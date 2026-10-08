@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { settings } from "./_shared/mockData/settings";
 import { Settings } from "../../components/pages/Settings";
 import { SettingsView } from "./Settings.stories";
@@ -17,6 +18,10 @@ const capabilities: AssistantCapabilities = {
   memory_available: false,
 };
 
+async function selectSection(label: string) {
+  await userEvent.setup().click(await screen.findByRole("tab", { name: label }));
+}
+
 describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () => {
   it("publishes the composed push support and fallback states", () => {
     expect(settingsStories.PushPermission).toBeDefined();
@@ -29,14 +34,16 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(screen.getByRole("heading", { name: "Configuración" })).toBeInTheDocument();
   });
 
-  it("renders groups by business consequence with approved Spanish card titles", () => {
+  it("renders groups by business consequence with approved Spanish card titles", async () => {
     render(<SettingsView />);
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detección de emergencias" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Tono" })).toBeInTheDocument();
+    await selectSection("Mensajes");
+    expect(screen.getByRole("heading", { name: "Tono del asistente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument();
+    await selectSection("Costos");
     expect(screen.getByRole("heading", { name: "Límites de gasto" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Precio Meta" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Gasto actual" })).toBeInTheDocument();
   });
 
@@ -71,18 +78,23 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(alert).getByText(/cada línea debe tener categoría=mode/i)).toBeInTheDocument();
   });
 
-  it("renders one save action per independently persisted group", () => {
+  it("renders one save action per independently persisted group", async () => {
     render(<SettingsView />);
-    const agentCard = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
-    const emergencyCard = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
-    const toneCard = screen.getByRole("heading", { name: "Tono" }).closest(".card") as HTMLElement;
+    await selectSection("Mensajes");
+    const toneCard = screen.getByRole("heading", { name: "Tono del asistente" }).closest(".card") as HTMLElement;
+    expect(within(toneCard).getByRole("button", { name: "Guardar tono" })).toBeInTheDocument();
+    const toneMessageCard = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
+    expect(within(toneMessageCard).getByRole("button", { name: "Guardar mensajes" })).toBeInTheDocument();
+    await selectSection("Costos");
     const limitsCard = screen.getByRole("heading", { name: "Límites de gasto" }).closest(".card") as HTMLElement;
     const pricingCard = screen.getByRole("heading", { name: "Precio Meta" }).closest(".card") as HTMLElement;
-    expect(within(agentCard).getByRole("button", { name: "Guardar alcance" })).toBeInTheDocument();
-    expect(within(emergencyCard).getByRole("button", { name: "Guardar palabras clave" })).toBeInTheDocument();
-    expect(within(toneCard).getByRole("button", { name: "Guardar tono" })).toBeInTheDocument();
     expect(within(limitsCard).getByRole("button", { name: "Guardar límites" })).toBeInTheDocument();
     expect(within(pricingCard).getByRole("button", { name: "Guardar precio" })).toBeInTheDocument();
+    await selectSection("Agente");
+    const agentCard = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
+    const emergencyCard = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
+    expect(within(agentCard).getByRole("button", { name: "Guardar alcance" })).toBeInTheDocument();
+    expect(within(emergencyCard).getByRole("button", { name: "Guardar palabras clave" })).toBeInTheDocument();
   });
 
   it("renders the emergency-keywords textarea with one keyword per line and plain-Spanish effect", () => {
@@ -97,16 +109,19 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     }
   });
 
-  it("renders the tone selector with the current tone value and plain-Spanish effect", () => {
+  it("renders the tone selector with the current tone value and plain-Spanish effect", async () => {
     render(<SettingsView />);
-    const card = screen.getByRole("heading", { name: "Tono" }).closest(".card") as HTMLElement;
+    await selectSection("Mensajes");
+    const card = screen.getByRole("heading", { name: "Tono del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/respuestas del agente/i)).toBeInTheDocument();
     const toneSelect = within(card).getByLabelText(/tono/i) as HTMLSelectElement;
     expect(toneSelect.value).toBe(settings.tone);
   });
 
-  it("renders the five editable standard messages", () => {
-    const card = (render(<SettingsView />), screen.getByRole("heading", { name: "Mensajes" }).closest(".card") as HTMLElement);
+  it("renders the five editable standard messages", async () => {
+    render(<SettingsView />);
+    await selectSection("Mensajes");
+    const card = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/menú de categorías se agrega automáticamente/i)).toBeInTheDocument();
     expect((within(card).getByLabelText(/saludo/i) as HTMLTextAreaElement).value).toBe(settings.messages.greeting);
     expect((within(card).getByLabelText(/no puede responder/i) as HTMLTextAreaElement).value).toBe(settings.messages.cannot_answer);
@@ -115,8 +130,9 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect((within(card).getByLabelText(/fuera de horario/i) as HTMLTextAreaElement).value).toBe(settings.messages.out_of_hours);
   });
 
-  it("renders the configured hours timezone and schedule", () => {
+  it("renders the configured hours timezone and schedule", async () => {
     render(<SettingsView />);
+    await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
     expect(within(card).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
     expect(within(card).getByLabelText("Apertura 1")).toHaveValue(settings.hours.schedule[0].open);
@@ -124,15 +140,17 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(card).getByLabelText("Lunes, entrada 1")).toBeChecked();
   });
 
-  it("prevents duplicate weekdays when adding a schedule entry", () => {
+  it("prevents duplicate weekdays when adding a schedule entry", async () => {
     render(<SettingsView />);
+    await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
     fireEvent.click(within(card).getByRole("button", { name: "Agregar horario" }));
     expect(within(card).getByLabelText("Lunes, entrada 2")).toBeDisabled();
   });
 
-  it("renders spend-limit inputs (conversation + daily) with plain-Spanish effect before them", () => {
+  it("renders spend-limit inputs (conversation + daily) with plain-Spanish effect before them", async () => {
     render(<SettingsView />);
+    await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Límites de gasto" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/al 80% el agente se vuelve más conservador/i)).toBeInTheDocument();
     expect(within(card).getByText(/al 100% se detienen las llamadas/i)).toBeInTheDocument();
@@ -142,16 +160,18 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(Number(daily.value)).toBe(settings.daily_limit);
   });
 
-  it("renders the Meta pricing input with service-message cost and plain-Spanish effect", () => {
+  it("renders the Meta pricing input with service-message cost and plain-Spanish effect", async () => {
     render(<SettingsView />);
+    await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Precio Meta" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/costo por mensaje de servicio/i)).toBeInTheDocument();
     const cost = within(card).getByLabelText(/costo por mensaje/i) as HTMLInputElement;
     expect(Number(cost.value)).toBe(settings.meta_cost);
   });
 
-  it("renders current spend via a numeric DataTable with tabular/right-aligned comparable numbers (DS-UI-TABLES)", () => {
+  it("renders current spend via a numeric DataTable with tabular/right-aligned comparable numbers (DS-UI-TABLES)", async () => {
     render(<SettingsView />);
+    await selectSection("Costos");
     const table = screen.getByRole("table");
     const snap = settings.snapshot;
     expect(table).toBeInTheDocument();
@@ -193,8 +213,9 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(banner).getByText(/datos posiblemente desactualizados/i)).toBeInTheDocument();
   });
 
-  it("composes push settings inside Configuración", () => {
+  it("composes push settings inside Configuración", async () => {
     render(<SettingsView />);
+    await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
     expect(push).toBeInTheDocument();
     expect(within(push).getByText(/correo o whatsapp|activa avisos/i)).toBeInTheDocument();
@@ -208,6 +229,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     });
 
     render(<Settings />);
+    await selectSection("Capacidades");
 
     const card = await screen.findByRole("heading", { name: "Capacidades del asistente" });
     expect(within(card.closest(".card") as HTMLElement).getByText("agenda")).toBeInTheDocument();
@@ -230,6 +252,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     });
 
     render(<Settings />);
+    await selectSection("Capacidades");
 
     expect(await screen.findByText("Cargando capacidades del asistente")).toBeInTheDocument();
     resolveCapabilities(new Response(JSON.stringify(capabilities), { status: 200 }));
@@ -244,6 +267,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     });
 
     render(<Settings />);
+    await selectSection("Capacidades");
 
     expect(await screen.findByText("No pudimos cargar las capacidades del asistente")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Configuración" })).toBeInTheDocument();
@@ -255,6 +279,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     vi.stubGlobal("Notification", { requestPermission });
     vi.stubGlobal("PushManager", function PushManager() {});
     render(<Settings data={settings} state="ready" />);
+    await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
     fireEvent.click(within(push).getByRole("button", { name: /activar push/i }));
     await waitFor(() => expect(within(push).getByText(/denegaste/i)).toBeInTheDocument());
@@ -272,6 +297,7 @@ describe("Settings API page", () => {
     });
 
     render(<Settings />);
+    await selectSection("Mensajes");
     const tone = await screen.findByLabelText("Tono");
     await waitFor(() => expect(tone).toHaveValue(settings.tone));
     fireEvent.change(tone, { target: { value: "directo" } });
@@ -291,6 +317,7 @@ describe("Settings API page", () => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
     render(<Settings />);
+    await selectSection("Mensajes");
     const greeting = await screen.findByDisplayValue(settings.messages.greeting);
     const farewell = screen.getByDisplayValue(settings.messages.farewell);
     const outOfHours = screen.getByDisplayValue(settings.messages.out_of_hours);
@@ -311,6 +338,7 @@ describe("Settings API page", () => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
     render(<Settings />);
+    await selectSection("Horarios y avisos");
     const opening = await screen.findByLabelText("Apertura 1");
     const card = opening.closest(".card") as HTMLElement;
     fireEvent.change(within(card).getByLabelText("Zona horaria"), { target: { value: "America/Argentina/Buenos_Aires" } });
@@ -329,6 +357,7 @@ describe("Settings API page", () => {
       return new Response(JSON.stringify({ detail: "weekday repeated across entries" }), { status: 400 });
     });
     render(<Settings />);
+    await selectSection("Horarios y avisos");
     fireEvent.click(await screen.findByRole("button", { name: "Guardar horarios" }));
     expect(await screen.findByText("weekday repeated across entries")).toBeInTheDocument();
     fetchMock.mockRestore();
@@ -343,6 +372,7 @@ describe("Settings API page", () => {
     });
 
     render(<Settings />);
+    await selectSection("Costos");
     const dailyLimit = await screen.findByLabelText("Límite diario (USD)");
     await waitFor(() => expect(dailyLimit).toHaveValue(5));
     fireEvent.change(dailyLimit, { target: { value: "7.5" } });

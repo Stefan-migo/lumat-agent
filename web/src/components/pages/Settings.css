@@ -1,0 +1,8 @@
+.settings-tabs__select { display: none; }
+.settings-tabs__content { display: grid; gap: var(--space-3); }
+.settings__footer-note { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+
+@media (max-width: 40rem) {
+  .settings-tabs__select { display: block; }
+  .settings-tabs .tabs [role="tablist"] { display: none; }
+}
