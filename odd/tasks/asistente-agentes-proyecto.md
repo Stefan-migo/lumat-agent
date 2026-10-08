@@ -101,8 +101,8 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 
 - Forecast: **> ~1,500 authored changed lines** across six slices (DB + backend + frontend) → exceeds
   the ~400 budget. `delivery_strategy`: `ask-on-risk`. Each slice is its own reviewable work unit with
-  its own commit(s) and verification; PR/merge remain the owner's decision. Chain strategy to be
-  confirmed by the owner before the first over-budget commit.
+  its own commit(s) and verification; PR/merge remain the owner's decision. `chain_strategy`:
+  `stacked-to-main` (owner direction: "encadenar los chicos"; stacks to `main` in slice order).
 
 ## Work units (stable IDs)
 
@@ -174,3 +174,10 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `npx vitest run src/components/pages/ProjectsPage.test.tsx` — 12 passed;
   `npx vitest run --no-file-parallelism` — 97 files / 1049 tests passed; `npm run build` passed (large
   chunk warning).
+- Slice 1 RDD assessment: `gentle-ai review assess --cwd <worktree> --agent opencode --base-ref 23ff4cd1
+  --committed-only` → `risk: medium` (`executable_change` in `app/panel/api/routes/projects.py`),
+  `changed_paths: 9`, `changed_lines: 365`, `review_due: false` (`under_budget`) → no review opened yet;
+  the reviewed boundary stays pending in the slice until a later commit reaches the ~400 budget.
+  Parent spot check re-ran `uv run pytest tests/functional/test_api_projects.py` — 12 passed, workspace
+  clean. Environment: worktree has `infra/.env` (gitignored, copied from the primary repo) and its own
+  test DB container on `:6227`; tests require `eval "$(bash infra/test-db.sh env)"` first.
