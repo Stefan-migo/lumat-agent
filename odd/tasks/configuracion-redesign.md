@@ -84,7 +84,7 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
       textarea, advanced-syntax disclosure, "Cómo funciona" panel, footer note + save) and
       `Detección de emergencias` (warning icon, keywords textarea + helper, "Consideraciones" panel,
       save). Findings `configuracion-002`, `configuracion-003`.
-- [ ] **CF-10** — Mensajes tab: `Tono del asistente` horizontal row, and `Mensajes del asistente`
+- [x] **CF-10** — Mensajes tab: `Tono del asistente` horizontal row, and `Mensajes del asistente`
       with the 5-template strip, selected-text editor, info line, and "Vista previa". Findings
       `configuracion-004`, `configuracion-005`.
 - [ ] **CF-11** — Horarios y avisos tab: `Horarios de atención` (globe timezone `Select`, weekly
@@ -152,6 +152,19 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     `HelpPanel`, footer note + save. Two-column layout, single column at ≤40rem.
   - Reuses the PR1/PR2 roll-ups (`HelpPanel`, `Card.headerAction`).
   - Verified: focused vitest 5/5 green; FULL suite 1065/1065 green; `npm run build` green.
+
+- **PR5 — Mensajes tab (CF-10)** — done on branch `odd/configuracion-redesign`.
+  - Commit: `68bf1d22` bring the Mensajes tab to the reference composition.
+  - Files: `pages/Settings.tsx`, `pages/Settings.css`, `pages/Settings.test.tsx`,
+    `stories/pages/Settings.stories.test.tsx`.
+  - `Tono del asistente`: tone `Select` + save on one horizontal row. `Mensajes del asistente`: a
+    5-template strip (`Tabs`) picking one template, one selected editor, an info line, and a
+    right-side "Vista previa" using the `MessagePreview` primitive (CF-3). Two columns, single at ≤40rem.
+  - Bug fixed while reviewing: the mobile selector that hides the section tablist was too broad
+    (`.settings-tabs .tabs [role="tablist"]`) and also hid the nested template strip at ≤40rem;
+    scoped to the direct child (`.settings-tabs > .tabs > [role="tablist"]`).
+  - Verified: focused vitest 7/7 + stories 30/30 green; FULL suite green (2 flaky `ClientFicha`
+    timeouts that pass 49/49 in isolation); `npm run build` green.
 
 ## Verification
 
