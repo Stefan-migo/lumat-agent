@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CircleHelp, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
+import { HelpPanel } from "../primitives/HelpPanel";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
@@ -171,8 +173,24 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     <Tabs ariaLabel="Secciones de configuración" tabs={SECTIONS} activeTab={activeSection} onTabChange={setActiveSection}>
       {(active) => <div className="settings-tabs__content">
         {active === "agent" ? <>
-          <Card title="Alcance del agente"><p>Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.</p><details><summary>Sintaxis avanzada · categoría=mode</summary><p>Formato técnico: una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate. No lo cambies sin conocer el efecto en las respuestas.</p></details><Textarea label="Reglas de alcance" rows={4} value={draft.scope} onChange={(event) => update("scope", event.target.value)} /><Button variant="secondary" disabled={saving("scope") || !draft.scope.trim() || !draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => { const [category, mode] = line.split("=").map((value) => value.trim()); return Boolean(category) && ["bot_resolve", "always_escalate"].includes(mode); })} onClick={saveScope}>Guardar alcance</Button>{footer()}</Card>
-          <Card title="Detección de emergencias"><p>Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante.</p><Textarea label="Palabras clave de emergencia" rows={6} value={draft.keywords} onChange={(event) => update("keywords", event.target.value)} /><Button variant="secondary" disabled={saving("keywords") || !draft.keywords.split("\n").some((value) => value.trim())} onClick={() => void save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords)}>Guardar palabras clave</Button>{footer()}</Card>
+          <div className="settings-agent__row">
+            <Card title="Alcance del agente" icon={SlidersHorizontal} headerAction={<Badge tone="neutral">Avanzado</Badge>}>
+              <p>Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.</p>
+              <Textarea label="Reglas de alcance" rows={4} value={draft.scope} onChange={(event) => update("scope", event.target.value)} />
+              <details><summary>Sintaxis avanzada · categoría=mode</summary><p>Formato técnico: una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate. No lo cambies sin conocer el efecto en las respuestas.</p></details>
+              <div className="settings-agent__footer">{footer()}<Button variant="secondary" disabled={saving("scope") || !draft.scope.trim() || !draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => { const [category, mode] = line.split("=").map((value) => value.trim()); return Boolean(category) && ["bot_resolve", "always_escalate"].includes(mode); })} onClick={saveScope}>Guardar alcance</Button></div>
+            </Card>
+            <HelpPanel icon={CircleHelp} title="Cómo funciona"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></HelpPanel>
+          </div>
+          <div className="settings-agent__row">
+            <Card title="Detección de emergencias" icon={ShieldAlert}>
+              <p>Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante.</p>
+              <Textarea label="Palabras clave de emergencia" rows={6} value={draft.keywords} onChange={(event) => update("keywords", event.target.value)} />
+              <p className="settings-agent__helper">Escribe una palabra o frase por línea.</p>
+              <div className="settings-agent__footer">{footer()}<Button variant="secondary" disabled={saving("keywords") || !draft.keywords.split("\n").some((value) => value.trim())} onClick={() => void save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords)}>Guardar palabras clave</Button></div>
+            </Card>
+            <HelpPanel icon={ShieldAlert} title="Consideraciones" tone="info"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></HelpPanel>
+          </div>
         </> : null}
         {active === "messages" ? <>
           <Card title="Tono del asistente"><p>Define cómo suenan las respuestas del agente en cada conversación.</p><Select label="Tono" value={draft.tone} onChange={(event) => update("tone", event.target.value)} options={[{ value: "", label: "Selecciona un tono" }, { value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} /><Button variant="secondary" disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button>{footer()}</Card>
