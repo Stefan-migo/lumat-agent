@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, createProject, getProject, listProjects, updateProjectConfig } from "../../api";
-import type { Project, ProjectCandidate, ProjectDetailResponse, ProjectsResponse } from "../../types";
+import type { Project, ProjectCandidate, ProjectDetailResponse, ProjectsResponse, Role } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -13,9 +13,10 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { Tabs } from "../primitives/Tabs";
+import { ProjectResources } from "./ProjectResources";
 import "./ProjectsPage.css";
 
-export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode }) {
+export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs, role }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode; role?: Role }) {
   const [form, setForm] = useState({ slug: "", name: "", purpose: "" });
   const [createdProjects, setCreatedProjects] = useState<ProjectsResponse | null>(null);
   const [creationError, setCreationError] = useState<{ detail: string; candidates: ProjectCandidate[] } | null>(null);
@@ -57,10 +58,7 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
             <Button disabled={savingInstructions} onClick={() => void saveInstructions()}>{savingInstructions ? "Guardando…" : "Guardar cambios"}</Button>
             {instructionsError ? <p role="alert">No se guardaron los cambios: {instructionsError}</p> : null}
           </Card>
-          <Card title="Archivos y conocimiento" description="Los recursos del proyecto aún no están disponibles.">
-            <EmptyState title="No hay recursos disponibles" description="La API todavía no permite vincular ni subir archivos para este proyecto." />
-            <Button variant="secondary" disabled>Agregar recurso</Button>
-          </Card>
+          <ProjectResources projectSlug={body.project.slug} projectId={body.project.id} role={role} />
         </div>;
       }}</Tabs> : null}
     </PageFrame>;

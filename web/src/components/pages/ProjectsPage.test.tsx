@@ -68,7 +68,7 @@ describe("projects panel", () => {
   });
 
   it("renders the project status and back control in the detail header", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
     expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("projects panel", () => {
   });
 
   it("offers a project-bound assistant entry point", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     const onOpenChat = vi.fn();
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} onOpenChat={onOpenChat} />);
 
@@ -89,7 +89,7 @@ describe("projects panel", () => {
   });
 
   it("renders editable instructions while keeping project identity and resource controls disabled", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
 
     expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
@@ -100,13 +100,14 @@ describe("projects panel", () => {
     expect(screen.getByLabelText("Instrucciones del proyecto")).toHaveValue("");
     expect(screen.getByLabelText("Instrucciones del proyecto")).toBeEnabled();
     expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Agregar recurso" })).toBeDisabled();
+    expect(await screen.findByRole("heading", { name: "Archivos del proyecto" })).toBeInTheDocument();
   });
 
   it("saves project instructions through the config endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Existing instructions", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Answer in Spanish.", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Answer in Spanish.", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
 
     const textarea = await screen.findByLabelText("Instrucciones del proyecto");
@@ -115,11 +116,11 @@ describe("projects panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect(await screen.findByLabelText("Instrucciones del proyecto")).toHaveValue("Answer in Spanish.");
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
   });
 
   it("explains that project-scoped threads are not supported and shows an honest agent empty state", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
     await screen.findByRole("tab", { name: "Hilos" });
 
