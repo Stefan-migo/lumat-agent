@@ -20,6 +20,13 @@ describe("Card (T8.2)", () => {
     expect(document.querySelector(".card__icon svg")).toBeInTheDocument();
   });
 
+  it("renders a header action when provided and omits it otherwise", () => {
+    const { rerender } = render(<Card title="Capacidades" headerAction={<button>Consultar</button>}>Content</Card>);
+    expect(screen.getByRole("button", { name: "Consultar" })).toBeInTheDocument();
+    rerender(<Card title="Capacidades">Content</Card>);
+    expect(screen.queryByRole("button", { name: "Consultar" })).not.toBeInTheDocument();
+  });
+
   it("uses a flat non-white surface and hairline separation", () => {
     const card = primitives.match(/\.card\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(card).toMatch(/background:\s*var\(--surface\)/);
