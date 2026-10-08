@@ -9,6 +9,7 @@ import type { KbDocument, User } from "../../types";
 const admin: User = { username: "ana", role: "admin" };
 const document = {
   id: 1,
+  project_id: null,
   title: "Manual de atencion al cliente",
   format: "pdf",
   version: 3,

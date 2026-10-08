@@ -54,6 +54,33 @@ export async function apiFetch<T>(
   return (await res.json()) as T;
 }
 
+async function apiFetchBlob(path: string): Promise<Blob> {
+  const res = await fetch(path, { credentials: 'include' });
+  if (!res.ok) {
+    const raw = await res.text().catch(() => '');
+    let detail = raw.trim();
+    try {
+      const payload = JSON.parse(raw) as { detail?: unknown };
+      if (typeof payload.detail === 'string') detail = payload.detail;
+    } catch {
+      // Keep the raw text when the body is not JSON.
+    }
+    throw new ApiError(res.status, detail || `${res.status} ${res.statusText}`.trim());
+  }
+  return res.blob();
+}
+
+export function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function postJson<T>(path: string, body?: unknown): Promise<T> {
   return apiFetch<T>(path, {
     method: 'POST',
@@ -64,7 +91,7 @@ export function patchJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse } from './types';
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse, ProjectFile, ProjectFilesResponse } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
   const body = new FormData();
   body.append('title', title);
@@ -231,6 +258,18 @@ export const listProjects = () => apiFetch<ProjectsResponse>('/panel/api/project
 export const createProject = (body: ProjectCreateRequest) => postJson<ProjectCreateResponse>('/panel/api/projects', body);
 export const getProject = (slug: string) => apiFetch<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}`);
 export const updateProjectConfig = (slug: string, body: ProjectConfigUpdate) => patchJson<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/config`, body);
+export const listProjectFiles = (slug: string) => apiFetch<ProjectFilesResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/files`);
+export const uploadProjectFile = (slug: string, file: File) => {
+  const body = new FormData();
+  body.append('file', file);
+  return apiFetch<{ file: ProjectFile }>(`/panel/api/projects/${encodeURIComponent(slug)}/files`, { method: 'POST', body });
+};
+export async function downloadProjectFile(slug: string, fileId: number, filename: string): Promise<void> {
+  triggerDownload(await apiFetchBlob(`/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}/download`), filename);
+}
+export async function downloadAssistantArtifact(threadId: number, artifactId: number, filename: string): Promise<void> {
+  triggerDownload(await apiFetchBlob(`/panel/api/chat/threads/${threadId}/artifacts/${artifactId}/download`), filename);
+}
 export const listPlanningSessions = () => apiFetch<PlanningSessionsResponse>('/panel/api/planning/sessions');
 export const getPlanningSession = (slug: string) => apiFetch<PlanningSessionDetailResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}`);
 export const openPlanningSession = (topic: string, threadId?: number) => postJson<PlanningSessionOpenResponse>('/panel/api/planning/sessions', { topic, ...(threadId === undefined ? {} : { thread_id: threadId }) });
