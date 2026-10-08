@@ -21,6 +21,7 @@ DEFAULT_TOOLS = {
     "project.find",
     "list_project_files",
     "read_project_file",
+    "artifact.save",
 }
 
 OPT_IN_TOOLS = {
