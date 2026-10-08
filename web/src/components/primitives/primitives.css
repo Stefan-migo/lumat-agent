@@ -397,6 +397,25 @@
 .help-panel__title { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
 .help-panel__body { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
+/* Settings roll-up primitive (configuracion-017): segmented Lun–Dom day toggle. Selected state
+   mirrors the closed-section option convention (ClientFichaDialogs): corp-text border + success tint. */
+.day-toggle { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.day-toggle__day {
+  min-width: calc(var(--space-8) + var(--space-2));
+  height: var(--space-8);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--corp-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.day-toggle__day:hover:not(:disabled) { background: var(--corp-surface-hover); }
+.day-toggle__day[aria-pressed="true"] { border-color: var(--corp-text); background: var(--success-tint); font-weight: var(--weight-semibold); }
+.day-toggle__day:disabled { cursor: not-allowed; opacity: 0.5; }
+
 /* ---- Skeleton (2C-1): CSS-only decorative loading placeholder ---- */
 .skeleton {
   display: block;
