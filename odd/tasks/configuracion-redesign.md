@@ -117,9 +117,21 @@ Backend suite only if a backend/API boundary changes (`configuracion-015`).
 
 - Authored changed lines forecast: ~2,880 (additions + deletions) — well over the 400-line review
   budget.
-- Delivery strategy: `ask-on-risk`; chain strategy pending the owner's call.
-- Proposed slices: Unit A (six primitives), Unit B (shell + draft model), one PR per tab (CF-9 …
-  CF-13). Each slice is an atomic, reviewable work unit with tests and docs.
+- Delivery strategy (owner decision 2026-10-08): **chained PRs, `stacked-to-main`**, merges in order.
+- Slice plan (each PR targets `main`):
+  1. PR1 — CF-1, CF-2, CF-3 (help panel, day toggle, message preview)
+  2. PR2 — CF-4, CF-5, CF-6 (metric row, accordion, `Card` header slot)
+  3. PR3 — CF-7, CF-8 (shell tabs + draft/save model)
+  4. PR4 — CF-9 (Agente)
+  5. PR5 — CF-10 (Mensajes)
+  6. PR6 — CF-11 (Horarios y avisos)
+  7. PR7 — CF-12 (Costos)
+  8. PR8 — CF-13 (Capacidades)
+  9. PR9 — CF-14 (verification + reference polish), or folded into PR8 if small.
+- Budget rule: keep each PR at or below ~400 authored changed lines. If a unit exceeds it, split
+  further (e.g., CF-11 into the hours card vs the right column); `size:exception` only with explicit
+  owner approval.
+- Running authored-line count is recorded per work-unit commit as slices land.
 
 ## Acceptance
 
