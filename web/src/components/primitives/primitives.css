@@ -278,6 +278,7 @@
   font-size: var(--text-lg);
 }
 .card__header { display: flex; align-items: center; gap: var(--space-3); }
+.card__header-action { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 .card__icon,
 .dialog__icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-md); background: var(--border); color: var(--text); }
 .card__copy { min-width: 0; }
@@ -423,6 +424,24 @@
 .message-preview__avatar { flex: 0 0 auto; }
 .message-preview__bubble { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface); color: var(--corp-text); font-size: var(--text-sm); }
 .message-preview__note { color: var(--corp-fg-muted); font-size: var(--text-xs); }
+
+/* Settings accordion groups with an accessible button-controlled content region. */
+.accordion { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.accordion__trigger { display: flex; width: 100%; min-height: var(--space-8); align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: inherit; background: transparent; color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
+.accordion__trigger:hover { background: var(--surface-subtle); }
+.accordion__trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.accordion__title { font-weight: var(--weight-semibold); }
+.accordion__indicator { margin-left: auto; color: var(--corp-fg-muted); }
+.accordion__panel { padding: 0 var(--space-3) var(--space-3); }
+.accordion__panel[hidden] { display: none; }
+
+.stat-card--row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stat-card__metric { min-width: 0; }
+.stat-card__metric + .stat-card__metric { padding-left: var(--space-3); border-left: 1px solid var(--border); }
+@media (max-width: 40rem) {
+  .stat-card--row { grid-template-columns: minmax(0, 1fr); }
+  .stat-card__metric + .stat-card__metric { padding: var(--space-3) 0 0; border-top: 1px solid var(--border); border-left: 0; }
+}
 
 /* ---- Skeleton (2C-1): CSS-only decorative loading placeholder ---- */
 .skeleton {
