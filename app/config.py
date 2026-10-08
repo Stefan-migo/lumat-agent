@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     assistant_chat_model: str = "google/gemini-2.5-flash"
     brave_search_api_key: str | None = None
     assistant_attachment_max_bytes: int = 5 * 1024 * 1024
+    assistant_artifact_max_bytes: int = 5 * 1024 * 1024
     assistant_attachment_max_count: int = 10
     assistant_attachment_max_context_chars: int = 20_000
     assistant_attachment_max_image_bytes: int = 5 * 1024 * 1024

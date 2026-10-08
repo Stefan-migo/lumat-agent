@@ -45,6 +45,40 @@ def test_registry_exposes_typed_bounded_tools():
     assert get_tool("automation.create_rule").read_only is False
 
 
+def test_artifact_save_is_typed_bounded_and_serializes_only_download_metadata(monkeypatch):
+    schemas = tool_schemas()
+    assert "artifact.save" in schemas
+    assert get_tool("artifact.save").read_only is False
+    assert schemas["artifact.save"]["type"] == "object"
+
+    for payload in (
+        {"filename": "", "content": "x"},
+        {"filename": "a.txt", "content": ""},
+        {"filename": "a.txt", "content": "x", "extra": True},
+    ):
+        with pytest.raises(ToolValidationError):
+            execute_tool(SimpleNamespace(), "artifact.save", payload, owner_id=1, trusted_thread_id=5, role="admin")
+
+    for kwargs in ({}, {"trusted_thread_id": 5}):
+        with pytest.raises(ToolValidationError, match="owner-scoped tool requires the authenticated owner"):
+            execute_tool(SimpleNamespace(), "artifact.save", {"filename": "r.md", "content": "abc"}, role="admin", **kwargs)
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.owned_thread", lambda *_args: None)
+    with pytest.raises(ToolValidationError, match="no accessible chat thread for artifacts"):
+        execute_tool(SimpleNamespace(), "artifact.save", {"filename": "r.md", "content": "abc"}, owner_id=1, trusted_thread_id=5, role="admin")
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.owned_thread", lambda *_args: SimpleNamespace(id=5))
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.assistant_artifacts.store_artifact",
+        lambda *_args, **_kwargs: SimpleNamespace(id=9, thread_id=5, filename="r.md", content_type="text/markdown", size=3),
+    )
+    result = execute_tool(SimpleNamespace(), "artifact.save", {"filename": "r.md", "content": "abc"}, owner_id=1, trusted_thread_id=5, role="admin")
+    assert result["result"]["download_path"] == "/panel/api/chat/threads/5/artifacts/9/download"
+    serialized = json.dumps(result)
+    assert "stored_path" not in serialized
+    assert "sha256" not in serialized
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -984,7 +1018,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
 
 
 def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
-    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete"})
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
     with pytest.raises(ValueError):
@@ -1080,7 +1114,7 @@ def test_memory_correction_rejects_rows_outside_agent_ownership(row_kwargs):
 
 
 def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
-    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete"})
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
     row = SimpleNamespace(id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
 
     class Savepoint:

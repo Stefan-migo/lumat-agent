@@ -225,22 +225,28 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       {(active) => <div className="settings-tabs__content">
         {active === "agent" ? <>
           <div className="settings-agent__row">
-            <Card title="Alcance del agente" icon={SlidersHorizontal} headerAction={<Badge tone="neutral">Avanzado</Badge>}>
-              <p>Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.</p>
-              <Textarea label="Reglas de alcance" rows={4} value={draft.scope} onChange={(event) => update("scope", event.target.value)} />
-              <details><summary>Sintaxis avanzada · categoría=mode</summary><p>Formato técnico: una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate. No lo cambies sin conocer el efecto en las respuestas.</p></details>
-              <div className="settings-agent__footer">{footer()}<Button variant="secondary" disabled={saving("scope") || !draft.scope.trim() || !draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => { const [category, mode] = line.split("=").map((value) => value.trim()); return Boolean(category) && ["bot_resolve", "always_escalate"].includes(mode); })} onClick={saveScope}>Guardar alcance</Button></div>
+            <Card title="Alcance del agente" description="Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona." icon={SlidersHorizontal} headerAction={<Badge tone="neutral">Avanzado</Badge>}>
+              <div className="settings-agent__layout">
+                <div className="settings-agent__form">
+                  <Textarea label="Reglas de alcance" rows={4} placeholder="Ej: reparación=bot_resolve" value={draft.scope} onChange={(event) => update("scope", event.target.value)} />
+                  <details><summary>Sintaxis avanzada</summary><p>Escribe una categoría y un modo en cada línea, separados por un signo igual. <code>bot_resolve</code> significa que el agente responde por su cuenta; <code>always_escalate</code> significa que deriva la conversación a una persona. Por ejemplo: <code>presupuesto=bot_resolve</code>.</p></details>
+                  <div className="settings-agent__footer">{footer()}<Button disabled={saving("scope") || !draft.scope.trim() || !draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => { const [category, mode] = line.split("=").map((value) => value.trim()); return Boolean(category) && ["bot_resolve", "always_escalate"].includes(mode); })} onClick={saveScope}>Guardar alcance</Button></div>
+                </div>
+                <HelpPanel icon={CircleHelp} title="Cómo funciona"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></HelpPanel>
+              </div>
             </Card>
-            <HelpPanel icon={CircleHelp} title="Cómo funciona"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></HelpPanel>
           </div>
           <div className="settings-agent__row">
-            <Card title="Detección de emergencias" icon={ShieldAlert}>
-              <p>Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante.</p>
-              <Textarea label="Palabras clave de emergencia" rows={6} value={draft.keywords} onChange={(event) => update("keywords", event.target.value)} />
-              <p className="settings-agent__helper">Escribe una palabra o frase por línea.</p>
-              <div className="settings-agent__footer">{footer()}<Button variant="secondary" disabled={saving("keywords") || !draft.keywords.split("\n").some((value) => value.trim())} onClick={() => void save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords)}>Guardar palabras clave</Button></div>
+            <Card title="Detección de emergencias" description="Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante." icon={ShieldAlert}>
+              <div className="settings-agent__layout">
+                <div className="settings-agent__form">
+                  <Textarea label="Palabras clave de emergencia" rows={6} value={draft.keywords} onChange={(event) => update("keywords", event.target.value)} />
+                  <p className="settings-agent__helper">Escribe una palabra o frase por línea.</p>
+                  <div className="settings-agent__footer">{footer()}<Button disabled={saving("keywords") || !draft.keywords.split("\n").some((value) => value.trim())} onClick={() => void save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords)}>Guardar palabras clave</Button></div>
+                </div>
+                <HelpPanel icon={ShieldAlert} title="Consideraciones"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></HelpPanel>
+              </div>
             </Card>
-            <HelpPanel icon={ShieldAlert} title="Consideraciones" tone="info"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></HelpPanel>
           </div>
         </> : null}
         {active === "messages" ? <>

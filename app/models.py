@@ -911,6 +911,20 @@ class AssistantAttachment(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AssistantArtifact(Base):
+    __tablename__ = "assistant_artifacts"
+    __table_args__ = (Index("idx_assistant_artifacts_thread", "thread_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    thread_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("internal_chat_threads.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    stored_path: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = _ts()
+
+
 class ProjectFile(Base):
     __tablename__ = "project_files"
     __table_args__ = (Index("idx_project_files_project", "project_id"),)
