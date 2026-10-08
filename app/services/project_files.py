@@ -9,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import Project, ProjectFile, User
+from app.models import DocumentFormat, KbDocument, KbVisibility, Project, ProjectFile, User
 from app.services.audit import record_audit
+from app.services.document_extract import extract_document_text
+from app.services.kb import ingest_document
 
 _DOCUMENTS = {
     ".pdf": ("pdf", "application/pdf"),
@@ -58,6 +60,46 @@ def store_project_file(session: Session, project: Project, owner: User, filename
                  entity_id=str(row.id), after={"project_id": project.id, "filename": filename, "size": len(content)})
     session.flush()
     return row
+
+
+def ingest_project_file(
+    session: Session,
+    project: Project,
+    row: ProjectFile,
+    content: bytes,
+    actor: str,
+) -> KbDocument | None:
+    """Ingest supported project-file text into the project-scoped KB."""
+    try:
+        kind = allowed_project_file(row.filename, row.content_type, row.size)
+        if kind == "image":
+            return None
+        text = extract_document_text(content, kind)
+        if not text.strip():
+            return None
+        fmt = {
+            "pdf": DocumentFormat.PDF,
+            "csv": DocumentFormat.CSV,
+            "docx": DocumentFormat.DOCX,
+            "xlsx": DocumentFormat.XLSX,
+            "txt": DocumentFormat.MD,
+            "md": DocumentFormat.MD,
+        }[kind]
+        with session.begin_nested():
+            return ingest_document(
+                session,
+                title=row.filename,
+                fmt=fmt,
+                content=content,
+                content_text=text,
+                source_meta={"project_file_id": row.id},
+                actor=actor,
+                visibility=KbVisibility.INTERNAL,
+                project_id=project.id,
+            )
+    except Exception:
+        row.status = "failed"
+        return None
 
 
 def list_project_files(session: Session, project_id: int) -> list[ProjectFile]:

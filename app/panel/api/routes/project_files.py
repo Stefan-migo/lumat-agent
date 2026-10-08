@@ -10,7 +10,7 @@ from app.models import Project, User
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.api.serializers import to_project_file_dict
 from app.panel.deps import get_db
-from app.services.project_files import get_project_file, list_project_files, store_project_file
+from app.services.project_files import get_project_file, ingest_project_file, list_project_files, store_project_file
 
 router = APIRouter(tags=["panel-api-project-files"])
 
@@ -34,6 +34,7 @@ def upload_project_file(
     content = file.file.read(get_settings().project_file_max_bytes + 1)
     try:
         row = store_project_file(session, project, current, filename, file.content_type, content)
+        ingest_project_file(session, project, row, content, current.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     session.commit()

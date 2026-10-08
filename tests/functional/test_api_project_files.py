@@ -1,5 +1,5 @@
 from app.db import SessionLocal
-from app.models import Project
+from app.models import KbDocument, Project
 
 
 def _login(client, make_user, username):
@@ -40,6 +40,23 @@ def test_upload_list_and_download_project_file(client, make_user, monkeypatch, t
     get_settings.cache_clear()
 
 
+def test_upload_text_file_ingests_project_scoped_kb_document(client, make_user, monkeypatch, tmp_path):
+    from app.config import get_settings
+    owner_id = make_user("project-file-kb-owner", "project-files-pass")
+    slug = _seed_project(owner_id, "project-file-kb")
+    client.post("/panel/api/login", json={"username": "project-file-kb-owner", "password": "project-files-pass"})
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    uploaded = client.post(
+        f"/panel/api/projects/{slug}/files",
+        files={"file": ("manual.txt", b"Project-only safety instructions for the heater.", "text/plain")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    with SessionLocal() as session:
+        project = session.query(Project).filter_by(slug=slug).one()
+        doc = session.query(KbDocument).filter_by(project_id=project.id, title="manual.txt").one()
+        assert doc.content == "Project-only safety instructions for the heater."
+    get_settings.cache_clear()
 def test_project_file_api_requires_auth_and_owner_scoping(client, make_user):
     owner_id = make_user("project-file-owner-a", "project-files-pass")
     make_user("project-file-owner-b", "project-files-pass")
