@@ -219,9 +219,9 @@ Follow RED → GREEN → REFACTOR; never fall back to standard mode. Test marker
 - [x] Add mandatory `email` to the capture order and persist it on the ficha.
 - [x] Consent is now its own explicit step before booking (removed from `CAPTURE_FIELDS`).
 
-#### CI-3b — Multi-field extraction + grouped questions
-- [ ] Extract multiple fields from one free-text message.
-- [ ] Ask only missing fields, grouped 2–3, natural language, no numbered lists.
+#### CI-3b — Multi-field extraction + grouped questions — DONE
+- [x] Extract multiple fields from one free-text message (same classifier LLM call).
+- [x] Ask only missing fields, grouped 2–3, natural language, no numbered lists.
 
 ### CI-4 — Media as evidence (photo/audio for the technician)
 - [ ] Stop `handoff_gate` from routing media to a human during capture; store media as case evidence.
@@ -308,3 +308,15 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
 - **CI-3b (next):** multi-field extraction (reuse the single classifier LLM call — add a `fields`
   object to `agent/personas/classify.md`) plus grouped 2–3 questions replacing the single `_pending`
   model.
+- **CI-3b implemented (2026-10-08).** The classifier now returns a `fields` object
+  (`agent/personas/classify.md`, with the byte-identical `prompts.FALLBACKS` mirror), so one LLM
+  call both classifies and extracts; `classify_intent` surfaces it as `state.extracted`. `capture`
+  merges the extracted fields and asks the next 2–3 MISSING fields in one natural-language message,
+  replacing the single-field `_pending` pointer with a batch list. A free-text answer that extracted
+  nothing is attributed to the first asked field still missing. Files: `app/chat/state.py`,
+  `app/chat/nodes/classify_intent.py`, `app/chat/nodes/capture.py`, `agent/personas/classify.md`,
+  `app/services/prompts.py`, `tests/integration/test_chat_capture.py`,
+  `tests/functional/test_conversation_flows.py`. Focused `uv run pytest` (capture/flows/booking/
+  handoff/out-of-hours/prompts) **110 passed**; full suite **EXIT 0** with the two known-flaky seed
+  tests deselected. New `test_cm3_extracts_multiple_fields_from_one_message` proves multi-field
+  extraction from a single message. CI-3b code commit: see the accompanying `feat` commit.
