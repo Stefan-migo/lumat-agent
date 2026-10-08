@@ -310,3 +310,24 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     `npm run build` — passed (existing Vite >500 kB chunk-size advisory).
   - Code commit: `2d1982be` (`feat(projects): add project context workspace`). Task evidence is recorded
     in this follow-up documentation commit.
+- **AW-1 owner visual-review revision (AW-7, 2026-10-08)** — revised the prior workspace-owned rail
+  decision per owner review: removed only `assistant-workspace__rail` and its styles (leaving global
+  `PanelShell` navigation untouched), and moved the two accessible pane toggles to the central thread
+  header. Removed the redundant rail thread-creation action; the thread-tabs create action remains.
+  The Proyectos pane now uses a folder-tree layout with route-backed “Contexto y archivos” and
+  “Historial de hilos” children. “Agentes del proyecto” is a separate section with a truthful zero
+  unknown count, disabled add action, and empty state; no agent rows or counts were invented.
+  Loading/error/retry/empty project states and narrow overlay/scrim behavior are retained.
+  - Files: `web/src/components/pages/AssistantWorkspace.tsx`, `AssistantWorkspace.css`,
+    `AssistantWorkspace.test.tsx`, and this task document.
+  - Graph Check: query `AssistantWorkspace projects pane explorer agents header` consulted
+    `AssistantWorkspace()`, `AssistantWorkspace.tsx`, `PanelShell.tsx`, `ProjectsPage.tsx`, `api.ts`,
+    `panelRoutes.ts`, `Button.tsx`, `Icon.tsx`, `EmptyState()`, and `StateMessage()`; path
+    `AssistantWorkspace()` → `panelRoutes.ts` via `pathForRoute()`. `GRAPH_REPORT.md` community hubs
+    include `PanelShell.tsx`, `AppShell.tsx`, `src/api.ts`; god nodes include core domain nodes unrelated
+    to this view. Reference PNGs were read from the main worktree only; no files there were modified.
+  - Verification from `web/`: `npx tsc -b --force --noEmit` — passed; focused workspace tests —
+    1 file / 6 passed; `npx vitest run --no-file-parallelism` — 97 files / 1043 passed; `npm run build`
+    — passed with the existing >500 kB chunk-size advisory. Focused tests emit existing async `act`
+    warnings from AgentChat. An initial full-suite attempt exceeded 300 seconds; the retry completed.
+  - Code commit and task-log commit are recorded in the following revision entry after they are made.

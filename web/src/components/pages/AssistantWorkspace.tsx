@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { FolderKanban, MessageSquarePlus, PanelRight, Plus, X } from "lucide-react";
-import { createChatThread, deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
+import { ChevronDown, ChevronRight, FileText, Folder, FolderKanban, History, PanelRight, PanelLeft, Plus, X } from "lucide-react";
+import { deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
 import type { AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -20,8 +20,6 @@ import "./AssistantWorkspace.css";
 export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true, attachments = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
-  const [creatingThread, setCreatingThread] = useState(false);
-  const [threadError, setThreadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
@@ -116,49 +114,11 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
-  const createThread = async () => {
-    const project = projects.find((item) => item.slug === selectedProject);
-    if (!project || creatingThread) return;
-    setCreatingThread(true);
-    setThreadError(null);
-    try {
-      const result = await createChatThread(project.slug);
-      const refreshed = await listChatThreads(20);
-      const createdSummary: InternalChatThreadSummary = {
-        id: result.thread.id,
-        title: null,
-        created_at: result.thread.created_at ?? null,
-        updated_at: result.thread.updated_at ?? null,
-        run_status: null,
-        approval_status: null,
-      };
-      setThreads([createdSummary, ...(refreshed.threads ?? []).filter((item) => item.id !== result.thread.id)]);
-      setThreadListError(null);
-      window.history.pushState({}, "", pathForRoute({ view: "chat", projectSlug: project.slug, threadId: result.thread.id }));
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } catch {
-      setThreadError("No pudimos crear el hilo.");
-    } finally {
-      setCreatingThread(false);
-    }
-  };
-
   return (
     <div
       className={`assistant-workspace${projectsVisible ? " assistant-workspace--projects-visible" : ""}${contextVisible ? " assistant-workspace--context-visible" : ""}`}
       data-testid="assistant-workspace"
     >
-      <nav className="assistant-workspace__rail" aria-label="Controles del espacio de trabajo">
-        <button type="button" className="assistant-workspace__rail-button" aria-label="Mostrar u ocultar proyectos" aria-expanded={projectsVisible} aria-controls="assistant-workspace-projects" title="Proyectos" onClick={() => setProjectsVisible((visible) => !visible)}>
-          <Icon icon={FolderKanban} />
-        </button>
-        <button type="button" className="assistant-workspace__rail-button" aria-label="Mostrar u ocultar el panel de contexto" aria-expanded={contextVisible} aria-controls="assistant-workspace-context" title="Contexto" onClick={() => setContextVisible((visible) => !visible)}>
-          <Icon icon={PanelRight} />
-        </button>
-        <button type="button" className="assistant-workspace__rail-button" aria-label="Crear hilo" title={selectedProject ? "Crear hilo" : "Selecciona un proyecto para crear un hilo"} disabled={!selectedProject || creatingThread} onClick={() => void createThread()}>
-          <Icon icon={MessageSquarePlus} />
-        </button>
-      </nav>
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
       <aside
         id="assistant-workspace-projects"
@@ -168,11 +128,8 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
       >
         <header className="assistant-workspace__pane-header">
           <h2>Proyectos</h2>
-          <Button variant="tertiary" aria-label="Crear proyecto" disabled>
-            <Icon icon={Plus} />
-          </Button>
         </header>
-        <SearchInput aria-label="Buscar proyectos" placeholder="Buscar proyectos" onSearch={setSearch} />
+        <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
           {projectsData.state === "loading" ? (
             <StateMessage tone="info" role="status" spinner title="Cargando proyectos" />
@@ -194,48 +151,40 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
             visibleProjects.map((project) => {
               const expanded = selectedProject === project.slug;
               return (
-                <Card className="assistant-workspace__project-card" key={project.slug}>
-                  <div className="assistant-workspace__project-row">
+                  <div className="assistant-workspace__project-card" key={project.slug}>
+                  <div className={`assistant-workspace__project-row${expanded ? " is-selected" : ""}`}>
                     <button
                       type="button"
                       className="assistant-workspace__project-select"
+                      aria-label={`${expanded ? "Contraer" : "Expandir"} ${project.name}`}
                       aria-expanded={expanded}
                       onClick={() => setSelectedProject(expanded ? null : project.slug)}
                     >
+                      <Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
+                      <Icon icon={Folder} size="sm" />
                       <span>{project.name}</span>
-                      <Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge>
                     </button>
-                    <Menu
-                      label={`Acciones de ${project.name}`}
-                      trigger="icon"
-                      items={[
-                        { value: "context", label: "Contexto y archivos" },
-                        { value: "threads", label: "Historial de hilos" },
-                      ]}
-                      onSelect={(value) => navigateToProject(project, value === "context" ? "context" : "threads")}
-                    />
                   </div>
                   {expanded ? (
                     <div className="assistant-workspace__project-details">
                       <nav aria-label={`Navegación de ${project.name}`}>
-                        <a href={pathForRoute({ view: "projects", projectSlug: project.slug })}>Contexto y archivos</a>
-                        <a href={pathForRoute({ view: "chat", projectSlug: project.slug })}>Historial de hilos</a>
+                        <a href={pathForRoute({ view: "projects", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToProject(project, "context"); }}><Icon icon={FileText} size="sm" />Contexto y archivos</a>
+                        <a href={pathForRoute({ view: "chat", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToProject(project, "threads"); }}><Icon icon={History} size="sm" />Historial de hilos</a>
                       </nav>
-                      <section aria-label="Agentes del proyecto">
-                        <h3>Agentes del proyecto</h3>
-                        <EmptyState title="Aún no hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." />
-                      </section>
                     </div>
                   ) : null}
-                </Card>
+                </div>
               );
             })
           )}
         </div>
+        <section className="assistant-workspace__agents" aria-label="Agentes del proyecto">
+          <header><h3>Agentes del proyecto</h3><span aria-label="Cantidad no disponible">—</span><Button variant="tertiary" aria-label="Agregar agente" disabled><Icon icon={Plus} /></Button></header>
+          <EmptyState title="No hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." />
+        </section>
       </aside>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
-        {threadError ? <StateMessage tone="danger" role="alert" title={threadError} /> : null}
         <nav className="assistant-workspace__thread-tabs" aria-label="Hilos recientes">
           <div className="assistant-workspace__thread-tab-list">
             {threads.map((thread) => (
@@ -259,6 +208,9 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
             <h1>{activeThread?.title || (activeThreadId ? "Sin título" : "Asistente Lumat")}</h1>
             {activeProject ? <p>Proyecto: {activeProject.name}</p> : null}
           </div>
+          <div className="assistant-workspace__header-actions">
+          <button type="button" className="assistant-workspace__pane-toggle" aria-label="Mostrar u ocultar proyectos" aria-expanded={projectsVisible} aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible((visible) => !visible)}><Icon icon={projectsVisible ? PanelLeft : FolderKanban} /></button>
+          <button type="button" className="assistant-workspace__pane-toggle" aria-label="Mostrar u ocultar el panel de contexto" aria-expanded={contextVisible} aria-controls="assistant-workspace-context" onClick={() => setContextVisible((visible) => !visible)}><Icon icon={PanelRight} /></button>
           {activeThread ? (
             <Menu
               label="Acciones del hilo"
@@ -271,6 +223,7 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
               }}
             />
           ) : null}
+          </div>
         </header>
         {threadActionError ? <StateMessage tone="danger" role="alert" title={threadActionError} /> : null}
         <Dialog open={renameTarget !== null} onClose={() => setRenameTarget(null)} title="Renombrar hilo">
