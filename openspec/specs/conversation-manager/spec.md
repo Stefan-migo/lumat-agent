@@ -2,18 +2,18 @@
 
 ## Purpose
 
-Drive the customer-facing WhatsApp conversation through a single-agent LangGraph flow: greet, show the 8-category menu, progressively capture structured data, classify intent and case, provide in-scope technical guidance, generate summaries, and log unresolved responses.
+Drive the customer-facing WhatsApp conversation through a single-agent LangGraph flow: greet openly, progressively capture structured data, classify intent and case, provide in-scope technical guidance, generate summaries, and log unresolved responses.
 
 ## Requirements
 
-### Requirement: CM-1 — Single-Agent Flow with Menu
+### Requirement: CM-1 — Single-Agent Flow with Open Greeting
 
-The system MUST run one LangGraph graph per conversation with persistent per-conversation state. On first contact it MUST greet as Lumat's virtual assistant and present the 8-category menu: Calefont, Caldera, Calefacción, Solicitar visita, Valores, Postventa/Garantía, Emergencia, Hablar con una persona.
+The system MUST run one LangGraph graph per conversation with persistent per-conversation state. On first contact it MUST send an open greeting identifying itself as Lumat's virtual assistant, without a menu.
 
 #### Scenario: First contact
 - GIVEN a new customer sends the first message
 - WHEN the conversation starts
-- THEN the bot greets, identifies itself, and presents the 8-category menu
+- THEN the bot greets, identifies itself, and asks how it can help without presenting a menu
 
 #### Scenario: Repeat contact on same conversation
 - GIVEN a customer continues an existing conversation
@@ -36,7 +36,7 @@ The system MUST collect, in a progressive question flow, the fields defined in L
 
 ### Requirement: CM-3 — Intent and Case Classification
 
-The system MUST classify the intent of each message and classify the case by service, priority, and status, storing the result for the case record and panel KPIs. It MUST persist a `classified` activity in the existing `ConversationEvent` model when classification completes.
+The system MUST classify the intent of each substantive message and classify the case by service, priority, and status, storing the result for the case record and panel KPIs. It MUST persist a `classified` activity in the existing `ConversationEvent` model when classification completes. A greeting-only first message MUST NOT be classified or recorded as `unknown_intent`.
 
 #### Scenario: Inbound message classified
 - GIVEN a customer message is received

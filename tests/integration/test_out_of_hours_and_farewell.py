@@ -137,14 +137,14 @@ def test_open_hours_normal_question_keeps_normal_flow(mock_openai_chat, monkeypa
         settings.set_setting(session, "hours.timezone", "UTC", actor="test")
         session.commit()
 
-    replies = _turn(_start_conversation(), "hola", "wamid.open.1")
+    replies = _turn(_start_conversation(), "hola, tengo una consulta", "wamid.open.1")
 
     assert OUT_OF_HOURS not in replies
     assert mock_openai_chat
 
 
 def test_empty_schedule_leaves_flow_unchanged(mock_openai_chat):
-    replies = _turn(_start_conversation(), "hola", "wamid.open.2")
+    replies = _turn(_start_conversation(), "hola, tengo una consulta", "wamid.open.2")
 
     assert OUT_OF_HOURS not in replies
     assert mock_openai_chat
