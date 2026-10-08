@@ -112,7 +112,7 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] Tests first (RED) for validation + owner scoping + persistence; then implement.
 
 ### A2 — Chats without project
-- [ ] `default` namespace as implicit "no project" for new chats; no visible "General" project.
+- [x] `default` namespace as implicit "no project" for admin/operator new chats; no visible "General" project. Technicians and unspecified roles retain project selection.
 
 ### A3 — Project files (large)
 - [ ] `project_files` table + migration (idempotent) + upload/download.
@@ -174,6 +174,16 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `npx vitest run src/components/pages/ProjectsPage.test.tsx` — 12 passed;
   `npx vitest run --no-file-parallelism` — 97 files / 1049 tests passed; `npm run build` passed (large
   chunk warning).
+
+- Slice 2 complete: `AgentChat.newChat()` creates a `default` thread for admin/operator when no project
+  is selected; technician and unspecified roles retain the existing project-picker/no-project error flow.
+  AgentChat renders no `thread.proyecto` value, and a UI assertion confirms the raw namespace is absent.
+  Graph nodes consulted: `AgentChat()`, `AgentChat`, `AgentChat.tsx`, `AgentChat.test.tsx`, and
+  `createChatThread()`; graph edge: `AgentChat() --calls--> createChatThread()`.
+  Frontend from `web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run
+  src/components/pages/AgentChat.test.tsx` — 1 file / 48 tests passed; `npx vitest run
+  --no-file-parallelism` — 97 files / 1051 tests passed; `npm run build` passed (existing large-chunk
+  warning). Commit: pending.
 - Slice 1 RDD assessment: `gentle-ai review assess --cwd <worktree> --agent opencode --base-ref 23ff4cd1
   --committed-only` → `risk: medium` (`executable_change` in `app/panel/api/routes/projects.py`),
   `changed_paths: 9`, `changed_lines: 365`, `review_due: false` (`under_budget`) → no review opened yet;

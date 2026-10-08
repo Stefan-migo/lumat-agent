@@ -491,7 +491,10 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
 
   const newChat = async () => {
     setError(null);
-    const project = thread?.proyecto || requestedProject;
+    let project = thread?.proyecto || requestedProject;
+    if (!project && (role === "admin" || role === "operador")) {
+      project = "default";
+    }
     if (!project) {
       try {
         const result = await listProjects();
