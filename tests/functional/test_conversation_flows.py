@@ -156,8 +156,8 @@ def test_cm2_skip_marks_unknown_and_continues(client, mock_openai_chat, mock_met
 
     # the skipped field is stored as unknown, NOT blocking the flow (CM-2)
     assert captured.get("name") == "unknown"
-    assert captured["_pending"] == "comuna"  # flow advanced to the next field
-    assert "comuna" in (last_reply or "").lower()
+    assert captured["_pending"] == "email"  # flow advanced to the next field
+    assert "correo" in (last_reply or "").lower()
 
 
 @pytest.mark.spec("CM-2")
@@ -170,13 +170,14 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
         ("wamid.cm2c.1", "hola"),                      # greeting
         ("wamid.cm2c.2", "calefont"),                  # menu choice -> capture
         ("wamid.cm2c.3", "Juan Perez"),                # name
-        ("wamid.cm2c.4", "Providencia"),               # comuna
-        ("wamid.cm2c.5", "Av. Siempre Viva 123"),      # address
-        ("wamid.cm2c.6", "Marca X modelo Y, 5 años"),  # equipment
-        ("wamid.cm2c.7", "no enciende desde ayer"),    # failure
-        ("wamid.cm2c.8", "no tengo"),                  # evidence -> skip
-        ("wamid.cm2c.9", "lunes o martes en la tarde"),  # availability
-        ("wamid.cm2c.10", "sí"),                       # consent -> completion
+        ("wamid.cm2c.4", "juan@mail.cl"),              # email
+        ("wamid.cm2c.5", "Providencia"),               # comuna
+        ("wamid.cm2c.6", "Av. Siempre Viva 123"),      # address
+        ("wamid.cm2c.7", "Marca X modelo Y, 5 años"),  # equipment
+        ("wamid.cm2c.8", "no enciende desde ayer"),    # failure
+        ("wamid.cm2c.9", "no tengo"),                  # evidence -> skip
+        ("wamid.cm2c.10", "lunes o martes en la tarde"),  # availability
+        ("wamid.cm2c.11", "sí"),                       # consent -> completion
     ]
     for wamid, text in turns:
         post_message(client, wamid, text)
@@ -189,6 +190,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
 
     # CR-6: captured identification/location + consent on the ficha
     assert customer.name == "Juan Perez"
+    assert customer.email == "juan@mail.cl"
     assert customer.comuna == "Providencia"
     assert customer.address == "Av. Siempre Viva 123"
     assert customer.consent_status is True
@@ -196,6 +198,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
 
     # CM-2: every answer stored; the skipped evidence field is "unknown"
     assert captured["name"] == "Juan Perez"
+    assert captured["email"] == "juan@mail.cl"
     assert captured["comuna"] == "Providencia"
     assert captured["equipment"] == "Marca X modelo Y, 5 años"
     assert captured["failure"] == "no enciende desde ayer"

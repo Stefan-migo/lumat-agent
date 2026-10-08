@@ -9,9 +9,10 @@ export interface CardProps {
   className?: string;
   icon?: LucideIcon;
   description?: string;
+  headerAction?: ReactNode;
 }
 
-export function Card({ title, children, className = "", icon, description }: CardProps) {
+export function Card({ title, children, className = "", icon, description, headerAction }: CardProps) {
   return (
     <section className={`card ${className}`.trim()}>
       {title ? (
@@ -21,6 +22,7 @@ export function Card({ title, children, className = "", icon, description }: Car
             <h2 className="card__title">{title}</h2>
             {description ? <p className="card__description">{description}</p> : null}
           </div>
+          {headerAction ? <div className="card__header-action">{headerAction}</div> : null}
         </header>
       ) : null}
       {children}

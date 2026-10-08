@@ -205,17 +205,23 @@ Follow RED → GREEN → REFACTOR; never fall back to standard mode. Test marker
 - [x] Updated the live spec `openspec/specs/conversation-manager/spec.md` and the `scripts/kb_fidelity.py`
       consumer.
 - Evidence: focused tests green; full suite `uv run pytest tests/` **EXIT=0** with the two known-flaky
-  seed subprocess tests deselected (both pass in isolation). Commit pending owner go-ahead.
+  seed subprocess tests deselected (both pass in isolation). CI-1 commits `5800a099` (docs) and
+  `76eaebec` (feat); PR #512 merged; review `review-359fcc5285c7a1b3` approved/acknowledged.
 
 ### CI-2 — Interruptible capture (core)
-- [ ] Remove the `_pending` blind skip; every turn re-classifies intent and extracts fields.
-- [ ] On a pivot, answer the deviation and resume the agenda.
-- [ ] Preserve emergency / handoff / cost / closure gates and booking/manage.
+- [x] Remove the `_pending` blind skip; every turn re-classifies intent and extracts fields.
+- [x] On a pivot, answer the deviation and resume the agenda.
+- [x] Preserve emergency / handoff / cost / closure gates and booking/manage.
 
 ### CI-3 — Extraction + grouped questions
+
+#### CI-3a — Mandatory email + separate consent — DONE
+- [x] Add mandatory `email` to the capture order and persist it on the ficha.
+- [x] Consent is now its own explicit step before booking (removed from `CAPTURE_FIELDS`).
+
+#### CI-3b — Multi-field extraction + grouped questions
 - [ ] Extract multiple fields from one free-text message.
 - [ ] Ask only missing fields, grouped 2–3, natural language, no numbered lists.
-- [ ] Add mandatory `email`; make consent a separate explicit step.
 
 ### CI-4 — Media as evidence (photo/audio for the technician)
 - [ ] Stop `handoff_gate` from routing media to a human during capture; store media as case evidence.
@@ -270,4 +276,35 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
   Verification: focused tests green; full suite `uv run pytest tests/` **EXIT=0** with two known-flaky
   seed subprocess tests deselected (`test_seed_demo.py::test_demo_seed_populates_dashboard_windows_and_today`,
   `test_seed.py::test_seed_applies_cleanly_twice`) — both pass in isolation; the stall is the intermittent
-  suite hang documented in `pyproject.toml`, not CI-1. Commit pending owner go-ahead.
+  suite hang documented in `pyproject.toml`, not CI-1. CI-1 commits `5800a099` (docs) and `76eaebec`
+  (feat); PR #512 merged; review `review-359fcc5285c7a1b3` approved/acknowledged.
+- **CI-2 implemented (2026-10-08).** Every non-greeting turn now classifies; retrieval deviations
+  use research triage and resume the unchanged pending capture question after a KB hit. Mid-capture
+  `unknown` does not consume HH-3 attempts; deterministic emergency/handoff/cost/closure gates remain
+  ahead of classification. Cancellation/rescheduling mid-capture deliberately remains a field answer
+  for CI-2. Files: `app/chat/state.py`, `app/chat/graph.py`,
+  `app/chat/nodes/{orchestrate,classify_intent,capture}.py`,
+  `tests/unit/test_routing_table.py`, `tests/integration/test_chat_capture.py`.
+  RED: new dispatcher cases failed before implementation with `TypeError: _dispatch() got an
+  unexpected keyword argument 'mid_capture'` (8 failures). GREEN: `uv run pytest
+  tests/unit/test_routing_table.py -q` **27 passed** and `uv run python -m compileall -q app/chat`
+  exited 0. Requested focused integration command blocked during migration with PostgreSQL
+  `password authentication failed for user "app"` on port 5830; the broader suite has the same
+  database setup failure. Requested second command also reports missing
+  `tests/functional/test_triage_reply_duplication.py` (the file is under `tests/integration/`).
+  CI-2 code commit: `229c732f`. This progress-log change is delivered by the accompanying
+  `docs(odd): record CI-2 review state and CI-1 delivery in the task` commit.
+- **CI-3a implemented (2026-10-08).** `email` added to the capture order (name, email, comuna,
+  address, …) and persisted on the ficha; `consent` removed from `CAPTURE_FIELDS` and asked as its
+  own explicit step after the data fields and before booking (a deviation on the consent step
+  re-asks it). Files: `app/chat/nodes/capture.py`, `scripts/kb_fidelity.py`,
+  `tests/integration/test_chat_capture.py`, `tests/functional/test_conversation_flows.py`,
+  `tests/integration/test_handoff.py`, `tests/integration/test_out_of_hours_and_farewell.py`.
+  RED: 7 capture/flow tests failed before implementation (email missing, consent still a field).
+  GREEN: focused `uv run pytest tests/integration/test_chat_capture.py
+  tests/functional/test_conversation_flows.py tests/integration/test_chat_booking.py
+  tests/unit/test_kb_fidelity.py` **63 passed**; full suite `uv run pytest tests/` **EXIT 0** with
+  the two known-flaky seed tests deselected. CI-3a code commit: `1a94d6a5`.
+- **CI-3b (next):** multi-field extraction (reuse the single classifier LLM call — add a `fields`
+  object to `agent/personas/classify.md`) plus grouped 2–3 questions replacing the single `_pending`
+  model.
