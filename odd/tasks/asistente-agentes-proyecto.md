@@ -115,7 +115,7 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] `default` namespace as implicit "no project" for admin/operator new chats; no visible "General" project. Technicians and unspecified roles retain project selection.
 
 ### A3 — Project files (large)
-- [ ] `project_files` table + migration (idempotent) + upload/download.
+- [x] `project_files` table + migration (idempotent) + upload/download. Commits `89ee041f`, `06a85ce3`; migration-test expectation fix `11ef749e`.
 - [ ] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber).
 - [ ] Ingest extracted content to `kb_documents(project_id)`.
 - [ ] Tools `list_project_files` / `read_project_file`.
@@ -197,3 +197,20 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `review-reliability`, 0 findings. Consent was granted by the owner via the native envelope;
   `review acknowledge-approved` returned `authority: burned`. Reviewed boundary for the next slice:
   `1cd09271`.
+
+- A3 (Slice 3) started after this doc's slices 1–2 entry; the worktree was recreated from new `main`
+  `e3575e49` and the session crashed ~2026-10-08 15:00 before documenting. Crash recovery
+  2026-10-08: working tree clean, no work lost; recovered commits `89ee041f`
+  (`feat(projects): persist project files` — `ProjectFile` model, `app/services/project_files.py`,
+  `db/migrations/042_project_files.sql`, `tests/integration/test_project_files.py`) and `06a85ce3`
+  (`feat(projects): expose project file upload and download API` — `app/panel/api/routes/project_files.py`,
+  serializer, `tests/functional/test_api_project_files.py`).
+- A3 partial verification and fix: the recovered slice left `tests/integration/test_migrations.py` RED
+  (`test_schema_migrations_records_version`, `test_all_tables_exist` did not know `042_project_files`);
+  fixed in `11ef749e` (`test(migrations): expect 042 project_files table and version`). Full backend after
+  fix: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — 1778 passed, 2 warnings.
+  Graph nodes consulted: `test_migrations.py`, `test_schema_migrations_records_version()`,
+  `test_all_tables_exist()`, `tests/conftest.py` (`migrated_db`), `app/config.py` (`get_settings`).
+- A3 still open: extractors (docx/xlsx/images, table-aware PDF via pdfplumber), ingest to
+  `kb_documents(project_id)`, tools `list_project_files`/`read_project_file`, downloadable artifact path,
+  UI "Archivos y conocimiento". RDD review of the A3 slice not yet assessed (boundary `e3575e49`).
