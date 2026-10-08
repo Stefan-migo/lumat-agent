@@ -254,3 +254,12 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `ingest_document -> KbDocument` and `upload_project_file -> store_project_file`.
 - A3 still open: tools `list_project_files`/`read_project_file`, downloadable artifact path,
   UI "Archivos y conocimiento".
+- A3.2 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
+  1d511d5d --committed-only` returned `risk: high` (`process_boundary` in
+  `tests/integration/test_migrations.py`), 13 paths, 723 lines, `review_due: true`. Lineage
+  `review-0d7df7cb8bc69017`, 4 lenses, 0 blocking findings; owner granted consent; `review
+  acknowledge-approved` returned `authority: burned`. Non-blocking advisory (follow-up, do NOT
+  re-review this candidate): the `except Exception` in `ingest_project_file` swallows the cause and
+  turns transient KB/embedding failures into a successful upload with `status="failed"` and no log —
+  `app/services/project_files.py:88,97-99` (R3-001/R4-001). Reviewed boundary for the next slice:
+  `f1ee53f9`.
