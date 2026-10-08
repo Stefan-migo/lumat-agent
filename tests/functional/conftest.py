@@ -163,3 +163,106 @@ def fake_embedder(monkeypatch):
             return (_fake_embedding(t) for t in texts)
 
     monkeypatch.setattr(kb_service, "get_embedder", lambda: _FakeEmbedder())
+
+
+@pytest.fixture
+def seed_customer_kb():
+    """Ingest a customer-visible KB document through the production service."""
+    def _seed(content: str):
+        from app.db import SessionLocal
+        from app.models import DocumentFormat, KbVisibility
+        from app.services import kb as kb_service
+
+        with SessionLocal() as session:
+            document = kb_service.ingest_document(
+                session, title="Golden-thread test", fmt=DocumentFormat.MD,
+                content=content.encode(), actor="functional-test",
+                visibility=KbVisibility.CUSTOMER,
+            )
+            session.commit()
+            return document.id
+
+    return _seed
+
+
+@pytest.fixture
+def seed_booking_availability():
+    """Create a technician and a future availability block for chat booking."""
+    def _seed():
+        from datetime import datetime, timedelta, timezone
+        from app.db import SessionLocal
+        from app.models import User, UserRole
+        from app.services import scheduling
+        from app.services.settings import set_setting
+
+        with SessionLocal() as session:
+            technician = User(
+                username="golden-thread-technician", password_hash="test",
+                role=UserRole.TECNICO,
+            )
+            session.add(technician)
+            session.flush()
+            starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
+                hour=9, minute=0, second=0, microsecond=0
+            )
+            scheduling.add_availability(
+                session, technician_id=technician.id, starts_at=starts,
+                ends_at=starts + timedelta(hours=8),
+            )
+            set_setting(session, "hours.timezone", "UTC")
+            technician_id = technician.id
+            session.commit()
+            return technician_id
+
+    return _seed
+
+
+@pytest.fixture
+def seed_future_appointment():
+    """Book an upcoming visit for the sender used by webhook_helpers."""
+    def _seed():
+        from datetime import datetime, timedelta, timezone
+        from app.db import SessionLocal
+        from app.models import Case, User, UserRole
+        from app.services import scheduling
+        from app.services.customers import get_or_create_customer
+        from tests.webhook_helpers import SENDER
+
+        with SessionLocal() as session:
+            customer = get_or_create_customer(session, f"+{SENDER}")
+            case = Case(service="Visita técnica", customer_id=customer.id)
+            technician = User(
+                username="golden-thread-manage-technician", password_hash="test",
+                role=UserRole.TECNICO,
+            )
+            session.add_all([case, technician])
+            session.flush()
+            start = (datetime.now(timezone.utc) + timedelta(days=3)).replace(
+                hour=10, minute=0, second=0, microsecond=0
+            )
+            availability_start = start - timedelta(days=1)
+            scheduling.add_availability(
+                session, technician_id=technician.id,
+                starts_at=availability_start,
+                ends_at=availability_start + timedelta(days=5),
+            )
+            appointment = scheduling.book(
+                session, service="Visita técnica", customer_id=customer.id,
+                case_id=case.id, technician_id=technician.id,
+                local_date=start.date(), local_time=start.time().replace(tzinfo=None),
+                timezone_name="UTC", duration_minutes=60, actor="functional-test",
+            )
+            appointment_ids = [appointment.id]
+            second_start = start + timedelta(days=2)
+            second = scheduling.book(
+                session, service="Visita técnica", customer_id=customer.id,
+                case_id=case.id, technician_id=technician.id,
+                local_date=second_start.date(),
+                local_time=second_start.time().replace(tzinfo=None),
+                timezone_name="UTC", duration_minutes=60, actor="functional-test",
+            )
+            appointment_ids.append(second.id)
+            session.commit()
+            return appointment_ids
+
+    return _seed

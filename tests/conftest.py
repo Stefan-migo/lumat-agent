@@ -26,6 +26,7 @@ defined here:
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -192,21 +193,50 @@ def classify_result_for(text: str) -> dict:
     """
     tl = text.lower()
     injection = is_injection(tl) or any(p in tl for p in _LLM_INJECTION_PHRASES)
-    if "caldera" in tl:
-        return {"intent": "caldera", "service": "caldera", "priority": "media", "status": "abierto", "injection": injection}
-    if "calefont" in tl:
-        return {"intent": "calefont", "service": "calefont", "priority": "media", "status": "abierto", "injection": injection}
-    if "calefaccion" in tl:
-        return {"intent": "calefaccion", "service": "calefaccion", "priority": "media", "status": "abierto", "injection": injection}
-    if "visita" in tl:
-        return {"intent": "solicitar_visita", "service": "visita", "priority": "alta", "status": "abierto", "injection": injection}
-    if "precio" in tl or "valor" in tl or "cuesta" in tl or "cuanto" in tl:
-        return {"intent": "valores", "service": "valores", "priority": "baja", "status": None, "injection": injection}
-    if "persona" in tl:
-        return {"intent": "persona", "service": None, "priority": None, "status": None, "injection": injection}
-    if "emergencia" in tl or "incendio" in tl:
-        return {"intent": "emergencia", "service": None, "priority": "alta", "status": "escalado", "injection": injection}
-    return {"intent": "unknown", "service": None, "priority": None, "status": None, "injection": injection}
+    # Deliberately conservative field extraction: this is a deterministic test
+    # double, not an attempt to reproduce the production model's NLP.
+    fields = {}
+    email = re.search(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", text)
+    if email:
+        fields["email"] = email.group()
+    address = re.search(r"\b(?:calle|av\.?|avenida|pasaje|los|las)\s+[\wáéíóúñ. ]+?\s+\d{1,6}\b", text, re.I)
+    if address:
+        fields["address"] = address.group().strip(" .,;")
+    name = re.match(r"\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)+)\s*,", text)
+    if name:
+        fields["name"] = name.group(1)
+    if re.search(r"\b(?:lunes|martes|miércoles|jueves|viernes|sábado|domingo|hoy|mañana|tarde|mañana|\d{1,2}:\d{2})\b", tl):
+        fields["availability"] = text.strip()
+    if re.search(r"\bno\s+(?:enciende|calienta|funciona|parte|prende|anda|sale|calienta)\b", tl):
+        fields["failure"] = text.strip()
+    # Equipment needs a model/brand/age clue; bare service names are intent only.
+    if re.search(r"\b(?:marca|modelo|años|junkers|splendid|mademsa)\b", tl):
+        fields["equipment"] = text.strip()
+    values = {"intent": "unknown", "service": None, "priority": None, "status": None}
+    if any(token in tl for token in ("cuanto", "cuánto", "cuesta", "sale", "precio", "valor")):
+        # Price questions take precedence even when they mention a visit.
+        values.update(intent="valores", service="valores", priority="baja")
+    elif any(token in tl for token in ("garantía", "garantia", "postventa", "me instalaron", "revisión de un trabajo", "revision de un trabajo")):
+        values.update(intent="postventa", service="postventa", priority="media", status="abierto")
+    elif "cancelar" in tl:
+        values.update(intent="cancelar_visita", service="visita", priority="media", status="abierto")
+    elif any(token in tl for token in ("reagendar", "cambiar la hora")):
+        values.update(intent="reagendar_visita", service="visita", priority="media", status="abierto")
+    elif any(token in tl for token in ("atienden", "cobertura", "horario", "dudas", "en la florida")):
+        values.update(intent="consulta", service="consulta", priority="baja")
+    elif "persona" in tl:
+        values.update(intent="persona")
+    elif "emergencia" in tl or "incendio" in tl:
+        values.update(intent="emergencia", priority="alta", status="escalado")
+    elif "caldera" in tl:
+        values.update(intent="caldera", service="caldera", priority="media", status="abierto")
+    elif "calefont" in tl:
+        values.update(intent="calefont", service="calefont", priority="media", status="abierto")
+    elif "calefaccion" in tl or "calefacción" in tl:
+        values.update(intent="calefaccion", service="calefaccion", priority="media", status="abierto")
+    elif "visita" in tl:
+        values.update(intent="solicitar_visita", service="visita", priority="alta", status="abierto")
+    return {**values, "injection": injection, "fields": fields}
 
 
 @pytest.fixture

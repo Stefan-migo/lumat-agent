@@ -124,6 +124,12 @@ UI copy below is the contract of intent; the exact wording is finalized in the t
             ¿Me pasas la dirección y la fecha del trabajo? Lo reviso.
 ```
 
+> **CI-5 note — POSTVENTA wording (pending owner ratification):** a bare `"fuga"` is a
+> strong emergency keyword by design (`app/services/emergency.py`), and the emergency gate
+> runs before classification, so `"quedó con una fuga"` escalates as an emergency and never
+> reaches the KB. The CI-5 test uses `"tengo una fuga de agua"` (the benign qualifier for
+> Lumat's gasfitería work) and pins the bare-leak escalation in its own test.
+
 ### Family 3 — Always escalate to human
 
 ```
@@ -240,7 +246,7 @@ Follow RED → GREEN → REFACTOR; never fall back to standard mode. Test marker
 - [x] Kept the triggers that must still fire (persona, complaint, injection, emergency).
 
 ### CI-5 — Golden-thread functional tests
-- [ ] One functional test per family (booking, KB, escalation, hidden) covering the contract above.
+- [x] One functional test per family (booking, KB, escalation, hidden) covering the contract above.
 
 ### CI-6 — Tone pass (owner, deferred)
 - [ ] Owner corrects copy during manual testing; adjust messages only.
@@ -344,3 +350,21 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
   the two known-flaky seed tests deselected. Commits `55e9fc32` (media is case evidence) and `0523db02`
   (optional evidence ask). RDD: 4-lens review `review-05186de94b2e39db` approved/acknowledged (authority
   burned); one non-blocking advisory R3-001 (media+text turn) left as follow-up.
+- **CI-5 implemented (2026-10-08).** Four golden-thread functional tests plus the harness support
+  they needed. `tests/conftest.py::classify_result_for` (the shared fake) was stale vs the CI-3b
+  contract: no `fields`, `"visita"` checked before price tokens (the turn-4 pivot classified as
+  `solicitar_visita`), and no `postventa`/`consulta`/`cancelar_visita`/`reagendar_visita`. It now
+  emits a conservative `fields` object over the extractable capture fields, gives price questions
+  precedence, and maps the missing intents (commit `680b55e3`). New
+  `tests/functional/test_golden_threads.py` drives the real webhook for all four families; turn 4 is
+  proven in ONE message (name+address extracted from the same pivot text and the agenda resumes with
+  only the missing fields). `tests/functional/conftest.py` gained KB / availability / appointment
+  seed fixtures (commit `cea5abf0`). Conflict found and pinned: a bare `"fuga"` is a strong emergency
+  keyword (`emergency.py`), so the task doc's POSTVENTA example `"quedó con una fuga"` escalates and
+  never reaches the KB — the thread uses `"fuga de agua"` (benign qualifier) and a separate test
+  asserts the bare-leak escalation (owner to ratify the wording). Verification: full suite
+  `uv run pytest tests/` **EXIT 0** with the two known-flaky seed tests deselected. RDD: 4-lens
+  review `review-2b95316df5abb587` approved/acknowledged (authority burned); three advisory
+  non-blocking findings — R3-001 (the bare-leak boundary test could also assert the safety reply)
+  and R3-002/R4-001 (availability fixture clock dependency, verified a false positive: `now + 2
+  days` reset to 09:00 is always ≥ ~1.4 days ahead).
