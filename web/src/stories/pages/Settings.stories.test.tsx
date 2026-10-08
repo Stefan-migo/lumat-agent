@@ -51,7 +51,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
     // The explanation precedes the textarea and is readable, not raw English.
-    expect(within(card).getByText(/el agente responde de forma automática/i)).toBeInTheDocument();
+    expect(card.querySelector(".card__description")).toHaveTextContent(/el agente responde de forma automática/i);
     expect(within(card).queryByText(/one rule per line: category=mode/i)).toBeNull();
   });
 
