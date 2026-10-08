@@ -63,11 +63,11 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
       New file under `web/src/components/primitives/`. Unit test (selection, disabled, a11y).
 - [x] **CF-3** — Message preview primitive (assistant bubble + note). Finding `configuracion-018`.
       New file under `web/src/components/primitives/`. Unit test.
-- [ ] **CF-4** — Three-metric row composition on the shared `StatCard` surface. Finding
+- [x] **CF-4** — Three-metric row composition on the shared `StatCard` surface. Finding
       `configuracion-019`. Extend `web/src/components/shared/StatCard.tsx` (+ test).
-- [ ] **CF-5** — Accordion group with count chip. Finding `configuracion-020`. New file under
+- [x] **CF-5** — Accordion group with count chip. Finding `configuracion-020`. New file under
       `web/src/components/primitives/`. Unit test (expand/collapse, count, a11y).
-- [ ] **CF-6** — `Card` header action / right-side slot (count, chip, "Consultar"). Finding
+- [x] **CF-6** — `Card` header action / right-side slot (count, chip, "Consultar"). Finding
       `configuracion-021`. Extend `web/src/components/primitives/Card.tsx` (+ test).
 
 ### Unit B — section shell and tabs
@@ -117,6 +117,18 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     `tokens/tokens.css`; corrected to `var(--info-tint)`. The day-toggle selected state follows the
     closed-section convention (`ClientFichaDialogs`): `--corp-text` border + `--success-tint`.
   - Note: not pushed / no PR opened yet.
+
+- **PR2 — Unit A roll-up primitives (CF-4, CF-5, CF-6)** — done on branch `odd/configuracion-redesign`.
+  - Commits: `93787e1b` StatCard three-metric row, `9445b7da` accordion group, `2f893f5d` Card header slot.
+  - Files: `shared/StatCard.tsx` (+ test), `primitives/Accordion.tsx` (+ test),
+    `primitives/Card.tsx` (+ test), `primitives/primitives.css`.
+  - Graph nodes consulted (graphify 0.9.40): `StatCard()`, `Card()`, `shared/helpers.test.tsx`,
+    `shared/DataTable.tsx`, `ClientMemories.tsx`, `Settings.tsx`, `KbList.tsx`, `Dashboard.tsx`,
+    community `shared/toneMaps.ts`.
+  - Verified: focused vitest 7/7 green; `npm run build` (tsc -b + vite build) green.
+  - Design notes: `StatCard` is now a discriminated union (single value OR a `metrics` tuple of 3);
+    the metric row uses a CSS grid with dividers and collapses to one column at ≤40rem.
+    `Accordion` uses `aria-expanded`/`aria-controls` + `role="region"` and a `Badge` count chip.
 
 ## Verification
 
