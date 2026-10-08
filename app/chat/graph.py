@@ -134,10 +134,7 @@ def run_internal_conversation(
 
 
 def _flow_start(state: ConversationState) -> str:
-    """Mid-capture messages continue the capture sub-flow (CM-2), skipping
-    re-classification (saves an LLM call; answers are field values, not intents)."""
-    if "_pending" in (state.captured or {}):
-        return "capture"
+    """Skip classification for a greeting-only first turn; otherwise classify."""
     if state.turn <= 1 and _greeting_only(state):
         return END
     return "classify_intent"
@@ -215,6 +212,16 @@ def _after_respond(state: ConversationState) -> str:
     return "handoff" if state.escalate else END
 
 
+def _after_research_triage(state: ConversationState) -> str:
+    """Resume the capture agenda after a KB deviation was answered (CI-2).
+
+    Only when a mid-capture deviation was routed here (capture_paused) and the
+    sub-graph did not itself escalate/hand off. A KB miss sets `escalate` inside
+    the sub-graph and must terminate, never resume.
+    """
+    return "capture" if state.capture_paused and not state.escalate else END
+
+
 def _triage_node(subgraph):
     """Wrap the triage sub-graph so it does not re-add the parent's replies.
 
@@ -290,7 +297,7 @@ def build_graph():
     builder.add_conditional_edges(
         "receive",
         _flow_start,
-        {"capture": "capture", "classify_intent": "classify_intent", END: END},
+        {"classify_intent": "classify_intent", END: END},
     )
     builder.add_edge("classify_intent", "orchestrate")
     builder.add_conditional_edges(
@@ -308,7 +315,11 @@ def build_graph():
     builder.add_conditional_edges("booking", _after_booking, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("manage", _after_manage, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("respond", _after_respond, {"handoff": "handoff", END: END})
-    builder.add_edge("research_triage", END)
+    builder.add_conditional_edges(
+        "research_triage",
+        _after_research_triage,
+        {"capture": "capture", END: END},
+    )
     builder.add_edge("handoff", END)
     builder.add_edge("emergency", END)
     builder.add_edge("summary", END)

@@ -119,6 +119,11 @@ def capture(state: ConversationState) -> dict:
     captured = dict(state.captured)
     pending = captured.get("_pending")
 
+    if state.capture_paused and pending is not None:
+        # CI-2: do not store deviation text as the pending value; re-ask and resume.
+        question = dict(CAPTURE_FIELDS)[pending]
+        return {"capture_paused": False, "replies": [question]}
+
     if pending is None:
         # First capture turn: the current message is the menu choice/intent,
         # not an answer. Ask the first field without storing anything.

@@ -33,6 +33,7 @@ from app.db import SessionLocal, session_scope  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
     Conversation,
+    ConversationEvent,
     Customer,
     CustomerEquipment,
     DocumentFormat,
@@ -131,6 +132,45 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     assert captured["comuna"] == "Providencia"
     assert captured["address"] == "Av Siempre Viva 123"
     assert captured["_pending"] == "equipment"
+
+
+def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_chat, fake_embedder):
+    _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos", KbVisibility.CUSTOMER)
+    conv_id = _start_conversation()
+
+    _turn(conv_id, "quiero una visita", "wamid.dev0")
+    assert _conversation_captured(conv_id)["_pending"] == "name"
+    replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.dev1")
+
+    assert any("Segun el manual de Lumat" in reply for reply in replies)
+    assert any("¿Cuál es tu nombre?" in reply for reply in replies)
+    captured = _conversation_captured(conv_id)
+    assert captured.get("name") != "cuanto cuesta la revision anual"
+    assert captured["_pending"] == "name"
+    with SessionLocal() as session:
+        unknown_count = session.scalar(
+            select(ConversationEvent.id).where(
+                ConversationEvent.conversation_id == conv_id,
+                ConversationEvent.event == "unknown_intent",
+            )
+        )
+        assert unknown_count is None
+        assert session.get(Conversation, conv_id).state.value != "human"
+
+
+def test_cm2_field_answers_do_not_burn_unknown_attempts(mock_openai_chat):
+    conv_id = _start_conversation()
+    for index, text in enumerate(["quiero una visita", "Juan Perez", "Providencia"]):
+        _turn(conv_id, text, f"wamid.unknown-field{index}")
+
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value != "human"
+        assert session.scalar(
+            select(ConversationEvent.id).where(
+                ConversationEvent.conversation_id == conv_id,
+                ConversationEvent.event == "unknown_intent",
+            )
+        ) is None
 
 
 def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
