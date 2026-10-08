@@ -5,7 +5,11 @@ import { settings } from "./_shared/mockData/settings";
 import type { AssistantCapabilities } from "../../types";
 
 const capabilities: AssistantCapabilities = {
-  tools: [{ name: "agenda", description: "Consulta horarios", read_only: true, write: false }],
+  tools: [
+    { name: "agenda.consultar", description: "Consulta horarios", read_only: true, write: false },
+    { name: "kb.retrieve", description: "Busca información en documentos", read_only: true, write: false },
+    { name: "agenda.crear_visita", description: "Agenda una visita", read_only: false, write: true },
+  ],
   personas: ["Cercana"],
   prompts: ["Atención inicial"],
   kb_available: true,

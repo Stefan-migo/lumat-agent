@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleHelp, Globe2, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound } from "lucide-react";
+import { BookOpen, Brain, CircleHelp, Globe2, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
+import { Accordion } from "../primitives/Accordion";
 import { Card } from "../primitives/Card";
 import { HelpPanel } from "../primitives/HelpPanel";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
+import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { MessagePreview } from "../primitives/MessagePreview";
@@ -110,7 +112,42 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
 }
 
 export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
-  return <Card title="Capacidades del asistente"><h3>Herramientas</h3><ul>{capabilities.tools.map((tool) => <li key={tool.name}><strong>{tool.name}</strong>: {tool.description}{" "}<Badge tone={tool.read_only ? "neutral" : "warning"}>{tool.read_only ? "Solo lectura" : "Puede escribir"}</Badge></li>)}</ul><h3>Configuración activa</h3><p>Personas: {capabilities.personas.join(", ")}</p><p>Prompts: {capabilities.prompts.join(", ")}</p><p>{capabilities.kb_available ? "KB disponible" : "KB no disponible"} · {capabilities.memory_available ? "Memoria disponible" : "Memoria no disponible"}</p></Card>;
+  const [query, setQuery] = useState("");
+  const [access, setAccess] = useState("all");
+  const toolAccess = (tool: AssistantCapabilities["tools"][number]) => tool.write ? "write" : tool.read_only ? "read" : "limited";
+  const filteredTools = capabilities.tools.filter((tool) => {
+    const matchesAccess = access === "all" || toolAccess(tool) === access;
+    const search = query.trim().toLocaleLowerCase();
+    return matchesAccess && (!search || `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(search));
+  });
+  const groupNames: Record<string, string> = { kb: "Conocimiento y memoria", memory: "Conocimiento y memoria", web: "Web", system: "Sistema", agenda: "Operación", cases: "Operación", customers: "Operación", projects: "Operación" };
+  const groupedTools = new Map<string, AssistantCapabilities["tools"]>();
+  filteredTools.forEach((tool) => {
+    const namespace = tool.name.includes(".") ? tool.name.split(".")[0] : "system";
+    groupedTools.set(namespace, [...(groupedTools.get(namespace) ?? []), tool]);
+  });
+  const groups = [...groupedTools].map(([namespace, tools]) => ({ namespace, title: groupNames[namespace] ?? (namespace === "system" ? "Sistema" : namespace), tools }))
+    .sort((left, right) => left.title.localeCompare(right.title) || left.namespace.localeCompare(right.namespace));
+  const accessOptions = [{ value: "all", label: "Todos los accesos" }, { value: "read", label: "Solo lectura" }, { value: "write", label: "Puede escribir" }, { value: "limited", label: "Acceso limitado" }];
+  const availability = (available: boolean) => <span className={`settings-capabilities__availability${available ? " is-available" : ""}`}><span aria-hidden="true" />{available ? "Disponible" : "No disponible"}</span>;
+  return <div className="settings-capabilities__layout">
+    <Card title="Herramientas del asistente" headerAction={<Badge tone="neutral">{capabilities.tools.length}</Badge>}>
+      <div className="settings-capabilities__filters"><SearchInput aria-label="Buscar herramientas" placeholder="Buscar herramientas" onSearch={setQuery} /><Select label="Acceso" value={access} onChange={(event) => setAccess(event.target.value)} options={accessOptions} /></div>
+      <div className="settings-capabilities__groups">{groups.map(({ namespace, title, tools }) => <Accordion key={namespace} title={title} count={tools.length} defaultExpanded>
+        <ul className="settings-capabilities__tools">{tools.map((tool) => <li className="settings-capabilities__tool" key={tool.name}>
+          <Wrench aria-hidden="true" /><span className="settings-capabilities__tool-copy"><strong>{tool.name.split(".").at(-1)?.replaceAll("_", " ")}</strong><code>{tool.name}</code></span>
+          <Badge tone={toolAccess(tool) === "write" ? "warning" : "neutral"}>{toolAccess(tool) === "write" ? "Puede escribir" : toolAccess(tool) === "read" ? "Solo lectura" : "Acceso limitado"}</Badge>
+        </li>)}</ul>
+      </Accordion>)}</div>
+      {!filteredTools.length ? <p className="settings-capabilities__empty">No hay herramientas que coincidan con la búsqueda.</p> : null}
+    </Card>
+    <Card title="Configuración activa" headerAction={<a className="btn btn--tertiary" href="/panel/app/kb">Consultar</a>}>
+      <div className="settings-capabilities__availability-row"><BookOpen aria-hidden="true" /><span>Base de conocimientos</span>{availability(capabilities.kb_available)}</div>
+      <div className="settings-capabilities__availability-row"><Brain aria-hidden="true" /><span>Memoria</span>{availability(capabilities.memory_available)}</div>
+      <div className="settings-capabilities__paths"><div><strong>Persona</strong><span>{capabilities.personas.join(", ") || "Sin configurar"}</span></div><div><strong>Prompts</strong><span>{capabilities.prompts.join(", ") || "Sin configurar"}</span></div></div>
+      <p className="settings__footer-note">{GENERIC_NOTE}</p>
+    </Card>
+  </div>;
 }
 
 export function Settings({ data: controlledData, state: controlledState, onRetry, capabilities: controlledCapabilities }: SettingsProps = {}) {

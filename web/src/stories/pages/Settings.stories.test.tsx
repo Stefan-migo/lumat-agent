@@ -9,8 +9,8 @@ import type { AssistantCapabilities } from "../../types";
 
 const capabilities: AssistantCapabilities = {
   tools: [
-    { name: "agenda", description: "Consulta horarios", read_only: true, write: false },
-    { name: "crear_visita", description: "Agenda una visita", read_only: false, write: true },
+    { name: "agenda.consultar", description: "Consulta horarios", read_only: true, write: false },
+    { name: "agenda.crear_visita", description: "Agenda una visita", read_only: false, write: true },
   ],
   personas: ["Cercana", "Técnica"],
   prompts: ["Atención inicial", "Emergencias"],
@@ -240,7 +240,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(push).getByText(/correo o whatsapp|activa avisos/i)).toBeInTheDocument();
   });
 
-  it("renders capability data with Spanish labels and translated availability", async () => {
+  it("renders grouped capability tools and translated configuration availability", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (input === "/panel/api/settings") return new Response(JSON.stringify(settings), { status: 200 });
       if (input === "/panel/api/assistant/capabilities") return new Response(JSON.stringify(capabilities), { status: 200 });
@@ -250,13 +250,19 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<Settings />);
     await selectSection("Capacidades");
 
-    const card = await screen.findByRole("heading", { name: "Capacidades del asistente" });
-    expect(within(card.closest(".card") as HTMLElement).getByText("agenda")).toBeInTheDocument();
-    expect(within(card.closest(".card") as HTMLElement).getByText("Solo lectura")).toBeInTheDocument();
-    expect(within(card.closest(".card") as HTMLElement).getByText("Puede escribir")).toBeInTheDocument();
-    expect(screen.getByText("Personas: Cercana, Técnica")).toBeInTheDocument();
-    expect(screen.getByText("Prompts: Atención inicial, Emergencias")).toBeInTheDocument();
-    expect(screen.getByText("KB disponible · Memoria no disponible")).toBeInTheDocument();
+    const card = await screen.findByRole("heading", { name: "Herramientas del asistente" });
+    const toolsCard = card.closest(".card") as HTMLElement;
+    expect(within(toolsCard).getByText("consultar")).toBeInTheDocument();
+    expect(within(toolsCard).getByText("crear visita")).toBeInTheDocument();
+    expect(within(toolsCard).getByText("agenda.crear_visita").tagName).toBe("CODE");
+    expect(within(toolsCard).getAllByText("Solo lectura")).toHaveLength(2);
+    expect(within(toolsCard).getAllByText("Puede escribir")).toHaveLength(2);
+    expect(within(toolsCard).getByRole("button", { name: /Operación/ })).toHaveTextContent("2");
+    expect(screen.getByText("Cercana, Técnica")).toBeInTheDocument();
+    expect(screen.getByText("Atención inicial, Emergencias")).toBeInTheDocument();
+    expect(screen.getByText("Disponible")).toBeInTheDocument();
+    expect(screen.getByText("No disponible")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Consultar" })).toHaveAttribute("href", "/panel/app/kb");
     expect(screen.queryByText(/read_only|kb_available|memory_available/)).toBeNull();
     fetchMock.mockRestore();
   });

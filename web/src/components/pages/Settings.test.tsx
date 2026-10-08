@@ -99,4 +99,28 @@ describe("Settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar tono" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled());
   });
+
+  it("groups, searches, and filters capability tools from the available payload fields", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={{
+      tools: [
+        { name: "kb.retrieve", description: "Busca documentos", read_only: true, write: false },
+        { name: "kb.index", description: "Indexa documentos", read_only: false, write: true },
+        { name: "plain_tool", description: "Herramienta general", read_only: true, write: false },
+      ], personas: ["Cercana"], prompts: ["Atención inicial"], kb_available: true, memory_available: false,
+    }} />);
+    await user.click(screen.getByRole("tab", { name: "Capacidades" }));
+    expect(screen.getByRole("heading", { name: "Herramientas del asistente" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /Conocimiento y memoria/ })).toBeVisible();
+    expect(screen.getByText("retrieve")).toBeInTheDocument();
+    expect(screen.getByText("kb.retrieve").tagName).toBe("CODE");
+    expect(screen.getAllByText("Solo lectura")).toHaveLength(3);
+    await user.selectOptions(screen.getByLabelText("Acceso"), "write");
+    expect(screen.getByText("index")).toBeInTheDocument();
+    expect(screen.queryByText("retrieve")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Buscar herramientas"), { target: { value: "no existe" } });
+    await waitFor(() => expect(screen.getByText("No hay herramientas que coincidan con la búsqueda.")).toBeInTheDocument());
+    expect(screen.getByText("Disponible")).toBeInTheDocument();
+    expect(screen.getByText("No disponible")).toBeInTheDocument();
+  });
 });
