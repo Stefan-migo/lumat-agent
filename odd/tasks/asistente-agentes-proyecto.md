@@ -183,7 +183,7 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   Frontend from `web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run
   src/components/pages/AgentChat.test.tsx` — 1 file / 48 tests passed; `npx vitest run
   --no-file-parallelism` — 97 files / 1051 tests passed; `npm run build` passed (existing large-chunk
-  warning). Commit: pending.
+  warning). Implementation commit: `986fd7f8` (`feat(assistant): start projectless chats for operators`).
 - Slice 1 RDD assessment: `gentle-ai review assess --cwd <worktree> --agent opencode --base-ref 23ff4cd1
   --committed-only` → `risk: medium` (`executable_change` in `app/panel/api/routes/projects.py`),
   `changed_paths: 9`, `changed_lines: 365`, `review_due: false` (`under_budget`) → no review opened yet;
