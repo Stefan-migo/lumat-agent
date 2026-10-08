@@ -72,9 +72,9 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ### Unit B — section shell and tabs
 
-- [ ] **CF-7** — Settings shell: 5-tab navigation via the `Tabs` primitive on desktop/tablet and a
+- [x] **CF-7** — Settings shell: 5-tab navigation via the `Tabs` primitive on desktop/tablet and a
       "Sección" `Select` on mobile, replacing the 10 stacked cards. Finding `configuracion-001`.
-- [ ] **CF-8** — Draft/save ownership model: refetch must not silently discard unsaved edits; add the
+- [x] **CF-8** — Draft/save ownership model: refetch must not silently discard unsaved edits; add the
       reference save notes and disabled-until-valid save state per card. Findings `configuracion-013`,
       `configuracion-022`.
 
@@ -129,6 +129,19 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
   - Design notes: `StatCard` is now a discriminated union (single value OR a `metrics` tuple of 3);
     the metric row uses a CSS grid with dividers and collapses to one column at ≤40rem.
     `Accordion` uses `aria-expanded`/`aria-controls` + `role="region"` and a `Badge` count chip.
+
+- **PR3 — Settings shell + draft/save (CF-7, CF-8)** — done on branch `odd/configuracion-redesign`.
+  - Commit: `05d0cb1f` rebuild Settings into a 5-tab shell with draft/save model.
+  - Files: `pages/Settings.tsx`, `pages/Settings.css` (new), `pages/Settings.test.tsx` (new).
+  - First user-visible slice. 5 tabs (Agente, Mensajes, Horarios y avisos, Costos, Capacidades) via the
+    `Tabs` primitive; a "Sección" `Select` drives the same state at ≤40rem. `PushSettings` stays embedded
+    in Horarios y avisos; its separate route in `AppShell.tsx` is untouched.
+  - Draft/save: per-field dirtiness vs the last persisted baseline; a refetch adopts server values only
+    for non-dirty fields, so unsaved edits survive. Save buttons disable while pending or invalid; each
+    card carries the reference footer note.
+  - Validation rule (conservative, pending owner visual pass): required non-empty; numeric fields finite
+    and non-negative; schedule needs timezone + ≥1 day + non-empty open<close. No invented upper bounds.
+  - Verified: focused vitest 4/4 green; `npm run build` green.
 
 ## Verification
 
