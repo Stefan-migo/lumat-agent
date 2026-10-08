@@ -171,9 +171,20 @@ UI copy below is the contract of intent; the exact wording is finalized in the t
    mandatory capture field. Consequence: `handoff_gate` MUST stop routing media to a human while the
    capture is active; media is stored as case evidence instead (CI-4).
 2. **Email — RESOLVED.** Mandatory for booking; add it to the batched data request (CI-3).
+3. **Media handoff — RESOLVED (2026-10-08, Option B).** Media **never** routes to a human by itself —
+   not only "during capture". Only persona / complaint / injection / emergency escalate.
+4. **Evidence storage — RESOLVED (2026-10-08, Option A minimal).** CI-4 keeps evidence as the
+   already-downloaded file (`media/<wamid>.<ext>`) + the conversation thread; **no schema change**. The
+   explicit media/evidence store (Option C) is deferred to the debt phase — see Declared debt.
 
 ## Declared debt (not blocking)
 
+- **Explicit media/evidence store (Option C) — deferred to the debt phase.** A real store: migration +
+  a media table modeled on `AssistantAttachment` (`app/models.py:898`) + an authenticated serving route
+  + frontend image/audio rendering + case linkage. Deferred because CI-4 is already >400 authored lines
+  and the store touches `app/models.py` + `db/migrations` (semantic-merge risk with the in-flight
+  worktrees). Today `download_media()` discards the local `Path` and `Message.media_url` holds the
+  ephemeral Meta lookaside URL (it expires). Working name: `media-evidence-store`.
 - **`VALORES` KB content is pending from Lumat.** The service quote format ("formato de cotización")
   must live in the KB; it is not confirmed to exist. Until then, useplaceholder test documentation
   with clearly-fake values so the thread can be tested without inventing business content. Track it as
@@ -223,10 +234,10 @@ Follow RED → GREEN → REFACTOR; never fall back to standard mode. Test marker
 - [x] Extract multiple fields from one free-text message (same classifier LLM call).
 - [x] Ask only missing fields, grouped 2–3, natural language, no numbered lists.
 
-### CI-4 — Media as evidence (photo/audio for the technician)
-- [ ] Stop `handoff_gate` from routing media to a human during capture; store media as case evidence.
-- [ ] Add the optional "algo más para el técnico" ask; never a mandatory field.
-- [ ] Keep the triggers that must still fire (persona, complaint, injection, emergency).
+### CI-4 — Media as evidence (photo/audio for the technician) — DONE
+- [x] `handoff_gate` no longer routes media to a human; media is case evidence (never a handoff trigger).
+- [x] Added the optional "algo más para el técnico" ask; never a mandatory field.
+- [x] Kept the triggers that must still fire (persona, complaint, injection, emergency).
 
 ### CI-5 — Golden-thread functional tests
 - [ ] One functional test per family (booking, KB, escalation, hidden) covering the contract above.
@@ -320,3 +331,16 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
   handoff/out-of-hours/prompts) **110 passed**; full suite **EXIT 0** with the two known-flaky seed
   tests deselected. New `test_cm3_extracts_multiple_fields_from_one_message` proves multi-field
   extraction from a single message. CI-3b code commit: see the accompanying `feat` commit.
+- **CI-4 implemented (2026-10-08).** Media is case evidence, never a handoff trigger (owner Option B).
+  `handoff_gate` dropped the `media_evidence` trigger (persona/complaint/injection/emergency remain);
+  `is_media_evidence()` distinguishes a media message with no text. `receive` acknowledges media-only
+  turns (`EVIDENCE_ACK`); `capture` treats a media turn as evidence and resumes the agenda without
+  attributing it to a field; `evidence` left `CAPTURE_FIELDS` and the optional ask (`EVIDENCE_QUESTION`)
+  is appended once to the last mandatory batch (non-blocking). Evidence stays the already-downloaded
+  file + the conversation thread (Option A; explicit store deferred — see Declared debt). Files:
+  `app/chat/nodes/{handoff_gate,receive,capture}.py`, `app/webhook/ingest.py`, `scripts/kb_fidelity.py`,
+  `openspec/specs/conversation-manager/spec.md`, `tests/integration/{test_handoff,test_chat_capture}.py`,
+  `tests/functional/test_conversation_flows.py`. RED→GREEN; focused 100 passed; full suite EXIT 0 with
+  the two known-flaky seed tests deselected. Commits `55e9fc32` (media is case evidence) and `0523db02`
+  (optional evidence ask). RDD: 4-lens review `review-05186de94b2e39db` approved/acknowledged (authority
+  burned); one non-blocking advisory R3-001 (media+text turn) left as follow-up.

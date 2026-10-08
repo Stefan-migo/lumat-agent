@@ -10,7 +10,7 @@ Scenarios mapped 1:1 from openspec/changes/hito-1-setup-whatsapp/specs/human-han
 - HH-2 "Handoff bundle complete": the case contains full history, summary,
   customer data and captured fields
 - HH-3 "Customer requests a person" / "Two failed comprehension attempts":
-  deterministic triggers -> handoff (persona, 2x unknown, media evidence,
+  deterministic triggers -> handoff (persona, 2x unknown,
   complaint keywords, SS-1 always_escalate scope)
 - HH-5 "Webhook keeps recording during human phase": inbound messages in
   `human` state are persisted, never answered by the bot loop
@@ -183,11 +183,11 @@ def test_gate_persona_trigger():
     assert handoff_gate(_gate_state("necesito un humano")) == {"handoff_reason": "persona"}
 
 
-def test_gate_media_evidence_trigger():
-    """HH-3 evidence: a photo/video/audio message -> handoff for review."""
+def test_gate_media_is_not_a_handoff_trigger():
+    """Media is case evidence, not a standalone reason to hand off."""
     for msg_type in ("image", "video", "audio", "document", "sticker"):
         assert handoff_gate(_gate_state(text=None, msg_type=msg_type)) == {
-            "handoff_reason": "media_evidence"
+            "handoff_reason": None
         }, msg_type
 
 
@@ -413,8 +413,8 @@ def test_complaint_escalates_to_human(mock_openai_chat):
     assert _case(conv_id).bundle["escalate_reason"] == "complaint"
 
 
-def test_media_evidence_escalates_through_process_message(mock_openai_chat, mock_meta_send):
-    """HH-3 evidence: an inbound image (no text) escalates for review."""
+def test_media_evidence_does_not_escalate(mock_openai_chat, mock_meta_send):
+    """An inbound image is kept as evidence and acknowledged without handoff."""
     from app.webhook.ingest import process_message
 
     conv_id = _start_conversation()
@@ -425,6 +425,7 @@ def test_media_evidence_escalates_through_process_message(mock_openai_chat, mock
                 conversation_id=conv_id,
                 direction=MessageDirection.INBOUND,
                 msg_type=MessageType.IMAGE,
+                payload={"image": {"id": "media-1", "mime_type": "image/jpeg"}},
                 status=MessageStatus.RECEIVED,
             )
         )
@@ -435,10 +436,22 @@ def test_media_evidence_escalates_through_process_message(mock_openai_chat, mock
         process_message(session, msg)
         session.commit()
 
-    assert _conversation_state(conv_id) == "human"
-    case = _case(conv_id)
-    assert case.bundle["escalate_reason"] == "media_evidence"
-    assert any(m["msg_type"] == "image" for m in case.bundle["history"])
+    assert _conversation_state(conv_id) == "bot"
+    with SessionLocal() as session:
+        assert session.scalar(select(Case).where(Case.conversation_id == conv_id)) is None
+        inbound = session.scalars(select(Message).where(Message.wamid == "wamid.img1")).one()
+        assert inbound.msg_type == MessageType.IMAGE
+        assert inbound.media_url is None
+        assert inbound.payload["image"]["id"] == "media-1"
+        replies = list(
+            session.scalars(
+                select(Message).where(
+                    Message.conversation_id == conv_id,
+                    Message.direction == MessageDirection.OUTBOUND,
+                )
+            )
+        )
+        assert replies
 
 
 # ---------------------------------------------------------------------------

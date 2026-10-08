@@ -358,9 +358,8 @@ def process_message(session, message: Message) -> None:
     number, no panel reply). Ack handling still runs (a customer "ok" acks an
     unacked emergency); no LLM call, no outbound delivery.
 
-    HH-3 (T4.4): media-only inbound (photo/video/audio/document) runs the
-    graph too, so the handoff gate can escalate evidence for technical review
-    (previously a media message was silently persisted without any answer).
+    CI-4: media-only inbound (photo/video/audio/document) runs the graph too,
+    so it is acknowledged as case evidence, not escalated by itself.
     """
     if message.media_url:
         settings = get_settings()

@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleHelp, Globe2, ShieldAlert, SlidersHorizontal, Trash2 } from "lucide-react";
+import { BookOpen, Brain, CircleHelp, Globe2, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
+import { Accordion } from "../primitives/Accordion";
 import { Card } from "../primitives/Card";
 import { HelpPanel } from "../primitives/HelpPanel";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
+import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { MessagePreview } from "../primitives/MessagePreview";
 import { DayToggle } from "../primitives/DayToggle";
-import { DataTable, tabularNum, type Column } from "../shared/DataTable";
+import { StatCard } from "../shared/StatCard";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { PushSettings } from "./PushSettings";
@@ -110,7 +112,42 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
 }
 
 export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
-  return <Card title="Capacidades del asistente"><h3>Herramientas</h3><ul>{capabilities.tools.map((tool) => <li key={tool.name}><strong>{tool.name}</strong>: {tool.description}{" "}<Badge tone={tool.read_only ? "neutral" : "warning"}>{tool.read_only ? "Solo lectura" : "Puede escribir"}</Badge></li>)}</ul><h3>Configuración activa</h3><p>Personas: {capabilities.personas.join(", ")}</p><p>Prompts: {capabilities.prompts.join(", ")}</p><p>{capabilities.kb_available ? "KB disponible" : "KB no disponible"} · {capabilities.memory_available ? "Memoria disponible" : "Memoria no disponible"}</p></Card>;
+  const [query, setQuery] = useState("");
+  const [access, setAccess] = useState("all");
+  const toolAccess = (tool: AssistantCapabilities["tools"][number]) => tool.write ? "write" : tool.read_only ? "read" : "limited";
+  const filteredTools = capabilities.tools.filter((tool) => {
+    const matchesAccess = access === "all" || toolAccess(tool) === access;
+    const search = query.trim().toLocaleLowerCase();
+    return matchesAccess && (!search || `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(search));
+  });
+  const groupNames: Record<string, string> = { kb: "Conocimiento y memoria", memory: "Conocimiento y memoria", web: "Web", system: "Sistema", agenda: "Operación", cases: "Operación", customers: "Operación", projects: "Operación" };
+  const groupedTools = new Map<string, AssistantCapabilities["tools"]>();
+  filteredTools.forEach((tool) => {
+    const namespace = tool.name.includes(".") ? tool.name.split(".")[0] : "system";
+    groupedTools.set(namespace, [...(groupedTools.get(namespace) ?? []), tool]);
+  });
+  const groups = [...groupedTools].map(([namespace, tools]) => ({ namespace, title: groupNames[namespace] ?? (namespace === "system" ? "Sistema" : namespace), tools }))
+    .sort((left, right) => left.title.localeCompare(right.title) || left.namespace.localeCompare(right.namespace));
+  const accessOptions = [{ value: "all", label: "Todos los accesos" }, { value: "read", label: "Solo lectura" }, { value: "write", label: "Puede escribir" }, { value: "limited", label: "Acceso limitado" }];
+  const availability = (available: boolean) => <span className={`settings-capabilities__availability${available ? " is-available" : ""}`}><span aria-hidden="true" />{available ? "Disponible" : "No disponible"}</span>;
+  return <div className="settings-capabilities__layout">
+    <Card title="Herramientas del asistente" headerAction={<Badge tone="neutral">{capabilities.tools.length}</Badge>}>
+      <div className="settings-capabilities__filters"><SearchInput aria-label="Buscar herramientas" placeholder="Buscar herramientas" onSearch={setQuery} /><Select label="Acceso" value={access} onChange={(event) => setAccess(event.target.value)} options={accessOptions} /></div>
+      <div className="settings-capabilities__groups">{groups.map(({ namespace, title, tools }) => <Accordion key={namespace} title={title} count={tools.length} defaultExpanded>
+        <ul className="settings-capabilities__tools">{tools.map((tool) => <li className="settings-capabilities__tool" key={tool.name}>
+          <Wrench aria-hidden="true" /><span className="settings-capabilities__tool-copy"><strong>{tool.name.split(".").at(-1)?.replaceAll("_", " ")}</strong><code>{tool.name}</code></span>
+          <Badge tone={toolAccess(tool) === "write" ? "warning" : "neutral"}>{toolAccess(tool) === "write" ? "Puede escribir" : toolAccess(tool) === "read" ? "Solo lectura" : "Acceso limitado"}</Badge>
+        </li>)}</ul>
+      </Accordion>)}</div>
+      {!filteredTools.length ? <p className="settings-capabilities__empty">No hay herramientas que coincidan con la búsqueda.</p> : null}
+    </Card>
+    <Card title="Configuración activa" headerAction={<a className="btn btn--tertiary" href="/panel/app/kb">Consultar</a>}>
+      <div className="settings-capabilities__availability-row"><BookOpen aria-hidden="true" /><span>Base de conocimientos</span>{availability(capabilities.kb_available)}</div>
+      <div className="settings-capabilities__availability-row"><Brain aria-hidden="true" /><span>Memoria</span>{availability(capabilities.memory_available)}</div>
+      <div className="settings-capabilities__paths"><div><strong>Persona</strong><span>{capabilities.personas.join(", ") || "Sin configurar"}</span></div><div><strong>Prompts</strong><span>{capabilities.prompts.join(", ") || "Sin configurar"}</span></div></div>
+      <p className="settings__footer-note">{GENERIC_NOTE}</p>
+    </Card>
+  </div>;
 }
 
 export function Settings({ data: controlledData, state: controlledState, onRetry, capabilities: controlledCapabilities }: SettingsProps = {}) {
@@ -171,11 +208,6 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     void save("scope", "/panel/api/settings/scope", { rules }, draft.scope);
   };
   const snapshot = data?.snapshot;
-  const columns: Column<{ label: string; value: string }>[] = [
-    { key: "label", header: "Fecha", render: (row) => row.label },
-    { key: "daily_spend", header: "Gasto diario", render: (row) => tabularNum(row.value), align: "right" },
-  ];
-  const spendRows = snapshot ? [{ label: snapshot.date, value: `$${snapshot.daily_spend.toFixed(4)}` }, { label: "Límite diario", value: `$${snapshot.daily_limit.toFixed(2)}` }, { label: "% del límite", value: `${snapshot.daily_percent.toFixed(1)}%` }] : [];
   const state = saveState ?? pageState;
   const retry = onRetry ?? fetched.retry;
   const capabilityState = controlledCapabilities ? "ready" : fetchedCapabilities.state;
@@ -233,10 +265,30 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           <Card title="Horarios de atención"><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
           <div className="settings-hours__aside"><Card title="Notificaciones push"><PushSettings embedded /></Card><Card title="Fuera de horario"><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div> : null}
-        {active === "costs" ? <>
-          <Card title="Límites de gasto"><p>Topes de gasto por conversación y por día. Al 80% el agente se vuelve más conservador; al 100% se detienen las llamadas de pago y la conversación pasa a una persona.</p><Input label="Límite por conversación (USD)" type="number" value={draft.conversationLimit} onChange={(event) => update("conversationLimit", event.target.value)} /><Input label="Límite diario (USD)" type="number" value={draft.dailyLimit} onChange={(event) => update("dailyLimit", event.target.value)} /><Button variant="secondary" disabled={saving("conversationLimit") || saving("dailyLimit") || !numericLimitsValid} onClick={() => void save("conversationLimit", "/panel/api/settings/limits", { conversation_limit: Number(draft.conversationLimit), daily_limit: Number(draft.dailyLimit) }, draft.conversationLimit)}>Guardar límites</Button>{footer()}</Card>
-          <Card title="Precio Meta"><p>Costo por mensaje de servicio (USD), vigente desde 2026-10-01.</p><Input label="Costo por mensaje (USD)" type="number" value={draft.metaCost} onChange={(event) => update("metaCost", event.target.value)} /><Button variant="secondary" disabled={saving("metaCost") || !isValidNonNegative(draft.metaCost)} onClick={() => void save("metaCost", "/panel/api/settings/meta", { service_message_cost: Number(draft.metaCost) }, draft.metaCost)}>Guardar precio</Button>{footer()}</Card>
-          <Card title="Gasto actual"><DataTable columns={columns} rows={spendRows} rowKey={(row) => row.label} />{snapshot?.conversation_percent !== null ? <p>Conversación {snapshot?.conversation_percent}% de ${snapshot?.conversation_limit.toFixed(2)}</p> : null}</Card>
+         {active === "costs" ? <>
+           <Card title="Gasto actual" headerAction={snapshot ? <Badge tone="neutral">{snapshot.date}</Badge> : undefined}>
+             {snapshot ? <StatCard metrics={[
+               { label: "Gasto diario", value: `$${snapshot.daily_spend.toFixed(4)}`, context: snapshot.conversation_percent !== null ? `Conversación: ${snapshot.conversation_percent}% de $${snapshot.conversation_limit.toFixed(2)}` : undefined },
+               { label: "Límite diario", value: `$${snapshot.daily_limit.toFixed(2)}` },
+               { label: "Del límite utilizado", value: `${snapshot.daily_percent.toFixed(1)}%` },
+             ]} /> : null}
+           </Card>
+           <Card title="Límites de gasto">
+             <p>Define los topes máximos de gasto por conversación y por día.</p>
+             <div className="settings-costs__limits">
+               <div className="settings-costs__input"><Input label="Límite por conversación" type="number" value={draft.conversationLimit} onChange={(event) => update("conversationLimit", event.target.value)} /><span aria-hidden="true">USD</span></div>
+               <div className="settings-costs__input"><Input label="Límite diario" type="number" value={draft.dailyLimit} onChange={(event) => update("dailyLimit", event.target.value)} /><span aria-hidden="true">USD</span></div>
+             </div>
+             <div className="settings-costs__footer"><Button variant="secondary" disabled={saving("conversationLimit") || saving("dailyLimit") || !numericLimitsValid} onClick={() => void save("conversationLimit", "/panel/api/settings/limits", { conversation_limit: Number(draft.conversationLimit), daily_limit: Number(draft.dailyLimit) }, draft.conversationLimit)}>Guardar límites</Button>{footer()}</div>
+           </Card>
+           <Card title="Precio Meta" headerAction={<Badge tone="neutral">Vigente desde 2026-10-01</Badge>}>
+             <div className="settings-costs__input"><Input label="Costo por mensaje" type="number" value={draft.metaCost} onChange={(event) => update("metaCost", event.target.value)} /><span aria-hidden="true">USD</span></div>
+             <div className="settings-costs__footer"><Button variant="secondary" disabled={saving("metaCost") || !isValidNonNegative(draft.metaCost)} onClick={() => void save("metaCost", "/panel/api/settings/meta", { service_message_cost: Number(draft.metaCost) }, draft.metaCost)}>Guardar precio</Button>{footer()}</div>
+           </Card>
+           <Card title="Qué ocurre al alcanzar los límites">
+             <div className="settings-costs__threshold"><ShieldCheck aria-hidden="true" /><strong>80%</strong><span>Respuestas más conservadoras</span></div>
+             <div className="settings-costs__threshold"><UserRound aria-hidden="true" /><strong>100%</strong><span>Derivación a una persona</span></div>
+           </Card>
         </> : null}
         {active === "capabilities" ? capabilityHost : null}
       </div>}

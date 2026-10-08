@@ -9,8 +9,8 @@ import type { AssistantCapabilities } from "../../types";
 
 const capabilities: AssistantCapabilities = {
   tools: [
-    { name: "agenda", description: "Consulta horarios", read_only: true, write: false },
-    { name: "crear_visita", description: "Agenda una visita", read_only: false, write: true },
+    { name: "agenda.consultar", description: "Consulta horarios", read_only: true, write: false },
+    { name: "agenda.crear_visita", description: "Agenda una visita", read_only: false, write: true },
   ],
   personas: ["Cercana", "Técnica"],
   prompts: ["Atención inicial", "Emergencias"],
@@ -160,45 +160,52 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeEnabled();
   });
 
-  it("renders spend-limit inputs (conversation + daily) with plain-Spanish effect before them", async () => {
+  it("renders the paired USD spend-limit inputs", async () => {
     render(<SettingsView />);
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Límites de gasto" }).closest(".card") as HTMLElement;
-    expect(within(card).getByText(/al 80% el agente se vuelve más conservador/i)).toBeInTheDocument();
-    expect(within(card).getByText(/al 100% se detienen las llamadas/i)).toBeInTheDocument();
     const conv = within(card).getByLabelText(/límite por conversación/i) as HTMLInputElement;
     const daily = within(card).getByLabelText(/límite diario/i) as HTMLInputElement;
     expect(Number(conv.value)).toBe(settings.conversation_limit);
     expect(Number(daily.value)).toBe(settings.daily_limit);
+    expect(within(card).getAllByText("USD")).toHaveLength(2);
   });
 
-  it("renders the Meta pricing input with service-message cost and plain-Spanish effect", async () => {
+  it("renders the Meta pricing input and effective-date chip", async () => {
     render(<SettingsView />);
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Precio Meta" }).closest(".card") as HTMLElement;
-    expect(within(card).getByText(/costo por mensaje de servicio/i)).toBeInTheDocument();
+    expect(within(card).getByText("Vigente desde 2026-10-01")).toBeInTheDocument();
     const cost = within(card).getByLabelText(/costo por mensaje/i) as HTMLInputElement;
     expect(Number(cost.value)).toBe(settings.meta_cost);
+    expect(within(card).getByText("USD")).toBeInTheDocument();
   });
 
-  it("renders current spend via a numeric DataTable with tabular/right-aligned comparable numbers (DS-UI-TABLES)", async () => {
+  it("renders current spend as a three-metric row with its date and conversation context", async () => {
     render(<SettingsView />);
     await selectSection("Costos");
-    const table = screen.getByRole("table");
+    const card = screen.getByRole("heading", { name: "Gasto actual" }).closest(".card") as HTMLElement;
     const snap = settings.snapshot;
-    expect(table).toBeInTheDocument();
-    // Headers in Spanish
-    expect(within(table).getByText(/fecha/i)).toBeInTheDocument();
-    expect(within(table).getByText(/gasto diario/i)).toBeInTheDocument();
-    expect(within(table).getByText(/límite diario/i)).toBeInTheDocument();
-    expect(within(table).getByText(/% del límite/i)).toBeInTheDocument();
-    // The numeric cells carry tabular numerals via --corp-value so they align.
-    const spendCell = within(table).getByText(`$${snap.daily_spend.toFixed(4)}`);
-    expect(spendCell.style.fontVariantNumeric).toBe("var(--corp-value)");
-    const limitCell = within(table).getByText(`$${snap.daily_limit.toFixed(2)}`);
-    expect(limitCell.style.fontVariantNumeric).toBe("var(--corp-value)");
-    const pctCell = within(table).getByText(`${snap.daily_percent.toFixed(1)}%`);
-    expect(pctCell.style.fontVariantNumeric).toBe("var(--corp-value)");
+    expect(within(card).getByText(snap.date)).toBeInTheDocument();
+    expect(within(card).getByText("Gasto diario")).toBeInTheDocument();
+    expect(within(card).getByText("Límite diario")).toBeInTheDocument();
+    expect(within(card).getByText("Del límite utilizado")).toBeInTheDocument();
+    expect(within(card).getByText(`$${snap.daily_spend.toFixed(4)}`)).toBeInTheDocument();
+    expect(within(card).getByText(`$${snap.daily_limit.toFixed(2)}`)).toBeInTheDocument();
+    expect(within(card).getByText(`${snap.daily_percent.toFixed(1)}%`)).toBeInTheDocument();
+    if (snap.conversation_percent !== null) {
+      expect(within(card).getByText(`Conversación: ${snap.conversation_percent}% de $${snap.conversation_limit.toFixed(2)}`)).toBeInTheDocument();
+    }
+  });
+
+  it("explains the 80% and 100% threshold actions", async () => {
+    render(<SettingsView />);
+    await selectSection("Costos");
+    expect(screen.getByRole("heading", { name: "Qué ocurre al alcanzar los límites" })).toBeInTheDocument();
+    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(screen.getByText("Respuestas más conservadoras")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("Derivación a una persona")).toBeInTheDocument();
   });
 
   it("renders saving state (DS-UI-STATES)", () => {
@@ -233,7 +240,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(push).getByText(/correo o whatsapp|activa avisos/i)).toBeInTheDocument();
   });
 
-  it("renders capability data with Spanish labels and translated availability", async () => {
+  it("renders grouped capability tools and translated configuration availability", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (input === "/panel/api/settings") return new Response(JSON.stringify(settings), { status: 200 });
       if (input === "/panel/api/assistant/capabilities") return new Response(JSON.stringify(capabilities), { status: 200 });
@@ -243,13 +250,19 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<Settings />);
     await selectSection("Capacidades");
 
-    const card = await screen.findByRole("heading", { name: "Capacidades del asistente" });
-    expect(within(card.closest(".card") as HTMLElement).getByText("agenda")).toBeInTheDocument();
-    expect(within(card.closest(".card") as HTMLElement).getByText("Solo lectura")).toBeInTheDocument();
-    expect(within(card.closest(".card") as HTMLElement).getByText("Puede escribir")).toBeInTheDocument();
-    expect(screen.getByText("Personas: Cercana, Técnica")).toBeInTheDocument();
-    expect(screen.getByText("Prompts: Atención inicial, Emergencias")).toBeInTheDocument();
-    expect(screen.getByText("KB disponible · Memoria no disponible")).toBeInTheDocument();
+    const card = await screen.findByRole("heading", { name: "Herramientas del asistente" });
+    const toolsCard = card.closest(".card") as HTMLElement;
+    expect(within(toolsCard).getByText("consultar")).toBeInTheDocument();
+    expect(within(toolsCard).getByText("crear visita")).toBeInTheDocument();
+    expect(within(toolsCard).getByText("agenda.crear_visita").tagName).toBe("CODE");
+    expect(within(toolsCard).getAllByText("Solo lectura")).toHaveLength(2);
+    expect(within(toolsCard).getAllByText("Puede escribir")).toHaveLength(2);
+    expect(within(toolsCard).getByRole("button", { name: /Operación/ })).toHaveTextContent("2");
+    expect(screen.getByText("Cercana, Técnica")).toBeInTheDocument();
+    expect(screen.getByText("Atención inicial, Emergencias")).toBeInTheDocument();
+    expect(screen.getByText("Disponible")).toBeInTheDocument();
+    expect(screen.getByText("No disponible")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Consultar" })).toHaveAttribute("href", "/panel/app/kb");
     expect(screen.queryByText(/read_only|kb_available|memory_available/)).toBeNull();
     fetchMock.mockRestore();
   });
@@ -394,7 +407,7 @@ describe("Settings API page", () => {
 
     render(<Settings />);
     await selectSection("Costos");
-    const dailyLimit = await screen.findByLabelText("Límite diario (USD)");
+    const dailyLimit = await screen.findByLabelText("Límite diario");
     await waitFor(() => expect(dailyLimit).toHaveValue(5));
     fireEvent.change(dailyLimit, { target: { value: "7.5" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar límites" }));
@@ -404,6 +417,20 @@ describe("Settings API page", () => {
       expect.objectContaining({ method: "POST", body: JSON.stringify({ conversation_limit: 1.5, daily_limit: 7.5 }) }),
     ));
     fetchMock.mockRestore();
+  });
+
+  it("renders the cost metrics, effective date, and threshold actions", async () => {
+    render(<SettingsView />);
+    await selectSection("Costos");
+
+    expect(await screen.findByText("Gasto diario")).toBeInTheDocument();
+    expect(screen.getByText("Límite diario", { selector: ".stat-card__label" })).toBeInTheDocument();
+    expect(screen.getByText("Del límite utilizado")).toBeInTheDocument();
+    expect(screen.getByText("2026-08-19")).toBeInTheDocument();
+    expect(screen.getByText("Vigente desde 2026-10-01")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Qué ocurre al alcanzar los límites" })).toBeInTheDocument();
+    expect(screen.getByText("Respuestas más conservadoras")).toBeInTheDocument();
+    expect(screen.getByText("Derivación a una persona")).toBeInTheDocument();
   });
 
   it("renders permission denied when an operador receives 403", async () => {
