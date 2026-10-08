@@ -191,3 +191,9 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   Parent spot check re-ran `uv run pytest tests/functional/test_api_projects.py` — 12 passed, workspace
   clean. Environment: worktree has `infra/.env` (gitignored, copied from the primary repo) and its own
   test DB container on `:6227`; tests require `eval "$(bash infra/test-db.sh env)"` first.
+- Slices 1+2 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
+  23ff4cd1 --committed-only` on the accumulated slice returned `risk: medium`, 11 paths, 434 changed
+  lines, `review_due: true` (`slice_budget_reached`). Lineage `review-cc0f651ce5f2de0c`, single lens
+  `review-reliability`, 0 findings. Consent was granted by the owner via the native envelope;
+  `review acknowledge-approved` returned `authority: burned`. Reviewed boundary for the next slice:
+  `1cd09271`.
