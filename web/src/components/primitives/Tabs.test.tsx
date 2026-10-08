@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Tabs } from "./Tabs";
+import { MessageCircle } from "lucide-react";
 
 const tabs = [
   { id: "datos", label: "Datos" },
@@ -95,5 +96,18 @@ describe("Tabs controlled (CORP-TABS-2)", () => {
       "aria-selected",
       "true",
     );
+  });
+});
+
+describe("Tabs vertical layout", () => {
+  it("renders icons and descriptions while preserving the tab's accessible name", () => {
+    render(<Tabs layout="vertical" tabs={[{ id: "saludo", label: "Saludo", description: "Inicio de conversación", icon: MessageCircle }]}>
+      {(activeId) => <p>Panel: {activeId}</p>}
+    </Tabs>);
+    expect(screen.getByRole("tablist")).toHaveAttribute("aria-orientation", "vertical");
+    const tab = screen.getByRole("tab", { name: "Saludo" });
+    expect(tab).toHaveTextContent("Inicio de conversación");
+    expect(tab.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(tab).toHaveAttribute("aria-selected", "true");
   });
 });

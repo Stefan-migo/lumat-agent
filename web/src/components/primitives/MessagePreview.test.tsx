@@ -15,4 +15,9 @@ describe("MessagePreview", () => {
     expect(screen.getByLabelText("Mensaje de Asistente")).toBeInTheDocument();
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
+
+  it("uses an optional brand image without changing the default letter avatar", () => {
+    render(<MessagePreview message="Hola" avatarSrc="/panel/app/brand/lumat-mark.png" />);
+    expect(screen.getByRole("img", { name: "Lumat" })).toHaveAttribute("src", "/panel/app/brand/lumat-mark.png");
+  });
 });

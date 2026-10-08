@@ -10,12 +10,19 @@
 .settings-agent__layout details { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .settings-agent__layout details summary { color: var(--corp-text); cursor: pointer; }
 .settings-agent__layout details p { margin-bottom: 0; }
-.settings-tabs__select .field__control { min-height: var(--space-8); padding: var(--space-2) calc(var(--space-4) + var(--space-3)) var(--space-2) var(--space-3); appearance: none; border-color: var(--border-strong); background-color: var(--surface); background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - var(--space-3)) 50%, calc(100% - var(--space-2)) 50%; background-size: var(--space-1) var(--space-1), var(--space-1) var(--space-1); background-repeat: no-repeat; }
-.settings-messages__tone-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--space-3); }
-.settings-messages__tone-row > button { margin-bottom: var(--space-1); }
-.settings-messages__layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(15rem, 1fr); align-items: start; gap: var(--space-3); }
-.settings-messages__editor, .settings-messages__preview { min-width: 0; }
+.settings-tabs__select .menu__trigger { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: calc(var(--space-8) + var(--space-3)); border-color: var(--border-strong); background: var(--surface); color: var(--corp-text); }
+.settings-tabs__select .menu__chevron, .settings-messages__tone-row .menu__chevron { display: inline-block; width: var(--space-2); height: var(--space-2); flex: none; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+.settings-messages__tone-row { display: flex; align-items: center; gap: var(--space-2); }
+.settings-messages__tone-row > .menu__trigger { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 9rem; min-height: calc(var(--space-8) + var(--space-3)); border-color: var(--border-strong); background: var(--surface); color: var(--corp-text); }
+.settings-messages__editor { min-width: 0; }
+.settings-messages__layout { display: grid; grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.5fr) minmax(14rem, 1fr); align-items: start; gap: var(--space-4); }
+.settings-messages__layout > .tabs--vertical { display: contents; }
+.settings-messages__layout > .tabs--vertical [role="tablist"] { grid-column: 1; }
+.settings-messages__layout > .tabs--vertical .tabs__panel { grid-column: 2; }
+.settings-messages__layout > .settings-messages__preview { grid-column: 3; }
 .settings-messages__edit { display: grid; gap: var(--space-3); }
+.settings-messages__edit h3, .settings-messages__preview h3 { margin: 0; color: var(--corp-text); font-size: var(--text-md); }
+.settings-messages__preview { display: grid; align-content: start; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); }
 .settings-messages__info { margin: 0; padding: var(--space-3); border-left: 3px solid var(--info); border-radius: var(--radius-md); background: var(--info-tint); color: var(--corp-text); font-size: var(--text-sm); }
 .settings-messages__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .settings-messages__preview .message-preview { min-height: var(--space-8); }
@@ -68,9 +75,13 @@
   .settings-tabs > .tabs > [role="tablist"] { display: none; }
   .settings-agent__layout { grid-template-columns: minmax(0, 1fr); }
   .settings-agent__footer { align-items: stretch; flex-direction: column; }
+  .settings-messages__tone .card__header { align-items: flex-start; flex-direction: column; }
+  .settings-messages__tone .card__header-action, .settings-messages__tone-row { width: 100%; }
+  .settings-messages__tone-row > .menu__trigger { flex: 1; min-width: 0; }
   .settings-messages__layout { grid-template-columns: minmax(0, 1fr); }
-  .settings-messages__tone-row { grid-template-columns: minmax(0, 1fr); }
-  .settings-messages__tone-row > button { margin-bottom: 0; }
+  .settings-messages__layout > .tabs--vertical [role="tablist"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-messages__layout > .tabs--vertical .tabs__panel, .settings-messages__layout > .settings-messages__preview { grid-column: 1; }
+  .settings-messages__layout > .tabs--vertical .tabs__tab { padding: var(--space-2); }
   .settings-messages__footer { align-items: stretch; flex-direction: column-reverse; }
   .settings-hours__layout { grid-template-columns: minmax(0, 1fr); }
   .settings-hours__item { grid-template-columns: minmax(0, 1fr) auto; }

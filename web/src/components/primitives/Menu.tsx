@@ -16,6 +16,7 @@ export interface MenuItem {
 
 export interface MenuProps {
   label: string;
+  ariaLabel?: string;
   items: MenuItem[];
   onSelect: (value: string) => void;
   disabled?: boolean;
@@ -30,11 +31,14 @@ export interface MenuProps {
   align?: "start" | "center" | "end";
   /** Radix collision padding in px, keeping the panel off the viewport edge. */
   collisionPadding?: number;
+  showChevron?: boolean;
 }
 
 /** Radix-backed menu primitive (CST-PRIM-7): owns menu keyboard semantics. */
 export function Menu({
   label,
+  ariaLabel,
+  showChevron = false,
   items,
   onSelect,
   disabled = false,
@@ -46,11 +50,11 @@ export function Menu({
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
-        className={iconTrigger ? "menu__trigger menu__trigger--icon" : "menu__trigger"}
+        className={`${iconTrigger ? "menu__trigger menu__trigger--icon" : "menu__trigger"}${showChevron ? " menu__trigger--chevron" : ""}`}
         disabled={disabled}
-        aria-label={iconTrigger ? label : undefined}
+        aria-label={ariaLabel ?? (iconTrigger ? label : undefined)}
       >
-        {iconTrigger ? <Icon icon={MoreHorizontal} /> : label}
+        {iconTrigger ? <Icon icon={MoreHorizontal} /> : <>{label}{showChevron ? <span className="menu__chevron" aria-hidden="true" /> : null}</>}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="menu__content" aria-label={label} align={align} collisionPadding={collisionPadding}>

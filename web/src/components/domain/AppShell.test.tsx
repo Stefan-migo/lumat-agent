@@ -156,7 +156,7 @@ describe('AppShell (T6.4)', () => {
     expect(await screen.findByText('No hay documentos')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Configuración' }));
     await user.click(await screen.findByRole('tab', { name: 'Mensajes' }));
-    expect(await screen.findByLabelText('Tono')).toHaveValue('cercano');
+    expect(await screen.findByRole('button', { name: 'Tono' })).toHaveTextContent('Cercano');
     expect(container.querySelector('.panel-shell__content')).not.toHaveTextContent('Vista disponible en un batch posterior.');
     fetchMock.mockRestore();
   });

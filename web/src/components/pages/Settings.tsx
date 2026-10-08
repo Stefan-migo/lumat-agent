@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Brain, CircleHelp, Globe2, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
+import { BookOpen, Brain, CircleHelp, Clock3, DoorOpen, Globe2, Headset, MessageCircle, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
@@ -10,6 +10,7 @@ import { Card } from "../primitives/Card";
 import { HelpPanel } from "../primitives/HelpPanel";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
+import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
@@ -32,11 +33,11 @@ const SECTIONS = [
   { id: "capabilities", label: "Capacidades" },
 ];
 const MESSAGE_TEMPLATES = [
-  { id: "greeting", label: "Saludo" },
-  { id: "cannot_answer", label: "Cuando no puede responder" },
-  { id: "clarification", label: "Aclaración" },
-  { id: "farewell", label: "Despedida" },
-  { id: "out_of_hours", label: "Fuera de horario" },
+  { id: "greeting", label: "Saludo", description: "Inicio de conversación", icon: MessageCircle },
+  { id: "cannot_answer", label: "Cuando no puede responder", description: "Derivación a un asesor", icon: Headset },
+  { id: "clarification", label: "Aclaración", description: "Mensaje no entendido", icon: CircleHelp },
+  { id: "farewell", label: "Despedida", description: "Cierre de conversación", icon: DoorOpen },
+  { id: "out_of_hours", label: "Fuera de horario", description: "Atención no disponible", icon: Clock3 },
 ] as const;
 type HoursData = SettingsData["hours"];
 type Drafts = {
@@ -220,7 +221,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
   return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
-    <div className="settings-tabs__select"><Select label="Sección" value={activeSection} onChange={(event) => setActiveSection(event.target.value)} options={SECTIONS.map(({ id, label }) => ({ value: id, label }))} /></div>
+     <div className="settings-tabs__select"><Menu label={SECTIONS.find(({ id }) => id === activeSection)?.label ?? "Agente"} ariaLabel="Sección" showChevron items={SECTIONS.map(({ id, label }) => ({ value: id, label }))} onSelect={setActiveSection} /></div>
     <Tabs ariaLabel="Secciones de configuración" tabs={SECTIONS} activeTab={activeSection} onTabChange={setActiveSection}>
       {(active) => <div className="settings-tabs__content">
         {active === "agent" ? <>
@@ -250,22 +251,23 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </div>
         </> : null}
         {active === "messages" ? <>
-          <Card title="Tono del asistente" className="settings-messages__tone"><p>Define cómo suenan las respuestas del agente en cada conversación.</p><div className="settings-messages__tone-row"><Select label="Tono" value={draft.tone} onChange={(event) => update("tone", event.target.value)} options={[{ value: "", label: "Selecciona un tono" }, { value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} /><Button variant="secondary" disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>{footer()}</Card>
-          <div className="settings-messages__layout">
-            <Card title="Mensajes del asistente" className="settings-messages__editor"><p>Personaliza los mensajes estándar. El menú de categorías se agrega automáticamente al saludo.</p>
-              <Tabs ariaLabel="Plantillas de mensajes" tabs={[...MESSAGE_TEMPLATES]} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
+          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
+          <Card title="Mensajes del asistente" className="settings-messages__editor">
+              <div className="settings-messages__layout">
+                <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={[...MESSAGE_TEMPLATES]} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
                 {(selected) => {
                   const template = MESSAGE_TEMPLATES.find(({ id }) => id === selected) ?? MESSAGE_TEMPLATES[0];
                   return <div className="settings-messages__edit">
-                    <Textarea label={template.label} rows={5} value={draft.messages[template.id]} onChange={(event) => update("messages", { ...draft.messages, [template.id]: event.target.value })} />
+                    <h3>{template.label}</h3>
+                    <Textarea label="Texto del mensaje" rows={5} value={draft.messages[template.id]} onChange={(event) => update("messages", { ...draft.messages, [template.id]: event.target.value })} />
                     <p className="settings-messages__info">Este mensaje se usa como respuesta automática para esta situación.</p>
                   </div>;
                 }}
               </Tabs>
-              <div className="settings-messages__footer"><Button variant="secondary" disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button>{footer()}</div>
-            </Card>
-            <Card title="Vista previa" className="settings-messages__preview"><MessagePreview message={draft.messages[activeMessage]} /></Card>
-          </div>
+                <div className="settings-messages__preview"><h3>Vista previa</h3><MessagePreview message={draft.messages[activeMessage]} note="Menú de categorías automático" avatarSrc="/panel/app/brand/lumat-mark.png" /></div>
+              </div>
+              <div className="settings-messages__footer">{footer()}<Button disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button></div>
+          </Card>
         </> : null}
         {active === "schedule" ? <div className="settings-hours__layout">
           <Card title="Horarios de atención"><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>

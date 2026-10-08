@@ -44,14 +44,15 @@ describe("Settings", () => {
     expect(rules).toBeEnabled();
   });
 
-  it("switches sections and keeps the mobile select on the same active state", async () => {
+  it("switches sections from the accessible mobile menu", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await user.click(screen.getByRole("tab", { name: "Mensajes" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
-    const sectionSelect = screen.getByLabelText("Sección");
-    expect(sectionSelect).toHaveValue("messages");
-    fireEvent.change(sectionSelect, { target: { value: "costs" } });
+    const sectionMenu = screen.getByRole("button", { name: "Sección" });
+    expect(sectionMenu).toHaveTextContent("Mensajes");
+    await user.click(sectionMenu);
+    await user.click(screen.getByRole("menuitem", { name: "Costos" }));
     expect(screen.getByRole("tab", { name: "Costos" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Gasto actual" })).toBeInTheDocument();
   });
@@ -60,9 +61,17 @@ describe("Settings", () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await user.click(screen.getByRole("tab", { name: "Mensajes" }));
-    const tone = screen.getByLabelText("Tono");
+    const tone = screen.getByRole("button", { name: "Tono" });
     const saveTone = screen.getByRole("button", { name: "Guardar tono" });
     expect(tone.closest(".settings-messages__tone-row")).toContainElement(saveTone);
+    expect(tone).toHaveTextContent("Cercano");
+  });
+
+  it("disables saving when no tone is configured", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings({ tone: "" })} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled();
   });
 
   it("switches the message template editor and previews its edited text", async () => {
@@ -71,10 +80,10 @@ describe("Settings", () => {
     await user.click(screen.getByRole("tab", { name: "Mensajes" }));
 
     const greetingPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-greeting"));
-    expect(within(greetingPanel!).getByLabelText("Saludo")).toHaveValue("Hola");
+    expect(within(greetingPanel!).getByLabelText("Texto del mensaje")).toHaveValue("Hola");
     await user.click(screen.getByRole("tab", { name: "Aclaración" }));
     const clarificationPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-clarification"));
-    const clarification = within(clarificationPanel!).getByLabelText("Aclaración");
+    const clarification = within(clarificationPanel!).getByLabelText("Texto del mensaje");
     expect(clarification).toHaveValue("¿Cuál?");
     await user.clear(clarification);
     await user.type(clarification, "¿Me puedes indicar tu comuna?");
@@ -98,11 +107,11 @@ describe("Settings", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
     const saveResponse = new Promise<Response>(() => undefined);
     vi.spyOn(globalThis, "fetch").mockReturnValue(saveResponse);
-    const tone = screen.getByLabelText("Tono");
-    fireEvent.change(tone, { target: { value: "" } });
-    expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled();
-    fireEvent.change(tone, { target: { value: "formal" } });
-    fireEvent.click(screen.getByRole("button", { name: "Guardar tono" }));
+    const tone = screen.getByRole("button", { name: "Tono" });
+    await user.click(tone);
+    await user.click(screen.getByRole("menuitem", { name: "Formal" }));
+    expect(tone).toHaveTextContent("Formal");
+    await user.click(screen.getByRole("button", { name: "Guardar tono" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled());
   });
 
