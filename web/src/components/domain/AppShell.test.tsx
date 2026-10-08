@@ -196,6 +196,7 @@ describe('AppShell (T6.4)', () => {
         appointment: { id: 7, service: 'Reparación de calefón', customer_id: 2, case_id: 3, technician_id: 4, local_start: '2026-09-26T10:00:00', timezone: 'America/Santiago', starts_at: '2026-09-26T13:00:00Z', ends_at: '2026-09-26T14:00:00Z', duration_minutes: 60, status: 'booked', history: [] },
         customer: { id: 2, name: 'Ana' }, case: { id: 3, conversation_id: null }, conversation_summary: null,
       }), { status: 200 });
+      if (path === '/panel/api/technicians') return new Response(JSON.stringify({ technicians: [] }), { status: 200 });
       return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
     });
 

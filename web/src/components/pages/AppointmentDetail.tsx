@@ -113,7 +113,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
     let current = true;
     void fetchTechnicians()
       .then(({ technicians: available }) => {
-        if (current) setTechnicianDirectory(available);
+        if (current) setTechnicianDirectory(available ?? []);
       })
       .catch(() => {
         if (current) setTechnicianDirectory([]);
