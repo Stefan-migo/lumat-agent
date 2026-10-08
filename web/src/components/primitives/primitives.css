@@ -278,6 +278,7 @@
   font-size: var(--text-lg);
 }
 .card__header { display: flex; align-items: center; gap: var(--space-3); }
+.card__header-action { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 .card__icon,
 .dialog__icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-md); background: var(--border); color: var(--text); }
 .card__copy { min-width: 0; }
@@ -382,6 +383,64 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.help-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+  color: var(--corp-text);
+}
+.help-panel--info { background: var(--info-tint); }
+.help-panel__header { display: flex; align-items: center; gap: var(--space-2); }
+.help-panel__header > .icon { color: var(--info); }
+.help-panel__title { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.help-panel__body { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+
+/* Settings roll-up primitive (configuracion-017): segmented Lun–Dom day toggle. Selected state
+   mirrors the closed-section option convention (ClientFichaDialogs): corp-text border + success tint. */
+.day-toggle { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.day-toggle__day {
+  min-width: calc(var(--space-8) + var(--space-2));
+  height: var(--space-8);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--corp-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.day-toggle__day:hover:not(:disabled) { background: var(--corp-surface-hover); }
+.day-toggle__day[aria-pressed="true"] { border-color: var(--corp-text); background: var(--success-tint); font-weight: var(--weight-semibold); }
+.day-toggle__day:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* Settings roll-up primitive (configuracion-018): assistant bubble + optional caption, as in the
+   "Vista previa" reference panel. The bubble reuses the surface/radius used by the thread bubbles. */
+.message-preview { display: grid; gap: var(--space-2); }
+.message-preview__row { display: flex; align-items: flex-start; gap: var(--space-2); }
+.message-preview__avatar { flex: 0 0 auto; }
+.message-preview__bubble { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface); color: var(--corp-text); font-size: var(--text-sm); }
+.message-preview__note { color: var(--corp-fg-muted); font-size: var(--text-xs); }
+
+/* Settings accordion groups with an accessible button-controlled content region. */
+.accordion { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.accordion__trigger { display: flex; width: 100%; min-height: var(--space-8); align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: inherit; background: transparent; color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
+.accordion__trigger:hover { background: var(--surface-subtle); }
+.accordion__trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.accordion__title { font-weight: var(--weight-semibold); }
+.accordion__indicator { margin-left: auto; color: var(--corp-fg-muted); }
+.accordion__panel { padding: 0 var(--space-3) var(--space-3); }
+.accordion__panel[hidden] { display: none; }
+
+.stat-card--row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stat-card__metric { min-width: 0; }
+.stat-card__metric + .stat-card__metric { padding-left: var(--space-3); border-left: 1px solid var(--border); }
+@media (max-width: 40rem) {
+  .stat-card--row { grid-template-columns: minmax(0, 1fr); }
+  .stat-card__metric + .stat-card__metric { padding: var(--space-3) 0 0; border-top: 1px solid var(--border); border-left: 0; }
 }
 
 /* ---- Skeleton (2C-1): CSS-only decorative loading placeholder ---- */
