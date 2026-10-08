@@ -11,6 +11,7 @@ const DOC_KEYS = [
   "format",
   "id",
   "model",
+  "project_id",
   "provider",
   "title",
   "version",
@@ -30,7 +31,7 @@ describe("KB mock (kb.ts)", () => {
     }
   });
 
-  it("covers all 3 DocFormat values (pdf/md/csv)", () => {
+  it("covers the three panel-uploadable DocFormat values (pdf/md/csv)", () => {
     const present = new Set(docs.map((d) => d.format));
     for (const fmt of DOC_FORMATS) {
       expect(present.has(fmt as (typeof docs)[number]["format"]), `missing format: ${fmt}`).toBe(true);
