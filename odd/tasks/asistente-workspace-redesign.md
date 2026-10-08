@@ -330,4 +330,5 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     1 file / 6 passed; `npx vitest run --no-file-parallelism` — 97 files / 1043 passed; `npm run build`
     — passed with the existing >500 kB chunk-size advisory. Focused tests emit existing async `act`
     warnings from AgentChat. An initial full-suite attempt exceeded 300 seconds; the retry completed.
-  - Code commit and task-log commit are recorded in the following revision entry after they are made.
+  - Commit: `536e0896` (`feat(assistant): move workspace pane controls to header`). This commit also
+    updates this task log; no follow-up documentation commit was needed.
