@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Brain, CircleHelp, Clock3, DoorOpen, Globe2, Headset, MessageCircle, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
+import { BookOpen, Brain, CircleHelp, Clock3, DoorOpen, Globe2, Headset, Info, MessageCircle, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
@@ -253,18 +253,25 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
         {active === "messages" ? <>
           <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
           <Card title="Mensajes del asistente" className="settings-messages__editor">
-              <div className="settings-messages__layout">
+              <div className="settings-messages__panel">
+                <div className="settings-messages__layout">
+                  <div className="settings-messages__mobile-selector">
+                    <label>Plantilla</label>
+                    <Menu label={MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.label ?? MESSAGE_TEMPLATES[0].label} ariaLabel="Plantilla" showChevron items={MESSAGE_TEMPLATES.map(({ id, label }) => ({ value: id, label }))} onSelect={(id) => setActiveMessage(id as typeof activeMessage)} />
+                    <p>{MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.description}</p>
+                  </div>
                 <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={[...MESSAGE_TEMPLATES]} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
                 {(selected) => {
                   const template = MESSAGE_TEMPLATES.find(({ id }) => id === selected) ?? MESSAGE_TEMPLATES[0];
                   return <div className="settings-messages__edit">
                     <h3>{template.label}</h3>
                     <Textarea label="Texto del mensaje" rows={5} value={draft.messages[template.id]} onChange={(event) => update("messages", { ...draft.messages, [template.id]: event.target.value })} />
-                    <p className="settings-messages__info">Este mensaje se usa como respuesta automática para esta situación.</p>
+                    <p className="settings-messages__info"><Info aria-hidden="true" />Este mensaje se usa como respuesta automática para esta situación.</p>
                   </div>;
                 }}
-              </Tabs>
+                </Tabs>
                 <div className="settings-messages__preview"><h3>Vista previa</h3><MessagePreview message={draft.messages[activeMessage]} note="Menú de categorías automático" avatarSrc="/panel/app/brand/lumat-mark.png" /></div>
+                </div>
               </div>
               <div className="settings-messages__footer">{footer()}<Button disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button></div>
           </Card>
