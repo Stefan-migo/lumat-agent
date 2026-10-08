@@ -16,6 +16,8 @@ from app.chat.assistant.tools.registry import (
     ProjectArchiveArgs,
     ProjectCreateArgs,
     ProjectMergeArgs,
+    ProjectListFilesArgs,
+    ProjectReadFileArgs,
     ProjectRenameArgs,
     RuleArgs,
     ToolValidationError,
@@ -233,6 +235,73 @@ def test_project_tools_are_typed_bounded_and_classified():
         execute_tool(SimpleNamespace(), "project.find", {"query": "x" * 201}, owner_id=1, role="admin")
     with pytest.raises(ToolValidationError):
         execute_tool(SimpleNamespace(), "project.merge", {"source": "a", "target": "b", "extra": "no"}, owner_id=1, role="admin")
+
+
+def test_project_file_tools_are_typed_read_only_and_validate_arguments():
+    schemas = tool_schemas()
+    for name in ("list_project_files", "read_project_file"):
+        assert name in schemas
+        assert get_tool(name).read_only is True
+        assert schemas[name]["type"] == "object"
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 0}, owner_id=1, role="admin")
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "list_project_files", {"limit": 0}, owner_id=1, role="admin")
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "list_project_files", {"extra": True}, owner_id=1, role="admin")
+
+
+@pytest.mark.parametrize("name", ["list_project_files", "read_project_file"])
+def test_project_file_tools_require_authenticated_owner(monkeypatch, name):
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: None)
+    with pytest.raises(ToolValidationError, match="owner-scoped tool requires the authenticated owner"):
+        execute_tool(SimpleNamespace(), name, {}, role="admin")
+    with pytest.raises(ToolValidationError, match="owner-scoped tool requires the authenticated owner"):
+        execute_tool(SimpleNamespace(), name, {}, trusted_thread_id=9, role="admin")
+
+
+def test_list_project_files_returns_safe_project_file_metadata(monkeypatch):
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.project_files.list_project_files",
+        lambda *_args: [SimpleNamespace(id=1, filename="a.pdf", content_type="application/pdf", size=10, status="ready", created_at=datetime(2026, 1, 1, tzinfo=timezone.utc), stored_path="secret", sha256="secret")],
+    )
+    result = execute_tool(SimpleNamespace(), "list_project_files", {}, owner_id=1, role="admin")
+    assert result["status"] == "completed"
+    assert result["result"]["project"] == "gas"
+    assert result["result"]["files"][0]["filename"] == "a.pdf"
+    assert result["result"]["files"][0]["created_at"] == "2026-01-01T00:00:00+00:00"
+    serialized = json.dumps(result)
+    assert "stored_path" not in serialized
+    assert "sha256" not in serialized
+
+
+def test_read_project_file_returns_exact_text_and_honest_image_state(monkeypatch):
+    row = SimpleNamespace(id=3, filename="a.pdf")
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.get_project_file", lambda *_args: row)
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.read_file_text", lambda _row: {"kind": "pdf", "text": "hello", "truncated": False, "chars": 5})
+    result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")
+    assert result["result"]["file_id"] == 3
+    assert result["result"]["filename"] == "a.pdf"
+    assert result["result"]["text"] == "hello"
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.read_file_text", lambda _row: {"kind": "image", "text": "", "truncated": False, "chars": 0})
+    image = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")
+    assert image["result"]["text"] == ""
+
+
+def test_read_project_file_rejects_missing_file(monkeypatch):
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.get_project_file", lambda *_args: None)
+    with pytest.raises(ToolValidationError, match="project file not found"):
+        execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")
+
+
+@pytest.mark.parametrize("name", ["list_project_files", "read_project_file"])
+def test_project_file_tools_deny_technician_role(name):
+    with pytest.raises(ToolValidationError, match="not authorized"):
+        execute_tool(SimpleNamespace(), name, {}, owner_id=1, role="tecnico")
 
 
 def test_project_tools_fail_closed_without_authenticated_owner(monkeypatch):

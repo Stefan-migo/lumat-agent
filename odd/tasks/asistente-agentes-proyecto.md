@@ -118,7 +118,7 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] `project_files` table + migration (idempotent) + upload/download. Commits `89ee041f`, `06a85ce3`; migration-test expectation fix `11ef749e`.
 - [x] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber). Commits `e1540d00`, `cc74ec97`. Images are stored but intentionally not text-extracted/embedded (D3).
 - [x] Ingest extracted content to `kb_documents(project_id)`. Commit `e14f757e`.
-- [ ] Tools `list_project_files` / `read_project_file`.
+- [x] Tools `list_project_files` / `read_project_file`. Commit `611383bc`; RDD assess `medium`, 164 lines, `review_due: false` (`under_budget`).
 - [ ] Downloadable artifact path.
 - [ ] UI "Archivos y conocimiento".
 
@@ -252,8 +252,7 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `retrieve`, `DocumentFormat`, `KbDocument`, `KbChunk`, `KbVisibility`, `ProjectFile`,
   `allowed_project_file`, `store_project_file`, `upload_project_file`; paths
   `ingest_document -> KbDocument` and `upload_project_file -> store_project_file`.
-- A3 still open: tools `list_project_files`/`read_project_file`, downloadable artifact path,
-  UI "Archivos y conocimiento".
+- A3 still open: downloadable artifact path, UI "Archivos y conocimiento".
 - A3.2 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
   1d511d5d --committed-only` returned `risk: high` (`process_boundary` in
   `tests/integration/test_migrations.py`), 13 paths, 723 lines, `review_due: true`. Lineage
@@ -263,3 +262,30 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   turns transient KB/embedding failures into a successful upload with `status="failed"` and no log —
   `app/services/project_files.py:88,97-99` (R3-001/R4-001). Reviewed boundary for the next slice:
   `f1ee53f9`.
+- Branch re-synced with current `main`: `git merge origin/main` fast-forwarded the worktree to
+  `f857e9f4` (PR #518, `odd/configuracion-redesign`). No conflicts; working tree clean. Because main
+  advanced past the A3.2 boundary, the RDD base for A3.3 is the integration point `f857e9f4`, not
+  `f1ee53f9` (which now predates unrelated main commits).
+- A3.3 done (project file read tools). Commit `611383bc` (`feat(assistant): add project file read tools`);
+  7 cohesive files: `app/services/project_files.py`, `app/chat/assistant/tools/registry.py`,
+  `agent/registry.yaml`, `tests/unit/test_assistant_tools.py`, `tests/unit/test_tool_tiers.py`,
+  `tests/unit/test_effective_config.py`, `tests/unit/test_assistant_delegation.py`. Decisions (accepted):
+  (a) registry keys honor D4 exactly — `list_project_files` / `read_project_file`, not dot-namespaced — so
+  the `project.` prefix owner-scoping rule does not apply; `execute_tool`'s `owner_scoped` guard and its
+  dispatch were extended explicitly instead. (b) Roles **ADMIN/OPERADOR only**, mirroring `kb.retrieve`
+  (the existing content-read set); TECNICO denied. (c) `project_files.owned_project()` re-verifies
+  `Project.owner_id == owner_id` and never matches the null-owner namespace. (d) `read_file_text()`
+  re-extracts the stored blob (D2 layer 1 = source of truth), so it works even when KB ingest failed or
+  was skipped; output bounded at `MAX_FILE_TEXT_CHARS = 20_000` with a `truncated` flag; images return an
+  honest empty text state and never fabricate. `agent/registry.yaml` whitelist and the tier/effective-config
+  expectation snapshots updated; the frozen planner-catalog SHA-256 in `test_assistant_delegation.py` was
+  rotated for the new catalog bytes. RED: `ImportError: cannot import name 'ProjectListFilesArgs'`. GREEN:
+  targeted 126 passed; full `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — 1815 passed,
+  2 warnings (parent re-run exit 0, no frontend files touched). Graph nodes consulted: `execute_tool()`,
+  `get_tool()`, `TOOL_REGISTRY`, `ROLE_TOOL_ALLOWLIST`, `Project`, `ProjectFile`, `services/project_files.py`,
+  `registry.py`, `ProjectConfig`/`resolve_effective_config`; paths `registry.py --imports--> project_files.py`
+  and `registry.py --imports--> models.py`.
+- A3.3 RDD assessment: `gentle-ai review assess --cwd <worktree> --agent opencode --base-ref f857e9f4
+  --committed-only --json` → `risk: medium` (`configuration_change` in `agent/registry.yaml`), 7 paths,
+  164 lines, `review_due: false` (`under_budget`) → no review opened; the reviewed boundary stays pending
+  at `f857e9f4` and accumulates with the next A3 slice commit.

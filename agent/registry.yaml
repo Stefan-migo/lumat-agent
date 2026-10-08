@@ -85,6 +85,8 @@ assistant:
     - automation.create_rule
     - project.list
     - project.find
+    - list_project_files
+    - read_project_file
     - project.create
     - project.rename
     - project.archive
