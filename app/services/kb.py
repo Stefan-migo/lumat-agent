@@ -190,12 +190,14 @@ def ingest_document(
     actor: str = "system",
     visibility: KbVisibility | str = KbVisibility.INTERNAL,
     project_id: int | None = None,
+    *,
+    content_text: str | None = None,
 ) -> KbDocument:
     """Create a document (version 1) and ingest its chunks (KB-1)."""
     doc = KbDocument(
         title=title,
         format=fmt,
-        content=extract_text(content, fmt),
+        content=extract_text(content, fmt) if content_text is None else content_text,
         version=1,
         active_version=1,
         active=True,

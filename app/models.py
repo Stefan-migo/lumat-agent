@@ -116,6 +116,8 @@ class DocumentFormat(str, enum.Enum):
     PDF = "pdf"
     MD = "md"
     CSV = "csv"
+    DOCX = "docx"
+    XLSX = "xlsx"
 
 
 class KbVisibility(str, enum.Enum):
@@ -907,6 +909,22 @@ class AssistantAttachment(Base):
     stored_path: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = _ts()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProjectFile(Base):
+    __tablename__ = "project_files"
+    __table_args__ = (Index("idx_project_files_project", "project_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    stored_path: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'ready'"))
+    created_at: Mapped[datetime] = _ts()
 
 
 class NotificationAttempt(Base):

@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     assistant_attachment_max_image_bytes: int = 5 * 1024 * 1024
     assistant_attachment_expiry_days: int = 30
     assistant_attachment_allowed_types: list[str] = ["pdf", "csv", "txt", "image"]
+    project_file_max_bytes: int = 20 * 1024 * 1024
+    project_file_allowed_types: list[str] = ["pdf", "csv", "txt", "md", "docx", "xlsx", "image"]
     assistant_context_injection_budget: int = 4_000
     assistant_session_window_tokens: int = 8_000
     assistant_compaction_threshold_tokens: int = 4_000
