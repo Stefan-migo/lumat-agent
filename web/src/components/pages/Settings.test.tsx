@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Settings as SettingsData } from "../../types";
 import { Settings } from "./Settings";
@@ -48,6 +48,31 @@ describe("Settings", () => {
     fireEvent.change(sectionSelect, { target: { value: "costs" } });
     expect(screen.getByRole("tab", { name: "Costos" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Gasto actual" })).toBeInTheDocument();
+  });
+
+  it("renders the tone selector and save action together", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    const tone = screen.getByLabelText("Tono");
+    const saveTone = screen.getByRole("button", { name: "Guardar tono" });
+    expect(tone.closest(".settings-messages__tone-row")).toContainElement(saveTone);
+  });
+
+  it("switches the message template editor and previews its edited text", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+
+    const greetingPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-greeting"));
+    expect(within(greetingPanel!).getByLabelText("Saludo")).toHaveValue("Hola");
+    await user.click(screen.getByRole("tab", { name: "Aclaración" }));
+    const clarificationPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-clarification"));
+    const clarification = within(clarificationPanel!).getByLabelText("Aclaración");
+    expect(clarification).toHaveValue("¿Cuál?");
+    await user.clear(clarification);
+    await user.type(clarification, "¿Me puedes indicar tu comuna?");
+    expect(screen.getByRole("heading", { name: "Vista previa" }).closest("section")?.querySelector(".message-preview__bubble")).toHaveTextContent("¿Me puedes indicar tu comuna?");
   });
 
   it("keeps an edited draft when refreshed persisted data changes", () => {
