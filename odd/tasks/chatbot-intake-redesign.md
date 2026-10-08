@@ -205,12 +205,13 @@ Follow RED → GREEN → REFACTOR; never fall back to standard mode. Test marker
 - [x] Updated the live spec `openspec/specs/conversation-manager/spec.md` and the `scripts/kb_fidelity.py`
       consumer.
 - Evidence: focused tests green; full suite `uv run pytest tests/` **EXIT=0** with the two known-flaky
-  seed subprocess tests deselected (both pass in isolation). Commit pending owner go-ahead.
+  seed subprocess tests deselected (both pass in isolation). CI-1 commits `5800a099` (docs) and
+  `76eaebec` (feat); PR #512 merged; review `review-359fcc5285c7a1b3` approved/acknowledged.
 
 ### CI-2 — Interruptible capture (core)
-- [ ] Remove the `_pending` blind skip; every turn re-classifies intent and extracts fields.
-- [ ] On a pivot, answer the deviation and resume the agenda.
-- [ ] Preserve emergency / handoff / cost / closure gates and booking/manage.
+- [x] Remove the `_pending` blind skip; every turn re-classifies intent and extracts fields.
+- [x] On a pivot, answer the deviation and resume the agenda.
+- [x] Preserve emergency / handoff / cost / closure gates and booking/manage.
 
 ### CI-3 — Extraction + grouped questions
 - [ ] Extract multiple fields from one free-text message.
@@ -270,4 +271,21 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
   Verification: focused tests green; full suite `uv run pytest tests/` **EXIT=0** with two known-flaky
   seed subprocess tests deselected (`test_seed_demo.py::test_demo_seed_populates_dashboard_windows_and_today`,
   `test_seed.py::test_seed_applies_cleanly_twice`) — both pass in isolation; the stall is the intermittent
-  suite hang documented in `pyproject.toml`, not CI-1. Commit pending owner go-ahead.
+  suite hang documented in `pyproject.toml`, not CI-1. CI-1 commits `5800a099` (docs) and `76eaebec`
+  (feat); PR #512 merged; review `review-359fcc5285c7a1b3` approved/acknowledged.
+- **CI-2 implemented (2026-10-08).** Every non-greeting turn now classifies; retrieval deviations
+  use research triage and resume the unchanged pending capture question after a KB hit. Mid-capture
+  `unknown` does not consume HH-3 attempts; deterministic emergency/handoff/cost/closure gates remain
+  ahead of classification. Cancellation/rescheduling mid-capture deliberately remains a field answer
+  for CI-2. Files: `app/chat/state.py`, `app/chat/graph.py`,
+  `app/chat/nodes/{orchestrate,classify_intent,capture}.py`,
+  `tests/unit/test_routing_table.py`, `tests/integration/test_chat_capture.py`.
+  RED: new dispatcher cases failed before implementation with `TypeError: _dispatch() got an
+  unexpected keyword argument 'mid_capture'` (8 failures). GREEN: `uv run pytest
+  tests/unit/test_routing_table.py -q` **27 passed** and `uv run python -m compileall -q app/chat`
+  exited 0. Requested focused integration command blocked during migration with PostgreSQL
+  `password authentication failed for user "app"` on port 5830; the broader suite has the same
+  database setup failure. Requested second command also reports missing
+  `tests/functional/test_triage_reply_duplication.py` (the file is under `tests/integration/`).
+  CI-2 code commit: `229c732f`. This progress-log change is delivered by the accompanying
+  `docs(odd): record CI-2 review state and CI-1 delivery in the task` commit.
