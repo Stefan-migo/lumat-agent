@@ -123,11 +123,18 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     await selectSection("Mensajes");
     const card = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/menú de categorías se agrega automáticamente/i)).toBeInTheDocument();
-    expect((within(card).getByLabelText(/saludo/i) as HTMLTextAreaElement).value).toBe(settings.messages.greeting);
-    expect((within(card).getByLabelText(/no puede responder/i) as HTMLTextAreaElement).value).toBe(settings.messages.cannot_answer);
-    expect((within(card).getByLabelText(/aclaración/i) as HTMLTextAreaElement).value).toBe(settings.messages.clarification);
-    expect((within(card).getByLabelText(/despedida/i) as HTMLTextAreaElement).value).toBe(settings.messages.farewell);
-    expect((within(card).getByLabelText(/fuera de horario/i) as HTMLTextAreaElement).value).toBe(settings.messages.out_of_hours);
+    const templates = [
+      ["greeting", "Saludo", settings.messages.greeting],
+      ["cannot_answer", "Cuando no puede responder", settings.messages.cannot_answer],
+      ["clarification", "Aclaración", settings.messages.clarification],
+      ["farewell", "Despedida", settings.messages.farewell],
+      ["out_of_hours", "Fuera de horario", settings.messages.out_of_hours],
+    ] as const;
+    for (const [id, label, value] of templates) {
+      await userEvent.click(within(card).getByRole("tab", { name: label }));
+      const panel = screen.getAllByRole("tabpanel").find((item) => item.getAttribute("aria-labelledby")?.includes(`trigger-${id}`));
+      expect(within(panel!).getByLabelText(label)).toHaveValue(value);
+    }
   });
 
   it("renders the configured hours timezone and schedule", async () => {
@@ -312,18 +319,28 @@ describe("Settings API page", () => {
   });
 
   it("saves edited standard messages through the messages endpoint", async () => {
+    const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
     render(<Settings />);
     await selectSection("Mensajes");
-    const greeting = await screen.findByDisplayValue(settings.messages.greeting);
-    const farewell = screen.getByDisplayValue(settings.messages.farewell);
-    const outOfHours = screen.getByDisplayValue(settings.messages.out_of_hours);
+    const templates = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
+    const greetingTab = within(templates).getByRole("tab", { name: "Saludo" });
+    const getEditor = (id: string, label: string) => {
+      const panel = screen.getAllByRole("tabpanel").find((item) => item.getAttribute("aria-labelledby")?.includes(`trigger-${id}`));
+      return within(panel!).getByLabelText(label);
+    };
+    const greeting = getEditor("greeting", "Saludo");
     fireEvent.change(greeting, { target: { value: "Hola nuevo" } });
+    await user.click(within(templates).getByRole("tab", { name: "Despedida" }));
+    const farewell = getEditor("farewell", "Despedida");
     fireEvent.change(farewell, { target: { value: "Hasta luego nuevo" } });
+    await user.click(within(templates).getByRole("tab", { name: "Fuera de horario" }));
+    const outOfHours = getEditor("out_of_hours", "Fuera de horario");
     fireEvent.change(outOfHours, { target: { value: "Estamos cerrados" } });
+    expect(greetingTab).toHaveAttribute("aria-selected", "false");
     fireEvent.click(screen.getByRole("button", { name: "Guardar mensajes" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/messages",
