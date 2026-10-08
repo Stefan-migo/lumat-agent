@@ -90,6 +90,20 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Vista previa" }).closest("section")?.querySelector(".message-preview__bubble")).toHaveTextContent("¿Me puedes indicar tu comuna?");
   });
 
+  it("switches the selected template from the mobile selector", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    const selector = screen.getByRole("button", { name: "Plantilla" });
+    expect(selector).toHaveTextContent("Saludo");
+    expect(screen.getByText("Inicio de conversación", { selector: ".settings-messages__mobile-selector p" })).toBeInTheDocument();
+    await user.click(selector);
+    await user.click(screen.getByRole("menuitem", { name: "Despedida" }));
+    expect(selector).toHaveTextContent("Despedida");
+    expect(screen.getByText("Cierre de conversación", { selector: ".settings-messages__mobile-selector p" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-farewell"))).toBeInTheDocument();
+  });
+
   it("keeps an edited draft when refreshed persisted data changes", () => {
     const { rerender } = render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     fireEvent.change(screen.getByLabelText("Palabras clave de emergencia"), { target: { value: "gas\nincendio" } });
