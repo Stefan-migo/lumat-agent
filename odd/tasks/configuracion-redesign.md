@@ -95,7 +95,7 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
       (USD inputs + save), `Precio Meta` (cost input, "Vigente desde" chip, save), and
       `Qué ocurre al alcanzar los límites` (80%/100% rows). Findings `configuracion-008`,
       `configuracion-009`, `configuracion-010`.
-- [ ] **CF-13** — Capacidades tab: `Herramientas del asistente` (count, search, "Todos los accesos"
+- [x] **CF-13** — Capacidades tab: `Herramientas del asistente` (count, search, "Todos los accesos"
       filter, accordion groups, rows of icon + name + id + access badge) and `Configuración activa`
       side card (KB/Memory availability, Persona/Prompts paths, "Consultar", footer note). Findings
       `configuracion-011`, `configuracion-012`, `configuracion-015`.
@@ -208,6 +208,36 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     green; Vite reported its existing >500 kB chunk advisory.
   - Not run: browser/runtime harness; this work unit changes only the existing frontend settings
     surface and has no separately configured runtime harness.
+
+- **PR8 — Capacidades tab (CF-13)** — done on branch `odd/configuracion-redesign`.
+  - Commit: `90fd24d5` brings the Capacidades tab to the reference composition.
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/pages/Settings.test.tsx`, `web/src/stories/pages/Settings.stories.tsx`,
+    `web/src/stories/pages/Settings.stories.test.tsx`.
+  - Graph nodes consulted: `Settings()` / `AssistantCapabilitiesView()` in `Settings.tsx`,
+    `Accordion()`, `SearchInput()`, `Badge()`, `Card()`, `getAssistantCapabilities()`,
+    `Settings.stories.tsx`, and `Settings.test.tsx`. Undirected paths confirmed
+    `Settings.stories.tsx --re_exports--> Settings.tsx --imports--> getAssistantCapabilities()` and
+    `Settings.stories.tsx --re_exports--> Settings.tsx --contains--> AssistantCapabilitiesView()`;
+    no directed path was found from `AssistantCapabilitiesView()` to `Badge()`.
+  - Data-boundary decision (`configuracion-015`): keep the slice frontend-only. Group tools by the
+    namespace before the first dot; undotted names use the `Sistema` fallback. Derive group counts,
+    search, and access filters locally from the existing capability payload. Access badges/filter
+    values come from `read_only` and `write`; a tool with neither flag is shown as `Acceso limitado`.
+    No API type, backend endpoint, or server-provided category was added.
+  - Reused the CF-5 `Accordion`, `SearchInput`, `Badge`, and the CF-6 `Card.headerAction`; the active
+    configuration card's `Consultar` link targets the existing `/panel/app/kb` route. Two columns
+    collapse to one at the established 40rem breakpoint. The section-tablist mobile selector remains
+    scoped to its direct child.
+  - Verification from `web/`: focused Settings + story tests 40/40 passed. Full `npm test` completed
+    with 1058/1070 passing; 12 unrelated failures were timeouts and async-state failures in
+    `AgentChat.test.tsx`, `ClientFicha.test.tsx`, `ClientesList.test.tsx`, and
+    `AgendaPage.stories.test.tsx`. `npm run build` (`tsc -b` + Vite) passed; Vite emitted its existing
+    chunk-size advisory (>500 kB).
+  - Learned: the referenced desktop and mobile image paths were not present in either checked
+    workspace root, so implementation followed the validated finding descriptions and the ODD task
+    composition rather than inspecting the image files. A browser/runtime harness was not run; this
+    is a frontend-only tab change with no configured harness.
 
 ## Verification
 
