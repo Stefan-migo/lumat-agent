@@ -424,6 +424,14 @@
 .message-preview__bubble { padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface); color: var(--corp-text); font-size: var(--text-sm); }
 .message-preview__note { color: var(--corp-fg-muted); font-size: var(--text-xs); }
 
+.stat-card--row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stat-card__metric { min-width: 0; }
+.stat-card__metric + .stat-card__metric { padding-left: var(--space-3); border-left: 1px solid var(--border); }
+@media (max-width: 40rem) {
+  .stat-card--row { grid-template-columns: minmax(0, 1fr); }
+  .stat-card__metric + .stat-card__metric { padding: var(--space-3) 0 0; border-top: 1px solid var(--border); border-left: 0; }
+}
+
 /* ---- Skeleton (2C-1): CSS-only decorative loading placeholder ---- */
 .skeleton {
   display: block;
