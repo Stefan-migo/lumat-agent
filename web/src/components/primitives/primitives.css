@@ -383,6 +383,19 @@
   height: 100%;
   object-fit: cover;
 }
+.help-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+  color: var(--corp-text);
+}
+.help-panel--info { background: var(--info-tint); }
+.help-panel__header { display: flex; align-items: center; gap: var(--space-2); }
+.help-panel__header > .icon { color: var(--info); }
+.help-panel__title { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.help-panel__body { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
 /* ---- Skeleton (2C-1): CSS-only decorative loading placeholder ---- */
 .skeleton {
