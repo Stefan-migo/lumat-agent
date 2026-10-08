@@ -122,9 +122,8 @@ def respond(state: ConversationState) -> dict:
     if state.intent == "unknown":
         # Deterministic path — no LLM spend (design Cost Guardrails).
         if state.turn <= 1:
-            # CM-1: on first contact the greeting + menu already answered this
-            # turn; a "no entendí" clarification right after the menu would be
-            # redundant noise (the customer has nothing to understand yet).
+            # CM-1: avoid a clarification immediately after the first-contact
+            # greeting; there is no prior bot instruction to clarify.
             return {}
         with session_scope() as session:
             clarification = get_message(session, "clarification", CLARIFICATION_REPLY)

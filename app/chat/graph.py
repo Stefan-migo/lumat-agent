@@ -39,12 +39,14 @@ Batch 4 (T4.4) adds the handoff node, which owns every escalation:
 The handoff node builds the HH-2 deriva bundle (case row), transitions the
 conversation bot -> human (HH-1) and replies that a human will take over.
 The gate runs before `receive` too, so a first-contact emergency never mixes
-the greeting/menu into the safety protocol (EM-2 full flow interrupt).
+the greeting into the safety protocol (EM-2 full flow interrupt).
 """
 
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -136,7 +138,26 @@ def _flow_start(state: ConversationState) -> str:
     re-classification (saves an LLM call; answers are field values, not intents)."""
     if "_pending" in (state.captured or {}):
         return "capture"
+    if state.turn <= 1 and _greeting_only(state):
+        return END
     return "classify_intent"
+
+
+def _greeting_only(state: ConversationState) -> bool:
+    """Match a bare first-turn greeting without consuming an unknown attempt."""
+    inbound = next(
+        (message for message in reversed(state.window) if message.get("direction") == "inbound"),
+        None,
+    )
+    if inbound is None:
+        return False
+    text = unicodedata.normalize("NFD", (inbound.get("text") or "").casefold())
+    text = "".join(char for char in text if unicodedata.category(char) != "Mn")
+    normalized = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    return normalized in {
+        "hola", "buenas", "hola buenas", "buenos dias", "buenas tardes",
+        "buenas noches", "hey",
+    }
 
 
 def _after_emergency_gate(state: ConversationState) -> str:
@@ -201,7 +222,7 @@ def _triage_node(subgraph):
     (`app/chat/subgraphs/research_triage.py`), and `replies` carries an `add` reducer
     (`app/chat/state.py`). Added as a plain node, LangGraph hands the sub-graph the
     parent's `replies` — already holding the CM-1 greeting — and merging the sub-graph's
-    final state back re-adds them, so the customer receives the greeting and menu twice.
+    final state back re-adds them, so the customer receives the greeting twice.
 
     Clearing the accumulator on the way in leaves the merge with exactly the sub-graph's
     own reply. A partial `input_schema` would also fix the duplication, and is rejected:
@@ -269,7 +290,7 @@ def build_graph():
     builder.add_conditional_edges(
         "receive",
         _flow_start,
-        {"capture": "capture", "classify_intent": "classify_intent"},
+        {"capture": "capture", "classify_intent": "classify_intent", END: END},
     )
     builder.add_edge("classify_intent", "orchestrate")
     builder.add_conditional_edges(

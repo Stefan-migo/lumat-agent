@@ -155,7 +155,7 @@ def test_clarification_reply_is_a_clarification():
 
 def test_cm1_greeting_is_stripped_before_classifying():
     """The accumulator merges the greeting and the terminal reply (D10)."""
-    replies = [fid.greeting_with_menu(), fid.CANNOT_ANSWER_REPLY]
+    replies = [fid.greeting(), fid.CANNOT_ANSWER_REPLY]
     assert fid.classify_outcome(replies) == "declined"
 
 
@@ -163,10 +163,10 @@ def test_greeting_alone_is_not_an_answer():
     """A turn that only greeted produced no outcome to score.
 
     It is reported as its own outcome rather than as `other`: on first contact the
-    CM-1 menu IS the reply, and `respond` stays silent when the classifier could
+    CM-1 open greeting IS the reply, and `respond` stays silent when classification is skipped
     not place the message. That is correct behaviour, not a missing outcome.
     """
-    assert fid.classify_outcome([fid.greeting_with_menu()]) == "greeted_only"
+    assert fid.classify_outcome([fid.greeting()]) == "greeted_only"
 
 
 def test_capture_prompt_is_not_an_answer():
@@ -176,7 +176,7 @@ def test_capture_prompt_is_not_an_answer():
     run. Scored as `answered`, they would have read as fabricated answers.
     """
     assert fid.classify_outcome(["¿Cuál es tu nombre?"]) == "capture_started"
-    assert fid.classify_outcome([fid.greeting_with_menu(), "¿En qué comuna te encuentras?"]) == (
+    assert fid.classify_outcome([fid.greeting(), "¿En qué comuna te encuentras?"]) == (
         "capture_started"
     )
     assert fid.classify_outcome([fid.COMPLETION_REPLY]) == "capture_started"
@@ -204,7 +204,7 @@ def test_empty_replies_is_other():
 
 
 def test_greeting_emitted_is_reported_separately():
-    assert fid.greeting_emitted([fid.greeting_with_menu(), "hola"]) is True
+    assert fid.greeting_emitted([fid.greeting(), "hola"]) is True
     assert fid.greeting_emitted(["hola"]) is False
     assert fid.greeting_emitted([]) is False
 

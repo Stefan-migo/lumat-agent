@@ -19,7 +19,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 
-from app.chat.state import MENU_CATEGORIES, WINDOW_SIZE, ConversationState, get_or_create_conversation  # noqa: E402
+from app.chat.state import WINDOW_SIZE, ConversationState, get_or_create_conversation  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     Conversation,
@@ -93,11 +93,11 @@ def _inbound_count() -> int:
 
 
 # ---------------------------------------------------------------------------
-# CM-1 — first contact: greeting + 8-category menu
+# CM-1 — first contact: open greeting
 # ---------------------------------------------------------------------------
 
 
-def test_cm1_first_contact_greeting_with_menu(mock_openai_chat):
+def test_cm1_first_contact_open_greeting_is_only_reply(mock_openai_chat):
     conv_id = _seed(["hola"])
     from app.chat.graph import run_conversation
 
@@ -108,25 +108,9 @@ def test_cm1_first_contact_greeting_with_menu(mock_openai_chat):
         replies = run_conversation(session, message)
         session.commit()
 
-    assert len(replies) >= 1
-    greeting = replies[0]  # greeting is always the first reply on first contact
-    assert "asistente virtual" in greeting.lower()  # identifies itself
-    assert "Lumat" in greeting
-    for category in MENU_CATEGORIES:  # all 8 categories present
-        assert category in greeting
-
-
-def test_cm1_menu_has_exactly_8_categories():
-    assert MENU_CATEGORIES == [
-        "Calefont",
-        "Caldera",
-        "Calefacción",
-        "Solicitar visita",
-        "Valores",
-        "Postventa/Garantía",
-        "Emergencia",
-        "Hablar con una persona",
-    ]
+    assert replies == ["Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"]
+    assert "Elige una opción" not in replies[0]
+    assert "1." not in replies[0]
 
 
 # ---------------------------------------------------------------------------
@@ -162,11 +146,11 @@ def test_cm1_repeat_contact_resumes_not_from_scratch(mock_openai_chat):
         replies = run_conversation(session, second)
         session.commit()
 
-    # resumed: the second reply is NOT a fresh greeting+menu (it's the first
+    # resumed: the second reply is NOT a fresh greeting (it's the first
     # capture question for the visita intent)
     assert len(replies) == 1
     assert "asistente virtual" not in replies[0].lower()
-    assert MENU_CATEGORIES[0] not in replies[0]
+    assert "Elige una opción" not in replies[0]
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +199,7 @@ def test_d2_run_conversation_persists_outbound_replies(mock_openai_chat):
 
     assert _inbound_count() == 1  # original inbound untouched
     replies = _outbound_texts(conv_id)
-    assert len(replies) == 1  # CM-1: greeting + menu only, no turn-1 clarification
+    assert len(replies) == 1  # CM-1: greeting only, no turn-1 clarification
     assert "asistente virtual" in replies[0].lower()
 
 
@@ -246,7 +230,7 @@ def test_d2_next_message_sees_previous_replies_in_window(mock_openai_chat):
     texts = [m["text"] for m in state.window]
     assert texts[0] == "hola"  # inbound
     assert "asistente virtual" in texts[1].lower()  # bot greeting reply in context
-    # CM-1: turn 1 produces ONLY the greeting — no clarification after the menu
+    # CM-1: turn 1 produces ONLY the greeting — no clarification
     assert "entend" not in texts[1].lower()
     assert texts[2] == "calefont"  # current inbound
 
