@@ -363,4 +363,8 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
   keyword (`emergency.py`), so the task doc's POSTVENTA example `"quedó con una fuga"` escalates and
   never reaches the KB — the thread uses `"fuga de agua"` (benign qualifier) and a separate test
   asserts the bare-leak escalation (owner to ratify the wording). Verification: full suite
-  `uv run pytest tests/` **EXIT 0** with the two known-flaky seed tests deselected.
+  `uv run pytest tests/` **EXIT 0** with the two known-flaky seed tests deselected. RDD: 4-lens
+  review `review-2b95316df5abb587` approved/acknowledged (authority burned); three advisory
+  non-blocking findings — R3-001 (the bare-leak boundary test could also assert the safety reply)
+  and R3-002/R4-001 (availability fixture clock dependency, verified a false positive: `now + 2
+  days` reset to 09:00 is always ≥ ~1.4 days ahead).
