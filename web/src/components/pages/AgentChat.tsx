@@ -27,6 +27,7 @@ import { Check, Copy, Paperclip, RotateCcw, Send } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
+  AssistantArtifact,
   AssistantAttachment,
   AssistantEvidence,
   AssistantEvent,
@@ -294,6 +295,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const [runId, setRunId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
+  const [artifacts, setArtifacts] = useState<AssistantArtifact[]>([]);
   const [uploading, setUploading] = useState(false);
   const [cortex, setCortex] = useState<PlanningSession | null>(null);
   const [report, setReport] = useState<CortexArtifact | null>(null);
@@ -331,6 +333,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     setLifecycle(state?.stage ?? null);
     setRunId(result.thread.active_run_id ?? null);
     setAttachments(result.attachments ?? []);
+    setArtifacts(result.artifacts ?? []);
     setCortex(state?.cortex_session ?? null);
   };
 
@@ -753,6 +756,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
       onCreateThread={() => void newChat()}
       loadThreadTabs={Boolean(onThreadOpened)}
       attachments={attachments}
+      artifacts={artifacts}
       capabilities={capabilities}
       capabilitiesLoading={capabilitiesLoading}
       capabilitiesError={capabilitiesError}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderKanban, History, PanelRight, PanelLeft, Plus, X } from "lucide-react";
-import { createProject, deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
-import type { AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project } from "../../types";
+import { ChevronDown, ChevronRight, Download, FileText, Folder, FolderKanban, History, PanelRight, PanelLeft, Plus, X } from "lucide-react";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listChatThreads, listProjects, renameChatThread } from "../../api";
+import type { AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -19,7 +19,7 @@ import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
 
-export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true, attachments = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
+export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
   const [search, setSearch] = useState("");
@@ -38,10 +38,23 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
   const [projectSlugEdited, setProjectSlugEdited] = useState(false);
   const [projectCreateError, setProjectCreateError] = useState<string | null>(null);
   const [projectSubmitting, setProjectSubmitting] = useState(false);
+  const [busyArtifactId, setBusyArtifactId] = useState<number | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
   const activeProjectSlug = route.get("proyecto") || selectedProject || undefined;
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
+  const downloadArtifact = async (artifact: AssistantArtifact) => {
+    setBusyArtifactId(artifact.id);
+    setArtifactError(null);
+    try {
+      await downloadAssistantArtifact(artifact.thread_id, artifact.id, artifact.filename);
+    } catch (reason: unknown) {
+      setArtifactError(reason instanceof ApiError ? reason.detail : "No pudimos descargar el artefacto.");
+    } finally {
+      setBusyArtifactId(null);
+    }
+  };
   const loadProjects = useCallback(() => listProjects(), []);
   const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(activeProjectSlug));
   const projects = projectsData.data?.projects ?? [];
@@ -316,6 +329,10 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
               {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <><p>{capabilities.tools?.length ?? 0} herramientas disponibles</p><p>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</p></> : <EmptyState title="Capacidades no disponibles" description="No hay información de capacidades para mostrar." />}
             </Card>
             <Card title="Archivos del hilo">{attachments.length ? <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.filename}</li>)}</ul> : <EmptyState title="Sin archivos adjuntos" description="Los archivos adjuntos a este hilo aparecerán aquí." />}</Card>
+            <Card title="Artefactos del hilo">
+              {artifacts.length === 0 ? <EmptyState title="Sin artefactos" description="Los archivos que el asistente genere aparecerán aquí." /> : <ul>{artifacts.map((artifact) => <li key={artifact.id}>{artifact.filename}<Button variant="tertiary" aria-label={`Descargar ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => void downloadArtifact(artifact)}><Icon icon={Download} size="sm" /></Button></li>)}</ul>}
+              {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
+            </Card>
             <Card title="Fuentes del hilo"><EmptyState title="Fuentes no disponibles" description="El hilo no entrega fuentes asociadas a sus respuestas." /></Card>
           </div> : <div className="assistant-workspace__context-content">
             <Card title="Agentes del proyecto"><EmptyState title="Aún no hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." /></Card>
