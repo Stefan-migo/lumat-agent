@@ -443,6 +443,19 @@ def to_assistant_attachment_dict(attachment: AssistantAttachment) -> dict:
             "created_at": _iso(attachment.created_at)}
 
 
+def to_project_file_dict(row) -> dict:
+    return {
+        "id": row.id,
+        "project_id": row.project_id,
+        "filename": row.filename,
+        "content_type": row.content_type,
+        "size": row.size,
+        "sha256": row.sha256,
+        "status": row.status,
+        "created_at": _iso(row.created_at),
+    }
+
+
 def to_doc_dict(doc: KbDocument, *, include_content: bool = False) -> dict:
     """KB document row -> snake_case dict (B4/T4.1; provider/model/cost, KB-3)."""
     payload = {
@@ -516,5 +529,4 @@ def to_project_dict(project: Project, *, include_config: bool = False) -> dict:
     if include_config:
         payload["config"] = ProjectConfig.model_validate(project.config or {}).model_dump()
     return payload
-
 

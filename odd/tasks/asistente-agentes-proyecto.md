@@ -115,9 +115,9 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] `default` namespace as implicit "no project" for admin/operator new chats; no visible "General" project. Technicians and unspecified roles retain project selection.
 
 ### A3 — Project files (large)
-- [ ] `project_files` table + migration (idempotent) + upload/download.
-- [ ] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber).
-- [ ] Ingest extracted content to `kb_documents(project_id)`.
+- [x] `project_files` table + migration (idempotent) + upload/download. Commits `89ee041f`, `06a85ce3`; migration-test expectation fix `11ef749e`.
+- [x] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber). Commits `e1540d00`, `cc74ec97`. Images are stored but intentionally not text-extracted/embedded (D3).
+- [x] Ingest extracted content to `kb_documents(project_id)`. Commit `e14f757e`.
 - [ ] Tools `list_project_files` / `read_project_file`.
 - [ ] Downloadable artifact path.
 - [ ] UI "Archivos y conocimiento".
@@ -197,3 +197,69 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `review-reliability`, 0 findings. Consent was granted by the owner via the native envelope;
   `review acknowledge-approved` returned `authority: burned`. Reviewed boundary for the next slice:
   `1cd09271`.
+
+- A3 (Slice 3) started after this doc's slices 1–2 entry; the worktree was recreated from new `main`
+  `e3575e49` and the session crashed ~2026-10-08 15:00 before documenting. Crash recovery
+  2026-10-08: working tree clean, no work lost; recovered commits `89ee041f`
+  (`feat(projects): persist project files` — `ProjectFile` model, `app/services/project_files.py`,
+  `db/migrations/042_project_files.sql`, `tests/integration/test_project_files.py`) and `06a85ce3`
+  (`feat(projects): expose project file upload and download API` — `app/panel/api/routes/project_files.py`,
+  serializer, `tests/functional/test_api_project_files.py`).
+- A3 partial verification and fix: the recovered slice left `tests/integration/test_migrations.py` RED
+  (`test_schema_migrations_records_version`, `test_all_tables_exist` did not know `042_project_files`);
+  fixed in `11ef749e` (`test(migrations): expect 042 project_files table and version`). Full backend after
+  fix: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — 1778 passed, 2 warnings.
+  Graph nodes consulted: `test_migrations.py`, `test_schema_migrations_records_version()`,
+  `test_all_tables_exist()`, `tests/conftest.py` (`migrated_db`), `app/config.py` (`get_settings`).
+- A3 still open: extractors (docx/xlsx/images, table-aware PDF via pdfplumber), ingest to
+  `kb_documents(project_id)`, tools `list_project_files`/`read_project_file`, downloadable artifact path,
+  UI "Archivos y conocimiento".
+- A3 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
+  e3575e49 --committed-only` returned `risk: high` (`process_boundary` in
+  `tests/integration/test_migrations.py`), 11 paths, 350 lines, `review_due: true`. Lineage
+  `review-253abff1f01e9da2`, 4 lenses (risk, resilience, readability, reliability), 0 blocking
+  findings; owner granted consent via the native envelope; `review acknowledge-approved` returned
+  `authority: burned`. Non-blocking advisory findings (follow-ups, do NOT re-review this candidate):
+  (a) file bytes are written to disk before the DB row/audit flush+commit, so a failed commit can
+  orphan disk files — `app/services/project_files.py:47-51` (R1-001/R3-002/R4-001); (b) the upload
+  reads `max_bytes + 1` but never drains/rejects the remaining oversized request body —
+  `app/panel/api/routes/project_files.py:32-33` (R3-001/R4-002).
+  Reviewed boundary for the next slice: `1d511d5d`.
+- A3.2 plan (extractors + KB ingest) — owner approved adding `pdfplumber`, `python-docx`,
+  `openpyxl` (all missing today; `pypdf`/`fastembed` already present). Approach: extend
+  `DocumentFormat` with `docx`/`xlsx` via migration `043` (`ALTER TYPE document_format ADD VALUE
+  IF NOT EXISTS ...`; `db/migrate.sh` runs autocommit so this is safe); new
+  `app/services/document_extract.py::extract_document_text(content, kind)` — pdf via pdfplumber
+  (page text + `extract_tables()`), docx via python-docx (paragraphs + tables), xlsx via openpyxl
+  (sheet rows as ` | `-joined blocks), md/txt decoded, csv reuses `kb._csv_rows_to_text`, image -> "".
+  `kb.ingest_document` gains an optional `content_text` override (keeps pypdf path for attachments/KB).
+  The upload route calls a new `ingest_project_file(...)` that ingests to
+  `kb_documents(project_id=<project>, visibility=internal, source_meta={"project_file_id": id})`; an
+  extraction failure marks `ProjectFile.status="failed"` without losing the stored blob. Must update
+  `tests/integration/test_migrations.py` (`043` version in `test_schema_migrations_records_version`;
+  `test_enums_materialized` document_format labels gain docx/xlsx). TDD ON (RED -> GREEN).
+- A3.2 done (owner-approved deps `pdfplumber`, `python-docx`, `openpyxl`). Commits: `e1540d00`
+  (`feat(kb): add docx and xlsx document formats` — `DocumentFormat.DOCX/XLSX`, migration
+  `043_document_format_docx_xlsx.sql`, migration-test updates); `cc74ec97`
+  (`feat(projects): extract project file text...` — `app/services/document_extract.py`,
+  `tests/integration/test_document_extract.py`, deps); `e14f757e`
+  (`feat(projects): ingest project file text into the project knowledge base` —
+  `kb.ingest_document(content_text=...)`, `project_files.ingest_project_file` with a
+  `begin_nested()` savepoint + `status="failed"` on extraction error, route wiring, tests).
+  RED observed: `ModuleNotFoundError: No module named 'docx'` + `cannot import name 'ingest_project_file'`.
+  GREEN: targeted 76 passed; full `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` —
+  1789 passed. Graph nodes consulted: `ingest_document`, `extract_text`, `_store_chunks`, `embed_texts`,
+  `retrieve`, `DocumentFormat`, `KbDocument`, `KbChunk`, `KbVisibility`, `ProjectFile`,
+  `allowed_project_file`, `store_project_file`, `upload_project_file`; paths
+  `ingest_document -> KbDocument` and `upload_project_file -> store_project_file`.
+- A3 still open: tools `list_project_files`/`read_project_file`, downloadable artifact path,
+  UI "Archivos y conocimiento".
+- A3.2 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
+  1d511d5d --committed-only` returned `risk: high` (`process_boundary` in
+  `tests/integration/test_migrations.py`), 13 paths, 723 lines, `review_due: true`. Lineage
+  `review-0d7df7cb8bc69017`, 4 lenses, 0 blocking findings; owner granted consent; `review
+  acknowledge-approved` returned `authority: burned`. Non-blocking advisory (follow-up, do NOT
+  re-review this candidate): the `except Exception` in `ingest_project_file` swallows the cause and
+  turns transient KB/embedding failures into a successful upload with `status="failed"` and no log —
+  `app/services/project_files.py:88,97-99` (R3-001/R4-001). Reviewed boundary for the next slice:
+  `f1ee53f9`.
