@@ -80,7 +80,7 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ### Unit C — tabs
 
-- [ ] **CF-9** — Agente tab: `Alcance del agente` (icon-tile header, "Avanzado" badge, rules
+- [x] **CF-9** — Agente tab: `Alcance del agente` (icon-tile header, "Avanzado" badge, rules
       textarea, advanced-syntax disclosure, "Cómo funciona" panel, footer note + save) and
       `Detección de emergencias` (warning icon, keywords textarea + helper, "Consideraciones" panel,
       save). Findings `configuracion-002`, `configuracion-003`.
@@ -142,6 +142,16 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
   - Validation rule (conservative, pending owner visual pass): required non-empty; numeric fields finite
     and non-negative; schedule needs timezone + ≥1 day + non-empty open<close. No invented upper bounds.
   - Verified: focused vitest 4/4 green; `npm run build` green.
+
+- **PR4 — Agente tab (CF-9)** — done on branch `odd/configuracion-redesign`.
+  - Commit: `b8aab4e7` bring the Agente tab to the reference composition.
+  - Files: `pages/Settings.tsx`, `pages/Settings.css`, `pages/Settings.test.tsx`.
+  - `Alcance del agente`: `Card` icon-tile header + "Avanzado" `Badge` in `headerAction`, rules
+    textarea, advanced-syntax disclosure, "Cómo funciona" `HelpPanel`, footer note + save.
+    `Detección de emergencias`: warning icon header, keywords textarea + helper, "Consideraciones"
+    `HelpPanel`, footer note + save. Two-column layout, single column at ≤40rem.
+  - Reuses the PR1/PR2 roll-ups (`HelpPanel`, `Card.headerAction`).
+  - Verified: focused vitest 5/5 green; FULL suite 1065/1065 green; `npm run build` green.
 
 ## Verification
 

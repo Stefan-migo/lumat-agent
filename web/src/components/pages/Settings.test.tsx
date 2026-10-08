@@ -24,6 +24,20 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
   });
 
+  it("renders the Agente cards, help panels, and editable advanced rules", () => {
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Detección de emergencias" })).toBeInTheDocument();
+    expect(screen.getByText("Avanzado")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cómo funciona" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Consideraciones" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Sintaxis avanzada · categoría=mode"));
+    expect(screen.getByText(/una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate/)).toBeInTheDocument();
+    const rules = screen.getByLabelText("Reglas de alcance");
+    expect(rules).toHaveValue("general=bot_resolve");
+    expect(rules).toBeEnabled();
+  });
+
   it("switches sections and keeps the mobile select on the same active state", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
