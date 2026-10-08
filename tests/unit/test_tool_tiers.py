@@ -19,6 +19,8 @@ DEFAULT_TOOLS = {
     "dashboard.summary",
     "project.list",
     "project.find",
+    "list_project_files",
+    "read_project_file",
 }
 
 OPT_IN_TOOLS = {

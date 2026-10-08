@@ -108,3 +108,35 @@ def list_project_files(session: Session, project_id: int) -> list[ProjectFile]:
 
 def get_project_file(session: Session, project_id: int, file_id: int) -> ProjectFile | None:
     return session.scalar(select(ProjectFile).where(ProjectFile.project_id == project_id, ProjectFile.id == file_id))
+
+
+MAX_FILE_TEXT_CHARS = 20_000
+
+
+def owned_project(session: Session, owner_id: int | None, *, project_id: int | None = None, slug: str | None = None) -> Project | None:
+    """Resolve a project the owner may access, or None. Fails closed."""
+    if owner_id is None:
+        return None
+    stmt = select(Project).where(Project.owner_id == owner_id)
+    if project_id is not None:
+        stmt = stmt.where(Project.id == project_id)
+    elif slug:
+        stmt = stmt.where(Project.slug == slug)
+    else:
+        return None
+    return session.scalar(stmt)
+
+
+def read_file_text(row: ProjectFile) -> dict:
+    """Return the exact extracted text of a stored file, bounded for the model.
+
+    Reads the original stored blob (the source of truth) and re-extracts text,
+    so it works even when KB ingestion failed or was skipped.
+    """
+    kind = allowed_project_file(row.filename, row.content_type, row.size)
+    if kind == "image":
+        return {"kind": "image", "text": "", "truncated": False, "chars": 0}
+    content = Path(row.stored_path).read_bytes()
+    text = extract_document_text(content, kind)
+    truncated = len(text) > MAX_FILE_TEXT_CHARS
+    return {"kind": kind, "text": text[:MAX_FILE_TEXT_CHARS], "truncated": truncated, "chars": len(text)}
