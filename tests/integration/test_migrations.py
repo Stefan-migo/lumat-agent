@@ -684,6 +684,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("040_project_config",),
         ("041_kb_project_scope",),
         ("042_project_files",),
+        ("043_document_format_docx_xlsx",),
     ]
 
 
@@ -960,7 +961,7 @@ def test_enums_materialized(migrated_db, admin_conn):
     assert by_type["message_status"] == [
         "received", "processing", "processed", "failed",
     ]
-    assert by_type["document_format"] == ["pdf", "md", "csv"]
+    assert by_type["document_format"] == ["pdf", "md", "csv", "docx", "xlsx"]
 
 
 def test_memory_provenance_schema(migrated_db, admin_conn):

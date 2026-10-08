@@ -116,6 +116,8 @@ class DocumentFormat(str, enum.Enum):
     PDF = "pdf"
     MD = "md"
     CSV = "csv"
+    DOCX = "docx"
+    XLSX = "xlsx"
 
 
 class KbVisibility(str, enum.Enum):
