@@ -213,4 +213,15 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `test_all_tables_exist()`, `tests/conftest.py` (`migrated_db`), `app/config.py` (`get_settings`).
 - A3 still open: extractors (docx/xlsx/images, table-aware PDF via pdfplumber), ingest to
   `kb_documents(project_id)`, tools `list_project_files`/`read_project_file`, downloadable artifact path,
-  UI "Archivos y conocimiento". RDD review of the A3 slice not yet assessed (boundary `e3575e49`).
+  UI "Archivos y conocimiento".
+- A3 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
+  e3575e49 --committed-only` returned `risk: high` (`process_boundary` in
+  `tests/integration/test_migrations.py`), 11 paths, 350 lines, `review_due: true`. Lineage
+  `review-253abff1f01e9da2`, 4 lenses (risk, resilience, readability, reliability), 0 blocking
+  findings; owner granted consent via the native envelope; `review acknowledge-approved` returned
+  `authority: burned`. Non-blocking advisory findings (follow-ups, do NOT re-review this candidate):
+  (a) file bytes are written to disk before the DB row/audit flush+commit, so a failed commit can
+  orphan disk files — `app/services/project_files.py:47-51` (R1-001/R3-002/R4-001); (b) the upload
+  reads `max_bytes + 1` but never drains/rejects the remaining oversized request body —
+  `app/panel/api/routes/project_files.py:32-33` (R3-001/R4-002).
+  Reviewed boundary for the next slice: `1d511d5d`.
