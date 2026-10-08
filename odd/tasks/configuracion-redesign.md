@@ -91,7 +91,7 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
       schedule list, "Nuevo horario" sub-card with day toggles + Inicio/Fin time inputs, delete,
       "Agregar otro horario", disabled save) plus the right column `Notificaciones push` and
       `Fuera de horario` cards. Findings `configuracion-006`, `configuracion-007`, `configuracion-014`.
-- [ ] **CF-12** — Costos tab: `Gasto actual` three-metric row with date chip, `Límites de gasto`
+- [x] **CF-12** — Costos tab: `Gasto actual` three-metric row with date chip, `Límites de gasto`
       (USD inputs + save), `Precio Meta` (cost input, "Vigente desde" chip, save), and
       `Qué ocurre al alcanzar los límites` (80%/100% rows). Findings `configuracion-008`,
       `configuracion-009`, `configuracion-010`.
@@ -167,7 +167,7 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     timeouts that pass 49/49 in isolation); `npm run build` green.
 
 - **PR6 — Horarios y avisos tab (CF-11)** — done on branch `odd/configuracion-redesign`.
-  - Commit: the single CF-11 work-unit commit reported in the delivery summary; brings the Horarios
+  - Commit: `6228e556` brings the Horarios
     y avisos tab to the reference composition.
   - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
     `web/src/stories/pages/Settings.stories.test.tsx`, this task log.
@@ -184,6 +184,28 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     dialog` timed out at 5s; rerunning `ClientFicha.test.tsx` alone passed 49/49. Settings story tests
     passed 30/30. `npm run build` (`tsc -b` + Vite) green; Vite reported its existing >500 kB chunk
     advisory.
+  - Not run: browser/runtime harness; this work unit changes only the existing frontend settings
+    surface and has no separately configured runtime harness.
+
+- **PR7 — Costos tab (CF-12)** — done on branch `odd/configuracion-redesign`.
+  - Commit: this single CF-12 work-unit commit (SHA reported in the delivery summary).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/stories/pages/Settings.stories.test.tsx`, this task log.
+  - Graph nodes consulted: `Settings()`, `StatCard()`, `Input()`, `settings` mock,
+    `tabularNum()`/`DataTable()`. `Settings()` → `StatCard()` had no directed path; their shared
+    consumer relationship was confirmed in source. `Input()` supports native HTML adornment-free
+    controls, so the USD suffix is composed at the call site. The graph query also linked the
+    settings mock and cost snapshot shape to the settings module.
+  - Reused the CF-4 `StatCard` three-metric row and CF-6 `Card` header action; added paired USD input
+    layout, effective-date badge, and the 80%/100% threshold panel. Existing save paths and draft /
+    validation flow remain unchanged. The 80% summary uses `conversation_percent` and
+    `conversation_limit` only when a conversation snapshot is available.
+  - Verified: focused Settings component + story tests 39/39 green. Full `npm test` completed with
+    1066/1069 passing; unrelated failures were `AgentChat.test.tsx > renders new stream content
+    while a previous markdown snapshot is stale`, `ClientFicha.test.tsx > posts state changes and
+    notes, then refreshes ficha and memories` (5s timeout), and `ConversationsList.test.tsx > requests
+    search and page changes and renders empty state as a DOM row`. `npm run build` (`tsc -b` + Vite)
+    green; Vite reported its existing >500 kB chunk advisory.
   - Not run: browser/runtime harness; this work unit changes only the existing frontend settings
     surface and has no separately configured runtime harness.
 
