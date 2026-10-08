@@ -36,6 +36,14 @@ afterEach(() => {
 });
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("uses immersive content only for the chat view", () => {
+    const { container, rerender } = render(<PanelShell user={admin} currentView="chat"><p>Contenido</p></PanelShell>);
+    expect(container.querySelector(".panel-shell__content")).toHaveClass("panel-shell__content--immersive");
+
+    rerender(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(container.querySelector(".panel-shell__content")).not.toHaveClass("panel-shell__content--immersive");
+  });
+
   it("filters notification rows by tab and shows unread counts and bulk action", async () => {
     const user = userEvent.setup();
     const onMarkAllNotificationsRead = vi.fn();

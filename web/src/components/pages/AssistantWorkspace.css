@@ -3,10 +3,10 @@
   grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr) minmax(17rem, 22.5rem);
   position: relative;
   min-width: 0;
-  width: calc(100% + 3rem);
-  height: calc(100dvh - 4.5rem);
+  width: 100%;
+  height: 100%;
   min-height: 0;
-  margin: calc(-1 * var(--space-6));
+  overflow: hidden;
   color: var(--corp-text);
 }
 
@@ -35,6 +35,8 @@
 .assistant-workspace__projects,
 .assistant-workspace__context {
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   padding: var(--space-4);
   border-right: 1px solid var(--corp-border);
   background: var(--brand-bg-elevated);
@@ -324,9 +326,8 @@
 @media (max-width: 64rem) {
   .assistant-workspace {
     grid-template-columns: minmax(0, 1fr);
-    width: calc(100% + 2.5rem);
-    height: calc(100dvh - 7.5rem);
-    margin: calc(-1 * var(--space-5));
+    width: 100%;
+    height: 100%;
   }
 
   .assistant-workspace__projects:not([hidden]),
@@ -363,9 +364,8 @@
 
 @media (max-width: 40rem) {
   .assistant-workspace {
-    width: calc(100% + 2rem);
-    height: calc(100dvh - 7rem);
-    margin: calc(-1 * var(--space-4));
+    width: 100%;
+    height: 100%;
   }
 }
 

@@ -575,7 +575,7 @@ export function PanelShell({
         </section>
       </dialog>
 
-      <div ref={contentAreaRef} className="panel-shell__content-area">
+       <div ref={contentAreaRef} className={`panel-shell__content-area${currentView === "chat" ? " panel-shell__content-area--immersive" : ""}`}>
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
             {onBack ? <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={onBack}>
@@ -635,7 +635,7 @@ export function PanelShell({
             </div>
           ) : null}
         </div>
-         <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
+         <div id="panel-main-content" className={`panel-shell__content${currentView === "chat" ? " panel-shell__content--immersive" : ""}`} tabIndex={-1}>
            {children}
         </div>
        </div>

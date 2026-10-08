@@ -367,5 +367,30 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     1047 passed (first run exceeded 300 seconds, retry at 600 seconds passed); `npm run build` —
     passed with the existing >500 kB chunk advisory.
   - Commit: `feat(assistant): expand workspace and collapse shell rail`.
-  - Remaining: owner visual confirmation of full-height/composer positioning at desktop and narrow
-    viewports; no runtime screenshot comparison was performed.
+   - Remaining: owner visual confirmation of full-height/composer positioning at desktop and narrow
+     viewports; no runtime screenshot comparison was performed.
+- **AW-7 full-bleed layout correction (2026-10-08)** — removed the previous AssistantWorkspace width
+  expansion and negative-margin offsets. The chat view now conditionally receives immersive shell
+  classes; only that view removes the shell content cap/padding and assigns a definite viewport-height
+  content track. `.page-frame.assistant-chat` removes PageFrame's centered cap, and
+  `.assistant-workspace` now fills its parent with a three-column grid; project/context panes scroll
+  independently while the center chat retains its existing message-scroll/composer grid.
+  - Files: `web/src/components/domain/PanelShell.tsx`, `PanelShell.test.tsx`,
+    `web/src/components/primitives/primitives.css`, `web/src/components/pages/AgentChat.css`,
+    `AssistantWorkspace.css`, and this task document.
+  - Graph Check: `graphify query "PanelShell content layout page-frame full width assistant"` consulted
+    `PanelShell()`, `PanelShell`, `PageFrame()`, `AgentChat.tsx`, `AppShell.tsx`,
+    `PanelShell.test.tsx`, and `web/src/components/primitives/primitives.css`. The directed path query
+    `PanelShell` → `AssistantWorkspace` returned no path and warned the source match was ambiguous.
+    `GRAPH_REPORT.md` hubs/community consulted: `PanelShell.tsx`, `AppShell.tsx`, and
+    `web/src/components/primitives/primitives.css`.
+  - Exact layout selectors: `.panel-shell__content-area--immersive` sets the chat content track to
+    `100dvh`; `.panel-shell__content--immersive` removes the 82rem cap, auto-centering and padding;
+    `.page-frame.assistant-chat` removes the 78rem cap and centering; `.assistant-workspace` is
+    `width: 100%; height: 100%; min-height: 0` with grid columns. No browser visual capture available.
+  - Verification from `web/`: `npx tsc -b --force --noEmit` — passed; focused
+    `npx vitest run src/components/domain/PanelShell.test.tsx src/components/pages/AssistantWorkspace.test.tsx`
+    — 2 files / 42 tests passed; `npx vitest run --no-file-parallelism` — 97 files / 1048 tests passed;
+    `npm run build` — passed (existing Vite >500 kB chunk advisory). Focused and assistant tests emit
+    existing React async `act` warnings. `git diff --check` passed.
+  - Commit: `fix(assistant): make workspace full-bleed` (hash recorded in delivery summary).
