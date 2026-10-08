@@ -49,6 +49,7 @@ def _dispatch(
     escalate: bool = False,
     emergency: bool = False,
     escalate_reason: str | None = None,
+    mid_capture: bool = False,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
@@ -83,6 +84,16 @@ def _dispatch(
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+    if mid_capture:
+        if intent in RETRIEVAL_INTENTS:
+            # Answer the deviation from KB, then resume the pending field (CI-2).
+            return {
+                "next_step": "research",
+                "active_sub_agent": RESEARCH_TRIAGE,
+                "capture_paused": True,
+            }
+        # Cancel/reschedule are intentionally treated as field answers in CI-2.
+        return {"next_step": "capture"}
     if intent in {"cancelar_visita", "reagendar_visita"}:
         return {"next_step": "manage"}
     if intent in CAPTURE_INTENTS:
@@ -113,6 +124,7 @@ def orchestrate(state: ConversationState) -> dict:
         escalate=state.escalate,
         emergency=state.emergency,
         escalate_reason=state.escalate_reason,
+        mid_capture="_pending" in (state.captured or {}),
     )
     if decision.get("active_sub_agent"):
         logger.info(

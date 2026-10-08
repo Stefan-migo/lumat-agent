@@ -149,6 +149,9 @@ class ConversationState:
     escalate_reason: str | None = None
     unknown_count: int = 0
     next_step: str = "receive"
+    # CI-2: set by orchestrate when a mid-capture deviation was dispatched to a
+    # sub-graph; the sub-graph's answer is followed by resuming the pending field.
+    capture_paused: bool = False
     # H2 orchestrator (design.md line 47): which sub-agent the orchestrator
     # dispatched to for this turn (None when no sub-graph runs).
     active_sub_agent: str | None = None
