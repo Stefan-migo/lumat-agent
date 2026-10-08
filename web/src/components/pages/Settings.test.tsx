@@ -31,8 +31,14 @@ describe("Settings", () => {
     expect(screen.getByText("Avanzado")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cómo funciona" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Consideraciones" })).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Sintaxis avanzada · categoría=mode"));
-    expect(screen.getByText(/una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cómo funciona" }).closest(".help-panel")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card")).toContainElement(screen.getByRole("heading", { name: "Cómo funciona" }));
+    expect(screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card")).toContainElement(screen.getByRole("heading", { name: "Consideraciones" }));
+    expect(screen.getByText("Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reglas de alcance")).toHaveAttribute("placeholder", "Ej: reparación=bot_resolve");
+    fireEvent.click(screen.getByText("Sintaxis avanzada"));
+    expect(screen.getByText("Sintaxis avanzada").parentElement).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
+    expect(screen.getByText("Sintaxis avanzada").parentElement).toHaveTextContent("presupuesto=bot_resolve");
     const rules = screen.getByLabelText("Reglas de alcance");
     expect(rules).toHaveValue("general=bot_resolve");
     expect(rules).toBeEnabled();
