@@ -91,6 +91,27 @@ describe("PanelShell rail contract (2C-1)", () => {
     expect(container.querySelector(".panel-shell__header .panel-shell__collapse-button")).toBeNull();
   });
 
+  it("collapses the rail only when requested and restores its previous state", () => {
+    const { container, rerender } = render(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    const root = container.querySelector(".panel-shell") as HTMLElement;
+    expect(root).not.toHaveClass("panel-shell--collapsed");
+
+    rerender(<PanelShell user={admin} currentView="chat" collapseRail><p>Contenido</p></PanelShell>);
+    expect(root).toHaveClass("panel-shell--collapsed");
+
+    rerender(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(root).not.toHaveClass("panel-shell--collapsed");
+  });
+
+  it("preserves a manually collapsed rail across the assistant view", async () => {
+    const user = userEvent.setup();
+    const { container, rerender } = render(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    await user.click(container.querySelector(".panel-shell__collapse-button") as HTMLButtonElement);
+    rerender(<PanelShell user={admin} currentView="chat" collapseRail><p>Contenido</p></PanelShell>);
+    rerender(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(container.querySelector(".panel-shell")).toHaveClass("panel-shell--collapsed");
+  });
+
   it("keeps every rail control named when the compact tier visually hides its label", () => {
     // The tablet rail hides the label text visually instead of removing it, because the text is what
     // supplies each control's accessible name (canonical: compact sidebar navigation with accessible

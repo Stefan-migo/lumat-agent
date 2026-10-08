@@ -136,7 +136,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} breadcrumbView={view} onBack={onBack} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} collapseRail={view === "chat"} breadcrumbView={view} onBack={onBack} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
       {page}
     </PanelShell>
   );

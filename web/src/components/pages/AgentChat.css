@@ -1,3 +1,10 @@
+.assistant-chat { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; min-height: 0; }
+.assistant-chat .page-frame__content { display: grid; min-width: 0; min-height: 0; height: 100%; }
+.assistant-chat__surface { min-width: 0; min-height: 0; height: 100%; }
+.assistant-chat__surface { align-items: stretch; }
+.assistant-chat__conversation { grid-template-rows: minmax(0, 1fr) auto; width: 100%; max-width: none; height: 100%; min-height: 0; }
+.assistant-chat__messages { min-height: 0; overflow-y: auto; }
+
 .assistant-chat .ai-agent-grammar__bubble-row { align-items: flex-start; }
 .assistant-chat .ai-agent-grammar__bubble-row > .avatar { flex: 0 0 auto; }
 .assistant-chat .ai-agent-grammar__bubble { max-width: min(78%, 46rem); border-radius: var(--radius-lg); background: var(--surface); color: var(--corp-text); box-shadow: var(--shadow-1); }

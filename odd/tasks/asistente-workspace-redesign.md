@@ -330,5 +330,42 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     1 file / 6 passed; `npx vitest run --no-file-parallelism` — 97 files / 1043 passed; `npm run build`
     — passed with the existing >500 kB chunk-size advisory. Focused tests emit existing async `act`
     warnings from AgentChat. An initial full-suite attempt exceeded 300 seconds; the retry completed.
-  - Commit: `536e0896` (`feat(assistant): move workspace pane controls to header`). This commit also
-    updates this task log; no follow-up documentation commit was needed.
+   - Commit: `536e0896` (`feat(assistant): move workspace pane controls to header`). This commit also
+     updates this task log; no follow-up documentation commit was needed.
+- **AW-7 owner visual-review revision 2 — work unit 1 complete (2026-10-08)** — added the Proyectos
+  header create action using the existing project API and shared Dialog/Input/Textarea/Button/Icon
+  primitives; slug auto-suggestions remain editable, invalid submissions are disabled, and API
+  failures stay visible without implying success. Newly created projects refresh and become selected.
+  Fixed font inheritance on project folder labels and text-bearing thread-tab buttons. Existing
+  project loading/search/error/empty behavior is unchanged.
+  - Files: `web/src/components/pages/AssistantWorkspace.tsx`, `AssistantWorkspace.css`, and
+    `AssistantWorkspace.test.tsx`.
+  - Graph Check: `AssistantWorkspace()`, `Dialog()`, `Button()`, `createProject()`, `useAsyncData()`,
+    `src/api.ts`, and `Project`; path query from `AssistantWorkspace` to `PanelShell` found no directed
+    path. `GRAPH_REPORT.md` hubs consulted: `src/api.ts`, `PanelShell.tsx`, `AppShell.tsx`, and
+    `AgentChat.tsx`.
+  - Verification: `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` — 1 file / 8
+    tests passed; `npx tsc -b --force --noEmit` — passed. Existing asynchronous React `act` warnings
+    remain in the narrow-pane test.
+  - Commit: `2a97c52d` (`feat(assistant): create projects from workspace`).
+- **AW-7 owner visual-review revision 2 — work unit 2 complete (2026-10-08)** — assistant-scoped
+  workspace overrides now remove the content max-width constraints, use the available viewport height,
+  and keep the chat message area scrollable with its composer at the bottom. Added an optional
+  `PanelShell.collapseRail` prop and wired it only for the actual `chat` route in `AppShell` (project
+  and planning routes keep their existing shell state). The shell restores the pre-assistant collapse
+  state on leave; shell ownership remains unchanged. `PanelShell.tsx` / `AppShell.tsx` are explicitly
+  in scope for this approved revision; no token or palette files changed.
+  - Files: `web/src/components/pages/AssistantWorkspace.css`, `AgentChat.css`,
+    `web/src/components/domain/PanelShell.tsx`, `PanelShell.test.tsx`, `AppShell.tsx`, and this task
+    document.
+  - Graph Check: `PanelShell()`, `AppShell()`, `AssistantWorkspace.tsx`, `AgentChat.tsx`, and the
+    shell/CSS requirement nodes; path searches between AppShell/PanelShell and AssistantWorkspace/
+    AgentChat found no directed paths. `GRAPH_REPORT.md` hubs consulted: `PanelShell.tsx`,
+    `AppShell.tsx`, `AgentChat.tsx`, and `web/src/components/primitives/primitives.css`.
+  - Verification: focused workspace/shell/app-shell/AgentChat tests — 4 files / 119 passed;
+    `npx tsc -b --force --noEmit` — passed; `npx vitest run --no-file-parallelism` — 97 files /
+    1047 passed (first run exceeded 300 seconds, retry at 600 seconds passed); `npm run build` —
+    passed with the existing >500 kB chunk advisory.
+  - Commit: `feat(assistant): expand workspace and collapse shell rail`.
+  - Remaining: owner visual confirmation of full-height/composer positioning at desktop and narrow
+    viewports; no runtime screenshot comparison was performed.
