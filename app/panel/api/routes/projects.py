@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from app.panel.api.deps import require_agent_surface_json
 from app.panel.api.serializers import to_project_dict
 from app.panel.deps import get_db
 from app.services import projects as project_service
+from app.services.project_config import ProjectConfigUpdate, set_project_config
 
 router = APIRouter(tags=["panel-api-projects"])
 
@@ -37,7 +38,25 @@ def project_detail(
     project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
-    return {"project": to_project_dict(project)}
+    return {"project": to_project_dict(project, include_config=True)}
+
+
+@router.patch("/projects/{slug}/config")
+def project_config_update(
+    slug: str,
+    payload: ProjectConfigUpdate,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        set_project_config(session, project, payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    session.commit()
+    return {"project": to_project_dict(project, include_config=True)}
 
 
 @router.post("/projects", status_code=201)

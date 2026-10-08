@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 
 from app.chat.assistant.tools.registry import TOOL_REGISTRY, is_tool_allowed_for_role
@@ -48,6 +48,24 @@ class ProjectConfig(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("Duplicate project skill name")
         return skills
+
+
+class ProjectConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    instructions: str | None = None
+    tool_policy: ToolPolicy | None = None
+    skills: list[ProjectSkill] | None = None
+
+
+def set_project_config(session, project: Project, update: ProjectConfigUpdate) -> ProjectConfig:
+    merged = ProjectConfig.model_validate(project.config or {}).model_dump()
+    for field, value in update.model_dump(exclude_unset=True).items():
+        if value is not None:
+            merged[field] = value
+    validated = ProjectConfig.model_validate(merged)
+    project.config = validated.model_dump()
+    session.flush()
+    return validated
 
 
 @dataclass(frozen=True)
