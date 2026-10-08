@@ -108,6 +108,18 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ## Progress log
 
+- **CF-14 — Agente tab reference polish (2026-10-08)** — visual changes implemented; full-suite gate remains open.
+  - Feature commit: `f834cd871879a871e6e3873bac86b4bc4582e1ab` (`feat(settings): polish the Agente tab against the reference`).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/pages/Settings.test.tsx`, `web/src/stories/pages/Settings.stories.test.tsx`.
+  - Both help panels now sit inside their cards beside the form, with neutral surfaces and responsive
+    stacking. Card subtitles, scope-rule example placeholder, plain-language syntax disclosure,
+    primary save buttons, and a styled mobile section selector were added.
+  - Verification: focused Settings tests 40/40 passed; `npm run build` passed (`tsc -b` + `vite build`).
+    Full `npm test` ran 103 files / 1070 tests: 101 files passed, 2 failed with four timeout failures
+    in unrelated `ClientFicha` and `UserManagement` tests under local load. Re-run full suite before
+    closing CF-14; visual recapture/self-review is still pending.
+
 - **PR1 — Unit A roll-up primitives (CF-1, CF-2, CF-3)** — done on branch `odd/configuracion-redesign`.
   - Commits: `348593f2` help panel, `feac640b` day toggle, `8e23d46a` message preview.
   - Files: `primitives/HelpPanel.tsx` (+ test), `primitives/DayToggle.tsx` (+ test),
