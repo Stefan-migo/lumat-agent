@@ -108,6 +108,30 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ## Progress log
 
+- **CF-14 — Mensajes tab second visual review (2026-10-08)** — implemented; full-suite gate remains
+  open because of one unrelated `ClientFicha` timeout under full-suite load.
+  - Feature commit: `c450c5001a2f221167cf584db86cdffbb7636ed3`
+    (`feat(settings): refine the Mensajes tab columns and mobile selector`).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/pages/Settings.test.tsx`.
+  - The message editor now has a neutral bordered inner panel with vertical column separators;
+    the preview is plain within the panel, and mobile uses a controlled template `Menu` instead of
+    the vertical tablist. The editor textarea border and info legend are neutral, and the tone menu
+    and save button share a minimum height. The existing section-tablist selector remains scoped to
+    `.settings-tabs > .tabs > [role="tablist"]`.
+  - Graph check: `Settings()`, `Menu()`, `Tabs()`, and `MessagePreview()`; the graph query mapped the
+    settings/template area. No direct directed Settings-to-Menu or Settings-to-Tabs path was found;
+    the undirected path was `Settings.stories.tsx -> Settings.tsx -> MessagePreview()`. `GRAPH_REPORT.md`
+    settings community hub and responsive shell requirement were reviewed.
+  - Verification from `web/`: focused Settings + story tests 42/42 passed;
+    `npm run build` (`tsc -b` + Vite) passed with the existing >500 kB chunk advisory. Full
+    `npm test`: 1073/1074 tests passed across 103 files; the sole failure was
+    `ClientFicha page grammar > posts state changes and notes, then refreshes ficha and memories`
+    timing out at 5s. `ClientFicha.test.tsx` passed 49/49 in isolation.
+  - Runtime harness: N/A — this is a frontend-only presentation change to an existing route.
+    Rollback boundary: revert the feature commit to restore the prior Mensajes columns, legend,
+    tone control sizing, and mobile template navigation.
+
 - **CF-14 — Agente tab reference polish (2026-10-08)** — visual changes implemented; full-suite gate remains open.
   - Feature commit: `f834cd871879a871e6e3873bac86b4bc4582e1ab` (`feat(settings): polish the Agente tab against the reference`).
   - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
