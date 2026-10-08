@@ -165,7 +165,7 @@ def test_cm2_skip_marks_unknown_and_continues(client, mock_openai_chat, mock_met
 def test_cm2_complete_capture_persists_consent_and_ficha(
     client, mock_openai_chat, mock_meta_send
 ):
-    """Full capture: each answer stored, skip on evidence, consent -> ficha."""
+    """Full capture: mandatory answers, optional evidence skipped, consent -> ficha."""
     turns = [
         ("wamid.cm2c.1", "hola"),                      # greeting
         ("wamid.cm2c.2", "calefont"),                  # menu choice -> capture
@@ -175,9 +175,8 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
         ("wamid.cm2c.6", "Av. Siempre Viva 123"),      # address
         ("wamid.cm2c.7", "Marca X modelo Y, 5 años"),  # equipment
         ("wamid.cm2c.8", "no enciende desde ayer"),    # failure
-        ("wamid.cm2c.9", "no tengo"),                  # evidence -> skip
-        ("wamid.cm2c.10", "lunes o martes en la tarde"),  # availability
-        ("wamid.cm2c.11", "sí"),                       # consent -> completion
+        ("wamid.cm2c.9", "lunes o martes en la tarde"),  # availability
+        ("wamid.cm2c.10", "sí"),                       # consent -> completion
     ]
     for wamid, text in turns:
         post_message(client, wamid, text)
@@ -196,13 +195,13 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     assert customer.consent_status is True
     assert customer.consent_at is not None
 
-    # CM-2: every answer stored; the skipped evidence field is "unknown"
+    # CM-2: mandatory answers are stored; optional evidence is not a field.
     assert captured["name"] == "Juan Perez"
     assert captured["email"] == "juan@mail.cl"
     assert captured["comuna"] == "Providencia"
     assert captured["equipment"] == "Marca X modelo Y, 5 años"
     assert captured["failure"] == "no enciende desde ayer"
-    assert captured["evidence"] == "unknown"
+    assert "evidence" not in captured
     assert "_pending" not in captured  # flow completed
 
     # No technician availability is configured: do not promise a confirmed visit.

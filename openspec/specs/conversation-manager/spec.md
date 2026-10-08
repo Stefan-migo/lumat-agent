@@ -22,7 +22,7 @@ The system MUST run one LangGraph graph per conversation with persistent per-con
 
 ### Requirement: CM-2 — Progressive Structured Data Capture
 
-The system MUST collect, in a progressive question flow, the fields defined in LumatRequest §1.5: identification (name, phone, email), location (comuna, address), equipment (type, brand, model, approximate age), failure (description, error code, when it occurs, frequency), evidence (photos, videos, audio when applicable), availability (preferred days/times), and consent to store data.
+The system MUST collect, in a progressive question flow, the fields defined in LumatRequest §1.5: identification (name, phone, email), location (comuna, address), equipment (type, brand, model, approximate age), failure (description, error code, when it occurs, frequency), availability (preferred days/times), and consent to store data. Evidence (photos, videos, audio) is an optional ask, never a mandatory field; received media is case evidence and never a handoff trigger by itself.
 
 #### Scenario: Complete capture
 - GIVEN a customer chose "Calefont"

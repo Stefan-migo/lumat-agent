@@ -4,7 +4,8 @@ Each turn the classifier extracts any capturable fields present in the free
 text (CI-3b); the node merges them and asks the next 2-3 MISSING fields in one
 natural-language message (no numbered list), in the LumatRequest §1.5 order:
 identification (name, email), location (comuna, address), equipment, failure,
-evidence, availability. A skip answer (no sé / no tengo / ...) marks the field
+availability. Evidence is an optional ask; received media is case evidence.
+A skip answer (no sé / no tengo / ...) marks the field
 `unknown` and continues without blocking (CM-2).
 
 CI-3: consent is NOT a data field. Once every field is captured the flow asks
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import logging
 
+from app.chat.nodes.handoff_gate import is_media_evidence
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Conversation, Customer
@@ -37,18 +39,18 @@ CAPTURE_FIELDS: list[tuple[str, str]] = [
     ("address", "¿Cuál es tu dirección?"),
     ("equipment", "¿Qué equipo tienes? (marca, modelo y años aproximados)"),
     ("failure", "Describe el problema: qué falla, desde cuándo y con qué frecuencia."),
-    ("evidence", "¿Puedes enviar una foto o video del equipo y su pantalla? (si no, di 'no tengo')"),
     ("availability", "¿Qué días y horarios te acomodan para la visita?"),
 ]
+
+EVIDENCE_QUESTION = "¿Tienes algo más para pasarle al técnico? (una foto, un audio…)"
 
 # CI-3: consent is an explicit step of its own, before booking. It is never a
 # data field and never extracted from free text (PII).
 CONSENT_QUESTION = "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
 
-# CI-3b: ask up to this many questions per message. `evidence` is a media ask, so
-# it is not an extracted free-text field.
+# CI-3b: ask up to this many questions per message.
 MAX_ASKS = 3
-EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS if field != "evidence")
+EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
 _FIELD_QUESTIONS = dict(CAPTURE_FIELDS)
 _FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 
@@ -93,7 +95,7 @@ def _answer_consent(value: str) -> bool | None:
 
 
 def _current_text(state: ConversationState) -> str:
-    return state.window[-1]["text"] if state.window else ""
+    return (state.window[-1].get("text") or "") if state.window else ""
 
 
 def _persist_captured(session, state: ConversationState, captured: dict) -> None:
@@ -142,6 +144,9 @@ def _merge_extracted(captured: dict, extracted: dict | None) -> None:
 def capture(state: ConversationState) -> dict:
     """Merge this turn's extraction and ask the next missing fields (CI-3b)."""
     captured = dict(state.captured)
+    message = state.window[-1] if state.window else None
+    if is_media_evidence(message):
+        return _ask_next(captured, state)
     _merge_extracted(captured, state.extracted)
     pending = captured.get("_pending")
 
@@ -192,9 +197,13 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
 
     batch = missing[:MAX_ASKS]
     captured["_pending"] = batch
+    ask = _ask_text(batch)
+    if len(missing) <= MAX_ASKS and not captured.get("_evidence_asked"):
+        ask = f"{ask} {EVIDENCE_QUESTION}"
+        captured["_evidence_asked"] = True
     with session_scope() as session:
         _persist_captured(session, state, captured)
-    updates: dict = {"captured": captured, "replies": [_ask_text(batch)]}
+    updates: dict = {"captured": captured, "replies": [ask]}
     if clear_paused:
         updates["capture_paused"] = False
     return updates
