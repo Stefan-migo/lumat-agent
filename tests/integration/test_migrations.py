@@ -71,6 +71,7 @@ EXPECTED_TABLES = {
     "project_aliases",
     "project_audit",
     "project_files",  # 042_project_files.sql (durable project-scoped file store)
+    "assistant_artifacts",  # 044_assistant_artifacts.sql (assistant-produced files)
     "schema_migrations",
 }
 
@@ -685,6 +686,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("041_kb_project_scope",),
         ("042_project_files",),
         ("043_document_format_docx_xlsx",),
+        ("044_assistant_artifacts",),
     ]
 
 

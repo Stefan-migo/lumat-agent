@@ -5,11 +5,11 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, User
+from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, User
 from app.config import get_settings
 from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
@@ -20,6 +20,7 @@ from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
     to_assistant_attachment_dict,
+    to_assistant_artifact_dict,
     to_cortex_report_dict,
     to_cortex_session_dict,
     to_internal_chat_thread_summary_dict,
@@ -27,6 +28,7 @@ from app.panel.api.serializers import (
 from app.services.audit import record_audit
 from sqlalchemy import func, select
 from app.services import projects, tukulpan
+from app.services import assistant_artifacts
 
 router = APIRouter(tags=["panel-api-chat"])
 
@@ -248,7 +250,19 @@ def read_thread(thread_id: int, session: Session = Depends(get_db), current: Use
     resume_thread(session, thread, current)
     messages = get_thread(session, thread_id, current.id)[1]
     attachments = session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.deleted_at.is_(None)).order_by(AssistantAttachment.id)).all()
-    return {"thread": thread_dict(thread), "messages": [message_dict(row) for row in messages], "attachments": [to_assistant_attachment_dict(row) for row in attachments]}
+    artifacts = session.scalars(select(AssistantArtifact).where(AssistantArtifact.thread_id == thread_id).order_by(AssistantArtifact.id)).all()
+    return {"thread": thread_dict(thread), "messages": [message_dict(row) for row in messages], "attachments": [to_assistant_attachment_dict(row) for row in attachments], "artifacts": [to_assistant_artifact_dict(row) for row in artifacts]}
+
+
+@router.get("/chat/threads/{thread_id}/artifacts/{artifact_id}/download")
+def download_artifact(thread_id: int, artifact_id: int, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> FileResponse:
+    result = get_thread(session, thread_id, current.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    row = assistant_artifacts.get_artifact(session, thread_id, artifact_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    return FileResponse(row.stored_path, filename=row.filename, media_type=row.content_type)
 
 
 @router.get("/assistant/capabilities")

@@ -443,6 +443,12 @@ def to_assistant_attachment_dict(attachment: AssistantAttachment) -> dict:
             "created_at": _iso(attachment.created_at)}
 
 
+def to_assistant_artifact_dict(artifact) -> dict:
+    return {"id": artifact.id, "thread_id": artifact.thread_id, "filename": artifact.filename,
+            "content_type": artifact.content_type, "size": artifact.size,
+            "created_at": _iso(artifact.created_at)}
+
+
 def to_project_file_dict(row) -> dict:
     return {
         "id": row.id,
@@ -529,4 +535,3 @@ def to_project_dict(project: Project, *, include_config: bool = False) -> dict:
     if include_config:
         payload["config"] = ProjectConfig.model_validate(project.config or {}).model_dump()
     return payload
-

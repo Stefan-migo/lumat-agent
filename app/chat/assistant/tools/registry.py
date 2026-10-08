@@ -19,7 +19,7 @@ from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import automation, cases, customers, kb, project_files, projects, relations, scheduling, tukulpan as memory
+from app.services import assistant_artifacts, automation, cases, customers, kb, project_files, projects, relations, scheduling, tukulpan as memory
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.archive",
     "project.merge",
 })
-AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete"})
+AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 # Own reads are a compact recall digest, so legacy rows cannot expose unbounded
 # content; 500 characters keeps enough context for the assistant without adding a config knob.
@@ -246,6 +246,12 @@ class ProjectListFilesArgs(BaseModel):
 class ProjectReadFileArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     file_id: int = Field(gt=0)
+
+
+class ArtifactSaveArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1, max_length=assistant_artifacts.MAX_ARTIFACT_CONTENT_CHARS)
 
 
 def _plain(value: Any) -> Any:
@@ -594,6 +600,23 @@ def _read_project_file(session, args: ProjectReadFileArgs, *, owner_id: int | No
     return {"file_id": row.id, "filename": row.filename, **project_files.read_file_text(row)}
 
 
+def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
+    thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
+    if thread is None:
+        raise ToolValidationError("no accessible chat thread for artifacts")
+    try:
+        row = assistant_artifacts.store_artifact(session, thread, args.filename, args.content, actor="assistant")
+    except ValueError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    return {
+        "artifact_id": row.id,
+        "filename": row.filename,
+        "content_type": row.content_type,
+        "size": row.size,
+        "download_path": f"/panel/api/chat/threads/{row.thread_id}/artifacts/{row.id}/download",
+    }
+
+
 def _assistant_capabilities(_session, _args: CapabilitiesArgs):
     from app.services.prompts import load_assistant_config
 
@@ -649,6 +672,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace.", tier="default"),
     "list_project_files": ToolDefinition("list_project_files", ProjectListFilesArgs, True, _list_project_files, "List the current project's stored files.", tier="default"),
     "read_project_file": ToolDefinition("read_project_file", ProjectReadFileArgs, True, _read_project_file, "Read one project file's exact extracted text.", tier="default"),
+    "artifact.save": ToolDefinition("artifact.save", ArtifactSaveArgs, False, _save_artifact, "Save a downloadable file artifact for the current conversation.", tier="default"),
     "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),
     "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval.", tier="opt_in"),
     "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval.", tier="opt_in"),
@@ -667,6 +691,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "artifact.save": frozenset(UserRole),
     "memory.read": frozenset(UserRole),
     "memory.search": frozenset(UserRole),
     "memory.write": frozenset(UserRole),
@@ -736,17 +761,17 @@ def execute_tool(
     if not is_tool_allowed_for_role(name, role):
         raise ToolValidationError(f"tool is not authorized for role {role}: {name}")
     autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
-    if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
-        raise ToolValidationError("autonomous memory write requires a positive trusted thread id")
     # Owner-scoped tools must never fall back to the null-owner business namespace.
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file"} or (
+    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "artifact.save"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
         raise ToolValidationError("owner-scoped tool requires the authenticated owner")
+    if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
+        raise ToolValidationError("autonomous memory write requires a positive trusted thread id")
     if definition.write and not autonomous_write and name not in APPROVED_WRITE_ALLOWLIST:
         raise ToolValidationError("write-not-registered")
     if not cost_allowed:
@@ -792,7 +817,9 @@ def execute_tool(
     if not definition.read_only and not autonomous_write and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
-        if name in {"list_project_files", "read_project_file"}:
+        if name == "artifact.save":
+            result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id))
+        elif name in {"list_project_files", "read_project_file"}:
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, proyecto=proyecto, project_id=project_id))
         elif name.startswith("project."):
             kwargs = {"owner_id": owner_id}

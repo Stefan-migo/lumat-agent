@@ -119,7 +119,7 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber). Commits `e1540d00`, `cc74ec97`. Images are stored but intentionally not text-extracted/embedded (D3).
 - [x] Ingest extracted content to `kb_documents(project_id)`. Commit `e14f757e`.
 - [x] Tools `list_project_files` / `read_project_file`. Commit `611383bc`; RDD assess `medium`, 164 lines, `review_due: false` (`under_budget`).
-- [ ] Downloadable artifact path.
+- [x] Downloadable artifact path + minimal producer. Commit `3ae808d4` (table `assistant_artifacts` + migration 044, service, tool `artifact.save`, owner-scoped download route); RDD review approved (lineage `review-b1549d051bfb01b1`, 4 lenses, 0 blockers).
 - [ ] UI "Archivos y conocimiento".
 
 ### A4 — Skills system
@@ -252,7 +252,7 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `retrieve`, `DocumentFormat`, `KbDocument`, `KbChunk`, `KbVisibility`, `ProjectFile`,
   `allowed_project_file`, `store_project_file`, `upload_project_file`; paths
   `ingest_document -> KbDocument` and `upload_project_file -> store_project_file`.
-- A3 still open: downloadable artifact path, UI "Archivos y conocimiento".
+- A3 still open: UI "Archivos y conocimiento".
 - A3.2 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref
   1d511d5d --committed-only` returned `risk: high` (`process_boundary` in
   `tests/integration/test_migrations.py`), 13 paths, 723 lines, `review_due: true`. Lineage
@@ -289,3 +289,32 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   --committed-only --json` → `risk: medium` (`configuration_change` in `agent/registry.yaml`), 7 paths,
   164 lines, `review_due: false` (`under_budget`) → no review opened; the reviewed boundary stays pending
   at `f857e9f4` and accumulates with the next A3 slice commit.
+- A3.3 shipped: PR #522 merged to main (`890dd10c`), CI green (`test` + `panel` + GitGuardian); branch and
+  worktree cleaned up. A3.4 started from a fresh worktree on main `977675cd`.
+- A3.4 scope decision (owner-approved via the design question): `assistant_artifacts` is a NEW thread-scoped
+  concept, NOT a reuse of `assistant_attachments`; deliver the storage+download path AND a minimal producer
+  so it is testable end-to-end. A3.4 done. Commit `3ae808d4` (`feat(assistant): produce and download
+  assistant artifacts`); 16 files: model `AssistantArtifact` + migration `044_assistant_artifacts.sql`,
+  `app/services/assistant_artifacts.py` (owner-scoped `owned_thread`, safe bounded filename, size-bounded
+  `store_artifact` with audit, `list_artifacts`/`get_artifact`), assistant tool `artifact.save` (default
+  tier, all roles, autonomous write bound to the authenticated owner's thread; added to
+  `AUTONOMOUS_WRITE_ALLOWLIST`), owner-authorized
+  `GET /chat/threads/{thread_id}/artifacts/{artifact_id}/download` (`FileResponse`), artifact metadata in
+  the thread detail response, `to_assistant_artifact_dict` (never exposes `stored_path`), persona
+  authorization of the new autonomous write, and the whitelist/tier/role/planner-catalog snapshots. New
+  setting `assistant_artifact_max_bytes` (5 MiB); `MAX_ARTIFACT_CONTENT_CHARS = 200_000`. RED observed;
+  GREEN: full `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — exit 0 (1822 passed). Graph
+  nodes consulted: `attachments.py`, `prepare_attachment_context`, `AssistantAttachment`, `AssistantArtifact`,
+  `InternalChatThread`, `InternalChatMessage`, `routes/chat.py`, `routes/project_files.py`
+  (`download_media`/FileResponse), `app/services/agent_chat.py`.
+- A3.4 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref 977675cd
+  --committed-only` returned `risk: high` (`process_boundary` in `tests/integration/test_migrations.py`),
+  16 paths, 290 lines, `review_due: true` (`high_risk`). Lineage `review-b1549d051bfb01b1`, 4 lenses
+  (risk, resilience, readability, reliability), 0 blocking findings; owner granted consent via the native
+  envelope; `review acknowledge-approved` returned `authority: burned`. Non-blocking advisory findings
+  (follow-ups, do NOT re-review this candidate): (a) R4-001/R3-001 WARNING — artifact bytes are written to
+  disk before the row/audit flush, so a failed flush or commit can orphan files
+  (`app/services/assistant_artifacts.py:48-49`), the same class as the A3/A3.2 advisories; (b) R2-001
+  SUGGESTION — `list_artifacts` duplicates the query the thread-read route issues itself
+  (`app/services/assistant_artifacts.py:66-67` vs `app/panel/api/routes/chat.py:253`). Reviewed boundary
+  for the next slice: `3ae808d4` (the docs commit that follows rides on top as a passive change).
