@@ -131,6 +131,7 @@ from app.chat.nodes.capture import (  # noqa: E402
     CAPTURE_FIELDS,
     COMPLETION_REPLY,
     CONSENT_QUESTION,
+    EVIDENCE_QUESTION,
 )
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY, CLARIFICATION_REPLY  # noqa: E402
@@ -151,7 +152,8 @@ OUTCOMES = (
 # question that was asked, and scoring it as one would invent false answers: four
 # `near_miss` queries in the first full run came back as "¿Cuál es tu nombre?".
 CAPTURE_PROMPTS = frozenset(
-    [question for _, question in CAPTURE_FIELDS] + [CONSENT_QUESTION, COMPLETION_REPLY]
+    [question for _, question in CAPTURE_FIELDS]
+    + [CONSENT_QUESTION, COMPLETION_REPLY, EVIDENCE_QUESTION]
 )
 
 # A number is a digit run optionally continued by `.`/`,` groups. Chilean Spanish

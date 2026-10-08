@@ -9,8 +9,6 @@ conversation to `human` (HH-1).
 Deterministic triggers (HH-3):
 1. menu "persona" — the customer asks to talk to a person ("hablar con una
    persona", "persona", "humano", "operador", ...)
-3. media evidence — a photo/video/audio/document/sticker arrives for technical
-   review (design: "media in normal flow -> handoff for review")
 4. complaint/warranty — complaint/upset language (deterministic keyword list,
    module constant; the panel can tune it later via settings if needed)
 
@@ -20,6 +18,8 @@ intent it has not classified):
    escalates on the second failure
 5. SS-1 `always_escalate` scope — classify_intent checks `get_scope_mode` once
    the category is known
+
+Media is case evidence, not a handoff trigger (CI-4).
 
 Both converge on the same `route` escalate path -> handoff node.
 
@@ -41,7 +41,6 @@ _PERSONA_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Trigger 3: media types treated as evidence requiring technical review.
 # String values — the D2 state window stores `msg_type` as `m.msg_type.value`.
 MEDIA_EVIDENCE_TYPES: frozenset[str] = frozenset(
     t.value for t in (MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT, MessageType.STICKER)
@@ -101,14 +100,19 @@ def evaluate_handoff(state: ConversationState) -> str | None:
     message = _current_message(state)
     if message is None:
         return None
-    if message.get("msg_type") in MEDIA_EVIDENCE_TYPES:
-        return "media_evidence"
     text = message.get("text") or ""
     if _PERSONA_PATTERN.search(text):
         return "persona"
     if _COMPLAINT_PATTERN.search(text):
         return "complaint"
     return None
+
+
+def is_media_evidence(message: dict | None) -> bool:
+    """A media message with no text: case evidence, never a handoff trigger (CI-4)."""
+    return bool(message) and message.get("msg_type") in MEDIA_EVIDENCE_TYPES and not (
+        message.get("text") or ""
+    )
 
 
 def handoff_gate(state: ConversationState) -> dict:

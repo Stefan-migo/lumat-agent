@@ -95,6 +95,23 @@ def _turn(conv_id: int, text: str, wamid: str) -> list[str]:
         return replies
 
 
+def _media_turn(conv_id: int, wamid: str) -> list[str]:
+    """Append a media-only inbound message and run the graph."""
+    with SessionLocal() as session:
+        message = Message(
+            wamid=wamid,
+            conversation_id=conv_id,
+            direction=MessageDirection.INBOUND,
+            msg_type=MessageType.IMAGE,
+            status=MessageStatus.RECEIVED,
+        )
+        session.add(message)
+        session.commit()
+        replies = run_conversation(session, message)
+        session.commit()
+        return replies
+
+
 def _conversation_captured(conv_id: int) -> dict:
     with SessionLocal() as session:
         conv = session.get(Conversation, conv_id)
@@ -136,7 +153,48 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     assert captured["comuna"] == "Providencia"
     assert captured["address"] == "Av Siempre Viva 123"
     # CI-3b: the ask is grouped (leading missing fields), not one per turn.
-    assert captured["_pending"] == ["equipment", "failure", "evidence"]
+    assert captured["_pending"] == ["equipment", "failure", "availability"]
+
+
+def test_media_during_capture_resumes_agenda(mock_openai_chat):
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.media-start")
+    pending_before = _conversation_captured(conv_id)["_pending"]
+
+    replies = _media_turn(conv_id, "wamid.media-mid")
+
+    captured = _conversation_captured(conv_id)
+    assert any("Recibí tu archivo" in reply for reply in replies)
+    assert any("¿Cuál es tu nombre?" in reply for reply in replies)
+    assert captured["_pending"] == pending_before
+    assert all(value not in (None, "unknown") for key, value in captured.items() if key != "_pending")
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "bot"
+
+
+def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
+    from app.chat.nodes.capture import EVIDENCE_QUESTION
+
+    conv_id = _start_conversation()
+    all_replies = []
+    for index, text in enumerate(
+        ["quiero una visita", "Juan", "juan@mail.cl", "Providencia", "Calle 1",
+         "Calefont", "no enciende"],
+        start=1,
+    ):
+        replies = _turn(conv_id, text, f"wamid.optional{index}")
+        all_replies.extend(replies)
+
+    assert any(EVIDENCE_QUESTION in reply for reply in all_replies)
+    captured = _conversation_captured(conv_id)
+    assert "evidence" not in captured
+    assert "availability" in captured["_pending"]
+
+    replies = _turn(conv_id, "paso", "wamid.optional-skip")
+    assert any("¿Autorizas" in reply for reply in replies)
+    captured = _conversation_captured(conv_id)
+    assert captured["_pending"] == "consent"
+    assert "evidence" not in captured
 
 
 def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_chat, fake_embedder):
@@ -188,9 +246,8 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
         ("Av Siempre Viva 123", "wamid.comp5"),
         ("Calefont Bosch 10 anios", "wamid.comp6"),
         ("No enciende y pierde agua", "wamid.comp7"),
-        ("no tengo", "wamid.comp8"),  # evidence skipped -> unknown, non-blocking
-        ("manana en la manana", "wamid.comp9"),
-        ("si", "wamid.comp10"),  # consent
+        ("manana en la manana", "wamid.comp8"),
+        ("si", "wamid.comp9"),  # consent
     ]
     last_replies = []
     for text, wamid in turns:
@@ -199,7 +256,7 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     captured = _conversation_captured(conv_id)
     assert captured["name"] == "Juan"
     assert captured["email"] == "juan@mail.cl"
-    assert captured["evidence"] == "unknown"  # skip non-blocking (CM-2)
+    assert "evidence" not in captured
     assert captured["consent"] == "si"
     assert "_pending" not in captured  # capture finished
     # No technician schedule is configured: the completed request is handed off.
@@ -230,7 +287,7 @@ def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
     _turn(conv_id, "calefont", "wamid.equipment0")
     for index, text in enumerate(
         ["Juan", "juan@mail.cl", "Providencia", "Av Siempre Viva 123",
-         "Calefont Bosch 10L", "No enciende", "no tengo", "mañana", "si"],
+         "Calefont Bosch 10L", "No enciende", "mañana", "si"],
         start=1,
     ):
         _turn(conv_id, text, f"wamid.equipment{index}")
@@ -323,7 +380,7 @@ def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
     replies = []
     for index, text in enumerate(
         ["quiero una visita", "Juan", "juan@mail.cl", "Providencia", "Calle 1",
-         "Calefont", "no enciende", "no tengo", "manana"],
+         "Calefont", "no enciende", "manana"],
         start=1,
     ):
         replies = _turn(conv_id, text, f"wamid.consent{index}")
@@ -585,9 +642,8 @@ def test_cm5_summary_stored_on_conversation_and_case(mock_openai_chat):
         ("Av Siempre Viva 123", "wamid.sum4"),
         ("calefont", "wamid.sum5"),
         ("no enciende", "wamid.sum6"),
-        ("no tengo", "wamid.sum7"),
-        ("manana", "wamid.sum8"),
-        ("si", "wamid.sum9"),
+        ("manana", "wamid.sum7"),
+        ("si", "wamid.sum8"),
     ]:
         _turn(conv_id, text, wamid)
 
@@ -600,7 +656,7 @@ def test_cm5_summary_stored_on_conversation_and_case(mock_openai_chat):
         # LLM cost recorded on the inbound message (T3.6 rate basis)
         msg = session.scalars(
             select(Message).where(
-                Message.conversation_id == conv_id, Message.wamid == "wamid.sum9"
+                Message.conversation_id == conv_id, Message.wamid == "wamid.sum8"
             )
         ).one()
         assert msg.cost_llm is not None and float(msg.cost_llm) > 0
