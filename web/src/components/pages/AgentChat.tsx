@@ -51,7 +51,10 @@ import { Textarea } from "../primitives/Textarea";
 import { PageFrame } from "../shared/PageFrame";
 import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
+import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { Icon } from "../primitives/Icon";
+import { AssistantWorkspace } from "./AssistantWorkspace";
+import "./AgentChat.css";
 
 export const COMMAND_CENTER_BREAKPOINTS = {
   compactMax: 640,
@@ -305,6 +308,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   // Copy feedback: the icon that was just used swaps to a check and says so,
   // then reverts. Without it the click is silent and reads as a no-op.
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [messagesExpanded, setMessagesExpanded] = useState(false);
   const copyTimer = useRef<number | null>(null);
   const [topic, setTopic] = useState("");
   const [topicError, setTopicError] = useState("");
@@ -353,6 +357,9 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         if (result) {
           loadThread(result);
           if (!requestedId && requestedProject) onThreadOpened?.(result.thread.id);
+        } else {
+          setThread(null);
+          setMessages([]);
         }
       })
       .catch((reason: unknown) =>
@@ -716,6 +723,10 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   };
 
   const groups = groupThreads(threads);
+  const persistedActivity = (thread?.assistant_state?.events ?? [])
+    .filter((event) => !runId || event.run_id === runId)
+    .flatMap((event) => event.evidence ?? []);
+  const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
   const state = loading ? (
     <StateMessage tone="info" role="status" spinner title="Cargando chat" />
   ) : error ? (
@@ -735,9 +746,22 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   );
 
   return (
+    <AssistantWorkspace
+      onCreateThread={() => void newChat()}
+      loadThreadTabs={Boolean(onThreadOpened)}
+      attachments={attachments}
+      capabilities={capabilities}
+      capabilitiesLoading={capabilitiesLoading}
+      capabilitiesError={capabilitiesError}
+      evidence={activityEvidence}
+      plan={plan}
+      lifecycle={lifecycle}
+      processing={processing}
+    >
     <PageFrame
       title="Asistente Lumat"
       meta="Chat interno con el agente virtual."
+      hideCopy
       state={state}
       className="assistant-chat"
       actions={
@@ -910,7 +934,8 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
                 <p>Describe una tarea o consulta para comenzar.</p>
               </div>
             ) : null}
-            {messages.map((message) => {
+            <CollapsibleMessages total={messages.length} previewCount={10} expanded={messagesExpanded} onToggle={() => setMessagesExpanded((value) => !value)}>
+            {(messages.length > 10 && !messagesExpanded ? messages.slice(-10) : messages).map((message) => {
               const outbound = message.author !== "agent";
               const messageRunId = message.assistant_metadata?.run_id;
               // Outbound messages only render the run's artifacts when no agent
@@ -1037,6 +1062,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
                 </article>
               );
             })}
+            </CollapsibleMessages>
             {processing || stream ? (
               <article
                 className="ai-agent-grammar__bubble-row"
@@ -1082,6 +1108,16 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
           </div>
           <div className="assistant-chat__composer-wrap">
             <div className="assistant-chat__composer">
+              {attachments.length > 0 || uploading ? (
+                <div className="assistant-chat__attachment-list" aria-label="Archivos adjuntos">
+                  {attachments.map((item) => (
+                    <span className="assistant-chat__attachment" key={item.id}>
+                      <Icon icon={Paperclip} size="sm" />{item.filename}
+                    </span>
+                  ))}
+                  {uploading ? <span role="status">Subiendo archivo…</span> : null}
+                </div>
+              ) : null}
               <Textarea
                 label="Mensaje"
                 value={content}
@@ -1095,16 +1131,22 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
                 className="assistant-chat__textarea"
               />
               <div className="assistant-chat__composer-controls">
-                <label className="assistant-chat__attach" title="Adjuntar archivo">
-                  <Icon icon={Paperclip} size="md" />
-                  <input
-                    aria-label="Adjuntar archivo"
-                    type="file"
-                    accept="image/*,.pdf,.csv,.txt"
-                    onChange={(event) => void attach(event)}
-                    disabled={!thread || processing || uploading}
-                  />
-                </label>
+                <Popover title="Agregar al hilo" triggerLabel="Agregar al hilo">
+                  <label className="assistant-chat__tool-option">
+                    <Icon icon={Paperclip} size="sm" />
+                    <span>Adjuntar archivo</span>
+                    <input
+                      aria-label="Adjuntar archivo"
+                      type="file"
+                      accept="image/*,.pdf,.csv,.txt"
+                      onChange={(event) => void attach(event)}
+                      disabled={!thread || processing || uploading}
+                    />
+                  </label>
+                </Popover>
+                <Button variant="secondary" onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
+                  Planificar
+                </Button>
                 <button
                   type="button"
                   className="assistant-chat__send"
@@ -1140,5 +1182,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         <p role="status">Informe de planificación: {report.contenido}</p>
       ) : null}
     </PageFrame>
+    </AssistantWorkspace>
   );
 }

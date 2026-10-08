@@ -1609,6 +1609,10 @@
   min-width: 0;
   min-height: 100dvh;
 }
+.panel-shell__content-area--immersive {
+  height: 100dvh;
+  min-height: 0;
+}
 .panel-shell__header-row {
   display: flex;
   align-items: center;
@@ -1654,6 +1658,14 @@
   max-width: 82rem;
   margin: 0 auto;
   overflow-x: auto;
+}
+.panel-shell__content--immersive {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .panel-shell__content:focus {
   outline: none;

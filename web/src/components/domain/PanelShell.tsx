@@ -92,6 +92,7 @@ const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
 export interface PanelShellProps {
   children: ReactNode;
   currentView?: PanelView;
+  collapseRail?: boolean;
   breadcrumbView?: PanelView;
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
@@ -330,6 +331,7 @@ function Navigation({
 export function PanelShell({
   children,
   currentView = "dashboard",
+  collapseRail = false,
   breadcrumbView,
   drawerInitiallyOpen = false,
   onNavigate,
@@ -345,6 +347,8 @@ export function PanelShell({
   const currentBreadcrumbView = breadcrumbView ?? currentView;
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
+  const expandedBeforeCollapseRail = useRef<boolean | null>(null);
+  const previousCollapseRail = useRef(false);
   const [navigationSearch, setNavigationSearch] = useState("");
   const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -356,6 +360,17 @@ export function PanelShell({
   const drawerRef = useRef<HTMLDialogElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (collapseRail && !previousCollapseRail.current) {
+      expandedBeforeCollapseRail.current = collapsed;
+      setCollapsed(true);
+    } else if (!collapseRail && previousCollapseRail.current) {
+      if (expandedBeforeCollapseRail.current !== null) setCollapsed(expandedBeforeCollapseRail.current);
+      expandedBeforeCollapseRail.current = null;
+    }
+    previousCollapseRail.current = collapseRail;
+  }, [collapseRail, collapsed]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationTab, setNotificationTab] = useState("all");
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -560,7 +575,7 @@ export function PanelShell({
         </section>
       </dialog>
 
-      <div ref={contentAreaRef} className="panel-shell__content-area">
+       <div ref={contentAreaRef} className={`panel-shell__content-area${currentView === "chat" ? " panel-shell__content-area--immersive" : ""}`}>
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
             {onBack ? <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={onBack}>
@@ -620,7 +635,7 @@ export function PanelShell({
             </div>
           ) : null}
         </div>
-         <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
+         <div id="panel-main-content" className={`panel-shell__content${currentView === "chat" ? " panel-shell__content--immersive" : ""}`} tabIndex={-1}>
            {children}
         </div>
        </div>

@@ -36,6 +36,14 @@ afterEach(() => {
 });
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("uses immersive content only for the chat view", () => {
+    const { container, rerender } = render(<PanelShell user={admin} currentView="chat"><p>Contenido</p></PanelShell>);
+    expect(container.querySelector(".panel-shell__content")).toHaveClass("panel-shell__content--immersive");
+
+    rerender(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(container.querySelector(".panel-shell__content")).not.toHaveClass("panel-shell__content--immersive");
+  });
+
   it("filters notification rows by tab and shows unread counts and bulk action", async () => {
     const user = userEvent.setup();
     const onMarkAllNotificationsRead = vi.fn();
@@ -89,6 +97,27 @@ describe("PanelShell rail contract (2C-1)", () => {
     const sidebarEl = container.querySelector(".panel-shell__sidebar");
     expect(sidebarEl?.querySelector(".panel-shell__collapse-button")).not.toBeNull();
     expect(container.querySelector(".panel-shell__header .panel-shell__collapse-button")).toBeNull();
+  });
+
+  it("collapses the rail only when requested and restores its previous state", () => {
+    const { container, rerender } = render(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    const root = container.querySelector(".panel-shell") as HTMLElement;
+    expect(root).not.toHaveClass("panel-shell--collapsed");
+
+    rerender(<PanelShell user={admin} currentView="chat" collapseRail><p>Contenido</p></PanelShell>);
+    expect(root).toHaveClass("panel-shell--collapsed");
+
+    rerender(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(root).not.toHaveClass("panel-shell--collapsed");
+  });
+
+  it("preserves a manually collapsed rail across the assistant view", async () => {
+    const user = userEvent.setup();
+    const { container, rerender } = render(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    await user.click(container.querySelector(".panel-shell__collapse-button") as HTMLButtonElement);
+    rerender(<PanelShell user={admin} currentView="chat" collapseRail><p>Contenido</p></PanelShell>);
+    rerender(<PanelShell user={admin} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(container.querySelector(".panel-shell")).toHaveClass("panel-shell--collapsed");
   });
 
   it("keeps every rail control named when the compact tier visually hides its label", () => {

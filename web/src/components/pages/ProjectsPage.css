@@ -1,0 +1,15 @@
+.projects-page__context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.projects-page__context > .card {
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .projects-page__context {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

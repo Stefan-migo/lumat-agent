@@ -9,12 +9,13 @@ export interface PageFrameProps {
   eyebrow?: ReactNode;
   actions?: ReactNode;
   state?: ReactNode;
+  hideCopy?: boolean;
   headerClassName?: string;
   className?: string;
   children: ReactNode;
 }
 
-export function PageFrame({ title, meta, titleAdornment, subtitle, eyebrow, actions, state, headerClassName, className, children }: PageFrameProps) {
+export function PageFrame({ title, meta, titleAdornment, subtitle, eyebrow, actions, state, hideCopy, headerClassName, className, children }: PageFrameProps) {
   return (
     <main className={`page-frame${className ? ` ${className}` : ""}`}>
       <div className="page-frame__titlebar">
@@ -25,6 +26,7 @@ export function PageFrame({ title, meta, titleAdornment, subtitle, eyebrow, acti
           subtitle={subtitle}
           eyebrow={eyebrow}
           actions={actions}
+          hideCopy={hideCopy}
           headerClassName={headerClassName}
         />
       </div>
