@@ -30,6 +30,16 @@
 .settings-hours__new h3 { margin: 0; font-size: var(--text-md); }
 .settings-hours__times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .settings-hours__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.settings-costs__limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.settings-costs__input { position: relative; min-width: 0; }
+.settings-costs__input > span { position: absolute; right: var(--space-3); bottom: calc(var(--space-3) + var(--text-sm)); color: var(--corp-fg-muted); font-size: var(--text-sm); pointer-events: none; }
+.settings-costs__input input { padding-right: calc(var(--space-3) + 2.5rem); }
+.settings-costs__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.settings-costs__threshold { display: grid; grid-template-columns: var(--icon-md) 4rem minmax(0, 1fr); align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
+.settings-costs__threshold:last-child { border-bottom: 0; padding-bottom: 0; }
+.settings-costs__threshold > svg { width: var(--icon-md); height: var(--icon-md); color: var(--corp-primary); }
+.settings-costs__threshold > strong { font-variant-numeric: var(--corp-value); }
+.settings-costs__threshold > span { color: var(--corp-fg-muted); }
 
 @media (max-width: 40rem) {
   .settings-tabs__select { display: block; }
@@ -43,4 +53,6 @@
   .settings-hours__layout { grid-template-columns: minmax(0, 1fr); }
   .settings-hours__item { grid-template-columns: minmax(0, 1fr) auto; }
   .settings-hours__footer { align-items: stretch; flex-direction: column; }
+  .settings-costs__limits { grid-template-columns: minmax(0, 1fr); }
+  .settings-costs__footer { align-items: stretch; flex-direction: column-reverse; }
 }
