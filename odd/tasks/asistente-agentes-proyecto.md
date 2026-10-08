@@ -225,3 +225,16 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   reads `max_bytes + 1` but never drains/rejects the remaining oversized request body —
   `app/panel/api/routes/project_files.py:32-33` (R3-001/R4-002).
   Reviewed boundary for the next slice: `1d511d5d`.
+- A3.2 plan (extractors + KB ingest) — owner approved adding `pdfplumber`, `python-docx`,
+  `openpyxl` (all missing today; `pypdf`/`fastembed` already present). Approach: extend
+  `DocumentFormat` with `docx`/`xlsx` via migration `043` (`ALTER TYPE document_format ADD VALUE
+  IF NOT EXISTS ...`; `db/migrate.sh` runs autocommit so this is safe); new
+  `app/services/document_extract.py::extract_document_text(content, kind)` — pdf via pdfplumber
+  (page text + `extract_tables()`), docx via python-docx (paragraphs + tables), xlsx via openpyxl
+  (sheet rows as ` | `-joined blocks), md/txt decoded, csv reuses `kb._csv_rows_to_text`, image -> "".
+  `kb.ingest_document` gains an optional `content_text` override (keeps pypdf path for attachments/KB).
+  The upload route calls a new `ingest_project_file(...)` that ingests to
+  `kb_documents(project_id=<project>, visibility=internal, source_meta={"project_file_id": id})`; an
+  extraction failure marks `ProjectFile.status="failed"` without losing the stored blob. Must update
+  `tests/integration/test_migrations.py` (`043` version in `test_schema_migrations_records_version`;
+  `test_enums_materialized` document_format labels gain docx/xlsx). TDD ON (RED -> GREEN).
