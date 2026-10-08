@@ -24,11 +24,12 @@ from sqlalchemy import func, select
 
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY  # noqa: E402
-from app.chat.state import MENU_CATEGORIES  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
     Conversation,
+    ConversationEvent,
     ConversationState,
     Customer,
     Message,
@@ -67,12 +68,12 @@ def _conversation(session, customer: Customer) -> Conversation:
 
 
 # ---------------------------------------------------------------------------
-# CM-1 — first contact menu + repeat resume
+# CM-1 — first contact open greeting + repeat resume
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.spec("CM-1")
-def test_cm1_first_contact_presents_8_category_menu(
+def test_cm1_first_contact_sends_only_open_greeting(
     client, mock_openai_chat, mock_meta_send
 ):
     post_message(client, "wamid.cm1.1", "hola")
@@ -83,11 +84,36 @@ def test_cm1_first_contact_presents_8_category_menu(
         assert customer.state.value == "nuevo"  # auto-ficha (CR-1)
         conversation = _conversation(session, customer)
         assert conversation.state == ConversationState.BOT
+        unknowns = session.scalar(
+            select(func.count(ConversationEvent.id)).where(
+                ConversationEvent.conversation_id == conversation.id,
+                ConversationEvent.event == "unknown_intent",
+            )
+        )
 
     assert len(replies) == 1
-    assert "asistente virtual de Lumat" in replies[0]
-    for category in MENU_CATEGORIES:
-        assert category in replies[0], f"menu missing category: {category}"
+    assert replies[0] == MESSAGE_DEFAULTS["greeting"]
+    assert "Elige una opción" not in replies[0]
+    assert "1." not in replies[0]
+    assert unknowns == 0
+
+
+@pytest.mark.spec("CM-1")
+def test_first_greeting_with_service_content_still_classifies_and_routes(
+    client, mock_openai_chat, mock_meta_send
+):
+    post_message(client, "wamid.cm1.content", "hola, tengo un calefont que no calienta")
+
+    with SessionLocal() as session:
+        replies = _outbound_texts(session)
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+
+    assert len(replies) == 2
+    assert replies[0] == MESSAGE_DEFAULTS["greeting"]
+    assert "¿Cuál es tu nombre?" in replies[1]
+    assert mock_openai_chat
+    assert conversation.captured_data["_pending"] == "name"
 
 
 @pytest.mark.spec("CM-1")
@@ -189,18 +215,17 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
 
 @pytest.mark.spec("HH-3")
 def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
-    """Greeting + one post-greeting failure -> human (2 unknown classifications).
+    """Greeting-only is not classified; two later failures escalate.
 
-    The first-contact "hola" is itself classified `unknown` and consumes the
-    first HH-3 counter slot (B4 behavior — classify_intent counts every unknown
-    message; the greeting is the bot's successful answer to it, CM-1). The NEXT
-    unknown reaches the 2-failure threshold: the handoff reply is sent (no LLM)
+    The first-contact greeting is not classified. The next two unknowns reach
+    the 2-failure threshold: the handoff reply is sent (no LLM)
     and the deriva bundle is created. The non-escalating clarification path for
     a turn-2 unknown is covered by tests/integration/test_webhook_ingest.py
     (retry-storm) and test_handoff.py.
     """
-    post_message(client, "wamid.hh3.1", "hola")  # greeting + menu (CM-1)
-    post_message(client, "wamid.hh3.2", "asdfghjkl")  # 2nd unknown -> escalate
+    post_message(client, "wamid.hh3.1", "hola")
+    post_message(client, "wamid.hh3.2", "asdfghjkl")
+    post_message(client, "wamid.hh3.3", "qwertyuiop")  # 2nd unknown -> escalate
 
     with SessionLocal() as session:
         customer = session.scalars(select(Customer)).one()
@@ -208,9 +233,9 @@ def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
         replies = _outbound_texts(session)
         cases = session.scalars(select(Case)).all()
 
-    assert len(replies) == 2
-    assert "asistente virtual" in replies[0]  # CM-1: NO clarification on turn 1
-    assert "asesor revisará tu caso" in replies[1]  # handoff reply
+    assert len(replies) == 3
+    assert "Hola, soy el asistente virtual de Lumat." in replies[0]
+    assert "asesor revisará tu caso" in replies[-1]  # handoff reply
     assert conversation.state == ConversationState.HUMAN  # HH-1 bot->human
     assert len(cases) == 1  # deriva bundle created (HH-2)
     assert cases[0].conversation_id == conversation.id

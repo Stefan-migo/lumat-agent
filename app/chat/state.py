@@ -5,7 +5,7 @@ reconstructs the state from Postgres (messages table is the source of truth,
 D2). `ConversationState` doubles as the LangGraph state schema (dataclass),
 so nodes mutate/return field updates and `from_db` seeds the initial dict.
 
-CM-1: on first contact the bot greets + shows the 8-category menu; on repeat
+CM-1: on first contact the bot sends an open greeting; on repeat
 the flow resumes from the stored state (window/turn/captured), never from
 scratch.
 """
@@ -32,18 +32,6 @@ from app.services.memory import load_customer_context, close_conversation
 from app.services.realtime import stage_event
 from app.services.settings import MESSAGE_DEFAULTS
 
-# CM-1: the 8-category menu shown on first contact (LumatRequest §1.x).
-MENU_CATEGORIES: list[str] = [
-    "Calefont",
-    "Caldera",
-    "Calefacción",
-    "Solicitar visita",
-    "Valores",
-    "Postventa/Garantía",
-    "Emergencia",
-    "Hablar con una persona",
-]
-
 # Context window: last N messages of the conversation (design Data Flow).
 WINDOW_SIZE = 10
 
@@ -51,10 +39,9 @@ WINDOW_SIZE = 10
 GREETING_HEADER = MESSAGE_DEFAULTS["greeting"]
 
 
-def greeting_with_menu(header: str = GREETING_HEADER) -> str:
-    """The CM-1 first-contact message: greeting + numbered 8-category menu."""
-    numbered = "\n".join(f"{i + 1}. {name}" for i, name in enumerate(MENU_CATEGORIES))
-    return header + numbered
+def greeting(header: str = GREETING_HEADER) -> str:
+    """The CM-1 first-contact open greeting."""
+    return header
 
 
 def get_or_create_conversation(session: Session, customer: Customer, phone_e164: str) -> Conversation:
@@ -162,6 +149,9 @@ class ConversationState:
     escalate_reason: str | None = None
     unknown_count: int = 0
     next_step: str = "receive"
+    # CI-2: set by orchestrate when a mid-capture deviation was dispatched to a
+    # sub-graph; the sub-graph's answer is followed by resuming the pending field.
+    capture_paused: bool = False
     # H2 orchestrator (design.md line 47): which sub-agent the orchestrator
     # dispatched to for this turn (None when no sub-graph runs).
     active_sub_agent: str | None = None

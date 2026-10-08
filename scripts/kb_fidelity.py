@@ -130,7 +130,7 @@ _load_provider_environment()
 from app.chat.nodes.capture import CAPTURE_FIELDS, COMPLETION_REPLY  # noqa: E402
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY, CLARIFICATION_REPLY  # noqa: E402
-from app.chat.state import greeting_with_menu  # noqa: E402
+from app.chat.state import greeting  # noqa: E402
 
 OUTCOMES = (
     "answered",
@@ -204,15 +204,15 @@ def terminal_reply(replies: Sequence[str]) -> str | None:
     yields `[greeting, <terminal reply>]` and the greeting must not be read as the
     answer.
     """
-    greeting = greeting_with_menu()
-    terminal = [reply for reply in replies if reply != greeting]
+    greeting_text = greeting()
+    terminal = [reply for reply in replies if reply != greeting_text]
     return terminal[-1] if terminal else None
 
 
 def greeting_emitted(replies: Sequence[str]) -> bool:
-    """Whether the CM-1 first-contact greeting was part of this turn's replies."""
-    greeting = greeting_with_menu()
-    return any(reply == greeting for reply in replies)
+    """Whether the CM-1 first-contact open greeting was part of these replies."""
+    greeting_text = greeting()
+    return any(reply == greeting_text for reply in replies)
 
 
 def classify_outcome(replies: Sequence[str], events: Sequence[dict] = ()) -> str:
@@ -226,7 +226,7 @@ def classify_outcome(replies: Sequence[str], events: Sequence[dict] = ()) -> str
     answers where there were none.
 
     `greeted_only` is likewise a distinct outcome on purpose. On first contact the
-    CM-1 menu is the reply, and `respond` deliberately stays silent when the
+    CM-1 greeting is the reply, and classification deliberately stays silent when the
     classifier could not place the message (`app/chat/nodes/respond.py:121-127`).
     That is the correct behaviour for a question the bot cannot serve, and folding
     it into `other` would report a safety property as a failure.
@@ -266,7 +266,7 @@ def summarize(rows: Sequence[dict]) -> dict:
             entry[kind] = counts.get(kind, 0)
         entry["answered_rate"] = entry["answered"] / total if total else 0.0
         # Everything that is not a free-text answer is a non-answer, including the
-        # menu-only and capture outcomes. Computing it as a complement rather than
+        # greeting-only and capture outcomes. Computing it as a complement rather than
         # as `declined + handed_off` means a new non-answer outcome cannot silently
         # inflate the false-answer rate.
         entry["non_answer_rate"] = (total - entry["answered"]) / total if total else 0.0
@@ -359,7 +359,7 @@ def run_query(session, query, phone: str) -> dict:
     answer = terminal_reply(replies) or ""
     chunk_texts = [chunk["content"] for chunk in chunks]
     # Only an answer can be ungrounded. Every other outcome is a deterministic
-    # constant, a capture prompt, a safety protocol or the CM-1 menu — none of
+    # constant, a capture prompt, a safety protocol or the CM-1 greeting — none of
     # which makes a factual claim about the KB.
     ungrounded = ungrounded_numbers(answer, chunk_texts) if outcome == "answered" else []
 

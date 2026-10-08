@@ -143,3 +143,30 @@ def test_empty_whitelist_denies_everything():
     # No whitelist (None or empty) -> every tool call is blocked.
     assert is_tool_whitelisted((), "kb.retrieve") is False
     assert is_tool_whitelisted(None, "kb.retrieve") is False
+
+
+@pytest.mark.parametrize("intent", ["valores", "consulta", "postventa"])
+def test_mid_capture_retrieval_intents_answer_then_resume(intent):
+    assert _dispatch(intent, mid_capture=True) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+@pytest.mark.parametrize("intent", ["unknown", "calefont", "cancelar_visita", "reagendar_visita"])
+def test_mid_capture_non_retrieval_is_pending_field_answer(intent):
+    assert _dispatch(intent, mid_capture=True) == {"next_step": "capture"}
+
+
+def test_mid_capture_persona_still_escalates():
+    result = _dispatch("persona", mid_capture=True)
+    assert result["next_step"] == "handoff"
+    assert result["escalate"] is True
+
+
+def test_non_mid_capture_dispatch_is_unchanged():
+    assert _dispatch("valores") == {
+        "next_step": "research", "active_sub_agent": "research_triage"
+    }
+    assert _dispatch("unknown") == {"next_step": "respond"}

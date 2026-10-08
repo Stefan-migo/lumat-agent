@@ -39,12 +39,14 @@ Batch 4 (T4.4) adds the handoff node, which owns every escalation:
 The handoff node builds the HH-2 deriva bundle (case row), transitions the
 conversation bot -> human (HH-1) and replies that a human will take over.
 The gate runs before `receive` too, so a first-contact emergency never mixes
-the greeting/menu into the safety protocol (EM-2 full flow interrupt).
+the greeting into the safety protocol (EM-2 full flow interrupt).
 """
 
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -132,11 +134,27 @@ def run_internal_conversation(
 
 
 def _flow_start(state: ConversationState) -> str:
-    """Mid-capture messages continue the capture sub-flow (CM-2), skipping
-    re-classification (saves an LLM call; answers are field values, not intents)."""
-    if "_pending" in (state.captured or {}):
-        return "capture"
+    """Skip classification for a greeting-only first turn; otherwise classify."""
+    if state.turn <= 1 and _greeting_only(state):
+        return END
     return "classify_intent"
+
+
+def _greeting_only(state: ConversationState) -> bool:
+    """Match a bare first-turn greeting without consuming an unknown attempt."""
+    inbound = next(
+        (message for message in reversed(state.window) if message.get("direction") == "inbound"),
+        None,
+    )
+    if inbound is None:
+        return False
+    text = unicodedata.normalize("NFD", (inbound.get("text") or "").casefold())
+    text = "".join(char for char in text if unicodedata.category(char) != "Mn")
+    normalized = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    return normalized in {
+        "hola", "buenas", "hola buenas", "buenos dias", "buenas tardes",
+        "buenas noches", "hey",
+    }
 
 
 def _after_emergency_gate(state: ConversationState) -> str:
@@ -194,6 +212,16 @@ def _after_respond(state: ConversationState) -> str:
     return "handoff" if state.escalate else END
 
 
+def _after_research_triage(state: ConversationState) -> str:
+    """Resume the capture agenda after a KB deviation was answered (CI-2).
+
+    Only when a mid-capture deviation was routed here (capture_paused) and the
+    sub-graph did not itself escalate/hand off. A KB miss sets `escalate` inside
+    the sub-graph and must terminate, never resume.
+    """
+    return "capture" if state.capture_paused and not state.escalate else END
+
+
 def _triage_node(subgraph):
     """Wrap the triage sub-graph so it does not re-add the parent's replies.
 
@@ -201,7 +229,7 @@ def _triage_node(subgraph):
     (`app/chat/subgraphs/research_triage.py`), and `replies` carries an `add` reducer
     (`app/chat/state.py`). Added as a plain node, LangGraph hands the sub-graph the
     parent's `replies` — already holding the CM-1 greeting — and merging the sub-graph's
-    final state back re-adds them, so the customer receives the greeting and menu twice.
+    final state back re-adds them, so the customer receives the greeting twice.
 
     Clearing the accumulator on the way in leaves the merge with exactly the sub-graph's
     own reply. A partial `input_schema` would also fix the duplication, and is rejected:
@@ -269,7 +297,7 @@ def build_graph():
     builder.add_conditional_edges(
         "receive",
         _flow_start,
-        {"capture": "capture", "classify_intent": "classify_intent"},
+        {"classify_intent": "classify_intent", END: END},
     )
     builder.add_edge("classify_intent", "orchestrate")
     builder.add_conditional_edges(
@@ -287,7 +315,11 @@ def build_graph():
     builder.add_conditional_edges("booking", _after_booking, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("manage", _after_manage, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("respond", _after_respond, {"handoff": "handoff", END: END})
-    builder.add_edge("research_triage", END)
+    builder.add_conditional_edges(
+        "research_triage",
+        _after_research_triage,
+        {"capture": "capture", END: END},
+    )
     builder.add_edge("handoff", END)
     builder.add_edge("emergency", END)
     builder.add_edge("summary", END)

@@ -4,7 +4,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { AgentChat as AgentChatView, COMMAND_CENTER_BREAKPOINTS, commandCenterTier, type AgentChatProps } from "./AgentChat";
 
 function AgentChat(props: Omit<AgentChatProps, "role"> & { role?: AgentChatProps["role"] }) {
-  return <AgentChatView {...props} role={props.role ?? "admin"} />;
+  const role = Object.hasOwn(props, "role") ? props.role : "admin";
+  return <AgentChatView {...props} role={role as AgentChatProps["role"]} />;
 }
 
 const makeThread = (id = 4) => ({
@@ -65,7 +66,7 @@ describe("AgentChat", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(jsonResponse({ threads: [] }));
 
-    render(<AgentChat />);
+    render(<AgentChat role={undefined} />);
 
     expect(
       await screen.findByRole("heading", { name: "Comienza una conversación" }),
@@ -83,7 +84,7 @@ describe("AgentChat", () => {
       return jsonResponse({ threads: [] });
     });
 
-    render(<AgentChat />);
+    render(<AgentChat role={undefined} />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
@@ -101,10 +102,48 @@ describe("AgentChat", () => {
 
   it("does not create a chat when the user has no projects", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ projects: [], threads: [] }));
-    render(<AgentChat />);
+    render(<AgentChat role={undefined} />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/proyecto primero/i);
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("creates a projectless chat for admins without opening the project picker", async () => {
+    const onThreadOpened = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input) === "/panel/api/chat/threads" && init?.method === "POST") {
+        return jsonResponse({ thread: makeThread(8), messages: [] }, 201);
+      }
+      return jsonResponse({ threads: [] });
+    });
+
+    render(<AgentChat role="admin" onThreadOpened={onThreadOpened} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ proyecto: "default" }) }),
+    ));
+    expect(screen.queryByRole("dialog", { name: /elegir proyecto/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("default")).not.toBeInTheDocument();
+    expect(onThreadOpened).toHaveBeenCalledWith(8);
+  });
+
+  it("keeps the project picker for technicians without a project", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input) === "/panel/api/projects"
+        ? jsonResponse({ projects: [{ id: 1, slug: "ops", name: "Operations", purpose: "Run operations", status: "active" }] })
+        : jsonResponse({ threads: [] }),
+    );
+
+    render(<AgentChat role="tecnico" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+
+    expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/panel/api/chat/threads",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ proyecto: "default" }) }),
+    );
   });
 
   it("loads an owned deep link without creating a thread", async () => {

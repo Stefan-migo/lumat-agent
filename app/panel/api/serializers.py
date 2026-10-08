@@ -37,6 +37,7 @@ from app.models import (
     MemoryRelation,
 )
 from app.services.customers import CUSTOMER_STATE_TRANSITIONS
+from app.services.project_config import ProjectConfig
 
 
 def _iso(value) -> str | None:
@@ -501,9 +502,9 @@ def to_memory_relation_dict(
     }
 
 
-def to_project_dict(project: Project) -> dict:
+def to_project_dict(project: Project, *, include_config: bool = False) -> dict:
     """Project registry row -> read-only panel shape."""
-    return {
+    payload = {
         "id": project.id,
         "slug": project.slug,
         "name": project.name,
@@ -512,6 +513,8 @@ def to_project_dict(project: Project) -> dict:
         "created_at": _iso(project.created_at),
         "updated_at": _iso(project.updated_at),
     }
-
+    if include_config:
+        payload["config"] = ProjectConfig.model_validate(project.config or {}).model_dump()
+    return payload
 
 

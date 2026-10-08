@@ -110,7 +110,7 @@ def test_kb_retrieval_failure_escalates_without_logging_unresolved(monkeypatch, 
     assert unresolved_calls == []
 
 
-def test_greeting_and_clarification_overrides_keep_the_menu_and_path_shape():
+def test_greeting_and_clarification_overrides_keep_path_shape():
     with SessionLocal() as session:
         settings.set_setting(session, "messages.greeting", "Hola editado:\n", actor="test")
         settings.set_setting(session, "messages.clarification", "Aclara tu solicitud.", actor="test")
@@ -125,7 +125,7 @@ def test_greeting_and_clarification_overrides_keep_the_menu_and_path_shape():
     )
     greeting = receive(state)["replies"][0]
     assert greeting.startswith("Hola editado:\n")
-    assert "8. Hablar con una persona" in greeting
+    assert "8. Hablar con una persona" not in greeting  # menu removed (CI-1 open greeting)
 
     state.turn = 2
     state.intent = "unknown"

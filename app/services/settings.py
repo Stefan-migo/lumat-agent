@@ -51,8 +51,7 @@ DEFAULT_TONE_STYLE = "cercano"
 
 MESSAGE_DEFAULTS: dict[str, str] = {
     "greeting": (
-        "Hola, soy el asistente virtual de Lumat, la empresa de gasfitería que te "
-        "atiende. ¿En qué puedo ayudarte? Elige una opción:\n"
+        "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"
     ),
     "cannot_answer": (
         "Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat "

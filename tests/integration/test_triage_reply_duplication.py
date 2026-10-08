@@ -20,7 +20,7 @@ import pytest
 from sqlalchemy import select
 
 from app.chat.graph import run_conversation  # noqa: E402
-from app.chat.state import get_or_create_conversation, greeting_with_menu  # noqa: E402
+from app.chat.state import get_or_create_conversation, greeting  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     DocumentFormat,
@@ -35,7 +35,7 @@ from app.services.customers import get_or_create_customer  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
-GREETING = greeting_with_menu()
+GREETING = greeting()
 GROUNDED_MARKER = "Segun el manual de Lumat"
 
 # Phrases the mocked classifier maps to intents (`tests/integration/conftest.py:120-141`).

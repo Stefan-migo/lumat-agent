@@ -138,6 +138,7 @@ def _record_unknown_intent(session, state: ConversationState, cause: str) -> int
 
 def classify_intent(state: ConversationState) -> dict:
     """Classify the current message; sets intent/case/unknown/escalate flags."""
+    mid_capture = "_pending" in (state.captured or {})
     text = _current_text(state)
     if not text:
         return {}
@@ -184,6 +185,9 @@ def classify_intent(state: ConversationState) -> dict:
         }
 
     if result["intent"] == "unknown":
+        if mid_capture:
+            # CM-2 field answers are not comprehension failures (HH-3).
+            return {"intent": "unknown"}
         with session_scope() as session:
             unknown_count = _record_unknown_intent(session, state, text)
             record_activity(

@@ -115,3 +115,80 @@ def test_project_creation_rejects_a_duplicate_slug(client, make_user):
     with SessionLocal() as session:
         rows = session.scalars(select(Project).where(Project.slug == "invoice-hub")).all()
         assert [row.name for row in rows] == ["Invoice Hub"]
+
+
+def test_project_config_update_saves_instructions_and_persists(client, make_user):
+    owner_id = make_user("config-owner", "projects-pass")
+    slug = _seed_project(owner_id, "config-save")
+    _login(client, make_user, username="config-owner", create=False)
+
+    response = client.patch(
+        f"/panel/api/projects/{slug}/config",
+        json={"instructions": "Always answer in Spanish."},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["project"]["config"]["instructions"] == "Always answer in Spanish."
+    detail = client.get(f"/panel/api/projects/{slug}")
+    assert detail.status_code == 200
+    assert detail.json()["project"]["config"]["instructions"] == "Always answer in Spanish."
+
+
+def test_project_config_update_preserves_unmodified_fields(client, make_user):
+    owner_id = make_user("config-merge-owner", "projects-pass")
+    slug = _seed_project(owner_id, "config-merge")
+    with SessionLocal() as session:
+        project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == owner_id))
+        project.config = {"skills": [{"name": "billing", "description": "Billing help", "body": "Explain billing."}]}
+        session.commit()
+    _login(client, make_user, username="config-merge-owner", create=False)
+
+    response = client.patch(
+        f"/panel/api/projects/{slug}/config",
+        json={"instructions": "Use concise answers."},
+    )
+
+    assert response.status_code == 200
+    config = response.json()["project"]["config"]
+    assert config["instructions"] == "Use concise answers."
+    assert config["skills"] == [{"name": "billing", "description": "Billing help", "body": "Explain billing."}]
+
+
+def test_project_config_update_is_owner_scoped(client, make_user):
+    owner_a = make_user("config-owner-a", "projects-pass")
+    make_user("config-owner-b", "projects-pass")
+    slug = _seed_project(owner_a, "config-private")
+    _login(client, make_user, username="config-owner-b", create=False)
+
+    response = client.patch(
+        f"/panel/api/projects/{slug}/config",
+        json={"instructions": "Unauthorized change."},
+    )
+
+    assert response.status_code == 404
+    with SessionLocal() as session:
+        project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == owner_a))
+        assert project.config == {}
+
+
+def test_project_config_update_rejects_invalid_payloads(client, make_user):
+    owner_id = make_user("config-validation-owner", "projects-pass")
+    slug = _seed_project(owner_id, "config-validation")
+    _login(client, make_user, username="config-validation-owner", create=False)
+
+    extra = client.patch(f"/panel/api/projects/{slug}/config", json={"unknown": "value"})
+    invalid_tool = client.patch(
+        f"/panel/api/projects/{slug}/config",
+        json={"tool_policy": {"opt_in_enabled": ["not-a-real-tool"]}},
+    )
+
+    assert extra.status_code == 422
+    assert invalid_tool.status_code == 422
+
+
+def test_project_config_update_missing_project_returns_404(client, make_user):
+    _login(client, make_user)
+
+    response = client.patch("/panel/api/projects/missing/config", json={"instructions": "No project."})
+
+    assert response.status_code == 404

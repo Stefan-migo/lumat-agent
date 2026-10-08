@@ -9,8 +9,8 @@ Only deterministic paths are asserted here:
 - The emergency route is the one full path that reaches END with **zero LLM
   calls** (the gate runs before any model call — `app/chat/graph.py:194-199`).
 - The first-contact greeting comes from `receive`, which is deterministic in
-  content, but the turn still continues into `classify_intent` — so an LLM
-  call is expected and mocked, never asserted away.
+  content; substantive content still continues into `classify_intent`, while a
+  greeting-only first turn ends before classification.
 """
 
 import sys
@@ -25,7 +25,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from chat_harness import ensure_conversation, inspect, run_turn  # noqa: E402
 
-from app.chat.state import MENU_CATEGORIES  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Case, Conversation, ConversationState, Customer  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -118,18 +117,15 @@ def test_ensure_conversation_never_reopens_a_closed_conversation():
 # ---------------------------------------------------------------------------
 
 
-def test_first_turn_returns_the_greeting_with_the_full_menu(mock_openai_chat):
+def test_first_turn_greeting_only_does_not_classify(mock_openai_chat):
     with SessionLocal() as session:
         conversation_id = ensure_conversation(session, PHONE)
         session.commit()
         replies = run_turn(session, conversation_id, "hola")
         session.commit()
 
-    assert replies, "a first contact must produce at least the greeting"
-    greeting = replies[0]
-    assert "asistente virtual" in greeting.lower()
-    for category in MENU_CATEGORIES:
-        assert category in greeting
+    assert replies == ["Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"]
+    assert mock_openai_chat == []
 
     with SessionLocal() as session:
         conversation = session.get(Conversation, conversation_id)
