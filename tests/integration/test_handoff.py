@@ -451,8 +451,9 @@ def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_c
     conv_id = _start_conversation()
     _turn(conv_id, "quiero una visita", "wamid.b1")
     _turn(conv_id, "Juan", "wamid.b2")
-    _turn(conv_id, "Providencia", "wamid.b3")
-    _turn(conv_id, "estoy molesto, quiero reclamar", "wamid.b4")
+    _turn(conv_id, "juan@mail.cl", "wamid.b3")
+    _turn(conv_id, "Providencia", "wamid.b4")
+    _turn(conv_id, "estoy molesto, quiero reclamar", "wamid.b5")
 
     with SessionLocal() as session:
         conv = session.get(Conversation, conv_id)
@@ -472,6 +473,7 @@ def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_c
         assert bundle["customer"]["phone_e164"] == "+56912345678"
         assert bundle["customer"]["name"] is None
         assert bundle["captured"]["name"] == "Juan"
+        assert bundle["captured"]["email"] == "juan@mail.cl"
         assert bundle["captured"]["comuna"] == "Providencia"
         assert bundle["escalate_reason"] == "complaint"
 

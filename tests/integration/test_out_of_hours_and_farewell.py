@@ -106,7 +106,7 @@ def test_capture_in_progress_during_closed_hours_continues_capture(mock_openai_c
 
     replies = _turn(conversation_id, "Juan", "wamid.closed.5")
 
-    assert any("comuna" in reply.lower() for reply in replies)
+    assert any("correo" in reply.lower() for reply in replies)
     assert OUT_OF_HOURS not in replies
 
 
