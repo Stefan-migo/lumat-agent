@@ -29,6 +29,8 @@ export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' 
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface ProjectToolPolicy { opt_in_enabled: string[]; }
 export interface ProjectSkill { name: string; description: string; body: string; }
+export interface GlobalSkill { name: string; description: string; scope: "global"; }
+export interface SkillsCatalogResponse { skills: GlobalSkill[]; }
 export interface ProjectConfig { instructions: string; tool_policy: ProjectToolPolicy; skills: ProjectSkill[]; }
 export type ProjectConfigUpdate = Partial<ProjectConfig>;
 export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; config?: ProjectConfig; }

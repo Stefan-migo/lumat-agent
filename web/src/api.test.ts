@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -110,6 +110,17 @@ describe('client API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ customer: {} }), { status: 200 }));
     await updateCustomerConsent(4, true);
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients/4/consent', expect.objectContaining({ method: 'POST', body: JSON.stringify({ consent: true }) }));
+  });
+});
+
+describe('global skills API contract', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lists the read-only global skills catalog', async () => {
+    const payload = { skills: [{ name: 'research', description: 'Research carefully', scope: 'global' as const }] };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    await expect(listGlobalSkills()).resolves.toEqual(payload);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/skills', expect.objectContaining({ credentials: 'include' }));
   });
 });
 

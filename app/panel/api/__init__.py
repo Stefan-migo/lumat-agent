@@ -27,6 +27,7 @@ from app.panel.api.routes import (
     users,
     projects,
     project_files,
+    skills,
 )
 
 # Per-domain sub-routers are included as they land, batch by batch.
@@ -50,3 +51,4 @@ api_router.include_router(technician.router)
 api_router.include_router(users.router)
 api_router.include_router(projects.router)
 api_router.include_router(project_files.router)
+api_router.include_router(skills.router)
