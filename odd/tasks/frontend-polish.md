@@ -57,6 +57,7 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T3** `Settings.css` — remove redundant overrides (dark `.menu__trigger` + redundant field `--border`)
 - [x] **T4** `DESIGN_SYSTEM.md` — record the decision
 - [ ] **T5** verify — `npm test` green, `npm run build` OK, visual check
+- [x] **T6** `Menu.tsx` — icon trigger `MoreHorizontal` → `EllipsisVertical` (the row-action "..." becomes vertical panel-wide)
 
 ## Acceptance
 
@@ -79,3 +80,6 @@ in `DESIGN_SYSTEM.md`, not hidden.
   `npm test` green in isolation; the full-suite timeouts were load-induced
   (another agent's suite was running concurrently, load avg ~26). Visual
   confirmation (T5) pending owner review.
+- 2026-10-09 — T6: the shared `Menu` icon trigger now uses `EllipsisVertical`
+  (was `MoreHorizontal`), so every row-action "…" in the panel is vertical.
+  `Menu.test.tsx` 10/10 and `npm run build` OK.
