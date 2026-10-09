@@ -783,6 +783,10 @@ class AutomationRule(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     conditions: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    recipient_target: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="customer", default="customer"
+    )
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     template_event: Mapped[str] = mapped_column(String(100), nullable=False)
     cooldown_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

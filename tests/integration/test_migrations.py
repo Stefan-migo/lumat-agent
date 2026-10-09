@@ -689,6 +689,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("043_document_format_docx_xlsx",),
         ("044_assistant_artifacts",),
         ("045_automation_installations",),
+        ("046_automation_rule_target_content",),
     ]
 
 

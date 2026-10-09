@@ -29,7 +29,7 @@ SYNTHETIC = recipes.RecipeDefinition(
 )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def synthetic_recipe(monkeypatch):
     monkeypatch.setitem(recipes.RECIPES, SYNTHETIC.recipe_id, SYNTHETIC)
 
@@ -47,11 +47,42 @@ def test_recipe_catalog_compiles_and_validates_parameters():
     assert fields == {
         "event_type": "case.created", "conditions": {}, "channel": "email",
         "template_event": "case.created", "cooldown_seconds": 60,
+        "recipient_target": "customer", "content": "",
     }
     assert len(recipes.RECIPES) == len({r.recipe_id for r in recipes.RECIPES.values()})
 
 
-def test_install_update_enable_and_lookup(migrated_db):
+def test_catalog_has_five_compilable_event_recipes_with_unique_ids():
+    assert len(recipes.RECIPES) == 5
+    assert len(recipes.RECIPES) == len({recipe.recipe_id for recipe in recipes.RECIPES.values()})
+    for recipe in recipes.RECIPES.values():
+        assert recipe.trigger_kind == "event"
+        assert any(parameter.key == "channel" for parameter in recipe.parameters)
+        fields = recipe.compile_rule_fields({"channel": next(iter(recipe.channel_allowed))})
+        assert fields["event_type"] == recipe.event_type
+
+
+def test_compile_without_channel_parameter_raises_clear_error():
+    recipe = recipes.RecipeDefinition(
+        recipe_id="test.no-channel", name="No channel", description="", category="operacion",
+        trigger_kind="event", event_type="case.created", channel_allowed=frozenset({"email"}), parameters=(),
+    )
+    with pytest.raises(ValueError, match="recipe has no channel parameter"):
+        recipe.compile_rule_fields({})
+
+
+def test_compile_rejects_unsupported_recipient_target():
+    recipe = recipes.RecipeDefinition(
+        recipe_id="test.invalid-target", name="Invalid target", description="", category="operacion",
+        trigger_kind="event", event_type="case.created", channel_allowed=frozenset({"email"}),
+        parameters=(recipes.RecipeParameter("channel", "Canal", "channel", True),),
+        recipient_target="unknown",
+    )
+    with pytest.raises(ValueError, match="unsupported recipient target"):
+        recipe.compile_rule_fields({"channel": "email"})
+
+
+def test_install_update_enable_and_lookup(migrated_db, synthetic_recipe):
     with SessionLocal() as session:
         with pytest.raises(ValueError, match="unknown recipe"):
             install(session, "missing", {}, actor="admin")
@@ -76,7 +107,17 @@ def test_install_update_enable_and_lookup(migrated_db):
         session.commit()
 
 
-def test_assistant_install_requires_executor_origin(migrated_db):
+def test_install_appointment_confirmation_compiles_content_and_recipient_target(migrated_db):
+    recipe = recipes.get_recipe("appointment_confirmation")
+    with SessionLocal() as session:
+        installation = install(session, recipe.recipe_id, {"channel": "whatsapp"}, actor="admin")
+        rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation.id))
+        assert (rule.event_type, rule.channel, rule.recipient_target, rule.content) == (
+            "appointment.booked", "whatsapp", "customer", recipe.content,
+        )
+
+
+def test_assistant_install_requires_executor_origin(migrated_db, synthetic_recipe):
     with SessionLocal() as session:
         with pytest.raises(PermissionError):
             install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="assistant")
