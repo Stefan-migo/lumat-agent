@@ -67,6 +67,13 @@ export interface Rule {
 export interface AutomationRulesResponse { rules: Rule[]; }
 export interface AutomationRuleResponse { rule: Rule; }
 
+export interface AutomationRecipeParameter { key: string; label: string; type: string; required: boolean; default: unknown; }
+export interface AutomationRecipe { recipe_id: string; name: string; description: string; category: string; trigger_kind: string; event_type: string; channel_allowed: string[]; recipient_target: string; content: string; cooldown_seconds: number; parameters: AutomationRecipeParameter[]; }
+export interface AutomationInstallation { id: number; recipe_id: string; parameters: Record<string, unknown>; enabled: boolean; created_by: string; created_at: string | null; updated_at: string | null; }
+export interface AutomationRecipesResponse { recipes: AutomationRecipe[]; }
+export interface AutomationInstallationsResponse { installations: AutomationInstallation[]; }
+export interface AutomationInstallationResponse { installation: AutomationInstallation; }
+
 export interface LoginResponse {
   ok: true;
   id: number;

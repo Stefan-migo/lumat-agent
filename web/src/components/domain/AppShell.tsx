@@ -19,8 +19,7 @@ import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
 import { AgentChat } from '../pages/AgentChat';
 import { AgendaPage } from '../pages/AgendaPage';
-import { AutomationRulesPage } from '../pages/AutomationRulesPage';
-import { AutomationRuleDetailPage } from '../pages/AutomationRuleDetailPage';
+import { AutomationRecipesPage } from '../pages/AutomationRecipesPage';
 import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
@@ -43,7 +42,6 @@ export interface AppShellProps {
 export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(`${window.location.pathname}${window.location.search}`));
   const [conversationRefresh, setConversationRefresh] = useState(0);
-  const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
   const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
   const [notifications, setNotifications] = useState<PanelNotification[]>([]);
 
@@ -80,7 +78,6 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       const nextPath = pathForRoute(nextRoute);
       if (`${window.location.pathname}${window.location.search}` !== nextPath) window.history.replaceState({}, '', nextPath);
       setRoute(nextRoute);
-      setCreatingAutomationRule(false);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -97,13 +94,6 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const navigateToRoute = (nextRoute: PanelRoute) => {
     window.history.pushState({}, '', pathForRoute(nextRoute));
     setRoute(nextRoute);
-    setCreatingAutomationRule(false);
-  };
-
-  const navigateToCreateAutomationRule = () => {
-    window.history.pushState({}, '', pathForView('automation-rules'));
-    setRoute({ view: 'automation-rules' });
-    setCreatingAutomationRule(true);
   };
 
   const view = route.view;
@@ -122,7 +112,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} /> : <AgendaPage />
-      : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
+      : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />

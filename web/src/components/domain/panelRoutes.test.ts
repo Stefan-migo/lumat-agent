@@ -13,7 +13,7 @@ describe('panel routes', () => {
     expect(isDetailRoute({ view: 'clients' })).toBe(false);
     expect(isDetailRoute({ view: 'clients', clientId: 42 })).toBe(true);
     expect(isDetailRoute({ view: 'conversations', conversationId: 7 })).toBe(true);
-    expect(isDetailRoute({ view: 'automation-rules', automationRuleId: 12 })).toBe(true);
+    expect(isDetailRoute({ view: 'automation-rules' })).toBe(false);
     expect(isDetailRoute({ view: 'kb', kbDocId: 3 })).toBe(true);
     expect(isDetailRoute({ view: 'agenda', appointmentId: 9 })).toBe(true);
     expect(isDetailRoute({ view: 'projects', projectSlug: 'ops' })).toBe(true);
@@ -111,11 +111,11 @@ describe('panel routes', () => {
     expect(parsePanelPath(`/panel/app/conversations?tab=${tab}`)).toEqual({ view: 'conversations', conversationTab: 'all' });
   });
 
-  it('builds and parses canonical automation rule list and detail routes', () => {
+  it('keeps only the automation recipe catalog route', () => {
     expect(pathForView('automation-rules')).toBe('/panel/app/automation-rules');
-    expect(pathForRoute({ view: 'automation-rules', automationRuleId: 12 })).toBe('/panel/app/automation-rules/12');
+    expect(pathForRoute({ view: 'automation-rules' })).toBe('/panel/app/automation-rules');
     expect(parsePanelPath('/panel/app/automation-rules')).toEqual({ view: 'automation-rules' });
-    expect(parsePanelPath('/panel/app/automation-rules/12')).toEqual({ view: 'automation-rules', automationRuleId: 12 });
+    expect(parsePanelPath('/panel/app/automation-rules/12')).toEqual({ view: 'dashboard' });
   });
 
   it('builds and parses planning session routes', () => {
@@ -131,7 +131,7 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/chat?thread_id=4')).toEqual({ view: 'chat', threadId: 4 });
   });
 
-  it('falls back to dashboard for malformed automation rule IDs', () => {
+  it('falls back to dashboard for legacy automation detail paths', () => {
     expect(parsePanelPath('/panel/app/automation-rules/0')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/automation-rules/not-an-id')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/automation-rules/1/extra')).toEqual({ view: 'dashboard' });

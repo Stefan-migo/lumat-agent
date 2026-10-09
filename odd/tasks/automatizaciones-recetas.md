@@ -124,19 +124,26 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
   131 passed; full suite 1843 passed, 2 warnings. Graph: `RecipeDefinition` ←contains— `recipes.py`
   —imports_from→ `automation.py` —imports→ `AutomationRule`; also consulted `install()`,
   `automation_installations.py`, `recipes.py`, `registry.py`, and `execute_tool()`.
-- [ ] **A5 — API + UI de tarjetas**: curated catalog and installed recipes; deterministic parameter
+- [x] **A5 — API + UI de tarjetas**: curated catalog and installed recipes; deterministic parameter
   form. Natural-language input is deferred. The curated UI replaces the technical free-rule UI;
   existing free-rule backend endpoints remain for compatibility.
 - [x] **A5a — Backend API**: admin-only recipe catalog and installation CRUD/status endpoints,
   with transactional commit/rollback and normalized validation/conflict responses. Commit SHA:
   recorded in delivery report (the SHA cannot be embedded in its own commit).
-- [ ] **A5b — Frontend UI**: recipe cards and deterministic parameter form, replacing the technical
-  free-rule UI while retaining the backend compatibility endpoints.
+- [x] **A5b — Frontend UI**: `AutomationRecipesPage` renders the recipe catalog as cards, a
+  deterministic parameter form (channel select), and the installed list with Activar/Desactivar,
+  with honest loading/error/denied/empty states and controls disabled while a request is in flight.
+  It replaces the technical `AutomationRulesPage` / `AutomationRuleDetailPage`, removed together with
+  their tests and stories; the free-rule backend endpoints stay. Commit SHA: reported in delivery
+  (the SHA cannot be embedded in its own commit). Verification: `npm run build` (tsc -b + vite)
+  passed; the full vitest suite is green serialized (102 files, 1075 tests) — the default parallel
+  `npm test` shows load-induced 5s timeouts on unrelated heavy files in this loaded worktree, while
+  the A5b-focused files pass in isolation (4 files, 88 tests).
 
-Graph Check for A5a: consulted `automation_installations.py`, `installation_snapshot()`,
-`recipes.py`, `api/serializers.py`, `AutomationRule`, and the automation panel API area. The graph
-report identifies `api/serializers.py` and `models.py` as hubs; the graph query found no directed
-path between the broad automation-recipes and panel-installation terms.
+Graph Check: A5a consulted `automation_installations.py`, `installation_snapshot()`, `recipes.py`,
+`api/serializers.py`, `AutomationRule`, and the automation panel API area (hubs `api/serializers.py`,
+`models.py`). A5b consulted `AppShell()`, `api.ts`, `types.ts`, `useAsyncData()`, `panelRoutes`,
+`Button`, and `StateMessage` (hubs `AppShell.tsx`, `api.ts`).
 
 ### Slice 2 — Dimensión tiempo (offsets)
 - [ ] **B1 — Tick de offsets** + receta recordatorio de visita + pedir evaluación + mantención periódica.
