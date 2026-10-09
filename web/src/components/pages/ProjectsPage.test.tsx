@@ -130,6 +130,7 @@ describe("projects panel", () => {
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Agentes" }), { button: 0 });
     expect(await screen.findByText("La gestión de agentes por proyecto todavía no está disponible.")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Skills" })).toBeInTheDocument();
   });
 
   it("shows a not-found state for an unknown project", async () => {
