@@ -160,8 +160,40 @@ Scope decisions (closed — do not re-litigate):
 - [x] **WU2 (frontend)**: api client + types (`ProjectAgent`, `ProjectAgentsResponse`). `13892a78`.
 - [x] **WU3 (frontend)**: `ProjectAgents` component in the `ProjectsPage` "Agentes" tab; roster + latest-run status + honest empty/loading/error states. Tests. `8025a4d6`. (The `AssistantWorkspace` "Agentes del proyecto" thread-level card was left out of scope — follow-up.)
 
-### A6 — Per-thread tool toggles + stop/cancel
-- [ ] Tool toggles per thread + active-run stop/cancel endpoint.
+### A6 — Per-thread tool toggles + stop/cancel (active run)
+
+Scope decisions (closed — do not re-litigate; owner-confirmed 2026-10-09):
+- D-A6-1: Tool toggles edit the thread's `assistant_state["tool_policy"]`, which the resolver
+  already treats as a **full replacement** of the project opt-in selection
+  (`resolve_effective_config`, `app/services/project_config.py:79-127`). Scope = `opt_in_enabled`
+  only; the always-on default tier stays non-configurable. Include a "reset to project" (remove
+  the thread override; absence = inherit).
+- D-A6-2: Stop is **cooperative**, not a process kill. An owner-scoped route persists a stop
+  intent for the specific run; the runner/graph checks it at safe boundaries and records a
+  terminal `cancelled` outcome. It does NOT interrupt an in-flight synchronous tool call or LLM
+  request, and does not undo completed effects — the UI must say so honestly.
+- D-A6-3: `active_run_id` is NOT proof of an active run (it persists after terminal outcomes,
+  `app/services/agent_chat.py:447-517`). Both endpoints verify the current run status, never mere
+  non-null.
+- D-A6-4: Toggles are rejected while the thread has an active (non-terminal) run; they apply on
+  the next turn (effective config is resolved once per turn at
+  `app/chat/assistant/nodes.py:521-545`).
+- D-A6-5: Stop of an `approval_pending` run follows the same cooperative path (terminal `cancelled`).
+- No migration: all state lives in `assistant_state` JSONB; preserve siblings via
+  `merge_assistant_state` (`app/chat/assistant/state.py:101-109`).
+
+- [ ] **WU1 (backend)** — Thread tool policy: `GET` (current/effective + available tools) and
+  owner-scoped `PUT` (+ reset) to set/clear `assistant_state["tool_policy"]`, validated by
+  `ToolPolicy`, rejected while a run is active. Tests (strict TDD). Route: delegated writer
+  (WU + tests, multi-file). Trigger: writer trigger.
+- [ ] **WU2 (frontend)** — api client + types + per-thread toggle control in `AgentChat`
+  (server-backed values only; honest loading/error/conflict states; no fabricated policy). Tests.
+  Route: delegated writer.
+- [ ] **WU3 (backend)** — Cooperative stop: owner-scoped stop route + persisted stop intent +
+  cancellation checks at safe boundaries + terminal `cancelled` end-to-end (SSE + persisted).
+  Tests (strict TDD). Route: delegated writer.
+- [ ] **WU4 (frontend)** — Stop control (processing-only) + reconcile `cancelled`; never treat an
+  SSE timeout/disconnect as cancellation. Tests. Route: delegated writer.
 
 ## Acceptance criteria
 
