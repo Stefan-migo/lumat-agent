@@ -14,7 +14,8 @@ describe("PushSettings", () => {
     render(<PushSettings supported />);
 
     expect(requestPermission).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /activar push/i }));
+    expect(screen.getByText("El navegador te pedirá permiso.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /activar notificaciones/i }));
     await waitFor(() => expect(screen.getByText(/denegaste|denegada/i)).toBeInTheDocument());
     expect(screen.getByText(/correo o whatsapp/i)).toBeInTheDocument();
     vi.unstubAllGlobals();
