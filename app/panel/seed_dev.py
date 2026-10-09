@@ -51,6 +51,57 @@ CHAT = [
     ["¿Realizan mantención de caldera mural?", "Sí, trabajamos con distintas marcas.", "La mía es una Baxi."],
     ["Necesito ayuda con el calefón, no enciende.", "Cuénteme si aparece alguna luz o código."],
 ]
+# One distinct conversation summary, case summary, operator note and equipment detail per customer,
+# so the panel does not read as twelve copies of the same row.
+SUMMARIES = [
+    "Consulta por ruido y apagado intermitente del calefón.",
+    "Solicitud de visita para revisar la caldera.",
+    "Coordinación de la mantención anual pendiente.",
+    "Reporte de olor a gas; se entregaron indicaciones de seguridad.",
+    "Consulta por código de error de la caldera Bosch.",
+    "Cotización de revisión de calefón.",
+    "Reporte de agua tibia intermitente en toda la casa.",
+    "Confirmación de la hora de la visita técnica.",
+    "Consulta por baja presión de la caldera.",
+    "Cierre de la reparación ya realizada por el técnico.",
+    "Consulta por mantención de caldera mural.",
+    "Calefón no enciende; cliente en Quilicura.",
+]
+CASE_SUMMARIES = [
+    "Se coordinó revisión por ruido y apagado del calefón.",
+    "Visita técnica agendada para revisar la caldera.",
+    "Mantención anual de caldera por coordinar.",
+    "Emergencia por olor a gas; se instruyó cerrar la llave y ventilar.",
+    "Diagnóstico de código de error en caldera Bosch Condens.",
+    "Cotización de diagnóstico de calefón solicitada por el cliente.",
+    "Agua tibia intermitente; se evaluará el termostato.",
+    "Visita confirmada; el cliente solicita puntualidad.",
+    "Presión de caldera baja; se solicitó foto del manómetro.",
+    "Servicio de reparación finalizado y confirmado por el cliente.",
+    "Mantención de caldera mural Baxi solicitada.",
+    "Calefón sin encender; caso derivado a atención humana.",
+]
+NOTES = [
+    "Prefiere contacto durante la tarde.",
+    "Cliente con historial de mantención anual.",
+    "Solicita aviso por WhatsApp antes de la visita.",
+    "Vive en edificio; coordinar acceso con conserjería.",
+    "Tiene dos equipos: calefón y caldera.",
+    "Pidió la cotización por escrito.",
+    "Trabaja fuera de casa hasta las 18:00.",
+    "Cliente frecuente; buen historial.",
+    "Prefiere técnico con experiencia en calderas murales.",
+    "Servicio cerrado; no contactar por ahora.",
+    "Solicita recordatorio un día antes.",
+    "Caso sensible; prefiere texto antes que llamados.",
+]
+EQUIPMENT = [
+    ("calefón", "Junkers", "Hydro 11", "6 años", "Instalado en logia; revisar encendido y llama."),
+    ("caldera", "Bosch", "Condens 2500", "4 años", "Mantención anual registrada; revisar presión."),
+    ("calefón", "Mademsa", "ES 200", "8 años", "Presenta ruido al calentar; revisar ánodo."),
+    ("caldera", "Baxi", "Nuvola 24", "3 años", "Mural; revisar purga y manómetro."),
+    ("calefón", "Rheem", "Eco 16", "5 años", "Encendido irregular; limpiar quemador."),
+]
 
 
 def _remove_previous(session) -> None:
@@ -98,9 +149,9 @@ def seed_dev() -> str:
             if i == 9:
                 turns = ["Solicité una reparación la semana pasada.", "El técnico ya lo dejó operativo.", "Muchas gracias."]
             conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=state,
-                created_at=now - timedelta(days=min(i * 2, 28)), last_message_at=now - timedelta(minutes=5) if i in (0, 3, 11) else at + timedelta(minutes=len(turns)),
+                created_at=now - timedelta(days=min(i * 2, 28)), last_message_at=now - timedelta(minutes=10) if i in (0, 3, 11) else at + timedelta(minutes=len(turns)),
                 closed_at=now - timedelta(days=3) if state == ConversationState.CLOSED else None,
-                summary="Consulta de servicio técnico y coordinación de una visita.", responsible_id=technician.id if state == ConversationState.HUMAN else None)
+                summary=SUMMARIES[i], responsible_id=technician.id if state == ConversationState.HUMAN else None)
             session.add(conversation)
             session.flush()
             for j, text in enumerate(turns):
@@ -114,7 +165,7 @@ def seed_dev() -> str:
             case = Case(customer_id=customer.id, conversation_id=conversation.id, created_at=at, service=service,
                 priority="urgente" if emergency else "alta" if i % 3 == 0 else "media",
                 status="escalado" if i in (0, 3, 6) else "abierto" if open_case else "cerrado",
-                summary="Revisión técnica solicitada; cliente disponible para coordinar una visita.",
+                summary=CASE_SUMMARIES[i],
                 amount=25000 + i * 5000, responsible_id=technician.id if i % 2 == 0 else None,
                 escalated_at=at if i in (0, 3, 6) else None, emergency=emergency,
                 acknowledged_at=at + timedelta(minutes=10) if i in (0, 3, 6) else None,
@@ -122,12 +173,12 @@ def seed_dev() -> str:
             session.add(case)
             session.flush()
             if i < 5:
-                session.add(CustomerEquipment(customer_id=customer.id, equipment_type="caldera" if i % 2 else "calefón",
-                    brand=["Junkers", "Bosch", "Mademsa", "Baxi", "Rheem"][i], model=f"Serie {110 + i}",
-                    age=f"{3 + i} años", details="Instalado en logia; revisar presión y funcionamiento.", created_at=at))
-                session.add(CustomerNote(customer_id=customer.id, author="operador", note="Prefiere coordinación durante la tarde.", created_at=at))
+                equipment_type, brand, model, age, details = EQUIPMENT[i]
+                session.add(CustomerEquipment(customer_id=customer.id, equipment_type=equipment_type,
+                    brand=brand, model=model, age=age, details=details, created_at=at))
+                session.add(CustomerNote(customer_id=customer.id, author="operador", note=NOTES[i], created_at=at))
                 memory_service.upsert(session, scope="customer", entity_id=str(customer.id), topic_key="contact_preference",
-                    tipo=MemoryType.PREFERENCE, titulo="Preferencia de contacto", contenido="Prefiere coordinación durante la tarde.")
+                    tipo=MemoryType.PREFERENCE, titulo="Preferencia de contacto", contenido=NOTES[i])
             if i < 6:
                 local_start = datetime.combine(now.astimezone(zone).date(), time(15 + i % 3), tzinfo=zone)
                 starts_at = local_start.astimezone(timezone.utc) if i == 0 else now + timedelta(days=i + 1)
@@ -135,7 +186,7 @@ def seed_dev() -> str:
                 session.add(Appointment(service=service, customer_id=customer.id, case_id=case.id, technician_id=technician.id,
                     local_start=local.replace(tzinfo=None), timezone="America/Santiago", starts_at=starts_at,
                     ends_at=starts_at + timedelta(hours=1), duration_minutes=60, status=AppointmentStatus.BOOKED))
-    return "replaced dev rows: 12 customers, 12 conversations, 42 messages, 12 cases, 6 appointments"
+    return "replaced dev rows: 12 customers, 12 conversations, 35 messages, 12 cases, 6 appointments"
 
 
 def main(argv: list[str] | None = None) -> int:
