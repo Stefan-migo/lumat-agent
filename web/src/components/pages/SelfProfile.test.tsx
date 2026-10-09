@@ -21,30 +21,51 @@ beforeEach(() => {
 describe("SelfProfile", () => {
   it("renders the user's identity and editable name and phone fields", async () => {
     render(<SelfProfile />);
-    expect(await screen.findByText("teo")).toBeInTheDocument();
+    expect((await screen.findAllByText("teo")).length).toBeGreaterThan(0);
     expect(screen.getByText("Técnico")).toBeInTheDocument();
     expect(screen.getByLabelText("Nombre")).toHaveValue("Teodoro");
-    expect(screen.getByLabelText("Teléfono")).toHaveValue("+56912345678");
+    expect(screen.getByLabelText("Teléfono (opcional)")).toHaveValue("+56912345678");
   });
 
-  it("saves only name and phone, mapping intentionally cleared values to null", async () => {
+  it("saves only name and phone, mapping a cleared field to null", async () => {
     const user = userEvent.setup();
     render(<SelfProfile />);
     await screen.findByLabelText("Nombre");
     await user.clear(screen.getByLabelText("Nombre"));
-    await user.click(screen.getByRole("button", { name: "Borrar nombre" }));
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(updateMe).toHaveBeenCalledExactlyOnceWith({ name: null, phone: "+56912345678" }));
+  });
+
+  it("restores the stored values when discarding unsaved edits", async () => {
+    const user = userEvent.setup();
+    render(<SelfProfile />);
+    await screen.findByLabelText("Nombre");
+    await user.clear(screen.getByLabelText("Nombre"));
+    await user.type(screen.getByLabelText("Nombre"), "Otro nombre");
+    await user.click(screen.getByRole("button", { name: "Descartar cambios" }));
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Teodoro");
   });
 
   it("allows saving a phone when no name has ever been stored", async () => {
     vi.mocked(fetchMe).mockResolvedValue({ ...profile, name: null, phone: null });
     const user = userEvent.setup();
     render(<SelfProfile />);
-    await screen.findByLabelText("Teléfono");
-    await user.type(screen.getByLabelText("Teléfono"), "+56987654321");
+    await screen.findByLabelText("Teléfono (opcional)");
+    await user.type(screen.getByLabelText("Teléfono (opcional)"), "+56987654321");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(updateMe).toHaveBeenCalledExactlyOnceWith({ name: null, phone: "+56987654321" }));
+  });
+
+  it("blocks the password change when the confirmation does not match", async () => {
+    const user = userEvent.setup();
+    render(<SelfProfile />);
+    await screen.findByLabelText("Nombre");
+    await user.type(screen.getByLabelText("Contraseña actual"), "current-pass");
+    await user.type(screen.getByLabelText("Nueva contraseña"), "new-password");
+    await user.type(screen.getByLabelText("Confirmar nueva contraseña"), "different-pass");
+    await user.click(screen.getByRole("button", { name: "Actualizar contraseña" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no coinciden/i);
+    expect(changePassword).not.toHaveBeenCalled();
   });
 
   it("submits the current and new password and explains 401 and 422 responses", async () => {
@@ -54,12 +75,13 @@ describe("SelfProfile", () => {
     await screen.findByLabelText("Nombre");
     await user.type(screen.getByLabelText("Contraseña actual"), "wrong-password");
     await user.type(screen.getByLabelText("Nueva contraseña"), "new-password");
-    await user.click(screen.getByRole("button", { name: "Cambiar contraseña" }));
+    await user.type(screen.getByLabelText("Confirmar nueva contraseña"), "new-password");
+    await user.click(screen.getByRole("button", { name: "Actualizar contraseña" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/contraseña actual/i);
     expect(changePassword).toHaveBeenCalledWith({ current_password: "wrong-password", new_password: "new-password" });
 
     vi.mocked(changePassword).mockRejectedValueOnce(new ApiError(422, "password must be at least 8 characters"));
-    await user.click(screen.getByRole("button", { name: "Cambiar contraseña" }));
+    await user.click(screen.getByRole("button", { name: "Actualizar contraseña" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/al menos 8 caracteres/i);
   });
 });

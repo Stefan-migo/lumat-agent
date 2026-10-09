@@ -5,6 +5,7 @@ import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
 import { roleLabels } from "../../roleLabels";
 import { Button } from "../primitives/Button";
+import { Pagination } from "../primitives/Pagination";
 import { Input } from "../primitives/Input";
 import { DataTable, type Column } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
@@ -122,7 +123,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
               </div>
             </li>)}
           </ul>
-          <footer className="table-footer"><span className="table-footer__count">Mostrando {pageUsers.length} de {visibleUsers.length} usuarios</span><span className="table-footer__mobile-count">{visibleUsers.length} de {visibleUsers.length} usuarios</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Anterior" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Siguiente" disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)}>›</Button></div></footer>
+          <footer className="table-footer"><span className="table-footer__count">Mostrando {pageUsers.length} de {visibleUsers.length} usuarios</span><span className="table-footer__mobile-count">{visibleUsers.length} de {visibleUsers.length} usuarios</span><Pagination page={page} pageCount={pageCount} onPageChange={setPage} /></footer>
         </div>}
       </Tabs>
     </>}

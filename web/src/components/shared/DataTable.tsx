@@ -6,6 +6,8 @@ export interface Column<T> {
   header: string;
   render: (row: T) => ReactNode;
   align?: "left" | "right";
+  /** Optional column width applied to the header cell. */
+  width?: string;
 }
 
 export interface DataTableProps<T> {
@@ -68,7 +70,7 @@ export function DataTable<T>({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} scope="col" style={{ textAlign: c.align ?? "left" }}>{c.header}</th>
+              <th key={c.key} scope="col" style={{ width: c.width, textAlign: c.align ?? "left" }}>{c.header}</th>
             ))}
             {actions ? <th scope="col">{actionsHeader}</th> : null}
           </tr>
