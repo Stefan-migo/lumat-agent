@@ -778,6 +778,7 @@ class AutomationRule(Base):
     __table_args__ = (Index("idx_automation_rules_event", "event_type", "enabled"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    installation_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("automation_installations.id"), unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     conditions: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
@@ -785,6 +786,18 @@ class AutomationRule(Base):
     template_event: Mapped[str] = mapped_column(String(100), nullable=False)
     cooldown_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AutomationInstallation(Base):
+    __tablename__ = "automation_installations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    recipe_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
