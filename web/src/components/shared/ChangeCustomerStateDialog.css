@@ -8,7 +8,7 @@
 .change-state-dialog__option { position: relative; display: grid; grid-template-rows: 1fr auto; gap: var(--space-3); min-height: 7rem; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
 .change-state-dialog__option > svg { width: var(--icon-lg); height: var(--icon-lg); }
 .change-state-dialog__option.is-selected { border: 2px solid var(--corp-primary); background: var(--success-bg); }
-.change-state-dialog__radio { position: absolute; top: var(--space-3); right: var(--space-3); width: var(--space-4); height: var(--space-4); border: 1px solid var(--border-strong); border-radius: 50%; }
+.change-state-dialog__radio { position: absolute; top: var(--space-3); right: var(--space-3); width: var(--space-4); height: var(--space-4); border: 1px solid var(--border); border-radius: 50%; }
 .change-state-dialog__option.is-selected .change-state-dialog__radio { border: 5px solid var(--corp-primary); }
 .change-state-dialog__transition { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .change-state-dialog > footer { display: flex; justify-content: flex-end; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronDown, MessageSquare, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
-import { ApiError, acknowledgeCase, listActiveConversations, listConversations, takeConversation } from "../../api";
+import { Check, ChevronDown, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
+import { ApiError, acknowledgeCase, changeConversationState, listActiveConversations, listConversations, takeConversation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse } from "../../types";
 import { Button } from "../primitives/Button";
@@ -16,6 +16,7 @@ import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { plainSummary } from "../shared/markdownText";
 import { coalesceSnapshotRefresh, realtimeClient, type ConnectionStatus } from "../../realtime";
 import "./ConversationsList.css";
 
@@ -76,17 +77,26 @@ export function ConversationsList({ data: controlledData, state: controlledState
   const nameFor = (c: Conversation) => c.customer?.name ?? customerName?.(c.customer_id) ?? `Cliente #${c.customer_id}`;
   const openThread = (c: Conversation) => { setSelectedId(c.id); onOpenThread?.(c.id); };
   const menuItems = (c: Conversation): MenuItem[] => [
-    ...(onOpenThread ? [{ value: "open", label: "Abrir conversación", icon: MessageSquare }] : []),
     ...(c.emergency && !c.acknowledged_at && c.case_id != null ? [{ value: "acknowledge", label: "Reconocer emergencia" }] : []),
+    ...(c.state === "human"
+      ? [
+          { value: "to-bot", label: "Devolver al agente" },
+          { value: "close", label: "Cerrar conversación" },
+        ]
+      : []),
   ];
   const rowActions = (c: Conversation) => <div className="table__actions conversations-list__actions">
     {c.state === "bot" ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button> : null}
-    {menuItems(c).length ? <Menu trigger="icon" align="end" collisionPadding={8} label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => value === "open" ? openThread(c) : void runAction(c.id, () => acknowledgeCase(c.case_id!))} /> : null}
+    {menuItems(c).length ? <Menu trigger="icon" align="end" collisionPadding={8} label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => {
+      if (value === "acknowledge") void runAction(c.id, () => acknowledgeCase(c.case_id!));
+      else if (value === "to-bot") void runAction(c.id, () => changeConversationState(c.id, "bot", c.version ?? 0));
+      else if (value === "close") void runAction(c.id, () => changeConversationState(c.id, "closed", c.version ?? 0));
+    }} /> : null}
   </div>;
   const columns: Column<Conversation>[] = [
-    { key: "identity", header: "Cliente y conversación", render: (c) => {
+    { key: "identity", header: "Cliente y conversación", width: "38%", render: (c) => {
       const name = nameFor(c);
-      return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span></div></div>;
+      return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ? plainSummary(c.summary) : "Sin resumen disponible"}</span></div></div>;
     } },
     { key: "state", header: "Estado y prioridad", render: conversationBadges },
     { key: "case", header: "Caso", render: (c) => c.case_id != null ? <Badge tone="neutral">Caso #{c.case_id}</Badge> : "—" },
@@ -118,7 +128,7 @@ export function ConversationsList({ data: controlledData, state: controlledState
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</div>
-        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{visibleRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="conversations-list__mobile-head"><Avatar name={name} className="table__resource-avatar" /><div className="conversations-list__mobile-identity"><button type="button" className="table__resource-name conversations-list__identity" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span></div></div><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span><div className="conversations-list__mobile-meta">{conversationBadges(c)}<div className="conversations-list__mobile-facts"><span className="conversations-list__case">{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>{activityCell(c.last_message_at)}</div></div>{rowActions(c)}</li>; })}</ul></>}
+        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{visibleRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="conversations-list__mobile-head"><Avatar name={name} className="table__resource-avatar" /><div className="conversations-list__mobile-identity"><button type="button" className="table__resource-name conversations-list__identity" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span></div></div><span className="conversations-list__summary">{c.summary ? plainSummary(c.summary) : "Sin resumen disponible"}</span><div className="conversations-list__mobile-meta">{conversationBadges(c)}<div className="conversations-list__mobile-facts"><span className="conversations-list__case">{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>{activityCell(c.last_message_at)}</div></div>{rowActions(c)}</li>; })}</ul></>}
         <footer className="table-footer"><span className="table-footer__count">Mostrando {visibleRows.length} de {total} conversaciones</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Página anterior" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - limit)); setRequestRevision((revision) => revision + 1); }}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Página siguiente" disabled={!data || offset + limit >= total} onClick={() => { setOffset(offset + limit); setRequestRevision((revision) => revision + 1); }}>›</Button></div></footer>
       </div>}</Tabs>
    </PageFrame>;

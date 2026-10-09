@@ -3,7 +3,7 @@
 /* Offline banner lives in primitives.css (`.conversations-offline`) — shared by the list and the thread. */
 
 /* Responsable filter: bordered control with leading icon, muted prefix, bold value, chevron. */
-.conversations-list__filter { display: inline-flex; align-items: center; justify-self: end; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
+.conversations-list__filter { display: inline-flex; align-items: center; justify-self: end; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
 .conversations-list__filter > svg { flex: 0 0 auto; color: var(--corp-fg-muted); }
 .conversations-list__filter > svg:last-child { margin-left: auto; }
 .conversations-list__filter-label { color: var(--corp-fg-muted); font-size: var(--text-sm); }
@@ -11,7 +11,7 @@
 .conversations-list__filter-menu { min-width: 12rem; }
 .conversations-list__filter-check { display: inline-flex; margin-left: auto; color: var(--corp-primary); }
 
-.conversations-list__summary { overflow: hidden; color: var(--corp-fg-muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.conversations-list__summary { max-width: 22rem; overflow: hidden; color: var(--corp-fg-muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .conversations-list__status { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 .conversations-list__case { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
@@ -24,7 +24,6 @@
 
 .conversations-list__actions { justify-content: flex-end; align-items: center; }
 .conversations-list__actions .btn { white-space: nowrap; }
-.conversations-list__actions .menu__trigger--icon { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); }
 
 /* Mobile card: identity head, summary, badges + facts, actions. */
 .conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-items: start; }

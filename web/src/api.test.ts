@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -140,6 +140,18 @@ describe('automation recipe API contracts', () => {
     expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/panel/api/automation-installations/7', expect.objectContaining({ method: 'PATCH', body: '{"parameters":{"channel":"whatsapp"}}' }));
     expect(globalThis.fetch).toHaveBeenNthCalledWith(5, '/panel/api/automation-installations/7/enable', expect.objectContaining({ method: 'POST' }));
     expect(globalThis.fetch).toHaveBeenNthCalledWith(6, '/panel/api/automation-installations/7/disable', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('project agents API contract', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('requests project agents using an encoded slug', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ agents: [], latest_run: null }), { status: 200 })));
+
+    await listProjectAgents('project / one');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/project%20%2F%20one/agents', expect.objectContaining({ credentials: 'include' }));
   });
 });
 

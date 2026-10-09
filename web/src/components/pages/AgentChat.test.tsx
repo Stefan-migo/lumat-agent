@@ -453,7 +453,7 @@ describe("AgentChat", () => {
         thread: {
           ...makeThread(),
           active_run_id: "run",
-          current_plan: { tool: "agenda", status: "pending" },
+          current_plan: { tool: "skill.propose", arguments: { name: "calefont", description: "Guía del proyecto", body: "Usa solo evidencia local." }, status: "pending" },
           assistant_state: {
             approval: { token: "token", status: "pending" },
             events: [{ evidence: [{ tool: "agenda", status: "completed", detail: "Creado" }] }],
@@ -470,6 +470,9 @@ describe("AgentChat", () => {
 
     expect(message).toContainElement(screen.getByRole("button", { name: "Aprobar" }));
     expect(message.querySelector("details")).toBeTruthy();
+    expect(message).toHaveTextContent("calefont");
+    expect(message).toHaveTextContent("Guía del proyecto");
+    expect(message).toHaveTextContent("Usa solo evidencia local.");
   });
 
   it("keeps processing until the SSE stream closes", async () => {

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.chat.assistant.tools.registry import (
+    APPROVED_WRITE_ALLOWLIST,
     AUTONOMOUS_WRITE_ALLOWLIST,
     MAX_ITEMS,
     CapabilitiesArgs,
@@ -43,6 +44,57 @@ def test_registry_exposes_typed_bounded_tools():
     assert schemas["customers.search"]["type"] == "object"
     assert get_tool("customers.search").read_only is True
     assert get_tool("automation.create_rule").read_only is False
+
+
+def test_skill_propose_is_owner_scoped_approval_write_and_upserts_project_skill(monkeypatch):
+    from app.chat.assistant.approval import consume_approval
+
+    assert get_tool("skill.propose").read_only is False
+    assert "skill.propose" in APPROVED_WRITE_ALLOWLIST
+    assert "skill.propose" not in AUTONOMOUS_WRITE_ALLOWLIST
+    assert get_tool("skill.propose").tier == "default"
+
+    from unittest.mock import MagicMock
+    project = SimpleNamespace(id=12, slug="repair", owner_id=7, config={})
+    session = MagicMock()
+    session.scalar.return_value = project
+    arguments = {"name": "project-helper", "description": "Helpful", "body": "Instructions"}
+    from app.chat.assistant.approval import issue_approval
+    approval = issue_approval({"tool": "skill.propose", "arguments": arguments})
+    assert consume_approval(approval, approval["token"])
+    completed = execute_tool(
+        session, "skill.propose", arguments, approval=approval, owner_id=7,
+        proyecto="repair", project_id=12, role="admin",
+    )
+    assert completed["status"] == "completed", completed
+    assert project.config["skills"] == [arguments]
+    assert session.add.call_args.args[0].action == "skill.propose.confirmed"
+
+
+def test_skill_propose_rejects_default_project_and_global_skill_shadow(monkeypatch):
+    from app.chat.assistant.approval import consume_approval, issue_approval
+
+    args = {"name": "capture", "description": "D", "body": "B"}
+    default_approval = issue_approval({"tool": "skill.propose", "arguments": args})
+    assert consume_approval(default_approval, default_approval["token"])
+    with pytest.raises(ToolValidationError, match="real project"):
+        execute_tool(SimpleNamespace(), "skill.propose", args, approval=default_approval, owner_id=7, role="admin")
+
+    monkeypatch.setattr(
+        "app.services.skills.global_skill_index",
+        lambda _config: (SimpleNamespace(name="capture"),),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.normalize_slug",
+        lambda value: value,
+    )
+    from unittest.mock import MagicMock
+    session = MagicMock()
+    session.scalar.return_value = SimpleNamespace(id=12, slug="repair", owner_id=7, config={})
+    approval = issue_approval({"tool": "skill.propose", "arguments": args})
+    assert consume_approval(approval, approval["token"])
+    with pytest.raises(ToolValidationError, match="global skill"):
+        execute_tool(session, "skill.propose", args, approval=approval, owner_id=7, proyecto="repair", project_id=12, role="admin")
 
 
 def test_artifact_save_is_typed_bounded_and_serializes_only_download_metadata(monkeypatch):

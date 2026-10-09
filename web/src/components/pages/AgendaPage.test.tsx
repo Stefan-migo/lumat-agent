@@ -90,7 +90,7 @@ describe('AgendaPage', () => {
     expect(screen.getByText('Instalación')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Próximas visitas', level: 2 }).parentElement).toHaveTextContent('Dom 6 sept');
     expect(screen.getByText('Mantención')).toBeInTheDocument();
-    expect(container.querySelector('.agenda-page__visit-heading time svg')).toHaveClass('icon');
+    expect(container.querySelector('.agenda-page__visit-heading .agenda-page__visit-clock')).toHaveClass('icon');
   });
 
   it('links the register service to its appointment detail route', () => {
@@ -143,7 +143,8 @@ describe('AgendaPage', () => {
 
   it('renders appointment slots in 24-hour time', () => {
     const { container } = render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
-    expect(container.querySelector('.agenda-page__visit-heading time')).toHaveTextContent('Sáb 5 sept · 14:00');
+    expect(container.querySelector('.agenda-page__visit-heading time')).toHaveTextContent('Sáb 5 sept');
+    expect(container.querySelector('.agenda-page__visit-heading time')).toHaveTextContent('14:00');
     expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
   });
 

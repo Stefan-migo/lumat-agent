@@ -89,9 +89,9 @@ describe("Select (T7.3)", () => {
     expect(screen.getByLabelText("Estado")).toBeDisabled();
   });
 
-  it("keeps a measured surface boundary and keyboard focus indicator", () => {
+  it("keeps a light surface boundary and keyboard focus indicator", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
-    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border-strong\)[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--surface\)/s);
     expect(css).toMatch(/\.field__control:focus-visible\s*\{[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
   });
 });

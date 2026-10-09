@@ -15,6 +15,7 @@ import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { Tabs } from "../primitives/Tabs";
 import { ProjectResources } from "./ProjectResources";
 import { ProjectSkills } from "./ProjectSkills";
+import { ProjectAgents } from "./ProjectAgents";
 import "./ProjectsPage.css";
 
 export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs, role }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode; role?: Role }) {
@@ -49,7 +50,7 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
     return <PageFrame title={body?.project.name ?? "Proyecto"} meta={body ? `${body.project.purpose} · ${projectStatusLabel(body.project.status)}` : "Detalle del proyecto"} actions={<><Button variant="secondary" onClick={() => onOpenChat?.(body?.project.slug ?? projectSlug)}>Abrir asistente</Button><Button variant="secondary" onClick={() => window.history.back()}>Volver a proyectos</Button></>} state={detail.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyecto" /> : notFound ? <StateMessage tone="warning" role="alert" title="No encontramos este proyecto" detail="Revisa el enlace o vuelve a la lista de proyectos." /> : detail.state === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el proyecto" detail="Intenta cargar el proyecto nuevamente más tarde." /><Button variant="secondary" onClick={detail.retry}>Reintentar</Button></> : undefined}>
       {body ? <Tabs ariaLabel="Secciones del proyecto" tabs={[{ id: "context", label: "Contexto" }, { id: "threads", label: "Hilos" }, { id: "agents", label: "Agentes" }, { id: "skills", label: "Skills" }]}>{(active) => {
         if (active === "threads") return <Card title="Hilos del proyecto"><EmptyState title="Hilos del proyecto no disponibles" description="Esta vista todavía no puede filtrar hilos por proyecto. La API no entrega la asociación del proyecto en el listado de hilos." /></Card>;
-        if (active === "agents") return <Card title="Agentes del proyecto"><EmptyState title="No hay agentes para mostrar" description="La gestión de agentes por proyecto todavía no está disponible." /></Card>;
+        if (active === "agents") return <ProjectAgents projectSlug={body.project.slug} />;
         if (active === "skills") return <ProjectSkills projectSlug={body.project.slug} projectId={body.project.id} role={role} skills={body.project.config?.skills ?? []} />;
         return <div className="projects-page__context">
           <Card title="Instrucciones del proyecto">

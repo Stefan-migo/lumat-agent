@@ -734,6 +734,12 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         return None
     if reject:
         message.status = "rejected"
+        if plan.get("tool") == "skill.propose":
+            record_audit(
+                session, actor=user.username, action="skill.propose.rejected",
+                entity="internal_chat_thread", entity_id=str(thread.id),
+                after={"run_id": run_id, "name": (plan.get("arguments") or {}).get("name")},
+            )
         return message
     actor_role = getattr(user.role, "value", user.role)
     thread.assistant_state = {
