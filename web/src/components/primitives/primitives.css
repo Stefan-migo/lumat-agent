@@ -3131,8 +3131,11 @@
 .agenda-page__section-heading { display: flex; align-items: center; gap: var(--space-3); }
 .agenda-page__cards { display: grid; gap: var(--space-4); min-width: 0; }
 .agenda-page__visit-card { gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--surface); }
-.agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); }
-.agenda-page__visit-heading > time { display: inline-flex; align-self: center; align-items: center; gap: var(--space-2); color: var(--corp-text); font-size: var(--text-xl); font-weight: var(--weight-semibold); font-variant-numeric: var(--corp-value); }
+.agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: var(--space-3); }
+.agenda-page__visit-clock { color: var(--corp-fg-muted); }
+.agenda-page__visit-when { display: grid; justify-items: end; font-variant-numeric: var(--corp-value); }
+.agenda-page__visit-when-date { color: var(--corp-fg-muted); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap; }
+.agenda-page__visit-when-time { color: var(--corp-text); font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .agenda-page__visit-title { display: grid; justify-items: start; gap: var(--space-2); min-width: 0; }
 .agenda-page__visit-title a { color: var(--corp-text); font-size: var(--text-lg); font-weight: var(--weight-semibold); overflow-wrap: anywhere; text-decoration: none; }
 .agenda-page__visit-title a:hover { text-decoration: underline; }
@@ -3145,10 +3148,11 @@
 .agenda-page__layout { display: grid; gap: var(--space-5); min-width: 0; }
 @media (max-width: 40rem) {
   .agenda-page__section { padding: var(--space-4); }
-  .agenda-page__visit-heading { grid-template-columns: minmax(0, 1fr) auto; }
-  .agenda-page__visit-heading > time { grid-column: 1; grid-row: 1; }
-  .agenda-page__visit-title { grid-column: 1; grid-row: 2; }
-  .agenda-page__visit-heading > .menu__trigger { grid-column: 2; grid-row: 1; }
+  .agenda-page__visit-heading { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .agenda-page__visit-heading > .agenda-page__visit-clock { grid-column: 1; grid-row: 1; }
+  .agenda-page__visit-title { grid-column: 2; grid-row: 1; }
+  .agenda-page__visit-when { grid-column: 2; grid-row: 2; justify-items: start; }
+  .agenda-page__visit-heading > .menu__trigger { grid-column: 3; grid-row: 1; }
   .agenda-page__visit-details > div { grid-template-columns: minmax(4.5rem, .5fr) minmax(0, 1fr); }
 }
 @media (min-width: 64rem) {
