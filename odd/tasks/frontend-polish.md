@@ -66,6 +66,7 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T12** `AgendaPage.tsx`/`primitives.css` — visit card heading rebalanced: clock glyph `sm`→`lg`, date and time stacked on two lines (date `--text-xs` muted, time `--text-base` semibold), and the date moved to the trailing column so the service title leads the card (`icono | título/badge | fecha`)
 - [x] **T13** `primitives.css` — account menu aligned to the Lumat palette: neutral avatar (dropped `--success-bg`), role rendered as `--text-muted` metadata (dropped `--teal-500`), sign-out row transparent with `--danger` text and a `--danger-bg` hover
 - [x] **T14** `SelfProfile.tsx`/`primitives.css` — "Mi perfil" redesigned on the `UserFicha` pattern: large identity avatar + role badge + "Usuario de acceso" rail card, card headers with icon + description, two-column fields with leading glyphs and helpers, and a `Descartar cambios | Guardar cambios` footer. Profile save now maps an empty field to null, so the `Borrar nombre/teléfono` buttons are gone; the password card gains `Confirmar nueva contraseña` with a match guard and reveal toggles
+- [x] **T15** `ClientFicha.tsx` — merge dialog "Otro cliente": replaced the plain `Select` (whose placeholder promised a search it could not perform) with the `Combobox` primitive, so the operator can type a name or phone and filter the candidate list
 
 ## Acceptance
 
@@ -113,3 +114,5 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - 2026-10-09 — T14: SelfProfile rebuilt on the `UserFicha` pattern; `Borrar` buttons
   removed in favour of empty-field-to-null plus `Descartar cambios`. Password card gains
   confirmation + reveal toggles. Commit `3fd66103`. SelfProfile tests 6/6, app 8/8.
+- 2026-10-09 — T15: merge dialog "Otro cliente" becomes a searchable `Combobox` (typing
+  filters by name/phone). Commit `fe8d1935`. ClientFicha 50/50.
