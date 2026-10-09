@@ -8,6 +8,10 @@ from app.services.audit import record_audit
 from app.services.recipes import get_recipe
 
 
+class RecipeAlreadyInstalled(ValueError):
+    """Raised when the catalog recipe already has a persisted installation."""
+
+
 def installation_snapshot(installation: AutomationInstallation) -> dict:
     return {
         "id": installation.id,
@@ -56,7 +60,7 @@ def install(
     if recipe is None:
         raise ValueError("unknown recipe")
     if session.scalar(select(AutomationInstallation).where(AutomationInstallation.recipe_id == recipe_id)) is not None:
-        raise ValueError("recipe already installed")
+        raise RecipeAlreadyInstalled("recipe already installed")
     validated = recipe.validate_parameters(parameters)
     installation = AutomationInstallation(recipe_id=recipe_id, parameters=validated, enabled=enabled, created_by=actor)
     session.add(installation)

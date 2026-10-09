@@ -28,8 +28,9 @@ Se eligió ODD (no SDD) para implementar slice por slice, con commits por work u
 1. **Alcance** = catálogo curado de 11 recetas (Nivel 1). Nivel 2/3 fuera de este presupuesto.
 2. **Efecto** de las recetas = notificación (WhatsApp/Email) o resumen al admin. Sin acciones
    sobre datos del negocio en este alcance.
-3. **UX** = patrón ChatGPT "Scheduled": tarjetas de recetas + input en lenguaje natural que
-   **parametriza una receta** (nunca inventa lógica).
+3. **UX** = curated recipe cards + deterministic parameter form. Natural-language input is deferred;
+   it must parameterize a recipe and never invent logic. The curated UI replaces the technical
+   free-rule UI, while the existing free-rule backend endpoints remain for compatibility.
 4. **Modelo de receta** (D-T1) = **catálogo en código** (definiciones versionadas) + tabla de
    **instalaciones en DB** (receta activa + parámetros). NO se entierra la lógica en DB.
 5. **Programación del worker** (D-T2) = **cron externo cada 5 min** (patrón `app.ops.sweep`).
@@ -123,8 +124,19 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
   131 passed; full suite 1843 passed, 2 warnings. Graph: `RecipeDefinition` ←contains— `recipes.py`
   —imports_from→ `automation.py` —imports→ `AutomationRule`; also consulted `install()`,
   `automation_installations.py`, `recipes.py`, `registry.py`, and `execute_tool()`.
-- [ ] **A5 — API + UI de tarjetas**: catálogo (tarjetas) + activas/parametrizadas; input NL que
-  parametriza recetas.
+- [ ] **A5 — API + UI de tarjetas**: curated catalog and installed recipes; deterministic parameter
+  form. Natural-language input is deferred. The curated UI replaces the technical free-rule UI;
+  existing free-rule backend endpoints remain for compatibility.
+- [x] **A5a — Backend API**: admin-only recipe catalog and installation CRUD/status endpoints,
+  with transactional commit/rollback and normalized validation/conflict responses. Commit SHA:
+  recorded in delivery report (the SHA cannot be embedded in its own commit).
+- [ ] **A5b — Frontend UI**: recipe cards and deterministic parameter form, replacing the technical
+  free-rule UI while retaining the backend compatibility endpoints.
+
+Graph Check for A5a: consulted `automation_installations.py`, `installation_snapshot()`,
+`recipes.py`, `api/serializers.py`, `AutomationRule`, and the automation panel API area. The graph
+report identifies `api/serializers.py` and `models.py` as hubs; the graph query found no directed
+path between the broad automation-recipes and panel-installation terms.
 
 ### Slice 2 — Dimensión tiempo (offsets)
 - [ ] **B1 — Tick de offsets** + receta recordatorio de visita + pedir evaluación + mantención periódica.
