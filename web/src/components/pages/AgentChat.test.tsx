@@ -129,6 +129,65 @@ describe("AgentChat", () => {
     expect(screen.getByRole("button", { name: "Restablecer al proyecto" })).toBeDisabled();
   });
 
+  it("shows stop only for an active run and sends its current run id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/tool-policy")) return jsonResponse(policy());
+      if (String(input).endsWith("/stop")) return jsonResponse({ status: "stopping", run_id: "run-live" });
+      return jsonResponse({
+        thread: { ...makeThread(), active_run_id: "run-live" },
+        messages: [{ id: 1, author: "admin", content: "Working", status: "processing", assistant_metadata: { run_id: "run-live" } }],
+      });
+    });
+    render(<AgentChat threadId={4} />);
+    const stop = await screen.findByRole("button", { name: /detener ejecución/i });
+    expect(stop).toBeEnabled();
+    fireEvent.click(stop);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/stop",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-live" }) }),
+    ));
+    expect(await screen.findByText("Deteniendo…")).toBeInTheDocument();
+    expect(screen.queryByText("Cancelado")).not.toBeInTheDocument();
+  });
+
+  it("does not show stop when no run is active", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({ thread: makeThread(), messages: [] }),
+    );
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    expect(screen.queryByRole("button", { name: /detener ejecución/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the stop control off while only the tool policy is saving", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/tool-policy")) {
+        if (init?.method === "PUT") return new Promise<Response>(() => {});
+        return jsonResponse(policy({ inherited: false }));
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "PUT" }),
+    ));
+    expect(screen.queryByRole("button", { name: /detener ejecución/i })).not.toBeInTheDocument();
+  });
+
+  it("renders a persisted cancelled message distinctly", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({
+        thread: { ...makeThread(), assistant_state: { execution_status: "cancelled" } },
+        messages: [{ id: 1, author: "admin", content: "Stopped", status: "cancelled" }],
+      }),
+    );
+    render(<AgentChat threadId={4} />);
+    expect(await screen.findByText("Cancelado")).toBeInTheDocument();
+  });
+
   it("shows policy loading errors without inventing toggles", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).endsWith("/tool-policy") ? jsonResponse({ detail: "denied" }, 403) : jsonResponse({ thread: makeThread(), messages: [] }),
@@ -932,6 +991,7 @@ describe("AgentChat", () => {
     expect(screen.getByRole("status", { name: /recuperable/i })).toHaveTextContent(
       /recuperable/i,
     );
+    expect(screen.queryByText("Cancelado")).not.toBeInTheDocument();
   });
 
   it("keeps persisted history authoritative when a transient stream is present", async () => {

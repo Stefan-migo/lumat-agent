@@ -22,11 +22,12 @@ import {
   renameChatThread,
   resetThreadToolPolicy,
   sendChatMessage,
+  stopChatThread,
   streamChatEvents,
   updateThreadToolPolicy,
   uploadAssistantAttachment,
 } from "../../api";
-import { Check, Copy, Paperclip, RotateCcw, Send } from "lucide-react";
+import { Check, Copy, Paperclip, RotateCcw, Send, Square } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -83,6 +84,7 @@ const stateLabels: Record<string, string> = {
   disconnected: "Desconectada",
   reconnecting: "Reconectando",
   connected: "Conectada",
+  cancelled: "Cancelado",
 };
 
 /** Stage copy for the in-flight bubble, so a waiting turn never looks dead.
@@ -323,6 +325,8 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const [toolPolicyLoading, setToolPolicyLoading] = useState(false);
   const [toolPolicyError, setToolPolicyError] = useState<string | null>(null);
   const [toolPolicySaving, setToolPolicySaving] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopMessage, setStopMessage] = useState<string | null>(null);
   const capabilitiesRequested = useRef(false);
   const [planningOpen, setPlanningOpen] = useState(false);
   // Copy feedback: the icon that was just used swaps to a check and says so,
@@ -344,6 +348,17 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     const state = result.thread.assistant_state;
     setThread(result.thread);
     setMessages(result.messages ?? []);
+    if (
+      state?.execution_status === "cancelled" ||
+      (result.messages ?? []).some(
+        (message) => message.status === "cancelled" && message.assistant_metadata?.run_id === result.thread.active_run_id,
+      ) ||
+      ((result.messages ?? []).some(
+        (message) =>
+          message.assistant_metadata?.run_id === result.thread.active_run_id &&
+          (message.status === "processed" || message.status === "failed"),
+      ) && state?.execution_status !== "running")
+    ) setStopping(false);
     if (!preserveArtifacts) setPlan(result.thread.current_plan ?? null);
     setApproval(state?.approval ?? null);
     const persistedEvidence = (state?.events ?? []).flatMap((event) => event.evidence ?? []);
@@ -460,6 +475,30 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         : reason instanceof ApiError ? reason.detail : "No pudimos actualizar las herramientas");
     } finally {
       setToolPolicySaving(false);
+    }
+  };
+
+  const stopRun = async () => {
+    if (!thread) return;
+    setStopping(true);
+    setStopMessage(null);
+    let waitingForSettlement = false;
+    try {
+      const result = await stopChatThread(thread.id, runId ?? undefined);
+      waitingForSettlement = result.status === "stopping";
+      if (result.status === "cancelled") {
+        loadThread(await getChatThread(thread.id));
+        setProcessing(false);
+      }
+    } catch (reason: unknown) {
+      if (reason instanceof ApiError && reason.status === 409) {
+        try { loadThread(await getChatThread(thread.id)); } catch { /* Keep the current persisted view. */ }
+        setStopMessage("La ejecución cambió o ya terminó. Actualizamos el estado del chat.");
+      } else {
+        setStopMessage(reason instanceof ApiError ? reason.detail : "No pudimos detener la ejecución.");
+      }
+    } finally {
+      if (!waitingForSettlement) setStopping(false);
     }
   };
 
@@ -794,7 +833,8 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     .filter((event) => !runId || event.run_id === runId)
     .flatMap((event) => event.evidence ?? []);
   const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
-  const toolControlsDisabled = processing || toolPolicySaving || messages.some((message) => message.status === "processing") || approval?.status === "pending";
+  const isRunActive = processing || messages.some((message) => message.status === "processing") || approval?.status === "pending";
+  const toolControlsDisabled = isRunActive || toolPolicySaving;
   const state = loading ? (
     <StateMessage tone="info" role="status" spinner title="Cargando chat" />
   ) : error ? (
@@ -835,6 +875,15 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
       className="assistant-chat"
       actions={
         <div className="assistant-chat__header-actions">
+          {thread && isRunActive ? (
+            <div>
+              <Button variant="secondary" onClick={() => void stopRun()} disabled={stopping} title="Se detiene en el siguiente paso seguro; no interrumpe una llamada en curso ni revierte efectos completados.">
+                <Icon icon={Square} size="sm" /> {stopping ? "Deteniendo…" : "Detener ejecución"}
+              </Button>
+              <p>La detención ocurre en el siguiente paso seguro; no interrumpe una llamada a herramienta o al modelo en curso ni revierte efectos completados.</p>
+            </div>
+          ) : null}
+          {stopMessage ? <p role="status">{stopMessage}</p> : null}
           <Popover title="Herramientas" triggerLabel="Herramientas" state={!thread ? "disabled" : "default"}>
             {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
             {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
@@ -1095,6 +1144,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
                         No se pudo procesar el mensaje
                       </p>
                     ) : null}
+                    {message.status === "cancelled" ? <p role="status">Cancelado</p> : null}
                     <time
                       className="ai-agent-grammar__message-time"
                       dateTime={message.created_at ?? undefined}
