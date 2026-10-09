@@ -38,6 +38,9 @@ export interface ProjectsResponse { projects: Project[]; }
 export interface ProjectFile { id: number; project_id: number; filename: string; content_type: string; size: number; sha256: string; status: string; created_at: string | null; }
 export interface ProjectFilesResponse { files: ProjectFile[]; }
 export interface ProjectDetailResponse { project: Project; }
+export interface ProjectAgent { key: string; name: string; role: string; description: string; read_only: boolean; }
+export interface ProjectRunStatus { status: string; tool?: string | null; at?: string | null; }
+export interface ProjectAgentsResponse { agents: ProjectAgent[]; latest_run: ProjectRunStatus | null; }
 export interface ProjectCandidate { slug: string; name: string; similarity: number; }
 export interface ProjectCreateRequest { slug: string; name: string; purpose: string; }
 export interface ProjectCreateResponse { project: Project; }
