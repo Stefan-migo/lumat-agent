@@ -139,12 +139,12 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "tool_loop_head": "planning",
         "verify_effects": "verifying",
     }
+    current_stage = "planning"
     for mode, chunk in graph.stream(state, stream_mode=["values", "updates"]):
         if mode == "values":
             last_state = chunk
         else:
             for node in chunk:
-                stage = stage_nodes.get(node)
-                if stage:
-                    on_stage(stage)
+                current_stage = stage_nodes.get(node, current_stage)
+                on_stage(current_stage)
     return last_state
