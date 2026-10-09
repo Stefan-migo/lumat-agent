@@ -27,6 +27,7 @@ import { PlanningSessions } from '../pages/PlanningSessions';
 import { SelfProfile } from '../pages/SelfProfile';
 import { UserFicha } from '../pages/UserFicha';
 import { AssistantTabs, type AssistantView } from '../pages/AssistantTabs';
+import { realtimeClient } from '../../realtime';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -56,6 +57,18 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       if (mounted) setNotificationState({ status: 'error' });
     });
     return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = realtimeClient.subscribe((event) => {
+      if (event.type !== 'notification') return;
+      void listNotifications().then((response) => {
+        setNotifications(response.notifications);
+        setNotificationState({ status: 'ready', unread: response.notifications.filter((notification) => notification.read_at === null).length });
+      }).catch(() => setNotificationState({ status: 'error' }));
+    });
+    realtimeClient.connect();
+    return () => { unsubscribe(); };
   }, []);
 
   const markAllRead = async () => {

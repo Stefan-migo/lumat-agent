@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, Appointment, AutomationExecution, AutomationRule, Case, Conversation, Customer, DomainEvent, MessageType, NotificationOperation, User
+from app.models import AuditLog, Appointment, AutomationExecution, AutomationRule, Case, Conversation, Customer, DomainEvent, MessageType, NotificationOperation, PanelNotification, User
 from app.webhook.ingest import NormalizedMessage, persist_message
 from app.services.events import publish_event
 from app.services import cases, scheduling
@@ -188,12 +188,14 @@ def test_free_rule_defaults_to_payload_recipient_and_template_content(migrated_d
         assert (operation.recipient, operation.content) == ("+56911112222", rule.template_event)
 
 
-def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db):
+def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db, monkeypatch):
+    monkeypatch.setattr(scheduling, "_schedule_followup", lambda *args, **kwargs: None)
     with SessionLocal() as session:
         suffix = str(uuid4().int)[:10]
         phone = f"+56949{suffix[:6]}"
+        admin = User(username=f"publisher-admin-{suffix}", password_hash="unused", role="admin")
         technician = User(username=f"publisher-technician-{suffix}", password_hash="unused")
-        session.add(technician)
+        session.add_all([admin, technician])
         session.flush()
         persist_message(session, NormalizedMessage(
             wamid=f"wamid-publisher-{suffix}", phone_e164=phone, msg_type=MessageType.TEXT,
@@ -220,6 +222,18 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
             technician_id=technician.id, actor="admin",
         )
         scheduling.cancel(session, appointment, actor="admin", reason="test")
+        no_show = scheduling.book(
+            session, service="mantención", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 8, 21), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="admin",
+        )
+        scheduling.close(session, no_show, outcome=scheduling.AppointmentStatus.NO_SHOW, actor="admin")
+        completed = scheduling.book(
+            session, service="revisión", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 8, 22), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="admin",
+        )
+        scheduling.close(session, completed, outcome=scheduling.AppointmentStatus.COMPLETED, actor="admin")
         session.commit()
 
     with SessionLocal() as session:
@@ -227,4 +241,11 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
         assert event_types == [
             "message.received", "case.created", "case.updated",
             "appointment.booked", "appointment.rescheduled", "appointment.cancelled",
+            "appointment.booked", "appointment.no_show", "appointment.booked", "appointment.completed",
         ]
+        panel_rows = session.scalars(select(PanelNotification).order_by(PanelNotification.id)).all()
+        # One row per admin for each notifiable event — booked x3, rescheduled,
+        # cancelled and no_show; `appointment.completed` is intentionally silent.
+        assert len(panel_rows) == 6
+        assert {row.user_id for row in panel_rows} == {admin.id}
+        assert {row.operation.channel for row in panel_rows} == {"panel"}
