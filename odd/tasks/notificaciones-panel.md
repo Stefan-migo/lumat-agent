@@ -109,13 +109,26 @@ slices. `chained-pr` not required unless the running count crosses the budget.
 
 ## Progress / Evidence
 
-- [ ] T1 helper `notify_admins`
-- [ ] T2 appointment events wired
-- [ ] T3 emergency wired
-- [ ] T4 realtime envelope type
-- [ ] T5 frontend subscription + badge
-- [ ] T6 tests + commits
+- [x] T1 helper `notify_admins` — commit `e082efad` (`feat(notifications): fan out transactional panel alerts`)
+- [x] T2 appointment events wired — commit `d120c026` (`feat(scheduling): notify admins of appointment outcomes`)
+- [x] T3 emergency wired — commit `02f0d8d8` (`feat(emergency): surface incidents in the admin panel`)
+- [x] T4 realtime envelope type — commit `e082efad` (`feat(notifications): fan out transactional panel alerts`)
+- [x] T5 frontend subscription + badge — commit `da02cf6a` (`feat(web): refresh notification badge from realtime`)
+- [x] T6 fan-out, replay, envelope, and appointment outcome tests — commits `e082efad`, `d120c026`, `2146c335`, and `da02cf6a`
+
+Verification evidence: backend integration suites were blocked by PostgreSQL refusing connections
+at `localhost:5761`; the full suite had the same database connection failure. Frontend test/build
+commands could not start because the worktree has no installed `vitest`/`tsc` binaries. Python
+`compileall` and `git diff --check` passed.
+
+Graph check for implementation: queried notification production/delivery, scheduling publishers,
+emergency handling, and the AppShell realtime subscription. Consulted nodes: `create_operation`,
+`create_panel_notification`, `stage_event`, `NotificationOperation`, `book`, `cancel`, `close`,
+`reschedule`, `publish_event`, `emergency`, `send_emergency_notification`, `RealtimeClient`,
+`RealtimeEnvelope`, `listNotifications`, and `AppShell`. Confirmed `book -> publish_event` and
+`stage_event -> dispatch_staged_events` is the commit dispatch path; ambiguous/no-directed-path
+queries between separate helper/client nodes returned no graph path and were not used as proof.
 
 ## Next step
 
-Implement T1–T6 in this worktree (`odd/notificaciones-panel`).
+Re-run the recorded verification commands when PostgreSQL and the web dependencies are available.
