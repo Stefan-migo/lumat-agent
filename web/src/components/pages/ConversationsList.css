@@ -24,7 +24,6 @@
 
 .conversations-list__actions { justify-content: flex-end; align-items: center; }
 .conversations-list__actions .btn { white-space: nowrap; }
-.conversations-list__actions .menu__trigger--icon { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); }
 
 /* Mobile card: identity head, summary, badges + facts, actions. */
 .conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-items: start; }

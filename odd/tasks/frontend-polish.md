@@ -58,6 +58,7 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T4** `DESIGN_SYSTEM.md` — record the decision
 - [ ] **T5** verify — `npm test` green, `npm run build` OK, visual check
 - [x] **T6** `Menu.tsx` — icon trigger `MoreHorizontal` → `EllipsisVertical` (the row-action "..." becomes vertical panel-wide)
+- [x] **T7** `Menu.tsx`/primitives.css — menu-trigger background defaults to the light `--surface`; darker `--corp-bg` only when open
 
 ## Acceptance
 
@@ -83,3 +84,6 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - 2026-10-09 — T6: the shared `Menu` icon trigger now uses `EllipsisVertical`
   (was `MoreHorizontal`), so every row-action "…" in the panel is vertical.
   `Menu.test.tsx` 10/10 and `npm run build` OK.
+- 2026-10-09 — T7: menu triggers use the light `--surface` by default and the darker
+  `--corp-bg` when open; icon triggers use the shared radius, removing the redundant
+  Conversaciones action override.
