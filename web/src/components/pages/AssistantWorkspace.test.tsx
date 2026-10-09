@@ -5,6 +5,7 @@ import { AgentChat } from "./AgentChat";
 describe("AssistantWorkspace", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     window.history.replaceState({}, "", "/");
   });
@@ -212,5 +213,56 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByText("Gestión")).toBeInTheDocument();
     expect(screen.getAllByText("manual.pdf")).toHaveLength(3);
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
+  });
+
+  it("lists and downloads thread artifacts, and shows an honest empty state when none exist", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [
+        { id: 7, title: "Agenda semanal", created_at: null, updated_at: null, run_status: null, approval_status: null },
+      ] }), { status: 200 });
+      if (url.endsWith("/threads/7")) return new Response(JSON.stringify({
+        thread: { id: 7, proyecto: "operaciones", status: "open" },
+        messages: [],
+        artifacts: [{ id: 5, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 1200, created_at: null }],
+      }), { status: 200 });
+      if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
+      if (url.endsWith("/artifacts/5/download")) return new Response(new Blob(["data"], { type: "text/csv" }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    vi.stubGlobal("URL", Object.assign(class extends URL {}, {
+      createObjectURL: vi.fn(() => "blob:test-artifact"),
+      revokeObjectURL: vi.fn(),
+    }));
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
+
+    expect(await screen.findByRole("heading", { name: "Artefactos del hilo" })).toBeInTheDocument();
+    expect(screen.getByText("reporte.csv")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Descargar reporte.csv" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download", expect.anything()));
+  });
+
+  it("shows the honest empty state when a thread has no artifacts", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=8");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.endsWith("/threads/8")) return new Response(JSON.stringify({ thread: { id: 8, proyecto: "operaciones", status: "open" }, messages: [] }), { status: 200 });
+      if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
+
+    expect(await screen.findByText("Sin artefactos")).toBeInTheDocument();
   });
 });

@@ -120,17 +120,17 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] Ingest extracted content to `kb_documents(project_id)`. Commit `e14f757e`.
 - [x] Tools `list_project_files` / `read_project_file`. Commit `611383bc`; RDD assess `medium`, 164 lines, `review_due: false` (`under_budget`).
 - [x] Downloadable artifact path + minimal producer. Commit `3ae808d4` (table `assistant_artifacts` + migration 044, service, tool `artifact.save`, owner-scoped download route); RDD review approved (lineage `review-b1549d051bfb01b1`, 4 lenses, 0 blockers).
-- [ ] **A3.5 — UI "Archivos y conocimiento"** (frontend). Replaces the `ProjectsPage` placeholder
+- [x] **A3.5 — UI "Archivos y conocimiento"** (frontend). Replaces the `ProjectsPage` placeholder
   card and surfaces three real, API-backed regions with honest empty/disabled states:
-  - [ ] **WU1 (foundation)**: API client + types — `ProjectFile`/`ProjectFilesResponse`/
+  - [x] **WU1 (foundation)**: API client + types — `ProjectFile`/`ProjectFilesResponse`/
     `AssistantArtifact` types; `artifacts` on `InternalChatResponse`; `project_id` on `Doc`;
     `listProjectFiles`/`uploadProjectFile`, binary download path + `downloadProjectFile`/
     `downloadAssistantArtifact`; `triggerDownload` helper. Tests in `api.test.ts`.
-  - [ ] **WU2 (project files + knowledge)**: `ProjectResources` component mounted in the
+  - [x] **WU2 (project files + knowledge)**: `ProjectResources` component mounted in the
     `ProjectsPage` "Contexto" tab — project files list + upload + download (agent-surface,
     owner-scoped), and project knowledge (admin-only, filtered `project_id` from the KB list;
     honest denied state for non-admins). Tests.
-  - [ ] **WU3 (thread artifacts)**: read `artifacts` from the thread detail in `AgentChat` and
+  - [x] **WU3 (thread artifacts)**: read `artifacts` from the thread detail in `AgentChat` and
     render a real list + download in the `AssistantWorkspace` context panel. Tests.
 
 ### A4 — Skills system
@@ -339,3 +339,17 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `routes/kb.py`, `routes/chat.py`, `api/serializers.py`. KB list route is admin-only and does not filter
   by project; A3.5 filters the existing list by `project_id` client-side (frontend-only slice) — a
   `project_id` query filter on `GET /kb` is a follow-up, not this slice.
+- A3.5 implemented on `odd/asistente-agentes-proyecto`. Commits: `3e992d7b` (feat: project-file and
+  artifact download client), `681bab30` (test: include `project_id` in the KB mock shape check),
+  `0ccaf61b` (feat: surface project files and knowledge in the project view), `483eab10` (feat: list
+  and download thread artifacts in the workspace); tracking commit `a2017781`. Frontend green:
+  `npx tsc -b --force --noEmit` exit 0, `npx vitest run --no-file-parallelism` 1082 passed,
+  `npm run build` built. RDD assess over `--base-ref 32bd9052 --committed-only`: risk `medium`,
+  427 lines, `review_due: true` (`slice_budget_reached`).
+- A3.5 RDD review — **approved and acknowledged** (authority burned). Lineage
+  `review-21c1d6118613e03d`, single lens `review-reliability`, 0 blockers, correction budget 200
+  unused. Non-blocking advisory (follow-up, do NOT re-review this candidate): **R3-001 WARNING** —
+  `triggerDownload` revokes the object URL immediately after the anchor click
+  (`web/src/api.ts:75-83`), which can interrupt the download in browsers that have not yet consumed
+  the blob URL; deferring revocation would be safer. Reviewed boundary: the A3.5 tree frozen by that
+  review; the A4 slice starts from the branch base after this branch merges.
