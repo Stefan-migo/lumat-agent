@@ -14,6 +14,7 @@ import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { Markdown } from "../shared/Markdown";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { caseStatusLabel, caseStatusTone, conversationLabel } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
@@ -102,7 +103,7 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
         <div className="conversation-context__case-head"><h2 id="conversation-case-heading">Caso vinculado</h2>{conversation.case_id != null ? <a className="conversation-context__case-link" href={pathForRoute({ view: "clients", clientId: conversation.customer_id, clientTab: "cases" })}>Ver caso <span aria-hidden="true">→</span></a> : null}</div>
         <p className="conversation-context__case-title">{caseData.service}</p>
         <div className="conversation-context__badges">{caseStatus ? <Badge tone={caseStatusTone(caseStatus)}>{caseStatusLabel(caseStatus)}</Badge> : null}{casePriority ? <Badge tone={priorityTone(casePriority)}>{priorityLabel(casePriority)}</Badge> : null}</div>
-        {caseData.summary ? <p className="conversation-context__case-summary">{caseData.summary}</p> : null}
+        {caseData.summary ? <div className="conversation-context__case-summary"><Markdown content={caseData.summary} /></div> : null}
         <dl><div className="ai-agent-grammar__detail"><dt>Emergencia</dt><dd>{conversation.emergency ? "Sí" : "No"}</dd></div><div className="ai-agent-grammar__detail"><dt>Reconocimiento</dt><dd>{conversation.acknowledged_at ? "Reconocida" : "Pendiente"}</dd></div></dl>
       </section> : null}
       {capturedRows.length > 0 || profileRows.length > 0 ? <details open><summary>Datos capturados</summary><dl>{capturedRows.map(([key, value]) => <div className="ai-agent-grammar__detail" key={key}><dt>{capturedLabel(key)}</dt><dd>{displayCapturedValue(value)}</dd></div>)}{profileRows.map(([label, value]) => <div className="ai-agent-grammar__detail" key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></details> : null}

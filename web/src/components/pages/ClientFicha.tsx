@@ -20,6 +20,8 @@ import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { Markdown } from "../shared/Markdown";
+import { plainSummary } from "../shared/markdownText";
 import { ChangeCustomerStateDialog } from "../shared/ChangeCustomerStateDialog";
 import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "../shared/AppointmentClosureDialog";
 import {
@@ -450,7 +452,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
     { key: "id", header: "Conversación", render: (row) => `#${row.id}` },
     { key: "state", header: "Estado", render: (row) => <Badge tone={CONVERSATION_TONES[row.state] ?? "neutral"}><Bot aria-hidden="true" />{conversationLabel(row.state)}</Badge> },
-    { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
+    { key: "summary", header: "Resumen", render: (row) => row.summary ? plainSummary(row.summary) : "—" },
     { key: "created", header: "Creada", render: (row) => formatIdentityDate(row.created_at) },
   ];
   const caseColumns: Column<(typeof history.cases)[number]>[] = [
@@ -459,7 +461,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
     { key: "priority", header: "Prioridad", render: (row) => row.priority },
     { key: "status", header: "Estado", render: (row) => <Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge> },
     { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin monto registrado" : CLP_FORMAT.format(row.amount) },
-    { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
+    { key: "summary", header: "Resumen", render: (row) => row.summary ? plainSummary(row.summary) : "—" },
   ];
   const archivedCaseColumns: Column<FichaCase>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -479,7 +481,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   ];
   const activeCaseBody = activeCase ? <>
     <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(activeCase) : openCaseEditor(activeCase)} /></div>
-    <h2 className="client-ficha__case-title">{activeCase.service}</h2><div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div><p>{activeCase.summary ?? "—"}</p>
+    <h2 className="client-ficha__case-title">{activeCase.service}</h2><div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div><div className="client-ficha__case-summary"><Markdown content={activeCase.summary ?? "—"} /></div>
     <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div>
     {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}<LocalFeedback feedback={caseEditTarget || amountTarget ? null : caseFeedback} />
   </> : <EmptyState title="Sin caso activo" />;
@@ -714,14 +716,14 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
             <ul className="table-cards table-cards--mobile client-ficha__conversation-cards" aria-label="Lista de conversaciones">
               {history.conversations.map((row) => <li className="table-card__item client-ficha__conversation-card" key={row.id}>
                 <div className="client-ficha__conversation-card-head"><strong>#{row.id}</strong><Badge tone={CONVERSATION_TONES[row.state] ?? "neutral"}><Bot aria-hidden="true" />{conversationLabel(row.state)}</Badge></div>
-                {row.summary ? <p>{row.summary}</p> : null}
+                {row.summary ? <p>{plainSummary(row.summary)}</p> : null}
                 <div className="client-ficha__conversation-card-foot"><span>{formatIdentityDate(row.created_at)}</span><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "conversations", conversationId: row.id }); }}>Abrir conversación</Button></div>
               </li>)}
             </ul>
           </> : <EmptyState title="No hay conversaciones" />}
         </Card></section>
         <section aria-label="Mensajes" className="client-ficha__history-block"><Card title={`Mensajes de la conversación #${activeConversationId ?? "—"}`} description="Historial de mensajes del hilo seleccionado.">
-          {history.conversations.length > 1 ? <div className="client-ficha__messages-toolbar"><Select label="Conversación" value={activeConversationId === null ? "" : String(activeConversationId)} options={history.conversations.map((row) => ({ value: String(row.id), label: `#${row.id} · ${conversationLabel(row.state)}${row.summary ? ` · ${row.summary}` : ""}` }))} onChange={(event) => setSelectedConversationId(Number(event.target.value))} /></div> : null}
+          {history.conversations.length > 1 ? <div className="client-ficha__messages-toolbar"><Select label="Conversación" value={activeConversationId === null ? "" : String(activeConversationId)} options={history.conversations.map((row) => ({ value: String(row.id), label: `#${row.id} · ${conversationLabel(row.state)}${row.summary ? ` · ${plainSummary(row.summary)}` : ""}` }))} onChange={(event) => setSelectedConversationId(Number(event.target.value))} /></div> : null}
           {conversationMessages.length ? <>
             <div className={surfaceClass(conversationMessages.length)}><div className="table-card__desktop client-ficha__messages-table"><DataTable columns={messageColumns} rows={conversationMessages} rowKey={(row) => String(row.id)} /></div></div>
             <ul className="table-cards table-cards--mobile client-ficha__message-cards" aria-label="Lista de mensajes">

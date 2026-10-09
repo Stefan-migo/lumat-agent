@@ -247,6 +247,18 @@ describe('conversation inspector layout CSS contract', () => {
   expect(screen.getByText('2')).toBeInTheDocument();
 });
 
+it('renders the inspector case summary as markdown', () => {
+  render(<ConversationThread data={{ ...thread, conversation: {
+    ...thread.conversation,
+    case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: true, summary: '**Needs** help', acknowledged_at: null, closed_at: null },
+    case_id: 22,
+  } }} state="ready" />);
+  const inspector = screen.getByRole('complementary', { name: /inspector de conversación/i });
+  expect(within(inspector).getByText('Needs')).toBeInTheDocument();
+  expect(within(inspector).getByText('Needs').tagName).toBe('STRONG');
+  expect(inspector.textContent).not.toContain('**');
+});
+
 it('keeps the thread usable without optional case or captured data', () => {
   render(<ConversationThread data={{ ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+5694' }, case: null, case_id: null, captured_data: null } }} state="ready" />);
 
