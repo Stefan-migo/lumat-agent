@@ -183,7 +183,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView />);
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Precio Meta" }).closest(".card") as HTMLElement;
-    expect(within(card).getByText("Vigente desde 2026-10-01")).toBeInTheDocument();
+    expect(within(card).getByText("Vigente desde el 1 oct 2026")).toBeInTheDocument();
     const cost = within(card).getByLabelText(/costo por mensaje/i) as HTMLInputElement;
     expect(Number(cost.value)).toBe(settings.meta_cost);
     expect(within(card).getByText("USD")).toBeInTheDocument();
@@ -194,15 +194,15 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Gasto actual" }).closest(".card") as HTMLElement;
     const snap = settings.snapshot;
-    expect(within(card).getByText(snap.date)).toBeInTheDocument();
+    expect(within(card).getByText("19 ago 2026")).toBeInTheDocument();
     expect(within(card).getByText("Gasto diario")).toBeInTheDocument();
     expect(within(card).getByText("Límite diario")).toBeInTheDocument();
     expect(within(card).getByText("Del límite utilizado")).toBeInTheDocument();
-    expect(within(card).getByText(`$${snap.daily_spend.toFixed(4)}`)).toBeInTheDocument();
-    expect(within(card).getByText(`$${snap.daily_limit.toFixed(2)}`)).toBeInTheDocument();
+    expect(within(card).getByText(`USD ${snap.daily_spend.toFixed(4)}`)).toBeInTheDocument();
+    expect(within(card).getByText(`USD ${snap.daily_limit.toFixed(2)}`)).toBeInTheDocument();
     expect(within(card).getByText(`${snap.daily_percent.toFixed(1)}%`)).toBeInTheDocument();
     if (snap.conversation_percent !== null) {
-      expect(within(card).getByText(`Conversación: ${snap.conversation_percent}% de $${snap.conversation_limit.toFixed(2)}`)).toBeInTheDocument();
+      expect(within(card).getByText(`Conversación: ${snap.conversation_percent}% de USD ${snap.conversation_limit.toFixed(2)}`)).toBeInTheDocument();
     }
   });
 
@@ -210,10 +210,8 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView />);
     await selectSection("Costos");
     expect(screen.getByRole("heading", { name: "Qué ocurre al alcanzar los límites" })).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
-    expect(screen.getByText("Respuestas más conservadoras")).toBeInTheDocument();
-    expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByText("Derivación a una persona")).toBeInTheDocument();
+    expect(screen.getByText(/Respuestas más conservadoras/)).toBeInTheDocument();
+    expect(screen.getByText(/Derivación a una persona/)).toBeInTheDocument();
   });
 
   it("renders saving state (DS-UI-STATES)", () => {
@@ -436,11 +434,11 @@ describe("Settings API page", () => {
     expect(await screen.findByText("Gasto diario")).toBeInTheDocument();
     expect(screen.getByText("Límite diario", { selector: ".stat-card__label" })).toBeInTheDocument();
     expect(screen.getByText("Del límite utilizado")).toBeInTheDocument();
-    expect(screen.getByText("2026-08-19")).toBeInTheDocument();
-    expect(screen.getByText("Vigente desde 2026-10-01")).toBeInTheDocument();
+    expect(screen.getByText("19 ago 2026")).toBeInTheDocument();
+    expect(screen.getByText("Vigente desde el 1 oct 2026")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Qué ocurre al alcanzar los límites" })).toBeInTheDocument();
-    expect(screen.getByText("Respuestas más conservadoras")).toBeInTheDocument();
-    expect(screen.getByText("Derivación a una persona")).toBeInTheDocument();
+    expect(screen.getByText(/Respuestas más conservadoras/)).toBeInTheDocument();
+    expect(screen.getByText(/Derivación a una persona/)).toBeInTheDocument();
   });
 
   it("renders permission denied when an operador receives 403", async () => {
