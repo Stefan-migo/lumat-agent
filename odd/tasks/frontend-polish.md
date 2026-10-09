@@ -62,6 +62,7 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T8** Pagination — fix Conversaciones paging (client-side, 10/page, was showing all 33) + one shared `Pagination` component (numbered pages + `…`) adopted by Conversaciones, Clientes and Usuarios
 - [x] **T9** `DataTable` column width support + constrain the Conversaciones "Cliente y conversación" column
 - [x] **T10** Conversaciones row actions — drop redundant "Abrir conversación"; menu offers "Devolver al agente" (→bot) and "Cerrar conversación" (→closed); keep "Reconocer emergencia" when applicable and the "Tomar conversación" button for bot rows
+- [x] **T11** `primitives.css` — `.tabs__tab-copy` label+count stacked on two lines in horizontal tabs; make it inline by default and grid only under `.tabs--vertical` (pre-existing from `c7b1a8ec`, surfaced here)
 
 ## Acceptance
 
