@@ -66,7 +66,7 @@
 .client-ficha__note-actions { position: relative; display: inline-flex; }
 .client-ficha__copy-hint { position: absolute; z-index: 1; top: calc(100% + var(--space-1)); left: 50%; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--corp-text); font-size: var(--text-xs); white-space: nowrap; transform: translateX(-50%); }
 .client-ficha-page .client-ficha__case-card { min-width: 0; }
-.client-ficha-page .client-ficha__case-card > p { overflow-wrap: anywhere; }
+.client-ficha-page .client-ficha__case-card > .client-ficha__case-summary { overflow-wrap: anywhere; }
 .client-ficha-page .client-ficha__case-eyebrow { min-width: 0; }
 .client-ficha-page .client-ficha__case-title { overflow-wrap: anywhere; }
 .client-ficha-page .client-ficha__case-badges { flex-wrap: wrap; }

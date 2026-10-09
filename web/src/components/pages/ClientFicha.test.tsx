@@ -179,6 +179,29 @@ describe("ClientFicha page grammar", () => {
     expect(within(archive).getByText("Mostrando 1 caso anterior")).toBeInTheDocument();
   });
 
+  it("renders the active case summary as markdown and keeps conversation options plain", async () => {
+    const withMarkdown = {
+      ...ficha,
+      history: {
+        ...ficha.history,
+        cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, summary: '**Calefón** en revisión' } : row),
+        conversations: [
+          ficha.history.conversations[0],
+          { ...ficha.history.conversations[0], id: 3, summary: '**Coordinar** visita' },
+        ],
+      },
+    };
+    const user = userEvent.setup();
+    render(<ClientFicha data={withMarkdown} memories={memories} />);
+
+    const summary = document.querySelector('.client-ficha__case-summary') as HTMLElement;
+    expect(within(summary).getByText('Calefón')).toHaveProperty('tagName', 'STRONG');
+    expect(summary.textContent).not.toContain('**');
+    await user.click(screen.getByRole('tab', { name: 'Conversaciones' }));
+    expect(screen.getByRole('option', { name: '#3 · Atención humana · Coordinar visita' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /\*\*/ })).not.toBeInTheDocument();
+  });
+
   it("renders a nullable CLP case amount and saves it through the existing update API", async () => {
     const user = userEvent.setup();
     vi.mocked(updateCaseAmount).mockResolvedValue({ ok: true, case: { ...ficha.history.cases[0], amount: 200000, customer: ficha.customer } });
