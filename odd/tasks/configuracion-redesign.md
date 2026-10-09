@@ -108,6 +108,49 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ## Progress log
 
+- **CF-14 — Capacidades tab reference polish (2026-10-09)** — implemented; owner visual pass pending.
+  - Feature commit: `45ac28ee` (`feat(settings): polish the Capacidades tab against the reference`).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/pages/Settings.test.tsx`, `web/src/components/primitives/Accordion.tsx`,
+    `web/src/components/primitives/Accordion.test.tsx`, `web/src/components/primitives/primitives.css`,
+    `web/src/stories/pages/Settings.stories.test.tsx`.
+  - Graph nodes consulted: `AssistantCapabilitiesView()` / `Settings.tsx`, `Accordion()` / `Accordion.tsx` /
+    `Accordion.test.tsx`, `Badge()`; shortest path `AssistantCapabilitiesView() <-contains- Settings.tsx
+    -imports-> Accordion()`; `GRAPH_REPORT.md` lists `Settings.tsx` as a community hub.
+  - Client-side composition only (`configuracion-015`): category grouping (Operación, Conocimiento y memoria,
+    Web, Automatizaciones y proyectos, Sistema) with `kb` + `memory` merged into one group; a per-tool map
+    (Spanish label + icon) and an access-badge icon; `Accordion` reshaped to a left chevron plus a right count
+    badge, collapsed by default; filter controls aligned to one height with a visually hidden label; the
+    active-config card gained subtitles, a bordered availability container with success pills, and boxed
+    Persona/Prompts paths. No API, type, or backend change.
+  - Verification from `web/`: focused Settings + Accordion + story tests 43/43 passed; `npm run build`
+    (`tsc -b` + Vite) passed with the existing >500 kB chunk advisory. Full `npm test`: 1085/1087 passing; the
+    two failures were the known load-flaky `ClientFicha` and `AgentChat` cases, which passed 97/97 in
+    isolation. RDD assess: `medium` / `review_due: false` (`under_budget`, 142 changed lines).
+  - Runtime harness: N/A — frontend-only presentation change on the existing settings route. Rollback
+    boundary: revert feature commit `45ac28ee` to restore the prior Capacidades composition and `Accordion`.
+
+- **CF-14 — Costos tab reference polish (2026-10-08)** — implemented; owner visual pass remains pending.
+  - Feature commit: `e00a386c270f2fc6fa27e900cb0adf85e1f6f0e0`
+    (`feat(settings): polish the Costos tab against the reference`).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/primitives/Input.tsx`, `web/src/components/primitives/primitives.css`,
+    `web/src/components/primitives/Input.test.tsx`, `web/src/stories/pages/Settings.stories.test.tsx`.
+  - Graph nodes consulted: `Settings()`, `Settings.tsx`, `Input()`, `FieldShell.tsx`, `Card()`,
+    `StatCard()`, and `Settings.stories.test.tsx`; graph query also surfaced the Configuración
+    section redesign community linking `Settings`, `Card`, and `primitives.css`. The attempted
+    directed `Settings.tsx` → `Input.tsx` path found no directed path; the undirected path returned
+    `Settings.stories.tsx → Settings.tsx → StatCard()`. `GRAPH_REPORT.md` settings hub and
+    Configuración redesign community were consulted.
+  - Added an in-control Input suffix, localized calendar date chips, USD-formatted spend metrics,
+    paired limit/Meta cards, and responsive threshold columns. Save behavior and data/API contracts
+    remain unchanged.
+  - Verification from `web/`: `npm test` passed 1087/1087 tests across 104 files;
+    `npm run build` passed (`tsc -b` + Vite build; existing >500 kB chunk advisory only).
+  - Runtime harness: N/A — frontend-only presentation changes on the existing settings route.
+    Rollback boundary: revert feature commit `e00a386c` to restore the prior Costos presentation,
+    Input suffix support, and associated tests.
+
 - **CF-14 — Horarios y avisos tab owner visual polish (2026-10-08)** — implemented; full-suite gate remains partial because of unrelated `ClientFicha` timeouts under full-suite load.
   - Feature commit: `3ee2c25c` (`feat(settings): polish the Horarios y avisos tab`).
   - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,

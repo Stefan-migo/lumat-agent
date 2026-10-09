@@ -129,24 +129,31 @@ describe("Settings", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled());
   });
 
-  it("groups, searches, and filters capability tools from the available payload fields", async () => {
+  it("groups, searches, and filters capability tools by ordered category", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={{
       tools: [
         { name: "kb.retrieve", description: "Busca documentos", read_only: true, write: false },
         { name: "kb.index", description: "Indexa documentos", read_only: false, write: true },
+        { name: "memory.read", description: "Lee memoria", read_only: true, write: false },
+        { name: "web.search", description: "Busca en web", read_only: true, write: false },
+        { name: "project.list", description: "Lista proyectos", read_only: true, write: false },
         { name: "plain_tool", description: "Herramienta general", read_only: true, write: false },
       ], personas: ["Cercana"], prompts: ["Atención inicial"], kb_available: true, memory_available: false,
     }} />);
     await user.click(screen.getByRole("tab", { name: "Capacidades" }));
     expect(screen.getByRole("heading", { name: "Herramientas del asistente" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: /Conocimiento y memoria/ })).toBeVisible();
-    expect(screen.getByText("retrieve")).toBeInTheDocument();
+    const regions = screen.getAllByRole("region", { hidden: true });
+    expect(regions.filter((region) => region.getAttribute("aria-labelledby") && region.textContent?.includes("kb.retrieve"))).toHaveLength(1);
+    const groupButtons = screen.getAllByRole("button").filter((button) => button.classList.contains("accordion__trigger"));
+    expect(groupButtons.map((button) => button.querySelector(".accordion__title")?.textContent)).toEqual(["Conocimiento y memoria", "Web", "Automatizaciones y proyectos", "Sistema"]);
+    await user.click(groupButtons[0]);
+    expect(screen.getByText("Consultar base de conocimientos")).toBeInTheDocument();
     expect(screen.getByText("kb.retrieve").tagName).toBe("CODE");
-    expect(screen.getAllByText("Solo lectura")).toHaveLength(3);
+    expect(document.querySelectorAll(".settings-capabilities__tool .badge")).toHaveLength(6);
     await user.selectOptions(screen.getByLabelText("Acceso"), "write");
-    expect(screen.getByText("index")).toBeInTheDocument();
-    expect(screen.queryByText("retrieve")).toBeNull();
+    expect(screen.getByText("Index")).toBeInTheDocument();
+    expect(screen.queryByText("kb.retrieve")).toBeNull();
     fireEvent.change(screen.getByLabelText("Buscar herramientas"), { target: { value: "no existe" } });
     await waitFor(() => expect(screen.getByText("No hay herramientas que coincidan con la búsqueda.")).toBeInTheDocument());
     expect(screen.getByText("Disponible")).toBeInTheDocument();

@@ -24,6 +24,14 @@ describe("Input (T7.2)", () => {
     );
   });
 
+  it("renders a suffix inside the control wrap", () => {
+    const { container } = render(<Input label="Costo" suffix="USD" />);
+    const suffix = screen.getByText("USD");
+    expect(suffix).toHaveClass("field__adornment", "field__adornment--trailing");
+    expect(suffix.parentElement).toHaveClass("field__control-wrap");
+    expect(container.querySelector("input")).toHaveClass("field__control--with-suffix");
+  });
+
   it("updates the input value on typing via the onChange contract", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

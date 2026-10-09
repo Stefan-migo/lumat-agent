@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { Badge } from "./Badge";
 import "./primitives.css";
 
@@ -25,9 +26,9 @@ export function Accordion({ title, count, children, defaultExpanded = false }: A
         aria-controls={panelId}
         onClick={() => setExpanded((open) => !open)}
       >
+        <ChevronRight className="accordion__chevron" aria-hidden="true" />
         <span className="accordion__title">{title}</span>
         <Badge>{count}</Badge>
-        <span className="accordion__indicator" aria-hidden="true">{expanded ? "−" : "+"}</span>
       </button>
       <div id={panelId} className="accordion__panel" role="region" aria-labelledby={triggerId} hidden={!expanded}>
         {children}

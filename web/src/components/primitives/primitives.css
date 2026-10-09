@@ -165,6 +165,7 @@
 .field__control-wrap { position: relative; width: 100%; }
 .field__control--with-adornment { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
 .field__control--with-toggle { padding-right: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.field__control--with-suffix { padding-right: 3.5rem; }
 .field__adornment { position: absolute; top: 50%; display: inline-flex; align-items: center; color: var(--corp-fg-muted); transform: translateY(-50%); pointer-events: none; }
 .field__adornment--leading { left: var(--space-2); }
 .field__adornment--trailing { right: var(--space-2); }
@@ -426,13 +427,15 @@
 .message-preview__note { color: var(--corp-fg-muted); font-size: var(--text-xs); }
 
 /* Settings accordion groups with an accessible button-controlled content region. */
-.accordion { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
-.accordion__trigger { display: flex; width: 100%; min-height: var(--space-8); align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: inherit; background: transparent; color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
+.accordion { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.accordion__trigger { display: flex; width: 100%; min-height: var(--space-8); align-items: center; gap: var(--space-3); padding: var(--space-3); border: 0; border-radius: 0; background: var(--surface-subtle); color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
 .accordion__trigger:hover { background: var(--surface-subtle); }
 .accordion__trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.accordion__chevron { width: var(--icon-md); height: var(--icon-md); flex: none; color: var(--corp-text); transition: transform var(--duration-base) var(--ease-out); }
+.accordion__trigger[aria-expanded="true"] .accordion__chevron { transform: rotate(90deg); }
 .accordion__title { font-weight: var(--weight-semibold); }
-.accordion__indicator { margin-left: auto; color: var(--corp-fg-muted); }
-.accordion__panel { padding: 0 var(--space-3) var(--space-3); }
+.accordion__trigger > .badge { margin-left: auto; }
+.accordion__panel { padding: 0 var(--space-3) var(--space-3); background: var(--surface); }
 .accordion__panel[hidden] { display: none; }
 
 .stat-card--row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
