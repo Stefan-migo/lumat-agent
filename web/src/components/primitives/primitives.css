@@ -536,6 +536,7 @@
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
 .table-footer__mobile-count { display: none; }
 .table-footer__pagination { display: flex; align-items: center; gap: var(--space-2); }
+.pagination__ellipsis { display: grid; min-width: var(--space-8); min-height: var(--space-8); place-items: center; color: var(--text-muted); }
 .table-footer__pagination .btn { min-width: var(--space-8); min-height: var(--space-8); padding: var(--space-1) var(--space-2); }
 .table-footer__page { display: grid; min-width: var(--space-8); min-height: var(--space-8); place-items: center; border-radius: var(--radius-sm); background: var(--corp-primary); color: var(--text-on-dark); font-weight: var(--weight-semibold); }
 .table__actions-cell { text-align: right !important; }

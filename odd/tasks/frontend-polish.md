@@ -59,6 +59,9 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [ ] **T5** verify — `npm test` green, `npm run build` OK, visual check
 - [x] **T6** `Menu.tsx` — icon trigger `MoreHorizontal` → `EllipsisVertical` (the row-action "..." becomes vertical panel-wide)
 - [x] **T7** `Menu.tsx`/primitives.css — menu-trigger background defaults to the light `--surface`; darker `--corp-bg` only when open
+- [x] **T8** Pagination — fix Conversaciones paging (client-side, 10/page, was showing all 33) + one shared `Pagination` component (numbered pages + `…`) adopted by Conversaciones, Clientes and Usuarios
+- [ ] **T9** `DataTable` column width support + constrain the Conversaciones "Cliente y conversación" column
+- [ ] **T10** Conversaciones row actions — drop redundant "Abrir conversación"; menu offers "Devolver al agente" (→bot) and "Cerrar conversación" (→closed); keep "Reconocer emergencia" when applicable and the "Tomar conversación" button for bot rows
 
 ## Acceptance
 
@@ -87,3 +90,6 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - 2026-10-09 — T7: menu triggers use the light `--surface` by default and the darker
   `--corp-bg` when open; icon triggers use the shared radius, removing the redundant
   Conversaciones action override.
+- 2026-10-09 — T8: added the shared numbered `Pagination` primitive and switched
+  Conversaciones to client-side 10-row pages over a bounded 100-row fetch; Clientes
+  and Usuarios now use the shared control.

@@ -5,6 +5,7 @@ import { ApiError, acknowledgeCase, listActiveConversations, listConversations, 
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse } from "../../types";
 import { Button } from "../primitives/Button";
+import { Pagination } from "../primitives/Pagination";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
@@ -22,6 +23,7 @@ import "./ConversationsList.css";
 export type ConversationsListState = AsyncDataState | "fatal-error";
 export interface ConversationsListProps { data?: ConversationsResponse | null; state?: ConversationsListState; onRetry?: () => void; onOpenThread?: (id: number) => void; onQueueTabChange?: (tab: QueueTab) => void; customerName?: (id: number) => string; refreshKey?: number; currentUserId?: number; initialQueueTab?: QueueTab; }
 type QueueTab = "all" | "human" | "emergency" | "case" | "closed";
+const PAGE_SIZE = 10;
 
 const priority = (conversation: Conversation) => conversation.emergency && !conversation.acknowledged_at ? 0 : conversation.state === "human" ? 1 : conversation.state === "closed" ? 3 : 2;
 const tabRows = (rows: Conversation[], tab: QueueTab) => rows.filter((row) => tab === "all" || tab === "human" && row.state === "human" || tab === "emergency" && row.emergency || tab === "case" && row.case_id != null || tab === "closed" && row.state === "closed");
@@ -48,17 +50,20 @@ export function ConversationsList({ data: controlledData, state: controlledState
   useEffect(() => setTab(initialQueueTab), [initialQueueTab]);
   const [query, setQuery] = useState("");
   const [assignment, setAssignment] = useState<"all" | "mine">("all");
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(1);
   const [requestRevision, setRequestRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<number>();
   const [busyId, setBusyId] = useState<number>();
-  const fetchConversations = useCallback(() => query || offset || assignment === "mine" ? listConversations({ q: query || undefined, responsible_id: assignment === "mine" ? currentUserId : undefined, limit: 20, offset }) : listConversations(), [assignment, currentUserId, query, offset, refreshKey]);
+  const fetchConversations = useCallback(() => listConversations({ q: query || undefined, responsible_id: assignment === "mine" ? currentUserId : undefined, limit: 100, offset: 0 }), [assignment, currentUserId, query, refreshKey]);
   const fetched = useAsyncData(fetchConversations, controlledData === undefined, refreshKey + requestRevision);
   const data = controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const retry = onRetry ?? fetched.retry;
   const rows = useMemo(() => [...(data?.items ?? data?.conversations ?? [])].sort((a, b) => priority(a) - priority(b) || (b.last_message_at ?? "").localeCompare(a.last_message_at ?? "") || b.id - a.id), [data]);
-  const visibleRows = tabRows(rows, tab);
+  const filteredRows = tabRows(rows, tab);
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const counts = data?.counts ?? { all: rows.length, human: rows.filter((r) => r.state === "human").length, emergency: rows.filter((r) => r.emergency).length, case: rows.filter((r) => r.case_id != null).length, closed: rows.filter((r) => r.state === "closed").length };
   const [connection, setConnection] = useState<ConnectionStatus>("disconnected");
 
@@ -67,10 +72,10 @@ export function ConversationsList({ data: controlledData, state: controlledState
     const snapshotRefresh = coalesceSnapshotRefresh(retry);
     const unsubscribe = realtimeClient.subscribe((event) => { if (["conversation", "message"].includes(event.type)) retry(); if (event.type === "snapshot") snapshotRefresh(); });
     const unsubscribeStatus = realtimeClient.subscribeStatus(setConnection);
-    const unregisterRecovery = realtimeClient.registerRecovery(async () => { await Promise.all([listConversations({ q: query || undefined, responsible_id: assignment === "mine" ? currentUserId : undefined, limit: 20, offset }), listActiveConversations()]); retry(); });
+    const unregisterRecovery = realtimeClient.registerRecovery(async () => { await Promise.all([fetchConversations(), listActiveConversations()]); retry(); });
     realtimeClient.connect();
     return () => { unsubscribe(); unsubscribeStatus(); unregisterRecovery(); snapshotRefresh.cancel(); };
-  }, [assignment, controlledData, currentUserId, offset, query, retry]);
+  }, [assignment, controlledData, currentUserId, fetchConversations, query, retry]);
 
   const runAction = async (id: number, action: () => Promise<unknown>) => { setBusyId(id); try { await action(); retry(); } finally { setBusyId(undefined); } };
   const nameFor = (c: Conversation) => c.customer?.name ?? customerName?.(c.customer_id) ?? `Cliente #${c.customer_id}`;
@@ -99,27 +104,24 @@ export function ConversationsList({ data: controlledData, state: controlledState
     { id: "case", label: <>Con caso <span>{counts.case}</span></> },
     { id: "closed", label: <>Cerradas <span>{counts.closed}</span></> },
   ];
-   const total = data?.total ?? rows.length;
-   const limit = data?.limit ?? 20;
-   const page = Math.floor(offset / limit) + 1;
-   return <PageFrame className="conversations-page" title="Conversaciones" titleAdornment={<Badge>{total}</Badge>} subtitle="Revisa y gestiona la atención de tus clientes." meta={data ? undefined : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
+   return <PageFrame className="conversations-page" title="Conversaciones" titleAdornment={<Badge>{data?.total ?? rows.length}</Badge>} subtitle="Revisa y gestiona la atención de tus clientes." meta={data ? undefined : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
       {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>Los datos guardados siguen disponibles.</span></p> : null}
-      <Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => { const nextTab = value as QueueTab; setTab(nextTab); onQueueTabChange?.(nextTab); }} ariaLabel="Cola de conversaciones">{() => <div className="table-card conversations-list__card">
-        <div className="table-toolbar"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <DropdownMenu.Root>
+       <Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => { const nextTab = value as QueueTab; setTab(nextTab); setPage(1); onQueueTabChange?.(nextTab); }} ariaLabel="Cola de conversaciones">{() => <div className="table-card conversations-list__card">
+         <div className="table-toolbar"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setPage(1); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button type="button" className="conversations-list__filter" aria-label={`Filtrar por responsable: ${assignment === "all" ? "Todos" : "Asignadas a mí"}`}><Icon icon={UserRound} size="sm" aria-hidden="true" /><span className="conversations-list__filter-label">Responsable:</span><span className="conversations-list__filter-value">{assignment === "all" ? "Todos" : "Asignadas a mí"}</span><ChevronDown aria-hidden="true" /></button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content className="menu__content conversations-list__filter-menu" align="start" sideOffset={4} collisionPadding={8}>
-              <DropdownMenu.RadioGroup value={assignment} onValueChange={(value) => { setAssignment(value as "all" | "mine"); setOffset(0); setRequestRevision((revision) => revision + 1); }}>
+               <DropdownMenu.RadioGroup value={assignment} onValueChange={(value) => { setAssignment(value as "all" | "mine"); setPage(1); setRequestRevision((revision) => revision + 1); }}>
                 <DropdownMenu.RadioItem className="menu__item" value="all">Todos<DropdownMenu.ItemIndicator className="conversations-list__filter-check"><Check aria-hidden="true" /></DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>
                 <DropdownMenu.RadioItem className="menu__item" value="mine">Asignadas a mí<DropdownMenu.ItemIndicator className="conversations-list__filter-check"><Check aria-hidden="true" /></DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>
               </DropdownMenu.RadioGroup>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</div>
-        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{visibleRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="conversations-list__mobile-head"><Avatar name={name} className="table__resource-avatar" /><div className="conversations-list__mobile-identity"><button type="button" className="table__resource-name conversations-list__identity" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span></div></div><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span><div className="conversations-list__mobile-meta">{conversationBadges(c)}<div className="conversations-list__mobile-facts"><span className="conversations-list__case">{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>{activityCell(c.last_message_at)}</div></div>{rowActions(c)}</li>; })}</ul></>}
-        <footer className="table-footer"><span className="table-footer__count">Mostrando {visibleRows.length} de {total} conversaciones</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Página anterior" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - limit)); setRequestRevision((revision) => revision + 1); }}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Página siguiente" disabled={!data || offset + limit >= total} onClick={() => { setOffset(offset + limit); setRequestRevision((revision) => revision + 1); }}>›</Button></div></footer>
+         {state === "loading" ? null : pageRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={pageRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{pageRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="conversations-list__mobile-head"><Avatar name={name} className="table__resource-avatar" /><div className="conversations-list__mobile-identity"><button type="button" className="table__resource-name conversations-list__identity" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span></div></div><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span><div className="conversations-list__mobile-meta">{conversationBadges(c)}<div className="conversations-list__mobile-facts"><span className="conversations-list__case">{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>{activityCell(c.last_message_at)}</div></div>{rowActions(c)}</li>; })}</ul></>}
+         <footer className="table-footer"><span className="table-footer__count">Mostrando {pageRows.length} de {filteredRows.length} conversaciones</span><Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} ariaLabel="Paginación de conversaciones" /></footer>
       </div>}</Tabs>
    </PageFrame>;
 }

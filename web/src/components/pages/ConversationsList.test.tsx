@@ -23,7 +23,7 @@ describe('production conversations list', () => {
     expect(await within(desktop).findByText('Needs visit')).toBeInTheDocument();
     expect(within(desktop).getByText('Cliente 4')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /atención humana/i })).toHaveTextContent('1');
-    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations?limit=100&offset=0', expect.anything());
   });
 
   it.each([401, 403, 409, 422])('renders an actionable error for HTTP %s', async (status) => {
@@ -86,9 +86,20 @@ describe('production conversations list', () => {
     const user = userEvent.setup();
     render(<ConversationsList />);
     await user.type(screen.getByRole('searchbox'), 'heater');
-    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&limit=20&offset=0', expect.anything()));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&limit=100&offset=0', expect.anything()));
     expect(screen.getByText(/no hay conversaciones/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /siguiente/i })).toBeInTheDocument();
+  });
+
+  it('paginates the fetched conversations client-side in pages of ten', async () => {
+    const items = Array.from({ length: 11 }, (_, index) => row(index + 1, 'bot', null));
+    render(<ConversationsList data={queue(items)} />);
+    expect(screen.getByText('Mostrando 10 de 11 conversaciones')).toBeInTheDocument();
+    expect(screen.getByTestId('conversation-row-11')).toBeInTheDocument();
+    expect(screen.queryByTestId('conversation-row-1')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Página siguiente' }));
+    expect(screen.getByText('Mostrando 1 de 11 conversaciones')).toBeInTheDocument();
+    expect(screen.getByTestId('conversation-row-1')).toBeInTheDocument();
   });
 
   it('refreshes after Tomar and Reconocer actions', async () => {
@@ -113,7 +124,7 @@ describe('production conversations list', () => {
     expect(trigger).toHaveTextContent('Responsable:');
     await user.click(trigger);
     await user.click(await screen.findByRole('menuitemradio', { name: 'Asignadas a mí' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?responsible_id=7&limit=20&offset=0', expect.anything()));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?responsible_id=7&limit=100&offset=0', expect.anything()));
   });
 
   it('posts emergency acknowledgement to the case acknowledgement route', async () => {
