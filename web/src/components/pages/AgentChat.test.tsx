@@ -61,6 +61,94 @@ describe("AgentChat", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  const policy = (overrides: Partial<{ available: string[]; opt_in_enabled: string[]; inherited: boolean }> = {}) => ({
+    available: ["tool.one", "tool.two"],
+    opt_in_enabled: ["tool.one"],
+    inherited: true,
+    ...overrides,
+  });
+
+  it("fetches and renders the thread tool policy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy")
+        ? jsonResponse(policy())
+        : jsonResponse({ thread: makeThread(), messages: [] }),
+    );
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    fireEvent.click(screen.getByRole("button", { name: "Herramientas" }));
+    expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "tool.two" })).not.toBeChecked();
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
+  });
+
+  it("sends the full opt-in selection when toggling a tool", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/tool-policy")) {
+        return init?.method === "PUT" ? jsonResponse(policy({ opt_in_enabled: ["tool.one", "tool.two"] })) : jsonResponse(policy());
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
+    ));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "tool.two" })).toBeChecked());
+  });
+
+  it("resets the thread policy to the project selection", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/tool-policy")) {
+        return init?.method === "DELETE" ? jsonResponse(policy({ inherited: true, opt_in_enabled: [] })) : jsonResponse(policy({ inherited: false }));
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restablecer al proyecto" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "DELETE" }),
+    ));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Restablecer al proyecto" })).not.toBeInTheDocument());
+  });
+
+  it("locks policy controls while a persisted run is active", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy") ? jsonResponse(policy({ inherited: false })) : jsonResponse({
+        thread: makeThread(),
+        messages: [{ id: 1, author: "admin", content: "Working", status: "processing" }],
+      }),
+    );
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
+    expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Restablecer al proyecto" })).toBeDisabled();
+  });
+
+  it("shows policy loading errors without inventing toggles", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy") ? jsonResponse({ detail: "denied" }, 403) : jsonResponse({ thread: makeThread(), messages: [] }),
+    );
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("denied");
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("shows an honest empty state when no opt-in tools are available", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy") ? jsonResponse(policy({ available: [], opt_in_enabled: [] })) : jsonResponse({ thread: makeThread(), messages: [] }),
+    );
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
+    expect(await screen.findByText("No hay herramientas opcionales disponibles.")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
   it("opens empty without creating a thread", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -444,7 +532,7 @@ describe("AgentChat", () => {
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: true });
     expect(composer).toHaveValue("Hola\n");
     expect(composer).not.toBeDisabled();
-    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(2);
   });
 
   it("renders approval and evidence inside the producing message", async () => {
@@ -495,6 +583,7 @@ describe("AgentChat", () => {
     });
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           message: {
@@ -543,6 +632,7 @@ describe("AgentChat", () => {
       });
       const fetchMock = vi.spyOn(globalThis, "fetch")
         .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+        .mockResolvedValueOnce(jsonResponse(policy()))
         .mockResolvedValueOnce(jsonResponse({
           message: {
             id: 2,
@@ -586,7 +676,7 @@ describe("AgentChat", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
       expect(composer).toBeDisabled();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_000);
@@ -595,7 +685,7 @@ describe("AgentChat", () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       expect(screen.getByText("Persisted answer")).toBeInTheDocument();
-      expect(fetchMock).toHaveBeenCalledTimes(6);
+      expect(fetchMock).toHaveBeenCalledTimes(7);
       expect(screen.getAllByText("Persisted answer")).toHaveLength(1);
       expect(composer).toBeEnabled();
     } finally {
@@ -606,6 +696,7 @@ describe("AgentChat", () => {
   it("does not poll after a normally closed stream", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(jsonResponse({
         message: {
           id: 2,
@@ -627,7 +718,7 @@ describe("AgentChat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
     await waitFor(() => expect(screen.getByText("Normal answer")).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(composer).toBeEnabled();
   });
 
@@ -728,6 +819,7 @@ describe("AgentChat", () => {
     });
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(jsonResponse({
         message: {
           id: 2,
@@ -741,7 +833,8 @@ describe("AgentChat", () => {
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
       }))
-      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }));
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()));
 
     render(<AgentChat threadId={4} />);
     const composer = await screen.findByRole("textbox", { name: /mensaje/i });
@@ -779,6 +872,7 @@ describe("AgentChat", () => {
     });
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(jsonResponse({
         message: {
           id: 2,
@@ -792,7 +886,8 @@ describe("AgentChat", () => {
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
       }))
-      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }));
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()));
 
     render(<AgentChat threadId={4} />);
     const composer = await screen.findByRole("textbox", { name: /mensaje/i });
@@ -814,6 +909,7 @@ describe("AgentChat", () => {
   it("does not call a disconnected stream successful and exposes recovery state", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           message: {
@@ -841,6 +937,7 @@ describe("AgentChat", () => {
   it("keeps persisted history authoritative when a transient stream is present", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           message: {
@@ -901,6 +998,7 @@ describe("AgentChat", () => {
           ],
         }),
       )
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           status: "rejected",
@@ -962,6 +1060,7 @@ describe("AgentChat", () => {
         },
         messages: [{ id: 1, author: "agent", content: "Confirma la agenda", status: "processed", assistant_metadata: { run_id: "run-approve" } }],
       }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(jsonResponse({
         status: "consumed",
         message: { id: 2, author: "agent", content: "Aprobado", status: "processed" },
@@ -972,7 +1071,7 @@ describe("AgentChat", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Aprobar" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       "/panel/api/chat/threads/4/approval",
       expect.objectContaining({
         method: "POST",
@@ -1018,6 +1117,7 @@ describe("AgentChat", () => {
   it("uploads an attachment from the composer and shows its filename", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           attachment: { id: 9, thread_id: 4, filename: "photo.png", kind: "image", size: 3 },
@@ -1054,6 +1154,7 @@ describe("AgentChat", () => {
           messages: [],
         }),
       )
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           session: {},
@@ -1077,6 +1178,7 @@ describe("AgentChat", () => {
   it("treats exact planning commands as lifecycle controls and free text as chat", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({ session: { slug: "budget-4" }, thread_id: 4 }, 201),
       )
@@ -1091,7 +1193,7 @@ describe("AgentChat", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenNthCalledWith(
-        2,
+        3,
         "/panel/api/planning/sessions",
         expect.objectContaining({
           body: JSON.stringify({ topic: "budget", thread_id: 4 }),
@@ -1103,7 +1205,7 @@ describe("AgentChat", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
+        4,
         "/panel/api/chat/threads/4/messages",
         expect.anything(),
       ),
@@ -1113,6 +1215,7 @@ describe("AgentChat", () => {
   it("resubmits a failed message in place and preserves an unsent draft", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
          message: { id: 3, author: "admin", content: "Retry me", status: "failed", error: "temporary" },
@@ -1233,6 +1336,7 @@ describe("AgentChat", () => {
   it("renders a streamed plan, evidence, and final response in event order", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse(policy()))
       .mockResolvedValueOnce(
         jsonResponse({
           message: {

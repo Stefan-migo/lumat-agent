@@ -29,6 +29,11 @@ from app.services.audit import record_audit
 from sqlalchemy import func, select
 from app.services import projects, tukulpan
 from app.services import assistant_artifacts
+from app.services.project_config import (
+    reset_thread_tool_policy,
+    set_thread_tool_policy,
+    thread_tool_policy,
+)
 
 router = APIRouter(tags=["panel-api-chat"])
 
@@ -57,6 +62,69 @@ class ChatThreadTitleBody(BaseModel):
 
 class ChatThreadBody(BaseModel):
     proyecto: str = Field(min_length=1, max_length=100)
+
+
+class ChatThreadToolPolicyBody(BaseModel):
+    opt_in_enabled: list[str]
+
+
+def _tool_policy_thread(session: Session, thread_id: int, current: User) -> InternalChatThread:
+    result = get_thread(session, thread_id, current.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    return result[0]
+
+
+def _require_no_active_run(thread: InternalChatThread) -> None:
+    # `active_run_id` remains populated after terminal outcomes; only `running`
+    # represents a live, non-terminal run (completed/failed/approval_pending are terminal).
+    # Reads stay available; only writes are locked while a run is in flight.
+    if ((thread.assistant_state or {}).get("live") or {}).get("status") == "running":
+        raise HTTPException(status_code=409, detail="tool policy cannot change while a run is active")
+
+
+def _thread_tool_policy_response(session: Session, thread: InternalChatThread, current: User) -> dict:
+    return thread_tool_policy(session, thread, current.role)
+
+
+@router.get("/chat/threads/{thread_id}/tool-policy")
+def read_thread_tool_policy(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    return _thread_tool_policy_response(session, thread, current)
+
+
+@router.put("/chat/threads/{thread_id}/tool-policy")
+def update_thread_tool_policy(
+    thread_id: int,
+    body: ChatThreadToolPolicyBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
+    try:
+        set_thread_tool_policy(thread, body.opt_in_enabled, current.role)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    session.flush()
+    return _thread_tool_policy_response(session, thread, current)
+
+
+@router.delete("/chat/threads/{thread_id}/tool-policy")
+def delete_thread_tool_policy(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
+    reset_thread_tool_policy(thread)
+    session.flush()
+    return _thread_tool_policy_response(session, thread, current)
 
 
 def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:

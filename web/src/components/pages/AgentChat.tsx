@@ -15,12 +15,15 @@ import {
   deleteChatThread,
   getAssistantCapabilities,
   getChatThread,
+  getThreadToolPolicy,
   listChatThreads,
   listProjects,
   openPlanningSession,
   renameChatThread,
+  resetThreadToolPolicy,
   sendChatMessage,
   streamChatEvents,
+  updateThreadToolPolicy,
   uploadAssistantAttachment,
 } from "../../api";
 import { Check, Copy, Paperclip, RotateCcw, Send } from "lucide-react";
@@ -38,6 +41,7 @@ import type {
   InternalChatThread,
   InternalChatThreadSummary,
   AssistantCapabilities,
+  ThreadToolPolicy,
   PlanningSession,
   Role,
 } from "../../types";
@@ -315,6 +319,10 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const [capabilities, setCapabilities] = useState<AssistantCapabilities | null>(null);
   const [capabilitiesLoading, setCapabilitiesLoading] = useState(false);
   const [capabilitiesError, setCapabilitiesError] = useState(false);
+  const [toolPolicy, setToolPolicy] = useState<ThreadToolPolicy | null>(null);
+  const [toolPolicyLoading, setToolPolicyLoading] = useState(false);
+  const [toolPolicyError, setToolPolicyError] = useState<string | null>(null);
+  const [toolPolicySaving, setToolPolicySaving] = useState(false);
   const capabilitiesRequested = useRef(false);
   const [planningOpen, setPlanningOpen] = useState(false);
   // Copy feedback: the icon that was just used swaps to a check and says so,
@@ -411,6 +419,49 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
       .catch(() => setCapabilitiesError(true))
       .finally(() => setCapabilitiesLoading(false));
   }, [contextOpen]);
+
+  useEffect(() => {
+    if (!thread) {
+      setToolPolicy(null);
+      setToolPolicyLoading(false);
+      setToolPolicyError(null);
+      return;
+    }
+    let current = true;
+    setToolPolicy(null);
+    setToolPolicyLoading(true);
+    setToolPolicyError(null);
+    void getThreadToolPolicy(thread.id)
+      .then((policy) => {
+        if (!current) return;
+        if (!Array.isArray(policy.available) || !Array.isArray(policy.opt_in_enabled) || typeof policy.inherited !== "boolean") {
+          throw new Error("Invalid thread tool policy response");
+        }
+        setToolPolicy(policy);
+      })
+      .catch((reason: unknown) => {
+        if (current) setToolPolicyError(reason instanceof ApiError ? reason.detail : "No pudimos cargar las herramientas");
+      })
+      .finally(() => {
+        if (current) setToolPolicyLoading(false);
+      });
+    return () => { current = false; };
+  }, [thread?.id]);
+
+  const changeToolPolicy = async (next: () => Promise<ThreadToolPolicy>) => {
+    setToolPolicySaving(true);
+    setToolPolicyError(null);
+    try {
+      const policy = await next();
+      setToolPolicy(policy);
+    } catch (reason: unknown) {
+      setToolPolicyError(reason instanceof ApiError && reason.status === 409
+        ? "No puedes cambiar las herramientas mientras se ejecuta el asistente."
+        : reason instanceof ApiError ? reason.detail : "No pudimos actualizar las herramientas");
+    } finally {
+      setToolPolicySaving(false);
+    }
+  };
 
   // Reset on setup, not only on cleanup: StrictMode mounts, unmounts and
   // remounts every effect in dev, so a ref that is only ever set to `true`
@@ -743,6 +794,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     .filter((event) => !runId || event.run_id === runId)
     .flatMap((event) => event.evidence ?? []);
   const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
+  const toolControlsDisabled = processing || toolPolicySaving || messages.some((message) => message.status === "processing") || approval?.status === "pending";
   const state = loading ? (
     <StateMessage tone="info" role="status" spinner title="Cargando chat" />
   ) : error ? (
@@ -783,6 +835,34 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
       className="assistant-chat"
       actions={
         <div className="assistant-chat__header-actions">
+          <Popover title="Herramientas" triggerLabel="Herramientas" state={!thread ? "disabled" : "default"}>
+            {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
+            {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
+            {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
+            {toolPolicy?.available.map((name) => (
+              <label key={name}>
+                <input
+                  type="checkbox"
+                  aria-label={name}
+                  checked={toolPolicy.opt_in_enabled.includes(name)}
+                  disabled={toolControlsDisabled || toolPolicyLoading}
+                  onChange={(event) => {
+                    const selected = new Set(toolPolicy.opt_in_enabled);
+                    if (event.target.checked) selected.add(name);
+                    else selected.delete(name);
+                    void changeToolPolicy(() => updateThreadToolPolicy(thread!.id, [...selected]));
+                  }}
+                />
+                {name}
+              </label>
+            ))}
+            {toolPolicy && !toolPolicy.inherited ? (
+              <Button variant="secondary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread!.id))}>
+                Restablecer al proyecto
+              </Button>
+            ) : null}
+            {toolControlsDisabled ? <p role="status">Bloqueadas durante la ejecución.</p> : null}
+          </Popover>
           <Popover title="Historial" triggerLabel="Historial">
             <div className="assistant-chat__navigator">
               {navigatorError ? (

@@ -160,8 +160,40 @@ Scope decisions (closed — do not re-litigate):
 - [x] **WU2 (frontend)**: api client + types (`ProjectAgent`, `ProjectAgentsResponse`). `13892a78`.
 - [x] **WU3 (frontend)**: `ProjectAgents` component in the `ProjectsPage` "Agentes" tab; roster + latest-run status + honest empty/loading/error states. Tests. `8025a4d6`. (The `AssistantWorkspace` "Agentes del proyecto" thread-level card was left out of scope — follow-up.)
 
-### A6 — Per-thread tool toggles + stop/cancel
-- [ ] Tool toggles per thread + active-run stop/cancel endpoint.
+### A6 — Per-thread tool toggles + stop/cancel (active run)
+
+Scope decisions (closed — do not re-litigate; owner-confirmed 2026-10-09):
+- D-A6-1: Tool toggles edit the thread's `assistant_state["tool_policy"]`, which the resolver
+  already treats as a **full replacement** of the project opt-in selection
+  (`resolve_effective_config`, `app/services/project_config.py:79-127`). Scope = `opt_in_enabled`
+  only; the always-on default tier stays non-configurable. Include a "reset to project" (remove
+  the thread override; absence = inherit).
+- D-A6-2: Stop is **cooperative**, not a process kill. An owner-scoped route persists a stop
+  intent for the specific run; the runner/graph checks it at safe boundaries and records a
+  terminal `cancelled` outcome. It does NOT interrupt an in-flight synchronous tool call or LLM
+  request, and does not undo completed effects — the UI must say so honestly.
+- D-A6-3: `active_run_id` is NOT proof of an active run (it persists after terminal outcomes,
+  `app/services/agent_chat.py:447-517`). Both endpoints verify the current run status, never mere
+  non-null.
+- D-A6-4: Toggles are rejected while the thread has an active (non-terminal) run; they apply on
+  the next turn (effective config is resolved once per turn at
+  `app/chat/assistant/nodes.py:521-545`).
+- D-A6-5: Stop of an `approval_pending` run follows the same cooperative path (terminal `cancelled`).
+- No migration: all state lives in `assistant_state` JSONB; preserve siblings via
+  `merge_assistant_state` (`app/chat/assistant/state.py:101-109`).
+
+- [x] **WU1 (backend)** — Thread tool policy: `GET` (current/effective + available tools) and
+  owner-scoped `PUT` (+ reset) to set/clear `assistant_state["tool_policy"]`, validated by
+  `ToolPolicy`, rejected while a run is active. Tests (strict TDD). Route: delegated writer
+  (WU + tests, multi-file). Trigger: writer trigger.
+- [x] **WU2 (frontend)** — api client + types + per-thread toggle control in `AgentChat`
+  (server-backed values only; honest loading/error/conflict states; no fabricated policy). Tests.
+  Route: delegated writer.
+- [ ] **WU3 (backend)** — Cooperative stop: owner-scoped stop route + persisted stop intent +
+  cancellation checks at safe boundaries + terminal `cancelled` end-to-end (SSE + persisted).
+  Tests (strict TDD). Route: delegated writer.
+- [ ] **WU4 (frontend)** — Stop control (processing-only) + reconcile `cancelled`; never treat an
+  SSE timeout/disconnect as cancellation. Tests. Route: delegated writer.
 
 ## Acceptance criteria
 
@@ -379,3 +411,6 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
 - A4 RDD review — **approved and acknowledged** (authority burned). Lineage `review-7b96ce0c61b5713b`, single lens `review-reliability`, `--base-ref 3085d0e9 --committed-only`, risk `medium`, 425 lines, correction budget 200 unused. Non-blocking advisory (follow-up, do NOT re-review this candidate): **R3-001 WARNING** — the project-skill editor validates only a nonblank `name`; blank `description`/`body` are submitted and rejected by the backend instead of being blocked client-side (`web/src/components/pages/ProjectSkills.tsx:40`, schema `app/chat/assistant/tools/registry.py:254-266`). Reviewed boundary advances to the A4 tree frozen by this review.
 - A5 scope closed by the owner: D-A5-1 expose + roster (NOT a runtime); D-A5-2 roster + live status; D-A5-3 informational/read-only (no persistence, no `ProjectConfig` roster field, no migration). Exploration found the three capabilities already exist: the panel assistant (Orquestador), `app/chat/assistant/verification.py` (Verificador), `app/chat/assistant/delegation.py` (Explorador base).
 - A5 implemented on `odd/asistente-agentes-proyecto` from base `d1810cb7`. Commits: `e4a426cd` (docs: register A5), `71ce91af` (feat panel: read-only project agents roster endpoint), `13892a78` (feat web: agents api client + types), `8025a4d6` (feat web: agents tab with live run status). Checks green: backend `uv run pytest tests/` 1842 passed; frontend `npx tsc -b --force --noEmit` OK, `npx vitest run --no-file-parallelism` 1094 passed (an earlier full-suite run showed flaky timeouts in unrelated files under machine load; re-run clean), `npm run build` OK. RDD assess over `--base-ref d1810cb7 --committed-only`: risk `medium`, 197 lines, `review_due: false` (`under_budget`) — stays pending in the slice. `latest_run.tool` reads `assistant_state.live.tool`, which the runtime currently never sets, so `tool` is honestly `null` today.
+- A6 WU1 complete. Commit `306e700c` (`feat(assistant): manage per-thread tool policies`): adds owner-scoped GET/PUT/DELETE policy routes, role-scoped opt-in availability and validation, and functional coverage. RED: new API tests returned 404 for the missing GET route (7 expected-contract failures); GREEN: targeted suite 20 passed; full `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — 1850 passed, 2 warnings. Graph nodes consulted from the supplied graph evidence: `chat.py`, `project_config.py`, `registry.py`, `agent/registry.yaml`, `agent_chat.py`, `state.py`, `models.py`, `api/serializers.py`; relevant relationships: chat routes use `get_thread()` for owner scoping; `project_config.py` resolves tool selection against registry role/global constraints; `agent_chat.py` writes live run status and `merge_assistant_state()` preserves sibling state. No migration or serializer changes were needed.
+- A6 WU2 complete. Commit `23728379` (`feat(assistant): add per-thread tool toggles`) implements the header `Herramientas` popover with server-backed checkboxes, complete-selection PUT, reset-to-project DELETE, active-run locks, and honest loading/error/empty states. Files: `web/src/api.ts`, `web/src/types.ts`, `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AgentChat.test.tsx`. First targeted run exposed older sequential fetch mocks consuming the new GET; mocks were updated to model the policy endpoint (no product-code failure remained). GREEN: targeted AgentChat suite 54 passed; `npx tsc -b --force --noEmit` passed; full frontend `npx vitest run --no-file-parallelism` — 106 files / 1100 tests passed; `npm run build` passed (existing large-chunk warning). Graph nodes consulted from supplied evidence: `AgentChat()`, `loadThread()`, `selectThread()`, header actions, `apiFetch()`, `Popover`, `Button`, `ThreadToolPolicy`; edges: `AgentChat -> getThreadToolPolicy`, `AgentChat -> updateThreadToolPolicy`, `AgentChat -> resetThreadToolPolicy`. No backend files changed.
+- A6 WU1+WU2 RDD review — **approved and acknowledged** (authority burned). `review assess --base-ref a843bd98 --committed-only` → risk `medium`, 8 paths, 500 lines, `review_due: true` (`slice_budget_reached`). Lineage `review-9ac76f3b98ddd8b7`, single lens `review-reliability`, correction budget 200 unused; owner granted consent via the native envelope; `review acknowledge-approved` returned `authority: burned`. Non-blocking advisory (follow-up, do NOT re-review this candidate): **R3-001 WARNING** — `available_opt_in_tools` derives the selectable set from the global whitelist ∩ role, not from the project's opt-in selection, so the UI can offer tools the project disabled and a PUT succeeds for them (`app/services/project_config.py:135-141`); the thread override is a full replacement (D-A6-1), so this is the designed behavior but deserves a conscious follow-up. Reviewed boundary for the next slice: `33519d9e`.
