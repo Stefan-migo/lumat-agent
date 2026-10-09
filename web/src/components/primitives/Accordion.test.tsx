@@ -8,6 +8,7 @@ describe("Accordion", () => {
     const button = screen.getByRole("button", { name: /Respuestas automáticas/ });
     const panel = screen.getByRole("region", { hidden: true });
     expect(screen.getByText("3")).toBeInTheDocument();
+    expect(button.querySelector(".accordion__chevron")).toHaveAttribute("aria-hidden", "true");
     expect(button).toHaveAttribute("aria-expanded", "false");
     expect(button).toHaveAttribute("aria-controls", panel.id);
     expect(panel).toHaveAttribute("aria-labelledby", button.id);

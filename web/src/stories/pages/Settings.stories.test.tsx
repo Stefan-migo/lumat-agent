@@ -258,14 +258,18 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
 
     const card = await screen.findByRole("heading", { name: "Herramientas del asistente" });
     const toolsCard = card.closest(".card") as HTMLElement;
-    expect(within(toolsCard).getByText("consultar")).toBeInTheDocument();
-    expect(within(toolsCard).getByText("crear visita")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(within(toolsCard).getByRole("button", { name: /Operación/ }));
+    expect(within(toolsCard).getByText("Consultar")).toBeInTheDocument();
+    expect(within(toolsCard).getByText("Crear visita")).toBeInTheDocument();
     expect(within(toolsCard).getByText("agenda.crear_visita").tagName).toBe("CODE");
     expect(within(toolsCard).getAllByText("Solo lectura")).toHaveLength(2);
     expect(within(toolsCard).getAllByText("Puede escribir")).toHaveLength(2);
     expect(within(toolsCard).getByRole("button", { name: /Operación/ })).toHaveTextContent("2");
-    expect(screen.getByText("Cercana, Técnica")).toBeInTheDocument();
-    expect(screen.getByText("Atención inicial, Emergencias")).toBeInTheDocument();
+    expect(screen.getByText("Cercana")).toBeInTheDocument();
+    expect(screen.getByText("Técnica")).toBeInTheDocument();
+    expect(screen.getByText("Atención inicial")).toBeInTheDocument();
+    expect(screen.getByText("Emergencias")).toBeInTheDocument();
     expect(screen.getByText("Disponible")).toBeInTheDocument();
     expect(screen.getByText("No disponible")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Consultar" })).toHaveAttribute("href", "/panel/app/kb");
