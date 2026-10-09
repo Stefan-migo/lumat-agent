@@ -145,5 +145,5 @@ queries between separate helper/client nodes returned no graph path and were not
 
 ## Next step
 
-None. Implementation is complete and verified in this worktree. Delivery (push, PR, merge) is the
-owner's decision.
+Delivered as **PR #552** (`https://github.com/Stefan-migo/lumat-agent/pull/552`) against `main`.
+Merge is the owner's decision.
