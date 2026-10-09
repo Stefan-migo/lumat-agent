@@ -87,6 +87,7 @@ assistant:
     - project.find
     - list_project_files
     - read_project_file
+    - skill.propose
     - artifact.save
     - project.create
     - project.rename

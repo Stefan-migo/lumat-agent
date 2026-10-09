@@ -13,7 +13,7 @@ from itertools import zip_longest
 import logging
 from typing import Annotated, Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 from app.models import UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
@@ -30,6 +30,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.rename",
     "project.archive",
     "project.merge",
+    "skill.propose",
 })
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
@@ -246,6 +247,20 @@ class ProjectListFilesArgs(BaseModel):
 class ProjectReadFileArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     file_id: int = Field(gt=0)
+
+
+class SkillProposeArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    body: str = Field(min_length=1)
+
+    @field_validator("name", "description", "body")
+    @classmethod
+    def validate_non_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Project skill fields must not be empty")
+        return value
 
 
 class ArtifactSaveArgs(BaseModel):
@@ -567,6 +582,33 @@ def _project_merge(session, args: ProjectMergeArgs, *, owner_id: int | None = No
     return projects.merge(session, args.source, args.target, owner_id=owner_id)
 
 
+def _propose_project_skill(session, args: SkillProposeArgs, *, owner_id: int | None, proyecto: str, project_id: int | None):
+    from sqlalchemy import select
+    from app.models import Project
+    from app.services.audit import record_audit
+    from app.services.project_config import ProjectConfigUpdate, ProjectSkill, set_project_config
+    from app.services.prompts import load_assistant_config
+    from app.services.skills import global_skill_index
+
+    slug = projects.normalize_slug(proyecto)
+    if not slug or slug == "default" or owner_id is None:
+        raise ToolValidationError("A project skill requires an authenticated owner and a real project")
+    project = session.scalar(select(Project).where(Project.id == project_id, Project.owner_id == owner_id)) if project_id else session.scalar(
+        select(Project).where(Project.slug == slug, Project.owner_id == owner_id)
+    )
+    if project is None or project.slug != slug:
+        raise ToolValidationError("The thread's project could not be resolved for a skill proposal")
+    if args.name in {item.name for item in global_skill_index(load_assistant_config())}:
+        raise ToolValidationError(f"Project skill name collides with global skill: {args.name}")
+    current = project.config or {}
+    skills = [ProjectSkill.model_validate(item) for item in current.get("skills", [])]
+    skills = [item for item in skills if item.name != args.name]
+    skills.append(ProjectSkill(name=args.name, description=args.description, body=args.body))
+    set_project_config(session, project, ProjectConfigUpdate(skills=skills))
+    record_audit(session, actor="assistant", action="skill.propose.confirmed", entity="project", entity_id=str(project.id), after={"name": args.name, "description": args.description[:500]})
+    return {"project": project.slug, "name": args.name, "saved": True}
+
+
 def _list_project_files(session, args: ProjectListFilesArgs, *, owner_id: int | None = None, proyecto: str = "default", project_id: int | None = None):
     slug = proyecto if isinstance(proyecto, str) and proyecto and proyecto != "default" else None
     project = project_files.owned_project(session, owner_id, project_id=project_id, slug=slug)
@@ -677,6 +719,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval.", tier="opt_in"),
     "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval.", tier="opt_in"),
     "project.merge": ToolDefinition("project.merge", ProjectMergeArgs, False, _project_merge, "Merge projects after approval.", tier="opt_in"),
+    "skill.propose": ToolDefinition("skill.propose", SkillProposeArgs, False, _propose_project_skill, "Propose a project skill for owner approval.", tier="default"),
 }
 
 ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
@@ -707,6 +750,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "project.rename": frozenset(UserRole),
     "project.archive": frozenset(UserRole),
     "project.merge": frozenset(UserRole),
+    "skill.propose": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
 }
 
 # Roles that may read business-shared memory (agent-role-access D2/D3/D5).
@@ -765,7 +809,7 @@ def execute_tool(
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "artifact.save"} or (
+    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "artifact.save", "skill.propose"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
@@ -819,7 +863,7 @@ def execute_tool(
     try:
         if name == "artifact.save":
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id))
-        elif name in {"list_project_files", "read_project_file"}:
+        elif name in {"list_project_files", "read_project_file", "skill.propose"}:
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, proyecto=proyecto, project_id=project_id))
         elif name.startswith("project."):
             kwargs = {"owner_id": owner_id}

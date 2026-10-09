@@ -700,6 +700,26 @@ def guardrails(state: AssistantState) -> AssistantState:
         _log_planner_failure(diagnosis)
         fallback = bounded_fallback(diagnosis["reason"])
         return {"planner": {**fallback.model_dump(), "valid": False, "failure": diagnosis}, "plan": fallback.model_dump(), "guardrails": {**decisions, "decision": "fallback"}, "response": fallback.summary, "status": "responding"}
+    if tool_name == "skill.propose":
+        from app.services.prompts import load_assistant_config
+        from app.services.skills import global_skill_index
+
+        proposed_name = plan_data.get("arguments", {}).get("name")
+        if proposed_name in {skill.name for skill in global_skill_index(load_assistant_config())}:
+            reason = "A project skill cannot use the name of a global skill."
+            if state.get("session") is not None:
+                record_audit(
+                    state["session"], actor=state.get("actor") or "assistant",
+                    action="skill.propose.rejected", entity="internal_chat_thread",
+                    entity_id=str(state.get("thread_id")),
+                    after={"run_id": state.get("run_id"), "name": proposed_name, "reason": "global_skill_collision"},
+                )
+            return {
+                "approval": None,
+                "guardrails": {**decisions, "whitelisted": False, "approval_required": False, "decision": "skill_shadow_refused"},
+                "response": reason,
+                "status": "completed",
+            }
     autonomous_write = _is_autonomous_write(tool_name, state.get("thread_id"))
     if not get_tool(tool_name).read_only and state.get("tool_steps", 0) >= 1:
         decisions["decision"] = "loop_write_refused"

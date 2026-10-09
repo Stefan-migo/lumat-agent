@@ -443,6 +443,67 @@ def test_step_two_write_plan_is_refused_by_guardrails():
     assert result["response"] == PANEL_LOOP_WRITE_REFUSAL
 
 
+def test_global_skill_name_collision_is_audited_and_never_issues_approval(monkeypatch):
+    audited = []
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"skill.propose"})
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: audited.append(kwargs))
+    state = _tool_state(
+        session=object(),
+        plan={"kind": "tool", "tool": "skill.propose", "arguments": {
+            "name": "memoria-tukulpan", "description": "D", "body": "B",
+        }},
+    )
+
+    result = guardrails(state)
+
+    assert result["status"] == "completed"
+    assert result["approval"] is None
+    assert result["guardrails"]["decision"] == "skill_shadow_refused"
+    assert audited[0]["action"] == "skill.propose.rejected"
+
+
+def test_valid_skill_proposal_is_gated_by_existing_approval_flow(monkeypatch):
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"skill.propose"})
+    state = _tool_state(plan={
+        "kind": "tool", "tool": "skill.propose",
+        "arguments": {"name": "local-guide", "description": "Project guide", "body": "Use grounded data."},
+    })
+
+    result = guardrails(state)
+
+    assert result["status"] == "approval_pending"
+    assert result["approval"]["status"] == "pending"
+    assert result["approval"]["tool"] == "skill.propose"
+
+
+def test_rejecting_skill_proposal_audits_without_executing(monkeypatch):
+    from app.chat.assistant.approval import issue_approval
+    from app.services import agent_chat
+
+    plan = {"tool": "skill.propose", "arguments": {"name": "local", "description": "D", "body": "B"}}
+    approval = issue_approval(plan)
+    audits = []
+    message = SimpleNamespace(status="processed")
+    thread = SimpleNamespace(id=9, active_run_id="run", current_plan=plan, assistant_state={"approval": approval})
+
+    class Session:
+        def execute(self, *_args, **_kwargs):
+            return SimpleNamespace(scalar_one_or_none=lambda: 9)
+
+        def refresh(self, _thread):
+            pass
+
+        def scalar(self, _query):
+            return message
+
+    monkeypatch.setattr(agent_chat, "record_audit", lambda session, **kwargs: audits.append(kwargs))
+    result = agent_chat.approve_plan(Session(), thread, SimpleNamespace(username="admin", role="admin"), "run", approval["token"], reject=True)
+
+    assert result is message
+    assert message.status == "rejected"
+    assert [item["action"] for item in audits] == ["skill.propose.rejected"]
+
+
 @pytest.mark.parametrize(
     "tool_name,arguments",
     [
