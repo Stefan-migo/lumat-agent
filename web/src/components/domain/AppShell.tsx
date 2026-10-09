@@ -70,7 +70,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       }).catch(() => setNotificationState({ status: 'error' }));
     });
     realtimeClient.connect();
-    return unsubscribe;
+    return () => { unsubscribe(); };
   }, []);
 
   const markAllRead = async () => {
