@@ -193,6 +193,8 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
             "appointment.booked", "appointment.no_show", "appointment.booked", "appointment.completed",
         ]
         panel_rows = session.scalars(select(PanelNotification).order_by(PanelNotification.id)).all()
-        assert len(panel_rows) == 4
+        # One row per admin for each notifiable event — booked x3, rescheduled,
+        # cancelled and no_show; `appointment.completed` is intentionally silent.
+        assert len(panel_rows) == 6
         assert {row.user_id for row in panel_rows} == {admin.id}
         assert {row.operation.channel for row in panel_rows} == {"panel"}
