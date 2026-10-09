@@ -105,8 +105,10 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
 - [ ] **A1 — Runner del worker**: cron cada 5 min que dispare `run_cycle()` (patrón `app.ops.sweep`);
   documentar en `docs/ops.md`; verificar el entrypoint `python -m app.ops.worker`. (Parte operativa
   — armar el cron en el VPS — requiere autorización remota aparte.)
-- [ ] **A2 — Modelo de receta**: catálogo de recetas en código (definiciones) + tabla de
+- [x] **A2 — Modelo de receta**: catálogo de recetas en código (definiciones) + tabla de
   instalaciones + migración idempotente + servicio de instalación/parametrización.
+  Commits `71a0b693` (modelo) y `47c1e4f4` (harness). Suite verde: 1834 passed.
+  RDD **aprobado** — lineage `review-9b4846fa6e0c8eb8` (4 lentes, 0 bloqueantes).
 - [ ] **A3 — Recetas de evento (5)**: confirmación de reserva, aviso de cancelación, reprogramación,
   no-show, nueva solicitud al equipo.
 - [ ] **A4 — Tool del agente**: adaptar a recetas (`recipe_id` + parámetros tipados) manteniendo
@@ -124,6 +126,23 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
 - [ ] **D1 — Evento de pago**.
 - [ ] **D2 — Destinatario en eventos de caso**.
 - [ ] **D3 — Redefinir `template_event`** (contenido vs nombre de evento).
+
+## Review follow-ups (non-blocking — from A2 RDD `review-9b4846fa6e0c8eb8`)
+
+These were reported as informational on the approved A2 candidate. They do NOT reopen the review;
+they are separate later work.
+
+- [ ] **R3-001** (`app/services/recipes.py:59`) — `compile_rule_fields` indexes `values["channel"]`
+  unconditionally, but the recipe model does not require a channel parameter; a recipe without one
+  raises `KeyError`. Tighten the model or the compile path before A3 adds real recipes.
+- [ ] **R3-002** (`app/services/automation_installations.py:11`) — `installation_snapshot` returns the
+  stored `parameters` dict by reference (mutable), and optional string params accept `null`. Return a
+  detached copy and decide the null policy.
+- [ ] **R4-001** (`app/services/automation_installations.py:36-41`) — the service establishes no
+  transaction boundary; commit/rollback belongs to the caller. Ensure callers roll back on later errors.
+- [ ] **R4-002** (`app/services/automation_installations.py:49-58`) — the duplicate-install precheck can
+  race with concurrent requests; the DB unique constraint rejects the loser, but the `IntegrityError` is
+  not translated into the documented `ValueError`. Normalize the conflict response when wiring the API.
 
 ## Verification
 
