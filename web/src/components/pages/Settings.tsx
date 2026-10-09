@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Brain, CircleHelp, Clock3, DoorOpen, Globe2, Headset, Info, MessageCircle, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
+import { Bell, BookOpen, Brain, CircleHelp, Clock3, DoorOpen, Globe2, Headset, Info, MessageCircle, Plus, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
@@ -94,21 +94,22 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
     const days = newDays.map((day) => SHORT_DAYS.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(SHORT_DAYS[day - 1]));
     if (!days.length || !newOpen || !newClose || newOpen >= newClose) return;
     onChange({ ...hours, schedule: [...hours.schedule, { days, open: newOpen, close: newClose }] });
-    setNewDays([]);
+    resetDraft();
   };
+  const resetDraft = () => { setNewDays([]); setNewOpen("09:00"); setNewClose("18:00"); };
   const timezoneOptions = [...new Set([hours.timezone, ...TIMEZONES])].filter(Boolean).sort((left, right) => left.localeCompare(right));
   return <>
     <div className="settings-hours__timezone"><Globe2 aria-hidden="true" /><Select label="Zona horaria" value={hours.timezone} onChange={(event) => onChange({ ...hours, timezone: event.target.value })} options={timezoneOptions.map((timezone) => ({ value: timezone, label: timezone }))} /></div>
-    <p>Define los días y el horario de atención. Cada día puede pertenecer a un solo horario.</p>
-    <div className="settings-hours__list" aria-label="Horarios configurados">{hours.schedule.map((entry, index) => <div className="settings-hours__item" key={index}>
+    <section className="settings-hours__weekly" aria-label="Horarios semanales"><h3>Horarios semanales</h3>
+    {hours.schedule.length ? <div className="settings-hours__list" aria-label="Horarios configurados">{hours.schedule.map((entry, index) => <div className="settings-hours__item" key={index}>
       <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => SHORT_DAYS[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
       <Button variant="tertiary" aria-label={`Eliminar horario ${index + 1}`} onClick={() => onChange({ ...hours, schedule: hours.schedule.filter((_, currentIndex) => currentIndex !== index) })}><Trash2 aria-hidden="true" /> Eliminar</Button>
-    </div>)}</div>
-    <div className="settings-hours__new"><h3>Nuevo horario</h3>
-      <DayToggle label="Días del nuevo horario" value={newDays} onChange={(value) => setNewDays(value.filter((day) => !usedDays.includes(day)))} />
+    </div>)}</div> : <p className="settings-hours__empty">No hay horarios guardados.</p>}</section>
+    <div className="settings-hours__new"><div className="settings-hours__new-header"><h3>Nuevo horario</h3><Badge tone="neutral">Sin guardar</Badge><Button variant="tertiary" className="settings-hours__reset" aria-label="Restablecer nuevo horario" onClick={resetDraft}><Trash2 aria-hidden="true" /></Button></div>
+      <span className="settings-hours__day-label">Días de atención</span><DayToggle label="Días de atención" value={newDays} onChange={(value) => setNewDays(value.filter((day) => !usedDays.includes(day)))} />
       <div className="settings-hours__times"><Input label="Inicio" type="time" value={newOpen} onChange={(event) => setNewOpen(event.target.value)} /><Input label="Fin" type="time" value={newClose} onChange={(event) => setNewClose(event.target.value)} /></div>
-      <Button variant="tertiary" disabled={!newDays.some((day) => !usedDays.includes(day)) || !newOpen || !newClose || newOpen >= newClose} onClick={addSchedule}>Agregar otro horario</Button>
-    </div>
+      <p className="settings-hours__info"><Info aria-hidden="true" />Cada día puede pertenecer a un solo horario.</p>
+    </div><Button variant="tertiary" className="settings-hours__add" disabled={!newDays.some((day) => !usedDays.includes(day)) || !newOpen || !newClose || newOpen >= newClose} onClick={addSchedule}><Plus aria-hidden="true" />Agregar otro horario</Button>
   </>;
 }
 
@@ -277,8 +278,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </Card>
         </> : null}
         {active === "schedule" ? <div className="settings-hours__layout">
-          <Card title="Horarios de atención"><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
-          <div className="settings-hours__aside"><Card title="Notificaciones push"><PushSettings embedded /></Card><Card title="Fuera de horario"><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
+          <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
+          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div> : null}
          {active === "costs" ? <>
            <Card title="Gasto actual" headerAction={snapshot ? <Badge tone="neutral">{snapshot.date}</Badge> : undefined}>
