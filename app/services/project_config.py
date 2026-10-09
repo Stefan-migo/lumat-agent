@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 
 from app.chat.assistant.tools.registry import TOOL_REGISTRY, is_tool_allowed_for_role
+from app.chat.assistant.state import merge_assistant_state
 from app.models import Project, UserRole
 from app.services.prompts import load_assistant_config
 from app.services.skills import SkillDefinition, global_skill_index
@@ -126,3 +127,46 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
         tools_whitelist=tools,
         skills_index=skills_index,
     )
+
+
+def available_opt_in_tools(role: UserRole | str) -> list[str]:
+    """List globally enabled opt-in tools that this role is authorized to execute."""
+    role_value = role.value if isinstance(role, UserRole) else role
+    return [
+        name for name in load_assistant_config().tools_whitelist
+        if TOOL_REGISTRY[name].tier == "opt_in" and is_tool_allowed_for_role(name, role_value)
+    ]
+
+
+def thread_tool_policy(session, thread, role: UserRole | str) -> dict:
+    """Return this thread's selected opt-in tools and its role-available choices."""
+    available = available_opt_in_tools(role)
+    effective = resolve_effective_config(session, thread, role)
+    enabled = [
+        name for name in effective.tools_whitelist
+        if TOOL_REGISTRY[name].tier == "opt_in" and name in available
+    ]
+    return {
+        "available": available,
+        "opt_in_enabled": enabled,
+        "inherited": "tool_policy" not in (thread.assistant_state or {}),
+    }
+
+
+def set_thread_tool_policy(thread, names: list[str], role: UserRole | str) -> None:
+    """Set a validated per-thread full replacement of project opt-in selection."""
+    policy = ToolPolicy(opt_in_enabled=names)
+    allowed = set(available_opt_in_tools(role))
+    denied = sorted(set(policy.opt_in_enabled) - allowed)
+    if denied:
+        raise ValueError(f"Tool(s) are not available for this role: {', '.join(denied)}")
+    thread.assistant_state = merge_assistant_state(
+        thread.assistant_state or {}, {"tool_policy": policy.model_dump()}
+    )
+
+
+def reset_thread_tool_policy(thread) -> None:
+    """Remove the thread override so it inherits the project selection again."""
+    state = dict(thread.assistant_state or {})
+    state.pop("tool_policy", None)
+    thread.assistant_state = state
