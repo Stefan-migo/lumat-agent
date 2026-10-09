@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Project, User
+from app.models import InternalChatThread, Project, User
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.api.serializers import to_project_dict
 from app.panel.deps import get_db
@@ -39,6 +39,42 @@ def project_detail(
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     return {"project": to_project_dict(project, include_config=True)}
+
+
+@router.get("/projects/{slug}/agents")
+def project_agents(
+    slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)
+) -> dict:
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+
+    thread = session.scalar(
+        select(InternalChatThread)
+        .where(InternalChatThread.proyecto == slug, InternalChatThread.user_id == current.id)
+        .order_by(InternalChatThread.updated_at.desc(), InternalChatThread.id.desc())
+        .limit(1)
+    )
+    live = (thread.assistant_state or {}).get("live") if thread else None
+    latest_run = None
+    if isinstance(live, dict) and live.get("status"):
+        latest_run = {
+            "status": live["status"],
+            "tool": live.get("tool"),
+            "at": thread.updated_at.isoformat() if thread.updated_at else None,
+        }
+
+    return {
+        "agents": [
+            {"key": "orchestrator", "name": "Orquestador", "role": "Asistente del proyecto",
+             "description": "Responde consultas del proyecto y ejecuta las herramientas disponibles según la solicitud.", "read_only": False},
+            {"key": "verifier", "name": "Verificador", "role": "Verificación independiente",
+             "description": "Contrasta un criterio con evidencia y, cuando corresponde, consulta herramientas de solo lectura.", "read_only": True},
+            {"key": "explorer", "name": "Explorador", "role": "Investigación de solo lectura",
+             "description": "Investiga mediante las herramientas de solo lectura habilitadas para la delegación.", "read_only": True},
+        ],
+        "latest_run": latest_run,
+    }
 
 
 @router.patch("/projects/{slug}/config")

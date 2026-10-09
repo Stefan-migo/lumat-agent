@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Project
+from app.models import InternalChatThread, Project
 
 
 def _login(client, make_user, *, role="operador", username="projects-operator", create=True):
@@ -192,3 +192,43 @@ def test_project_config_update_missing_project_returns_404(client, make_user):
     response = client.patch("/panel/api/projects/missing/config", json={"instructions": "No project."})
 
     assert response.status_code == 404
+
+
+def test_project_agents_are_owner_scoped_and_describe_existing_capabilities(client, make_user):
+    owner = make_user("agents-owner", "projects-pass")
+    make_user("agents-other", "projects-pass")
+    slug = _seed_project(owner, "agents-project")
+    url = f"/panel/api/projects/{slug}/agents"
+    assert client.get(url).status_code == 401
+    _login(client, make_user, username="agents-other", create=False)
+    assert client.get(url).status_code == 404
+    assert client.get("/panel/api/projects/missing/agents").status_code == 404
+    client.post("/panel/api/logout")
+    _login(client, make_user, username="agents-owner", create=False)
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [agent["key"] for agent in body["agents"]] == ["orchestrator", "verifier", "explorer"]
+    assert [agent["read_only"] for agent in body["agents"]] == [False, True, True]
+    assert all(agent["name"] and agent["role"] and agent["description"] for agent in body["agents"])
+    assert body["latest_run"] is None
+
+
+def test_project_agents_show_latest_thread_with_live_run(client, make_user):
+    owner = make_user("agents-run-owner", "projects-pass")
+    slug = _seed_project(owner, "agents-run")
+    with SessionLocal() as session:
+        thread = InternalChatThread(
+            user_id=owner, proyecto=slug, assistant_state={"live": {"run_id": "run-1", "status": "running"}},
+        )
+        session.add(thread)
+        session.commit()
+        expected_at = thread.updated_at.isoformat()
+    _login(client, make_user, username="agents-run-owner", create=False)
+
+    response = client.get(f"/panel/api/projects/{slug}/agents")
+
+    assert response.status_code == 200
+    assert response.json()["latest_run"] == {"status": "running", "tool": None, "at": expected_at}
