@@ -149,9 +149,16 @@ Scope decisions (closed — do not re-litigate):
   - [x] WU2.2 (frontend): render the proposal in the thread (reuse the approval card) + confirm/reject wiring + tests. `dad31e5a`.
   - [x] WU2.3 (backend): guardrail/injection tests (skill body never affects tool policy). `564fb33f`.
 
-### A5 — Project agents (large)
-- [ ] `project_agents` roster (Orquestador default) + Verificador + Explorer.
-- [ ] Runs/state + realtime + UI "Agentes del proyecto".
+### A5 — Project agents (re-scoped: expose + roster, NOT a runtime)
+Scope decisions (closed — do not re-litigate):
+- D-A5-1: A5 SURFACES what already exists — the panel assistant (Orquestador), the effect verifier (Verificador: read-only, fresh context, `app/chat/assistant/verification.py`), and read-only delegation (Explorer base, `app/chat/assistant/delegation.py`). NOT a distinct multi-agent runtime; A5 is not "large".
+- D-A5-2: the "Agentes del proyecto" surface shows the roster + the current/most-recent run status, reusing the existing run state. NO new run persistence.
+- D-A5-3: the roster is READ-ONLY and informational (always-present agents, no per-project enable/disable config). NO roster field in `ProjectConfig`, NO migration, NO knobs.
+- Honesty: "Explorador" maps to the real read-only delegation capability (labeled as such, not a fabricated runtime); "live status" = the project's most recent run, read from existing thread data, refreshed on tab open (not a streaming feed).
+
+- [ ] **WU1 (backend)**: `GET /panel/api/projects/{slug}/agents` (owner-scoped) returning the three real capabilities honestly described (`{key, name, role, description, read_only}`) + `latest_run` (`{status, tool, at} | null`, from the project's most recent thread by `proyecto`+owner, reading `active_run_id`/`assistant_state.live`). Tests (strict TDD).
+- [ ] **WU2 (frontend)**: api client + types (`ProjectAgent`, `ProjectAgentsResponse`).
+- [ ] **WU3 (frontend)**: `ProjectAgents` component in the `ProjectsPage` "Agentes" tab + wire the `AssistantWorkspace` "Agentes del proyecto" card; roster + latest-run status + honest empty/loading/error states. Tests.
 
 ### A6 — Per-thread tool toggles + stop/cancel
 - [ ] Tool toggles per thread + active-run stop/cancel endpoint.
