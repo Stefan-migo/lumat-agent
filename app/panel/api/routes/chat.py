@@ -16,6 +16,7 @@ from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
 from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
+from app.chat.assistant.state import merge_assistant_state
 from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
@@ -48,6 +49,10 @@ class ApprovalBody(BaseModel):
     run_id: str = Field(min_length=1)
     token: str = Field(min_length=1)
     reject: bool = False
+
+
+class StopBody(BaseModel):
+    run_id: str | None = Field(default=None, min_length=1)
 
 
 class PlanningSessionBody(BaseModel):
@@ -320,6 +325,64 @@ def read_thread(thread_id: int, session: Session = Depends(get_db), current: Use
     attachments = session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.deleted_at.is_(None)).order_by(AssistantAttachment.id)).all()
     artifacts = session.scalars(select(AssistantArtifact).where(AssistantArtifact.thread_id == thread_id).order_by(AssistantArtifact.id)).all()
     return {"thread": thread_dict(thread), "messages": [message_dict(row) for row in messages], "attachments": [to_assistant_attachment_dict(row) for row in attachments], "artifacts": [to_assistant_artifact_dict(row) for row in artifacts]}
+
+
+@router.post("/chat/threads/{thread_id}/stop")
+def stop_thread_run(
+    thread_id: int,
+    body: StopBody | None = None,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    # Lock the owner-scoped row so competing stop requests and terminal writes
+    # cannot both make a decision from an outdated JSONB snapshot.
+    thread = session.scalar(select(InternalChatThread).where(
+        InternalChatThread.id == thread_id, InternalChatThread.user_id == current.id,
+    ).with_for_update())
+    if thread is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    state = thread.assistant_state or {}
+    live = state.get("live") or {}
+    run_id = live.get("run_id")
+    stop = state.get("stop_request") or {}
+    # `approval_pending` is a persisted terminal graph outcome with no runner
+    # left, but the owner decision explicitly allows cancelling that pending
+    # approval rather than leaving an executable plan available.
+    if live.get("status") not in {"running", "approval_pending"}:
+        raise HTTPException(status_code=409, detail="assistant run is not active")
+    if body and body.run_id and body.run_id != run_id:
+        raise HTTPException(status_code=409, detail="assistant run has changed")
+    if stop.get("run_id") != run_id:
+        thread.assistant_state = merge_assistant_state(state, {"stop_request": {"run_id": run_id}})
+    if live.get("status") == "approval_pending" or live.get("stage") == "approval_pending":
+        # The graph has already returned at this safe boundary; there is no
+        # background runner left to consume the intent, so settle it here.
+        settled = dict(thread.assistant_state or {})
+        settled.pop("stop_request", None)
+        thread.assistant_state = merge_assistant_state(settled, {
+            "stage": "cancelled", "execution_status": "cancelled",
+            "live": {"run_id": run_id, "stage": "cancelled", "status": "cancelled"},
+            "events": [*(settled.get("events") or []), {
+                "type": "status", "thread_id": thread_id, "run_id": run_id,
+                "sequence": len(settled.get("events") or []), "status": "cancelled",
+            }],
+        })
+        message = session.scalar(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id,
+            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
+        ).order_by(InternalChatMessage.id.desc()))
+        if message is not None:
+            message.status = "cancelled"
+            message.error = "This assistant run was cancelled by the user."
+            message.completed_at = datetime.now(timezone.utc)
+            message.assistant_metadata = {
+                **(message.assistant_metadata or {}),
+                "cancellation": {"status": "cancelled", "requested_by": "owner"},
+            }
+        session.flush()
+        return {"status": "cancelled", "run_id": run_id}
+    session.flush()
+    return {"status": "stopping", "run_id": run_id}
 
 
 @router.get("/chat/threads/{thread_id}/artifacts/{artifact_id}/download")

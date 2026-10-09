@@ -64,6 +64,10 @@ TITLE_TIMEOUT_SECONDS = 5.0
 STALE_RUN_SECONDS = 600
 
 
+class _StopRequested(Exception):
+    """Internal control flow for a persisted cooperative stop request."""
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -441,7 +445,7 @@ def _run_agent_turn_session(
             compaction=compaction,
             project_authorization=project_authorization,
             cortex_session=(thread.assistant_state or {}).get("cortex_session"),
-            on_stage=lambda stage: publish_live(_session_factory(), thread.id, run_id, stage=stage),
+            on_stage=lambda stage: _publish_stage_or_stop(thread.id, run_id, stage),
         )
         publish_live(_session_factory(), thread.id, run_id, preview="".join(preview))
         thread.active_run_id = run_id
@@ -494,6 +498,26 @@ def _run_agent_turn_session(
                 conversation_id=thread.id,
                 data=message_dict(response_message),
             )
+    except _StopRequested:
+        message.status = "cancelled"
+        message.error = "This assistant run was cancelled by the user."
+        message.completed_at = datetime.now(timezone.utc)
+        message.assistant_metadata = {
+            **(message.assistant_metadata or {}), "run_id": run_id,
+            "cancellation": {"status": "cancelled", "requested_by": "owner"},
+        }
+        state = dict(thread.assistant_state or {})
+        state.pop("stop_request", None)
+        thread.assistant_state = merge_assistant_state(state, {
+            "stage": "cancelled", "execution_status": "cancelled", "recoverable": True,
+            "live": {"run_id": run_id, "stage": "cancelled", "status": "cancelled",
+                     "updated_at": _now_iso()},
+            "events": [*(state.get("events") or []), {
+                "type": "status", "thread_id": thread.id, "run_id": run_id,
+                "sequence": len(state.get("events") or []), "status": "cancelled",
+            }],
+        })
+        thread.active_run_id = run_id
     except Exception as exc:
         message.status = "failed"
         message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
@@ -524,6 +548,18 @@ def _run_agent_turn_session(
 def _session_factory():
     from app.db import SessionLocal
     return SessionLocal
+
+
+def _publish_stage_or_stop(thread_id: int, run_id: str, stage: str) -> None:
+    publish_live(_session_factory(), thread_id, run_id, stage=stage)
+    session = _session_factory()()
+    try:
+        thread = session.get(InternalChatThread, thread_id)
+        stop = (thread.assistant_state or {}).get("stop_request") if thread else None
+        if stop and stop.get("run_id") == run_id:
+            raise _StopRequested
+    finally:
+        session.close()
 
 
 def run_agent_turn(*, thread_id: int, run_id: str, user_id: int,
@@ -589,7 +625,7 @@ def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) 
     ]
 
 
-_TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending"}
+_TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending", "cancelled"}
 
 
 class _EventCursor:

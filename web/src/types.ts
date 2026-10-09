@@ -29,6 +29,7 @@ export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' 
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface ProjectToolPolicy { opt_in_enabled: string[]; }
 export interface ThreadToolPolicy { available: string[]; opt_in_enabled: string[]; inherited: boolean; }
+export interface StopThreadRunResponse { status: 'stopping' | 'cancelled'; run_id: string; }
 export interface ProjectSkill { name: string; description: string; body: string; }
 export interface GlobalSkill { name: string; description: string; scope: "global"; }
 export interface SkillsCatalogResponse { skills: GlobalSkill[]; }
@@ -180,7 +181,7 @@ export interface PendingMemoryRelationsResponse { relations: MemoryRelation[]; }
 export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
 export interface NotificationsResponse { notifications: PanelNotification[]; }
 
-export type InternalChatStatus = 'processing' | 'processed' | 'failed' | 'approval_pending' | 'rejected';
+export type InternalChatStatus = 'processing' | 'processed' | 'failed' | 'approval_pending' | 'rejected' | 'cancelled';
 export interface AssistantPlan { tool?: string | null; arguments?: Record<string, unknown>; summary?: string; status?: string; requires_approval?: boolean; }
 export interface AssistantApproval {
   token?: string;
