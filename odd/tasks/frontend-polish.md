@@ -56,7 +56,7 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T2** page CSS — control-boundary rules → `--border`
 - [x] **T3** `Settings.css` — remove redundant overrides (dark `.menu__trigger` + redundant field `--border`)
 - [x] **T4** `DESIGN_SYSTEM.md` — record the decision
-- [ ] **T5** verify — `npm test` green, `npm run build` OK, visual check
+- [x] **T5** verify — `npm test` green, `npm run build` OK, visual check
 - [x] **T6** `Menu.tsx` — icon trigger `MoreHorizontal` → `EllipsisVertical` (the row-action "..." becomes vertical panel-wide)
 - [x] **T7** `Menu.tsx`/primitives.css — menu-trigger background defaults to the light `--surface`; darker `--corp-bg` only when open
 - [x] **T8** Pagination — fix Conversaciones paging (client-side, 10/page, was showing all 33) + one shared `Pagination` component (numbered pages + `…`) adopted by Conversaciones, Clientes and Usuarios
