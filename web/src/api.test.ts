@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -244,6 +244,53 @@ describe('admin user ficha API contracts', () => {
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: null, phone: '123', email: null, position: 'Técnico' }) }));
     await unlockUser(8);
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8/unlock', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('project file and artifact API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('lists project files from the encoded project URL', async () => {
+    const payload = { files: [{ id: 1, project_id: 3, filename: 'guide.pdf' }] };
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    await expect(listProjectFiles('my project')).resolves.toEqual(payload);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/my%20project/files', expect.anything());
+  });
+
+  it('uploads a project file as FormData', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ file: {} }), { status: 201 }));
+    await uploadProjectFile('ops', new File(['contents'], 'notes.txt'));
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/files', expect.objectContaining({ method: 'POST', body: expect.any(FormData) }));
+    expect(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body).toBeInstanceOf(FormData);
+  });
+
+  it.each([
+    ['project file', () => downloadProjectFile('ops', 7, 'brief.pdf'), '/panel/api/projects/ops/files/7/download'],
+    ['assistant artifact', () => downloadAssistantArtifact(12, 8, 'report.csv'), '/panel/api/chat/threads/12/artifacts/8/download'],
+  ])('downloads a %s through the binary endpoint', async (_name, download, expectedUrl) => {
+    const blob = new Blob(['binary']);
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(blob, { status: 200 }));
+    const createObjectURL = vi.fn().mockReturnValue('blob:test-download');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    await download();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(expectedUrl, { credentials: 'include' });
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(click).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-download');
+  });
+
+  it('throws ApiError for a failed binary download', async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'missing file' }), { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'missing file' }), { status: 404 }));
+    await expect(downloadProjectFile('ops', 7, 'brief.pdf')).rejects.toBeInstanceOf(ApiError);
+    await expect(downloadAssistantArtifact(12, 8, 'report.csv')).rejects.toMatchObject({ status: 404, detail: 'missing file' });
   });
 });
 

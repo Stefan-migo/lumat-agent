@@ -33,6 +33,8 @@ export interface ProjectConfig { instructions: string; tool_policy: ProjectToolP
 export type ProjectConfigUpdate = Partial<ProjectConfig>;
 export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; config?: ProjectConfig; }
 export interface ProjectsResponse { projects: Project[]; }
+export interface ProjectFile { id: number; project_id: number; filename: string; content_type: string; size: number; sha256: string; status: string; created_at: string | null; }
+export interface ProjectFilesResponse { files: ProjectFile[]; }
 export interface ProjectDetailResponse { project: Project; }
 export interface ProjectCandidate { slug: string; name: string; similarity: number; }
 export interface ProjectCreateRequest { slug: string; name: string; purpose: string; }
@@ -183,7 +185,7 @@ export interface AssistantEvent { type: AssistantEventType; thread_id: number; r
 export interface AssistantState { stage?: string; recoverable?: boolean; execution_status?: string; approval?: AssistantApproval | null; events?: AssistantEvent[]; cortex_session?: PlanningSession; }
 export interface InternalChatThread { id: number; user_id?: number; proyecto?: string | null; status: string; assistant_state?: AssistantState; current_plan?: AssistantPlan | null; active_run_id?: string | null; created_at?: string | null; updated_at?: string | null; }
 export interface InternalChatMessage { id: number; thread_id?: number; author: Role | 'agent'; content: string; status: InternalChatStatus; error?: string | null; assistant_metadata?: { run_id?: string; approval?: AssistantApproval | null }; created_at?: string | null; completed_at?: string | null; }
-export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; attachments?: AssistantAttachment[]; }
+export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; }
 export interface InternalChatThreadSummary {
   id: number;
   title: string | null;
@@ -194,6 +196,7 @@ export interface InternalChatThreadSummary {
 }
 export interface InternalChatThreadsResponse { threads: InternalChatThreadSummary[]; }
 export interface AssistantAttachment { id: number; thread_id: number; filename: string; kind: string; content_type: string; size: number; created_at?: string | null; }
+export interface AssistantArtifact { id: number; thread_id: number; filename: string; content_type: string; size: number; created_at?: string | null; }
 export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
 export interface AssistantCapabilities { tools: AssistantCapabilityTool[]; personas: string[]; prompts: string[]; kb_available: boolean; memory_available: boolean; }
 
@@ -360,11 +363,12 @@ export interface CasesResponse {
 
 export interface ManualCaseRequest { customer_id: number; service: string; summary?: string; }
 
-export type DocFormat = 'pdf' | 'md' | 'csv';
+export type DocFormat = 'pdf' | 'md' | 'csv' | 'docx' | 'xlsx';
 export type KbVisibility = 'customer' | 'internal';
 
 export interface Doc {
   id: number;
+  project_id: number | null;
   title: string;
   format: DocFormat;
   version: number;

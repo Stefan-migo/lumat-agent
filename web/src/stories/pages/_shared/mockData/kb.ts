@@ -2,13 +2,14 @@ import type { Doc } from "../../../../types";
 
 /** KB document mocks matching to_doc_dict() in app/panel/api/serializers.py
  *  (R-PRD-PG-3, KB-3/4): {id, title, format, version, active_version, active,
- *  provider, model, cost_meta, created_at, visibility} — snake_case, 6-decimal USD cost
- *  (`'%.6f' % cost_meta` in the Jinja list), ISO datetimes, nullable provider/
- *  model/cost. Covers all 3 DocFormat values, both active states, and docs
- *  with/without prior versions (Restore select). */
+ *  provider, model, cost_meta, created_at, visibility, project_id} — snake_case,
+ *  6-decimal USD cost (`'%.6f' % cost_meta` in the Jinja list), ISO datetimes,
+ *  nullable provider/model/cost/project. Covers all DocFormat values, both active
+ *  states, and docs with/without prior versions (Restore select). */
 export const docs: Doc[] = [
   {
     id: 1,
+    project_id: null,
     title: "Manual de atencion al cliente",
     format: "pdf",
     version: 3,
@@ -22,6 +23,7 @@ export const docs: Doc[] = [
   },
   {
     id: 2,
+    project_id: null,
     title: "Procedimiento de emergencia gas",
     format: "pdf",
     version: 1,
@@ -35,6 +37,7 @@ export const docs: Doc[] = [
   },
   {
     id: 3,
+    project_id: null,
     title: "Tarifas y planes vigentes",
     format: "md",
     version: 2,
@@ -48,6 +51,7 @@ export const docs: Doc[] = [
   },
   {
     id: 4,
+    project_id: null,
     title: "FAQ portabilidad numerica",
     format: "md",
     version: 1,
@@ -61,6 +65,7 @@ export const docs: Doc[] = [
   },
   {
     id: 5,
+    project_id: null,
     title: "Comunas y zonas de cobertura",
     format: "csv",
     version: 4,

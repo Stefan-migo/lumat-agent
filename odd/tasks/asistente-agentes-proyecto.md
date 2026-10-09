@@ -120,7 +120,18 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 - [x] Ingest extracted content to `kb_documents(project_id)`. Commit `e14f757e`.
 - [x] Tools `list_project_files` / `read_project_file`. Commit `611383bc`; RDD assess `medium`, 164 lines, `review_due: false` (`under_budget`).
 - [x] Downloadable artifact path + minimal producer. Commit `3ae808d4` (table `assistant_artifacts` + migration 044, service, tool `artifact.save`, owner-scoped download route); RDD review approved (lineage `review-b1549d051bfb01b1`, 4 lenses, 0 blockers).
-- [ ] UI "Archivos y conocimiento".
+- [ ] **A3.5 — UI "Archivos y conocimiento"** (frontend). Replaces the `ProjectsPage` placeholder
+  card and surfaces three real, API-backed regions with honest empty/disabled states:
+  - [ ] **WU1 (foundation)**: API client + types — `ProjectFile`/`ProjectFilesResponse`/
+    `AssistantArtifact` types; `artifacts` on `InternalChatResponse`; `project_id` on `Doc`;
+    `listProjectFiles`/`uploadProjectFile`, binary download path + `downloadProjectFile`/
+    `downloadAssistantArtifact`; `triggerDownload` helper. Tests in `api.test.ts`.
+  - [ ] **WU2 (project files + knowledge)**: `ProjectResources` component mounted in the
+    `ProjectsPage` "Contexto" tab — project files list + upload + download (agent-surface,
+    owner-scoped), and project knowledge (admin-only, filtered `project_id` from the KB list;
+    honest denied state for non-admins). Tests.
+  - [ ] **WU3 (thread artifacts)**: read `artifacts` from the thread detail in `AgentChat` and
+    render a real list + download in the `AssistantWorkspace` context panel. Tests.
 
 ### A4 — Skills system
 - [ ] Global catalog + UI (global/project, filterable) + agent-proposed skills with guardrail.
@@ -318,3 +329,13 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   SUGGESTION — `list_artifacts` duplicates the query the thread-read route issues itself
   (`app/services/assistant_artifacts.py:66-67` vs `app/panel/api/routes/chat.py:253`). Reviewed boundary
   for the next slice: `3ae808d4` (the docs commit that follows rides on top as a passive change).
+- A3.5 started from a fresh worktree `../lumat-agent-odd-asistente-agentes-proyecto` on
+  `odd/asistente-agentes-proyecto` from `main` = `32bd9052` (owner approved 2026-10-08). The A3.4 PR #528
+  merged, and main advanced to `32bd9052` via PR #529 (`configuracion-redesign`). Scope confirmed by
+  exploration: the `ProjectsPage` "Contexto" tab already renders an "Archivos y conocimiento" placeholder
+  (`web/src/components/pages/ProjectsPage.tsx:60-63`), and `AssistantWorkspace` renders the thread context
+  panel. Graph nodes consulted (via `graphify query` / `GRAPH_REPORT.md`): `AssistantWorkspace.tsx`,
+  `AgentChat.tsx`, `ProjectsPage.tsx`, `KbList.tsx`, `api.ts`, `types.ts`, `services/project_files.py`,
+  `routes/kb.py`, `routes/chat.py`, `api/serializers.py`. KB list route is admin-only and does not filter
+  by project; A3.5 filters the existing list by `project_id` client-side (frontend-only slice) — a
+  `project_id` query filter on `GET /kb` is a follow-up, not this slice.

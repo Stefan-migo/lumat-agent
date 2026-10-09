@@ -4,8 +4,8 @@ import type { Doc } from "../../types";
 import { KbList } from "./KbList";
 
 const docs: Doc[] = [
-  { id: 1, title: "Manual de atención", format: "pdf", version: 3, active_version: 2, active: true, visibility: "customer", provider: null, model: null, cost_meta: 0.0012, created_at: "2026-07-10T14:02:00-04:00" },
-  { id: 2, title: "Procedimiento interno", format: "md", version: 1, active_version: 1, active: false, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: "2026-07-14T09:30:00-04:00" },
+  { id: 1, project_id: null, title: "Manual de atención", format: "pdf", version: 3, active_version: 2, active: true, visibility: "customer", provider: null, model: null, cost_meta: 0.0012, created_at: "2026-07-10T14:02:00-04:00" },
+  { id: 2, project_id: null, title: "Procedimiento interno", format: "md", version: 1, active_version: 1, active: false, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: "2026-07-14T09:30:00-04:00" },
 ];
 
 describe("KbList landing", () => {
