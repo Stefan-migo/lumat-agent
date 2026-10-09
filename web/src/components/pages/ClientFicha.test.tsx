@@ -558,7 +558,8 @@ describe("ClientFicha merge dialog", () => {
 
     await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
-    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(within(dialog).getByLabelText("Otro cliente"));
+    await user.click(await within(dialog).findByRole("option"));
     expect(within(dialog).getByText("Revisa las fichas antes de confirmar.")).toBeInTheDocument();
     expect(within(dialog).getByText(/Vista previa: se moverán/)).toHaveTextContent("conversaciones: 2 · casos: 1 · notas: 3 · equipos: 1 · visitas: 0");
     expect(within(dialog).getByText(/2 conflictos de memoria/)).toBeInTheDocument();
@@ -568,6 +569,23 @@ describe("ClientFicha merge dialog", () => {
 
     expect(previewClientMerge).toHaveBeenCalledWith(7, 8);
     expect(mergeClient).toHaveBeenCalledWith(7, 8);
+  });
+
+  it("search filters other clients by typed name or phone", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [
+      { ...ficha.customer, id: 8, name: "José Soto", phone_e164: "+56987654321" },
+      { ...ficha.customer, id: 9, name: "Carla Díaz", phone_e164: "+56933333333" },
+    ] });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await clickCustomerMenuItem(user, "Fusionar con otro cliente");
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Otro cliente"), "3333");
+
+    expect(await within(dialog).findByRole("option", { name: /Carla Díaz/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("option", { name: /José Soto/ })).not.toBeInTheDocument();
   });
 
   it("reloads equipment after a survivor-side merge", async () => {
@@ -582,7 +600,8 @@ describe("ClientFicha merge dialog", () => {
     await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(1));
     await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
-    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(within(dialog).getByLabelText("Otro cliente"));
+    await user.click(await within(dialog).findByRole("option"));
     await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
 
     await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(2));
@@ -603,7 +622,8 @@ describe("ClientFicha merge dialog", () => {
 
     await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
-    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(within(dialog).getByLabelText("Otro cliente"));
+    await user.click(await within(dialog).findByRole("option"));
     await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
 
     expect(await screen.findByRole("heading", { level: 1, name: "José Soto" })).toBeInTheDocument();
@@ -618,7 +638,8 @@ describe("ClientFicha merge dialog", () => {
 
     await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
-    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(within(dialog).getByLabelText("Otro cliente"));
+    await user.click(await within(dialog).findByRole("option"));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("cannot merge a customer tombstone");
     expect(within(dialog).getByRole("button", { name: "Confirmar fusión" })).toBeDisabled();
@@ -633,7 +654,7 @@ describe("ClientFicha slice 2 — product register", () => {
   it("uses the panel primitives for its controls instead of raw elements", () => {
     const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
-    expect(container.querySelector("select")).toHaveClass("field__control");
+    expect(container.querySelector(".combobox__input")).toHaveClass("field__control");
     expect(container.querySelector("textarea")).toHaveClass("field__control");
     expect(container.querySelectorAll("button:not(.btn):not(.dialog__close):not(.menu__trigger):not(.tabs__tab):not(.client-ficha__history-entry)")).toHaveLength(0);
   });
