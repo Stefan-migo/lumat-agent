@@ -99,4 +99,4 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - 2026-10-09 — T10: replaced the redundant open-thread row menu action with human-state
   transitions while retaining emergency acknowledgement and the bot-row take button.
   Added a state-transition request test. Conversations list tests (15/15) and
-  `npm run build` passed. Commit pending.
+  `npm run build` passed. Commit `672a3b5b`.
