@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, User
+from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, User, UserRole
 from app.services.events import publish_event
 from app.services import notifications
 from _testdb import admin_database_url
@@ -81,6 +81,51 @@ def test_event_fanout_creates_one_panel_notification_and_push_failure_is_audited
         assert notifications.process_operation(session, operation.id) is False
         session.commit()
         assert session.scalar(select(AuditLog).where(AuditLog.action == "notification.push_failed")) is not None
+
+
+def test_notify_admins_fans_out_and_stages_notification_envelope():
+    admin_ids = [_user("panel-admin-one"), _user("panel-admin-two")]
+    with SessionLocal() as session:
+        operator = User(username="panel-operator", password_hash="unused", role=UserRole.OPERADOR)
+        session.add(operator)
+        session.flush()
+        notifications.notify_admins(
+            session, title="Nueva visita", content="Se agendó una visita.", source="appointment",
+            source_id=17, dedupe_key="appointment:17:booked",
+        )
+        session.commit()
+
+        rows = session.scalars(select(PanelNotification).order_by(PanelNotification.user_id)).all()
+        operation = session.scalar(select(NotificationOperation).where(
+            NotificationOperation.idempotency_key == "panel:appointment:17:booked"
+        ))
+        assert [row.user_id for row in rows] == sorted(admin_ids)
+        assert all(row.operation_id == operation.id for row in rows)
+        assert operation.channel == "panel"
+        assert operation.status == "sent"
+        assert operation.delivered_at is not None
+        assert session.info["realtime_events"][-1].type == "notification"
+
+
+def test_notify_admins_replay_does_not_duplicate_rows_or_operations():
+    first, second = _user("panel-replay-one"), _user("panel-replay-two")
+    with SessionLocal() as session:
+        for _ in range(2):
+            notifications.notify_admins(
+                session, title="Visita reagendada", content="Se actualizó una visita.",
+                source="appointment", source_id="23", dedupe_key="appointment:23:rescheduled",
+            )
+        session.commit()
+
+        assert session.scalar(select(NotificationOperation).where(
+            NotificationOperation.idempotency_key == "panel:appointment:23:rescheduled"
+        )) is not None
+        assert session.scalar(select(PanelNotification).where(PanelNotification.user_id == first)).operation_id == session.scalar(
+            select(PanelNotification).where(PanelNotification.user_id == second)
+        ).operation_id
+        assert session.scalar(select(PanelNotification.id).where(PanelNotification.user_id == first)) is not None
+        assert session.scalar(select(PanelNotification.id).where(PanelNotification.user_id == second)) is not None
+        assert len(session.scalars(select(PanelNotification)).all()) == 2
 
 
 def test_push_failure_creates_and_delivers_policy_fallback(monkeypatch):
