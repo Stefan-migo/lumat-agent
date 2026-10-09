@@ -1,6 +1,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { LucideIcon } from "lucide-react";
-import { MoreHorizontal } from "lucide-react";
+import { EllipsisVertical } from "lucide-react";
 import { Icon } from "./Icon";
 import "./primitives.css";
 
@@ -54,7 +54,7 @@ export function Menu({
         disabled={disabled}
         aria-label={ariaLabel ?? (iconTrigger ? label : undefined)}
       >
-        {iconTrigger ? <Icon icon={MoreHorizontal} /> : <>{label}{showChevron ? <span className="menu__chevron" aria-hidden="true" /> : null}</>}
+        {iconTrigger ? <Icon icon={EllipsisVertical} /> : <>{label}{showChevron ? <span className="menu__chevron" aria-hidden="true" /> : null}</>}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="menu__content" aria-label={label} align={align} collisionPadding={collisionPadding}>

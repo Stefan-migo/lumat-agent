@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.chat.assistant.approval import issue_approval
 from app.db import SessionLocal
-from app.models import AuditLog, AutomationRule, InternalChatMessage, InternalChatThread, User
+from app.models import AuditLog, AutomationInstallation, AutomationRule, InternalChatMessage, InternalChatThread, User
 from app.services import automation
 from app.services.agent_chat import approve_plan
 from app.services.events import publish_event
@@ -15,26 +15,12 @@ from app.services.users import hash_password
 
 def test_approved_assistant_rule_is_persisted_audited_and_worker_visible(migrated_db):
     suffix = uuid4().hex[:10]
-    assistant_rule_args = {
-        "name": f"Assistant rule {suffix}",
-        "event_type": "message.received",
-        "conditions": {"text": "assistant-runtime"},
-        "channel": "whatsapp",
-        "template_event": "message.received",
-        "cooldown_seconds": 0,
-    }
-    ui_rule_args = {
-        **assistant_rule_args,
-        "name": f"UI rule {suffix}",
-        "conditions": {"text": "ui-runtime"},
-    }
+    assistant_rule_args = {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}}
 
     with SessionLocal() as session:
         user = User(username=f"assistant-runtime-{suffix}", password_hash=hash_password("pass"), role="admin")
         session.add(user)
         session.flush()
-        automation.create_rule(session, ui_rule_args, actor=user.username)
-
         run_id = f"runtime-{suffix}"
         plan = {"tool": "automation.create_rule", "arguments": assistant_rule_args, "requires_approval": True}
         approval = issue_approval(plan)
@@ -59,17 +45,20 @@ def test_approved_assistant_rule_is_persisted_audited_and_worker_visible(migrate
         assert message is not None
         session.commit()
 
-        assistant_rule = session.scalar(
-            select(AutomationRule).where(AutomationRule.name == assistant_rule_args["name"])
-        )
+        installation = session.scalar(select(AutomationInstallation).where(
+            AutomationInstallation.recipe_id == "appointment_confirmation"
+        ))
+        assert installation is not None
+        assert installation.enabled is True
+        assistant_rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation.id))
         assert assistant_rule is not None
+        assert assistant_rule.installation_id == installation.id
+        assert assistant_rule.enabled is True
         assert assistant_rule.created_by == "assistant"
-        names = session.scalars(select(AutomationRule.name).order_by(AutomationRule.name)).all()
-        assert names == sorted([ui_rule_args["name"], assistant_rule_args["name"]])
         audit = session.scalar(
             select(AuditLog).where(
-                AuditLog.action == "automation.rule.create",
-                AuditLog.entity_id == str(assistant_rule.id),
+                AuditLog.action == "automation.installation.create",
+                AuditLog.entity_id == str(installation.id),
             )
         )
         assert audit is not None
@@ -77,10 +66,10 @@ def test_approved_assistant_rule_is_persisted_audited_and_worker_visible(migrate
 
         event = publish_event(
             session,
-            event_type="message.received",
-            entity_type="message",
+            event_type="appointment.booked",
+            entity_type="appointment",
             entity_id=f"runtime-{suffix}",
-            payload={"phone": "+56911111111", "text": "assistant-runtime"},
+            payload={"phone": "+56911111111"},
             dedupe_key=f"runtime:{suffix}",
         )
         assert automation.evaluate_event(session, event) == [assistant_rule.id]

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listProjectAgents } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -121,6 +121,25 @@ describe('global skills API contract', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
     await expect(listGlobalSkills()).resolves.toEqual(payload);
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/skills', expect.objectContaining({ credentials: 'include' }));
+  });
+});
+
+describe('automation recipe API contracts', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('uses catalog and installation endpoints with expected verbs and payloads', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ recipes: [], installations: [], installation: {} }), { status: 200 }));
+    await listAutomationRecipes();
+    await listAutomationInstallations();
+    await createAutomationInstallation('recipe-id', { channel: 'email' });
+    await updateAutomationInstallation(7, { channel: 'whatsapp' });
+    await enableAutomationInstallation(7);
+    await disableAutomationInstallation(7);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/panel/api/automation-recipes', expect.objectContaining({ credentials: 'include' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/automation-installations', expect.objectContaining({ credentials: 'include' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/panel/api/automation-installations', expect.objectContaining({ method: 'POST', body: '{"recipe_id":"recipe-id","parameters":{"channel":"email"}}' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/panel/api/automation-installations/7', expect.objectContaining({ method: 'PATCH', body: '{"parameters":{"channel":"whatsapp"}}' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(5, '/panel/api/automation-installations/7/enable', expect.objectContaining({ method: 'POST' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(6, '/panel/api/automation-installations/7/disable', expect.objectContaining({ method: 'POST' }));
   });
 });
 

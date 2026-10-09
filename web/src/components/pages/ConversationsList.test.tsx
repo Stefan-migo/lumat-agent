@@ -132,4 +132,23 @@ describe('production conversations list', () => {
     await user.click(screen.getByRole('menuitem', { name: /reconocer/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/cases/44/ack', expect.anything()));
   });
+
+  it('offers human conversation state actions and posts the selected transition', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    render(<ConversationsList data={queue([row(12, 'human', 7)])} />);
+    const user = userEvent.setup();
+    const desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+
+    await user.click(within(desktop).getByRole('button', { name: /acciones para cliente 12/i }));
+    expect(screen.getByRole('menuitem', { name: 'Devolver al agente' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cerrar conversación' })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Cerrar conversación' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/12/state', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"state":"closed"'),
+    })));
+    const request = fetchMock.mock.calls.find(([url]) => url === '/panel/api/conversations/12/state')?.[1];
+    expect(JSON.parse(request?.body as string)).toEqual(expect.objectContaining({ state: 'closed', expected_version: 2 }));
+  });
 });

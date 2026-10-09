@@ -25,12 +25,8 @@ from sqlalchemy import select
 
 def _rule_args():
     return {
-        "name": "notify",
-        "event_type": "case.created",
-        "conditions": {},
-        "channel": "email",
-        "template_event": "case.created",
-        "cooldown_seconds": 0,
+        "recipe_id": "appointment_confirmation",
+        "parameters": {"channel": "whatsapp"},
     }
 
 
@@ -83,7 +79,7 @@ def test_cost_guard_rejects_before_handler(monkeypatch):
 def test_write_requires_exact_consumed_approval_before_handler(monkeypatch):
     called = []
     monkeypatch.setattr(
-        "app.chat.assistant.tools.registry.automation.create_rule",
+        "app.chat.assistant.tools.registry.automation_installations.install",
         lambda *args, **kwargs: called.append((args, kwargs)),
     )
     approval = issue_approval({"tool": "automation.create_rule", "arguments": _rule_args()})
@@ -91,7 +87,7 @@ def test_write_requires_exact_consumed_approval_before_handler(monkeypatch):
         execute_tool(
             SimpleNamespace(),
             "automation.create_rule",
-            {**_rule_args(), "name": "tampered"},
+            {**_rule_args(), "parameters": {"channel": "email"}},
             whitelist={"automation.create_rule"},
             approval={**approval, "status": "consumed"},
             role="admin",

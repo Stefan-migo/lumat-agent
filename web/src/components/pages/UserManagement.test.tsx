@@ -233,7 +233,7 @@ describe("UserManagement", () => {
     render(<UserManagement currentUser={admin} />);
     await within(await screen.findByRole("table")).findByRole("link", { name: "user0" });
     expect(screen.getByText("Mostrando 10 de 12 usuarios")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Siguiente" }));
+    await user.click(screen.getByRole("button", { name: "Página siguiente" }));
     expect(screen.getByText("Mostrando 2 de 12 usuarios")).toBeInTheDocument();
     expect(screen.getByText("2", { selector: "span" })).toBeInTheDocument();
   });
