@@ -140,10 +140,10 @@ Scope decisions (closed — do not re-litigate):
 - D-A4-3: the agent may propose only PROJECT skills; a proposal whose name collides with a GLOBAL skill is rejected fail-closed and audited (project wins by name → shadowing a global is the D6 escalation vector). The project owner's manual edit MAY shadow a global (that is D9's designed override).
 - D-A4-4: a dedicated **"Skills" tab** in the ProjectsPage detail (global read-only + project editable, filterable).
 
-- [ ] **PR1 — Global catalog + Skills tab UI**
-  - [ ] WU1.1 (backend): read-only endpoint for the global skills index + tests.
-  - [ ] WU1.2 (frontend): api client + types (`GlobalSkill`, catalog response).
-  - [ ] WU1.3 (frontend): `ProjectSkills` component in the new "Skills" tab (global read-only + project editable + filter, honest empty/denied states) + tests.
+- [x] **PR1 — Global catalog + Skills tab UI**
+  - [x] WU1.1 (backend): read-only endpoint for the global skills index + tests. `66084945`.
+  - [x] WU1.2 (frontend): api client + types (`GlobalSkill`, catalog response). `5cd8ac97`.
+  - [x] WU1.3 (frontend): `ProjectSkills` component in the new "Skills" tab (global read-only + project editable + filter, honest empty/denied states) + tests. `3b294614`.
 - [ ] **PR2 — Agent-proposed skills with guardrail**
   - [ ] WU2.1 (backend): `skill.propose` tool (approval-gated) + no-shadow fail-closed handler + audit + tests.
   - [ ] WU2.2 (frontend): render the proposal in the thread (reuse the approval card) + confirm/reject wiring + tests.
@@ -366,3 +366,5 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   (`web/src/api.ts:75-83`), which can interrupt the download in browsers that have not yet consumed
   the blob URL; deferring revocation would be safer. Reviewed boundary: the A3.5 tree frozen by that
   review; the A4 slice starts from the branch base after this branch merges.
+- A4 scope closed by the owner (2026-10-08/09): D-A4-1 global catalog read-only in the UI (git-backed); D-A4-2 agent proposals thread-bound (reuse the approval flow + `assistant_state` JSONB, no migration); D-A4-3 the agent may not shadow a global skill (fail-closed + audit; the owner's manual edit may, per D9); D-A4-4 dedicated "Skills" tab in the `ProjectsPage` detail. No migration required.
+- A4 PR1 implemented on `odd/asistente-agentes-proyecto` from base `3085d0e9`. Commits: `06c3e662` (docs: register A4 work units), `66084945` (feat panel: global skills catalog endpoint), `5cd8ac97` (feat web: skills catalog api client + types), `3b294614` (feat web: project skills tab with global catalog + editing). Checks green: backend `uv run pytest tests/` 1831 passed; frontend `npx tsc -b --force --noEmit` OK, `npx vitest run --no-file-parallelism` 1089 passed, `npm run build` OK. Graph nodes consulted: `skills.py`/`global_skill_index()`, `api/serializers.py`, `api.ts`/`apiFetch()`, `ProjectsPage()`, `Tabs()`. RDD assess over `--base-ref 3085d0e9 --committed-only`: risk `medium`, 195 lines, `review_due: false` (`under_budget`) — stays pending in the slice until a later commit reaches the budget.
