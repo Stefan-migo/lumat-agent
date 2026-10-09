@@ -137,7 +137,8 @@ def test_event_fanout_creates_one_operation_per_policy_channel(migrated_db):
         ]
 
 
-def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db):
+def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db, monkeypatch):
+    monkeypatch.setattr(scheduling, "_schedule_followup", lambda *args, **kwargs: None)
     with SessionLocal() as session:
         suffix = str(uuid4().int)[:10]
         phone = f"+56949{suffix[:6]}"
@@ -170,6 +171,18 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
             technician_id=technician.id, actor="admin",
         )
         scheduling.cancel(session, appointment, actor="admin", reason="test")
+        no_show = scheduling.book(
+            session, service="mantención", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 8, 21), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="admin",
+        )
+        scheduling.close(session, no_show, outcome=scheduling.AppointmentStatus.NO_SHOW, actor="admin")
+        completed = scheduling.book(
+            session, service="revisión", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 8, 22), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="admin",
+        )
+        scheduling.close(session, completed, outcome=scheduling.AppointmentStatus.COMPLETED, actor="admin")
         session.commit()
 
     with SessionLocal() as session:
@@ -177,8 +190,9 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
         assert event_types == [
             "message.received", "case.created", "case.updated",
             "appointment.booked", "appointment.rescheduled", "appointment.cancelled",
+            "appointment.booked", "appointment.no_show", "appointment.booked", "appointment.completed",
         ]
         panel_rows = session.scalars(select(PanelNotification).order_by(PanelNotification.id)).all()
-        assert len(panel_rows) == 3
+        assert len(panel_rows) == 4
         assert {row.user_id for row in panel_rows} == {admin.id}
         assert {row.operation.channel for row in panel_rows} == {"panel"}
