@@ -97,8 +97,8 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
 - Forecast: **> ~1,000 authored changed lines** a lo largo de los 3 slices → excede el budget de ~400.
   `delivery_strategy`: `ask-on-risk`. Cada slice es un work unit revisable con su(s) commit(s) y su
   verificación. PR/merge quedan en manos del owner.
-- `chain_strategy`: **pendiente de confirmar** con el owner antes del primer PR (patrón histórico del
-  repo: `stacked-to-main`).
+- `chain_strategy`: **stacked branch chain** (confirmado con el owner). Cada work unit es su propia
+  branch encadenada sobre la anterior, mergeadas en orden: `#545 → #546 → #547 → #550 → #551`.
 
 ## Work units (stable IDs)
 
@@ -183,3 +183,8 @@ they are separate later work.
 
 - 2026-10-09 — Task doc creado desde la sesión `2026-10-09-automatizaciones-recetas`. Worktree
   `../lumat-agent-odd-automatizaciones-recetas`, branch `odd/automatizaciones-recetas`, base `07ddfb05`.
+- 2026-10-09 — Slice 1 cerrado (A2, A3, A4, A5a, A5b) con PRs encadenados abiertos:
+  **#545** (A2 → main), **#546** (A3 → #545), **#547** (A4 agent tool → #546),
+  **#550** (A5a API → #547), **#551** (A5b UI → #550). Todos OPEN, review RDD aprobado por work unit.
+  **A1 (runner/cron) queda diferido al release, en el servidor** (requiere autorización remota).
+  NL input deferido dentro de A5. Slice 2 (B1 offsets) y Slice 3 (C1 resúmenes) pendientes.
