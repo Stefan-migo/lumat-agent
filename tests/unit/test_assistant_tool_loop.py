@@ -519,12 +519,8 @@ def test_rejecting_skill_proposal_audits_without_executing(monkeypatch):
         (
             "automation.create_rule",
             {
-                "name": "N",
-                "event_type": "appointment.created",
-                "conditions": {},
-                "channel": "whatsapp",
-                "template_event": "reminder",
-                "cooldown_seconds": 0,
+                "recipe_id": "appointment_confirmation",
+                "parameters": {"channel": "whatsapp"},
             },
         ),
     ],

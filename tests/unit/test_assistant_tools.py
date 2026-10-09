@@ -20,7 +20,7 @@ from app.chat.assistant.tools.registry import (
     ProjectListFilesArgs,
     ProjectReadFileArgs,
     ProjectRenameArgs,
-    RuleArgs,
+    RecipeArgs,
     ToolValidationError,
     TOOL_REGISTRY,
     ToolDefinition,
@@ -579,17 +579,10 @@ def test_unknown_and_invalid_tools_are_rejected_before_execution():
 def test_write_requires_consumed_exact_approval(monkeypatch):
     called = []
     monkeypatch.setattr(
-        "app.chat.assistant.tools.registry.automation.create_rule",
+        "app.chat.assistant.tools.registry.automation_installations.install",
         lambda *args, **kwargs: called.append((args, kwargs)),
     )
-    args = {
-        "name": "notify",
-        "event_type": "case.created",
-        "conditions": {},
-        "channel": "email",
-        "template_event": "case.created",
-        "cooldown_seconds": 0,
-    }
+    args = {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}}
     with pytest.raises(ToolValidationError):
         execute_tool(SimpleNamespace(), "automation.create_rule", args, role="admin")
     assert called == []
@@ -697,7 +690,9 @@ def test_write_argument_schemas_forbid_missing_and_extra_fields():
     with pytest.raises(ValueError):
         ProjectMergeArgs.model_validate({"source": "s", "target": "t", "extra": 1})
     with pytest.raises(ValueError):
-        RuleArgs.model_validate({"name": "n", "event_type": "e", "channel": "c", "template_event": "t", "cooldown_seconds": -1})
+        RecipeArgs.model_validate({"parameters": {"channel": "whatsapp"}})
+    with pytest.raises(ValueError):
+        RecipeArgs.model_validate({"recipe_id": "appointment_confirmation", "extra": True})
 
 
 def test_project_create_requires_exact_decision_payload(monkeypatch):
@@ -725,13 +720,51 @@ def test_project_create_requires_exact_decision_payload(monkeypatch):
 
 def test_write_handler_failure_is_preserved_as_error_evidence(monkeypatch):
     monkeypatch.setattr(
-        "app.chat.assistant.tools.registry.automation.create_rule",
+        "app.chat.assistant.tools.registry.automation_installations.install",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")),
     )
-    args = {"name": "n", "event_type": "e", "conditions": {}, "channel": "c", "template_event": "t", "cooldown_seconds": 0}
+    args = {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}}
     approval = issue_approval({"tool": "automation.create_rule", "arguments": args})
     assert consume_approval(approval, approval["token"])
     result = execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval, role="admin")
+    assert result["status"] == "error"
+    assert result["evidence"]["status"] == "error"
+
+
+def test_approved_recipe_install_activates_through_installer(monkeypatch):
+    calls = []
+    session = SimpleNamespace()
+    installation = SimpleNamespace(id=3)
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.automation_installations.install",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or installation,
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.automation_installations.installation_snapshot",
+        lambda row: {"id": row.id, "enabled": True},
+    )
+    arguments = {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}}
+    approval = issue_approval({"tool": "automation.create_rule", "arguments": arguments})
+    assert consume_approval(approval, approval["token"])
+
+    result = execute_tool(session, "automation.create_rule", arguments, approval=approval, role="admin")
+
+    assert result["status"] == "completed"
+    assert calls == [((session, "appointment_confirmation", {"channel": "whatsapp"}), {"actor": "assistant", "executor_origin": True, "enabled": True})]
+    assert result["result"] == {"id": 3, "enabled": True}
+
+
+def test_unknown_recipe_install_returns_error_evidence(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.automation_installations.install",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("unknown recipe")),
+    )
+    arguments = {"recipe_id": "not-a-recipe", "parameters": {}}
+    approval = issue_approval({"tool": "automation.create_rule", "arguments": arguments})
+    assert consume_approval(approval, approval["token"])
+
+    result = execute_tool(SimpleNamespace(), "automation.create_rule", arguments, approval=approval, role="admin")
+
     assert result["status"] == "error"
     assert result["evidence"]["status"] == "error"
 
