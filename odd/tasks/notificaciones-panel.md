@@ -116,10 +116,24 @@ slices. `chained-pr` not required unless the running count crosses the budget.
 - [x] T5 frontend subscription + badge — commit `da02cf6a` (`feat(web): refresh notification badge from realtime`)
 - [x] T6 fan-out, replay, envelope, and appointment outcome tests — commits `e082efad`, `d120c026`, `2146c335`, and `da02cf6a`
 
-Verification evidence: backend integration suites were blocked by PostgreSQL refusing connections
-at `localhost:5761`; the full suite had the same database connection failure. Frontend test/build
-commands could not start because the worktree has no installed `vitest`/`tsc` binaries. Python
-`compileall` and `git diff --check` passed.
+Verification evidence (orchestrator re-run; PostgreSQL on `localhost:5761` up, web dependencies installed):
+
+- `uv run pytest tests/integration/test_h4_notifications.py tests/integration/test_h4_automations.py -q`: 14 passed.
+- `uv run pytest -q`: 1844 passed in 398.54s.
+- `npm --prefix web run build`: green (`tsc -b` + `vite build`).
+- `npm --prefix web run test`: this branch adds no failures — the same 8-file set fails the same 3
+  pre-existing `ClientFicha` tests on `origin/main` and on the branch. The full-suite 46-report was
+  parallel-load flakiness; running the affected files in isolation reproduces only the base 3.
+
+Post-writer corrections (commits `d9f20f48`, `245b9f4e`, `947ed57a`):
+
+- carrier operation now uses `source_entity="panel"` / `source_id="panel:<id>"` so it cannot collide
+  with appointment operations read by source; the shared `source_entity="appointment"` had broken 4
+  reminder tests.
+- `AppShell` subscription cleanup returns `void` (it returned a `boolean`-returning unsubscribe, which
+  failed `tsc -b`).
+- the automations fan-out test now asserts 6 rows (booked x3, rescheduled, cancelled, no_show) instead
+  of 4.
 
 Graph check for implementation: queried notification production/delivery, scheduling publishers,
 emergency handling, and the AppShell realtime subscription. Consulted nodes: `create_operation`,
@@ -131,4 +145,5 @@ queries between separate helper/client nodes returned no graph path and were not
 
 ## Next step
 
-Re-run the recorded verification commands when PostgreSQL and the web dependencies are available.
+None. Implementation is complete and verified in this worktree. Delivery (push, PR, merge) is the
+owner's decision.
