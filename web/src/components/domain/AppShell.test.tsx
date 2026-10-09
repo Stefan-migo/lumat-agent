@@ -336,12 +336,12 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('deep-links to automation rules and renders a forbidden state for operadores', async () => {
+  it('deep-links to the recipe catalog and renders a forbidden state for operadores', async () => {
     window.history.replaceState({}, '', '/panel/app/automation-rules');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'Forbidden' }), { status: 403 }));
 
     const { container } = render(<AppShell user={operador} />);
-    expect(await screen.findByText(/no tienes permiso|acceso denegado|forbidden/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/no tienes permiso/i)).length).toBeGreaterThan(0);
     expect(sidebar(container).queryByText('Automatizaciones')).not.toBeInTheDocument();
     await userEvent.setup().click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
@@ -349,19 +349,13 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses browser back after opening an automation rule detail route', async () => {
+  it('does not retain the legacy automation rule detail route', async () => {
     window.history.replaceState({}, '', '/panel/app/automation-rules');
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      const body = { rules: [{ id: 12, name: 'Aviso', event_type: 'case.created', conditions: {}, channel: 'whatsapp', template_event: 'case.created', cooldown_seconds: 0, enabled: true, created_by: 'ana', created_at: null, updated_at: null }] };
-      return new Response(JSON.stringify(body), { status: 200 });
-    });
+    window.history.replaceState({}, '', '/panel/app/automation-rules/12');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
     render(<AppShell user={admin} />);
-    expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('link', { name: 'Aviso' }));
-    expect(window.location.pathname).toBe('/panel/app/automation-rules/12');
-    window.history.back();
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(() => expect(window.location.pathname).toBe('/panel/app/automation-rules'));
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/panel/app/');
     vi.restoreAllMocks();
   });
 

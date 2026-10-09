@@ -38,6 +38,7 @@ from app.models import (
 )
 from app.services.customers import CUSTOMER_STATE_TRANSITIONS
 from app.services.project_config import ProjectConfig
+from app.services.automation_installations import installation_snapshot
 
 
 def _iso(value) -> str | None:
@@ -314,6 +315,30 @@ def to_automation_rule_dict(rule: AutomationRule) -> dict:
         "created_at": _iso(rule.created_at),
         "updated_at": _iso(rule.updated_at),
     }
+
+
+def to_recipe_dict(recipe) -> dict:
+    return {
+        "recipe_id": recipe.recipe_id,
+        "name": recipe.name,
+        "description": recipe.description,
+        "category": recipe.category,
+        "trigger_kind": recipe.trigger_kind,
+        "event_type": recipe.event_type,
+        "channel_allowed": sorted(recipe.channel_allowed),
+        "recipient_target": recipe.recipient_target,
+        "content": recipe.content,
+        "cooldown_seconds": recipe.cooldown_seconds,
+        "parameters": [
+            {"key": parameter.key, "label": parameter.label, "type": parameter.type,
+             "required": parameter.required, "default": parameter.default}
+            for parameter in recipe.parameters
+        ],
+    }
+
+
+def to_installation_dict(installation) -> dict:
+    return installation_snapshot(installation)
 
 
 def to_agenda_dict(appointment: Appointment, *, customer_name: str | None, customer_address: str | None, customer_comuna: str | None, case_name: str | None, technician_name: str | None, timezone_name: str, sync: AppointmentCalendarSync | None) -> dict:

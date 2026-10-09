@@ -23,6 +23,7 @@ from app.panel.api.routes import (
     chat,
     advanced_dashboard,
     automation_rules,
+    automation_recipes,
     technician,
     users,
     projects,
@@ -47,6 +48,7 @@ api_router.include_router(settings.router)
 api_router.include_router(chat.router)
 api_router.include_router(advanced_dashboard.router)
 api_router.include_router(automation_rules.router)
+api_router.include_router(automation_recipes.router)
 api_router.include_router(technician.router)
 api_router.include_router(users.router)
 api_router.include_router(projects.router)

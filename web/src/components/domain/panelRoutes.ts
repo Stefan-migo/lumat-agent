@@ -8,7 +8,6 @@ export type PanelRoute = {
   clientTab?: 'summary' | 'cases' | 'visits' | 'conversations';
   userId?: number;
   conversationId?: number;
-  automationRuleId?: number;
   kbDocId?: number;
   appointmentId?: number;
   projectSlug?: string;
@@ -21,7 +20,6 @@ export const PANEL_BASE_PATH = '/panel/app/';
 export function isDetailRoute(route: PanelRoute): boolean {
   return (route.view === 'clients' && route.clientId !== undefined && Number.isSafeInteger(route.clientId) && route.clientId > 0)
     || (route.view === 'conversations' && route.conversationId !== undefined && Number.isSafeInteger(route.conversationId) && route.conversationId > 0)
-    || (route.view === 'automation-rules' && route.automationRuleId !== undefined && Number.isSafeInteger(route.automationRuleId) && route.automationRuleId > 0)
     || (route.view === 'kb' && route.kbDocId !== undefined && Number.isSafeInteger(route.kbDocId) && route.kbDocId > 0)
     || (route.view === 'agenda' && route.appointmentId !== undefined && Number.isSafeInteger(route.appointmentId) && route.appointmentId > 0)
     || (route.view === 'projects' && Boolean(route.projectSlug))
@@ -74,9 +72,6 @@ export function pathForRoute(route: PanelRoute): string {
   }
   if (route.view === 'conversations' && route.conversationId !== undefined && Number.isSafeInteger(route.conversationId) && route.conversationId > 0) {
     return `${base}/${route.conversationId}`;
-  }
-  if (route.view === 'automation-rules' && route.automationRuleId !== undefined && Number.isSafeInteger(route.automationRuleId) && route.automationRuleId > 0) {
-    return `${base}/${route.automationRuleId}`;
   }
   if (route.view === 'kb' && route.kbDocId !== undefined && Number.isSafeInteger(route.kbDocId) && route.kbDocId > 0) {
     return `${base}/${route.kbDocId}`;
@@ -141,7 +136,7 @@ export function parsePanelPath(pathname: string): PanelRoute {
   if (view === 'projects') return { view, projectSlug: segments[3] };
   if (view === 'planning-sessions') return { view, planningSessionSlug: segments[3] };
   if (id === null || !['clients', 'users', 'conversations', 'automation-rules', 'kb', 'agenda'].includes(view)) return fallback();
-  if (view === 'automation-rules') return { view, automationRuleId: id };
+  if (view === 'automation-rules') return fallback();
   if (view === 'kb') return { view, kbDocId: id };
   if (view === 'agenda') return { view, appointmentId: id };
   if (view === 'clients') {

@@ -62,6 +62,7 @@ EXPECTED_TABLES = {
     "domain_events",
     "automation_rules",
     "automation_executions",
+    "automation_installations",  # 045_automation_installations.sql (recipe installations)
     "panel_notifications",
     "push_subscriptions",
     "internal_chat_threads",
@@ -687,6 +688,8 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("042_project_files",),
         ("043_document_format_docx_xlsx",),
         ("044_assistant_artifacts",),
+        ("045_automation_installations",),
+        ("046_automation_rule_target_content",),
     ]
 
 

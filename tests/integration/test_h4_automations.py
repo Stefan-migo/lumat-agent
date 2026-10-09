@@ -13,6 +13,9 @@ from app.models import AuditLog, Appointment, AutomationExecution, AutomationRul
 from app.webhook.ingest import NormalizedMessage, persist_message
 from app.services.events import publish_event
 from app.services import cases, scheduling
+from app.services.automation_installations import install
+from app.services.settings import get_setting
+from app.services import recipes
 from _testdb import admin_database_url
 
 ADMIN_DB_URL = admin_database_url()
@@ -135,6 +138,54 @@ def test_event_fanout_creates_one_operation_per_policy_channel(migrated_db):
             ("whatsapp", "automation:1:event:1"),
             ("email", "automation:2:event:1"),
         ]
+
+
+def test_recipe_event_targets_customer_and_uses_recipe_content(migrated_db):
+    from app.services.automation import evaluate_event
+
+    recipe = recipes.get_recipe("appointment_confirmation")
+    with SessionLocal() as session:
+        installation = install(session, recipe.recipe_id, {"channel": "whatsapp"}, actor="admin")
+        rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation.id))
+        rule.enabled = True
+        event = publish_event(
+            session, event_type="appointment.booked", entity_type="appointment", entity_id="booked-1",
+            payload={"recipient": "+56912345678"}, dedupe_key="appointment:booked:recipe-customer",
+        )
+        evaluate_event(session, event)
+        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.event_id == event.id))
+        assert (operation.recipient, operation.content) == ("+56912345678", recipe.content)
+
+
+def test_recipe_event_targets_admin_setting_and_uses_recipe_content(migrated_db):
+    from app.services.automation import evaluate_event
+
+    recipe = recipes.get_recipe("case_new_request")
+    with SessionLocal() as session:
+        installation = install(session, recipe.recipe_id, {"channel": "whatsapp"}, actor="admin")
+        rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation.id))
+        rule.enabled = True
+        event = publish_event(
+            session, event_type="case.created", entity_type="case", entity_id="case-recipe-admin",
+            payload={}, dedupe_key="case:created:recipe-admin",
+        )
+        evaluate_event(session, event)
+        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.event_id == event.id))
+        assert (operation.recipient, operation.content) == (
+            get_setting(session, "notify.owner_whatsapp"), recipe.content,
+        )
+
+
+def test_free_rule_defaults_to_payload_recipient_and_template_content(migrated_db):
+    from app.services.automation import evaluate_event
+
+    with SessionLocal() as session:
+        rule = _rule(session, cooldown_seconds=0, conditions={})
+        event = _event(session, payload={"phone": "+56911112222"}, key="free-rule-defaults")
+        evaluate_event(session, event)
+        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.event_id == event.id))
+        assert (rule.recipient_target, rule.content) == ("customer", None)
+        assert (operation.recipient, operation.content) == ("+56911112222", rule.template_event)
 
 
 def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db, monkeypatch):
