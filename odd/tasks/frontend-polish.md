@@ -67,6 +67,7 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T13** `primitives.css` — account menu aligned to the Lumat palette: neutral avatar (dropped `--success-bg`), role rendered as `--text-muted` metadata (dropped `--teal-500`), sign-out row transparent with `--danger` text and a `--danger-bg` hover
 - [x] **T14** `SelfProfile.tsx`/`primitives.css` — "Mi perfil" redesigned on the `UserFicha` pattern: large identity avatar + role badge + "Usuario de acceso" rail card, card headers with icon + description, two-column fields with leading glyphs and helpers, and a `Descartar cambios | Guardar cambios` footer. Profile save now maps an empty field to null, so the `Borrar nombre/teléfono` buttons are gone; the password card gains `Confirmar nueva contraseña` with a match guard and reveal toggles
 - [x] **T15** `ClientFicha.tsx` — merge dialog "Otro cliente": replaced the plain `Select` (whose placeholder promised a search it could not perform) with the `Combobox` primitive, so the operator can type a name or phone and filter the candidate list
+- [x] **T16** `primitives.css` — one global scrollbar rule (thin `--primary-700` pill on a transparent track, `--brand-forest` on hover) replaces the per-component copies on the dashboard motivos list and the client-ficha history dialog, so every scroll container — including the new merge combobox listbox — matches the same treatment
 
 ## Acceptance
 
@@ -116,3 +117,6 @@ in `DESIGN_SYSTEM.md`, not hidden.
   confirmation + reveal toggles. Commit `3fd66103`. SelfProfile tests 6/6, app 8/8.
 - 2026-10-09 — T15: merge dialog "Otro cliente" becomes a searchable `Combobox` (typing
   filters by name/phone). Commit `fe8d1935`. ClientFicha 50/50.
+- 2026-10-09 — T16: scrollbars unified globally to the dashboard treatment; the two
+  per-component copies were removed. Commit `198bfd54`. Dashboard + ClientFicha + token
+  guard 102/102.
