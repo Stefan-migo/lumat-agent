@@ -26,6 +26,12 @@ describe('production conversations list', () => {
     expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations', expect.anything());
   });
 
+  it('renders markdown summaries as clean plain text', () => {
+    render(<ConversationsList data={queue([row(4, 'human', 7, { summary: '**Needs** visit' })])} />);
+    expect(screen.getAllByText('Needs visit').length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain('**');
+  });
+
   it.each([401, 403, 409, 422])('renders an actionable error for HTTP %s', async (status) => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'problem' }), { status }));
     render(<ConversationsList />);
