@@ -109,8 +109,13 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
   instalaciones + migración idempotente + servicio de instalación/parametrización.
   Commits `71a0b693` (modelo) y `47c1e4f4` (harness). Suite verde: 1834 passed.
   RDD **aprobado** — lineage `review-9b4846fa6e0c8eb8` (4 lentes, 0 bloqueantes).
-- [ ] **A3 — Recetas de evento (5)**: confirmación de reserva, aviso de cancelación, reprogramación,
-  no-show, nueva solicitud al equipo.
+- [x] **A3 — Recetas de evento (5)**: confirmación de reserva, aviso de cancelación, reprogramación,
+  no-show, nueva solicitud al equipo. Requirió una extensión mínima del motor: `AutomationRule.recipient_target`
+  + `content` (migración `046`), resolución de admin desde settings (`notify.owner_whatsapp`/`owner_email`),
+  y contenido `payload → rule.content → template_event`. Commit `d4f5baaf`. Suite verde: 1840 passed.
+  RDD **aprobado** — lineage `review-7cf5522c2723c822` (4 lentes, 0 hallazgos). R3-001 resuelto.
+  Nota: los mensajes de las recetas son v1 (texto fijo chileno neutro); interpolar fecha/servicio queda como
+  follow-up (requiere enriquecer los payloads). Targets fijos (customer/admin); configurable queda para más adelante.
 - [ ] **A4 — Tool del agente**: adaptar a recetas (`recipe_id` + parámetros tipados) manteniendo
   opt-in/admin-only/aprobación.
 - [ ] **A5 — API + UI de tarjetas**: catálogo (tarjetas) + activas/parametrizadas; input NL que
@@ -132,9 +137,9 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
 These were reported as informational on the approved A2 candidate. They do NOT reopen the review;
 they are separate later work.
 
-- [ ] **R3-001** (`app/services/recipes.py:59`) — `compile_rule_fields` indexes `values["channel"]`
-  unconditionally, but the recipe model does not require a channel parameter; a recipe without one
-  raises `KeyError`. Tighten the model or the compile path before A3 adds real recipes.
+- [x] **R3-001** (`app/services/recipes.py:59`) — **resuelto en A3**: `compile_rule_fields` ahora valida la
+  presencia de `channel` y lanza un `ValueError` claro (`recipe has no channel parameter`), más un assert de
+  integridad del catálogo.
 - [ ] **R3-002** (`app/services/automation_installations.py:11`) — `installation_snapshot` returns the
   stored `parameters` dict by reference (mutable), and optional string params accept `null`. Return a
   detached copy and decide the null policy.
