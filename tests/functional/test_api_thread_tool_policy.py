@@ -82,12 +82,13 @@ def test_put_rejects_tool_outside_owner_role_allowlist(client, make_user):
     assert response.status_code == 400
 
 
-def test_policy_reads_and_writes_conflict_while_run_is_active(client, make_user):
+def test_policy_writes_conflict_while_run_is_active(client, make_user):
     owner = make_user("policy-running-owner", "policy-pass")
     thread_id = _seed_thread(owner, state={"live": {"status": "running"}})
     _login(client, "policy-running-owner")
 
-    assert client.get(f"/panel/api/chat/threads/{thread_id}/tool-policy").status_code == 409
+    # Reads stay available so the UI can render the current selection; only writes are locked.
+    assert client.get(f"/panel/api/chat/threads/{thread_id}/tool-policy").status_code == 200
     assert client.put(
         f"/panel/api/chat/threads/{thread_id}/tool-policy", json={"opt_in_enabled": ["web.fetch"]}
     ).status_code == 409

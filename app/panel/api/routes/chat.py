@@ -72,12 +72,15 @@ def _tool_policy_thread(session: Session, thread_id: int, current: User) -> Inte
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
-    thread = result[0]
+    return result[0]
+
+
+def _require_no_active_run(thread: InternalChatThread) -> None:
     # `active_run_id` remains populated after terminal outcomes; only `running`
     # represents a live, non-terminal run (completed/failed/approval_pending are terminal).
+    # Reads stay available; only writes are locked while a run is in flight.
     if ((thread.assistant_state or {}).get("live") or {}).get("status") == "running":
         raise HTTPException(status_code=409, detail="tool policy cannot change while a run is active")
-    return thread
 
 
 def _thread_tool_policy_response(session: Session, thread: InternalChatThread, current: User) -> dict:
@@ -102,6 +105,7 @@ def update_thread_tool_policy(
     current: User = Depends(require_agent_surface_json),
 ) -> dict:
     thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
     try:
         set_thread_tool_policy(thread, body.opt_in_enabled, current.role)
     except ValueError as exc:
@@ -117,6 +121,7 @@ def delete_thread_tool_policy(
     current: User = Depends(require_agent_surface_json),
 ) -> dict:
     thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
     reset_thread_tool_policy(thread)
     session.flush()
     return _thread_tool_policy_response(session, thread, current)
