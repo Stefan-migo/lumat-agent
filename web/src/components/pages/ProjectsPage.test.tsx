@@ -119,7 +119,7 @@ describe("projects panel", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
   });
 
-  it("explains that project-scoped threads are not supported and shows an honest agent empty state", async () => {
+  it("explains that project-scoped threads are not supported and loads the project agent roster", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
     await screen.findByRole("tab", { name: "Hilos" });
@@ -129,7 +129,7 @@ describe("projects panel", () => {
     expect(screen.queryByText(/Conversación|thread/i)).not.toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Agentes" }), { button: 0 });
-    expect(await screen.findByText("La gestión de agentes por proyecto todavía no está disponible.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Agentes del proyecto" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Skills" })).toBeInTheDocument();
   });
 
