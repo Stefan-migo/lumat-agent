@@ -298,6 +298,7 @@
 .user-ficha__form-card form { display: grid; gap: var(--space-3); }
 .user-ficha__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .user-ficha__footer { display: flex; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.user-ficha__footer--end { justify-content: flex-end; }
 .user-ficha__security-row { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .user-ficha__security-icon { display: inline-flex; flex: 0 0 auto; width: var(--space-8); height: var(--space-8); align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--border); color: var(--text); }
 .user-ficha__security-copy { display: grid; gap: var(--space-1); min-width: 0; margin-right: auto; }

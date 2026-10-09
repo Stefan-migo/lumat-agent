@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from "react";
+import { LockKeyhole, Phone, Save, ShieldCheck, UserRound } from "lucide-react";
 import { ApiError, changePassword, fetchMe, updateMe } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { roleLabels } from "../../roleLabels";
 import { Avatar } from "../primitives/Avatar";
+import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
+import { Icon } from "../primitives/Icon";
 import { Input } from "../primitives/Input";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -15,31 +18,30 @@ export function SelfProfile() {
   const profileData = useAsyncData(fetchMe);
   const profile = profileData.data;
   const [draft, setDraft] = useState<{ name: string; phone: string } | null>(null);
-  const [cleared, setCleared] = useState<{ name: boolean; phone: boolean }>({ name: false, phone: false });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileFeedback, setProfileFeedback] = useState<Feedback | null>(null);
   const [password, setPassword] = useState({ current_password: "", new_password: "" });
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<Feedback | null>(null);
   const fields = draft ?? { name: profile?.name ?? "", phone: profile?.phone ?? "" };
 
+  const discardProfile = () => {
+    setDraft({ name: profile?.name ?? "", phone: profile?.phone ?? "" });
+    setProfileFeedback(null);
+  };
+
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!profile || savingProfile) return;
-    const body = {
-      name: cleared.name ? null : (fields.name.trim() || null),
-      phone: cleared.phone ? null : (fields.phone.trim() || null),
-    };
-    if ((!cleared.name && !body.name && profile.name !== null) || (!cleared.phone && !body.phone && profile.phone !== null)) {
-      setProfileFeedback({ tone: "danger", title: "Usa “Borrar” para quitar un dato; no dejes el campo vacío." });
-      return;
-    }
     setSavingProfile(true);
     setProfileFeedback(null);
+    const name = fields.name.trim();
+    const phone = fields.phone.trim();
     try {
-      await updateMe(body);
-      setDraft({ name: body.name ?? "", phone: body.phone ?? "" });
-      setCleared({ name: false, phone: false });
+      await updateMe({ name: name || null, phone: phone || null });
+      setDraft({ name, phone });
       setProfileFeedback({ tone: "success", title: "Datos personales guardados" });
     } catch {
       setProfileFeedback({ tone: "danger", title: "No pudimos guardar tus datos personales." });
@@ -51,11 +53,18 @@ export function SelfProfile() {
   const savePassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (savingPassword) return;
+    if (password.new_password !== confirmPassword) {
+      setPasswordError("Las contraseñas no coinciden.");
+      setPasswordFeedback(null);
+      return;
+    }
+    setPasswordError(null);
     setSavingPassword(true);
     setPasswordFeedback(null);
     try {
       await changePassword(password);
       setPassword({ current_password: "", new_password: "" });
+      setConfirmPassword("");
       setPasswordFeedback({ tone: "success", title: "Contraseña actualizada" });
     } catch (error) {
       const title = error instanceof ApiError && error.status === 401
@@ -76,34 +85,48 @@ export function SelfProfile() {
       : undefined;
 
   return (
-    <PageFrame title="Mi perfil" meta="Tus datos personales y acceso" state={loadingState}>
-      {!profile ? null : <div className="detail-region">
-        <section className="detail-region__rail" aria-label="Identidad">
-          <Card title="Tu cuenta">
-            <div className="client-ficha__customer-controls">
-              <Avatar name={profile.username} />
-              <strong>{profile.username}</strong>
-              <span>{roleLabels[profile.role]}</span>
+    <PageFrame title="Mi perfil" subtitle="Gestiona tus datos personales y la seguridad de tu cuenta." state={loadingState}>
+      {!profile ? null : <div className="user-ficha__layout">
+        <Card title="Tu cuenta" className="user-ficha__account">
+          <div className="user-ficha__identity">
+            <Avatar name={profile.username} className="user-ficha__avatar" />
+            <div className="user-ficha__identity-copy">
+              <h3>{profile.username}</h3>
+              <Badge tone="success">{roleLabels[profile.role]}</Badge>
             </div>
-          </Card>
-        </section>
-        <div className="detail-region__main">
-          <Card title="Datos personales">
+          </div>
+          <div className="user-ficha__login">
+            <span>Usuario de acceso</span>
+            <strong>{profile.username}</strong>
+            <p>Tu rol define los permisos dentro de Lumat.</p>
+          </div>
+        </Card>
+        <div className="user-ficha__details">
+          <Card title="Datos personales" icon={UserRound} description="Actualiza cómo te identificas y cómo podemos contactarte." className="user-ficha__form-card">
             <form onSubmit={(event) => void saveProfile(event)}>
-              <Input label="Nombre" value={fields.name} onChange={(event) => { setDraft({ ...fields, name: event.target.value }); setCleared({ ...cleared, name: false }); }} />
-              <Button type="button" variant="secondary" onClick={() => { setDraft({ ...fields, name: "" }); setCleared({ ...cleared, name: true }); }}>Borrar nombre</Button>
-              <Input label="Teléfono" type="tel" value={fields.phone} onChange={(event) => { setDraft({ ...fields, phone: event.target.value }); setCleared({ ...cleared, phone: false }); }} />
-              <Button type="button" variant="secondary" onClick={() => { setDraft({ ...fields, phone: "" }); setCleared({ ...cleared, phone: true }); }}>Borrar teléfono</Button>
+              <div className="user-ficha__fields">
+                <Input label="Nombre" icon={UserRound} helper="Este nombre se mostrará en tu perfil." value={fields.name} onChange={(event) => setDraft({ ...fields, name: event.target.value })} />
+                <Input label="Teléfono (opcional)" icon={Phone} type="tel" helper="Incluye el código de país." value={fields.phone} onChange={(event) => setDraft({ ...fields, phone: event.target.value })} />
+              </div>
               {profileFeedback ? <StateMessage tone={profileFeedback.tone} role={profileFeedback.tone === "danger" ? "alert" : "status"} title={profileFeedback.title} /> : null}
-              <Button type="submit" disabled={savingProfile}>{savingProfile ? "Guardando…" : "Guardar cambios"}</Button>
+              <footer className="user-ficha__footer">
+                <Button type="button" variant="secondary" disabled={savingProfile} onClick={discardProfile}>Descartar cambios</Button>
+                <Button type="submit" disabled={savingProfile}><Icon icon={Save} />{savingProfile ? "Guardando…" : "Guardar cambios"}</Button>
+              </footer>
             </form>
           </Card>
-          <Card title="Cambiar contraseña">
+          <Card title="Seguridad" icon={ShieldCheck} description="Cambia tu contraseña de acceso." className="user-ficha__form-card">
             <form onSubmit={(event) => void savePassword(event)}>
-              <Input label="Contraseña actual" type="password" autoComplete="current-password" required value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} />
-              <Input label="Nueva contraseña" type="password" autoComplete="new-password" minLength={8} required value={password.new_password} onChange={(event) => setPassword({ ...password, new_password: event.target.value })} />
+              <Input label="Contraseña actual" type="password" revealable icon={LockKeyhole} autoComplete="current-password" required value={password.current_password} onChange={(event) => setPassword({ ...password, current_password: event.target.value })} />
+              <div className="user-ficha__fields">
+                <Input label="Nueva contraseña" type="password" revealable icon={LockKeyhole} autoComplete="new-password" minLength={8} required value={password.new_password} onChange={(event) => { setPassword({ ...password, new_password: event.target.value }); setPasswordError(null); }} />
+                <Input label="Confirmar nueva contraseña" type="password" revealable icon={LockKeyhole} autoComplete="new-password" minLength={8} required error={passwordError ?? undefined} value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setPasswordError(null); }} />
+              </div>
+              <span className="field__helper">Usa una contraseña única y difícil de adivinar.</span>
               {passwordFeedback ? <StateMessage tone={passwordFeedback.tone} role={passwordFeedback.tone === "danger" ? "alert" : "status"} title={passwordFeedback.title} /> : null}
-              <Button type="submit" disabled={savingPassword}>{savingPassword ? "Actualizando…" : "Cambiar contraseña"}</Button>
+              <footer className="user-ficha__footer user-ficha__footer--end">
+                <Button type="submit" disabled={savingPassword}>{savingPassword ? "Actualizando…" : "Actualizar contraseña"}</Button>
+              </footer>
             </form>
           </Card>
         </div>
