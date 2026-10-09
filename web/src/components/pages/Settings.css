@@ -5,6 +5,7 @@
 .settings-agent__row > .card { min-width: 0; }
 .settings-agent__layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(15rem, 1fr); align-items: start; gap: var(--space-3); }
 .settings-agent__form { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
+.settings-agent__form .field__control { border-color: var(--border); }
 .settings-agent__layout > .help-panel { min-width: 0; }
 .settings-agent__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .settings-agent__helper { margin: calc(-1 * var(--space-2)) 0 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
