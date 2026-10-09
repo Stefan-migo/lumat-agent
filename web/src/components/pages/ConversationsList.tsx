@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronDown, MessageSquare, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
-import { ApiError, acknowledgeCase, listActiveConversations, listConversations, takeConversation } from "../../api";
+import { Check, ChevronDown, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
+import { ApiError, acknowledgeCase, changeConversationState, listActiveConversations, listConversations, takeConversation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse } from "../../types";
 import { Button } from "../primitives/Button";
@@ -77,15 +77,24 @@ export function ConversationsList({ data: controlledData, state: controlledState
   const nameFor = (c: Conversation) => c.customer?.name ?? customerName?.(c.customer_id) ?? `Cliente #${c.customer_id}`;
   const openThread = (c: Conversation) => { setSelectedId(c.id); onOpenThread?.(c.id); };
   const menuItems = (c: Conversation): MenuItem[] => [
-    ...(onOpenThread ? [{ value: "open", label: "Abrir conversación", icon: MessageSquare }] : []),
     ...(c.emergency && !c.acknowledged_at && c.case_id != null ? [{ value: "acknowledge", label: "Reconocer emergencia" }] : []),
+    ...(c.state === "human"
+      ? [
+          { value: "to-bot", label: "Devolver al agente" },
+          { value: "close", label: "Cerrar conversación" },
+        ]
+      : []),
   ];
   const rowActions = (c: Conversation) => <div className="table__actions conversations-list__actions">
     {c.state === "bot" ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button> : null}
-    {menuItems(c).length ? <Menu trigger="icon" align="end" collisionPadding={8} label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => value === "open" ? openThread(c) : void runAction(c.id, () => acknowledgeCase(c.case_id!))} /> : null}
+    {menuItems(c).length ? <Menu trigger="icon" align="end" collisionPadding={8} label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => {
+      if (value === "acknowledge") void runAction(c.id, () => acknowledgeCase(c.case_id!));
+      else if (value === "to-bot") void runAction(c.id, () => changeConversationState(c.id, "bot", c.version ?? 0));
+      else if (value === "close") void runAction(c.id, () => changeConversationState(c.id, "closed", c.version ?? 0));
+    }} /> : null}
   </div>;
   const columns: Column<Conversation>[] = [
-    { key: "identity", header: "Cliente y conversación", render: (c) => {
+    { key: "identity", header: "Cliente y conversación", width: "38%", render: (c) => {
       const name = nameFor(c);
       return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ? plainSummary(c.summary) : "Sin resumen disponible"}</span></div></div>;
     } },

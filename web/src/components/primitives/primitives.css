@@ -19,6 +19,19 @@
  *     no consumer requires them this slice).
  */
 
+/* ---- Global scrollbars ----
+ * Every scroll container shares the dashboard "Motivos de contacto" treatment:
+ * a thin forest pill on a transparent track. Defined once here instead of per
+ * component, so new scroll areas inherit it for free. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-700) transparent;
+}
+*::-webkit-scrollbar { width: var(--space-2); height: var(--space-2); }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { border-radius: var(--radius-pill); background: var(--primary-700); }
+*::-webkit-scrollbar-thumb:hover { background: var(--brand-forest); }
+
 /* ---- Button (T7.1) ---- */
 .btn {
   display: inline-flex;
@@ -46,7 +59,7 @@
 .btn--secondary {
   background: var(--surface);
   color: var(--corp-text);
-  border-color: var(--border-strong);
+  border-color: var(--border);
 }
 .btn--secondary:hover {
   background: var(--corp-surface-hover);
@@ -71,7 +84,7 @@
 .btn--danger {
   background: var(--surface);
   color: var(--danger);
-  border-color: var(--border-strong);
+  border-color: var(--border);
 }
 .btn--danger:hover {
   background: var(--surface);
@@ -152,7 +165,7 @@
   font-family: var(--font-ui);
   font-size: var(--text-md);
   padding: var(--space-2);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--corp-radius);
   background: var(--surface);
   color: var(--corp-text);
@@ -246,7 +259,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--corp-radius);
   background: var(--surface);
   color: var(--corp-fg-muted);
@@ -298,6 +311,7 @@
 .user-ficha__form-card form { display: grid; gap: var(--space-3); }
 .user-ficha__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .user-ficha__footer { display: flex; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.user-ficha__footer--end { justify-content: flex-end; }
 .user-ficha__security-row { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .user-ficha__security-icon { display: inline-flex; flex: 0 0 auto; width: var(--space-8); height: var(--space-8); align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--border); color: var(--text); }
 .user-ficha__security-copy { display: grid; gap: var(--space-1); min-width: 0; margin-right: auto; }
@@ -406,7 +420,7 @@
   min-width: calc(var(--space-8) + var(--space-2));
   height: var(--space-8);
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--corp-text);
@@ -536,6 +550,7 @@
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
 .table-footer__mobile-count { display: none; }
 .table-footer__pagination { display: flex; align-items: center; gap: var(--space-2); }
+.pagination__ellipsis { display: grid; min-width: var(--space-8); min-height: var(--space-8); place-items: center; color: var(--text-muted); }
 .table-footer__pagination .btn { min-width: var(--space-8); min-height: var(--space-8); padding: var(--space-1) var(--space-2); }
 .table-footer__page { display: grid; min-width: var(--space-8); min-height: var(--space-8); place-items: center; border-radius: var(--radius-sm); background: var(--corp-primary); color: var(--text-on-dark); font-weight: var(--weight-semibold); }
 .table__actions-cell { text-align: right !important; }
@@ -879,7 +894,8 @@
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
-.tabs__tab-copy { display: grid; gap: var(--space-1); text-align: left; }
+.tabs__tab-copy { display: inline-flex; align-items: baseline; gap: var(--space-1); text-align: left; }
+.tabs--vertical .tabs__tab-copy { display: grid; gap: var(--space-1); }
 .tabs__tab-copy small { color: var(--corp-fg-muted); font-size: var(--text-xs); font-weight: 400; }
 .tabs--vertical { display: grid; grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.5fr); gap: var(--space-4); }
 .tabs--vertical [role="tablist"] { display: grid; align-content: start; gap: var(--space-1); border: 0; }
@@ -962,10 +978,7 @@
 .client-ficha__history-dialog { display: grid; gap: var(--space-4); }
 .client-ficha__history-table { overflow-x: auto; }
 .dialog[open]:has(.client-ficha__history-dialog) { display: flex; flex-direction: column; max-height: min(90dvh, 52rem); overflow: hidden; }
-.dialog:has(.client-ficha__history-dialog) .dialog__body { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--primary-700) transparent; }
-.dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar { width: var(--space-2); }
-.dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar-thumb { background: var(--primary-700); border-radius: var(--radius-lg); }
-.dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar-track { background: transparent; }
+.dialog:has(.client-ficha__history-dialog) .dialog__body { min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .dialog__message { margin: 0 0 var(--space-3); }
 .dialog__actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
 .spinner {
@@ -1098,10 +1111,12 @@
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--corp-border);
   border-radius: var(--corp-radius);
-  background: var(--corp-bg);
+  background: var(--surface);
   color: var(--corp-fg);
   cursor: pointer;
 }
+/* An open menu trigger reads as selected: the darker surface. */
+.menu__trigger[data-state="open"] { background: var(--corp-bg); }
 /* Icon-only trigger: the single row-action control, square and named for assistive
    technology through `aria-label`, so the row's own name is not repeated as visible
    action text (DESIGN_SYSTEM.md:475). 40px is the control floor this block already
@@ -1111,6 +1126,7 @@
   align-items: center;
   justify-content: center;
   min-width: 40px;
+  border-radius: var(--radius-md);
   padding: var(--space-2);
 }
 .menu__content {
@@ -1929,7 +1945,7 @@
 .panel-shell__menu-button,
 .panel-shell__drawer-close {
   padding: var(--space-2) var(--space-3);
-  border-color: var(--border-strong);
+  border-color: var(--border);
   background: var(--corp-surface);
   color: var(--corp-primary);
 }
@@ -2013,22 +2029,20 @@
 }
 .panel-shell__back:hover,
 .panel-shell__account-trigger:hover { background: var(--surface-subtle); }
-/* DS-TKN-13: an interactive control's visible boundary resolves through --border-strong, never the
-   decorative --border. The reference draws the back control as a --surface-filled chip, which is also what
-   makes the boundary measurable: --border-strong is 3.09:1 on --surface but only 2.88:1 on --header-bg. */
-.panel-shell__back { background: var(--surface); border-color: var(--border-strong); }
+/* DS-TKN-13: per the 2026-10-09 product decision, this control boundary resolves through --border. */
+.panel-shell__back { background: var(--surface); border-color: var(--border); }
 .panel-shell__back:hover { background: var(--bg); }
 .panel-shell__back:focus-visible,
 .panel-shell__account-trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .panel-shell__account { position: relative; }
 .panel-shell__account-avatar { width: var(--space-8); height: var(--space-8); }
 .panel-shell__account-name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-shell__account-menu { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: var(--z-modal); display: grid; width: min(20rem, calc(100vw - var(--space-6))); gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow-3); }
+.panel-shell__account-menu { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: var(--z-modal); display: grid; width: min(20rem, calc(100vw - var(--space-6))); gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow-3); }
 .panel-shell__account-identity { display: grid; grid-template-columns: var(--space-8) minmax(0, 1fr); gap: var(--space-3); align-items: center; min-width: 0; }
-.panel-shell__account-menu-avatar { width: var(--space-8); height: var(--space-8); background: var(--success-bg); color: var(--primary-800); }
+.panel-shell__account-menu-avatar { width: var(--space-8); height: var(--space-8); }
 .panel-shell__account-copy { display: grid; min-width: 0; gap: var(--space-1); }
 .panel-shell__account-copy strong { overflow: hidden; color: var(--text); font-weight: var(--weight-bold); text-overflow: ellipsis; white-space: nowrap; }
-.panel-shell__account-copy > span { color: var(--teal-500); }
+.panel-shell__account-copy > span { color: var(--text-muted); font-size: var(--text-xs); }
 .panel-shell__account-divider { height: 1px; background: var(--border); }
 /* Neutral menu row ("Mi perfil"). Host-agnostic: the same rule styles the header menu and the sidebar's
    user nav, so the entry can be added to either without new CSS. Without it the button falls back to the
@@ -2040,9 +2054,9 @@
 .panel-shell__account-item svg { width: var(--space-5); height: var(--space-5); flex: none; }
 .panel-shell__account-item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .panel-shell__account-menu .panel-shell__account-logout,
-.panel-shell__user-options .panel-shell__account-logout { display: flex; width: 100%; min-height: 44px; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--danger-bg); color: var(--danger); text-align: left; font: inherit; font-weight: var(--weight-semibold); cursor: pointer; }
+.panel-shell__user-options .panel-shell__account-logout { display: flex; width: 100%; min-height: 44px; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--danger); text-align: left; font: inherit; font-weight: var(--weight-semibold); cursor: pointer; }
 .panel-shell__account-menu .panel-shell__account-logout:hover,
-.panel-shell__user-options .panel-shell__account-logout:hover { background: var(--danger-tint); }
+.panel-shell__user-options .panel-shell__account-logout:hover { background: var(--danger-bg); }
 .panel-shell__account-logout svg { width: var(--space-5); height: var(--space-5); flex: none; }
 .panel-shell__header-action:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
@@ -2156,7 +2170,7 @@
   overflow-y: auto;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text);
@@ -2690,7 +2704,7 @@
    the outbound `--primary-800` background. `currentColor` is the bubble's own
    text color, so the ring reads on both surfaces. */
 .assistant-chat__icon-button { display: inline-flex; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: inherit; cursor: pointer; transition: border-color var(--duration-base) var(--ease-out), background-color var(--duration-base) var(--ease-out); }
-.assistant-chat__icon-button:hover { border-color: var(--border-strong); background: color-mix(in srgb, currentColor 8%, transparent); }
+.assistant-chat__icon-button:hover { border-color: var(--border); background: color-mix(in srgb, currentColor 8%, transparent); }
 .assistant-chat__icon-button:focus-visible { outline: var(--focus-ring-width) solid currentColor; outline-offset: var(--focus-ring-offset); }
 /* Failed-message error: own danger surface so it never reads as message body. */
 .assistant-chat__message-error { margin: var(--space-2) 0 0; padding: var(--space-1) var(--space-2); border: 1px solid var(--danger-border); border-radius: var(--radius-sm); background: var(--danger-bg); color: var(--danger); font-size: var(--text-xs); font-weight: var(--weight-semibold); }
@@ -2709,7 +2723,7 @@
    (attach left, send right). The textarea keeps its label in the DOM for the
    accessible name but the label is visually hidden; the container carries the
    focus ring so the whole surface reads as one control (industry standard). */
-.assistant-chat__composer { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-1); }
+.assistant-chat__composer { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-1); }
 .assistant-chat__composer:has(.assistant-chat__textarea:focus) { border-color: var(--primary-700); box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring); }
 .assistant-chat__composer .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .assistant-chat__textarea { width: 100%; min-width: 0; min-height: var(--space-8); max-height: 10rem; padding: var(--space-2) 0; border: 0; background: transparent; resize: none; overflow-y: auto; }
@@ -2728,7 +2742,7 @@
 .assistant-chat__send:disabled { background: var(--border-strong); cursor: not-allowed; }
 .assistant-chat__send:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .assistant-chat__status { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; color: var(--corp-fg-muted); font-size: var(--text-xs); }
-.assistant-chat__attachment { padding: var(--space-1) var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+.assistant-chat__attachment { padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .assistant-chat__context { position: fixed; inset: 0 0 0 auto; z-index: var(--z-modal); width: min(24rem, calc(100vw - var(--space-4))); padding: var(--space-5); background: var(--brand-bg-elevated); color: var(--corp-text); box-shadow: var(--shadow-3); }
 .assistant-chat__context > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .assistant-chat__context h2 { margin: 0; font-size: var(--text-lg); }
@@ -2900,7 +2914,7 @@
 .kb-search__advanced summary { width: fit-content; color: var(--text); cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .kb-upload-form { display: grid; gap: var(--space-3); }
 .kb-upload__picker { display: grid; gap: var(--space-2); }
-.kb-upload__dropzone { display: grid; min-height: 9rem; place-items: center; gap: var(--space-2); padding: var(--space-4); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--text-muted); text-align: center; cursor: pointer; }
+.kb-upload__dropzone { display: grid; min-height: 9rem; place-items: center; gap: var(--space-2); padding: var(--space-4); border: 1px dashed var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text-muted); text-align: center; cursor: pointer; }
 .kb-upload__dropzone:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .kb-upload__dropzone--active { border-color: var(--brand); background: var(--brand-bg-elevated); }
 .kb-upload__input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -3080,11 +3094,7 @@
 .dashboard__motivos__sub { color:var(--corp-fg-muted); font-size:var(--text-xs); }
 
 /* ---- Motivos ranked rows ---- */
-.dashboard__motivos-list { display:grid; align-content:start; gap:var(--space-1); min-height:0; max-height:calc(var(--space-8) * 6 + var(--space-6)); overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--primary-700) transparent; }
-.dashboard__motivos-list::-webkit-scrollbar { width:var(--space-2); }
-.dashboard__motivos-list::-webkit-scrollbar-track { background:transparent; }
-.dashboard__motivos-list::-webkit-scrollbar-thumb { border-radius:var(--radius-pill); background:var(--primary-700); }
-.dashboard__motivos-list::-webkit-scrollbar-thumb:hover { background:var(--brand-forest); }
+.dashboard__motivos-list { display:grid; align-content:start; gap:var(--space-1); min-height:0; max-height:calc(var(--space-8) * 6 + var(--space-6)); overflow-y:auto; }
 .dashboard__motivo { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); min-height:calc(var(--space-8) + var(--space-2)); padding:var(--space-2) var(--space-3); border-radius:var(--radius-md); background:var(--brand-bg-elevated); color:var(--corp-text); font-size:var(--text-sm); }
 .dashboard__motivo-count { min-width:var(--space-6); padding:var(--space-1) var(--space-2); border-radius:var(--radius-pill); background:var(--brand-bg); color:var(--corp-text); text-align:center; font-size:var(--text-xs); font-weight:var(--weight-semibold); font-variant-numeric:var(--corp-value); }
 
@@ -3128,8 +3138,11 @@
 .agenda-page__section-heading { display: flex; align-items: center; gap: var(--space-3); }
 .agenda-page__cards { display: grid; gap: var(--space-4); min-width: 0; }
 .agenda-page__visit-card { gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--surface); }
-.agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); }
-.agenda-page__visit-heading > time { display: inline-flex; align-self: center; align-items: center; gap: var(--space-2); color: var(--corp-text); font-size: var(--text-xl); font-weight: var(--weight-semibold); font-variant-numeric: var(--corp-value); }
+.agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: var(--space-3); }
+.agenda-page__visit-clock { color: var(--corp-fg-muted); }
+.agenda-page__visit-when { display: grid; justify-items: end; font-variant-numeric: var(--corp-value); }
+.agenda-page__visit-when-date { color: var(--corp-fg-muted); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap; }
+.agenda-page__visit-when-time { color: var(--corp-text); font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .agenda-page__visit-title { display: grid; justify-items: start; gap: var(--space-2); min-width: 0; }
 .agenda-page__visit-title a { color: var(--corp-text); font-size: var(--text-lg); font-weight: var(--weight-semibold); overflow-wrap: anywhere; text-decoration: none; }
 .agenda-page__visit-title a:hover { text-decoration: underline; }
@@ -3142,10 +3155,11 @@
 .agenda-page__layout { display: grid; gap: var(--space-5); min-width: 0; }
 @media (max-width: 40rem) {
   .agenda-page__section { padding: var(--space-4); }
-  .agenda-page__visit-heading { grid-template-columns: minmax(0, 1fr) auto; }
-  .agenda-page__visit-heading > time { grid-column: 1; grid-row: 1; }
-  .agenda-page__visit-title { grid-column: 1; grid-row: 2; }
-  .agenda-page__visit-heading > .menu__trigger { grid-column: 2; grid-row: 1; }
+  .agenda-page__visit-heading { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .agenda-page__visit-heading > .agenda-page__visit-clock { grid-column: 1; grid-row: 1; }
+  .agenda-page__visit-title { grid-column: 2; grid-row: 1; }
+  .agenda-page__visit-when { grid-column: 2; grid-row: 2; justify-items: start; }
+  .agenda-page__visit-heading > .menu__trigger { grid-column: 3; grid-row: 1; }
   .agenda-page__visit-details > div { grid-template-columns: minmax(4.5rem, .5fr) minmax(0, 1fr); }
 }
 @media (min-width: 64rem) {

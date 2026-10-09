@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import AutomationExecution, AutomationRule, DomainEvent
 from app.services.audit import record_audit
 from app.services.notifications import create_operation
+from app.services.settings import get_setting
 
 ALLOWED_CHANNELS = {"whatsapp", "email"}
 ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.rescheduled", "appointment.cancelled", "appointment.completed", "appointment.no_show"}
@@ -109,6 +110,14 @@ def _matches(conditions: dict, payload: dict) -> bool:
     return all(payload.get(key) == value for key, value in conditions.items())
 
 
+def _resolve_recipient(session: Session, rule: AutomationRule, event: DomainEvent):
+    if rule.recipient_target == "admin":
+        key = "notify.owner_whatsapp" if rule.channel == "whatsapp" else "notify.owner_email"
+        return get_setting(session, key)
+    payload = event.payload or {}
+    return payload.get("recipient") or payload.get("phone") or payload.get("email")
+
+
 def evaluate_event(session: Session, event: DomainEvent) -> list[int]:
     """Evaluate every applicable rule and return ids that created/reused work."""
     now = datetime.now(timezone.utc)
@@ -144,8 +153,9 @@ def evaluate_event(session: Session, event: DomainEvent) -> list[int]:
             if recent is not None:
                 outcome, reason = "skipped", "cooldown"
             else:
-                recipient = event.payload.get("recipient") or event.payload.get("phone") or event.payload.get("email")
-                content = event.payload.get("content") or event.payload.get("text") or rule.template_event
+                payload = event.payload or {}
+                recipient = _resolve_recipient(session, rule, event)
+                content = payload.get("content") or payload.get("text") or rule.content or rule.template_event
                 if not recipient:
                     outcome, reason = "skipped", "missing_recipient"
                 else:

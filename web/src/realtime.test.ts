@@ -82,6 +82,17 @@ describe("RealtimeClient", () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it("surfaces notification envelopes to subscribers", () => {
+    const client = new RealtimeClient({ factory: () => new Socket() });
+    const listener = vi.fn();
+    client.subscribe(listener);
+    client.connect();
+    Socket.instances[0].sendEnvelope({ type: "notification", data: { source: "appointment" } });
+
+    expect(listener).toHaveBeenCalledWith({ type: "notification", data: { source: "appointment" } });
+    client.disconnect();
+  });
+
   it("coalesces a burst of snapshot refresh requests into one callback", () => {
     vi.useFakeTimers();
     const refresh = vi.fn();

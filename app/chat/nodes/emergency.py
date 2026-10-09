@@ -36,6 +36,7 @@ from app.models import (
 from app.services.audit import record_audit
 from app.services.cases import set_case_status, get_or_create_case
 from app.services.notify import send_emergency_notification
+from app.services.notifications import notify_admins
 from app.services.settings import (
     DEFAULT_EMERGENCY_CONTACTS,
     DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
@@ -110,6 +111,14 @@ def emergency(state: ConversationState) -> dict:
                 context = state.window[-1]["text"] if state.window else ""
                 send_emergency_notification(
                     session, case, customer, conversation, context=context
+                )
+                notify_admins(
+                    session,
+                    title="Emergencia detectada",
+                    content=f"Se detectó una emergencia en el caso #{case.id}.",
+                    source="emergencia",
+                    source_id=case.id,
+                    dedupe_key=f"emergencia:{case.id}",
                 )
             except Exception:
                 logger.exception(

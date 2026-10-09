@@ -71,6 +71,13 @@ export interface Rule {
 export interface AutomationRulesResponse { rules: Rule[]; }
 export interface AutomationRuleResponse { rule: Rule; }
 
+export interface AutomationRecipeParameter { key: string; label: string; type: string; required: boolean; default: unknown; }
+export interface AutomationRecipe { recipe_id: string; name: string; description: string; category: string; trigger_kind: string; event_type: string; channel_allowed: string[]; recipient_target: string; content: string; cooldown_seconds: number; parameters: AutomationRecipeParameter[]; }
+export interface AutomationInstallation { id: number; recipe_id: string; parameters: Record<string, unknown>; enabled: boolean; created_by: string; created_at: string | null; updated_at: string | null; }
+export interface AutomationRecipesResponse { recipes: AutomationRecipe[]; }
+export interface AutomationInstallationsResponse { installations: AutomationInstallation[]; }
+export interface AutomationInstallationResponse { installation: AutomationInstallation; }
+
 export interface LoginResponse {
   ok: true;
   id: number;
@@ -206,7 +213,7 @@ export interface AssistantArtifact { id: number; thread_id: number; filename: st
 export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
 export interface AssistantCapabilities { tools: AssistantCapabilityTool[]; personas: string[]; prompts: string[]; kb_available: boolean; memory_available: boolean; }
 
-export type RealtimeEnvelopeType = 'message' | 'conversation' | 'activity' | 'snapshot';
+export type RealtimeEnvelopeType = 'message' | 'conversation' | 'activity' | 'snapshot' | 'notification';
 export interface RealtimeEnvelope<T = unknown> { type: RealtimeEnvelopeType; conversation_id?: number | null; data: T; }
 export interface RealtimeActivity { id?: number; conversation_id?: number; event: string; cause?: string | null; actor?: string | null; created_at?: string; }
 export interface RealtimeSnapshot { conversations: Conversation[]; activity: RealtimeActivity[]; }

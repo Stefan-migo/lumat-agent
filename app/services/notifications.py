@@ -10,10 +10,11 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db import session_scope
-from app.models import Appointment, AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification
+from app.models import Appointment, AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification, User, UserRole
 from app.services.audit import record_audit
 from app.services.send import send_text
 from app.services.push import send_push
+from app.services.realtime import stage_event
 
 SWEEP_LOCK_KEY = 832731
 DEFAULT_BATCH_SIZE = 50
@@ -152,6 +153,44 @@ def create_panel_notification(session: Session, *, user_id: int, operation_id: i
     session.add(row)
     session.flush()
     return row
+
+
+def notify_admins(
+    session: Session,
+    *,
+    title: str,
+    content: str,
+    source: str,
+    source_id: str | int,
+    dedupe_key: str,
+) -> None:
+    now = datetime.now(timezone.utc)
+    operation = create_operation(
+        session,
+        recipient="panel",
+        channel="panel",
+        content=content,
+        source_entity="panel",
+        source_id=f"panel:{source_id}",
+        idempotency_key=f"panel:{dedupe_key}",
+        status="sent",
+        delivered_at=now,
+    )
+    admins = session.scalars(select(User).where(User.role == UserRole.ADMIN)).all()
+    for admin in admins:
+        create_panel_notification(
+            session,
+            user_id=admin.id,
+            operation_id=operation.id,
+            title=title,
+            content=content,
+            source=source,
+        )
+    stage_event(
+        session,
+        type="notification",
+        data={"source": source, "source_id": str(source_id), "dedupe_key": dedupe_key},
+    )
 
 
 def list_panel_notifications(session: Session, *, user_id: int, unread: bool | None = None, status: str | None = None, source: str | None = None) -> list[PanelNotification]:

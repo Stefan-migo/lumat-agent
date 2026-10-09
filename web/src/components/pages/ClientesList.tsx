@@ -6,6 +6,7 @@ import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
+import { Pagination } from "../primitives/Pagination";
 import { SearchInput } from "../primitives/SearchInput";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -310,7 +311,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                   </li>;
                 })}
               </ul>
-              <footer className="table-footer"><span className="table-footer__count">Mostrando {rows.length} de {filteredRows.length} clientes</span><div className="table-footer__pagination"><Button variant="secondary" disabled={page <= 1} aria-label="Página anterior" onClick={() => setPage((value) => value - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" disabled={page >= pageCount} aria-label="Página siguiente" onClick={() => setPage((value) => value + 1)}>›</Button></div></footer>
+              <footer className="table-footer"><span className="table-footer__count">Mostrando {rows.length} de {filteredRows.length} clientes</span><Pagination page={page} pageCount={pageCount} onPageChange={setPage} /></footer>
           </div>
         ) : filtered ? (
           <div>

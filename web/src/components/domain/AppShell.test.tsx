@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import type { User } from '../../types';
+import { realtimeClient } from '../../realtime';
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
@@ -335,12 +336,12 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('deep-links to automation rules and renders a forbidden state for operadores', async () => {
+  it('deep-links to the recipe catalog and renders a forbidden state for operadores', async () => {
     window.history.replaceState({}, '', '/panel/app/automation-rules');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'Forbidden' }), { status: 403 }));
 
     const { container } = render(<AppShell user={operador} />);
-    expect(await screen.findByText(/no tienes permiso|acceso denegado|forbidden/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/no tienes permiso/i)).length).toBeGreaterThan(0);
     expect(sidebar(container).queryByText('Automatizaciones')).not.toBeInTheDocument();
     await userEvent.setup().click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
@@ -348,19 +349,13 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses browser back after opening an automation rule detail route', async () => {
+  it('does not retain the legacy automation rule detail route', async () => {
     window.history.replaceState({}, '', '/panel/app/automation-rules');
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      const body = { rules: [{ id: 12, name: 'Aviso', event_type: 'case.created', conditions: {}, channel: 'whatsapp', template_event: 'case.created', cooldown_seconds: 0, enabled: true, created_by: 'ana', created_at: null, updated_at: null }] };
-      return new Response(JSON.stringify(body), { status: 200 });
-    });
+    window.history.replaceState({}, '', '/panel/app/automation-rules/12');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
     render(<AppShell user={admin} />);
-    expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('link', { name: 'Aviso' }));
-    expect(window.location.pathname).toBe('/panel/app/automation-rules/12');
-    window.history.back();
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(() => expect(window.location.pathname).toBe('/panel/app/automation-rules'));
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/panel/app/');
     vi.restoreAllMocks();
   });
 
@@ -544,6 +539,28 @@ describe('AppShell — agent shell grammar', () => {
     expect(await headerActions(container).findByRole('button', { name: /notificaciones no disponibles/i })).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
+  });
+
+  it('refreshes notification data and unread count on a realtime notification envelope', async () => {
+    const subscribe = vi.spyOn(realtimeClient, 'subscribe');
+    vi.spyOn(realtimeClient, 'connect').mockImplementation(() => undefined);
+    let notificationRequests = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('/notifications')) {
+        notificationRequests += 1;
+        const notifications = notificationRequests === 1 ? [] : [{ id: 1, user_id: 1, operation_id: 1, title: 'Emergencia detectada', content: 'Caso urgente', source: 'emergencia', channel: 'panel', status: 'sent', read_at: null, created_at: null }];
+        return new Response(JSON.stringify({ notifications }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
+    });
+    const { container } = render(<AppShell user={admin} />);
+    await waitFor(() => expect(notificationRequests).toBe(1));
+
+    subscribe.mock.calls[0][0]({ type: 'notification', data: {} });
+
+    expect(await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' })).toBeInTheDocument();
+    expect(notificationRequests).toBe(2);
+    vi.restoreAllMocks();
   });
 
   it('renders the five approved mobile destinations and keeps notifications reachable in the header', async () => {
