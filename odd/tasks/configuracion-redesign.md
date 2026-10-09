@@ -108,6 +108,27 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ## Progress log
 
+- **CF-14 — Horarios y avisos tab owner visual polish (2026-10-08)** — implemented; full-suite gate remains partial because of unrelated `ClientFicha` timeouts under full-suite load.
+  - Feature commit: `3ee2c25c` (`feat(settings): polish the Horarios y avisos tab`).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/pages/PushSettings.tsx`, `web/src/components/pages/PushSettings.test.tsx`,
+    `web/src/stories/pages/Settings.stories.test.tsx`.
+  - Graph nodes consulted: `HoursEditor()`, `Settings()`, `PushSettings()`, `DayToggle()`, `Card()`;
+    `Settings.tsx --imports--> PushSettings.tsx`. The refreshed graph query connected HoursEditor
+    with its draft helpers and Settings tests; no directed HoursEditor-to-PushSettings path was found.
+    `GRAPH_REPORT.md` settings hub, settings community, and repeated-weekday invariant were consulted.
+  - Added the weekly-hours subtitle, empty state, centered timezone icon via grid alignment, resettable
+    new-schedule draft, helper note, compact day-toggle row, dashed add action, and bordered saved rows.
+    Added push/out-of-hours card icons, revised embedded push copy and permission legend, and left-aligned
+    the out-of-hours edit action. Existing permission branches and schedule/save validation remain intact.
+  - Verification from `web/`: focused Settings + PushSettings + story tests 44/44 passed. `npm run build`
+    (`tsc -b` + Vite) passed with the existing >500 kB chunk advisory. Full `npm test` completed with
+    1072/1074 tests passing across 103 files; the two failures were `ClientFicha equipment > adds equipment
+    from the dialog` and `ClientFicha page grammar > posts state changes and notes, then refreshes ficha
+    and memories`, both 5s timeouts under full-suite load. `ClientFicha.test.tsx` passed 49/49 in isolation.
+  - Runtime harness: N/A — frontend-only polish on the existing settings route. Rollback boundary: revert
+    the feature commit to restore the prior Horarios y avisos composition and copy.
+
 - **CF-14 — Mensajes tab second visual review (2026-10-08)** — implemented; full-suite gate remains
   open because of one unrelated `ClientFicha` timeout under full-suite load.
   - Feature commit: `c450c5001a2f221167cf584db86cdffbb7636ed3`

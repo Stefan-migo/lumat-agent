@@ -144,7 +144,9 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(card).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
     expect(within(card).getByText("Lun, Mar, Mié, Jue, Vie")).toBeInTheDocument();
     expect(within(card).getByText("09:00 – 18:00")).toBeInTheDocument();
-    expect(within(card).getByLabelText("Días del nuevo horario")).toBeInTheDocument();
+    expect(within(card).getByRole("group", { name: "Días de atención" })).toBeInTheDocument();
+    expect(within(card).getByText("Sin guardar")).toBeInTheDocument();
+    expect(within(card).getByText("Cada día puede pertenecer a un solo horario.")).toBeInTheDocument();
     expect(within(card).getByLabelText("Inicio")).toHaveValue("09:00");
     expect(within(card).getByLabelText("Fin")).toHaveValue("18:00");
     expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
@@ -158,6 +160,12 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
     fireEvent.click(within(card).getByRole("button", { name: "Sáb" }));
     expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeEnabled();
+    fireEvent.change(within(card).getByLabelText("Inicio"), { target: { value: "10:00" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Restablecer nuevo horario" }));
+    expect(within(card).getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(card).getByLabelText("Inicio")).toHaveValue("09:00");
+    expect(within(card).getByLabelText("Fin")).toHaveValue("18:00");
+    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
   });
 
   it("renders the paired USD spend-limit inputs", async () => {
@@ -306,7 +314,8 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<Settings data={settings} state="ready" />);
     await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
-    fireEvent.click(within(push).getByRole("button", { name: /activar push/i }));
+    expect(within(push).getByText("El navegador te pedirá permiso.")).toBeInTheDocument();
+    fireEvent.click(within(push).getByRole("button", { name: /activar notificaciones/i }));
     await waitFor(() => expect(within(push).getByText(/denegaste/i)).toBeInTheDocument());
     vi.unstubAllGlobals();
   });
