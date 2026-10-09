@@ -133,8 +133,21 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
   - [x] **WU3 (thread artifacts)**: read `artifacts` from the thread detail in `AgentChat` and
     render a real list + download in the `AssistantWorkspace` context panel. Tests.
 
-### A4 — Skills system
-- [ ] Global catalog + UI (global/project, filterable) + agent-proposed skills with guardrail.
+### A4 — Skills system (catalog + UI + agent proposals)
+Scope decisions (closed — do not re-litigate):
+- D-A4-1: global catalog is **read-only** in the panel UI (browse + filter), sourced from the git-backed catalog; project skills are the editable layer (coherent with D9).
+- D-A4-2: agent proposals are **thread-bound** — they reuse the approval flow + `assistant_state` (JSONB), no new table, no migration.
+- D-A4-3: the agent may propose only PROJECT skills; a proposal whose name collides with a GLOBAL skill is rejected fail-closed and audited (project wins by name → shadowing a global is the D6 escalation vector). The project owner's manual edit MAY shadow a global (that is D9's designed override).
+- D-A4-4: a dedicated **"Skills" tab** in the ProjectsPage detail (global read-only + project editable, filterable).
+
+- [ ] **PR1 — Global catalog + Skills tab UI**
+  - [ ] WU1.1 (backend): read-only endpoint for the global skills index + tests.
+  - [ ] WU1.2 (frontend): api client + types (`GlobalSkill`, catalog response).
+  - [ ] WU1.3 (frontend): `ProjectSkills` component in the new "Skills" tab (global read-only + project editable + filter, honest empty/denied states) + tests.
+- [ ] **PR2 — Agent-proposed skills with guardrail**
+  - [ ] WU2.1 (backend): `skill.propose` tool (approval-gated) + no-shadow fail-closed handler + audit + tests.
+  - [ ] WU2.2 (frontend): render the proposal in the thread (reuse the approval card) + confirm/reject wiring + tests.
+  - [ ] WU2.3 (backend): guardrail/injection tests (skill body never affects tool policy).
 
 ### A5 — Project agents (large)
 - [ ] `project_agents` roster (Orquestador default) + Verificador + Explorer.
