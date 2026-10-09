@@ -89,7 +89,7 @@ export function ConversationsList({ data: controlledData, state: controlledState
     {menuItems(c).length ? <Menu trigger="icon" align="end" collisionPadding={8} label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => value === "open" ? openThread(c) : void runAction(c.id, () => acknowledgeCase(c.case_id!))} /> : null}
   </div>;
   const columns: Column<Conversation>[] = [
-    { key: "identity", header: "Cliente y conversación", render: (c) => {
+    { key: "identity", header: "Cliente y conversación", width: "38%", render: (c) => {
       const name = nameFor(c);
       return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span></div></div>;
     } },
