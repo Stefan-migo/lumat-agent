@@ -19,7 +19,7 @@ from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import assistant_artifacts, automation, cases, customers, kb, project_files, projects, relations, scheduling, tukulpan as memory
+from app.services import assistant_artifacts, automation_installations, cases, customers, kb, project_files, projects, recipes, relations, scheduling, tukulpan as memory
 
 logger = logging.getLogger(__name__)
 
@@ -194,14 +194,10 @@ class WebFetchArgs(BaseModel):
     url: str = Field(min_length=1, max_length=2_000)
 
 
-class RuleArgs(BaseModel):
+class RecipeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = Field(min_length=1, max_length=255)
-    event_type: str
-    conditions: dict[str, Any] = Field(default_factory=dict)
-    channel: str
-    template_event: str
-    cooldown_seconds: int = Field(ge=0, le=2_592_000)
+    recipe_id: str = Field(min_length=1, max_length=100)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectListArgs(BaseModel):
@@ -528,8 +524,16 @@ def _delete_memory(session, args: MemoryDeleteArgs, *, trusted_thread_id: int, p
         return {"deleted": False, "degraded_reason": "Memory delete unavailable"}
 
 
-def _create_rule(session, args: RuleArgs):
-    return automation.create_rule(session, args.model_dump(), actor="assistant", executor_origin=True)
+def _create_rule(session, args: RecipeArgs):
+    installation = automation_installations.install(
+        session,
+        args.recipe_id,
+        args.parameters,
+        actor="assistant",
+        executor_origin=True,
+        enabled=True,
+    )
+    return automation_installations.installation_snapshot(installation)
 
 
 def _web_search(_session, args: WebSearchArgs):
@@ -667,7 +671,14 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary.", tier="default"),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
     "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
-    "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval.", tier="opt_in"),
+    "automation.create_rule": ToolDefinition(
+        "automation.create_rule",
+        RecipeArgs,
+        False,
+        _create_rule,
+        "Install and activate an automation recipe after approval. Valid recipe_id values: " + ", ".join(recipes.RECIPES),
+        tier="opt_in",
+    ),
     "project.list": ToolDefinition("project.list", ProjectListArgs, True, _project_list, "List project namespaces.", tier="default"),
     "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace.", tier="default"),
     "list_project_files": ToolDefinition("list_project_files", ProjectListFilesArgs, True, _list_project_files, "List the current project's stored files.", tier="default"),

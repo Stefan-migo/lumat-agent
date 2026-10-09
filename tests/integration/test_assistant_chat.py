@@ -243,7 +243,7 @@ def test_pending_plan_survives_thread_reload(client):
             "run_id": "run-recovery",
             "status": "approval_pending",
             "tool": "automation.create_rule",
-            "arguments": {"name": "notify"},
+            "arguments": {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}},
         }
         thread.assistant_state = {"stage": "approval", "recoverable": True}
         session.commit()

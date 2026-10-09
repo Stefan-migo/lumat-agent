@@ -116,8 +116,13 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
   RDD **aprobado** — lineage `review-7cf5522c2723c822` (4 lentes, 0 hallazgos). R3-001 resuelto.
   Nota: los mensajes de las recetas son v1 (texto fijo chileno neutro); interpolar fecha/servicio queda como
   follow-up (requiere enriquecer los payloads). Targets fijos (customer/admin); configurable queda para más adelante.
-- [ ] **A4 — Tool del agente**: adaptar a recetas (`recipe_id` + parámetros tipados) manteniendo
-  opt-in/admin-only/aprobación.
+- [x] **A4 — Agent tool**: `automation.create_rule` now installs a catalog recipe through typed
+  `recipe_id` + `parameters`, preserving opt-in, admin-only access, and exact approval. Admin approval
+  activates the installation (`enabled=True`); panel installs remain disabled by default. Commit SHA:
+  reported in delivery (the SHA cannot be embedded in its own commit). Verification: focused suite
+  131 passed; full suite 1843 passed, 2 warnings. Graph: `RecipeDefinition` ←contains— `recipes.py`
+  —imports_from→ `automation.py` —imports→ `AutomationRule`; also consulted `install()`,
+  `automation_installations.py`, `recipes.py`, `registry.py`, and `execute_tool()`.
 - [ ] **A5 — API + UI de tarjetas**: catálogo (tarjetas) + activas/parametrizadas; input NL que
   parametriza recetas.
 

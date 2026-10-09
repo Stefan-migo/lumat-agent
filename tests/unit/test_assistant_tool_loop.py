@@ -458,12 +458,8 @@ def test_step_two_write_plan_is_refused_by_guardrails():
         (
             "automation.create_rule",
             {
-                "name": "N",
-                "event_type": "appointment.created",
-                "conditions": {},
-                "channel": "whatsapp",
-                "template_event": "reminder",
-                "cooldown_seconds": 0,
+                "recipe_id": "appointment_confirmation",
+                "parameters": {"channel": "whatsapp"},
             },
         ),
     ],

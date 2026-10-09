@@ -41,7 +41,15 @@ def _compile(session: Session, installation: AutomationInstallation, actor: str)
     return rule
 
 
-def install(session: Session, recipe_id: str, parameters: dict, *, actor: str, executor_origin: bool = False) -> AutomationInstallation:
+def install(
+    session: Session,
+    recipe_id: str,
+    parameters: dict,
+    *,
+    actor: str,
+    executor_origin: bool = False,
+    enabled: bool = False,
+) -> AutomationInstallation:
     if actor == "assistant" and not executor_origin:
         raise PermissionError("assistant installations must originate from the approved tool executor")
     recipe = get_recipe(recipe_id)
@@ -50,7 +58,7 @@ def install(session: Session, recipe_id: str, parameters: dict, *, actor: str, e
     if session.scalar(select(AutomationInstallation).where(AutomationInstallation.recipe_id == recipe_id)) is not None:
         raise ValueError("recipe already installed")
     validated = recipe.validate_parameters(parameters)
-    installation = AutomationInstallation(recipe_id=recipe_id, parameters=validated, enabled=False, created_by=actor)
+    installation = AutomationInstallation(recipe_id=recipe_id, parameters=validated, enabled=enabled, created_by=actor)
     session.add(installation)
     session.flush()
     _compile(session, installation, actor)
