@@ -55,7 +55,7 @@
 .settings-hours__new .day-toggle { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-2); }
 .settings-hours__new .day-toggle__day { width: 100%; border-color: var(--border); }
 .settings-hours__new .field__control { border-color: var(--border); }
-.settings-hours__times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.settings-hours__times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-2); }
 .settings-hours__info { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .settings-hours__info svg, .push-settings__legend svg { width: var(--icon-md); height: var(--icon-md); flex: none; }
 .settings-hours__add { justify-self: stretch; justify-content: flex-start; padding-inline: var(--space-4); border-color: var(--border-strong); border-style: dashed; }
@@ -113,8 +113,11 @@
   .settings-messages__layout > .tabs--vertical .tabs__panel, .settings-messages__layout > .settings-messages__preview { grid-column: 1; border-left: 0; border-top: 1px solid var(--border); }
   .settings-messages__footer { align-items: stretch; flex-direction: column-reverse; }
   .settings-hours__layout { grid-template-columns: minmax(0, 1fr); }
-  .settings-hours__item { grid-template-columns: minmax(0, 1fr) auto; }
+  .settings-hours__item { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .settings-hours__item > strong { grid-row: 1; grid-column: 1; }
+  .settings-hours__item > button { grid-row: 1; grid-column: 2; align-self: start; }
   .settings-hours__item > span { grid-column: 1 / -1; }
+  .settings-hours__new .day-toggle { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .settings-hours__footer { align-items: stretch; flex-direction: column; }
   .settings-costs__limits { grid-template-columns: minmax(0, 1fr); }
   .settings-costs__footer { align-items: stretch; flex-direction: column-reverse; }
