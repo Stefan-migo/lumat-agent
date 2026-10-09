@@ -117,7 +117,7 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
   });
 
   it('draws the back control as a bordered --surface chip (DS-TKN-13)', () => {
-    expect(primitivesRaw).toMatch(/\.panel-shell__back\s*\{[^}]*border-color:\s*var\(--border-strong\)/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__back\s*\{[^}]*border-color:\s*var\(--border\)/);
     expect(primitivesRaw).toMatch(/\.panel-shell__back\s*\{[^}]*background:\s*var\(--surface\)/);
   });
 

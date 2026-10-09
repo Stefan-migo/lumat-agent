@@ -16,7 +16,7 @@
 .client-ficha-dialog__option-copy > span { color: var(--text-muted); }
 .client-ficha-dialog__options [role="radiogroup"] .client-ficha-dialog__radio { grid-column: 1; grid-row: 1; }
 .client-ficha-dialog__option-copy { display: grid; gap: var(--space-2); }
-.client-ficha-dialog__radio { width: 1rem; height: 1rem; border: 1px solid var(--border-strong); border-radius: 50%; }
+.client-ficha-dialog__radio { width: 1rem; height: 1rem; border: 1px solid var(--border); border-radius: 50%; }
 .client-ficha-dialog__option[aria-checked="true"] .client-ficha-dialog__radio { border: 0.3rem solid var(--corp-text); }
 .client-ficha-dialog__options [role="radiogroup"] .client-ficha-dialog__option.is-selected { border-color: var(--corp-text); background: var(--success-tint); }
 .client-ficha-dialog__transition { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }

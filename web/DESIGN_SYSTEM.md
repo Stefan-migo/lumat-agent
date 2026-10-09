@@ -209,11 +209,12 @@ Measured WCAG 2.x sRGB pairs: `--text` on `--bg`/`--surface`/`--header-bg` is
 labels; `--lime-500` there is 9.08:1 as a non-text active bar. Token
 measurements do not certify unmeasured rendered component combinations.
 
-Decorative dispositions: `--border` is a container hairline, not a required
-interactive boundary; `--lime-700` is a decorative title accent rule; semantic
-status badge borders are decorative reinforcement, never the only status
-channel. `--border-strong` is a required control boundary only on `--surface`
-(3.09:1); it does not meet 3:1 on `--bg` (2.79:1), so do not rely on it there.
+Decorative dispositions: per the 2026-10-09 product decision, control
+boundaries now use `--border`; `--border-strong` is retained only for decorative
+emphasis such as disabled fills and status dots. The accepted trade-off is that
+`--border` is 1.18:1 on `--surface`, below the 3:1 non-text guidance for control
+boundaries. `--lime-700` is a decorative title accent rule; semantic status
+badge borders are decorative reinforcement, never the only status channel.
 
 ### Shipped operational foundation
 
@@ -589,7 +590,7 @@ Dates, times, currencies, decimals, and percentages follow the active Chilean lo
 WCAG 2.2 Level AA is the minimum.
 
 - Normal text: at least 4.5:1 contrast.
-- Large text and meaningful graphical/UI boundaries: at least 3:1.
+- Large text and meaningful graphical/UI boundaries: at least 3:1. Control boundaries are an explicit product exception (2026-10-09).
 - All workflows operate by keyboard with visible focus and no traps.
 - Focus order matches reading and visual order.
 - Sticky elements do not cover focused controls.

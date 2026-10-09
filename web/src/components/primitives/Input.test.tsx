@@ -89,9 +89,9 @@ describe("Input (T7.2)", () => {
     expect(screen.getByText("Nombre")).toBeInTheDocument();
   });
 
-  it("uses a non-white surface and measured boundary role with visible focus", () => {
+  it("uses a non-white surface and light boundary role with visible focus", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
-    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border-strong\)[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--surface\)/s);
     expect(css).toMatch(/\.field__control:focus\s*\{[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
     expect(css).toMatch(/\.field__control:disabled\s*\{[^}]*background:\s*var\(--surface-subtle\)/s);
   });

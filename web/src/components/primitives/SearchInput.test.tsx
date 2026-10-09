@@ -22,9 +22,9 @@ describe("SearchInput (T8.1)", () => {
     vi.useRealTimers();
   });
 
-  it("uses the approved surface and boundary roles while retaining a visible focus-within indicator", () => {
+  it("uses the approved surface and light boundary roles while retaining a visible focus-within indicator", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
-    expect(css).toMatch(/\.search-input\s*\{[^}]*border:\s*1px solid var\(--border-strong\)[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.search-input\s*\{[^}]*border:\s*1px solid var\(--border\)[^}]*background:\s*var\(--surface\)/s);
     expect(css).toMatch(/\.search-input:focus-within\s*\{[^}]*border-color:\s*var\(--focus-ring\)[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
   });
 });
