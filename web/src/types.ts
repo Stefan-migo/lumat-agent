@@ -28,6 +28,7 @@ export interface AdminUser { id: number; username: string; role: Role; active: b
 export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' | 'position'>;
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface ProjectToolPolicy { opt_in_enabled: string[]; }
+export interface ThreadToolPolicy { available: string[]; opt_in_enabled: string[]; inherited: boolean; }
 export interface ProjectSkill { name: string; description: string; body: string; }
 export interface GlobalSkill { name: string; description: string; scope: "global"; }
 export interface SkillsCatalogResponse { skills: GlobalSkill[]; }
