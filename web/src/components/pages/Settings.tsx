@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, BookOpen, Brain, CircleHelp, Clock3, DoorOpen, Globe2, Headset, Info, MessageCircle, Plus, ShieldAlert, ShieldCheck, SlidersHorizontal, Trash2, UserRound, Wrench } from "lucide-react";
+import { Archive, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
@@ -26,6 +27,13 @@ export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" |
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
 const EMPTY_MESSAGES = { greeting: "", cannot_answer: "", clarification: "", farewell: "", out_of_hours: "" };
 const SHORT_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function formatShortDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  return `${Number(day)} ${MONTHS_SHORT[Number(month) - 1] ?? month} ${year}`;
+}
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const SECTIONS = [
   { id: "agent", label: "Agente" }, { id: "messages", label: "Mensajes" },
@@ -122,32 +130,66 @@ export function AssistantCapabilitiesView({ capabilities }: { capabilities: Assi
     const search = query.trim().toLocaleLowerCase();
     return matchesAccess && (!search || `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(search));
   });
-  const groupNames: Record<string, string> = { kb: "Conocimiento y memoria", memory: "Conocimiento y memoria", web: "Web", system: "Sistema", agenda: "Operación", cases: "Operación", customers: "Operación", projects: "Operación" };
+  const categories = [
+    { id: "operacion", title: "Operación" },
+    { id: "conocimiento", title: "Conocimiento y memoria" },
+    { id: "web", title: "Web" },
+    { id: "automatizaciones", title: "Automatizaciones y proyectos" },
+    { id: "sistema", title: "Sistema" },
+  ];
+  const namespaceCategories: Record<string, string> = {
+    appointments: "operacion", agenda: "operacion", cases: "operacion", customers: "operacion", conversations: "operacion", dashboard: "operacion",
+    kb: "conocimiento", memory: "conocimiento", web: "web", automation: "automatizaciones", project: "automatizaciones", artifact: "automatizaciones",
+    assistant: "sistema", system: "sistema",
+  };
+  const categoryFor = (name: string) => {
+    if (name === "list_project_files" || name === "read_project_file") return "automatizaciones";
+    const namespace = name.includes(".") ? name.split(".")[0] : "system";
+    return namespaceCategories[namespace] ?? namespace;
+  };
+  const categoryTitles = Object.fromEntries(categories.map(({ id, title }) => [id, title]));
   const groupedTools = new Map<string, AssistantCapabilities["tools"]>();
   filteredTools.forEach((tool) => {
-    const namespace = tool.name.includes(".") ? tool.name.split(".")[0] : "system";
-    groupedTools.set(namespace, [...(groupedTools.get(namespace) ?? []), tool]);
+    const category = categoryFor(tool.name);
+    groupedTools.set(category, [...(groupedTools.get(category) ?? []), tool]);
   });
-  const groups = [...groupedTools].map(([namespace, tools]) => ({ namespace, title: groupNames[namespace] ?? (namespace === "system" ? "Sistema" : namespace), tools }))
-    .sort((left, right) => left.title.localeCompare(right.title) || left.namespace.localeCompare(right.namespace));
+  const groups = [...categories.map(({ id, title }) => ({ id, title, tools: groupedTools.get(id) ?? [] })).filter(({ tools }) => tools.length),
+    ...[...groupedTools].filter(([id]) => !categories.some(({ id: known }) => id === known)).map(([id, tools]) => ({ id, title: categoryTitles[id] ?? id.charAt(0).toUpperCase() + id.slice(1), tools }))];
+  const toolPresentation: Record<string, { label: string; icon: LucideIcon }> = {
+    "assistant.capabilities": { label: "Capacidades del asistente", icon: Bot },
+    "customers.search": { label: "Buscar clientes", icon: Search }, "customers.list": { label: "Listar clientes", icon: Users },
+    "conversations.search": { label: "Buscar conversaciones", icon: Search }, "conversations.list": { label: "Listar conversaciones", icon: MessagesSquare },
+    "appointments.upcoming": { label: "Próximas citas", icon: CalendarDays }, "customers.operational_history": { label: "Historial del cliente", icon: History },
+    "cases.list": { label: "Listar casos", icon: ClipboardList }, "kb.retrieve": { label: "Consultar base de conocimientos", icon: BookOpen },
+    "memory.read": { label: "Leer memoria", icon: FileText }, "memory.search": { label: "Buscar en memoria", icon: Search },
+    "memory.write": { label: "Crear memoria", icon: Plus }, "memory.update": { label: "Actualizar memoria", icon: SquarePen },
+    "memory.delete": { label: "Eliminar memoria", icon: Trash2 }, "dashboard.summary": { label: "Resumen del panel", icon: LayoutDashboard },
+    "web.search": { label: "Buscar en la web", icon: Globe }, "web.fetch": { label: "Leer página web", icon: Globe },
+    "automation.create_rule": { label: "Crear regla de automatización", icon: Zap }, "project.list": { label: "Listar proyectos", icon: FolderOpen },
+    "project.find": { label: "Buscar proyecto", icon: Search }, "list_project_files": { label: "Listar archivos del proyecto", icon: Files },
+    "read_project_file": { label: "Leer archivo del proyecto", icon: FileText }, "artifact.save": { label: "Guardar archivo", icon: Paperclip },
+    "project.create": { label: "Crear proyecto", icon: FolderPlus }, "project.rename": { label: "Renombrar proyecto", icon: SquarePen },
+    "project.archive": { label: "Archivar proyecto", icon: Archive }, "project.merge": { label: "Combinar proyectos", icon: GitMerge },
+  };
   const accessOptions = [{ value: "all", label: "Todos los accesos" }, { value: "read", label: "Solo lectura" }, { value: "write", label: "Puede escribir" }, { value: "limited", label: "Acceso limitado" }];
   const availability = (available: boolean) => <span className={`settings-capabilities__availability${available ? " is-available" : ""}`}><span aria-hidden="true" />{available ? "Disponible" : "No disponible"}</span>;
   return <div className="settings-capabilities__layout">
-    <Card title="Herramientas del asistente" headerAction={<Badge tone="neutral">{capabilities.tools.length}</Badge>}>
-      <div className="settings-capabilities__filters"><SearchInput aria-label="Buscar herramientas" placeholder="Buscar herramientas" onSearch={setQuery} /><Select label="Acceso" value={access} onChange={(event) => setAccess(event.target.value)} options={accessOptions} /></div>
-      <div className="settings-capabilities__groups">{groups.map(({ namespace, title, tools }) => <Accordion key={namespace} title={title} count={tools.length} defaultExpanded>
+    <Card title="Herramientas del asistente" description="Consulta las herramientas disponibles y su tipo de acceso." headerAction={<Badge tone="neutral">{capabilities.tools.length}</Badge>}>
+      <div className="settings-capabilities__filters"><SearchInput aria-label="Buscar herramientas" placeholder="Buscar herramientas..." onSearch={setQuery} /><Select aria-label="Acceso" label="Acceso" value={access} onChange={(event) => setAccess(event.target.value)} options={accessOptions} /></div>
+      <div className="settings-capabilities__groups">{groups.map(({ id, title, tools }) => <Accordion key={id} title={title} count={tools.length}>
         <ul className="settings-capabilities__tools">{tools.map((tool) => <li className="settings-capabilities__tool" key={tool.name}>
-          <Wrench aria-hidden="true" /><span className="settings-capabilities__tool-copy"><strong>{tool.name.split(".").at(-1)?.replaceAll("_", " ")}</strong><code>{tool.name}</code></span>
-          <Badge tone={toolAccess(tool) === "write" ? "warning" : "neutral"}>{toolAccess(tool) === "write" ? "Puede escribir" : toolAccess(tool) === "read" ? "Solo lectura" : "Acceso limitado"}</Badge>
+          {(() => { const presentation = toolPresentation[tool.name]; const ToolIcon = presentation?.icon ?? Wrench; const label = presentation?.label ?? (tool.name.split(".").at(-1) ?? tool.name).replaceAll("_", " ").replace(/^./, (letter) => letter.toLocaleUpperCase()); const kind = toolAccess(tool); const AccessIcon = kind === "write" ? Pencil : BookOpen; return <><ToolIcon aria-hidden="true" /><span className="settings-capabilities__tool-copy"><strong>{label}</strong><code>{tool.name}</code></span><Badge tone={kind === "write" ? "success" : "neutral"}>{kind !== "limited" ? <AccessIcon aria-hidden="true" /> : null}{kind === "write" ? "Puede escribir" : kind === "read" ? "Solo lectura" : "Acceso limitado"}</Badge></>; })()}
         </li>)}</ul>
       </Accordion>)}</div>
       {!filteredTools.length ? <p className="settings-capabilities__empty">No hay herramientas que coincidan con la búsqueda.</p> : null}
+      <p className="settings__footer-note">{capabilities.tools.length} herramientas disponibles.</p>
     </Card>
-    <Card title="Configuración activa" headerAction={<a className="btn btn--tertiary" href="/panel/app/kb">Consultar</a>}>
-      <div className="settings-capabilities__availability-row"><BookOpen aria-hidden="true" /><span>Base de conocimientos</span>{availability(capabilities.kb_available)}</div>
-      <div className="settings-capabilities__availability-row"><Brain aria-hidden="true" /><span>Memoria</span>{availability(capabilities.memory_available)}</div>
-      <div className="settings-capabilities__paths"><div><strong>Persona</strong><span>{capabilities.personas.join(", ") || "Sin configurar"}</span></div><div><strong>Prompts</strong><span>{capabilities.prompts.join(", ") || "Sin configurar"}</span></div></div>
-      <p className="settings__footer-note">{GENERIC_NOTE}</p>
+    <Card title="Configuración activa" description="Información actual de la configuración del asistente." headerAction={<a className="settings-capabilities__consult" href="/panel/app/kb">Consultar</a>}>
+      <div className="settings-capabilities__availability-list"><div className="settings-capabilities__availability-row"><BookOpen aria-hidden="true" /><span>Base de conocimientos</span>{availability(capabilities.kb_available)}</div>
+      <div className="settings-capabilities__availability-row"><Database aria-hidden="true" /><span>Memoria</span>{availability(capabilities.memory_available)}</div></div>
+      <section className="settings-capabilities__paths"><div className="settings-capabilities__path-section"><h3>Persona</h3><p>Archivo que define el comportamiento, objetivos y características del asistente.</p>{capabilities.personas.length ? capabilities.personas.map((path) => <code className="settings-capabilities__path" key={path}>{path}</code>) : <code className="settings-capabilities__path">Sin configurar</code>}</div>
+      <div className="settings-capabilities__path-section"><h3>Prompts</h3><p>Archivos de prompts que utiliza el asistente.</p>{capabilities.prompts.length ? capabilities.prompts.map((path) => <code className="settings-capabilities__path" key={path}>{path}</code>) : <code className="settings-capabilities__path">Sin configurar</code>}</div></section>
+      <p className="settings-capabilities__config-footer">Configuración técnica del asistente.</p>
     </Card>
   </div>;
 }
@@ -281,31 +323,40 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
           <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div> : null}
-         {active === "costs" ? <>
-           <Card title="Gasto actual" headerAction={snapshot ? <Badge tone="neutral">{snapshot.date}</Badge> : undefined}>
-             {snapshot ? <StatCard metrics={[
-               { label: "Gasto diario", value: `$${snapshot.daily_spend.toFixed(4)}`, context: snapshot.conversation_percent !== null ? `Conversación: ${snapshot.conversation_percent}% de $${snapshot.conversation_limit.toFixed(2)}` : undefined },
-               { label: "Límite diario", value: `$${snapshot.daily_limit.toFixed(2)}` },
-               { label: "Del límite utilizado", value: `${snapshot.daily_percent.toFixed(1)}%` },
-             ]} /> : null}
-           </Card>
-           <Card title="Límites de gasto">
-             <p>Define los topes máximos de gasto por conversación y por día.</p>
-             <div className="settings-costs__limits">
-               <div className="settings-costs__input"><Input label="Límite por conversación" type="number" value={draft.conversationLimit} onChange={(event) => update("conversationLimit", event.target.value)} /><span aria-hidden="true">USD</span></div>
-               <div className="settings-costs__input"><Input label="Límite diario" type="number" value={draft.dailyLimit} onChange={(event) => update("dailyLimit", event.target.value)} /><span aria-hidden="true">USD</span></div>
-             </div>
-             <div className="settings-costs__footer"><Button variant="secondary" disabled={saving("conversationLimit") || saving("dailyLimit") || !numericLimitsValid} onClick={() => void save("conversationLimit", "/panel/api/settings/limits", { conversation_limit: Number(draft.conversationLimit), daily_limit: Number(draft.dailyLimit) }, draft.conversationLimit)}>Guardar límites</Button>{footer()}</div>
-           </Card>
-           <Card title="Precio Meta" headerAction={<Badge tone="neutral">Vigente desde 2026-10-01</Badge>}>
-             <div className="settings-costs__input"><Input label="Costo por mensaje" type="number" value={draft.metaCost} onChange={(event) => update("metaCost", event.target.value)} /><span aria-hidden="true">USD</span></div>
-             <div className="settings-costs__footer"><Button variant="secondary" disabled={saving("metaCost") || !isValidNonNegative(draft.metaCost)} onClick={() => void save("metaCost", "/panel/api/settings/meta", { service_message_cost: Number(draft.metaCost) }, draft.metaCost)}>Guardar precio</Button>{footer()}</div>
-           </Card>
-           <Card title="Qué ocurre al alcanzar los límites">
-             <div className="settings-costs__threshold"><ShieldCheck aria-hidden="true" /><strong>80%</strong><span>Respuestas más conservadoras</span></div>
-             <div className="settings-costs__threshold"><UserRound aria-hidden="true" /><strong>100%</strong><span>Derivación a una persona</span></div>
-           </Card>
-        </> : null}
+          {active === "costs" ? <div className="settings-costs">
+            <Card title="Gasto actual" description="Resumen del consumo en el periodo actual." headerAction={snapshot ? <Badge tone="neutral"><CalendarDays aria-hidden="true" />{formatShortDate(snapshot.date)}</Badge> : undefined}>
+              {snapshot ? <StatCard metrics={[
+                { label: "Gasto diario", value: `USD ${snapshot.daily_spend.toFixed(4)}`, context: snapshot.conversation_percent !== null ? `Conversación: ${snapshot.conversation_percent}% de USD ${snapshot.conversation_limit.toFixed(2)}` : undefined },
+                { label: "Límite diario", value: `USD ${snapshot.daily_limit.toFixed(2)}` },
+                { label: "Del límite utilizado", value: `${snapshot.daily_percent.toFixed(1)}%` },
+              ]} /> : null}
+            </Card>
+            <div className="settings-costs__pair">
+              <Card title="Límites de gasto" icon={Coins} description="Controla el gasto por conversación y por día.">
+                <div className="settings-costs__limits">
+                  <Input label="Límite por conversación" type="number" suffix="USD" value={draft.conversationLimit} onChange={(event) => update("conversationLimit", event.target.value)} />
+                  <Input label="Límite diario" type="number" suffix="USD" value={draft.dailyLimit} onChange={(event) => update("dailyLimit", event.target.value)} />
+                </div>
+                <div className="settings-costs__footer"><Button variant="primary" disabled={saving("conversationLimit") || saving("dailyLimit") || !numericLimitsValid} onClick={() => void save("conversationLimit", "/panel/api/settings/limits", { conversation_limit: Number(draft.conversationLimit), daily_limit: Number(draft.dailyLimit) }, draft.conversationLimit)}>Guardar límites</Button>{footer()}</div>
+              </Card>
+              <Card title="Precio Meta" icon={Receipt} description="Costo por mensaje de servicio." headerAction={<Badge tone="neutral"><CalendarDays aria-hidden="true" />Vigente desde el 1 oct 2026</Badge>}>
+                <Input label="Costo por mensaje" type="number" suffix="USD" value={draft.metaCost} onChange={(event) => update("metaCost", event.target.value)} />
+                <div className="settings-costs__footer"><Button variant="primary" disabled={saving("metaCost") || !isValidNonNegative(draft.metaCost)} onClick={() => void save("metaCost", "/panel/api/settings/meta", { service_message_cost: Number(draft.metaCost) }, draft.metaCost)}>Guardar precio</Button>{footer()}</div>
+              </Card>
+            </div>
+            <Card title="Qué ocurre al alcanzar los límites" icon={Info} description="Así responde el sistema cuando se llega a ciertos niveles de uso.">
+              <div className="settings-costs__thresholds">
+                <div className="settings-costs__threshold">
+                  <span className="settings-costs__threshold-icon"><ShieldCheck aria-hidden="true" /></span>
+                  <div className="settings-costs__threshold-copy"><strong>80% · Respuestas más conservadoras</strong><span>El agente se vuelve más conservador.</span></div>
+                </div>
+                <div className="settings-costs__threshold">
+                  <span className="settings-costs__threshold-icon"><UserRound aria-hidden="true" /></span>
+                  <div className="settings-costs__threshold-copy"><strong>100% · Derivación a una persona</strong><span>Se detienen todas las llamadas de pago y la conversación pasa a una persona.</span></div>
+                </div>
+              </div>
+            </Card>
+          </div> : null}
         {active === "capabilities" ? capabilityHost : null}
       </div>}
     </Tabs>
