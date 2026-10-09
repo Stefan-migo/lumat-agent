@@ -164,10 +164,20 @@ export function PlanCard({
     consumed: "Aprobado",
     completed: "Completado",
   }[plan.status ?? ""] ?? "Propuesto";
+  const skillProposal = plan.tool === "skill.propose" ? plan.arguments ?? {} : null;
 
   return (
     <Card title="Plan de acción" className="assistant-chat__plan-card">
-      <dl>
+      {skillProposal ? (
+        <section aria-label="Propuesta de habilidad">
+          <h3>Propuesta de habilidad</h3>
+          <dl>
+            <dt>Nombre</dt><dd>{displayArgumentValue(skillProposal.name)}</dd>
+            <dt>Descripción</dt><dd>{displayArgumentValue(skillProposal.description)}</dd>
+            <dt>Vista previa</dt><dd>{displayArgumentValue(skillProposal.body)}</dd>
+          </dl>
+        </section>
+      ) : <dl>
         <dt>Herramienta</dt>
         <dd>{plan.tool || "Respuesta del asistente"}</dd>
         <dt>Argumentos</dt>
@@ -185,7 +195,7 @@ export function PlanCard({
             "—"
           )}
         </dd>
-      </dl>
+      </dl>}
       <Badge tone={pending ? "warning" : plan.status === "rejected" ? "danger" : "success"}>
         {label}
       </Badge>
