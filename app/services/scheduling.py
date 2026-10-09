@@ -13,6 +13,7 @@ from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory,
 from app.services.audit import record_audit
 from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
 from app.services.events import publish_event
+from app.services.notifications import notify_admins
 from app.services.settings import get_hours_timezone, get_setting
 
 
@@ -287,7 +288,9 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
         raise
     _history(session, appointment, actor=actor, action="booked", previous=None)
     record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
-    publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=f"appointment:{appointment.id}:booked")
+    dedupe_key = f"appointment:{appointment.id}:booked"
+    publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=dedupe_key)
+    notify_admins(session, title="Nueva visita agendada", content=f"Se agendó una visita de {service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
     _maintain_reminder(session, appointment, schedule=True)
     return appointment
 
@@ -303,7 +306,9 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     record_audit(session, actor=actor, action="appointment.cancelled", entity="appointment", entity_id=str(appointment.id), after={"reason": reason})
     _sync_existing_calendar(session, appointment, actor=actor)
     customer = session.get(Customer, appointment.customer_id)
-    publish_event(session, event_type="appointment.cancelled", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id, "recipient": customer.phone_e164 if customer else None, "reason": reason}, dedupe_key=f"appointment:{appointment.id}:cancelled")
+    dedupe_key = f"appointment:{appointment.id}:cancelled"
+    publish_event(session, event_type="appointment.cancelled", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id, "recipient": customer.phone_e164 if customer else None, "reason": reason}, dedupe_key=dedupe_key)
+    notify_admins(session, title="Visita cancelada", content=f"Se canceló la visita de {appointment.service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
     return appointment
 
 
@@ -318,6 +323,7 @@ def close(session: Session, appointment: Appointment, *, outcome: AppointmentSta
     _history(session, appointment, actor=actor, action=outcome.value, previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action=f"appointment.{outcome.value}", entity="appointment", entity_id=str(appointment.id), after={"outcome": outcome.value, "reason": reason})
     customer = session.get(Customer, appointment.customer_id)
+    dedupe_key = f"appointment:{appointment.id}:{outcome.value}"
     publish_event(
         session,
         event_type=f"appointment.{outcome.value}",
@@ -325,8 +331,10 @@ def close(session: Session, appointment: Appointment, *, outcome: AppointmentSta
         entity_id=appointment.id,
         payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id,
                  "recipient": customer.phone_e164 if customer else None, "outcome": outcome.value},
-        dedupe_key=f"appointment:{appointment.id}:{outcome.value}",
+        dedupe_key=dedupe_key,
     )
+    if outcome is AppointmentStatus.NO_SHOW:
+        notify_admins(session, title="Visita no realizada", content=f"La visita de {appointment.service} quedó marcada como no asistida.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
     _schedule_followup(session, appointment, outcome=outcome, now=now or datetime.now(timezone.utc))
     return appointment
 
@@ -357,6 +365,7 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
     record_audit(session, actor=actor, action="appointment.rescheduled", entity="appointment", entity_id=str(appointment.id), after=details)
     _sync_existing_calendar(session, appointment, actor=actor)
     customer = session.get(Customer, appointment.customer_id)
+    dedupe_key = f"appointment:{appointment.id}:rescheduled"
     publish_event(
         session,
         event_type="appointment.rescheduled",
@@ -368,8 +377,9 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
             "recipient": customer.phone_e164 if customer else None,
             **details,
         },
-        dedupe_key=f"appointment:{appointment.id}:rescheduled",
+        dedupe_key=dedupe_key,
     )
+    notify_admins(session, title="Visita reagendada", content=f"Se actualizó la fecha de la visita de {appointment.service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
     return appointment
 
 

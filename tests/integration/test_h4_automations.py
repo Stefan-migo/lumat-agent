@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, Appointment, AutomationExecution, AutomationRule, Case, Conversation, Customer, DomainEvent, MessageType, NotificationOperation, User
+from app.models import AuditLog, Appointment, AutomationExecution, AutomationRule, Case, Conversation, Customer, DomainEvent, MessageType, NotificationOperation, PanelNotification, User
 from app.webhook.ingest import NormalizedMessage, persist_message
 from app.services.events import publish_event
 from app.services import cases, scheduling
@@ -141,8 +141,9 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
     with SessionLocal() as session:
         suffix = str(uuid4().int)[:10]
         phone = f"+56949{suffix[:6]}"
+        admin = User(username=f"publisher-admin-{suffix}", password_hash="unused", role="admin")
         technician = User(username=f"publisher-technician-{suffix}", password_hash="unused")
-        session.add(technician)
+        session.add_all([admin, technician])
         session.flush()
         persist_message(session, NormalizedMessage(
             wamid=f"wamid-publisher-{suffix}", phone_e164=phone, msg_type=MessageType.TEXT,
@@ -177,3 +178,7 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
             "message.received", "case.created", "case.updated",
             "appointment.booked", "appointment.rescheduled", "appointment.cancelled",
         ]
+        panel_rows = session.scalars(select(PanelNotification).order_by(PanelNotification.id)).all()
+        assert len(panel_rows) == 3
+        assert {row.user_id for row in panel_rows} == {admin.id}
+        assert {row.operation.channel for row in panel_rows} == {"panel"}
