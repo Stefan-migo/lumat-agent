@@ -6,6 +6,41 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.1] - 2026-10-09
+
+This catch-up release brings a broad redesign of the administration panel and a project-scoped workspace for Asistente Lumat. It also expands the knowledge base, customer intake, notifications, and automation recipes, alongside usability and reliability fixes across the panel and assistant.
+
+### Added
+
+- **Project-scoped Asistente Lumat.** Manage project files and attachments with extraction and knowledge-base ingestion, scoped knowledge and skills, assistant artifacts, project agents, and project-specific assistant configuration.
+- **Assistant run controls.** Configure tool access by role and thread, toggle tools per thread, and cooperatively stop active runs.
+- **Panel notifications.** Receive transactional alerts for emergencies and appointment events, with live unread-count updates.
+- **Automation recipe catalog.** Browse curated recipes and install them through the agent tool, panel API, and recipe-card interface.
+- **Post-visit follow-ups.** Send a follow-up after an Agenda visit is closed.
+- **User profiles and account controls.** View user details, manage profiles, and change your own password.
+- **More useful development data.** Seed a realistic unified development environment and render markdown summaries.
+
+### Changed
+
+- **Conversaciones rebuilt.** Reworked the conversation workspace and its responsive interactions.
+- **Clientes redesigned.** Added a customer list and tabbed ficha, with lifecycle and archive controls, duplicate merging, and improved customer history and details.
+- **Configuración reorganized.** Rebuilt the five tabs for Agente, Mensajes, Horarios y avisos, Costos, and Capacidades.
+- **Agenda redesigned.** Added a calendar roll-up, visit details, and a new-visit dialog.
+- **Dashboard refined.** Added a functional activity-period selector, clearer HOY cards, and seeded demo data with readable charts across date ranges.
+- **Knowledge base unified.** Redesigned the landing and document-detail views, audience and availability controls, content and version management, and markdown preview.
+- **Customer intake streamlined.** Start with an open greeting, group capture questions, and resume after mid-capture reclassification; require email and explicit consent, and treat media as case evidence rather than a handoff trigger.
+- **Panel shell and visual system refreshed.** Adopted the approved design tokens and updated desktop, tablet, and mobile navigation and shared interface components.
+- **Panel access broadened.** Make agent chat available to panel roles, with assistant capabilities and upcoming appointments scoped to the caller's role and technician.
+
+### Fixed
+
+- **Technician selection and lookup.** Guard Agenda against missing technician-directory data, use readable names in the technician picker, and surface lookup failures during rescheduling.
+- **Authenticated message authorship.** Derive message authors from the authenticated role rather than client-supplied identity.
+- **User account dialogs and details.** Improve the admin password-reset dialog and ensure profile names appear in the users list and ficha.
+- **Panel navigation at smaller sizes.** Correct the tablet breadcrumb, center the mobile logo, and refine responsive navigation and header controls.
+- **Dashboard HOY layout.** Correct the cards grid, shortcuts layout, and surface styling.
+- **Localized follow-up email fallback.** Preserve the appropriate language when a follow-up email uses its fallback text.
+
 ## [2026.09.5] - 2026-09-23
 
 This release carries the operational fix that lets the assistant answer at all in production,
