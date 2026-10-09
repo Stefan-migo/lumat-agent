@@ -22,6 +22,7 @@ DEFAULT_TOOLS = {
     "list_project_files",
     "read_project_file",
     "artifact.save",
+    "skill.propose",
 }
 
 OPT_IN_TOOLS = {
