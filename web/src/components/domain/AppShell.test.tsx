@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import type { User } from '../../types';
+import { realtimeClient } from '../../realtime';
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
@@ -544,6 +545,28 @@ describe('AppShell — agent shell grammar', () => {
     expect(await headerActions(container).findByRole('button', { name: /notificaciones no disponibles/i })).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
+  });
+
+  it('refreshes notification data and unread count on a realtime notification envelope', async () => {
+    const subscribe = vi.spyOn(realtimeClient, 'subscribe');
+    vi.spyOn(realtimeClient, 'connect').mockImplementation(() => undefined);
+    let notificationRequests = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('/notifications')) {
+        notificationRequests += 1;
+        const notifications = notificationRequests === 1 ? [] : [{ id: 1, user_id: 1, operation_id: 1, title: 'Emergencia detectada', content: 'Caso urgente', source: 'emergencia', channel: 'panel', status: 'sent', read_at: null, created_at: null }];
+        return new Response(JSON.stringify({ notifications }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
+    });
+    const { container } = render(<AppShell user={admin} />);
+    await waitFor(() => expect(notificationRequests).toBe(1));
+
+    subscribe.mock.calls[0][0]({ type: 'notification', data: {} });
+
+    expect(await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' })).toBeInTheDocument();
+    expect(notificationRequests).toBe(2);
+    vi.restoreAllMocks();
   });
 
   it('renders the five approved mobile destinations and keeps notifications reachable in the header', async () => {
