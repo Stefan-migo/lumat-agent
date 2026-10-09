@@ -63,6 +63,9 @@ in `DESIGN_SYSTEM.md`, not hidden.
 - [x] **T9** `DataTable` column width support + constrain the Conversaciones "Cliente y conversación" column
 - [x] **T10** Conversaciones row actions — drop redundant "Abrir conversación"; menu offers "Devolver al agente" (→bot) and "Cerrar conversación" (→closed); keep "Reconocer emergencia" when applicable and the "Tomar conversación" button for bot rows
 - [x] **T11** `primitives.css` — `.tabs__tab-copy` label+count stacked on two lines in horizontal tabs; make it inline by default and grid only under `.tabs--vertical` (pre-existing from `c7b1a8ec`, surfaced here)
+- [x] **T12** `AgendaPage.tsx`/`primitives.css` — visit card heading rebalanced: clock glyph `sm`→`lg`, date and time stacked on two lines (date `--text-xs` muted, time `--text-base` semibold), and the date moved to the trailing column so the service title leads the card (`icono | título/badge | fecha`)
+- [x] **T13** `primitives.css` — account menu aligned to the Lumat palette: neutral avatar (dropped `--success-bg`), role rendered as `--text-muted` metadata (dropped `--teal-500`), sign-out row transparent with `--danger` text and a `--danger-bg` hover
+- [x] **T14** `SelfProfile.tsx`/`primitives.css` — "Mi perfil" redesigned on the `UserFicha` pattern: large identity avatar + role badge + "Usuario de acceso" rail card, card headers with icon + description, two-column fields with leading glyphs and helpers, and a `Descartar cambios | Guardar cambios` footer. Profile save now maps an empty field to null, so the `Borrar nombre/teléfono` buttons are gone; the password card gains `Confirmar nueva contraseña` with a match guard and reveal toggles
 
 ## Acceptance
 
@@ -101,3 +104,12 @@ in `DESIGN_SYSTEM.md`, not hidden.
   transitions while retaining emergency acknowledgement and the bot-row take button.
   Added a state-transition request test. Conversations list tests (15/15) and
   `npm run build` passed. Commit `672a3b5b`.
+- 2026-10-09 — T12: visit card heading rebased. First the date went two-line and the
+  clock grew (`f3c71a8a`), then the layout was tried with the date below (`af83e6bb`)
+  and settled on `icono | título/badge | fecha` (`21da29af`). AgendaPage tests 47/47.
+- 2026-10-09 — T13: account menu palette aligned to the design system; shared classes
+  cover both the header `AccountControl` and the sidebar/drawer `UserContext`. Commit
+  `2bd1bbe5`. PanelShell + app tests 42/42.
+- 2026-10-09 — T14: SelfProfile rebuilt on the `UserFicha` pattern; `Borrar` buttons
+  removed in favour of empty-field-to-null plus `Descartar cambios`. Password card gains
+  confirmation + reveal toggles. Commit `3fd66103`. SelfProfile tests 6/6, app 8/8.
