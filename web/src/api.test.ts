@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, getTechnicianSchedule, saveTechnicianSchedule } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -110,6 +110,28 @@ describe('client API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ customer: {} }), { status: 200 }));
     await updateCustomerConsent(4, true);
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients/4/consent', expect.objectContaining({ method: 'POST', body: JSON.stringify({ consent: true }) }));
+  });
+});
+
+describe('technician schedule API contracts', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('gets and replaces a technician weekly schedule using the typed routes', async () => {
+    const response = { technician_id: 12, schedule: [{ weekday: 1, opens_at: '09:00:00', closes_at: '18:00:00' }] };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify(response), { status: 200 }));
+
+    await expect(getTechnicianSchedule(12)).resolves.toEqual(response);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/panel/api/technicians/12/schedule', expect.objectContaining({ credentials: 'include' }));
+    await saveTechnicianSchedule(12, [{ weekday: 1, opens_at: '09:00', closes_at: '18:00' }]);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/technicians/12/schedule', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ schedule: [{ weekday: 1, opens_at: '09:00', closes_at: '18:00' }] }) }));
+  });
+
+  it('allows saving an empty schedule to clear availability', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ technician_id: 12, schedule: [] }), { status: 200 }));
+
+    await saveTechnicianSchedule(12, []);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/technicians/12/schedule', expect.objectContaining({ method: 'PUT', body: '{"schedule":[]}' }));
   });
 });
 
