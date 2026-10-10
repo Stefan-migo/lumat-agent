@@ -111,12 +111,19 @@ Single PR against `main`. Forecast ~250-350 authored changed lines (under ~400).
 
 ## Progress / Evidence
 
-- [ ] T1 send_push real + dep + VAPID config
+- [x] T1 send_push real + dep + VAPID config — commit pending; evidence: adapter tests and `uv sync`.
 - [ ] T2 notify_admins push producer
 - [ ] T3 GET /panel/api/push-config
 - [ ] T4 frontend subscribe flow
 - [ ] T5 SW push/notificationclick handlers
 - [ ] T6 tests + verification
+
+Graph check for backend implementation: consulted `send_push()`, `PushUnavailable`,
+`get_settings()`, `PushSubscription`, `notify_admins()`, `create_operation()`,
+`NotificationOperation`, `require_user_json()`, and `routes/notifications.py`. Edges:
+`notify_admins() --calls--> create_operation()` and
+`send_push() <-contains- push.py --imports_from--> services/notifications.py
+--imports_from--> db.py --imports--> get_settings()`.
 
 ## Next step
 

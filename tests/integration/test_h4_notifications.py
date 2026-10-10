@@ -7,9 +7,11 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, User, UserRole
+from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, PushSubscription, User, UserRole
 from app.services.events import publish_event
 from app.services import notifications
+from app.services import push
+from app.services.push import PushUnavailable
 from _testdb import admin_database_url
 
 ADMIN_DB_URL = admin_database_url()
@@ -225,6 +227,48 @@ def test_push_failure_uses_configured_email_fallback(monkeypatch):
         fallback = session.scalar(select(NotificationOperation).where(NotificationOperation.channel == "email"))
         assert fallback.status == "sent"
         assert sent == [("ops@example.test", "Email fallback")]
+
+
+def test_send_push_requires_vapid_configuration(monkeypatch):
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": None, "vapid_private_key": None, "vapid_subject": None,
+    })())
+    with pytest.raises(PushUnavailable):
+        push.send_push("1", "hello")
+
+
+def test_send_push_uses_stored_subscription(monkeypatch):
+    user_id = _user("push-send")
+    with SessionLocal() as session:
+        subscription = PushSubscription(user_id=user_id, endpoint="https://push.example.test/1", p256dh="public", auth="secret")
+        session.add(subscription)
+        session.commit()
+        subscription_id = subscription.id
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": "public-key", "vapid_private_key": "private.pem", "vapid_subject": "mailto:ops@example.test",
+    })())
+    calls = []
+    monkeypatch.setattr(push, "webpush", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    assert push.send_push(str(subscription_id), "hello") == f"push:{subscription_id}"
+    assert calls == [(({"endpoint": "https://push.example.test/1", "keys": {"p256dh": "public", "auth": "secret"}},), {
+        "data": "hello", "vapid_private_key": "private.pem", "vapid_claims": {"sub": "mailto:ops@example.test"},
+    })]
+
+
+@pytest.mark.parametrize("active", [True, False])
+def test_send_push_missing_or_inactive_subscription_is_unavailable(monkeypatch, active):
+    user_id = _user(f"push-inactive-{active}")
+    with SessionLocal() as session:
+        subscription = PushSubscription(user_id=user_id, endpoint=f"https://push.example.test/{active}", p256dh="public", auth="secret", active=active)
+        session.add(subscription)
+        session.commit()
+        subscription_id = subscription.id
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": "public-key", "vapid_private_key": "private.pem", "vapid_subject": "mailto:ops@example.test",
+    })())
+    with pytest.raises(PushUnavailable):
+        push.send_push(str(subscription_id if not active else 999999999), "hello")
 
 
 def test_notification_center_and_push_routes_require_json_auth(client):
