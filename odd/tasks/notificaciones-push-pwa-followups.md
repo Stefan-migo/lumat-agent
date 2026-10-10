@@ -43,10 +43,14 @@ service functions, no UI copy change beyond what the fix requires.
   `subscription.active = False` **in the same `session_scope()`** (the subscription is read
   there) and **re-raise** so the notification op still follows its retry/fallback. Leave the
   row in place (no delete) — deactivation is auditable and reversible.
-- **R3-002:** before subscribing, call `registration.pushManager.getSubscription()`; if one
-  exists, reuse it and re-POST instead of calling `subscribe()` again. On POST failure,
-  recover consistently (retry the save against the reused/created subscription, or
-  `unsubscribe()` if the save cannot be recovered) so the browser and server state agree.
+- **R3-002 (final):** before subscribing, call `registration.pushManager.getSubscription()`;
+  if one exists, reuse it and re-POST instead of calling `subscribe()` again (kills the
+  `InvalidStateError` path). Additionally, do NOT mark `permission` as `"granted"` until
+  `savePushSubscription` succeeds — so after a failed POST the activation button stays
+  available (JSX unchanged) and an in-place retry reuses the subscription and re-saves.
+  No `unsubscribe()` cleanup and no JSX change: reuse is strictly better than destroying a
+  possibly-valid subscription on a transient failure, and an orphaned subscription the user
+  never retries is benign.
 
 ## Work units (stable IDs)
 
@@ -58,11 +62,11 @@ service functions, no UI copy change beyond what the fix requires.
       inactive/missing cases stay green.
 
 ### WU2 — R3-002 frontend: reuse existing subscription / recover after failed POST
-- [ ] RED: a test where `pushManager.getSubscription()` resolves an existing subscription and
+- [x] RED: a test where `pushManager.getSubscription()` resolves an existing subscription and
       `subscribe()` must NOT be called again (the existing one is re-POSTed); plus a case where
       the first POST rejects and the flow recovers to a consistent state.
-- [ ] GREEN: reuse `getSubscription()` before subscribing; recover on save failure.
-- [ ] No regression: existing `PushSettings.test.tsx` cases stay green.
+- [x] GREEN: reuse `getSubscription()` before subscribing; recover on save failure.
+- [x] No regression: existing `PushSettings.test.tsx` cases stay green.
 
 ## Acceptance criteria
 
@@ -104,3 +108,13 @@ service functions, no UI copy change beyond what the fix requires.
   `session.commit()` before re-raising.
 - RDD assess (`--base-ref 576b07ef --committed-only`) after WU1 → `medium` /
   `under_budget`, `review_due: false`; boundary stays pending until WU2.
+- WU2 — `588ea784` `fix(web): reuse existing push subscription and recover after failed save`.
+  New "reuses and saves an existing browser subscription" + "reuses the browser subscription
+  when retrying after a failed save" observed RED (2 failed / 4 passed), then GREEN
+  (`npm test -- PushSettings` → 6 passed). Updated the existing "subscribes and saves" test
+  mock to provide `getSubscription`. Decision detail: `setPermission("granted")` moved to
+  after a successful save so the activation button stays visible for an in-place retry; JSX
+  untouched.
+- Verification (parent spot check): backend `eval "$(infra/test-db.sh env)" && uv run pytest tests/`
+  → **1894 passed, 2 warnings** (pre-existing); frontend `npm run build` (`tsc -b && vite build`)
+  → success (pre-existing chunk-size warning); `npm test -- PushSettings` → 6 passed.
