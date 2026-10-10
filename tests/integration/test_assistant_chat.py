@@ -277,6 +277,44 @@ def test_runner_cooperatively_cancels_at_graph_stage_boundary(monkeypatch):
         assert message.assistant_metadata["cancellation"]["status"] == "cancelled"
 
 
+def test_runner_honors_stop_requested_after_last_stage_boundary(monkeypatch):
+    from app.services import agent_chat
+
+    with SessionLocal() as session:
+        owner = User(username="assistant-stop-terminal", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, active_run_id="terminal-stop-run", assistant_state={
+            "live": {"run_id": "terminal-stop-run", "status": "running"},
+        })
+        session.add(thread)
+        session.flush()
+        message = InternalChatMessage(thread_id=thread.id, author="admin", content="work", status="processing",
+                                      assistant_metadata={"run_id": "terminal-stop-run"})
+        session.add(message)
+        session.flush()
+        thread_id, message_id, owner_id = thread.id, message.id, owner.id
+        session.commit()
+
+    def stop_after_last_stage(**kwargs):
+        with SessionLocal() as stopping:
+            thread = stopping.get(InternalChatThread, thread_id)
+            thread.assistant_state = {**thread.assistant_state, "stop_request": {"run_id": "terminal-stop-run"}}
+            stopping.commit()
+        return _completed_result()
+
+    monkeypatch.setattr(agent_chat, "run_assistant", stop_after_last_stage)
+    agent_chat.run_agent_turn(thread_id=thread_id, run_id="terminal-stop-run", user_id=owner_id,
+                              attachment_ids=[], sdb_requested=None)
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        message = session.get(InternalChatMessage, message_id)
+        assert thread.assistant_state["live"]["status"] == "cancelled"
+        assert "stop_request" not in thread.assistant_state
+        assert message.status == "cancelled"
+
+
 def test_stop_route_accepts_approval_pending_as_running(client):
     _user("assistant-stop-approval", "admin")
     _login(client, "assistant-stop-approval")
@@ -298,6 +336,54 @@ def test_stop_route_accepts_approval_pending_as_running(client):
         assert thread.assistant_state["live"]["status"] == "cancelled"
         assert message.status == "cancelled"
         assert message.assistant_metadata["cancellation"]["status"] == "cancelled"
+
+
+def test_stopping_approval_pending_revokes_approval_and_prevents_execution(client, monkeypatch):
+    _user("assistant-stop-revoke-approval", "admin")
+    _login(client, "assistant-stop-revoke-approval")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    run_id = "revoked-approval-run"
+    plan = {"tool": "stub", "arguments": {}, "requires_approval": True}
+    approval = issue_approval(plan)
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.current_plan = plan
+        thread.active_run_id = run_id
+        thread.assistant_state = {
+            "stage": "approval_pending",
+            "live": {"run_id": run_id, "stage": "approval_pending", "status": "approval_pending"},
+            "approval": approval,
+        }
+        session.add(InternalChatMessage(
+            thread_id=thread_id, author="admin", content="pending", status="approval_pending",
+            assistant_metadata={"run_id": run_id, "approval": approval},
+        ))
+        session.commit()
+
+    stopped = client.post(f"/panel/api/chat/threads/{thread_id}/stop", json={"run_id": run_id})
+    assert stopped.status_code == 200
+    assert stopped.json() == {"status": "cancelled", "run_id": run_id}
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        assert thread.assistant_state["approval"]["status"] == "revoked"
+
+    executed = []
+    monkeypatch.setattr("app.services.agent_chat.execute", lambda state: executed.append(state) or {
+        "status": "completed", "response": "Executed", "evidence": [],
+    })
+    rejected = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval",
+        json={"run_id": run_id, "token": approval["token"]},
+    )
+
+    assert rejected.status_code == 409
+    assert executed == []
+    with SessionLocal() as session:
+        messages = list(session.scalars(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id,
+        )))
+        assert len(messages) == 1
+        assert messages[0].status == "cancelled"
 
 
 def test_sdb_requested_is_admin_only(client):

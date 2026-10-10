@@ -359,6 +359,9 @@ def stop_thread_run(
         # background runner left to consume the intent, so settle it here.
         settled = dict(thread.assistant_state or {})
         settled.pop("stop_request", None)
+        approval = settled.get("approval")
+        if isinstance(approval, dict) and approval.get("status") == "pending":
+            approval["status"] = "revoked"
         thread.assistant_state = merge_assistant_state(settled, {
             "stage": "cancelled", "execution_status": "cancelled",
             "live": {"run_id": run_id, "stage": "cancelled", "status": "cancelled"},
