@@ -162,7 +162,11 @@ the two recipes that do not exist today. No `visit_reminder` catalog entry is ad
 
 **Anchors:** review request → `appointment.ends_at + Xd` with `status=completed` (there is no
 `completed_at` column); maintenance → the customer's last completed `ends_at` + N months.
-Anti-backfill floor: an occurrence only fires when its anchor is `>= installation.created_at`.
+Anti-backfill floor: an occurrence only fires when its **due time** (`anchor + offset`) is
+`>= installation.created_at`. A due time already in the past when the recipe is installed is
+suppressed; a due time still in the future fires normally. (Floored on the due time, NOT on the
+anchor: flooring on the anchor would wrongly skip entities whose anchor predates the install but
+whose due time is in the future.)
 
 - [x] **WU1 — Time recipe model**: `trigger_kind="offset"` in `RecipeDefinition`;
   `compile_rule_fields` accepts `{"event","offset"}`; `type="number"` parameter validation;
