@@ -51,10 +51,10 @@ service functions, no UI copy change beyond what the fix requires.
 ## Work units (stable IDs)
 
 ### WU1 — R3-001 backend: deactivate subscription on 404/410
-- [ ] RED: a test where `webpush` raises `WebPushException` with `response.status_code == 410`;
+- [x] RED: a test where `webpush` raises `WebPushException` with `response.status_code == 410`;
       assert `send_push` re-raises and the `PushSubscription` row ends `active is False`.
-- [ ] GREEN: guard the `webpush` call, deactivate on 404/410, re-raise.
-- [ ] No regression: existing `test_send_push_uses_stored_subscription` and the
+- [x] GREEN: guard the `webpush` call, deactivate on 404/410, re-raise.
+- [x] No regression: existing `test_send_push_uses_stored_subscription` and the
       inactive/missing cases stay green.
 
 ### WU2 — R3-002 frontend: reuse existing subscription / recover after failed POST
@@ -96,3 +96,11 @@ service functions, no UI copy change beyond what the fix requires.
 
 - Worktree created from `main` = `576b07ef`. Baseline
   `uv run pytest tests/integration/test_h4_notifications.py` → 15 passed.
+- WU1 — `15e35141` `fix(push): deactivate subscription on terminal push-service failure`.
+  New `test_send_push_deactivates_subscription_on_gone_response` observed RED (row stayed
+  `active=True`), then GREEN. Targeted `tests/integration/test_h4_notifications.py` → 16 passed
+  (parent spot check re-ran → 16 passed). Full backend `uv run pytest tests/` → 1894 passed.
+  Note: `session_scope()` rolls back on exception, so the handler does an explicit
+  `session.commit()` before re-raising.
+- RDD assess (`--base-ref 576b07ef --committed-only`) after WU1 → `medium` /
+  `under_budget`, `review_due: false`; boundary stays pending until WU2.
