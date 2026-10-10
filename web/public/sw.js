@@ -11,6 +11,20 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener("push", (event) => {
+  const body = event.data ? event.data.text() : "";
+  event.waitUntil(self.registration.showNotification("Lumat", { body, data: { url: "/panel/app/" } }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url ?? "/panel/app/";
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    const client = clients.find((candidate) => new URL(candidate.url).origin === self.location.origin && candidate.url.startsWith(self.registration.scope));
+    return client ? client.focus() : self.clients.openWindow(url);
+  }));
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
