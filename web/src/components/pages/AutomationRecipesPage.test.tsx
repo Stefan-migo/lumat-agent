@@ -4,6 +4,7 @@ import { AutomationRecipesPage } from './AutomationRecipesPage';
 
 const recipe = { recipe_id: 'booking-confirmation', name: 'Confirmación de reserva', description: 'Confirma una reserva.', category: 'Reservas', trigger_kind: 'event', event_type: 'appointment.booked', channel_allowed: ['whatsapp', 'email'], recipient_target: 'customer', content: 'Tu reserva está confirmada.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'string', required: true, default: 'whatsapp' }] };
 const offsetRecipe = { recipe_id: 'appointment_review_request', name: 'Pedir evaluación', description: 'Solicita una evaluación después de la visita.', category: 'postventa', trigger_kind: 'offset', event_type: 'appointment.review_due', channel_allowed: ['whatsapp'], recipient_target: 'customer', content: '¿Cómo estuvo tu visita? Nos encantaría conocer tu opinión.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: null }, { key: 'days_after', label: 'Días después de la visita', type: 'number', required: true, default: 3 }] };
+const weeklyRecipe = { recipe_id: 'admin_weekly_summary', name: 'Resumen semanal', description: 'Envía un resumen semanal.', category: 'administración', trigger_kind: 'schedule', channel_allowed: ['whatsapp'], recipient_target: 'admin', content: 'Resumen semanal.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: 'whatsapp' }, { key: 'weekday', label: 'Día de la semana', type: 'weekday', required: true, default: 1 }, { key: 'time', label: 'Hora', type: 'time', required: true, default: '07:00' }] };
 const installation = { id: 8, recipe_id: recipe.recipe_id, parameters: { channel: 'email' }, enabled: false, created_by: 'ana', created_at: null, updated_at: null };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
@@ -48,6 +49,31 @@ describe('AutomationRecipesPage', () => {
       const body = JSON.parse(String(postCall?.[1]?.body));
       expect(body.parameters.days_after).toBe(5);
       expect(typeof body.parameters.days_after).toBe('number');
+    });
+  });
+
+  it('installs a weekly summary with numeric weekday and time parameters', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/automation-recipes')) return json({ recipes: [weeklyRecipe] });
+      if (init?.method === 'POST') return json({ installation: { ...installation, recipe_id: weeklyRecipe.recipe_id, parameters: { channel: 'whatsapp', weekday: 3, time: '09:30' } } }, 201);
+      return json({ installations: [] });
+    });
+    render(<AutomationRecipesPage />);
+    expect(await screen.findByText(weeklyRecipe.content)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Instalar' }));
+    expect(screen.getByLabelText('Día de la semana')).toHaveValue('1');
+    expect(screen.getByLabelText('Hora')).toHaveValue('07:00');
+    fireEvent.change(screen.getByLabelText('Día de la semana'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '09:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar instalación' }));
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/automation-installations') && init?.method === 'POST');
+      expect(postCall).toBeDefined();
+      const body = JSON.parse(String(postCall?.[1]?.body));
+      expect(body.parameters.weekday).toBe(3);
+      expect(typeof body.parameters.weekday).toBe('number');
+      expect(body.parameters.time).toBe('09:30');
     });
   });
 
