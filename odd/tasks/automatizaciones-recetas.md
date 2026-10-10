@@ -212,13 +212,16 @@ local `now >= due_time` (today at HH:MM; the configured weekday at HH:MM for wee
 - [x] **WU1 — Schedule recipe model**: `trigger_kind="schedule"`; param types `time` (HH:MM) and
   `weekday` (1-7); `_schedule_recipe`; the two summary recipes; synthetic events in `ALLOWED_EVENTS`;
   updated catalog expectations. Commit `85899bda`. Full backend suite **1894 passed**.
-- [ ] **WU2 — Digest builder**: `app/ops/daily_summary.py` `build_digest(session, period, now)` from real
-  KPIs, honest empty state.
-- [ ] **WU3 — Calendar evaluation**: `_summary_due` in `app/services/time_triggers.py` on the same tick,
-  business timezone, day/week dedupe, digest in the event payload. Plus a separate `fix:` commit
-  isolating per-installation failures (resolves R3-003).
-- [ ] **WU4 — Surface + verification**: render `time`/`weekday` params in `AutomationRecipesPage.tsx`;
-  frontend test + `npm run build`.
+- [x] **WU2 — Digest builder**: `app/ops/daily_summary.py` `build_digest(session, *, period, now)` from
+  real KPIs (open cases, unresolved questions, spend), honest empty state, plus a stdout `main()`.
+  Commit `b8306b8d`. Full backend suite **1898 passed**.
+- [x] **WU3 — Calendar evaluation**: `_summary_due` in `app/services/time_triggers.py` on the same tick,
+  business timezone (`hours.timezone`), day/week dedupe, digest in the event payload, anti-backfill
+  floor. Commit `4a81fc61`. Separate `fix:` commit `d5a048cf` isolates per-installation failures
+  (resolves R3-003). Full backend suite **1903 passed**.
+- [x] **WU4 — Surface + verification**: `AutomationRecipesPage.tsx` renders `time` (native time input)
+  and `weekday` (Lunes–Domingo select, integer value) params. Commit `8ffd0c64`. `npm run build`
+  (tsc -b + vite) green; full serialized `npm test` **104 files, 1108 tests** green.
 
 ### Transversal
 - [ ] **D1 — Evento de pago**.
@@ -241,7 +244,9 @@ they are separate later work.
 - [ ] **R4-002** (`app/services/automation_installations.py:49-58`) — the duplicate-install precheck can
   race with concurrent requests; the DB unique constraint rejects the loser, but the `IntegrityError` is
   not translated into the documented `ValueError`. Normalize the conflict response when wiring the API.
-- [ ] **R3-003 — Slice 2 review** (`app/services/time_triggers.py:109-116`) — an enabled offset
+- [x] **R3-003 — Slice 2 review** — **resuelto en Slice 3 WU3** (commit `d5a048cf`): the per-installation
+  evaluation is wrapped in `try/except` + logger + `continue`, so one broken installation no longer
+  aborts the tick. Original report (`app/services/time_triggers.py:109-116`) — an enabled offset
   installation whose persisted parameters no longer validate raises inside `evaluate_time_triggers`
   and aborts the worker cycle before it claims any domain events, stalling unrelated queued events on
   every tick. Isolate per-installation failures (skip + continue). Advisory WARNING from the Slice 2
@@ -278,3 +283,7 @@ they are separate later work.
   mismo tick, sin migración, digest por payload). C1 = WU1 (modelo de recetas de calendario) + WU2
   (builder del resumen) + WU3 (evaluación en el tick + fold R3-003) + WU4 (UI + verificación). WU1
   commiteado (`85899bda`); NOTA: `infra/.env` no lo copia `rapso worktree create` — copiado a mano.
+- 2026-10-10 — Slice 3 C1 backend + UI completo. Commits `85899bda` (WU1), `b8306b8d` (WU2),
+  `4a81fc61` (WU3 tick), `d5a048cf` (WU3 fix R3-003), `8ffd0c64` (WU4 UI). Backend suite **1903**,
+  frontend serializado **1108**, `npm run build` verde. Pendiente: review RDD del slice (base `576b07ef`)
+  y push/PR del owner.
