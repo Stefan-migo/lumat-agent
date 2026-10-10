@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -10,6 +11,7 @@ from app.models import (
 )
 from app.services.automation_installations import install
 from app.services.recipes import get_recipe
+from app.services.settings import set_setting
 from app.services.time_triggers import evaluate_time_triggers
 
 
@@ -140,3 +142,63 @@ def test_worker_processes_due_review_into_notification_operation(migrated_db):
         operation = session.scalar(select(NotificationOperation))
         assert operation.recipient == customer.phone_e164
         assert operation.content == get_recipe("appointment_review_request").content
+
+
+def _schedule(session, recipe_id, **parameters):
+    return _install(session, recipe_id, **parameters)
+
+
+def test_daily_summary_trigger_publishes_digest_and_deduplicates(migrated_db):
+    now = datetime(2026, 10, 10, 15, 0, tzinfo=timezone.utc)
+    with SessionLocal() as session:
+        installation = _schedule(session, "admin_daily_summary", time="11:00")
+        installation.created_at = datetime(2026, 10, 9, tzinfo=timezone.utc)
+        session.flush()
+        assert evaluate_time_triggers(session, now) == 1
+        assert evaluate_time_triggers(session, now) == 1
+        events = session.scalars(select(DomainEvent)).all()
+        assert len(events) == 1
+        assert events[0].dedupe_key == "schedule:admin_daily_summary:2026-10-10"
+        assert events[0].payload["content"]
+
+
+def test_daily_summary_not_due_yet(migrated_db):
+    now = datetime(2026, 10, 10, 9, 0, tzinfo=timezone.utc)
+    with SessionLocal() as session:
+        installation = _schedule(session, "admin_daily_summary", time="11:00")
+        installation.created_at = datetime(2026, 10, 9, tzinfo=timezone.utc)
+        session.flush()
+        assert evaluate_time_triggers(session, now) == 0
+
+
+def test_weekly_summary_uses_iso_week_dedupe_key(migrated_db):
+    now = datetime(2026, 10, 10, 15, 0, tzinfo=timezone.utc)
+    iso = now.isocalendar()
+    with SessionLocal() as session:
+        installation = _schedule(session, "admin_weekly_summary", weekday=6, time="11:00")
+        installation.created_at = datetime(2026, 10, 9, tzinfo=timezone.utc)
+        session.flush()
+        assert evaluate_time_triggers(session, now) == 1
+        event = session.scalar(select(DomainEvent))
+        assert event.dedupe_key == f"schedule:admin_weekly_summary:W{iso.year}-{iso.week:02d}"
+
+
+def test_worker_processes_daily_summary_for_admin(migrated_db):
+    from app.ops.daily_summary import build_digest
+    from app.ops.worker import run_cycle
+
+    with SessionLocal() as session:
+        set_setting(session, "notify.owner_whatsapp", "+15559990000")
+        set_setting(session, "hours.timezone", "UTC")
+        now = datetime.now(timezone.utc)
+        scheduled = now - timedelta(minutes=1)
+        installation = _schedule(session, "admin_daily_summary", time=scheduled.strftime("%H:%M"))
+        installation.created_at = now - timedelta(days=1)
+        session.commit()
+        expected = build_digest(session, period="daily", now=now)
+
+    assert run_cycle() == 1
+    with SessionLocal() as session:
+        operation = session.scalar(select(NotificationOperation))
+        assert operation.content == expected
+        assert operation.recipient == "+15559990000"

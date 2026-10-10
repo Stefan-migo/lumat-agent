@@ -2,7 +2,8 @@
 
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.models import (
 )
 from app.services.events import publish_event
 from app.services.recipes import RecipeDefinition, get_recipe
+from app.services.settings import get_hours_timezone
 
 try:
     from dateutil.relativedelta import relativedelta
@@ -94,9 +96,35 @@ def _maintenance_due(session: Session, installation: AutomationInstallation, rec
             )
 
 
+def _summary_due(session: Session, installation: AutomationInstallation, recipe: RecipeDefinition, now: datetime):
+    parameters = recipe.validate_parameters(installation.parameters or {})
+    period = "daily" if recipe.recipe_id == "admin_daily_summary" else "weekly"
+    tz = ZoneInfo(get_hours_timezone(session))
+    local_now = now.astimezone(tz)
+    hour, minute = map(int, parameters["time"].split(":"))
+    if period == "daily":
+        due = datetime.combine(local_now.date(), time(hour, minute), tzinfo=tz)
+        dedupe_key = f"schedule:{recipe.recipe_id}:{local_now.date().isoformat()}"
+    else:
+        iso = local_now.isocalendar()
+        due_date = local_now.date() - timedelta(days=iso.weekday - parameters["weekday"])
+        due = datetime.combine(due_date, time(hour, minute), tzinfo=tz)
+        dedupe_key = f"schedule:{recipe.recipe_id}:W{iso.year}-{iso.week:02d}"
+    if local_now < due or due.astimezone(now.tzinfo) < installation.created_at:
+        return
+    from app.ops.daily_summary import build_digest
+
+    yield DueOccurrence("summary", recipe.recipe_id, {"content": build_digest(session, period=period, now=now)}, dedupe_key)
+
+
 _EVALUATORS = {
     "appointment_review_request": _review_due,
     "customer_maintenance": _maintenance_due,
+}
+
+_SCHEDULE_EVALUATORS = {
+    "admin_daily_summary": _summary_due,
+    "admin_weekly_summary": _summary_due,
 }
 
 
@@ -108,9 +136,15 @@ def evaluate_time_triggers(session: Session, now: datetime) -> int:
     )
     for installation in installations:
         recipe = get_recipe(installation.recipe_id)
-        if recipe is None or recipe.trigger_kind != "offset":
+        if recipe is None:
             continue
-        evaluator = _EVALUATORS.get(installation.recipe_id)
+        evaluator = (
+            _EVALUATORS.get(installation.recipe_id)
+            if recipe.trigger_kind == "offset"
+            else _SCHEDULE_EVALUATORS.get(installation.recipe_id)
+            if recipe.trigger_kind == "schedule"
+            else None
+        )
         if evaluator is None:
             continue
         for occurrence in evaluator(session, installation, recipe, now):
