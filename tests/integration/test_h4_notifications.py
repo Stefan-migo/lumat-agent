@@ -303,8 +303,26 @@ def test_send_push_missing_or_inactive_subscription_is_unavailable(monkeypatch, 
 
 
 def test_notification_center_and_push_routes_require_json_auth(client):
-    for method, path in (("get", "/panel/api/notifications"), ("post", "/panel/api/push-subscription")):
+    for method, path in (("get", "/panel/api/notifications"), ("post", "/panel/api/push-subscription"), ("get", "/panel/api/push-config")):
         response = client.get(path) if method == "get" else client.post(path, json={})
         assert response.status_code in {401, 422}
         if response.status_code == 401:
-            assert response.json() == {"detail": "unauthorized"}
+                assert response.json() == {"detail": "unauthorized"}
+
+
+def test_push_config_returns_public_key_to_authenticated_user(client, monkeypatch):
+    from app.config import get_settings
+
+    user_id = _user("push-config-user")
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        from app.services.users import hash_password
+        user.password_hash = hash_password("push-config-pass")
+        session.commit()
+    monkeypatch.setattr(get_settings(), "vapid_public_key", "public-vapid-key")
+    response = client.post("/panel/api/login", json={"username": "push-config-user", "password": "push-config-pass"})
+    assert response.status_code == 200
+
+    response = client.get("/panel/api/push-config")
+    assert response.status_code == 200
+    assert response.json() == {"public_key": "public-vapid-key"}
