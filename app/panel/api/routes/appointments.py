@@ -16,6 +16,7 @@ from app.panel.api.serializers import (
 )
 from app.panel.deps import get_db
 from app.services import scheduling
+from app.services import technician_schedule
 
 router = APIRouter(tags=["panel-api-appointments"])
 
@@ -48,6 +49,16 @@ class RescheduleBody(BaseModel):
     technician_id: int
 
 
+class TechnicianScheduleEntry(BaseModel):
+    weekday: int
+    opens_at: time
+    closes_at: time
+
+
+class TechnicianScheduleBody(BaseModel):
+    schedule: list[TechnicianScheduleEntry]
+
+
 @router.get("/appointments")
 def list_appointments(from_date: date = Query(alias="from"), to_date: date = Query(alias="to"), timezone_name: str = Query(alias="timezone"), session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     try:
@@ -66,6 +77,30 @@ def technician_availability(technician_id: int, starts_at: datetime, ends_at: da
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"technician_id": technician_id, "starts_at": starts_at.isoformat(), "ends_at": ends_at.isoformat(), "available": available}
+
+
+@router.get("/technicians/{technician_id}/schedule")
+def get_technician_schedule(technician_id: int, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
+    entries = technician_schedule.get_schedule(session, technician_id)
+    return {"technician_id": technician_id, "schedule": [
+        {**entry, "opens_at": entry["opens_at"].isoformat(), "closes_at": entry["closes_at"].isoformat()}
+        for entry in entries
+    ]}
+
+
+@router.put("/technicians/{technician_id}/schedule")
+def put_technician_schedule(technician_id: int, body: TechnicianScheduleBody, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
+    try:
+        entries = technician_schedule.set_schedule(
+            session, technician_id, [entry.model_dump() for entry in body.schedule]
+        )
+    except technician_schedule.InvalidSchedule as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_schedule", "message": str(exc)}) from exc
+    session.commit()
+    return {"technician_id": technician_id, "schedule": [
+        {**entry, "opens_at": entry["opens_at"].isoformat(), "closes_at": entry["closes_at"].isoformat()}
+        for entry in entries
+    ]}
 
 
 @router.post("/appointments")
