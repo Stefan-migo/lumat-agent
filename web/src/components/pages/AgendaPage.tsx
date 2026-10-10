@@ -299,17 +299,17 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {closeFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={closeFeedback.title} /> : null}
     {rescheduleFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={rescheduleFeedback.title} /> : null}
-     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
+    {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /> : register}</Tabs></section>
      </div>}
-     <details onToggle={expandRoster}>
+     <details className="agenda-page__schedules" onToggle={expandRoster}>
        <summary>Horarios de técnicos</summary>
        <p>Define la disponibilidad semanal para que el asistente ofrezca horarios reales.</p>
        {rosterState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}
        {rosterState === "error" ? <div><StateMessage tone="danger" role="alert" title="No pudimos cargar los técnicos" detail="Intenta nuevamente para consultar sus horarios." /><Button variant="secondary" onClick={() => void loadRoster()}>Reintentar</Button></div> : null}
        {rosterState === "ready" && technicians.length === 0 ? <p>No hay técnicos disponibles.</p> : null}
-       {rosterState === "ready" && technicians.length > 0 ? <ul>{technicians.map((technician) => <li key={technician.id}>{technician.username} <Button variant="secondary" onClick={() => setScheduleTechnician(technician)}>Horarios</Button></li>)}</ul> : null}
+       {rosterState === "ready" && technicians.length > 0 ? <ul className="agenda-page__schedules-list">{technicians.map((technician) => <li className="agenda-page__schedules-item" key={technician.id}><span>{technician.username}</span><Button variant="secondary" onClick={() => setScheduleTechnician(technician)}>Horarios</Button></li>)}</ul> : null}
      </details>
      {scheduleTechnician ? <TechnicianScheduleDialog open technician={scheduleTechnician} onClose={() => setScheduleTechnician(null)} /> : null}
      <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita" icon={CalendarX} description="Indica el motivo de la cancelación de esta visita.">

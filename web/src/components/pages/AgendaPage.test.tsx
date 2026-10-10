@@ -70,9 +70,14 @@ describe('AgendaPage', () => {
 
     expect(fetchTechnicians).not.toHaveBeenCalled();
     const disclosure = screen.getByText('Horarios de técnicos').closest('details')!;
+    expect(disclosure).toHaveClass('agenda-page__schedules');
+    expect(within(disclosure).getByText('Horarios de técnicos').tagName).toBe('SUMMARY');
     await user.click(within(disclosure).getByText('Horarios de técnicos'));
     expect(await within(disclosure).findByText('Luis Pérez')).toBeInTheDocument();
     expect(fetchTechnicians).toHaveBeenCalledOnce();
+    expect(within(disclosure).getByRole('list').tagName).toBe('UL');
+    expect(within(disclosure).getByRole('list')).toHaveClass('agenda-page__schedules-list');
+    expect(within(disclosure).getAllByRole('button', { name: 'Horarios' })).toHaveLength(1);
     await user.click(within(disclosure).getByRole('button', { name: 'Horarios' }));
     const scheduleDialog = await screen.findByRole('dialog', { name: 'Horario semanal' });
     expect(scheduleDialog).toHaveTextContent('Define los días y horarios de atención de Luis Pérez.');
@@ -80,6 +85,12 @@ describe('AgendaPage', () => {
     await user.click(within(disclosure).getByText('Horarios de técnicos'));
     await user.click(within(disclosure).getByText('Horarios de técnicos'));
     expect(fetchTechnicians).toHaveBeenCalledOnce();
+  });
+
+  it('styles the technician roster with tokenized Agenda section and row rules', () => {
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+
+    expect(stylesheet).toMatch(/\.agenda-page__schedules > summary\s*\{[^}]*font-size:\s*var\(--text-lg\)[^}]*font-weight:\s*var\(--weight-semibold\)[^}]*\}[\s\S]*\.agenda-page__schedules-list\s*\{[^}]*display:\s*grid[^}]*list-style:\s*none[^}]*\}[\s\S]*\.agenda-page__schedules-item\s*\{[^}]*padding:\s*var\(--space-3\)[^}]*border:\s*1px solid var\(--border\)[^}]*border-radius:\s*var\(--radius-md\)/s);
   });
 
   it('shows roster errors with a retry and an explicit empty state', async () => {
