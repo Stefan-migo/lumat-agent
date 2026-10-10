@@ -118,3 +118,26 @@ service functions, no UI copy change beyond what the fix requires.
 - Verification (parent spot check): backend `eval "$(infra/test-db.sh env)" && uv run pytest tests/`
   → **1894 passed, 2 warnings** (pre-existing); frontend `npm run build` (`tsc -b && vite build`)
   → success (pre-existing chunk-size warning); `npm test -- PushSettings` → 6 passed.
+- RDD (2026-10-10): selectorless STATUS preflight returned `review.start`; consent relayed and
+  **granted** by the owner; START created transaction `review-bfbcbdbdf6a05827` (medium,
+  one lens `review-reliability`, correction budget 108). The bound STATUS then refused with the
+  typed failure `immutable_review_transport_unsupported` (`next_action: stop`, `retry_safe: false`,
+  `mutation_outcome: not_started`): this runtime is not eligible for immutable receipt review.
+  Same condition the `odd/wu3-stop-followups` session recorded. No authority burned, no receipt.
+  Applied the RDD-off fallback (writers self-verified + parent spot checks + **one** independent
+  read-only verifier).
+- Independent verifier verdict: **PASS-WITH-WARNINGS**, 0 blockers. Confirmed the explicit
+  `session.commit()` before re-raise is correct (`session_scope` rolls back on exception, and
+  this session only loads the subscription → no staged events lost), `exc.response` is guarded
+  for `None`, and the UI denied/unsupported/unconfigured paths are unaffected. Two SUGGESTIONs
+  left as follow-ups (not blockers, not applied post-freeze):
+  1. Backend test covers `410` only; add `404` and a non-terminal code (e.g. 500) to pin the
+     `(404, 410)` deactivation boundary.
+  2. Concurrent double-click on "Activar" could race two `subscribe()` calls; sequential retry
+     is covered, concurrency is not.
+
+## Follow-ups (non-blocking, out of scope)
+
+- Backend boundary test: parametrize the new test over `404`/`410` (deactivate) vs another
+  status (no deactivate).
+- Frontend: serialize concurrent activation clicks if deemed worth it.
