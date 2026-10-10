@@ -142,7 +142,7 @@ export function listNotifications(filters: NotificationFilters = {}) { const par
 export const markNotificationRead = (id: number) => postJson<{ notification: PanelNotification }>(`/panel/api/notifications/${id}/read`);
 export const markAllNotificationsRead = () => postJson<{ ok: true; read: number }>('/panel/api/notifications/read-all');
 export const createChatThread = (proyecto: string) => postJson<InternalChatResponse>('/panel/api/chat/threads', { proyecto });
-export const listChatThreads = (limit: number) => apiFetch<InternalChatThreadsResponse>(`/panel/api/chat/threads?limit=${encodeURIComponent(limit)}`);
+export const listChatThreads = (limit: number, proyecto?: string) => apiFetch<InternalChatThreadsResponse>(`/panel/api/chat/threads?limit=${encodeURIComponent(limit)}${proyecto === undefined ? '' : `&proyecto=${encodeURIComponent(proyecto)}`}`);
 export const renameChatThread = (id: number, title: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) });
 export const deleteChatThread = (id: number) => apiFetch<{ ok: true }>(`/panel/api/chat/threads/${id}`, { method: 'DELETE' });
 export const sendChatMessage = (id: number, content: string, attachment_ids: number[] = []) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content, attachment_ids });

@@ -551,6 +551,20 @@ def test_thread_list_is_admin_only_bounded_and_ordered(client):
     assert listed.json()["threads"][0]["updated_at"]
     assert "status" not in listed.json()["threads"][0]
 
+    with SessionLocal() as session:
+        session.query(InternalChatThread).filter_by(id=first).update({"proyecto": "other-project"})
+        session.commit()
+
+    all_threads = client.get("/panel/api/chat/threads?limit=10")
+    default_threads = client.get("/panel/api/chat/threads?limit=10&proyecto=default")
+    assert {row["id"] for row in all_threads.json()["threads"]} == {first, second}
+    assert {row["id"]: row["proyecto"] for row in all_threads.json()["threads"]} == {
+        first: "other-project",
+        second: "default",
+    }
+    assert [row["id"] for row in default_threads.json()["threads"]] == [second]
+    assert default_threads.json()["threads"][0]["proyecto"] == "default"
+
     client.post("/panel/api/logout")
     _login(client, "thread-list-operator")
     assert client.get("/panel/api/chat/threads?limit=1").json()["threads"] == []

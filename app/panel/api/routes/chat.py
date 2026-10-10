@@ -166,6 +166,7 @@ def new_thread(
 @router.get("/chat/threads")
 def list_chat_threads(
     limit: int = Query(..., ge=1, le=50),
+    proyecto: str | None = Query(default=None, max_length=100),
     session: Session = Depends(get_db),
     current: User = Depends(require_agent_surface_json),
 ) -> dict:
@@ -174,15 +175,18 @@ def list_chat_threads(
         .where(InternalChatMessage.thread_id == InternalChatThread.id)
         .scalar_subquery()
     )
+    where = [
+        InternalChatThread.user_id == current.id,
+        InternalChatThread.assistant_state["cortex_session"].as_string().is_(None),
+        select(InternalChatMessage.id)
+        .where(InternalChatMessage.thread_id == InternalChatThread.id)
+        .exists(),
+    ]
+    if proyecto is not None:
+        where.append(InternalChatThread.proyecto == proyecto)
     rows = session.scalars(
         select(InternalChatThread)
-        .where(
-            InternalChatThread.user_id == current.id,
-            InternalChatThread.assistant_state["cortex_session"].as_string().is_(None),
-            select(InternalChatMessage.id)
-            .where(InternalChatMessage.thread_id == InternalChatThread.id)
-            .exists(),
-        )
+        .where(*where)
         .order_by(latest_created_at.desc(), InternalChatThread.id.desc())
         .limit(limit)
     ).all()

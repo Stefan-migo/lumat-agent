@@ -433,6 +433,7 @@ def to_internal_chat_thread_summary_dict(
     return {
         "id": thread.id,
         "title": thread.title,
+        "proyecto": thread.proyecto,
         "created_at": _iso(thread.created_at),
         "updated_at": _iso(thread.updated_at),
         "run_status": state.get("execution_status"),

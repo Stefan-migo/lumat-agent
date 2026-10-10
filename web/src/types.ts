@@ -203,6 +203,7 @@ export interface InternalChatResponse { thread: InternalChatThread; messages: In
 export interface InternalChatThreadSummary {
   id: number;
   title: string | null;
+  proyecto: string;
   created_at: string | null;
   updated_at: string | null;
   run_status: string | null;
