@@ -53,13 +53,43 @@ def test_recipe_catalog_compiles_and_validates_parameters():
 
 
 def test_catalog_has_compilable_recipes_with_unique_ids():
-    assert len(recipes.RECIPES) == 7
+    assert len(recipes.RECIPES) == 9
     assert len(recipes.RECIPES) == len({recipe.recipe_id for recipe in recipes.RECIPES.values()})
     for recipe in recipes.RECIPES.values():
-        assert recipe.trigger_kind in {"event", "offset"}
+        assert recipe.trigger_kind in {"event", "offset", "schedule"}
         assert any(parameter.key == "channel" for parameter in recipe.parameters)
         fields = recipe.compile_rule_fields({"channel": next(iter(recipe.channel_allowed))})
         assert fields["event_type"] == recipe.event_type
+
+
+def test_schedule_recipe_catalog_validates_and_compiles_calendar_parameters():
+    from app.services.automation import ALLOWED_EVENTS
+
+    daily = recipes.get_recipe("admin_daily_summary")
+    weekly = recipes.get_recipe("admin_weekly_summary")
+    assert daily is not None and weekly is not None
+    for recipe, event_type in (
+        (daily, "admin.daily_summary_due"),
+        (weekly, "admin.weekly_summary_due"),
+    ):
+        assert recipe.trigger_kind == "schedule"
+        assert recipe.recipient_target == "admin"
+        assert recipe.event_type == event_type and event_type in ALLOWED_EVENTS
+        fields = recipe.compile_rule_fields({"channel": "email"})
+        assert fields["event_type"] == event_type
+        assert fields["recipient_target"] == "admin"
+
+    assert daily.validate_parameters({"channel": "email"})["time"] == "07:00"
+    for value in ("7:00", "25:00", "07:60"):
+        with pytest.raises(ValueError, match="parameter time must be a HH:MM time"):
+            daily.validate_parameters({"channel": "email", "time": value})
+
+    assert weekly.validate_parameters({"channel": "email"})["weekday"] == 1
+    for weekday in range(1, 8):
+        assert weekly.validate_parameters({"channel": "email", "weekday": weekday})["weekday"] == weekday
+    for weekday in (0, 8, True):
+        with pytest.raises(ValueError, match="parameter weekday must be a weekday 1-7"):
+            weekly.validate_parameters({"channel": "email", "weekday": weekday})
 
 
 @pytest.mark.parametrize(

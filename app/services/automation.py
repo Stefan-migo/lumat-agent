@@ -13,7 +13,7 @@ from app.services.notifications import create_operation
 from app.services.settings import get_setting
 
 ALLOWED_CHANNELS = {"whatsapp", "email"}
-ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.rescheduled", "appointment.cancelled", "appointment.completed", "appointment.no_show", "appointment.review_due", "customer.maintenance_due"}
+ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.rescheduled", "appointment.cancelled", "appointment.completed", "appointment.no_show", "appointment.review_due", "customer.maintenance_due", "admin.daily_summary_due", "admin.weekly_summary_due"}
 MAX_AUTHORING_COOLDOWN_SECONDS = 2_592_000
 
 

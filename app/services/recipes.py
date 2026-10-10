@@ -1,9 +1,12 @@
 """Code-defined automation recipe catalog and rule compilation."""
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 from app.services.automation import ALLOWED_CHANNELS, ALLOWED_EVENTS
+
+_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
 
 @dataclass(frozen=True)
@@ -51,11 +54,17 @@ class RecipeDefinition:
                 raise ValueError(f"parameter {key} must be a string")
             elif parameter.type == "number" and (isinstance(value, bool) or not isinstance(value, int) or value <= 0):
                 raise ValueError(f"parameter {key} must be a positive integer")
+            elif parameter.type == "time":
+                if not isinstance(value, str) or not _TIME_RE.fullmatch(value):
+                    raise ValueError(f"parameter {key} must be a HH:MM time")
+            elif parameter.type == "weekday":
+                if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 7:
+                    raise ValueError(f"parameter {key} must be a weekday 1-7")
             result[key] = value
         return result
 
     def compile_rule_fields(self, parameters: dict) -> dict:
-        if self.trigger_kind not in {"event", "offset"} or self.event_type not in ALLOWED_EVENTS:
+        if self.trigger_kind not in {"event", "offset", "schedule"} or self.event_type not in ALLOWED_EVENTS:
             raise ValueError("recipe event is not supported")
         values = self.validate_parameters(parameters)
         if self.recipient_target not in {"customer", "admin"}:
@@ -128,6 +137,29 @@ def _offset_recipe(
     )
 
 
+def _schedule_recipe(
+    recipe_id: str,
+    name: str,
+    category: str,
+    trigger_event: str,
+    content: str,
+    schedule_parameters: tuple[RecipeParameter, ...],
+) -> RecipeDefinition:
+    return RecipeDefinition(
+        recipe_id=recipe_id,
+        name=name,
+        description="",
+        category=category,
+        trigger_kind="schedule",
+        event_type=trigger_event,
+        channel_allowed=frozenset({"whatsapp", "email"}),
+        parameters=(RecipeParameter("channel", "Canal", "channel", True), *schedule_parameters),
+        cooldown_seconds=0,
+        recipient_target="admin",
+        content=content,
+    )
+
+
 RECIPES: dict[str, RecipeDefinition] = {
     recipe.recipe_id: recipe
     for recipe in (
@@ -167,6 +199,17 @@ RECIPES: dict[str, RecipeDefinition] = {
             "customer.maintenance_due", "customer", frozenset({"whatsapp"}),
             "Ya pasó un tiempo desde tu última mantención. ¿Agendamos una nueva visita?",
             RecipeParameter("months", "Meses desde el último servicio", "number", True, 6),
+        ),
+        _schedule_recipe(
+            "admin_daily_summary", "Resumen diario", "resumenes",
+            "admin.daily_summary_due", "",
+            (RecipeParameter("time", "Hora del resumen", "time", True, "07:00"),),
+        ),
+        _schedule_recipe(
+            "admin_weekly_summary", "Resumen semanal", "resumenes",
+            "admin.weekly_summary_due", "",
+            (RecipeParameter("weekday", "Día de la semana", "weekday", True, 1),
+             RecipeParameter("time", "Hora del resumen", "time", True, "07:00")),
         ),
     )
 }
