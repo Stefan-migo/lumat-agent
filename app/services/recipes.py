@@ -40,7 +40,7 @@ class RecipeDefinition:
         for key, parameter in specs.items():
             if key in values:
                 value = values[key]
-            elif parameter.required:
+            elif parameter.required and parameter.default is None:
                 raise ValueError(f"parameter {key} is required")
             else:
                 value = parameter.default
@@ -49,11 +49,13 @@ class RecipeDefinition:
                     raise ValueError(f"unsupported channel for parameter {key}")
             elif parameter.type == "string" and value is not None and not isinstance(value, str):
                 raise ValueError(f"parameter {key} must be a string")
+            elif parameter.type == "number" and (isinstance(value, bool) or not isinstance(value, int) or value <= 0):
+                raise ValueError(f"parameter {key} must be a positive integer")
             result[key] = value
         return result
 
     def compile_rule_fields(self, parameters: dict) -> dict:
-        if self.trigger_kind != "event" or self.event_type not in ALLOWED_EVENTS:
+        if self.trigger_kind not in {"event", "offset"} or self.event_type not in ALLOWED_EVENTS:
             raise ValueError("recipe event is not supported")
         values = self.validate_parameters(parameters)
         if self.recipient_target not in {"customer", "admin"}:
@@ -101,6 +103,31 @@ def _event_recipe(
     )
 
 
+def _offset_recipe(
+    recipe_id: str,
+    name: str,
+    category: str,
+    trigger_event: str,
+    recipient_target: str,
+    channel_allowed: frozenset[str],
+    content: str,
+    offset_parameter: RecipeParameter,
+) -> RecipeDefinition:
+    return RecipeDefinition(
+        recipe_id=recipe_id,
+        name=name,
+        description="",
+        category=category,
+        trigger_kind="offset",
+        event_type=trigger_event,
+        channel_allowed=channel_allowed,
+        parameters=(RecipeParameter("channel", "Canal", "channel", True), offset_parameter),
+        cooldown_seconds=0,
+        recipient_target=recipient_target,
+        content=content,
+    )
+
+
 RECIPES: dict[str, RecipeDefinition] = {
     recipe.recipe_id: recipe
     for recipe in (
@@ -128,6 +155,18 @@ RECIPES: dict[str, RecipeDefinition] = {
             "case_new_request", "Nueva solicitud al equipo", "operacion",
             "case.created", "admin", frozenset({"whatsapp", "email"}),
             "Nueva solicitud de un cliente en Lumat.",
+        ),
+        _offset_recipe(
+            "appointment_review_request", "Pedir evaluación", "postventa",
+            "appointment.review_due", "customer", frozenset({"whatsapp"}),
+            "¿Cómo estuvo tu visita? Nos encantaría conocer tu opinión.",
+            RecipeParameter("days_after", "Días después de la visita", "number", True, 3),
+        ),
+        _offset_recipe(
+            "customer_maintenance", "Mantención periódica", "postventa",
+            "customer.maintenance_due", "customer", frozenset({"whatsapp"}),
+            "Ya pasó un tiempo desde tu última mantención. ¿Agendamos una nueva visita?",
+            RecipeParameter("months", "Meses desde el último servicio", "number", True, 6),
         ),
     )
 }
