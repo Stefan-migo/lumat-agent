@@ -202,3 +202,20 @@ def test_worker_processes_daily_summary_for_admin(migrated_db):
         operation = session.scalar(select(NotificationOperation))
         assert operation.content == expected
         assert operation.recipient == "+15559990000"
+
+
+def test_invalid_installation_does_not_block_other_due_triggers(migrated_db):
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        session.add(AutomationInstallation(
+            recipe_id="admin_daily_summary", parameters={"channel": "invalid", "time": "25:00"},
+            enabled=True, created_by="test",
+        ))
+        customer = _customer(session)
+        _appointment(session, customer, now - timedelta(days=5))
+        installation = _install(session, days_after=3)
+        installation.created_at = now - timedelta(days=10)
+        session.flush()
+
+        assert evaluate_time_triggers(session, now) == 1
+        assert session.scalar(select(func.count()).select_from(DomainEvent)) == 1

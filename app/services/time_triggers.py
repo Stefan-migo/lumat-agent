@@ -3,6 +3,7 @@
 from calendar import monthrange
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
+import logging
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -14,6 +15,8 @@ from app.models import (
 from app.services.events import publish_event
 from app.services.recipes import RecipeDefinition, get_recipe
 from app.services.settings import get_hours_timezone
+
+logger = logging.getLogger(__name__)
 
 try:
     from dateutil.relativedelta import relativedelta
@@ -135,23 +138,26 @@ def evaluate_time_triggers(session: Session, now: datetime) -> int:
         select(AutomationInstallation).where(AutomationInstallation.enabled.is_(True))
     )
     for installation in installations:
-        recipe = get_recipe(installation.recipe_id)
-        if recipe is None:
-            continue
-        evaluator = (
-            _EVALUATORS.get(installation.recipe_id)
-            if recipe.trigger_kind == "offset"
-            else _SCHEDULE_EVALUATORS.get(installation.recipe_id)
-            if recipe.trigger_kind == "schedule"
-            else None
-        )
-        if evaluator is None:
-            continue
-        for occurrence in evaluator(session, installation, recipe, now):
-            publish_event(
-                session, event_type=recipe.event_type, entity_type=occurrence.entity_type,
-                entity_id=occurrence.entity_id, payload=occurrence.payload,
-                dedupe_key=occurrence.dedupe_key,
+        try:
+            recipe = get_recipe(installation.recipe_id)
+            if recipe is None:
+                continue
+            evaluator = (
+                _EVALUATORS.get(installation.recipe_id)
+                if recipe.trigger_kind == "offset"
+                else _SCHEDULE_EVALUATORS.get(installation.recipe_id)
+                if recipe.trigger_kind == "schedule"
+                else None
             )
-            count += 1
+            if evaluator is None:
+                continue
+            for occurrence in evaluator(session, installation, recipe, now):
+                publish_event(
+                    session, event_type=recipe.event_type, entity_type=occurrence.entity_type,
+                    entity_id=occurrence.entity_id, payload=occurrence.payload,
+                    dedupe_key=occurrence.dedupe_key,
+                )
+                count += 1
+        except Exception:
+            logger.exception("Failed to evaluate time-trigger installation %s", installation.id)
     return count
