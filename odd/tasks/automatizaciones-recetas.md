@@ -213,11 +213,12 @@ they are separate later work.
 - [ ] **R4-002** (`app/services/automation_installations.py:49-58`) — the duplicate-install precheck can
   race with concurrent requests; the DB unique constraint rejects the loser, but the `IntegrityError` is
   not translated into the documented `ValueError`. Normalize the conflict response when wiring the API.
-- [ ] **R3-001 — Slice 2 review** (`app/services/time_triggers.py:109-116`) — an enabled offset
+- [ ] **R3-003 — Slice 2 review** (`app/services/time_triggers.py:109-116`) — an enabled offset
   installation whose persisted parameters no longer validate raises inside `evaluate_time_triggers`
   and aborts the worker cycle before it claims any domain events, stalling unrelated queued events on
   every tick. Isolate per-installation failures (skip + continue). Advisory WARNING from the Slice 2
-  RDD review `review-41c0036acfbe328e`; non-blocking, does not reopen that review.
+  RDD review `review-41c0036acfbe328e` (the review assigned it id `R3-001`; renamed here to avoid
+  colliding with the resolved A2 `R3-001`); non-blocking, does not reopen that review.
 
 ## Verification
 
