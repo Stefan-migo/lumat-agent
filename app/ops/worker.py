@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db import session_scope
 from app.models import DomainEvent
 from app.services.automation import evaluate_event
+from app.services.time_triggers import evaluate_time_triggers
 
 DEFAULT_BATCH_SIZE = 50
 LEASE_SECONDS = 60
@@ -50,6 +51,8 @@ def run_cycle(limit: int = DEFAULT_BATCH_SIZE, owner: str = "h4-worker") -> int:
     now = datetime.now(timezone.utc)
     processed = 0
     with session_scope() as session:
+        evaluate_time_triggers(session, now)
+        session.flush()
         for event_id in _claim(session, limit, owner, now):
             event = session.get(DomainEvent, event_id)
             try:
