@@ -59,6 +59,7 @@ describe("AgentChat", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     window.history.replaceState({}, "", "/");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   });
 
   const policy = (overrides: Partial<{ available: string[]; opt_in_enabled: string[]; inherited: boolean }> = {}) => ({
@@ -1110,8 +1111,9 @@ describe("AgentChat", () => {
   });
 
   it("submits the approval verb for a persisted pending plan", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
         thread: {
           ...makeThread(),
           active_run_id: "run-approve",
@@ -1119,19 +1121,20 @@ describe("AgentChat", () => {
           assistant_state: { approval: { token: "secret", status: "pending" } },
         },
         messages: [{ id: 1, author: "agent", content: "Confirma la agenda", status: "processed", assistant_metadata: { run_id: "run-approve" } }],
-      }))
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(jsonResponse({
+      });
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/approval" && init?.method === "POST") return jsonResponse({
         status: "consumed",
         message: { id: 2, author: "agent", content: "Aprobado", status: "processed" },
-      }))
-      .mockResolvedValueOnce(sseResponse([]));
+      });
+      if (url.includes("/panel/api/chat/threads/4/stream")) return sseResponse([]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     render(<AgentChat threadId={4} />);
     fireEvent.click(await screen.findByRole("button", { name: "Aprobar" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/approval",
       expect.objectContaining({
         method: "POST",
@@ -1175,14 +1178,21 @@ describe("AgentChat", () => {
   });
 
   it("uploads an attachment from the composer and shows its filename", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(
-        jsonResponse({
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      if (url === "/panel/api/chat/threads/4" && !init?.method) {
+        return jsonResponse({ thread: makeThread(), messages: [] });
+      }
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/attachments" && init?.method === "POST") {
+        return jsonResponse({
           attachment: { id: 9, thread_id: 4, filename: "photo.png", kind: "image", size: 3 },
-        }, 201),
-      );
+        }, 201);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     render(<AgentChat threadId={4} />);
     await screen.findByRole("textbox", { name: /mensaje/i });
@@ -1191,43 +1201,42 @@ describe("AgentChat", () => {
     });
 
     expect(await screen.findAllByText("photo.png")).toHaveLength(3);
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
   it("shows the active Cortex indicator and closes through the planning endpoint", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        jsonResponse({
-          thread: {
-            ...makeThread(),
-            assistant_state: {
-              cortex_session: {
-                slug: "budget-4",
-                topic: "Budget",
-                status: "active",
-              },
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
+        thread: {
+          ...makeThread(),
+          assistant_state: {
+            cortex_session: {
+              slug: "budget-4",
+              topic: "Budget",
+              status: "active",
             },
           },
-          messages: [],
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          session: {},
-          report: { contenido: "Report" },
-        }),
-      );
+        },
+        messages: [],
+      });
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/planning/sessions/budget-4/close" && init?.method === "POST") return jsonResponse({
+        session: {},
+        report: { contenido: "Report" },
+      });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     render(<AgentChat threadId={4} />);
     expect(await screen.findByText(/Planificación activa/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /cerrar planificación/i }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenLastCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/panel/api/planning/sessions/budget-4/close",
         expect.objectContaining({ method: "POST" }),
       ),
