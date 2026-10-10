@@ -133,4 +133,4 @@ No directed PushSettings-to-api or SW-to-AppShell path was found in the extracte
 
 ## Next step
 
-Implement T1-T6 in worktree `../lumat-agent-odd-notificaciones-push-pwa` on `odd/notificaciones-push-pwa`.
+Delivered as **PR #556** (`https://github.com/Stefan-migo/lumat-agent/pull/556`) against `main`. Branch `odd/notificaciones-push-pwa` contains current `origin/main` (`591f46eb`); CI runs over the merged tree. Merge is the owner's decision. Real push delivery remains a manual check. Follow-ups R3-001/R3-002 are non-blocking.
