@@ -115,7 +115,7 @@ Single PR against `main`. Forecast ~250-350 authored changed lines (under ~400).
 - [x] T2 notify_admins push producer — `b39fb428`; evidence: active-admin subscription fan-out integration test including replay.
 - [x] T3 GET /panel/api/push-config — `6b6d4b12`; evidence: route auth and configured public-key integration tests.
 - [x] T4 frontend subscribe flow — `b4e71c45`; evidence: focused PushSettings + Settings story tests pass; `npm --prefix web run build` passes.
-- [x] T5 SW push/notificationclick handlers — `PENDING`; evidence: plain-text push payload handling and scoped-client focus/open logic implemented.
+- [x] T5 SW push/notificationclick handlers — `29e5d7e6`; evidence: plain-text push payload handling and scoped-client focus/open logic implemented; original fetch handler unchanged.
 - [ ] T6 tests + verification
 
 Graph check for backend implementation: consulted `send_push()`, `PushUnavailable`,
