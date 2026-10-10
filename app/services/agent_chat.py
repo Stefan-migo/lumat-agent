@@ -448,6 +448,12 @@ def _run_agent_turn_session(
             on_stage=lambda stage: _publish_stage_or_stop(thread.id, run_id, stage),
         )
         publish_live(_session_factory(), thread.id, run_id, preview="".join(preview))
+        stop_state = session.execute(
+            text("SELECT assistant_state -> 'stop_request' FROM internal_chat_threads WHERE id = :tid FOR UPDATE"),
+            {"tid": thread.id},
+        ).scalar()
+        if isinstance(stop_state, dict) and stop_state.get("run_id") == run_id:
+            raise _StopRequested
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
         thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
