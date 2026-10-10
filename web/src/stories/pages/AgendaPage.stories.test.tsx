@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
+import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, getTechnicianSchedule, listAppointments, rescheduleAppointment, retryCalendarSync, saveTechnicianSchedule } from "../../api";
 import {
   AgendaPageStory,
   CancelConfirmation,
@@ -17,6 +17,8 @@ import {
   SectionEmpty,
   Stale,
   SyncFailure,
+  TechnicianRoster,
+  TechnicianSchedule,
 } from "./AgendaPage.stories";
 
 vi.mock("../../api", () => ({
@@ -29,6 +31,8 @@ vi.mock("../../api", () => ({
   fetchCases: vi.fn(),
   fetchClients: vi.fn(),
   fetchTechnicians: vi.fn(),
+  getTechnicianSchedule: vi.fn(),
+  saveTechnicianSchedule: vi.fn(),
 }));
 
 describe("AgendaPage Storybook state matrix", () => {
@@ -178,10 +182,22 @@ describe("AgendaPage Storybook state matrix", () => {
 
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
-    // Creation is the only control this page gained (agenda-booking); the guard keeps
-    // asserting that edit, reschedule and availability are still not invented.
+    // Agenda actions remain independently available beside optional schedule editing.
     expect(screen.getByRole("button", { name: "Nueva visita" })).toBeInTheDocument();
-    expect(screen.queryByText(/editar|reagendar/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /editar|reagendar/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Horarios de técnicos")).toBeInTheDocument();
+  });
+
+  it("provides expanded-roster and technician-schedule story variants", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: "Luis Pérez" }] });
+    vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 30, schedule: [] });
+    expect(TechnicianRoster).toBeDefined();
+    expect(TechnicianSchedule).toBeDefined();
+
+    render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    await user.click(screen.getByText("Horarios de técnicos"));
+    await user.click(await screen.findByRole("button", { name: "Horarios" }));
+    expect(await screen.findByRole("dialog", { name: "Horario semanal" })).toHaveTextContent("Luis Pérez");
+    expect(saveTechnicianSchedule).not.toHaveBeenCalled();
   });
 });
