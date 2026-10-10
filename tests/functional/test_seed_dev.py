@@ -9,7 +9,10 @@ from pathlib import Path
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.models import Appointment, Case, Conversation, ConversationState, Customer, Message, MessageDirection
+from app.models import (
+    Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case,
+    Conversation, ConversationEvent, ConversationState, Customer, Message, MessageDirection,
+)
 from app.panel.seed_dev import MARKER
 from app.services.dashboard import compute_kpis, today_projection, trend
 
@@ -71,6 +74,26 @@ def test_dev_seed_populates_dashboard_and_composer(migrated_db):
                 bot_unanswered |= messages[-1].direction == MessageDirection.INBOUND
         assert human_recent
         assert bot_unanswered
+
+    with SessionLocal() as session:
+        appointment = session.scalar(select(Appointment).join(Case).join(Customer).where(
+            Customer.phone_e164.like(f"+{MARKER}%")
+        ))
+        conversation = session.scalar(select(Conversation).join(Customer).where(
+            Customer.phone_e164.like(f"+{MARKER}%")
+        ))
+        session.add_all([
+            AppointmentCalendarSync(
+                appointment_id=appointment.id, uid="seed-rerun@example.test",
+                idempotency_key="seed-rerun", timezone="America/Santiago",
+            ),
+            AppointmentHistory(
+                appointment_id=appointment.id, actor="test", action="status_changed",
+                to_status=AppointmentStatus.BOOKED,
+            ),
+            ConversationEvent(conversation_id=conversation.id, event="seed_rerun_test"),
+        ])
+        session.commit()
 
     rerun = subprocess.run([*command, "--yes"], cwd=REPO_ROOT, env=env, capture_output=True, text=True)
     assert rerun.returncode == 0, f"{rerun.stdout}\n{rerun.stderr}"

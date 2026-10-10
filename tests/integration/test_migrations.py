@@ -640,6 +640,42 @@ def test_migration_039_user_profile_constraints_and_rollback(tmp_path):
         ).fetchone() == (0,)
 
 
+def test_migration_047_calendar_sync_cascades_for_app_role(tmp_path):
+    with _scratch_migration_db(tmp_path, 46, 47) as (conn, apply_047, _):
+        customer_id = conn.execute(
+            "INSERT INTO customers (phone_e164) VALUES ('+56904700001') RETURNING id"
+        ).fetchone()[0]
+        user_id = conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+            (f"migration-047-{uuid4().hex}",),
+        ).fetchone()[0]
+        case_id = conn.execute(
+            "INSERT INTO cases (customer_id, service) VALUES (%s, 'visit') RETURNING id",
+            (customer_id,),
+        ).fetchone()[0]
+        appointment_id = conn.execute(
+            "INSERT INTO appointments (service, customer_id, case_id, technician_id, local_start, timezone, "
+            "starts_at, ends_at, duration_minutes) VALUES ('visit', %s, %s, %s, now(), 'UTC', now(), "
+            "now() + interval '1 hour', 60) RETURNING id",
+            (customer_id, case_id, user_id),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO appointment_calendar_sync (appointment_id, uid, idempotency_key, timezone) "
+            "VALUES (%s, 'migration-047@example.test', 'migration-047', 'UTC')",
+            (appointment_id,),
+        )
+        result = apply_047()
+        assert result.returncode == 0, f"047 failed:\n{result.stdout}\n{result.stderr}"
+
+        app_parts = conninfo_to_dict(conn.info.dsn)
+        app_parts.update(user="app", password="app")
+        with psycopg.connect(make_conninfo(**app_parts), autocommit=True) as app_conn:
+            app_conn.execute("DELETE FROM appointments WHERE id = %s", (appointment_id,))
+        assert conn.execute(
+            "SELECT count(*) FROM appointment_calendar_sync WHERE appointment_id = %s", (appointment_id,)
+        ).fetchone() == (0,)
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -690,6 +726,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("044_assistant_artifacts",),
         ("045_automation_installations",),
         ("046_automation_rule_target_content",),
+        ("047_appointment_calendar_sync_cascade",),
     ]
 
 
