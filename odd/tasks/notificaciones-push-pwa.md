@@ -111,12 +111,12 @@ Single PR against `main`. Forecast ~250-350 authored changed lines (under ~400).
 
 ## Progress / Evidence
 
-- [x] T1 send_push real + dep + VAPID config — `e09bc4f8`; evidence: adapter tests and `uv sync`.
-- [x] T2 notify_admins push producer — `b39fb428`; evidence: active-admin subscription fan-out integration test including replay.
-- [x] T3 GET /panel/api/push-config — `6b6d4b12`; evidence: route auth and configured public-key integration tests.
-- [x] T4 frontend subscribe flow — `b4e71c45`; evidence: focused PushSettings + Settings story tests pass; `npm --prefix web run build` passes.
-- [x] T5 SW push/notificationclick handlers — `29e5d7e6`; evidence: plain-text push payload handling and scoped-client focus/open logic implemented; original fetch handler unchanged.
-- [ ] T6 tests + verification
+- [x] T1 send_push real + dep + VAPID config — deps `f8779ad1` (`chore(deps): add pywebpush`) + adapter `860b99f8`; evidence: adapter tests and `uv sync`. The generated `uv.lock` is isolated in its own deps work unit so the hand-written code reviews as a bounded candidate.
+- [x] T2 notify_admins push producer — `a9247d01`; evidence: active-admin subscription fan-out integration test including replay.
+- [x] T3 GET /panel/api/push-config — `bd5484f2`; evidence: route auth and configured public-key integration tests.
+- [x] T4 frontend subscribe flow — `f9330388`; evidence: focused PushSettings + Settings story tests pass; `npm --prefix web run build` passes.
+- [x] T5 SW push/notificationclick handlers — `08e4e618`; evidence: plain-text push payload handling and scoped-client focus/open logic implemented; original fetch handler unchanged.
+- [x] T6 tests + verification — backend focused suite 15 passed; full backend suite green (`uv run pytest -q`); `npm --prefix web run build` green (`tsc -b` + vite); touched frontend files pass in isolation (46 tests). Real push delivery remains a documented MANUAL check (HTTPS + VAPID + installed PWA).
 
 Graph check for backend implementation: consulted `send_push()`, `PushUnavailable`,
 `get_settings()`, `PushSubscription`, `notify_admins()`, `create_operation()`,
