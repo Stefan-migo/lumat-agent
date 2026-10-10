@@ -14,9 +14,9 @@ from sqlalchemy.engine import make_url
 from app.config import get_settings
 from app.db import session_scope
 from app.models import (
-    Appointment, AppointmentStatus, Case, Conversation, ConversationState, Customer,
-    CustomerEquipment, CustomerNote, CustomerState, Memory, MemoryType, Message,
-    MessageDirection, MessageStatus, MessageType, User, UserRole,
+    Appointment, AppointmentHistory, AppointmentStatus, Case, Conversation, ConversationEvent,
+    ConversationState, Customer, CustomerEquipment, CustomerNote, CustomerState, Memory,
+    MemoryType, Message, MessageDirection, MessageStatus, MessageType, User, UserRole,
 )
 from app.services import memory as memory_service
 from app.services.users import hash_password
@@ -110,6 +110,9 @@ def _remove_previous(session) -> None:
     case_ids = select(Case.id).where(Case.customer_id.in_(customer_ids))
     memory_ids = select(cast(Customer.id, String)).where(Customer.phone_e164.like(f"+{MARKER}%"))
     session.execute(delete(Message).where(Message.conversation_id.in_(conversation_ids)))
+    appointment_ids = select(Appointment.id).where(Appointment.case_id.in_(case_ids))
+    session.execute(delete(AppointmentHistory).where(AppointmentHistory.appointment_id.in_(appointment_ids)))
+    session.execute(delete(ConversationEvent).where(ConversationEvent.conversation_id.in_(conversation_ids)))
     session.execute(delete(Appointment).where(Appointment.case_id.in_(case_ids)))
     session.execute(delete(Case).where(Case.customer_id.in_(customer_ids)))
     session.execute(delete(CustomerEquipment).where(CustomerEquipment.customer_id.in_(customer_ids)))
