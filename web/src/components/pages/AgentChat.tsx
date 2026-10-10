@@ -638,6 +638,21 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     }
   };
 
+  const createDefaultChat = async () => {
+    if (role !== "admin" && role !== "operador") return;
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await createChatThread("default");
+      loadThread(result);
+      onThreadOpened?.(result.thread.id);
+    } catch (reason: unknown) {
+      setError(reason instanceof ApiError ? reason.detail : "No pudimos crear el chat");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const resize = (element: HTMLTextAreaElement) => {
     element.style.height = "auto";
     element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
@@ -856,6 +871,8 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   return (
     <AssistantWorkspace
       onCreateThread={() => void newChat()}
+      onCreateDefaultThread={() => void createDefaultChat()}
+      role={role}
       loadThreadTabs={Boolean(onThreadOpened)}
       attachments={attachments}
       artifacts={artifacts}

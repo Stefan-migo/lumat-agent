@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Download, FileText, Folder, FolderKanban, History, PanelRight, PanelLeft, Plus, X } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listChatThreads, listProjects, renameChatThread } from "../../api";
-import type { AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project } from "../../types";
+import { ChevronDown, ChevronRight, Download, FileText, Folder, History, PanelRight, PanelLeft, Plus, X, MessageSquarePlus } from "lucide-react";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listChatThreads, listProjectAgents, listProjects, renameChatThread } from "../../api";
+import type { AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project, ProjectAgentsResponse, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -19,11 +19,16 @@ import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
 
-export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
   const [search, setSearch] = useState("");
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get("proyecto"));
+  const [projectThreads, setProjectThreads] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>>({});
+  const [historySearch, setHistorySearch] = useState<Record<string, string>>({});
+  const [defaultHistoryOpen, setDefaultHistoryOpen] = useState(false);
+  const [defaultThreads, setDefaultThreads] = useState<{ state: "idle" | "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>({ state: "idle", threads: [] });
+  const [agents, setAgents] = useState<{ slug: string; state: "loading" | "ready" | "empty" | "error" | "denied"; data: ProjectAgentsResponse | null } | null>(null);
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
@@ -64,6 +69,39 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
     return query ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : projects;
   }, [projects, search]);
 
+  useEffect(() => {
+    if (!selectedProject) { setAgents(null); return; }
+    let current = true;
+    setAgents({ slug: selectedProject, state: "loading", data: null });
+    listProjectAgents(selectedProject).then((data) => {
+      if (!Array.isArray(data.agents)) throw new Error("Invalid project agent response");
+      if (current) setAgents({ slug: selectedProject, state: data.agents.length ? "ready" : "empty", data });
+    }).catch((error: unknown) => {
+      if (current) setAgents({ slug: selectedProject, state: error instanceof ApiError && error.status === 403 ? "denied" : "error", data: null });
+    });
+    return () => { current = false; };
+  }, [selectedProject]);
+
+  const loadProjectThreads = async (slug: string) => {
+    setProjectThreads((current) => ({ ...current, [slug]: { state: "loading", threads: [] } }));
+    try {
+      const result = await listChatThreads(20, slug);
+      setProjectThreads((current) => ({ ...current, [slug]: { state: result.threads.length ? "ready" : "empty", threads: result.threads } }));
+    } catch (error: unknown) {
+      setProjectThreads((current) => ({ ...current, [slug]: { state: error instanceof ApiError && error.status === 403 ? "denied" : "error", threads: [] } }));
+    }
+  };
+
+  const loadDefaultThreads = async () => {
+    setDefaultThreads({ state: "loading", threads: [] });
+    try {
+      const result = await listChatThreads(20, "default");
+      setDefaultThreads({ state: result.threads.length ? "ready" : "empty", threads: result.threads });
+    } catch (error: unknown) {
+      setDefaultThreads({ state: error instanceof ApiError && error.status === 403 ? "denied" : "error", threads: [] });
+    }
+  };
+
   const refreshThreads = useCallback(async () => {
     try {
       const result = await listChatThreads(20);
@@ -88,10 +126,10 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
     return () => window.removeEventListener("popstate", onPopState);
   }, [loadThreadTabs]);
 
-  const navigateToThread = (threadId: number) => {
+  const navigateToThread = (threadId: number, projectSlug = activeProjectSlug) => {
     window.history.pushState({}, "", pathForRoute({
       view: "chat",
-      ...(activeProjectSlug ? { projectSlug: activeProjectSlug } : {}),
+      ...(projectSlug ? { projectSlug } : {}),
       threadId,
     }));
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -171,7 +209,7 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
 
   return (
     <div
-      className={`assistant-workspace${projectsVisible ? " assistant-workspace--projects-visible" : ""}${contextVisible ? " assistant-workspace--context-visible" : ""}`}
+      className={`assistant-workspace${projectsVisible ? " assistant-workspace--projects-visible" : " assistant-workspace--projects-collapsed"}${contextVisible ? " assistant-workspace--context-visible" : " assistant-workspace--context-collapsed"}`}
       data-testid="assistant-workspace"
     >
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
@@ -179,12 +217,23 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
         id="assistant-workspace-projects"
         className="assistant-workspace__projects"
         aria-label="Proyectos"
-        hidden={!projectsVisible}
+        data-collapsed={!projectsVisible}
       >
         <header className="assistant-workspace__pane-header">
-          <h2>Proyectos</h2>
-          <Button variant="tertiary" aria-label="Crear proyecto" title="Crear proyecto" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} /></Button>
+          {projectsVisible ? <><h2>Proyectos</h2><div className="assistant-workspace__pane-actions">
+            {role === "admin" || role === "operador" ? <><Button variant="tertiary" aria-label="Nuevo chat predeterminado" title="Nuevo chat predeterminado" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /></Button><Button variant="tertiary" aria-label="Historial predeterminado" title="Historial predeterminado" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /></Button></> : null}
+            <Button variant="tertiary" aria-label="Crear proyecto" title="Crear proyecto" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} /></Button>
+            <button type="button" className="assistant-workspace__pane-toggle" aria-label="Contraer panel de proyectos" aria-expanded="true" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(false)}><Icon icon={PanelLeft} /></button>
+          </div></> : <button type="button" className="assistant-workspace__pane-toggle" aria-label="Expandir panel de proyectos" aria-expanded="false" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(true)}><Icon icon={PanelLeft} /></button>}
         </header>
+        {projectsVisible && defaultHistoryOpen ? <div className="assistant-workspace__default-history" aria-label="Hilos predeterminados">
+          {defaultThreads.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
+          {defaultThreads.state === "error" || defaultThreads.state === "denied" ? <StateMessage tone="danger" role="alert" title={defaultThreads.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
+          {defaultThreads.state === "empty" ? <EmptyState title="No hay hilos" description="Todavía no hay hilos en el espacio predeterminado." /> : null}
+          {defaultThreads.state === "ready" ? <ul>{defaultThreads.threads.map((thread) => <li key={thread.id}><button type="button" onClick={() => navigateToThread(thread.id, "default")}>{thread.title || "Sin título"}</button></li>)}</ul> : null}
+          {defaultThreads.state === "error" ? <Button variant="secondary" onClick={() => void loadDefaultThreads()}>Reintentar</Button> : null}
+        </div> : null}
+        {projectsVisible ? <>
         <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
           {projectsData.state === "loading" ? (
@@ -225,7 +274,15 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
                     <div className="assistant-workspace__project-details">
                       <nav aria-label={`Navegación de ${project.name}`}>
                         <a href={pathForRoute({ view: "projects", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToProject(project, "context"); }}><Icon icon={FileText} size="sm" />Contexto y archivos</a>
-                        <a href={pathForRoute({ view: "chat", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToProject(project, "threads"); }}><Icon icon={History} size="sm" />Historial de hilos</a>
+                          <button type="button" className="assistant-workspace__history-trigger" aria-expanded={projectThreads[project.slug] !== undefined} onClick={() => { if (projectThreads[project.slug]) setProjectThreads((current) => { const next = { ...current }; delete next[project.slug]; return next; }); else void loadProjectThreads(project.slug); }}><Icon icon={History} size="sm" />Historial de hilos</button>
+                          {projectThreads[project.slug] ? <div className="assistant-workspace__project-history">
+                            <SearchInput aria-label={`Buscar hilos de ${project.name}`} placeholder="Buscar hilo" onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} />
+                            {projectThreads[project.slug].state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
+                            {projectThreads[project.slug].state === "error" || projectThreads[project.slug].state === "denied" ? <StateMessage tone="danger" role="alert" title={projectThreads[project.slug].state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
+                            {projectThreads[project.slug].state === "empty" ? <EmptyState title="No hay hilos" description="Este proyecto aún no tiene hilos." /> : null}
+                            {projectThreads[project.slug].state === "ready" ? (() => { const filtered = projectThreads[project.slug].threads.filter((thread) => (thread.title || "Sin título").toLocaleLowerCase().includes((historySearch[project.slug] || "").trim().toLocaleLowerCase())); return filtered.length ? <ul>{filtered.map((thread) => <li key={thread.id}><button type="button" onClick={() => navigateToThread(thread.id, project.slug)}>{thread.title || "Sin título"}</button></li>)}</ul> : <EmptyState title="No encontramos hilos" description="Prueba con otro nombre." />; })() : null}
+                            {projectThreads[project.slug].state === "error" ? <Button variant="secondary" onClick={() => void loadProjectThreads(project.slug)}>Reintentar</Button> : null}
+                          </div> : null}
                       </nav>
                     </div>
                   ) : null}
@@ -246,9 +303,10 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
           </div>
         </Dialog>
         <section className="assistant-workspace__agents" aria-label="Agentes del proyecto">
-          <header><h3>Agentes del proyecto</h3><span aria-label="Cantidad no disponible">—</span><Button variant="tertiary" aria-label="Agregar agente" disabled><Icon icon={Plus} /></Button></header>
-          <EmptyState title="No hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." />
+          <header><h3>Agentes del proyecto</h3><span>{agents?.slug === selectedProject ? agents.data?.agents.length ?? "—" : "—"}</span><Button variant="tertiary" aria-label="Agregar agente" disabled><Icon icon={Plus} /></Button></header>
+          {!selectedProject ? <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver sus agentes." /> : agents?.slug !== selectedProject || agents.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando agentes" /> : agents.state === "error" || agents.state === "denied" ? <StateMessage tone="danger" role="alert" title={agents.state === "denied" ? "No tienes permiso para ver los agentes de este proyecto." : "No pudimos cargar los agentes del proyecto."} /> : <>{agents.state === "empty" ? <EmptyState title="No hay agentes" description="Este proyecto no tiene agentes registrados." /> : <ul>{agents.data?.agents.map((agent) => <li key={agent.key}><strong>{agent.name}</strong><p>{agent.role}</p><p>{agent.description}</p>{agent.read_only ? <Badge tone="neutral">Solo lectura</Badge> : null}</li>)}</ul>}<p>Última ejecución: {agents.data?.latest_run?.status === "running" ? "En curso" : agents.data?.latest_run?.status === "completed" ? "Listo" : "—"}</p></>}
         </section>
+        </> : null}
       </aside>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
@@ -276,8 +334,6 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
             {activeProject ? <p>Proyecto: {activeProject.name}</p> : null}
           </div>
           <div className="assistant-workspace__header-actions">
-          <button type="button" className="assistant-workspace__pane-toggle" aria-label="Mostrar u ocultar proyectos" aria-expanded={projectsVisible} aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible((visible) => !visible)}><Icon icon={projectsVisible ? PanelLeft : FolderKanban} /></button>
-          <button type="button" className="assistant-workspace__pane-toggle" aria-label="Mostrar u ocultar el panel de contexto" aria-expanded={contextVisible} aria-controls="assistant-workspace-context" onClick={() => setContextVisible((visible) => !visible)}><Icon icon={PanelRight} /></button>
           {activeThread ? (
             <Menu
               label="Acciones del hilo"
@@ -313,9 +369,10 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
         id="assistant-workspace-context"
         className="assistant-workspace__context"
         aria-label="Contexto del hilo"
-        hidden={!contextVisible}
+        data-collapsed={!contextVisible}
       >
-        <h2>Actividad del hilo</h2>
+        <header className="assistant-workspace__pane-header"><h2>Actividad del hilo</h2><button type="button" className="assistant-workspace__pane-toggle" aria-label={contextVisible ? "Cerrar panel de actividad" : "Abrir panel de actividad"} aria-expanded={contextVisible} aria-controls="assistant-workspace-context" onClick={() => setContextVisible((visible) => !visible)}><Icon icon={contextVisible ? X : PanelRight} /></button></header>
+        {contextVisible ? <>
         <Tabs
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }, { id: "activity", label: "Actividad" }]}
@@ -343,6 +400,7 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
             </Card>
           </div>}
         </Tabs>
+        </> : null}
       </aside>
     </div>
   );
