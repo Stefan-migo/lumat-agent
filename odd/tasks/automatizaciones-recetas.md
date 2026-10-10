@@ -164,10 +164,14 @@ the two recipes that do not exist today. No `visit_reminder` catalog entry is ad
 `completed_at` column); maintenance → the customer's last completed `ends_at` + N months.
 Anti-backfill floor: an occurrence only fires when its anchor is `>= installation.created_at`.
 
-- [ ] **WU1 — Time recipe model**: `trigger_kind="offset"` in `RecipeDefinition`;
+- [x] **WU1 — Time recipe model**: `trigger_kind="offset"` in `RecipeDefinition`;
   `compile_rule_fields` accepts `{"event","offset"}`; `type="number"` parameter validation;
   `_offset_recipe` helper; two new recipes (`appointment_review_request`, `customer_maintenance`);
-  synthetic trigger events in `ALLOWED_EVENTS`. Tests.
+  synthetic trigger events in `ALLOWED_EVENTS`. Commit `48037e8`. Full backend suite **1879 passed**.
+  Note: `validate_parameters` now applies a parameter's default when it is required but has one
+  (no prior required param had a default). Adding recipes recomputed the pinned assistant planner
+  catalog hash in `tests/unit/test_assistant_delegation.py` (snapshot fixture). RDD assess: medium,
+  `review_due: false` (`under_budget`) — slice boundary stays open.
 - [ ] **WU2 — Tick evaluation**: `app/services/time_triggers.py` computing due occurrences per
   recipe + idempotent `publish_event`; hook into `worker.run_cycle` (same tick). Tests (dedupe
   across ticks, anti-backfill floor, worker → operation path).
