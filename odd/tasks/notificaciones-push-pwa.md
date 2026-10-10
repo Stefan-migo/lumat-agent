@@ -114,7 +114,7 @@ Single PR against `main`. Forecast ~250-350 authored changed lines (under ~400).
 - [x] T1 send_push real + dep + VAPID config — `e09bc4f8`; evidence: adapter tests and `uv sync`.
 - [x] T2 notify_admins push producer — `b39fb428`; evidence: active-admin subscription fan-out integration test including replay.
 - [x] T3 GET /panel/api/push-config — `6b6d4b12`; evidence: route auth and configured public-key integration tests.
-- [ ] T4 frontend subscribe flow
+- [x] T4 frontend subscribe flow — `PENDING`; evidence: focused PushSettings tests and production build pass.
 - [ ] T5 SW push/notificationclick handlers
 - [ ] T6 tests + verification
 
@@ -124,6 +124,12 @@ Graph check for backend implementation: consulted `send_push()`, `PushUnavailabl
 `notify_admins() --calls--> create_operation()` and
 `send_push() <-contains- push.py --imports_from--> services/notifications.py
 --imports_from--> db.py --imports--> get_settings()`.
+
+Graph check for frontend implementation: consulted `PushSettings()`, `PushSettings.tsx`,
+`PushSettings.test.tsx`, `api.ts`, `apiFetch()`, `postJson()`, `pwa.ts`, `web/public/sw.js service worker fetch policy`, and `AppShell.tsx`.
+Edges found: `api.ts <--imports_from-- app.tsx <--imports_from-- main.tsx --imports_from--> pwa.ts`;
+`web/src/pwa.ts cache policy helpers --conceptually_related_to--> web/public/sw.js service worker fetch policy`.
+No directed PushSettings-to-api or SW-to-AppShell path was found in the extracted graph.
 
 ## Next step
 

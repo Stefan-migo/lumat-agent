@@ -87,6 +87,11 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+export const fetchPushConfig = () => apiFetch<{ public_key: string | null }>('/panel/api/push-config');
+export const savePushSubscription = (subscription: { endpoint: string; p256dh: string; auth: string; user_agent?: string }) =>
+  postJson('/panel/api/push-subscription', subscription);
+export const deletePushSubscription = (endpoint: string) =>
+  apiFetch<{ ok: true }>(`/panel/api/push-subscription?endpoint=${encodeURIComponent(endpoint)}`, { method: 'DELETE' });
 export function patchJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 }
