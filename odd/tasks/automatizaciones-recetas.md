@@ -176,11 +176,18 @@ whose due time is in the future.)
   (no prior required param had a default). Adding recipes recomputed the pinned assistant planner
   catalog hash in `tests/unit/test_assistant_delegation.py` (snapshot fixture). RDD assess: medium,
   `review_due: false` (`under_budget`) — slice boundary stays open.
-- [ ] **WU2 — Tick evaluation**: `app/services/time_triggers.py` computing due occurrences per
-  recipe + idempotent `publish_event`; hook into `worker.run_cycle` (same tick). Tests (dedupe
-  across ticks, anti-backfill floor, worker → operation path).
-- [ ] **WU3 — Surface + verification**: catalog/API exposes the time recipes with numeric params;
-  UI verified (the `type="number"` form branch already exists); backend suite + `npm run build`.
+- [x] **WU2 — Tick evaluation**: `app/services/time_triggers.py` computing due occurrences per
+  recipe + idempotent `publish_event`; hook into `worker.run_cycle` (same tick). Commit `8692404`.
+  Focused `test_time_triggers.py` **5 passed**; full backend suite **1884 passed**. `dateutil` was
+  unavailable → stdlib `_add_months` (clamped). Idempotency verified (double call → 1 `DomainEvent`).
+  Note: installs must backdate `installation.created_at` in tests, since the floor is the due time.
+- [x] **WU3 — Surface + verification**: catalog/API exposes the time recipes with numeric params
+  (no backend change needed — the serializer passes `type`/`default` through); UI verified (the
+  `type="number"` form branch already exists). Commit `cafafdc0` adds a frontend test covering an
+  offset recipe's numeric parameter: `npm test` focused **6 passed**, `npm run build` (tsc -b + vite)
+  green. A full serialized `npm test` run flaked on the unrelated `AgentChat` suite under load (the
+  frontend source is byte-identical to base; `AgentChat.test.tsx` passes 58/58 in isolation and on
+  `main`).
 
 ### Slice 3 — Resúmenes
 - [ ] **C1 — Disparos de calendario** + módulo `daily_summary` + resumen diario/semanal.
@@ -206,6 +213,11 @@ they are separate later work.
 - [ ] **R4-002** (`app/services/automation_installations.py:49-58`) — the duplicate-install precheck can
   race with concurrent requests; the DB unique constraint rejects the loser, but the `IntegrityError` is
   not translated into the documented `ValueError`. Normalize the conflict response when wiring the API.
+- [ ] **R3-001 — Slice 2 review** (`app/services/time_triggers.py:109-116`) — an enabled offset
+  installation whose persisted parameters no longer validate raises inside `evaluate_time_triggers`
+  and aborts the worker cycle before it claims any domain events, stalling unrelated queued events on
+  every tick. Isolate per-installation failures (skip + continue). Advisory WARNING from the Slice 2
+  RDD review `review-41c0036acfbe328e`; non-blocking, does not reopen that review.
 
 ## Verification
 
@@ -227,3 +239,8 @@ they are separate later work.
   release v2026.10.1 + #553). Diseño del tick cerrado (synthetic `DomainEvent`s, sin migración).
   Decisión del owner: **convivir** con `_maintain_reminder` (no duplicar el recordatorio de visita).
   B1 = WU1 (modelo de receta de tiempo) + WU2 (evaluación en el tick) + WU3 (superficie + verificación).
+- 2026-10-10 — Slice 2 implementado y **RDD aprobado**. Commits `48037e8` (WU1), `8692404` (WU2),
+  `cafafdc0` (WU3). Review nativo: lineage `review-41c0036acfbe328e`, 1 lente (reliability),
+  riesgo medium, 421 líneas, **0 bloqueantes**, 1 advisory (R3-001). Authority **burned**. Pendiente
+  humano: push + PR/merge. A1 (cron del worker) sigue diferido, así que las recetas de tiempo no
+  disparan en prod todavía.
