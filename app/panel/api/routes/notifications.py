@@ -11,10 +11,16 @@ from app.models import NotificationOperation, PanelNotification, PushSubscriptio
 from app.panel.api.deps import require_user_json
 from app.panel.api.serializers import to_notification_dict, to_panel_notification_dict
 from app.panel.deps import get_db
+from app.config import get_settings
 from app.services.audit import record_audit
 from app.services.notifications import list_panel_notifications, mark_all_notifications_read, mark_notification_read
 
 router = APIRouter(tags=["panel-api-notifications"])
+
+
+@router.get("/push-config")
+def push_config(current: User = Depends(require_user_json)) -> dict:
+    return {"public_key": get_settings().vapid_public_key}
 
 class PushSubscriptionBody(BaseModel):
     endpoint: str
