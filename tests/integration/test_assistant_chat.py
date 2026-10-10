@@ -338,6 +338,54 @@ def test_stop_route_accepts_approval_pending_as_running(client):
         assert message.assistant_metadata["cancellation"]["status"] == "cancelled"
 
 
+def test_stopping_approval_pending_revokes_approval_and_prevents_execution(client, monkeypatch):
+    _user("assistant-stop-revoke-approval", "admin")
+    _login(client, "assistant-stop-revoke-approval")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    run_id = "revoked-approval-run"
+    plan = {"tool": "stub", "arguments": {}, "requires_approval": True}
+    approval = issue_approval(plan)
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.current_plan = plan
+        thread.active_run_id = run_id
+        thread.assistant_state = {
+            "stage": "approval_pending",
+            "live": {"run_id": run_id, "stage": "approval_pending", "status": "approval_pending"},
+            "approval": approval,
+        }
+        session.add(InternalChatMessage(
+            thread_id=thread_id, author="admin", content="pending", status="approval_pending",
+            assistant_metadata={"run_id": run_id, "approval": approval},
+        ))
+        session.commit()
+
+    stopped = client.post(f"/panel/api/chat/threads/{thread_id}/stop", json={"run_id": run_id})
+    assert stopped.status_code == 200
+    assert stopped.json() == {"status": "cancelled", "run_id": run_id}
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        assert thread.assistant_state["approval"]["status"] == "revoked"
+
+    executed = []
+    monkeypatch.setattr("app.services.agent_chat.execute", lambda state: executed.append(state) or {
+        "status": "completed", "response": "Executed", "evidence": [],
+    })
+    rejected = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval",
+        json={"run_id": run_id, "token": approval["token"]},
+    )
+
+    assert rejected.status_code == 409
+    assert executed == []
+    with SessionLocal() as session:
+        messages = list(session.scalars(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id,
+        )))
+        assert len(messages) == 1
+        assert messages[0].status == "cancelled"
+
+
 def test_sdb_requested_is_admin_only(client):
     _user("assistant-sdb-operator", "operador")
     _login(client, "assistant-sdb-operator")

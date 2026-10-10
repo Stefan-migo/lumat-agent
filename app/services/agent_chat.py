@@ -749,6 +749,8 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     plan = thread.current_plan or {}
     state = thread.assistant_state or {}
     approval = state.get("approval") or {}
+    if state.get("stage") == "cancelled" or (state.get("live") or {}).get("status") == "cancelled":
+        return None
     if thread.active_run_id != run_id or not validate_approval(plan, approval, token):
         return None
     status = "rejected" if reject else "consumed"
