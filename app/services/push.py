@@ -1,10 +1,39 @@
 """Optional Web Push adapter; absence never blocks panel notifications."""
 
+from pywebpush import webpush
+
+from app.config import get_settings
+from app.db import session_scope
+from app.models import PushSubscription
+
 
 class PushUnavailable(RuntimeError):
     """Raised when deployment/browser push support is not configured."""
 
 
 def send_push(recipient: str, content: str) -> str:
-    """Deployment-specific adapter seam; VAPID credentials stay out of source."""
-    raise PushUnavailable("browser push is unavailable")
+    """Send to one stored subscription; recipient is its database id."""
+    settings = get_settings()
+    if not all((settings.vapid_public_key, settings.vapid_private_key, settings.vapid_subject)):
+        raise PushUnavailable("VAPID credentials are not configured")
+
+    try:
+        subscription_id = int(recipient)
+    except (TypeError, ValueError):
+        raise PushUnavailable("push subscription is unavailable") from None
+
+    with session_scope() as session:
+        subscription = session.get(PushSubscription, subscription_id)
+        if subscription is None or subscription.active is False:
+            raise PushUnavailable("push subscription is unavailable")
+        subscription_info = {
+            "endpoint": subscription.endpoint,
+            "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth},
+        }
+        webpush(
+            subscription_info,
+            data=content,
+            vapid_private_key=settings.vapid_private_key,
+            vapid_claims={"sub": settings.vapid_subject},
+        )
+        return f"push:{subscription.id}"

@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     assistant_compaction_threshold_tokens: int = 4_000
     assistant_compaction_retention_tokens: int = 2_000
 
+    # Web Push (optional; absent credentials disable delivery without affecting boot).
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str | None = None
+
     # Local embeddings (fastembed, ONNX Runtime — no API key, no token
     # billing). Multilingual model, 384 dims (db/migrations/008_local_embeddings.sql).
     embed_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

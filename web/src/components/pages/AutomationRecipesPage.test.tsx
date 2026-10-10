@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AutomationRecipesPage } from './AutomationRecipesPage';
 
 const recipe = { recipe_id: 'booking-confirmation', name: 'Confirmación de reserva', description: 'Confirma una reserva.', category: 'Reservas', trigger_kind: 'event', event_type: 'appointment.booked', channel_allowed: ['whatsapp', 'email'], recipient_target: 'customer', content: 'Tu reserva está confirmada.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'string', required: true, default: 'whatsapp' }] };
+const offsetRecipe = { recipe_id: 'appointment_review_request', name: 'Pedir evaluación', description: 'Solicita una evaluación después de la visita.', category: 'postventa', trigger_kind: 'offset', event_type: 'appointment.review_due', channel_allowed: ['whatsapp'], recipient_target: 'customer', content: '¿Cómo estuvo tu visita? Nos encantaría conocer tu opinión.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: null }, { key: 'days_after', label: 'Días después de la visita', type: 'number', required: true, default: 3 }] };
 const installation = { id: 8, recipe_id: recipe.recipe_id, parameters: { channel: 'email' }, enabled: false, created_by: 'ana', created_at: null, updated_at: null };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
@@ -26,6 +27,28 @@ describe('AutomationRecipesPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations', expect.objectContaining({ method: 'POST', body: '{"recipe_id":"booking-confirmation","parameters":{"channel":"email"}}' })));
     expect(await screen.findByRole('button', { name: 'Activar' })).toBeInTheDocument();
     expect(screen.getByText('Inactiva')).toBeInTheDocument();
+  });
+
+  it('installs an offset recipe with its numeric parameter', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/automation-recipes')) return json({ recipes: [offsetRecipe] });
+      if (init?.method === 'POST') return json({ installation: { ...installation, recipe_id: offsetRecipe.recipe_id, parameters: { channel: 'whatsapp', days_after: 5 } } }, 201);
+      return json({ installations: [] });
+    });
+    render(<AutomationRecipesPage />);
+    expect(await screen.findByText(offsetRecipe.content)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Instalar' }));
+    expect(screen.getByLabelText('Días después de la visita')).toHaveValue(3);
+    fireEvent.change(screen.getByLabelText('Días después de la visita'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar instalación' }));
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/automation-installations') && init?.method === 'POST');
+      expect(postCall).toBeDefined();
+      const body = JSON.parse(String(postCall?.[1]?.body));
+      expect(body.parameters.days_after).toBe(5);
+      expect(typeof body.parameters.days_after).toBe('number');
+    });
   });
 
   it.each([[false, 'Activar'], [true, 'Desactivar']] as const)('toggles an installation currently %s and refreshes', async (enabled, action) => {

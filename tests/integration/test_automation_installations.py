@@ -52,14 +52,46 @@ def test_recipe_catalog_compiles_and_validates_parameters():
     assert len(recipes.RECIPES) == len({r.recipe_id for r in recipes.RECIPES.values()})
 
 
-def test_catalog_has_five_compilable_event_recipes_with_unique_ids():
-    assert len(recipes.RECIPES) == 5
+def test_catalog_has_compilable_recipes_with_unique_ids():
+    assert len(recipes.RECIPES) == 7
     assert len(recipes.RECIPES) == len({recipe.recipe_id for recipe in recipes.RECIPES.values()})
     for recipe in recipes.RECIPES.values():
-        assert recipe.trigger_kind == "event"
+        assert recipe.trigger_kind in {"event", "offset"}
         assert any(parameter.key == "channel" for parameter in recipe.parameters)
         fields = recipe.compile_rule_fields({"channel": next(iter(recipe.channel_allowed))})
         assert fields["event_type"] == recipe.event_type
+
+
+@pytest.mark.parametrize(
+    ("recipe_id", "trigger_event", "parameter_key", "default"),
+    [
+        ("appointment_review_request", "appointment.review_due", "days_after", 3),
+        ("customer_maintenance", "customer.maintenance_due", "months", 6),
+    ],
+)
+def test_offset_recipe_catalog_and_compilation(recipe_id, trigger_event, parameter_key, default):
+    recipe = recipes.get_recipe(recipe_id)
+    assert recipe is not None
+    assert recipe.trigger_kind == "offset"
+    assert any(parameter.key == "channel" for parameter in recipe.parameters)
+    numeric = next(parameter for parameter in recipe.parameters if parameter.key == parameter_key)
+    assert numeric.type == "number" and numeric.default == default
+    fields = recipe.compile_rule_fields({"channel": "whatsapp"})
+    assert fields["event_type"] == trigger_event
+    assert fields["template_event"] == trigger_event
+    assert fields["channel"] == "whatsapp"
+
+
+@pytest.mark.parametrize("value", ["3", 3.0, True, 0, -1])
+def test_numeric_recipe_parameter_rejects_invalid_values(value):
+    recipe = recipes.get_recipe("appointment_review_request")
+    with pytest.raises(ValueError, match="parameter days_after must be a positive integer"):
+        recipe.validate_parameters({"channel": "whatsapp", "days_after": value})
+
+
+def test_numeric_recipe_parameter_applies_default_when_omitted():
+    recipe = recipes.get_recipe("appointment_review_request")
+    assert recipe.validate_parameters({"channel": "whatsapp"})["days_after"] == 3
 
 
 def test_compile_without_channel_parameter_raises_clear_error():

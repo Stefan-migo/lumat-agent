@@ -7,9 +7,11 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, User, UserRole
+from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, PushSubscription, User, UserRole
 from app.services.events import publish_event
 from app.services import notifications
+from app.services import push
+from app.services.push import PushUnavailable
 from _testdb import admin_database_url
 
 ADMIN_DB_URL = admin_database_url()
@@ -128,6 +130,37 @@ def test_notify_admins_replay_does_not_duplicate_rows_or_operations():
         assert len(session.scalars(select(PanelNotification)).all()) == 2
 
 
+def test_notify_admins_enqueues_one_push_per_active_admin_subscription_and_dedupes():
+    admin_id = _user("push-fanout-admin")
+    operator_id = _user("push-fanout-operator")
+    with SessionLocal() as session:
+        session.get(User, operator_id).role = UserRole.OPERADOR
+        session.add_all([
+            PushSubscription(user_id=admin_id, endpoint="https://push.example.test/active-a", p256dh="a", auth="a"),
+            PushSubscription(user_id=admin_id, endpoint="https://push.example.test/active-b", p256dh="b", auth="b"),
+            PushSubscription(user_id=admin_id, endpoint="https://push.example.test/inactive", p256dh="x", auth="x", active=False),
+            PushSubscription(user_id=operator_id, endpoint="https://push.example.test/operator", p256dh="o", auth="o"),
+        ])
+        session.flush()
+        active_ids = session.scalars(select(PushSubscription.id).where(PushSubscription.user_id == admin_id, PushSubscription.active.is_(True))).all()
+        for _ in range(2):
+            notifications.notify_admins(
+                session, title="New visit", content="Visit booked.", source="appointment",
+                source_id=41, dedupe_key="appointment:41:booked",
+            )
+        session.commit()
+
+        operations = session.scalars(select(NotificationOperation).where(NotificationOperation.channel == "push")).all()
+        assert len(operations) == 2
+        assert {operation.recipient for operation in operations} == {str(identifier) for identifier in active_ids}
+        assert all(operation.user_id is None for operation in operations)
+        assert all(operation.status == "pending" and operation.delivered_at is None for operation in operations)
+        assert all(operation.source_id == "panel:41" for operation in operations)
+        assert {operation.idempotency_key for operation in operations} == {
+            f"panel:appointment:41:booked:push:{identifier}" for identifier in active_ids
+        }
+
+
 def test_push_failure_creates_and_delivers_policy_fallback(monkeypatch):
     user_id = _user("fallback-admin")
     delivered = []
@@ -227,9 +260,69 @@ def test_push_failure_uses_configured_email_fallback(monkeypatch):
         assert sent == [("ops@example.test", "Email fallback")]
 
 
+def test_send_push_requires_vapid_configuration(monkeypatch):
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": None, "vapid_private_key": None, "vapid_subject": None,
+    })())
+    with pytest.raises(PushUnavailable):
+        push.send_push("1", "hello")
+
+
+def test_send_push_uses_stored_subscription(monkeypatch):
+    user_id = _user("push-send")
+    with SessionLocal() as session:
+        subscription = PushSubscription(user_id=user_id, endpoint="https://push.example.test/1", p256dh="public", auth="secret")
+        session.add(subscription)
+        session.commit()
+        subscription_id = subscription.id
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": "public-key", "vapid_private_key": "private.pem", "vapid_subject": "mailto:ops@example.test",
+    })())
+    calls = []
+    monkeypatch.setattr(push, "webpush", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    assert push.send_push(str(subscription_id), "hello") == f"push:{subscription_id}"
+    assert calls == [(({"endpoint": "https://push.example.test/1", "keys": {"p256dh": "public", "auth": "secret"}},), {
+        "data": "hello", "vapid_private_key": "private.pem", "vapid_claims": {"sub": "mailto:ops@example.test"},
+    })]
+
+
+@pytest.mark.parametrize("active", [True, False])
+def test_send_push_missing_or_inactive_subscription_is_unavailable(monkeypatch, active):
+    user_id = _user(f"push-inactive-{active}")
+    with SessionLocal() as session:
+        subscription = PushSubscription(user_id=user_id, endpoint=f"https://push.example.test/{active}", p256dh="public", auth="secret", active=active)
+        session.add(subscription)
+        session.commit()
+        subscription_id = subscription.id
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": "public-key", "vapid_private_key": "private.pem", "vapid_subject": "mailto:ops@example.test",
+    })())
+    with pytest.raises(PushUnavailable):
+        push.send_push(str(subscription_id if not active else 999999999), "hello")
+
+
 def test_notification_center_and_push_routes_require_json_auth(client):
-    for method, path in (("get", "/panel/api/notifications"), ("post", "/panel/api/push-subscription")):
+    for method, path in (("get", "/panel/api/notifications"), ("post", "/panel/api/push-subscription"), ("get", "/panel/api/push-config")):
         response = client.get(path) if method == "get" else client.post(path, json={})
         assert response.status_code in {401, 422}
         if response.status_code == 401:
-            assert response.json() == {"detail": "unauthorized"}
+                assert response.json() == {"detail": "unauthorized"}
+
+
+def test_push_config_returns_public_key_to_authenticated_user(client, monkeypatch):
+    from app.config import get_settings
+
+    user_id = _user("push-config-user")
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        from app.services.users import hash_password
+        user.password_hash = hash_password("push-config-pass")
+        session.commit()
+    monkeypatch.setattr(get_settings(), "vapid_public_key", "public-vapid-key")
+    response = client.post("/panel/api/login", json={"username": "push-config-user", "password": "push-config-pass"})
+    assert response.status_code == 200
+
+    response = client.get("/panel/api/push-config")
+    assert response.status_code == 200
+    assert response.json() == {"public_key": "public-vapid-key"}

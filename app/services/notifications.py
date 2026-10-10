@@ -10,7 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db import session_scope
-from app.models import Appointment, AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification, User, UserRole
+from app.models import Appointment, AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification, PushSubscription, User, UserRole
 from app.services.audit import record_audit
 from app.services.send import send_text
 from app.services.push import send_push
@@ -185,6 +185,22 @@ def notify_admins(
             title=title,
             content=content,
             source=source,
+        )
+    subscriptions = session.scalars(
+        select(PushSubscription)
+        .join(User, User.id == PushSubscription.user_id)
+        .where(User.role == UserRole.ADMIN, PushSubscription.active.is_(True))
+    ).all()
+    for subscription in subscriptions:
+        create_operation(
+            session,
+            recipient=str(subscription.id),
+            channel="push",
+            content=content,
+            source_entity="panel",
+            source_id=f"panel:{source_id}",
+            idempotency_key=f"panel:{dedupe_key}:push:{subscription.id}",
+            user_id=None,
         )
     stage_event(
         session,

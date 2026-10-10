@@ -309,17 +309,13 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     fetchMock.mockRestore();
   });
 
-  it("preserves push permission and fallback states in the composed section", async () => {
-    const requestPermission = vi.fn().mockResolvedValue("denied");
-    vi.stubGlobal("Notification", { requestPermission });
-    vi.stubGlobal("PushManager", function PushManager() {});
+  it("preserves push configuration fallback in the composed section", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ public_key: null }), { status: 200 }));
     render(<Settings data={settings} state="ready" />);
     await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
-    expect(within(push).getByText("El navegador te pedirá permiso.")).toBeInTheDocument();
-    fireEvent.click(within(push).getByRole("button", { name: /activar notificaciones/i }));
-    await waitFor(() => expect(within(push).getByText(/denegaste/i)).toBeInTheDocument());
-    vi.unstubAllGlobals();
+    expect(within(push).getByText(/no admite push/i)).toBeInTheDocument();
+    fetchMock.mockRestore();
   });
 });
 
