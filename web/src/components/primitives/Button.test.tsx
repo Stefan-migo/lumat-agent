@@ -15,6 +15,11 @@ describe("Button (T7.1)", () => {
     expect(btn).toBeEnabled();
   });
 
+  it("forwards aria-pressed to the rendered button", () => {
+    render(<Button aria-pressed>Monday</Button>);
+    expect(screen.getByRole("button", { name: "Monday" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("renders an anchor when href is provided, with the same children and href", () => {
     render(<Button href="/panel/export/clients.csv">Exportar</Button>);
     const link = screen.getByRole("link", { name: "Exportar" });
