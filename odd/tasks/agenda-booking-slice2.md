@@ -190,3 +190,27 @@ runner `cd web && npx vitest run`.
 - Worktree created from `origin/main` = `591f46eb`; branch `odd/agenda-booking-slice2`. Env: `uv sync`,
   `infra/.env` copied, test DB on port `6303`; sanity `tests/integration/test_scheduling.py` 18 passed
   (EXIT=0). Design settled (Option B). No source changes yet.
+- **Backend slice (T1–T4) implemented (2026-10-10).** Model + migration `048` + service
+  (`technician_schedule.get_schedule`/`set_schedule`/`materialize`/`ensure_horizon`) + panel routes
+  (`GET`/`PUT /panel/api/technicians/{id}/schedule`) + booking wiring (`ensure_horizon` before
+  `open_slots_for_assignment`). Commits `2b836465` (schema), `0dd78d5c` (availability service),
+  `eec1d523` (booking wiring), `e4afd96f` (fixture isolation). Evidence observed by the orchestrator
+  on the final tree: focused `tests/integration/test_technician_schedule.py` +
+  `tests/functional/test_api_scheduling.py` **23 passed** (EXIT=0); full suite `uv run pytest tests/`
+  **EXIT=0**; `git diff --check` clean.
+- **Backend slice reviewed (RDD, high risk).** Lineage `review-e6c07c52df56479c`, 4 lenses
+  (risk/resilience/readability/reliability). Verdict **approved**; authority burned
+  (`gentle-ai.review-acknowledged/v1`, consumed revision `sha256:a4aa1b90…`). Advisory non-blocking:
+  **R3-001** (`app/services/technician_schedule.py:61-65`) — replacing a weekly schedule deletes any
+  future availability row whose start matches an old generated start, even a manually authored one,
+  because `TechnicianAvailability` has no provenance marker. Recorded as debt (below), not a blocker.
+
+## Declared debt (follow-ups)
+
+- **R3-001 — availability provenance (from the backend review, non-blocking).** The schedule
+  replacement deletes future blocks by `(technician_id, starts_at)` with no marker distinguishing
+  generated from manually authored rows. Harmless while no product path creates manual blocks; revisit
+  when one-off overrides/vacations are added (the deliberate "Out" item above). Cite:
+  `app/services/technician_schedule.py:61-65`.
+- **Frontend editor (T5) — not started.** The backend is usable via the API today; the operator UI
+  lands in PR2.
