@@ -130,6 +130,37 @@ def test_notify_admins_replay_does_not_duplicate_rows_or_operations():
         assert len(session.scalars(select(PanelNotification)).all()) == 2
 
 
+def test_notify_admins_enqueues_one_push_per_active_admin_subscription_and_dedupes():
+    admin_id = _user("push-fanout-admin")
+    operator_id = _user("push-fanout-operator")
+    with SessionLocal() as session:
+        session.get(User, operator_id).role = UserRole.OPERADOR
+        session.add_all([
+            PushSubscription(user_id=admin_id, endpoint="https://push.example.test/active-a", p256dh="a", auth="a"),
+            PushSubscription(user_id=admin_id, endpoint="https://push.example.test/active-b", p256dh="b", auth="b"),
+            PushSubscription(user_id=admin_id, endpoint="https://push.example.test/inactive", p256dh="x", auth="x", active=False),
+            PushSubscription(user_id=operator_id, endpoint="https://push.example.test/operator", p256dh="o", auth="o"),
+        ])
+        session.flush()
+        active_ids = session.scalars(select(PushSubscription.id).where(PushSubscription.user_id == admin_id, PushSubscription.active.is_(True))).all()
+        for _ in range(2):
+            notifications.notify_admins(
+                session, title="New visit", content="Visit booked.", source="appointment",
+                source_id=41, dedupe_key="appointment:41:booked",
+            )
+        session.commit()
+
+        operations = session.scalars(select(NotificationOperation).where(NotificationOperation.channel == "push")).all()
+        assert len(operations) == 2
+        assert {operation.recipient for operation in operations} == {str(identifier) for identifier in active_ids}
+        assert all(operation.user_id is None for operation in operations)
+        assert all(operation.status == "pending" and operation.delivered_at is None for operation in operations)
+        assert all(operation.source_id == "panel:41" for operation in operations)
+        assert {operation.idempotency_key for operation in operations} == {
+            f"panel:appointment:41:booked:push:{identifier}" for identifier in active_ids
+        }
+
+
 def test_push_failure_creates_and_delivers_policy_fallback(monkeypatch):
     user_id = _user("fallback-admin")
     delivered = []

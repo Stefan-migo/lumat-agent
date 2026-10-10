@@ -111,8 +111,8 @@ Single PR against `main`. Forecast ~250-350 authored changed lines (under ~400).
 
 ## Progress / Evidence
 
-- [x] T1 send_push real + dep + VAPID config — commit pending; evidence: adapter tests and `uv sync`.
-- [ ] T2 notify_admins push producer
+- [x] T1 send_push real + dep + VAPID config — `e09bc4f8`; evidence: adapter tests and `uv sync`.
+- [x] T2 notify_admins push producer — commit pending; evidence: active-admin subscription fan-out integration test including replay.
 - [ ] T3 GET /panel/api/push-config
 - [ ] T4 frontend subscribe flow
 - [ ] T5 SW push/notificationclick handlers
