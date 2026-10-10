@@ -187,6 +187,8 @@ runner `cd web && npx vitest run`.
 
 ## Progress log
 
+- **Frontend T5 authorized scope (2026-10-10).** Worktree `lumat-agent-odd-agenda-booking-slice2-frontend`; branch `odd/agenda-booking-slice2-frontend`; base `6cd5a72e`. Authorized frontend files are `web/src/types.ts`, `web/src/api.ts`, `web/src/api.test.ts`, `web/src/components/shared/TechnicianScheduleDialog.tsx`, `web/src/components/shared/TechnicianScheduleDialog.css`, `web/src/components/shared/TechnicianScheduleDialog.test.tsx`, `web/src/components/pages/AgendaPage.tsx`, `web/src/components/pages/AgendaPage.test.tsx`, `web/src/stories/pages/AgendaPage.stories.tsx`, and `web/src/stories/pages/AgendaPage.stories.test.tsx`. No other source files are authorized.
+- **T5 progress (2026-10-10).** Frontend implementation started in the dedicated worktree. Graph check consulted `AgendaPage()`, `apiFetch()`, `Dialog()`, `types.ts`, `api.test.ts`, `AgendaPage.test.tsx`, `AgendaPage.stories.tsx`, `AppointmentRescheduleDialog.tsx`, and the `AgendaPage.tsx` community; direct directed paths for the ambiguous AgendaPage→api.ts and Dialog→AppointmentRescheduleDialog queries were not found. Graph report freshness is at `576b07ef` while this branch is based on `6cd5a72e`.
 - Worktree created from `origin/main` = `591f46eb`; branch `odd/agenda-booking-slice2`. Env: `uv sync`,
   `infra/.env` copied, test DB on port `6303`; sanity `tests/integration/test_scheduling.py` 18 passed
   (EXIT=0). Design settled (Option B). No source changes yet.
