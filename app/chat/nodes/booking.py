@@ -12,6 +12,7 @@ from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, Conversation
 from app.services import scheduling
+from app.services import technician_schedule
 from app.services.settings import get_hours_timezone
 
 OFFER_TTL = timedelta(minutes=30)
@@ -55,6 +56,7 @@ def _new_offer(session, state: ConversationState, now: datetime, *, attempts: in
     )
     if case is None:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_missing_case"}
+    technician_schedule.ensure_horizon(session, now)
     assignments = scheduling.open_slots_for_assignment(
         session, now=now, days=7, duration_minutes=DURATION_MINUTES, limit=3
     )
