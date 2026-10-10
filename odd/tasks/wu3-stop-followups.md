@@ -91,3 +91,14 @@ endpoint, no behavioral change for non-stop paths.
 - Worktree created from `main` = `54fb4527`. Baseline `uv run pytest tests/integration/test_assistant_chat.py -q` → 62 passed.
 - F1 — `9615dadf`: terminal stop race test observed RED (`completed` instead of `cancelled`), then GREEN; terminal-stop test and existing stage-boundary cancellation test → 2 passed.
 - F2 — `918f587b`: approval stop test observed RED (`pending` instead of `revoked`), then GREEN; approval stop and existing approval-pending stop test → 2 passed.
+- Verification (2026-10-10). Targeted `tests/integration/test_assistant_chat.py` → 64 passed. Full backend
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → **1873 passed, 2 warnings** (pre-existing:
+  unawaited `_publish_all` coroutine + fastembed pooling). Parent spot check re-ran the targeted file → 64 passed.
+- RDD: native immutable review transport **unavailable for OpenCode** (`review status` →
+  `immutable_review_transport_unsupported`, `next_action: stop`; `review assess --base-ref 54fb4527
+  --committed-only` → `high` / `unassessable`). Same runtime condition the A6 WU3 handoff recorded, not a code
+  defect. Applied the RDD-off fallback: writer self-verification + **one independent verifier** →
+  **PASS-WITH-WARNINGS, 0 blockers**. Advisory (no correction): (a) the F1 test does not assert
+  `active_run_id` / sibling-key preservation; (b) F2 cannot undo a tool execution already committed if an
+  approval won the race first (inherent honest limitation).
+- Docs commit `93a1718a` (`docs(odd): track wu3-stop-followups`). Branch `odd/wu3-stop-followups`; not pushed.
