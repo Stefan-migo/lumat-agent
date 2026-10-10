@@ -189,8 +189,36 @@ whose due time is in the future.)
   frontend source is byte-identical to base; `AgentChat.test.tsx` passes 58/58 in isolation and on
   `main`).
 
-### Slice 3 — Resúmenes
-- [ ] **C1 — Disparos de calendario** + módulo `daily_summary` + resumen diario/semanal.
+### Slice 3 — Resúmenes (branch `odd/automatizaciones-recetas-resumenes`, base `576b07ef`)
+
+**Design (closed 2026-10-10):** calendar triggers ride the same worker tick as the Slice 2 offsets.
+Two new `trigger_kind="schedule"` recipes (`admin_daily_summary`, `admin_weekly_summary`) publish
+synthetic `DomainEvent`s (`admin.daily_summary_due`, `admin.weekly_summary_due`) once per business day /
+ISO week; the existing pipeline delivers the digest to the admin (`recipient_target="admin"`). No
+migration: dedupe rides `DomainEvent.dedupe_key` (same as Slice 2). The digest text is built from real
+KPIs at trigger time and carried in the event payload (`content`), which `evaluate_event` already prefers
+over `rule.content`.
+
+**Scope:** daily + weekly summary to the admin (notification only, no data actions). Digest KPIs: open
+cases (`cases.list_open_cases`), unresolved questions (`respond.list_unresolved_questions`), spend
+(`costs.daily_spend`). Honest empty state when there is no data. The `backup status` mentioned in
+`docs/ops.md` §2.8 is omitted — no in-app source, must not be fabricated.
+
+**Business timezone:** `hours.timezone` (default `America/Santiago`) via `ZoneInfo`. A tick fires when
+local `now >= due_time` (today at HH:MM; the configured weekday at HH:MM for weekly). Dedupe keys:
+`schedule:{recipe_id}:{YYYY-MM-DD}` (daily) and `schedule:{recipe_id}:W{iso_week}` (weekly).
+
+**Work units:**
+- [x] **WU1 — Schedule recipe model**: `trigger_kind="schedule"`; param types `time` (HH:MM) and
+  `weekday` (1-7); `_schedule_recipe`; the two summary recipes; synthetic events in `ALLOWED_EVENTS`;
+  updated catalog expectations. Commit `85899bda`. Full backend suite **1894 passed**.
+- [ ] **WU2 — Digest builder**: `app/ops/daily_summary.py` `build_digest(session, period, now)` from real
+  KPIs, honest empty state.
+- [ ] **WU3 — Calendar evaluation**: `_summary_due` in `app/services/time_triggers.py` on the same tick,
+  business timezone, day/week dedupe, digest in the event payload. Plus a separate `fix:` commit
+  isolating per-installation failures (resolves R3-003).
+- [ ] **WU4 — Surface + verification**: render `time`/`weekday` params in `AutomationRecipesPage.tsx`;
+  frontend test + `npm run build`.
 
 ### Transversal
 - [ ] **D1 — Evento de pago**.
@@ -245,3 +273,8 @@ they are separate later work.
   riesgo medium, 421 líneas, **0 bloqueantes**, 1 advisory (R3-001). Authority **burned**. Pendiente
   humano: push + PR/merge. A1 (cron del worker) sigue diferido, así que las recetas de tiempo no
   disparan en prod todavía.
+- 2026-10-10 — Slice 3 abierto en worktree nuevo `../lumat-agent-odd-automatizaciones-recetas-resumenes`,
+  branch `odd/automatizaciones-recetas-resumenes`, base `576b07ef`. Diseño C1 cerrado (schedule en el
+  mismo tick, sin migración, digest por payload). C1 = WU1 (modelo de recetas de calendario) + WU2
+  (builder del resumen) + WU3 (evaluación en el tick + fold R3-003) + WU4 (UI + verificación). WU1
+  commiteado (`85899bda`); NOTA: `infra/.env` no lo copia `rapso worktree create` — copiado a mano.
