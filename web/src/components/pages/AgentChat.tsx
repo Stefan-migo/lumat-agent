@@ -13,12 +13,15 @@ import {
   createChatThread,
   getChatThread,
   getThreadToolPolicy,
+  listProjectFiles,
   listProjects,
   openPlanningSession,
   resetThreadToolPolicy,
   sendChatMessage,
   stopChatThread,
   streamChatEvents,
+  setChatThreadProject,
+  attachProjectFileToThread,
   updateThreadToolPolicy,
   uploadAssistantAttachment,
 } from "../../api";
@@ -37,9 +40,10 @@ import type {
   InternalChatThread,
   ThreadToolPolicy,
   PlanningSession,
+  ProjectFile,
   Role,
 } from "../../types";
-import { realtimeClient, type ConnectionStatus } from "../../realtime";
+import { realtimeClient } from "../../realtime";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -252,11 +256,12 @@ function AgentActivity({
 
 export interface AgentChatProps {
   role: Role;
+  userName?: string;
   threadId?: number;
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
+export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -268,7 +273,6 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [connection, setConnection] = useState<ConnectionStatus>("disconnected");
   const [stream, setStream] = useState("");
   const [recoverable, setRecoverable] = useState(false);
   const [plan, setPlan] = useState<AssistantPlan | null>(null);
@@ -297,6 +301,10 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
   const [topicError, setTopicError] = useState("");
   const [projectChoices, setProjectChoices] = useState<{ slug: string; name: string }[]>([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [projectFilesOpen, setProjectFilesOpen] = useState(false);
+  const [projectActionLoading, setProjectActionLoading] = useState(false);
+  const [projectActionError, setProjectActionError] = useState<string | null>(null);
   const watchCancelledRef = useRef(false);
   const watchedRunRef = useRef<string | null>(null);
 
@@ -360,11 +368,9 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
         ]);
       }
     });
-    const unsubscribeStatus = realtimeClient.subscribeStatus(setConnection);
     realtimeClient.connect();
     return () => {
       unsubscribe();
-      unsubscribeStatus();
     };
   }, [thread]);
 
@@ -694,10 +700,9 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
     }
   };
 
-  const attach = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const attach = async (file: File | undefined) => {
     if (!file || !thread) return;
+    setError(null);
     setUploading(true);
     try {
       const result = await uploadAssistantAttachment(thread.id, file);
@@ -707,6 +712,63 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleAttachmentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    void attach(file);
+  };
+
+  const chooseProject = async () => {
+    setProjectActionError(null);
+    setProjectActionLoading(true);
+    try {
+      const result = await listProjects();
+      setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })));
+      setProjectPickerOpen(true);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.");
+    } finally { setProjectActionLoading(false); }
+  };
+
+  const changeProject = async (slug: string) => {
+    if (!thread) return;
+    setProjectActionLoading(true);
+    setProjectActionError(null);
+    try {
+      const result = await setChatThreadProject(thread.id, slug);
+      setThread(result.thread);
+      setProjectPickerOpen(false);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cambiar el proyecto.");
+    } finally { setProjectActionLoading(false); }
+  };
+
+  const chooseProjectFile = async () => {
+    if (!thread?.proyecto || thread.proyecto === "default") return;
+    setProjectActionError(null);
+    setProjectActionLoading(true);
+    try {
+      const result = await listProjectFiles(thread.proyecto);
+      setProjectFiles(result.files);
+      setProjectFilesOpen(true);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los archivos del proyecto.");
+    } finally { setProjectActionLoading(false); }
+  };
+
+  const attachProjectFile = async (fileId: number) => {
+    if (!thread) return;
+    setProjectActionLoading(true);
+    setProjectActionError(null);
+    try {
+      const result = await attachProjectFileToThread(thread.id, fileId);
+      setAttachments((current) => [...current, result.attachment]);
+      setProjectFilesOpen(false);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos adjuntar el archivo del proyecto.");
+    } finally { setProjectActionLoading(false); }
   };
 
   const planning = async () => {
@@ -790,7 +852,14 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
       <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto">
         <div className="assistant-chat__planning-form">
           <p>Elige el proyecto para este chat.</p>
-          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" onClick={() => void createProjectChat(project.slug)}>{project.name}</Button>)}
+          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" disabled={projectActionLoading} onClick={() => void (thread ? changeProject(project.slug) : createProjectChat(project.slug))}>{project.name}</Button>)}
+          {projectActionError ? <p role="alert">{projectActionError}</p> : null}
+        </div>
+      </Dialog>
+      <Dialog open={projectFilesOpen} onClose={() => setProjectFilesOpen(false)} title="Archivos del proyecto">
+        <div className="assistant-chat__planning-form">
+          {projectFiles.length ? projectFiles.map((file) => <Button key={file.id} variant="secondary" disabled={projectActionLoading} onClick={() => void attachProjectFile(file.id)}>{file.filename}</Button>) : <p role="status">Este proyecto no tiene archivos disponibles.</p>}
+          {projectActionError ? <p role="alert">{projectActionError}</p> : null}
         </div>
       </Dialog>
       <Dialog
@@ -823,8 +892,8 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
           <div className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
               <div className="assistant-chat__hero">
-                <h2>Comienza una conversación</h2>
-                <p>Escribe una consulta al asistente para iniciar un chat.</p>
+                <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
+                <Button onClick={() => void newChat()} disabled={loading}>Iniciar conversación</Button>
               </div>
             ) : null}
             {thread && messages.length === 0 && !loading ? (
@@ -1006,13 +1075,7 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
               </p>
             ) : null}
           </div>
-          <div className="assistant-chat__composer-wrap">
-            {thread && isRunActive ? <div className="assistant-chat__stop-control">
-              <Button variant="secondary" onClick={() => void stopRun()} disabled={stopping} title="Se detiene en el siguiente paso seguro; no interrumpe una llamada en curso ni revierte efectos completados.">
-                <Icon icon={Square} size="sm" /> {stopping ? "Deteniendo…" : "Detener ejecución"}
-              </Button>
-              <p>La detención ocurre en el siguiente paso seguro; no interrumpe una llamada a herramienta o al modelo en curso ni revierte efectos completados.</p>
-            </div> : null}
+          {thread ? <div className="assistant-chat__composer-wrap" onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void attach(file); }}>
             {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
               {attachments.length > 0 || uploading ? (
@@ -1046,53 +1109,50 @@ export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
                       aria-label="Adjuntar archivo"
                       type="file"
                       accept="image/*,.pdf,.csv,.txt"
-                      onChange={(event) => void attach(event)}
+                      onChange={handleAttachmentChange}
                       disabled={!thread || processing || uploading}
                     />
                   </label>
-                  <button type="button" disabled title="Próximamente">Elegir del proyecto · Próximamente</button>
+                  <div className="assistant-chat__tool-chips" aria-label="Herramientas disponibles">
+                    {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
+                    {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
+                    {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
+                    {toolPolicy?.available.map((name) => {
+                      const enabled = toolPolicy.opt_in_enabled.includes(name);
+                      return <label key={name} className="assistant-chat__tool-chip"><input type="checkbox" aria-label={name} checked={enabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
+                        const selected = new Set(toolPolicy.opt_in_enabled);
+                        if (enabled) selected.delete(name); else selected.add(name);
+                        void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
+                      }} />{name} · {enabled ? "Activada" : "Desactivada"}</label>;
+                    })}
+                    {toolPolicy && !toolPolicy.inherited ? <Button variant="tertiary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}>Restablecer al proyecto</Button> : null}
+                    {isRunActive ? <p role="status">Las herramientas están bloqueadas durante la ejecución.</p> : null}
+                  </div>
                 </Popover>
                 <Button variant="tertiary" onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
                   Planificar
                 </Button>
                 <Button variant="tertiary" disabled title="Próximamente">@Agente · Próximamente</Button>
-                {thread?.proyecto === "default" ? <span className="assistant-chat__project-chip">Conversación rápida</span> : thread?.proyecto ? <span className="assistant-chat__project-chip">{thread.proyecto}</span> : null}
                 <button
                   type="button"
                   className="assistant-chat__send"
-                  aria-label="Enviar"
-                  title="Enviar"
-                  onClick={() => void send()}
-                  disabled={!thread || processing || !content.trim()}
+                  aria-label={isRunActive ? stopping ? "Deteniendo…" : "Detener ejecución" : "Enviar"}
+                  title={isRunActive ? stopping ? "Deteniendo…" : "Detener ejecución" : "Enviar"}
+                  onClick={() => isRunActive ? void stopRun() : void send()}
+                  disabled={isRunActive ? stopping : !content.trim()}
                 >
-                  <Icon icon={Send} size="md" />
+                  <Icon icon={isRunActive ? Square : Send} size="md" />
                 </button>
               </div>
-              <div className="assistant-chat__tool-chips" aria-label="Herramientas disponibles">
-                {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
-                {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
-                {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
-                {toolPolicy?.available.map((name) => {
-                  const enabled = toolPolicy.opt_in_enabled.includes(name);
-                  return <label key={name} className="assistant-chat__tool-chip">
-                    <input type="checkbox" aria-label={name} checked={enabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
-                    const selected = new Set(toolPolicy.opt_in_enabled);
-                    if (enabled) selected.delete(name); else selected.add(name);
-                    void changeToolPolicy(() => updateThreadToolPolicy(thread!.id, [...selected]));
-                  }} />{name} · {enabled ? "Activada" : "Desactivada"}</label>;
-                })}
-                {toolPolicy && !toolPolicy.inherited ? <Button variant="tertiary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread!.id))}>Restablecer al proyecto</Button> : null}
+              <div className="assistant-chat__composer-bottom-row">
+                <Button variant="tertiary" onClick={() => void chooseProject()} disabled={isRunActive || projectActionLoading}>{thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "Proyecto"}</Button>
+                {thread.proyecto && thread.proyecto !== "default" ? <Button variant="tertiary" onClick={() => void chooseProjectFile()} disabled={projectActionLoading || uploading}>Elegir archivo del proyecto</Button> : null}
+                {projectActionLoading ? <span role="status">Cargando…</span> : null}
+                {projectActionError ? <p role="alert">{projectActionError}</p> : null}
               </div>
-          </div>
-          <div className="assistant-chat__status">
-              <span>Conexión: {stateLabels[connection] ?? "No disponible"}</span>
-              <span>{processing ? stateLabels[lifecycle ?? "planning"] ?? "Procesando" : "Listo"}</span>
-              {uploading ? <span>Subiendo archivo…</span> : null}
-              {attachments.map((item) => (
-                <span className="assistant-chat__attachment" key={item.id}>{item.filename}</span>
-              ))}
             </div>
           </div>
+          : null}
         </section>
       </div>
       {cortex?.status === "active" ? (

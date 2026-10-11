@@ -147,7 +147,7 @@ describe("AgentChat", () => {
       "/panel/api/chat/threads/4/stop",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-live" }) }),
     ));
-    expect(await screen.findByText("Deteniendo…")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Deteniendo…" })).toBeInTheDocument();
     expect(screen.queryByText("Cancelado")).not.toBeInTheDocument();
   });
 
@@ -214,7 +214,7 @@ describe("AgentChat", () => {
     render(<AgentChat role={undefined} />);
 
     expect(
-      await screen.findByRole("heading", { name: "Comienza una conversación" }),
+      await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ }),
     ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/panel/api/chat/threads",
@@ -230,7 +230,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat role={undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Crear nuevo hilo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar conversación" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
@@ -248,7 +248,7 @@ describe("AgentChat", () => {
   it("does not create a chat when the user has no projects", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ projects: [], threads: [] }));
     render(<AgentChat role={undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Crear nuevo hilo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar conversación" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/proyecto primero/i);
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
   });
@@ -282,7 +282,7 @@ describe("AgentChat", () => {
     );
 
     render(<AgentChat role="tecnico" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Crear nuevo hilo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar conversación" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
@@ -407,7 +407,7 @@ describe("AgentChat", () => {
   it("removes the redundant inline context panel", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
     render(<AgentChat />);
-    await screen.findByRole("heading", { name: "Comienza una conversación" });
+    await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ });
     expect(screen.queryByRole("button", { name: "Contexto" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Contexto" })).not.toBeInTheDocument();
   });
@@ -1088,7 +1088,7 @@ describe("AgentChat", () => {
       target: { files: [new File(["png"], "photo.png", { type: "image/png" })] },
     });
 
-    expect(await screen.findAllByText("photo.png")).toHaveLength(3);
+    expect(await screen.findAllByText("photo.png")).toHaveLength(2);
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
