@@ -86,7 +86,8 @@ describe("AgentChat", () => {
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(toolToggle("Todas las herramientas")).not.toBeNull());
     const dialog = screen.getByRole("dialog", { name: "Herramientas del hilo" });
-    expect(dialog.querySelector("h2")).not.toHaveClass("visually-hidden");
+    expect(dialog.querySelector("h2")).toHaveClass("visually-hidden");
+    expect(dialog.querySelector("h2")).toHaveTextContent("Herramientas del hilo");
     expect(dialog).not.toHaveTextContent(/\d+ de \d+ activadas/);
     expect(screen.getByRole("button", { name: "Cerrar" })).toHaveAttribute("popovertarget", dialog.id);
     expect(dialog).toHaveTextContent("Adjuntar archivo");
@@ -1210,6 +1211,27 @@ describe("AgentChat", () => {
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("keeps long thread filenames on a titled single-line row", async () => {
+    const filename = "screenshot-localhost-1234567890-with-a-very-long-name.png";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/tool-policy")) return jsonResponse(policy());
+      return jsonResponse({
+        thread: makeThread(),
+        messages: [],
+        attachments: [{ id: 1, thread_id: 4, filename, kind: "image", content_type: "image/png", size: 10 }],
+      });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 1" }));
+    await screen.findAllByText(filename);
+    const name = document.querySelector(`.assistant-chat__filename[title="${filename}"]`);
+    expect(name).not.toBeNull();
+    expect(name!).toHaveClass("assistant-chat__filename");
+    expect(name!).toHaveAttribute("title", filename);
+    expect(name!.parentElement?.querySelector("small")).toHaveTextContent("IMAGE · Adjuntado");
   });
 
   it("shows the active Cortex indicator and closes through the planning endpoint", async () => {

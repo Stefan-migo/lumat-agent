@@ -803,3 +803,51 @@ Commits: `1ba689bd` (`feat(assistant): simplify thread tool controls`) covers th
 anchoring, tests, and this Slice 15 record; `9aa55c01` (`refactor(ui): remove unused popover accessory`)
 removes `Popover.titleAccessory` and its accessory-specific test; the final cleanup commit removes the
 now-unused tool-label map and its unit test (`1de4f8e8`, `refactor(assistant): remove unused tool labels`).
+
+## Slice 16 — Compact, viewport-safe composer dialogs
+
+Owner final visual feedback: hide the visible “Herramientas del hilo” heading from the `+` dialog while
+retaining its accessible name and close button; compact composer popover rows; bound every composer dialog
+to a viewport-safe height with internal vertical scrolling and block-axis flip fallbacks; and keep file names
+on one ellipsized line with the full filename available on hover.
+
+- Apply `Popover.hideTitle` only to the `+` dialog; keep the `h2` as its accessible label and preserve the
+  native close control and all dialog content.
+- Use a smaller height cap than the existing `min(70vh, 32rem)` where needed so panels anchored low in the
+  viewport can flip and remain wholly visible while scrolling internally. Preserve the empty-state `+`
+  preference to open below the chatbox and the nested project-files panel's inline flip.
+- Compact row padding/line-height in all composer popovers and ellipsize long attachment/project filenames
+  without removing file-type/subtitle information.
+- Add/update focused tests for the accessible title and long filename presentation; verify bounded scrolling
+  and anchor fallback with a browser geometry probe.
+
+Graph Check before source edits: ran the required
+`graphify query "assistant composer popover panel max-height scroll overflow truncate file row"`, which
+surfaced `AgentChat.tsx`, `Popover()`, `Popover.tsx`, `Popover.test.tsx`, and the composer-first central panel.
+`graphify path "AgentChat.tsx" "Popover.tsx"` found the extracted import edge
+`AgentChat.tsx --imports_from--> Popover.tsx`; the reverse directed path from Popover to AgentChat tests was
+absent. Read `graphify-out/GRAPH_REPORT.md`; its UI hub/community includes `AgentChat.tsx` and `Popover.tsx`.
+The report initially lagged starting HEAD `5c25b0ed` (graph built at `5b8bfbd4`), so Graphify was updated
+and the report regenerated before editing. `cluster-only` reported 757 communities; HTML visualization was
+skipped because the graph exceeds its 5,000-node visualization limit.
+
+Implementation: the `+` popover now sets `hideTitle`, retaining its labelled `h2` and close button without
+showing the title. Composer popovers share a `min(45vh, 20rem)` border-box cap, internal vertical scrolling,
+and block-axis flip fallback; the nested project-files panel keeps its inline flip and adds block flip. The
+empty-state `+` still declares below-chatbox placement first. Tool, project, and file rows use tighter vertical
+spacing/line height. Both file-row variants render a titled, single-line ellipsis filename while preserving
+their type/status subtitle. Focused tests cover the accessible title, close button, and thread attachment
+filename metadata.
+
+Verification from `web/`:
+- `npx tsc -b --force --noEmit` — passed (no output).
+- `npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` — passed (2 files, 66 tests); existing React `act(...)` warnings remain in AgentChat tests.
+- `npm run build` — passed; Vite emitted the existing advisory that the 848.46 kB JS chunk exceeds 500 kB.
+- Chrome 151 headless / Playwright viewport probe (1200×600; trigger at y=550; 40-row popover): `top=272`, `bottom=542`, `height=270`, `maxHeight=270px`, `overflowY=auto`, `scrollHeight=2016`, `clientHeight=268`, `positionTry=flip-block`. Panel stayed inside the viewport, flipped above the low trigger, and remained internally scrollable.
+
+Ponytail: the native Popover/anchor-positioning platform handles internal scrolling and directional fallback;
+the existing `hideTitle` API avoids primitive changes. Duplicate `+` panel sizing/scroll declarations were
+removed in favor of the shared panel rule. No intentional shortcut with a known ceiling or authorized behavior
+was deferred.
+
+Commit: pending.
