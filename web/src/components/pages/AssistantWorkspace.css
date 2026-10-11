@@ -195,7 +195,7 @@
   cursor: pointer;
 }
 
-.assistant-workspace__project-chat:hover { background: var(--surface-muted); }
+.assistant-workspace__project-chat:hover { background: var(--surface); }
 .assistant-workspace__project-chat:focus-visible { outline: 2px solid var(--focus-ring); }
 
 .assistant-workspace__project-details {
