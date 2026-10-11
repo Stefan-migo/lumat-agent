@@ -27,7 +27,8 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Agentes", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
     expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
-    expect(await within(thread).findByRole("heading", { name: "Comienza una conversación" })).toBeInTheDocument();
+    expect(await within(thread).findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
+    expect(within(thread).queryByRole("navigation", { name: "Hilos abiertos" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
@@ -349,7 +350,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByText("Proyecto: Operaciones")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Acciones del hilo" })).toBeInTheDocument();
     expect(screen.getByText("Gestión")).toBeInTheDocument();
-    expect(screen.getAllByText("manual.pdf")).toHaveLength(3);
+    expect(screen.getAllByText("manual.pdf")).toHaveLength(2);
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
   });
 

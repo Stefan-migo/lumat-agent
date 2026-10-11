@@ -365,7 +365,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       </aside>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
-        <nav className="assistant-workspace__thread-tabs" aria-label="Hilos abiertos">
+        {openThreadIds.length > 0 ? <nav className="assistant-workspace__thread-tabs" aria-label="Hilos abiertos">
           <div className="assistant-workspace__thread-tab-list">
             {openThreadIds.map((id) => {
               const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
@@ -392,7 +392,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           <Button variant="tertiary" aria-label="Crear nuevo hilo" title="Crear nuevo hilo" onClick={onCreateThread}>
             <Icon icon={Plus} />
           </Button>
-        </nav>
+        </nav> : null}
         {threadListError ? <StateMessage tone="danger" role="alert" title={threadListError} /> : null}
         {threadActionError ? <StateMessage tone="danger" role="alert" title={threadActionError} /> : null}
         <Dialog open={renameTarget !== null} onClose={() => setRenameTarget(null)} title="Renombrar hilo">
