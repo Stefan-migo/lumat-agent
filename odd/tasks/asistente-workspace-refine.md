@@ -130,6 +130,44 @@ exists.
 - No fabricated activity: only rows returned by the endpoint. (Sub-agent rows are a later slice.)
 - Tests with fake timers / mocked endpoint for the list, empty, and error states.
 
+## Slice 3 — Open-tab model + agents = open tabs (this pass)
+
+Owner model (2026-10-10): **"active" = the thread tab is open in the workspace**, not "the run is
+executing". An open tab *means* the agent is active. Today the tab bar shows *recent* threads and the
+tab's close button *deletes* the thread. Both are wrong for this model.
+
+Decisions (owner-confirmed):
+- **Close tab = remove from the open set** (session state); it never deletes the thread and never
+  cancels a run. `deleteChatThread` stays only as the explicit header "…" menu action.
+- **Closing a tab deactivates the agent** even if its run keeps running in the background (the run is
+  not cancelled).
+- Session tabs (in-memory), consistent with the earlier choice; a reload clears the open set.
+- No backend change: the Agentes section lists the open tabs and enriches each row with the live stage
+  from the existing `GET /panel/api/chat/active-runs` (B2) matched by `thread_id`.
+
+### S7 — Open-thread tab model (frontend)
+
+- [x] Add session state `openThreadIds: number[]` (ordered). The tab bar renders the **open threads**, not
+  the recent list.
+- [x] Opening a thread (create, pick from `Historial`, pick from a project's thread list, or a `thread_id`
+  already in the URL on mount/popstate) adds it to the open set and makes it active.
+- [x] **Tab close** removes the id from the open set only. If the closed tab was active, activate the last
+  remaining open tab, or clear the URL so the empty "Asistente Lumat" state shows. NO delete, NO cancel.
+- [x] Keep resolving tab titles/project from the loaded thread summaries (the recent list remains a
+  title/history source); a thread opened directly by URL with unknown title shows an honest placeholder
+  until resolved.
+- [x] The header "…" menu keeps **Renombrar** / **Eliminar**; delete also removes the id from the open set.
+
+### S8 — Agentes section = open tabs (frontend)
+
+- [x] Render one row per **open thread**: agent label "Orquestador" + the project name (resolve `proyecto`;
+  `"default"` → "Conversación rápida").
+- [x] Status per row: the live stage label when that thread has an active run (from the polled
+  `active-runs`, matched by `thread_id`), otherwise a neutral **"Activo"** (open = active). Unknown
+  stage → "En curso".
+- [x] Honest empty state when no tab is open: **"No hay agentes activos"**.
+- [x] Keep the 5s poll of `active-runs` (only for the stage enrichment). No fabricated rows.
+
 ## Acceptance criteria
 
 1. `npx tsc -b --force --noEmit`, `npx vitest run --no-file-parallelism`, `npm run build` green (from `web/`).
@@ -193,3 +231,10 @@ exists.
   `review_due: false` (`under_budget`). No review opened; the reviewed boundary stays at `08581eff` and
   accumulates with the next slice. Slice 2 is up for owner visual review against the isolated env
   (Vite `:5174` → API `:8001`).
+- Graph Check for Slice 3: consulted `AssistantWorkspace()` and `listActiveRuns`/active-run listing nodes;
+  graph path query did not find a directed path between the workspace and polling API symbols.
+- S7/S8 — delivered in `28e71da4` (`feat(assistant): model workspace tabs as open threads`). Focused
+  suite: 14/14 passed; `npx tsc -b --force --noEmit` passed; full frontend suite: 104 files,
+  1,111/1,111 passed; `npm run build` passed (existing >500 kB chunk-size advisory). Tab close only
+  removes session state and clearing the active tab resets the chat URL. Rollback boundary: the
+  `AssistantWorkspace.tsx` and `.test.tsx` changes in `28e71da4`.
