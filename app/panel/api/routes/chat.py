@@ -294,8 +294,15 @@ def open_planning_session(
 
 
 @router.get("/planning/sessions")
-def list_planning_sessions(session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
-    threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == current.id).order_by(InternalChatThread.updated_at.desc())).all()
+def list_planning_sessions(
+    proyecto: str | None = Query(default=None, max_length=100),
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    query = select(InternalChatThread).where(InternalChatThread.user_id == current.id)
+    if proyecto is not None:
+        query = query.where(InternalChatThread.proyecto == proyecto)
+    threads = session.scalars(query.order_by(InternalChatThread.updated_at.desc())).all()
     return {"sessions": [to_cortex_session_dict(thread) for thread in threads if (thread.assistant_state or {}).get("cortex_session")]}
 
 
