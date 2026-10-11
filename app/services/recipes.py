@@ -75,7 +75,6 @@ class RecipeDefinition:
             "event_type": self.event_type,
             "conditions": {},
             "channel": values.get("channel"),
-            "template_event": self.event_type,
             "cooldown_seconds": self.cooldown_seconds,
             "recipient_target": self.recipient_target,
             "content": self.content,

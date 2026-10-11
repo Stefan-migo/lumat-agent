@@ -308,7 +308,6 @@ def to_automation_rule_dict(rule: AutomationRule) -> dict:
         "event_type": rule.event_type,
         "conditions": rule.conditions or {},
         "channel": rule.channel,
-        "template_event": rule.template_event,
         "cooldown_seconds": rule.cooldown_seconds,
         "enabled": rule.enabled,
         "created_by": rule.created_by,

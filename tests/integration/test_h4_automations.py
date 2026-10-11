@@ -46,7 +46,6 @@ def _rule(session, **overrides):
         "event_type": "message.received",
         "conditions": {"text": "help"},
         "channel": "whatsapp",
-        "template_event": "message.received",
         "cooldown_seconds": 300,
         "enabled": True,
         "created_by": "admin",
@@ -176,16 +175,16 @@ def test_recipe_event_targets_admin_setting_and_uses_recipe_content(migrated_db)
         )
 
 
-def test_free_rule_defaults_to_payload_recipient_and_template_content(migrated_db):
+def test_free_rule_defaults_to_payload_recipient_and_message_content(migrated_db):
     from app.services.automation import evaluate_event
 
     with SessionLocal() as session:
         rule = _rule(session, cooldown_seconds=0, conditions={})
-        event = _event(session, payload={"phone": "+56911112222"}, key="free-rule-defaults")
+        event = _event(session, payload={"phone": "+56911112222", "text": "Customer message"}, key="free-rule-defaults")
         evaluate_event(session, event)
         operation = session.scalar(select(NotificationOperation).where(NotificationOperation.event_id == event.id))
         assert (rule.recipient_target, rule.content) == ("customer", None)
-        assert (operation.recipient, operation.content) == ("+56911112222", rule.template_event)
+        assert (operation.recipient, operation.content) == ("+56911112222", "Customer message")
 
 
 def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db, monkeypatch):

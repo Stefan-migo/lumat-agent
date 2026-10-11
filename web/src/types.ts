@@ -61,7 +61,6 @@ export interface Rule {
   event_type: string;
   conditions: Record<string, string | number | boolean | null>;
   channel: string;
-  template_event: string;
   cooldown_seconds: number;
   enabled: boolean;
   created_by: string;
