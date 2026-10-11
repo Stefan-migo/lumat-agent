@@ -885,7 +885,14 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
         </div>
       </Dialog>
       <div className={`assistant-chat__surface${!processing && !stream && messages.length === 0 ? " assistant-chat__surface--empty" : ""}`} data-tier={commandCenterTier(globalThis.innerWidth || 1024)}>
-        <section className="assistant-chat__conversation" aria-label="Conversación">
+        <section className="assistant-chat__conversation" aria-label="Conversación"
+          onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }}
+          onDrop={(event) => {
+            if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+            event.preventDefault();
+            if (!thread || isRunActive || uploading) return;
+            for (const file of Array.from(event.dataTransfer.files)) void attach(file);
+          }}>
           <div className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
               <div className="assistant-chat__hero">
@@ -1072,7 +1079,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
               </p>
             ) : null}
           </div>
-          {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void attach(file); }}>
+          {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`}>
             {attachments.length > 0 || uploading ? <div className="assistant-chat__attachment-tray" aria-label="Archivos adjuntos">
               {attachments.map((item) => <div className="assistant-chat__attachment" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
               {uploading ? <span role="status">Subiendo archivo…</span> : null}

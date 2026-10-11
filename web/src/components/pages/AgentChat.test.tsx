@@ -255,6 +255,30 @@ describe("AgentChat", () => {
     );
   });
 
+  it("accepts multiple dropped files across the conversation area", async () => {
+    const uploads: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/attachments") && init?.method === "POST") {
+        const form = init.body as FormData;
+        const file = form.get("file") as File;
+        uploads.push(file.name);
+        return jsonResponse({ attachment: { id: uploads.length, filename: file.name, kind: "document", content_type: "text/plain" } });
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+
+    const zone = screen.getByRole("region", { name: "Conversación" });
+    expect(zone.querySelector(".assistant-chat__messages")).toBeInTheDocument();
+    expect(zone.querySelector(".assistant-chat__composer-stack")).toBeInTheDocument();
+    const files = [new File(["one"], "one.txt", { type: "text/plain" }), new File(["two"], "two.txt", { type: "text/plain" })];
+    fireEvent.drop(zone, { dataTransfer: { types: ["Files"], files } });
+    await waitFor(() => expect(uploads).toEqual(["one.txt", "two.txt"]));
+  });
+
   it("shows project names without slugs and keeps selection functional", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);

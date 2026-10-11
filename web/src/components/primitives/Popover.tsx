@@ -35,7 +35,7 @@ export function Popover({ title, triggerLabel, trigger, children, state = "defau
         {trigger ?? triggerLabel}
       </button>
       <div id={id} popover="auto" role="dialog" aria-labelledby={titleId} className="popover__panel">
-        <div className="popover__header">
+        <div className={`popover__header${hideTitle && dismissible ? " popover__header--hidden-title-dismissible" : ""}`}>
           <h2 id={titleId} className={`popover__title${hideTitle ? " visually-hidden" : ""}`}>{title}</h2>
           {dismissible ? <button type="button" className="popover__close" aria-label="Cerrar" popoverTarget={id} popoverTargetAction="hide">×</button> : null}
         </div>

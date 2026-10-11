@@ -47,7 +47,12 @@
 .assistant-chat__add-popover .popover__trigger::after { content: "+"; display: block; font-size: var(--text-lg); line-height: 1; }
 .assistant-chat .popover__panel:popover-open { box-sizing: border-box; display: grid; gap: var(--space-2); width: min(20rem, calc(100vw - var(--space-8))); max-width: calc(100vw - var(--space-8)); max-height: min(45vh, 20rem); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--brand-bg-elevated); color: var(--corp-text); font-size: var(--text-sm); box-shadow: var(--shadow-2); }
 .assistant-chat__add-popover .popover__panel:popover-open { width: min(56rem, calc(100vw - var(--space-8))); }
-.assistant-chat__add-popover .popover__header { margin-bottom: var(--space-2); }
+.assistant-chat__add-popover .popover__header { margin-bottom: var(--space-1); }
+.assistant-chat__add-popover .popover__header--hidden-title-dismissible { display: contents; }
+.assistant-chat__add-popover .popover__header--hidden-title-dismissible .popover__close { position: absolute; top: var(--space-2); right: var(--space-2); margin: 0; }
+.assistant-chat__add-popover .popover__panel:popover-open { gap: var(--space-1); padding: var(--space-2); }
+.assistant-chat__add-popover .assistant-chat__tool-option,
+.assistant-chat__add-popover .assistant-chat__tool-row { padding-block: 2px; }
 .assistant-chat__tool-divider { width: 100%; margin: var(--space-1) 0; border: 0; border-top: 1px solid var(--border); }
 @supports (anchor-name: --popover-trigger) {
   .assistant-chat__add-popover .popover__panel:popover-open { width: anchor-size(--assistant-composer-card width); max-width: calc(100vw - var(--space-8)); position-anchor: --assistant-composer-card; }
