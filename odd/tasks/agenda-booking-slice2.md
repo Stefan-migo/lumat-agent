@@ -211,6 +211,12 @@ runner `cd web && npx vitest run`.
   no conflicts, then re-verified on the merged tree — focused web suite **115 passed**, `npm run build`
   **EXIT=0**, full backend suite **EXIT=0**, `git diff --check` clean. Not pushed; PR/merge is the
   owner's decision.
+- **Frontend slice reviewed (RDD, medium).** Lineage `review-28f10e678cb8f4bf`, 1 lens
+  (`review-reliability`); verdict **approved**, authority burned (`gentle-ai.review-acknowledged/v1`,
+  consumed revision `sha256:0386e586…`). Advisory non-blocking: **R3-001** — an in-flight schedule
+  load could overwrite the dialog with stale data if the selected technician changes before the
+  earlier request resolves (`web/src/components/shared/TechnicianScheduleDialog.tsx:31-45`). Recorded
+  as debt, not a blocker.
 - Worktree created from `origin/main` = `591f46eb`; branch `odd/agenda-booking-slice2`. Env: `uv sync`,
   `infra/.env` copied, test DB on port `6303`; sanity `tests/integration/test_scheduling.py` 18 passed
   (EXIT=0). Design settled (Option B). No source changes yet.
@@ -239,3 +245,9 @@ runner `cd web && npx vitest run`.
 - **Frontend editor (T5) — delivered on `odd/agenda-booking-slice2-frontend` (PR2), pending merge.**
   The operator UI (agenda technician roster + weekly schedule dialog) is implemented and verified;
   the backend remains usable via the API independently.
+- **R3-001 — schedule-load race on technician change (from the frontend review, non-blocking).** In
+  `TechnicianScheduleDialog`, an in-flight `getTechnicianSchedule` for a previous technician could
+  resolve after a newer selection and replace the current draft. In the current Agenda integration the
+  dialog is remounted per selected technician (closed before another opens), so the window is
+  theoretical; revisit if the dialog becomes a master-detail with in-place technician switching. Cite:
+  `web/src/components/shared/TechnicianScheduleDialog.tsx:31-45`.
