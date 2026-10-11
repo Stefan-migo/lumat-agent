@@ -127,3 +127,24 @@ Removing the Actividad tab leaves these `AssistantWorkspace` props unused
 - Dev stack for this worktree: API `:8001`, db `:5433`, Vite `:5174`
   (`VITE_API_TARGET=http://localhost:8001`). The isolated DB starts empty; the
   owner will do the visual pass.
+
+## Progress / Evidence — slice 1 (2026-10-11)
+
+- **WU1** `a2c58ed5` — `refactor(assistant): drop the thread activity tab and its unused props`
+- **WU2** `ec19f36b` — `feat(assistant): redesign the thread detail panel (Contexto)`
+- **Task doc** `cde71155` — this file.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → passed (parent re-ran it: clean).
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,142 tests passed
+    (writer); parent re-ran the targeted file → 16/16 passed.
+  - `npm run build` → passed (only the pre-existing >500 kB chunk warning).
+- **RDD**: mode `on` (global). `review assess --base-ref origin/main
+  --committed-only` → risk `medium`, `changed_lines` 274, `review_due: false`
+  (`under_budget`) → **no native review due for this slice**.
+- **Open findings (non-blocking)**: `fileTone()` duplicates the extension mapping
+  already in `assistantFileIcon.ts`; `ContextSection` types its icon prop as
+  `typeof Folder` instead of `LucideIcon`; one test reaches into the DOM via
+  `document.querySelector`.
+- **Pending**: owner's visual pass; `graphify --update` at session close (a
+  mid-session incremental update was run by the writer but did not regenerate
+  `GRAPH_REPORT.md`).
