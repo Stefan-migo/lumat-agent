@@ -662,3 +662,52 @@ reduction found, no shortcut with a known ceiling was added, and no authorized b
 Commits: `8da47ce7` (`feat(ui): allow visually hidden popover titles`), `87bfc07a`
 (`feat(assistant): map tool labels to Lucide icons`), and `4d593b59`
 (`feat(assistant): refine composer popovers and tray`).
+
+## Slice 13 — Popover anchoring and composer details
+
+Owner direction: make every popover anchor to its own trigger; keep empty-state composer popovers below
+their triggers with a visible gap, and place the active-conversation `+` popover entirely above the
+composer card. Remove tray count badge decoration, make the `+` trigger square/circular, and restore
+left/top textarea padding in active mode.
+
+- Give each `Popover` instance a sanitized unique anchor name through a root custom property; bind only
+  popover triggers/panels to it, leaving tooltip behavior unchanged. Cover two-instance uniqueness and
+  trigger/panel association in `Popover.test.tsx`.
+- Verify empty composer panels open downward without covering their triggers; in active mode, position the
+  `+` panel above the composer card edge rather than merely above its own trigger. Retain bounded panel
+  height and scrolling.
+- Render bare numeric counts for tray Archivos/Herramientas; force the `+` trigger to a fixed square with
+  no minimum width or padding; add active textarea left and top padding.
+- Update focused `AgentChat` tests for tray counts and composer classes/placement wiring.
+
+Graph Check before source edits: ran `graphify query "popover anchor positioning primitive trigger panel"` and
+`graphify path "Popover()" "AgentChat()"`; the query consulted `Popover()`, `Popover.tsx`,
+`Popover.test.tsx`, `AgentChat.tsx`, and `AgentChat()`. The path query found no directed path (ambiguous
+matches). Read `graphify-out/GRAPH_REPORT.md`; relevant UI nodes include `Popover()`, `AgentChat.tsx`,
+`Popover.test.tsx`, and `web/src/components/primitives/primitives.css`. The report initially lagged HEAD
+(`f460b09f` vs `bdbc6da0`), so its graph was incrementally refreshed before source edits.
+
+Implementation: `Popover` sanitizes React's `useId()` into a per-instance `--pop-anchor-*` value on its
+root; only popover triggers/panels consume that property, while tooltip anchoring remains on its previous
+shared name. This prevents each popover panel from resolving against another instance's trigger. Empty-state
+composer panels retain the downward primitive placement and gap. In active mode only the `+` panel anchors
+to the composer card and opens above its top edge. Panel height/scroll bounds remain intact. Tray counts are
+plain numbers; the `+` trigger now overrides the base minimum height to stay square; active textarea padding
+includes horizontal and top space. Tests cover instance uniqueness/association, plain counts, and active/
+empty composer markup; the browser positioning check covers the placement geometry.
+
+Verification from `web/`:
+- `npx tsc -b --force --noEmit` — passed (no output).
+- `npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` — passed (2 files, 64 tests); existing React `act(...)` warnings remain. The “confirms a copy with a transient label” test passed in this batch.
+- `npm run build` — passed; Vite emitted its existing advisory that the 848.89 kB JS chunk exceeds 500 kB.
+- Browser positioning check using a minimal reproduction of the implemented anchor declarations in installed Google Chrome `151.0.7922.137` via Playwright — CSS anchor positioning supported; empty panel bounds were top 69 / bottom 179 against trigger bottom 61 (8px gap); active panel bottom 333 against composer card top 341 (8px gap). No overlap in either tested placement.
+
+Ponytail: useId and native CSS anchor positioning are the minimum existing React/platform mechanisms; no
+new dependency, custom positioning runtime, or duplicate layout system was added. The fixed named composer
+card anchor is scoped only to the single active composer, while instance-specific anchors remain necessary
+for all popover triggers. The only shortcut is native CSS anchor-position support; the existing
+`@supports` guard preserves the non-anchor fallback when unsupported, so no known ceiling requires a
+`ponytail:` code comment and no authorized behavior was deferred.
+
+Commits: `f4ebc506` (`fix(ui): isolate popover anchor names`) and `077c717a`
+(`fix(assistant): refine composer popover placement`).
