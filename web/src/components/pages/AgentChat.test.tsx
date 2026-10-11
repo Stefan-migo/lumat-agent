@@ -89,7 +89,6 @@ describe("AgentChat", () => {
     expect(dialog.querySelector("h2")).toHaveClass("visually-hidden");
     expect(dialog.querySelector("h2")).toHaveTextContent("Herramientas del hilo");
     expect(dialog).not.toHaveTextContent(/\d+ de \d+ activadas/);
-    expect(screen.getByRole("button", { name: "Cerrar" })).toHaveAttribute("popovertarget", dialog.id);
     expect(dialog).toHaveTextContent("Adjuntar archivo");
     expect(dialog).toHaveTextContent("Sube un documento o una imagen");
     expect(dialog.querySelector(".assistant-chat__tool-chips")).toHaveClass("assistant-chat__tool-chips--stacked");

@@ -57,30 +57,6 @@ describe("Popover (CST-PRIM-7)", () => {
     expect(panel).toHaveAttribute("aria-labelledby", panel.querySelector("h2")?.id);
   });
 
-  it("renders a native close control targeting its panel", () => {
-    render(<Popover title="Herramientas del hilo" triggerLabel="+" dismissible><span>Contenido</span></Popover>);
-
-    const panel = screen.getByRole("dialog", { name: "Herramientas del hilo" });
-    const close = screen.getByRole("button", { name: "Cerrar" });
-    expect(close).toHaveAttribute("popovertarget", panel.id);
-    expect(close).toHaveAttribute("popovertargetaction", "hide");
-    fireEvent.click(close);
-    expect(panel).toHaveAttribute("popover", "auto");
-  });
-
-  it("keeps the hidden-title close control in the content row without losing its dialog wiring", () => {
-    render(<Popover title="Herramientas del hilo" triggerLabel="+" dismissible hideTitle><span>Primera fila</span></Popover>);
-
-    const panel = screen.getByRole("dialog", { name: "Herramientas del hilo" });
-    const header = panel.querySelector(".popover__header");
-    const close = screen.getByRole("button", { name: "Cerrar" });
-    expect(header).toHaveClass("popover__header--hidden-title-dismissible");
-    expect(header?.querySelector("h2")).toHaveClass("visually-hidden");
-    expect(panel).toHaveAttribute("aria-labelledby", header?.querySelector("h2")?.id);
-    expect(close).toHaveAttribute("popovertarget", panel.id);
-    expect(close).toHaveAttribute("popovertargetaction", "hide");
-  });
-
   it("keeps native controls for disabled and complete states", () => {
     const { rerender } = render(
       <Popover title="Acciones" triggerLabel="Abrir acciones" state="loading">

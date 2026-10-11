@@ -1124,7 +1124,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                 className="assistant-chat__textarea"
               />
               <div className="assistant-chat__composer-controls">
-                <div className="assistant-chat__add-popover"><Popover title="Herramientas del hilo" triggerLabel="+" dismissible hideTitle>
+                <div className="assistant-chat__add-popover"><Popover title="Herramientas del hilo" triggerLabel="+" hideTitle>
                   <label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker">
                     <Icon icon={Paperclip} size="sm" />
                     <span><strong>Adjuntar archivo</strong><small>Sube un documento o una imagen</small></span>
