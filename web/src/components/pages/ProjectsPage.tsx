@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, createProject, getProject, listProjects, updateProjectConfig } from "../../api";
 import type { Project, ProjectCandidate, ProjectDetailResponse, ProjectsResponse, Role } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -18,7 +18,7 @@ import { ProjectSkills } from "./ProjectSkills";
 import { ProjectAgents } from "./ProjectAgents";
 import "./ProjectsPage.css";
 
-export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs, role }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode; role?: Role }) {
+export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, role }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; role?: Role }) {
   const [form, setForm] = useState({ slug: "", name: "", purpose: "" });
   const [createdProjects, setCreatedProjects] = useState<ProjectsResponse | null>(null);
   const [creationError, setCreationError] = useState<{ detail: string; candidates: ProjectCandidate[] } | null>(null);
@@ -98,7 +98,6 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
   };
   const visibleProjects = createdProjects ?? projects;
   return <PageFrame title="Proyectos" meta={<span>Espacios de proyecto del asistente</span>} state={currentState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyectos" /> : currentState === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los proyectos" /> : undefined}>
-    {sectionTabs}
     <Card title="Crear proyecto">
       <form onSubmit={(event) => void create(event)}>
         <Input label="Slug" maxLength={100} required value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} />

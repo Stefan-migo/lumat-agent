@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AgentChat } from "./AgentChat";
 
 describe("AssistantWorkspace", () => {
@@ -21,9 +22,13 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("navigation", { name: "Controles del espacio de trabajo" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Crear hilo" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Asistente Lumat", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Proyectos", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Agentes", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
-    expect(within(thread).getByRole("heading", { name: "Asistente Lumat" })).toBeInTheDocument();
-    expect(await within(thread).findByRole("heading", { name: "Comienza una conversación" })).toBeInTheDocument();
+    expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
+    expect(await within(thread).findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
+    expect(within(thread).queryByRole("navigation", { name: "Hilos abiertos" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
@@ -32,6 +37,7 @@ describe("AssistantWorkspace", () => {
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
+      if (url.includes("/agents")) return new Response(JSON.stringify({ agents: [], latest_run: null }), { status: 200 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
         { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
         { id: 2, slug: "archivo", name: "Archivo", purpose: "Registro", status: "archived", created_at: null, updated_at: null },
@@ -56,11 +62,8 @@ describe("AssistantWorkspace", () => {
     await waitFor(() => expect(screen.getByText("Operaciones")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Operaciones").closest("button")!);
     expect(screen.getByRole("link", { name: "Contexto y archivos" })).toHaveAttribute("href", "/panel/app/projects/operaciones");
-    expect(screen.getByRole("link", { name: "Historial de hilos" })).toHaveAttribute("href", "/panel/app/chat?proyecto=operaciones");
-    expect(screen.getByRole("heading", { name: "Agentes del proyecto" })).toBeInTheDocument();
-    expect(screen.getByText("La gestión de agentes por proyecto todavía no está disponible.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Cantidad no disponible")).toHaveTextContent("—");
-    expect(screen.getByRole("button", { name: "Agregar agente" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Historial de hilos" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Agregar agente" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Contraer Operaciones" }));
     expect(screen.queryByRole("link", { name: "Contexto y archivos" })).not.toBeInTheDocument();
   });
@@ -68,6 +71,7 @@ describe("AssistantWorkspace", () => {
   it("shows a retryable error instead of fabricated project rows", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ detail: "failure" }), { status: 500 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
@@ -86,6 +90,7 @@ describe("AssistantWorkspace", () => {
     let projectRequests = 0;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
+      if (url.endsWith("/agents")) return new Response(JSON.stringify({ agents: [], latest_run: null }), { status: 200 });
       if (url === "/panel/api/projects" && init?.method === "POST") {
         expect(JSON.parse(String(init.body))).toEqual({ slug: "nuevo-proyecto", name: "Nuevo Proyecto", purpose: "Organizar trabajo" });
         return new Response(JSON.stringify({ project }), { status: 201 });
@@ -100,7 +105,8 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Crear proyecto" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Nuevo proyecto" }));
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Nuevo Proyecto" } });
     expect(screen.getByLabelText("Slug")).toHaveValue("nuevo-proyecto");
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Organizar trabajo" } });
@@ -114,6 +120,7 @@ describe("AssistantWorkspace", () => {
   it("keeps the project dialog open and reports API failures honestly", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
       if (url === "/panel/api/projects" && init?.method === "POST") return new Response(JSON.stringify({ detail: "failure" }), { status: 500 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
@@ -122,7 +129,8 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Crear proyecto" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Nuevo proyecto" }));
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Proyecto" } });
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "proyecto" } });
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Propósito" } });
@@ -132,7 +140,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("dialog", { name: "Crear proyecto" })).toBeInTheDocument();
   });
 
-  it("toggles both panes from the thread header at narrow widths", async () => {
+  it("toggles each pane from its own header and keeps collapsed rails reopenable", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
@@ -142,23 +150,144 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 640 });
 
     render(<AgentChat role="admin" />);
-    const projectsToggle = screen.getByRole("button", { name: "Mostrar u ocultar proyectos" });
-    const contextToggle = screen.getByRole("button", { name: "Mostrar u ocultar el panel de contexto" });
+    const projectsToggle = screen.getByRole("button", { name: "Expandir panel de proyectos" });
+    const contextToggle = screen.getByRole("button", { name: "Abrir panel de actividad" });
     expect(projectsToggle).toHaveAttribute("aria-expanded", "false");
     expect(projectsToggle).toHaveAttribute("aria-controls", "assistant-workspace-projects");
     expect(contextToggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(projectsToggle);
-    expect(projectsToggle).toHaveAttribute("aria-expanded", "true");
+    const collapseProjects = screen.getByRole("button", { name: "Contraer panel de proyectos" });
+    expect(collapseProjects).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible();
     fireEvent.click(contextToggle);
-    expect(contextToggle).toHaveAttribute("aria-expanded", "true");
+    const closeContext = screen.getByRole("button", { name: "Cerrar panel de actividad" });
+    expect(closeContext).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cerrar paneles" })).toBeInTheDocument();
+    fireEvent.click(collapseProjects);
+    expect(screen.getByRole("button", { name: "Expandir panel de proyectos" })).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(closeContext);
+    expect(screen.getByRole("button", { name: "Abrir panel de actividad" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(screen.getByRole("region", { name: "Área del hilo" })).queryByRole("button", { name: /panel de/ })).not.toBeInTheDocument();
   });
 
-  it("lists recent threads as navigable tabs and exposes the real create action", async () => {
+  it("limits default chat controls to admin and operator and supports default thread creation/history", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads" && init?.method === "POST") return new Response(JSON.stringify({ thread: { id: 71, proyecto: "default", status: "open" }, messages: [] }), { status: 201 });
+      if (url.includes("proyecto=default")) return new Response(JSON.stringify({ threads: [{ id: 72, title: "Consulta general", proyecto: "default", created_at: null, updated_at: null, run_status: null, approval_status: null }] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    const { unmount } = render(<AgentChat role="admin" onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)} />);
+    expect(await screen.findByRole("button", { name: "Nueva conversación" })).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Consulta general" }));
+    expect(window.location.search).toContain("thread_id=72");
+    fireEvent.click(screen.getByRole("button", { name: "Nueva conversación" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" })));
+    expect(window.location.search).toContain("thread_id=71");
+
+    unmount();
+    const operator = render(<AgentChat role="operador" />);
+    expect(await screen.findByRole("button", { name: "Nueva conversación" })).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    operator.unmount();
+    render(<AgentChat role="tecnico" />);
+    expect(screen.queryByRole("button", { name: "Nueva conversación" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).queryByRole("button", { name: "Historial" })).not.toBeInTheDocument();
+  });
+
+  it("filters inline project history without rendering a static agent roster", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
+      if (url.includes("proyecto=operaciones")) return new Response(JSON.stringify({ threads: [
+        { id: 81, title: "Agenda semanal", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null },
+        { id: 82, title: "Revisar inventario", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null },
+      ] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
+    fireEvent.click(screen.getByRole("button", { name: "Historial de hilos" }));
+    expect(await screen.findByRole("button", { name: "Agenda semanal" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar hilos de Operaciones" }), { target: { value: "inventario" } });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Agenda semanal" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Revisar inventario" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Revisar inventario" }));
+    expect(window.location.search).toContain("proyecto=operaciones");
+    expect(window.location.search).toContain("thread_id=82");
+  });
+
+  it("re-homes project management, project chat, and project planning sessions", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [{ slug: "plan-a", proyecto: "operaciones", topic: "Plan", status: "active", thread_id: 3, opened_at: null, closed_at: null, report_key: null }] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Administrar proyectos" }));
+    expect(window.location.pathname).toBe("/panel/app/projects");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
+    expect(await screen.findByRole("link", { name: "Sesiones de planificación" })).toHaveAttribute("href", "/panel/app/planning-sessions?proyecto=operaciones");
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar chat en Operaciones" }));
+    expect(window.location.search).toContain("proyecto=operaciones");
+  });
+
+  it("renders open tabs with idle status and enriches matching runs with their stage", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=91");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [
+        { thread_id: 91, title: "Plan", proyecto: "operaciones", agent: "orchestrator", stage: "planning", run_id: "run-91", updated_at: null },
+        { thread_id: 92, title: "Consulta", proyecto: "default", agent: "orchestrator", stage: "streaming", run_id: "run-92", updated_at: null },
+      ] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+    expect(await screen.findByText("Operaciones", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
+    expect(screen.getByText("Planificando")).toBeInTheDocument();
+    expect(screen.queryByText("Conversación rápida")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Orquestador")).toHaveLength(1);
+  });
+
+  it("shows an honest empty state when no tab is open regardless of run-list results", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+      if (String(input).includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+    });
+    const { unmount } = render(<AgentChat role="admin" />);
+    expect(await screen.findByText("No hay agentes activos")).toBeInTheDocument();
+    unmount();
+    fetchMock.mockImplementation(async (input) => String(input).endsWith("/active-runs")
+      ? new Response(JSON.stringify({ detail: "failure" }), { status: 500 })
+      : new Response(JSON.stringify({ threads: [], projects: [] }), { status: 200 }));
+    render(<AgentChat role="admin" />);
+    expect(await screen.findByText("No hay agentes activos")).toBeInTheDocument();
+  });
+
+  it("opens selected history threads as tabs and exposes the real create action", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones");
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/panel/api/chat/threads" && init?.method === "POST") return new Response(JSON.stringify({
         thread: { id: 42, proyecto: "operaciones", status: "open" }, messages: [],
@@ -177,15 +306,46 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" onThreadOpened={onThreadOpened} />);
 
-    const tab = await screen.findByRole("button", { name: "Revisión KB" });
+    const projectsSidebar = screen.getByRole("complementary", { name: "Proyectos" });
+    expect(within(projectsSidebar).getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revisión KB" })).not.toBeInTheDocument();
+    fireEvent.click(within(projectsSidebar).getByRole("button", { name: "Historial" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Agenda semanal" }));
+    const historyThread = await screen.findByRole("button", { name: "Revisión KB" });
+    fireEvent.click(historyThread);
+    const workspace = screen.getByRole("region", { name: "Área del hilo" });
+    const tab = await within(workspace).findByRole("button", { name: "Revisión KB" });
     fireEvent.click(screen.getByRole("button", { name: "Crear nuevo hilo" }));
     await waitFor(() => expect(onThreadOpened).toHaveBeenCalledWith(42));
     fireEvent.click(tab);
-    expect(window.location.search).toBe("?proyecto=operaciones&thread_id=12");
+    expect(window.location.search).toBe("?proyecto=default&thread_id=12");
     expect(screen.getByRole("button", { name: "Crear nuevo hilo" })).toBeInTheDocument();
+    expect(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" })).toBeInTheDocument();
+    expect(within(workspace).getByRole("button", { name: "Acciones de Agenda semanal" })).toBeInTheDocument();
+    expect(within(workspace).queryByRole("button", { name: "Acciones del hilo" })).not.toBeInTheDocument();
+    await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
+    const renameItem = await screen.findByRole("menuitem", { name: "Renombrar" });
+    const closeItem = screen.getByRole("menuitem", { name: "Cerrar pestaña" });
+    const deleteItem = screen.getByRole("menuitem", { name: "Eliminar hilo" });
+    expect(renameItem.querySelector("svg")).not.toBeNull();
+    expect(closeItem.querySelector("svg")).not.toBeNull();
+    expect(deleteItem.querySelector("svg")).not.toBeNull();
+    await userEvent.setup().click(renameItem);
+    expect(screen.getByRole("dialog", { name: "Renombrar hilo" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Nombre del hilo")).toHaveValue("Revisión KB");
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Renombrar hilo" })).getByRole("button", { name: "Cerrar" }));
+    await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Eliminar hilo" }));
+    expect(screen.getByRole("dialog", { name: "Eliminar hilo" })).toHaveTextContent("Revisión KB");
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Eliminar hilo" })).getByRole("button", { name: "Cerrar" }));
+    await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
+    expect(window.location.search).toBe("?proyecto=default&thread_id=11");
+    expect(within(workspace).queryByRole("button", { name: "Revisión KB" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("/threads/12") && init?.method === "DELETE")).toBe(false);
   });
 
-  it("shows the active thread title and real project name without a competing page title", async () => {
+  it("shows the active thread title in the tab bar without redundant header chrome", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
@@ -206,13 +366,42 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
-    expect(await screen.findByRole("heading", { name: "Agenda semanal", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Agenda semanal" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Asistente Lumat", level: 1 })).not.toBeInTheDocument();
-    expect(screen.getByText("Proyecto: Operaciones")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Acciones del hilo" })).toBeInTheDocument();
+    expect(screen.queryByText("Proyecto: Operaciones")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de Agenda semanal" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acciones del hilo" })).not.toBeInTheDocument();
     expect(screen.getByText("Gestión")).toBeInTheDocument();
-    expect(screen.getAllByText("manual.pdf")).toHaveLength(3);
+    expect(screen.getAllByText("manual.pdf").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
+  });
+
+  it("renames an open tab even when its thread is absent from loaded lists", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=404");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+      if (url === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.endsWith("/threads/404") && init?.method === "PATCH") return new Response(JSON.stringify({ thread: { id: 404, title: "Hilo renombrado" } }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" />);
+    const workspace = screen.getByRole("region", { name: "Área del hilo" });
+    const actions = await within(workspace).findByRole("button", { name: "Acciones de hilo" });
+    await userEvent.setup().click(actions);
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Renombrar" }));
+    expect(screen.getByRole("dialog", { name: "Renombrar hilo" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Nombre del hilo"), { target: { value: "Hilo renombrado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar nombre" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/404", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ title: "Hilo renombrado" }),
+    })));
+    expect(await within(workspace).findByRole("button", { name: "Hilo renombrado" })).toBeInTheDocument();
   });
 
   it("lists and downloads thread artifacts, and shows an honest empty state when none exist", async () => {

@@ -25,12 +25,14 @@ def test_planning_session_lifecycle_and_auth_matrix(client, make_user):
     assert opened.status_code == 201, opened.text
     body = opened.json()
     assert body["session"]["status"] == "active"
+    assert body["session"]["proyecto"] == "default"
     slug = body["session"]["slug"]
     thread_id = body["thread_id"]
 
     listed = client.get("/panel/api/planning/sessions")
     assert listed.status_code == 200
     assert listed.json()["sessions"][0]["slug"] == slug
+    assert listed.json()["sessions"][0]["proyecto"] == "default"
     detail = client.get(f"/panel/api/planning/sessions/{slug}")
     assert detail.status_code == 200
     assert detail.json()["thread"]["id"] == thread_id
@@ -44,6 +46,34 @@ def test_planning_session_lifecycle_and_auth_matrix(client, make_user):
     assert reopened.status_code == 200
     assert reopened.json()["session"]["status"] == "active"
     assert client.post(f"/panel/api/planning/sessions/{slug}/reopen").status_code == 409
+
+
+def test_planning_session_list_can_be_scoped_by_project(client, make_user):
+    _login(client, make_user)
+    project = client.post("/panel/api/projects", json={
+        "slug": "planning-scope", "name": "Planning Scope", "purpose": "Planning session filter test",
+    })
+    assert project.status_code == 201, project.text
+
+    default_session = client.post(
+        "/panel/api/planning/sessions", json={"topic": "Default planning"},
+    )
+    project_session = client.post(
+        "/panel/api/planning/sessions",
+        json={"topic": "Project planning", "proyecto": "planning-scope"},
+    )
+    assert default_session.status_code == 201, default_session.text
+    assert project_session.status_code == 201, project_session.text
+
+    all_sessions = client.get("/panel/api/planning/sessions")
+    assert all_sessions.status_code == 200
+    assert {session["proyecto"] for session in all_sessions.json()["sessions"]} == {
+        "default", "planning-scope",
+    }
+
+    scoped = client.get("/panel/api/planning/sessions?proyecto=planning-scope")
+    assert scoped.status_code == 200
+    assert [session["proyecto"] for session in scoped.json()["sessions"]] == ["planning-scope"]
 
 
 def test_planning_unknown_thread_and_forbidden_detail(client, make_user):

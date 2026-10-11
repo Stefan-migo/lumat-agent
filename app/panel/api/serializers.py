@@ -432,10 +432,25 @@ def to_internal_chat_thread_summary_dict(
     return {
         "id": thread.id,
         "title": thread.title,
+        "proyecto": thread.proyecto,
         "created_at": _iso(thread.created_at),
         "updated_at": _iso(thread.updated_at),
         "run_status": state.get("execution_status"),
         "approval_status": approval.get("status"),
+    }
+
+
+def to_active_chat_run_dict(thread: InternalChatThread) -> dict:
+    """Serialize the compact owner-scoped active-run indicator shape."""
+    live = (thread.assistant_state or {}).get("live") or {}
+    return {
+        "thread_id": thread.id,
+        "title": thread.title,
+        "proyecto": thread.proyecto,
+        "agent": "orchestrator",
+        "stage": live.get("stage"),
+        "run_id": live.get("run_id"),
+        "updated_at": _iso(thread.updated_at),
     }
 
 
@@ -452,7 +467,7 @@ def to_cortex_session_dict(thread: InternalChatThread) -> dict:
     """Expose the persisted Cortex lifecycle without leaking ORM state."""
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}
     fields = ("slug", "topic", "status", "opened_at", "closed_at", "report_key")
-    return {**{field: cortex.get(field) for field in fields}, "thread_id": thread.id}
+    return {**{field: cortex.get(field) for field in fields}, "thread_id": thread.id, "proyecto": thread.proyecto}
 
 
 def to_cortex_report_dict(memory: Memory | None) -> dict | None:

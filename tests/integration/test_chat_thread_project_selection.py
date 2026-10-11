@@ -92,3 +92,69 @@ def test_thread_creation_accepts_explicit_default_project(client, migrated_db):
 
     assert response.status_code == 201
     assert response.json()["thread"]["proyecto"] == "default"
+
+
+def test_thread_patch_moves_thread_to_owned_project(client, migrated_db):
+    owner_id = _user("chat-move-owner", "admin")
+    project_slug = f"move-{uuid4().hex[:8]}"
+    with SessionLocal() as session:
+        session.add(Project(
+            slug=project_slug, name="Move target", purpose="A", purpose_embedding=[0.0] * 384,
+            owner_id=owner_id,
+        ))
+        session.commit()
+    _login(client, "chat-move-owner")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+
+    response = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"proyecto": project_slug})
+
+    assert response.status_code == 200
+    assert response.json()["thread"]["proyecto"] == project_slug
+
+
+def test_thread_patch_rejects_invalid_project_and_default_for_non_business_role(client, migrated_db):
+    owner_id = _user("chat-move-invalid", "tecnico")
+    project_slug = f"tech-{uuid4().hex[:8]}"
+    with SessionLocal() as session:
+        session.add(Project(
+            slug=project_slug, name="Tech project", purpose="A", purpose_embedding=[0.0] * 384,
+            owner_id=owner_id,
+        ))
+        thread = InternalChatThread(user_id=owner_id, proyecto=project_slug)
+        session.add(thread)
+        session.commit()
+        thread_id = thread.id
+    _login(client, "chat-move-invalid")
+
+    invalid = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"proyecto": "missing-project"})
+    default = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"proyecto": "default"})
+
+    assert invalid.status_code == 400
+    assert default.status_code == 400
+
+
+def test_thread_patch_requires_a_field_and_preserves_title_rename(client, migrated_db):
+    _user("chat-patch-title", "admin")
+    _login(client, "chat-patch-title")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+
+    empty = client.patch(f"/panel/api/chat/threads/{thread_id}", json={})
+    renamed = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"title": "Renamed thread"})
+
+    assert empty.status_code == 422
+    assert renamed.status_code == 200
+    assert renamed.json()["thread"]["title"] == "Renamed thread"
+
+
+def test_thread_patch_conflicts_while_run_is_active(client, migrated_db):
+    owner_id = _user("chat-patch-running", "admin")
+    with SessionLocal() as session:
+        thread = InternalChatThread(user_id=owner_id, proyecto="default", assistant_state={"live": {"status": "running"}})
+        session.add(thread)
+        session.commit()
+        thread_id = thread.id
+    _login(client, "chat-patch-running")
+
+    response = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"title": "Blocked"})
+
+    assert response.status_code == 409

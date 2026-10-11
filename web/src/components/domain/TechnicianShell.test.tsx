@@ -4,9 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { TechnicianShell } from "./TechnicianShell";
 import type { User } from "../../types";
 
-vi.mock("../pages/AgentChat", () => ({ AgentChat: ({ sectionTabs, onThreadOpened, role }: { sectionTabs: React.ReactNode; onThreadOpened: (id: number) => void; role: string }) => <section><h1>AgentChat role={role}</h1>{sectionTabs}<button onClick={() => onThreadOpened(11)}>Open thread</button></section> }));
-vi.mock("../pages/ProjectsPage", () => ({ ProjectsPage: ({ sectionTabs }: { sectionTabs: React.ReactNode }) => <section><h1>ProjectsPage</h1>{sectionTabs}</section> }));
-vi.mock("../pages/PlanningSessions", () => ({ PlanningSessions: ({ sectionTabs }: { sectionTabs: React.ReactNode }) => <section><h1>PlanningSessions</h1>{sectionTabs}</section> }));
+vi.mock("../pages/AgentChat", () => ({ AgentChat: ({ onThreadOpened, role }: { onThreadOpened: (id: number) => void; role: string }) => <section><h1>AgentChat role={role}</h1><button onClick={() => onThreadOpened(11)}>Open thread</button></section> }));
+vi.mock("../pages/ProjectsPage", () => ({ ProjectsPage: () => <section><h1>ProjectsPage</h1></section> }));
+vi.mock("../pages/PlanningSessions", () => ({ PlanningSessions: () => <section><h1>PlanningSessions</h1></section> }));
 vi.mock("../pages/TechnicianAgenda", () => ({ TechnicianAgenda: () => <h1>TechnicianAgenda</h1> }));
 vi.mock("../pages/SelfProfile", () => ({ SelfProfile: () => <h1>Mi perfil</h1> }));
 
@@ -26,18 +26,16 @@ describe("TechnicianShell routing", () => {
     },
   );
 
-  it("navigates across assistant sections with URL-backed tabs and marks the active route", async () => {
+  it("navigates to projects through the technician footer navigation", async () => {
     render(<TechnicianShell user={tecnico} />);
     fireEvent.click(screen.getByRole("button", { name: "Asistente" }));
     expect(await screen.findByRole("heading", { name: "AgentChat role=tecnico" })).toBeInTheDocument();
-    const tabs = screen.getByRole("tablist", { name: "Secciones del asistente" });
-    for (const label of ["Chat", "Proyectos", "Sesiones de planificación"]) expect(within(tabs).getByRole("tab", { name: label })).toBeInTheDocument();
-    expect(within(tabs).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
-    await userEvent.setup().click(within(tabs).getByRole("tab", { name: "Proyectos" }));
+    const nav = screen.getByRole("navigation", { name: "Navegación del técnico" });
+    await userEvent.setup().click(within(nav).getByRole("button", { name: "Proyectos" }));
     expect(window.location.pathname).toBe("/panel/app/projects");
     expect(await screen.findByRole("heading", { name: "ProjectsPage" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/panel/app/projects");
-    expect(screen.getByRole("tab", { name: "Proyectos" })).toHaveAttribute("aria-selected", "true");
+    expect(within(nav).getByRole("button", { name: "Proyectos" })).toHaveAttribute("aria-current", "page");
   });
 
   it("resolves allowed deep links and denies disallowed views on browser navigation", async () => {

@@ -1083,15 +1083,17 @@
   display: none;
 }
 @supports (anchor-name: --popover-trigger) {
-  .popover__trigger,
-  .tooltip__trigger {
-    anchor-name: --primitive-trigger;
+  .popover .popover__trigger {
+    anchor-name: var(--pop-anchor);
   }
   .popover__panel {
-    position-anchor: --primitive-trigger;
+    position-anchor: var(--pop-anchor);
     inset: auto;
     margin: var(--space-2) 0 0;
     position-area: bottom span-right;
+  }
+  .tooltip__trigger {
+    anchor-name: --primitive-trigger;
   }
   .tooltip__content {
     position-anchor: --primitive-trigger;
@@ -2694,6 +2696,10 @@
 .assistant-chat__conversation { display: grid; grid-template-rows: minmax(18rem, 1fr) auto; width: min(100%, 48rem); min-width: 0; min-height: min(68vh, 48rem); }
 .assistant-chat__messages { display: grid; align-content: start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; }
 .assistant-chat__hero { display: grid; place-items: center; align-content: center; gap: var(--space-2); min-height: 18rem; padding: var(--space-6); text-align: center; }
+.assistant-chat__hero--welcome { gap: var(--space-4); }
+.assistant-chat__hero--welcome h2 { font-size: var(--text-3xl); }
+.assistant-chat__hero--welcome p { font-size: var(--text-xl); }
+.assistant-chat__hero--welcome > .btn { margin-top: var(--space-3); }
 .assistant-chat__hero h2, .assistant-chat__hero p { margin: 0; }
 .assistant-chat__hero p { color: var(--corp-fg-muted); }
 .assistant-chat__message-content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -2718,18 +2724,6 @@
 .assistant-chat__thinking-dots i:nth-child(2) { animation-delay: 150ms; }
 .assistant-chat__thinking-dots i:nth-child(3) { animation-delay: 300ms; }
 @keyframes assistant-thinking { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
-.assistant-chat__composer-wrap { position: sticky; bottom: 0; display: grid; gap: var(--space-2); padding: var(--space-3) 0; background: var(--brand-bg); }
-/* Composer — one rounded unit: textarea on top, control row underneath
-   (attach left, send right). The textarea keeps its label in the DOM for the
-   accessible name but the label is visually hidden; the container carries the
-   focus ring so the whole surface reads as one control (industry standard). */
-.assistant-chat__composer { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-1); }
-.assistant-chat__composer:has(.assistant-chat__textarea:focus) { border-color: var(--primary-700); box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring); }
-.assistant-chat__composer .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-.assistant-chat__textarea { width: 100%; min-width: 0; min-height: var(--space-8); max-height: 10rem; padding: var(--space-2) 0; border: 0; background: transparent; resize: none; overflow-y: auto; }
-/* Beats `.field__control:focus` (same specificity, later in the file). */
-.assistant-chat__textarea:focus, .assistant-chat__textarea:disabled { border: 0; outline: none; background: transparent; }
-.assistant-chat__composer-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .assistant-chat__attach { display: inline-flex; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-sm); color: var(--corp-primary); cursor: pointer; }
 .assistant-chat__attach:hover { background: color-mix(in srgb, var(--corp-primary) 10%, transparent); }
 .assistant-chat__attach:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
@@ -3316,3 +3310,4 @@
   .agenda-create-form__row--schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agenda-create-form__row--schedule > :first-child { grid-column: 1 / -1; }
 }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

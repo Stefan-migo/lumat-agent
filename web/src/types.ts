@@ -11,6 +11,7 @@ export interface User {
   id?: number;
   username: string;
   role: Role;
+  name?: string | null;
 }
 
 export interface SelfProfile extends User {
@@ -48,7 +49,7 @@ export interface ProjectCreateRequest { slug: string; name: string; purpose: str
 export interface ProjectCreateResponse { project: Project; }
 
 export type CortexStatus = 'active' | 'closed';
-export interface PlanningSession { slug: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; }
+export interface PlanningSession { slug: string; proyecto: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; }
 export interface CortexArtifact { id: number; scope: string; entity_id: string; tipo: MemoryType; titulo: string; contenido: string; topic_key: string; status: MemoryStatus; created_at: string | null; updated_at: string | null; }
 export interface PlanningSessionsResponse { sessions: PlanningSession[]; }
 export interface PlanningSessionOpenResponse { session: PlanningSession; thread_id: number; }
@@ -202,12 +203,15 @@ export interface InternalChatResponse { thread: InternalChatThread; messages: In
 export interface InternalChatThreadSummary {
   id: number;
   title: string | null;
+  proyecto: string;
   created_at: string | null;
   updated_at: string | null;
   run_status: string | null;
   approval_status: string | null;
 }
 export interface InternalChatThreadsResponse { threads: InternalChatThreadSummary[]; }
+export interface ActiveRun { thread_id: number; title: string | null; proyecto: string; agent: string; stage: string; run_id: string; updated_at: string | null; }
+export interface ActiveRunsResponse { active_runs: ActiveRun[]; }
 export interface AssistantAttachment { id: number; thread_id: number; filename: string; kind: string; content_type: string; size: number; created_at?: string | null; }
 export interface AssistantArtifact { id: number; thread_id: number; filename: string; content_type: string; size: number; created_at?: string | null; }
 export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
