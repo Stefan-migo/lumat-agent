@@ -922,6 +922,13 @@ preview.
   only with attachments; an image row opens the preview while a non-image does not; the filename carries
   the full name via `title`.
 
+Implementation: `AgentChat.tsx` (attachment tray above the composer card, a shared delete handler with a
+visible error, image-only preview through the `Dialog` primitive, and an image-load error state),
+`AgentChat.css` (tray, ellipsized filename, remove controls, preview sizing), and tests in
+`AgentChat.test.tsx`. Verification from `web/`: `npx tsc -b --force --noEmit` passed;
+`npx vitest run src/components/pages/AgentChat.test.tsx` → 63 passed (existing React `act(...)`
+warnings); `npm run build` passed (existing >500 kB advisory). Commit: `8f811c34`.
+
 ## Slice 19 — `+` dialog close placement and full-area drop (frontend)
 
 Owner visual review 2026-10-11: in the open `+` dialog the close `×` sits on its own line above the
@@ -936,3 +943,12 @@ first row and the dialog can be tighter; drag & drop only works over the compose
   Preserve the existing picker path.
 - Tests: `×` renders aligned with the first row (no standalone header row when `hideTitle`); dropping N
   files attaches N; the drop zone covers the conversation area.
+
+Implementation: `AgentChat.tsx:888-896, 1079` (drop handlers on the whole chat area, multiple files through
+the existing `attach` path, non-file drags ignored, active-run/upload guards kept), `AgentChat.css:50-55`
+(hidden-title close aligned alongside the first row, compacter `+` dialog), `Popover.tsx:38` (a modifier
+rendered only for the hidden-title dismissible case), and tests in `AgentChat.test.tsx` /
+`Popover.test.tsx`. Verification from `web/`: `npx tsc -b --force --noEmit` passed;
+`npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` → 71
+passed (existing React `act(...)` warnings); `npm run build` passed (existing >500 kB advisory). Commit:
+`3ba006f7`.
