@@ -11,6 +11,7 @@ export interface User {
   id?: number;
   username: string;
   role: Role;
+  name?: string | null;
 }
 
 export interface SelfProfile extends User {

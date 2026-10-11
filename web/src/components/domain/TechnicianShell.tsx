@@ -48,7 +48,7 @@ export function TechnicianShell({ user, onLogout, children }: TechnicianShellPro
   };
   const view = route.view;
   const page = view === 'chat'
-    ? <AgentChat role="tecnico" onThreadOpened={(id) => navigate({ view: 'chat', threadId: id })} />
+    ? <AgentChat role="tecnico" userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigate({ view: 'chat', threadId: id })} />
     : view === 'projects'
        ? <ProjectsPage projectSlug={route.projectSlug} onOpenProject={(slug) => navigate({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigate({ view: 'chat', projectSlug: slug })} />
       : view === 'planning-sessions'
