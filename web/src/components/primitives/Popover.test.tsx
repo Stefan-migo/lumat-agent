@@ -57,12 +57,11 @@ describe("Popover (CST-PRIM-7)", () => {
     expect(panel).toHaveAttribute("aria-labelledby", panel.querySelector("h2")?.id);
   });
 
-  it("renders the title accessory and a native close control targeting its panel", () => {
-    render(<Popover title="Herramientas del hilo" triggerLabel="+" dismissible titleAccessory={<span>1 de 2 activadas</span>}><span>Contenido</span></Popover>);
+  it("renders a native close control targeting its panel", () => {
+    render(<Popover title="Herramientas del hilo" triggerLabel="+" dismissible><span>Contenido</span></Popover>);
 
     const panel = screen.getByRole("dialog", { name: "Herramientas del hilo" });
     const close = screen.getByRole("button", { name: "Cerrar" });
-    expect(panel).toHaveTextContent("1 de 2 activadas");
     expect(close).toHaveAttribute("popovertarget", panel.id);
     expect(close).toHaveAttribute("popovertargetaction", "hide");
     fireEvent.click(close);

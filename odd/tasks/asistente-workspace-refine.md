@@ -799,4 +799,6 @@ or the full card width cannot fit; no authorized behavior was deferred. An optio
 could not launch because the installed Playwright browser executable is absent; no browser package download
 was attempted.
 
-Commits: pending verification-record commits.
+Commits: `1ba689bd` (`feat(assistant): simplify thread tool controls`) covers the tool UI, composer
+anchoring, tests, and this Slice 15 record; `PENDING` removes the now-unused `Popover.titleAccessory`
+prop and its accessory-specific test; `PENDING` removes the now-unused tool-label map and its unit test.
