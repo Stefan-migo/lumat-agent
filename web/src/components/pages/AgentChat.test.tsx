@@ -111,7 +111,7 @@ describe("AgentChat", () => {
       expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
     ));
     await waitFor(() => expect(toolToggle("tool.two")).toBeChecked());
-    expect(document.querySelector(".assistant-chat__tools-summary .badge")).toHaveTextContent("2");
+    expect(document.querySelector(".assistant-chat__tools-summary")).toHaveTextContent(/Herramientas\s+2/);
   });
 
   it("enables all available optional tools from the master switch", async () => {
@@ -209,7 +209,9 @@ describe("AgentChat", () => {
     expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
-    await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary .badge")).toHaveTextContent("1"));
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary > span")).toHaveTextContent("1"));
+    expect(document.querySelector(".assistant-chat__tools-summary .badge")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Archivos 0" }).querySelector(".badge")).not.toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__active-chips")).toBeNull();
     expect(screen.queryByRole("button", { name: /Herramientas/ })).not.toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__composer-bottom-row")).toHaveClass("assistant-chat__composer-bottom-row--grouped");
