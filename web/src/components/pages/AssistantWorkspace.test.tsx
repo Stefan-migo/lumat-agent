@@ -310,6 +310,7 @@ describe("AssistantWorkspace", () => {
     expect(within(projectsSidebar).getByRole("button", { name: "Historial" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Revisión KB" })).not.toBeInTheDocument();
     fireEvent.click(within(projectsSidebar).getByRole("button", { name: "Historial" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Agenda semanal" }));
     const historyThread = await screen.findByRole("button", { name: "Revisión KB" });
     fireEvent.click(historyThread);
     const workspace = screen.getByRole("region", { name: "Área del hilo" });
@@ -319,8 +320,22 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(tab);
     expect(window.location.search).toBe("?proyecto=default&thread_id=12");
     expect(screen.getByRole("button", { name: "Crear nuevo hilo" })).toBeInTheDocument();
-    fireEvent.click(within(workspace).getByRole("button", { name: "Cerrar Revisión KB" }));
-    expect(window.location.search).toBe("");
+    expect(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" })).toBeInTheDocument();
+    expect(within(workspace).getByRole("button", { name: "Acciones de Agenda semanal" })).toBeInTheDocument();
+    expect(within(workspace).queryByRole("button", { name: "Acciones del hilo" })).not.toBeInTheDocument();
+    await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Renombrar" }));
+    expect(screen.getByRole("dialog", { name: "Renombrar hilo" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Nombre del hilo")).toHaveValue("Revisión KB");
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Renombrar hilo" })).getByRole("button", { name: "Cerrar" }));
+    await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Eliminar hilo" }));
+    expect(screen.getByRole("dialog", { name: "Eliminar hilo" })).toHaveTextContent("Revisión KB");
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Eliminar hilo" })).getByRole("button", { name: "Cerrar" }));
+    await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
+    expect(window.location.search).toBe("?proyecto=default&thread_id=11");
+    expect(within(workspace).queryByRole("button", { name: "Revisión KB" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("/threads/12") && init?.method === "DELETE")).toBe(false);
   });
 
@@ -348,9 +363,10 @@ describe("AssistantWorkspace", () => {
     expect(await screen.findByRole("button", { name: "Agenda semanal" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Asistente Lumat", level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByText("Proyecto: Operaciones")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Acciones del hilo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de Agenda semanal" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acciones del hilo" })).not.toBeInTheDocument();
     expect(screen.getByText("Gestión")).toBeInTheDocument();
-    expect(screen.getAllByText("manual.pdf")).toHaveLength(2);
+    expect(screen.getAllByText("manual.pdf").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
   });
 

@@ -53,7 +53,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
   const activeProjectSlug = route.get("proyecto") || selectedProject || undefined;
-  const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const downloadArtifact = async (artifact: AssistantArtifact) => {
     setBusyArtifactId(artifact.id);
     setArtifactError(null);
@@ -373,22 +372,20 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                 <button type="button" aria-current={id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(id, thread?.proyecto)}>
                   {thread?.title || "Sin título"}
                 </button>
-                <button type="button" className="assistant-workspace__thread-close" aria-label={`Cerrar ${thread?.title || "hilo"}`} onClick={() => closeThreadTab(id)}>
-                  <Icon icon={X} size="sm" />
-                </button>
+                <Menu
+                  label={`Acciones de ${thread?.title || "hilo"}`}
+                  trigger="icon"
+                  items={[{ value: "rename", label: "Renombrar" }, { value: "close", label: "Cerrar pestaña" }, { value: "delete", label: "Eliminar hilo", tone: "danger" }]}
+                  onSelect={(value) => {
+                    setThreadActionError(null);
+                    if (value === "rename") { setRenameTarget(thread ?? null); setRenameTitle(thread?.title ?? ""); }
+                    else if (value === "close") closeThreadTab(id);
+                    else setDeleteTarget(thread ?? null);
+                  }}
+                />
               </div>;
             })}
           </div>
-          {activeThread ? <Menu
-            label="Acciones del hilo"
-            trigger="icon"
-            items={[{ value: "rename", label: "Renombrar" }, { value: "delete", label: "Eliminar", tone: "danger" }]}
-            onSelect={(value) => {
-              setThreadActionError(null);
-              if (value === "rename") { setRenameTarget(activeThread); setRenameTitle(activeThread.title ?? ""); }
-              else setDeleteTarget(activeThread);
-            }}
-          /> : null}
           <Button variant="tertiary" aria-label="Crear nuevo hilo" title="Crear nuevo hilo" onClick={onCreateThread}>
             <Icon icon={Plus} />
           </Button>
