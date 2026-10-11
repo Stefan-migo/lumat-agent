@@ -1095,3 +1095,36 @@ tab even when its thread is absent from loaded lists" test failed because the "R
 opened. Verification from `web/`: `npx tsc -b --force --noEmit` passed;
 `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` → 16 passed; `npm run build` passed
 (existing >500 kB advisory). Commits: `6615d97b`, `aef6a5a7`.
+
+## Slice 25 — Welcome empty state: copy, scale, and vertical centring (frontend)
+
+Owner visual review 2026-10-11 (5th round): the no-chat welcome screen is too small and sits near the top
+of a large empty area. The second line must read **"En qué trabajamos hoy"** (replacing
+"¿Con qué trabajamos hoy?"), everything must be **larger**, and the block must be **vertically centred**
+in the available area.
+
+- `AgentChat.tsx`: change the welcome hero's second line copy to `En qué trabajamos hoy`.
+- Enlarge the welcome hero: a clearly larger greeting (`--text-2xl`/`--text-3xl`), a larger second line
+  (`--text-lg`/`--text-xl`), and a larger CTA — do NOT resize the shared `.btn` for every consumer; scope
+  the larger font/padding to this hero's button.
+- **Vertical centring**: the block must sit centred in the available height. Investigate the height chain
+  (`.assistant-chat__surface` → `.assistant-chat__conversation` → `.assistant-chat__messages`): the empty
+  conversation's `min-height: min(68vh, 48rem)` plus the `flex: 0 0 auto` messages cell
+  (`AgentChat.css:32-34`) leave the block near the top of a taller area. Make the welcome state fill the
+  available height and centre its content.
+- Scope: only the no-chat welcome state. The thread-empty hero ("¿En qué trabajamos hoy?" + subtitle) and
+  every composer state must not regress.
+- Evidence: run a headless Chrome/Playwright geometry probe at ~1200×800 (Chrome is at
+  `/usr/bin/google-chrome`; the Playwright browser cache exists) and report the hero block's vertical
+  centre vs the viewport centre.
+- Tests: the welcome copy assertion updated; the rest stay green.
+
+Implementation: `AgentChat.tsx:900` (copy → `En qué trabajamos hoy`), `primitives.css:2699-2702` (welcome
+greeting `--text-3xl`, second line `--text-xl`, and a welcome-only CTA at `--text-lg` with larger padding —
+the shared `.btn` is untouched), `AgentChat.css:35-36` (welcome-only rules that let the messages cell grow
+and centre its content, scoped with `:has(.assistant-chat__hero--welcome)` so the thread-empty hero and the
+composer states are unaffected), and the updated assertion in `AgentChat.test.tsx`. Verification from
+`web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run src/components/pages/AgentChat.test.tsx` →
+64 passed; `npm run build` passed (existing >500 kB advisory). Headless Chrome probe at 1200×800: the hero
+block's vertical centre measured 400px against a 400px viewport centre (measured against a fixture using
+the repository CSS, not the live app). Commit: `ca8c5441`.
