@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Download, FileText, Folder, History, PanelRight, PanelLeft, Plus, X, MessageSquarePlus } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listChatThreads, listProjectAgents, listProjects, renameChatThread } from "../../api";
-import type { AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project, ProjectAgentsResponse, Role } from "../../types";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listProjects, renameChatThread } from "../../api";
+import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -28,7 +28,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [historySearch, setHistorySearch] = useState<Record<string, string>>({});
   const [defaultHistoryOpen, setDefaultHistoryOpen] = useState(false);
   const [defaultThreads, setDefaultThreads] = useState<{ state: "idle" | "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>({ state: "idle", threads: [] });
-  const [agents, setAgents] = useState<{ slug: string; state: "loading" | "ready" | "empty" | "error" | "denied"; data: ProjectAgentsResponse | null } | null>(null);
+  const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
@@ -70,17 +70,21 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   }, [projects, search]);
 
   useEffect(() => {
-    if (!selectedProject) { setAgents(null); return; }
     let current = true;
-    setAgents({ slug: selectedProject, state: "loading", data: null });
-    listProjectAgents(selectedProject).then((data) => {
-      if (!Array.isArray(data.agents)) throw new Error("Invalid project agent response");
-      if (current) setAgents({ slug: selectedProject, state: data.agents.length ? "ready" : "empty", data });
-    }).catch((error: unknown) => {
-      if (current) setAgents({ slug: selectedProject, state: error instanceof ApiError && error.status === 403 ? "denied" : "error", data: null });
-    });
-    return () => { current = false; };
-  }, [selectedProject]);
+    const refresh = async () => {
+      try {
+        const result = await listActiveRuns();
+        if (current) setActiveRuns({ state: result.active_runs.length ? "ready" : "empty", runs: result.active_runs });
+      } catch {
+        if (current) setActiveRuns({ state: "error", runs: [] });
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 5000);
+    return () => { current = false; window.clearInterval(interval); };
+  }, []);
+
+  const stageLabel = (stage: string) => ({ planning: "Planificando", executing: "Ejecutando", verifying: "Verificando", streaming: "Respondiendo" }[stage] ?? "En curso");
 
   const loadProjectThreads = async (slug: string) => {
     setProjectThreads((current) => ({ ...current, [slug]: { state: "loading", threads: [] } }));
@@ -219,13 +223,17 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         aria-label="Proyectos"
         data-collapsed={!projectsVisible}
       >
-        <header className="assistant-workspace__pane-header">
-          {projectsVisible ? <><h2>Proyectos</h2><div className="assistant-workspace__pane-actions">
-            {role === "admin" || role === "operador" ? <><Button variant="tertiary" aria-label="Nuevo chat predeterminado" title="Nuevo chat predeterminado" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /></Button><Button variant="tertiary" aria-label="Historial predeterminado" title="Historial predeterminado" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /></Button></> : null}
-            <Button variant="tertiary" aria-label="Crear proyecto" title="Crear proyecto" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} /></Button>
-            <button type="button" className="assistant-workspace__pane-toggle" aria-label="Contraer panel de proyectos" aria-expanded="true" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(false)}><Icon icon={PanelLeft} /></button>
-          </div></> : <button type="button" className="assistant-workspace__pane-toggle" aria-label="Expandir panel de proyectos" aria-expanded="false" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(true)}><Icon icon={PanelLeft} /></button>}
-        </header>
+        <section className="assistant-workspace__sidebar-header" aria-label="Asistente Lumat">
+          <header className="assistant-workspace__pane-header">
+            {projectsVisible ? <><h2>Asistente Lumat</h2><button type="button" className="assistant-workspace__pane-toggle" aria-label="Contraer panel de proyectos" aria-expanded="true" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(false)}><Icon icon={PanelLeft} /></button></> : <button type="button" className="assistant-workspace__pane-toggle" aria-label="Expandir panel de proyectos" aria-expanded="false" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(true)}><Icon icon={PanelLeft} /></button>}
+          </header>
+          {(role === "admin" || role === "operador") ? <div className="assistant-workspace__default-actions">
+            <Button variant="tertiary" aria-label="Nueva conversación" title="Nueva conversación" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /><span>Nueva conversación</span></Button>
+            <Button variant="tertiary" aria-label="Historial" title="Historial" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /><span>Historial</span></Button>
+          </div> : null}
+        </section>
+        <section className="assistant-workspace__project-section" aria-label="Proyectos" hidden={!projectsVisible}>
+          <header className="assistant-workspace__section-header"><h2>Proyectos</h2><Button variant="tertiary" aria-label="Nuevo proyecto" title="Nuevo proyecto" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} /><span>Nuevo proyecto</span></Button></header>
         {projectsVisible && defaultHistoryOpen ? <div className="assistant-workspace__default-history" aria-label="Hilos predeterminados">
           {defaultThreads.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
           {defaultThreads.state === "error" || defaultThreads.state === "denied" ? <StateMessage tone="danger" role="alert" title={defaultThreads.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
@@ -233,7 +241,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           {defaultThreads.state === "ready" ? <ul>{defaultThreads.threads.map((thread) => <li key={thread.id}><button type="button" onClick={() => navigateToThread(thread.id, "default")}>{thread.title || "Sin título"}</button></li>)}</ul> : null}
           {defaultThreads.state === "error" ? <Button variant="secondary" onClick={() => void loadDefaultThreads()}>Reintentar</Button> : null}
         </div> : null}
-        {projectsVisible ? <>
         <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
           {projectsData.state === "loading" ? (
@@ -302,11 +309,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             </Button>
           </div>
         </Dialog>
-        <section className="assistant-workspace__agents" aria-label="Agentes del proyecto">
-          <header><h3>Agentes del proyecto</h3><span>{agents?.slug === selectedProject ? agents.data?.agents.length ?? "—" : "—"}</span><Button variant="tertiary" aria-label="Agregar agente" disabled><Icon icon={Plus} /></Button></header>
-          {!selectedProject ? <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver sus agentes." /> : agents?.slug !== selectedProject || agents.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando agentes" /> : agents.state === "error" || agents.state === "denied" ? <StateMessage tone="danger" role="alert" title={agents.state === "denied" ? "No tienes permiso para ver los agentes de este proyecto." : "No pudimos cargar los agentes del proyecto."} /> : <>{agents.state === "empty" ? <EmptyState title="No hay agentes" description="Este proyecto no tiene agentes registrados." /> : <ul>{agents.data?.agents.map((agent) => <li key={agent.key}><strong>{agent.name}</strong><p>{agent.role}</p><p>{agent.description}</p>{agent.read_only ? <Badge tone="neutral">Solo lectura</Badge> : null}</li>)}</ul>}<p>Última ejecución: {agents.data?.latest_run?.status === "running" ? "En curso" : agents.data?.latest_run?.status === "completed" ? "Listo" : "—"}</p></>}
         </section>
-        </> : null}
+        <section className="assistant-workspace__agents" aria-label="Agentes" hidden={!projectsVisible}>
+          <header><h3>Agentes</h3></header>
+          {activeRuns.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando agentes activos" /> : activeRuns.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los agentes activos." /> : activeRuns.state === "empty" ? <EmptyState title="No hay agentes activos" /> : <ul>{activeRuns.runs.map((run) => <li key={`${run.thread_id}-${run.run_id}`}><strong>Orquestador</strong><p>{run.proyecto === "default" ? "Conversación rápida" : projects.find((project) => project.slug === run.proyecto)?.name ?? run.proyecto}</p><span>{stageLabel(run.stage)}</span></li>)}</ul>}
+        </section>
       </aside>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">

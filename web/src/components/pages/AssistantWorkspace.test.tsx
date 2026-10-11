@@ -21,6 +21,9 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("navigation", { name: "Controles del espacio de trabajo" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Crear hilo" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Asistente Lumat", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Proyectos", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Agentes", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
     expect(within(thread).getByRole("heading", { name: "Asistente Lumat" })).toBeInTheDocument();
     expect(await within(thread).findByRole("heading", { name: "Comienza una conversación" })).toBeInTheDocument();
@@ -58,10 +61,7 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(screen.getByText("Operaciones").closest("button")!);
     expect(screen.getByRole("link", { name: "Contexto y archivos" })).toHaveAttribute("href", "/panel/app/projects/operaciones");
     expect(screen.getByRole("button", { name: "Historial de hilos" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Agentes del proyecto" })).toBeInTheDocument();
-    expect(await screen.findByText("No hay agentes")).toBeInTheDocument();
-    expect(screen.getByText("0", { selector: ".assistant-workspace__agents header span" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Agregar agente" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Agregar agente" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Contraer Operaciones" }));
     expect(screen.queryByRole("link", { name: "Contexto y archivos" })).not.toBeInTheDocument();
   });
@@ -69,6 +69,7 @@ describe("AssistantWorkspace", () => {
   it("shows a retryable error instead of fabricated project rows", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ detail: "failure" }), { status: 500 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
@@ -102,7 +103,7 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Crear proyecto" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo proyecto" }));
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Nuevo Proyecto" } });
     expect(screen.getByLabelText("Slug")).toHaveValue("nuevo-proyecto");
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Organizar trabajo" } });
@@ -116,6 +117,7 @@ describe("AssistantWorkspace", () => {
   it("keeps the project dialog open and reports API failures honestly", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
       if (url === "/panel/api/projects" && init?.method === "POST") return new Response(JSON.stringify({ detail: "failure" }), { status: 500 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
@@ -124,7 +126,7 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Crear proyecto" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo proyecto" }));
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Proyecto" } });
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "proyecto" } });
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Propósito" } });
@@ -177,28 +179,27 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
 
     const { unmount } = render(<AgentChat role="admin" onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)} />);
-    expect(await screen.findByRole("button", { name: "Nuevo chat predeterminado" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Historial predeterminado" }));
+    expect(await screen.findByRole("button", { name: "Nueva conversación" })).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial" }));
     fireEvent.click(await screen.findByRole("button", { name: "Consulta general" }));
     expect(window.location.search).toContain("thread_id=72");
-    fireEvent.click(screen.getByRole("button", { name: "Nuevo chat predeterminado" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nueva conversación" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" })));
     expect(window.location.search).toContain("thread_id=71");
 
     unmount();
     const operator = render(<AgentChat role="operador" />);
-    expect(await screen.findByRole("button", { name: "Nuevo chat predeterminado" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Historial predeterminado" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Nueva conversación" })).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial" })).toBeInTheDocument();
     operator.unmount();
     render(<AgentChat role="tecnico" />);
-    expect(screen.queryByRole("button", { name: "Nuevo chat predeterminado" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Historial predeterminado" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nueva conversación" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).queryByRole("button", { name: "Historial" })).not.toBeInTheDocument();
   });
 
-  it("filters inline project history and renders real agent data and run status", async () => {
+  it("filters inline project history without rendering a static agent roster", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
-      if (url.includes("/panel/api/projects/operaciones/agents")) return new Response(JSON.stringify({ agents: [{ key: "planner", name: "Planificador", role: "Coordinación", description: "Organiza tareas.", read_only: true }], latest_run: { status: "running", tool: null, at: null } }), { status: 200 });
       if (url.includes("proyecto=operaciones")) return new Response(JSON.stringify({ threads: [
         { id: 81, title: "Agenda semanal", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null },
         { id: 82, title: "Revisar inventario", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null },
@@ -219,29 +220,43 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revisar inventario" }));
     expect(window.location.search).toContain("proyecto=operaciones");
     expect(window.location.search).toContain("thread_id=82");
-    expect(await screen.findByText("Planificador")).toBeInTheDocument();
-    expect(screen.getByText("Coordinación")).toBeInTheDocument();
-    expect(screen.getByText("Organiza tareas.")).toBeInTheDocument();
-    expect(screen.getByText("Solo lectura")).toBeInTheDocument();
-    expect(screen.getByText("Última ejecución: En curso")).toBeInTheDocument();
-    expect(screen.getByText("1", { selector: ".assistant-workspace__agents header span" })).toBeInTheDocument();
   });
 
-  it("keeps the agent roster loading state honest until the endpoint resolves", async () => {
-    let resolveAgents!: (response: Response) => void;
+  it("renders active orchestrator rows with resolved projects and stage labels", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
-      if (url.endsWith("/agents")) return await new Promise<Response>((resolve) => { resolveAgents = resolve; });
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [
+        { thread_id: 91, title: "Plan", proyecto: "operaciones", agent: "orchestrator", stage: "planning", run_id: "run-91", updated_at: null },
+        { thread_id: 92, title: "Consulta", proyecto: "default", agent: "orchestrator", stage: "streaming", run_id: "run-92", updated_at: null },
+      ] }), { status: 200 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
     });
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
-    expect(await screen.findByText("Cargando agentes")).toBeInTheDocument();
-    resolveAgents(new Response(JSON.stringify({ agents: [], latest_run: null }), { status: 200 }));
-    expect(await screen.findByText("No hay agentes")).toBeInTheDocument();
+    expect(await screen.findByText("Operaciones", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
+    expect(screen.getByText("Planificando")).toBeInTheDocument();
+    expect(screen.getByText("Conversación rápida")).toBeInTheDocument();
+    expect(screen.getByText("Respondiendo")).toBeInTheDocument();
+    expect(screen.getAllByText("Orquestador")).toHaveLength(2);
+  });
+
+  it("shows honest empty and error states for active runs", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+      if (String(input).includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+    });
+    const { unmount } = render(<AgentChat role="admin" />);
+    expect(await screen.findByText("No hay agentes activos")).toBeInTheDocument();
+    unmount();
+    fetchMock.mockImplementation(async (input) => String(input).endsWith("/active-runs")
+      ? new Response(JSON.stringify({ detail: "failure" }), { status: 500 })
+      : new Response(JSON.stringify({ threads: [], projects: [] }), { status: 200 }));
+    render(<AgentChat role="admin" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar los agentes activos");
   });
 
   it("lists recent threads as navigable tabs and exposes the real create action", async () => {
