@@ -32,6 +32,15 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Detalle del hilo" })).toBeInTheDocument();
+    expect(screen.getByText("Sin título")).toBeInTheDocument();
+    for (const title of ["Proyecto", "Recursos del proyecto", "Capacidades del asistente", "Archivos del hilo", "Artefactos del hilo", "Fuentes del hilo"]) {
+      expect(screen.getByRole("button", { name: new RegExp(title) })).toHaveAttribute("aria-controls");
+    }
+    expect(screen.getByRole("button", { name: "Proyecto" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Los adjuntos y resultados pertenecen a este hilo.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Recursos del proyecto/ }));
+    expect(screen.getByText("Selección de recursos aún no disponible.")).toBeInTheDocument();
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
@@ -151,7 +160,7 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" />);
     const projectsToggle = screen.getByRole("button", { name: "Expandir panel de proyectos" });
-    const contextToggle = screen.getByRole("button", { name: "Abrir panel de actividad" });
+    const contextToggle = screen.getByRole("button", { name: "Abrir panel del hilo" });
     expect(projectsToggle).toHaveAttribute("aria-expanded", "false");
     expect(projectsToggle).toHaveAttribute("aria-controls", "assistant-workspace-projects");
     expect(contextToggle).toHaveAttribute("aria-expanded", "false");
@@ -160,14 +169,14 @@ describe("AssistantWorkspace", () => {
     expect(collapseProjects).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible();
     fireEvent.click(contextToggle);
-    const closeContext = screen.getByRole("button", { name: "Cerrar panel de actividad" });
+    const closeContext = screen.getByRole("button", { name: "Cerrar panel del hilo" });
     expect(closeContext).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cerrar paneles" })).toBeInTheDocument();
     fireEvent.click(collapseProjects);
     expect(screen.getByRole("button", { name: "Expandir panel de proyectos" })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(closeContext);
-    expect(screen.getByRole("button", { name: "Abrir panel de actividad" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Abrir panel del hilo" })).toHaveAttribute("aria-expanded", "false");
     expect(within(screen.getByRole("region", { name: "Área del hilo" })).queryByRole("button", { name: /panel de/ })).not.toBeInTheDocument();
   });
 
@@ -374,6 +383,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByText("Gestión")).toBeInTheDocument();
     expect(screen.getAllByText("manual.pdf").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Detalle del hilo" }).parentElement).toHaveTextContent("Agenda semanal");
   });
 
   it("renames an open tab even when its thread is absent from loaded lists", async () => {
@@ -432,9 +442,9 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
-    expect(await screen.findByRole("heading", { name: "Artefactos del hilo" })).toBeInTheDocument();
-    expect(screen.getByText("reporte.csv")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Descargar reporte.csv" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("reporte.csv")).toBeInTheDocument();
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".assistant-workspace__file-list button")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download", expect.anything()));
   });
 
@@ -452,6 +462,7 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
-    expect(await screen.findByText("Sin artefactos")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("Los archivos que el asistente genere aparecerán aquí.")).toBeInTheDocument();
   });
 });
