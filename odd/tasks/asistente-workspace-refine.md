@@ -274,6 +274,57 @@ per-project tree item is impossible today.
 **Out:** palette/tokens; the composer; `PanelShell` global chrome (leave the shell treatment of
 projects/planning-sessions as-is unless it looks wrong in the visual review).
 
+## Slice 6 — Chat file/project controls (backend)
+
+Owner direction 2026-10-11 (visual review): the composer must let the user (a) **choose which project the
+chat belongs to** and (b) **attach files that already live in the project** to the thread. Neither exists
+today: a thread's `proyecto` is set only at creation, and thread attachments are created only by multipart
+upload. Owner confirmed **both**.
+
+### B4 — move a chat thread to another project
+`PATCH /chat/threads/{thread_id}` today only renames (required `title`).
+- Extend the body to accept optional `title` **and** optional `proyecto`; require at least one (422 otherwise).
+- Validate `proyecto` exactly like `create_thread` (`app/services/agent_chat.py:264`): resolve via
+  `projects.agent_context(session, proyecto, owner_id=user.id)`; `default` requires a business-memory role.
+- Reject with **409** while a run is active (mirror the tool-policy guard).
+- Update `thread.proyecto`, audit (`internal_chat.thread_project_changed`), return the thread summary.
+- `web/src/api.ts` — `setChatThreadProject(id, proyecto)` → `PATCH` with `{ proyecto }`.
+
+### B5 — attach an existing project file to a thread
+New route `POST /chat/threads/{thread_id}/attachments/from-project`, body `{ project_file_id: int }`.
+- The file must belong to the thread's project (`ProjectFile.project_id` == the thread's resolved project);
+  404 otherwise. `default` threads have no project → 400.
+- Respect `assistant_attachment_max_count` and the expiry cleanup, like `upload_attachment`.
+- Read the file bytes and create the `AssistantAttachment` via the same `store_attachment` path. NOTE:
+  `allowed_attachment` (assistant) accepts only pdf/csv/txt/images, while project files also allow
+  md/docx/xlsx — an unsupported project file must return **400** with a clear message (the frontend shows
+  it honestly; it must NOT offer to fabricate support).
+- Audit (`internal_chat.attachment_attached_from_project`), return the attachment dict.
+- `web/src/api.ts` — `attachProjectFileToThread(threadId, projectFileId)`; `web/src/types.ts` unchanged
+  (`AssistantAttachment` already exists).
+
+Strict backend TDD RED→GREEN for both: project change (valid/invalid slug/role guard/active-run 409);
+from-project attach (owned file ok, foreign file 404, unsupported type 400, count limit).
+
+## Slice 7 — Composer + empty state (frontend)
+
+Owner visual review 2026-10-11.
+- **Empty state (no chat open):** Momentum-style greeting — **time-based salutation + the user's saved
+  name (`SelfProfile.name`, fallback to `username`)** — and a single **"Iniciar conversación"** button.
+  Remove the thread-tabs bar (with its `+`) and the disabled composer while no chat is open.
+  Name plumbing: the `User` type must carry `name`; `/me` already returns it, but the login path does not —
+  refresh it so the greeting is correct right after login.
+- **Composer (chat open):**
+  - The **send button becomes a stop button** while a run is active; remove the separate "Detener ejecución"
+    block above the composer.
+  - **All tool toggles move inside the `+`** popover, with real Lumat design (today they are unstyled).
+  - **Fix the `+` button** (not centred).
+  - **Drag & drop** a file onto the chat → same `attach` path as the picker.
+  - **Bottom row below the composer** (quick access, outside the `+`): **project selector** (B4 → change the
+    thread's project) + **project files picker** (B5 → attach a file already in the project).
+  - Badge "Conversación rápida" → **"General"**.
+  - Remove the **"Conexión: … | Listo"** footer from the composer (the WS status is noise for this view).
+
 ## Acceptance criteria
 
 1. `npx tsc -b --force --noEmit`, `npx vitest run --no-file-parallelism`, `npm run build` green (from `web/`).
@@ -396,3 +447,28 @@ projects/planning-sessions as-is unless it looks wrong in the visual review).
   `review_due: false` (`under_budget`). No review opened; the reviewed boundary stays at `f8b2fa3f` and
   accumulates with the next slice. Slice 5 is up for owner visual review against the isolated env
   (Vite `:5174` → API `:8001`).
+
+- **Slice 6 (backend) + Slice 7 (frontend) opened 2026-10-11.** Owner visual review: (a) empty state =
+  Momentum-style greeting by the **saved name** + "Iniciar conversación"; (b) composer = send↔stop, tools
+  inside `+`, `+` centred, drag & drop, bottom row (project selector + project files), badge "General", no
+  "Conexión"; (c) two new backend endpoints (owner confirmed **both**). Graph Check consulted
+  `rename_chat_thread()`, `ProjectFile`, `store_attachment()`, `AgentChat()`, `AssistantWorkspace()`,
+  `AppShell()`.
+- B4/B5 — delivered in `a0919d16` (`feat(assistant): move threads and attach project files`). Strict TDD
+  RED→GREEN. `PATCH /chat/threads/{id}` accepts optional `{title?, proyecto?}` (409 while a run is active;
+  `default` needs a business-memory role). New `POST /chat/threads/{id}/attachments/from-project` (project
+  scope + type + count validation; unsupported types → honest 400). Backend full suite + 25 focused tests pass.
+- Slice 7 — delivered in `c16ed1ef`, `31d02f93`, `1381346f`. Empty state greeting (saved `name` via `/me`,
+  fallback username) + "Iniciar conversación"; thread-tabs hidden with no open tab; composer send↔stop;
+  tools moved into the `+` popover (styled); `+` centred; drag & drop; bottom row with the project selector
+  (B4) and project-file picker (B5); badge "General"; "Conexión" footer removed. Verification: tsc pass;
+  focused 69 tests; full 103 files / 1,107 tests; build pass.
+- **Slice 6+7 RDD review — approved and acknowledged (authority burned), 2026-10-11.** Lineage
+  `review-8e1822a6a3a1b5c8`, tier `medium`, lens `review-reliability`, 26 paths / 862 lines. Two
+  non-blocking advisories (follow-ups, do NOT re-review this candidate): **R3-001** — the login→`fetchMe`
+  name refresh (`web/src/app.tsx:46-47`) can resolve after logout and re-set the authenticated shell; guard
+  it with a cancellation / current-state check. **R3-002** — `attach_project_file` reads the stored path
+  (`app/panel/api/routes/chat.py:632-634`) without handling a missing/unreadable file → uncaught filesystem
+  error instead of a controlled response; wrap the read and answer honestly.
+- Known follow-ups to fold into a later slice: R3-001 and R3-002 above, plus the earlier tool-chip
+  "bloqueadas durante la ejecución" reason and the active-run poll error indicator.
