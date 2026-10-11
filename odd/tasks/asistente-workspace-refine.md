@@ -116,4 +116,12 @@ filter, so a per-project history/search is impossible today.
 - S3 — delivered in `28b8263b`; focused suite: 13/13 pass; project history search and thread navigation covered.
 - S4 — delivered in `28b8263b`; focused suite: 13/13 pass; roster, count, loading, and empty states covered.
 - Shared verification: `npx tsc -b --force --noEmit` and `npm run build` passed. `npx vitest run --no-file-parallelism` did not complete within 600 seconds; output included existing test timeouts and three AssistantWorkspace tests exceeding the 5-second per-test limit under the prolonged run. The focused AssistantWorkspace run passed after implementation.
-- Test-brittleness follow-up: routed the attachment, persisted-approval, and Cortex-close mocks by URL; Graphify path `AgentChat.test.tsx` → `AgentChat.tsx` → `uploadAssistantAttachment()`. `npx vitest run src/components/pages/AgentChat.test.tsx --no-file-parallelism`: 58/58 passed; `npx vitest run --no-file-parallelism`: 104 files, 1,110 tests passed.
+- Test-brittleness follow-up: routed the attachment, persisted-approval, and Cortex-close mocks by URL; Graphify path `AgentChat.test.tsx` → `AgentChat.tsx` → `uploadAssistantAttachment()`. `npx vitest run src/components/pages/AgentChat.test.tsx --no-file-parallelism`: 58/58 passed; `npx vitest run --no-file-parallelism`: 104 files, 1,110 tests passed. Commit `70a927e7`.
+- **Native RDD review — approved and acknowledged (authority burned), 2026-10-10.** Immutable transport
+  available this session. Lineage `review-602235d86ac6b39e`, tier `medium`, single lens
+  `review-reliability`, 0 findings across all 11 changed paths. Owner granted consent via the native
+  envelope; `review acknowledge-approved` returned `authority: burned`. Slice delivered on
+  `odd/asistente-lumat-frontend`; push/PR/merge are the owner's decision.
+- **Review env (owner visual review):** isolated compose project `lumat-asistente-lumat-frontend`
+  (API `:8001`, db `:5433`), admin seeded via `db/seed.sh`, plus 3 seeded projects + 4 threads
+  (script run in the api container). Vite `:5174` targets `VITE_API_TARGET=http://localhost:8001`.
