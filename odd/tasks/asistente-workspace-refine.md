@@ -616,4 +616,4 @@ Ponytail: the existing `resize` handler already supports multi-line growth, so n
 mechanism was added. CSS grid's existing auto-sized composer row provides bottom docking without layout
 restructuring. No shortcut with a known ceiling was introduced.
 
-Commit containing implementation and tests: to be recorded in the tracking follow-up.
+Implementation and tests: `c3796641` (`feat(assistant): dock composer for active conversations`).
