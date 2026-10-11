@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentChat as AgentChatView, COMMAND_CENTER_BREAKPOINTS, commandCenterTier, type AgentChatProps } from "./AgentChat";
 
+vi.mock("../../api", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../api")>(),
+  listActiveRuns: vi.fn().mockResolvedValue({ active_runs: [] }),
+}));
+
 function AgentChat(props: Omit<AgentChatProps, "role"> & { role?: AgentChatProps["role"] }) {
   const role = Object.hasOwn(props, "role") ? props.role : "admin";
   return <AgentChatView {...props} role={role as AgentChatProps["role"]} />;
@@ -17,6 +22,9 @@ const makeThread = (id = 4) => ({
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
+
+const chatHistoryButton = () => screen.getAllByRole("button", { name: "Historial" })
+  .find((button) => button.classList.contains("popover__trigger"))!;
 
 const sseResponse = (events: unknown[]) => {
   const body = events
@@ -424,7 +432,7 @@ describe("AgentChat", () => {
     );
 
     render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Historial" }));
+    fireEvent.click(chatHistoryButton());
 
     expect((await screen.findAllByText("Hoy")).length).toBeGreaterThan(0);
     expect(screen.queryByText("open")).not.toBeInTheDocument();
@@ -442,7 +450,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Historial" }));
+    fireEvent.click(chatHistoryButton());
     fireEvent.click(await screen.findByRole("button", { name: /renombrar consulta/i }));
     expect(screen.getByLabelText(/nuevo nombre/i)).toHaveValue("Consulta");
     fireEvent.click(screen.getAllByRole("button", { name: "Cancelar" })[0]);
@@ -462,7 +470,7 @@ describe("AgentChat", () => {
     );
 
     render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Historial" }));
+    fireEvent.click(chatHistoryButton());
     fireEvent.click(await screen.findByRole("button", { name: /eliminar consulta/i }));
     expect(screen.getByText(/Eliminar la conversación “Consulta”/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /eliminar consulta/i })).toBeInTheDocument();

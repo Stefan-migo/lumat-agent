@@ -82,6 +82,54 @@ filter, so a per-project history/search is impossible today.
 - [x] Count = roster length; the `+` stays disabled (no add contract). Honest loading/denied/error/empty
       states. No rows when no project is selected.
 
+## Slice 2 — Sidebar sections + active orchestrators (this pass)
+
+Restructure the workspace sidebar into **three sections** and make the Agentes section a live
+indicator of **active orchestrators**. Owner direction 2026-10-10. Full picture (orchestrators live +
+sub-agents live) is split: sub-agent live activity needs a new runtime in-progress signal and is a
+later slice.
+
+### B2 — owner-scoped active-run listing (backend)
+
+`GET /panel/api/chat/active-runs` (owner-scoped, `require_agent_surface_json`): list this owner's
+threads whose run is currently non-terminal so the sidebar can show active agents. Today the only
+project/agent read is the per-project static roster + single latest run; no cross-thread active list
+exists.
+
+- Select threads where `InternalChatThread.user_id == current.id` and
+  `assistant_state -> 'live' ->> 'status' == 'running'` (the only non-terminal status; terminal set is
+  `completed/failed/approval_pending/cancelled`, `agent_chat.py:_TERMINAL_RUN_STATUSES`). Exclude cortex
+  sessions as the existing list does.
+- Ordered by `updated_at` desc; bounded (e.g. `limit` default 50, 1..100).
+- Response: `{"active_runs": [{"thread_id", "title", "proyecto", "agent": "orchestrator", "stage", "run_id", "updated_at"}]}`
+  where `stage`/`run_id` come from `assistant_state.live`. The `agent` field is `"orchestrator"` today so
+  the later sub-agent slice can add rows without a shape change.
+- Strict backend TDD RED→GREEN: a running thread appears with its project + stage; a terminal thread does
+  not appear; another owner's running thread does not appear.
+
+### S5 — Sidebar three-section layout (frontend)
+
+- [x] Complete the three-section sidebar layout and retain the reopenable collapsed rail.
+- **Header section:** title "Asistente Lumat" with the pane collapse/expand toggle on the same row; below,
+  two actions **"Nueva conversación"** (create a `default`-namespace thread, admin/operador) and
+  **"Historial"** (default-namespace thread history). Reuses the S2 handlers, relocated + relabelled.
+  When the pane is collapsed, these render **icon-only** in the rail (label via accessible name only).
+- **Proyectos section:** "Proyectos" title with the **"Nuevo proyecto"** action on the same row; the
+  existing project tree (search + expandable `Contexto y archivos` / `Historial de hilos`) unchanged.
+- **Agentes section:** title only (**no `+` button**); renders the live active-agent list (S6).
+- Collapsed rail shows the toggle + the two header actions icon-only; Proyectos/Agentes bodies hide.
+- CSS + tests.
+
+### S6 — Active orchestrators indicator (frontend)
+
+- [x] Complete the polled active-orchestrator indicator with honest loading, empty, and error states.
+- Poll B2 (`listActiveRuns`) on an interval (e.g. every 5s) while the workspace is mounted; honest
+  loading/empty/error states. Render one row per active run: agent label "Orquestador" + the project
+  name (or "Conversación rápida" for the `default` namespace) + the live stage label.
+- Honest empty state: "No hay agentes activos".
+- No fabricated activity: only rows returned by the endpoint. (Sub-agent rows are a later slice.)
+- Tests with fake timers / mocked endpoint for the list, empty, and error states.
+
 ## Acceptance criteria
 
 1. `npx tsc -b --force --noEmit`, `npx vitest run --no-file-parallelism`, `npm run build` green (from `web/`).
@@ -134,3 +182,9 @@ filter, so a per-project history/search is impossible today.
 - Graphify consulted nodes `list_chat_threads`, `InternalChatThread`, `app/panel/api/routes/chat.py`,
   `app/models.py`, and `api/serializers.py`; focused path queries found no directed route-to-model
   path in this graph snapshot.
+- S5/S6 — delivered in `2467301e` (`feat(assistant): show live orchestrators in workspace sidebar`).
+  Focused `AssistantWorkspace` suite: 14/14 passed; full frontend suite: 104 files, 1,111/1,111
+  passed; `npx tsc -b --force --noEmit` passed; `npm run build` passed (Vite reported only the
+  existing >500 kB chunk-size advisory). Companion `AgentChat.test.tsx`: 58/58 passed.
+  Graphify consulted `AssistantWorkspace()`, `api.ts`, `types.ts`, and active-conversation route nodes;
+  directed `AssistantWorkspace()` → `api.ts`/`types.ts` paths were not present in this graph snapshot.
