@@ -3153,6 +3153,56 @@
 .agenda-page__sync { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .agenda-page__sync small { flex-basis: 100%; color: var(--corp-fg-muted); overflow-wrap: anywhere; }
 .agenda-page__layout { display: grid; gap: var(--space-5); min-width: 0; }
+.agenda-page__schedules {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-lg);
+  background: var(--brand-bg-elevated);
+}
+.agenda-page__schedules > summary {
+  display: flex;
+  min-height: var(--touch-target);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  list-style: none;
+  color: var(--corp-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.agenda-page__schedules > summary::-webkit-details-marker { display: none; }
+.agenda-page__schedules > summary::after {
+  width: var(--space-2);
+  height: var(--space-2);
+  flex: none;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(45deg);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+.agenda-page__schedules[open] > summary::after { transform: rotate(225deg); }
+.agenda-page__schedules > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.agenda-page__schedules > p { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.agenda-page__schedules-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.agenda-page__schedules-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.agenda-page__schedules-item > span { min-width: 0; overflow-wrap: anywhere; }
+.agenda-page__schedules-item > .btn { min-height: var(--touch-target); }
 @media (max-width: 40rem) {
   .agenda-page__section { padding: var(--space-4); }
   .agenda-page__visit-heading { grid-template-columns: auto minmax(0, 1fr) auto; }

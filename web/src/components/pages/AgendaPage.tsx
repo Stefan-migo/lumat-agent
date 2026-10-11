@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type SyntheticEvent } from "react";
 import { CalendarDays, CalendarPlus, CalendarX, Check, Clock3, ExternalLink, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -21,6 +21,7 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { AgendaTimeError, agendaDayLabel, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
 import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
+import { TechnicianScheduleDialog } from "../shared/TechnicianScheduleDialog";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 
@@ -67,6 +68,9 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [clients, setClients] = useState<Customer[]>([]);
   const [cases, setCases] = useState<Case[]>([]);
   const [technicians, setTechnicians] = useState<UserRef[]>([]);
+  const [rosterState, setRosterState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [rosterRequested, setRosterRequested] = useState(false);
+  const [scheduleTechnician, setScheduleTechnician] = useState<UserRef | null>(null);
   const [createForm, setCreateForm] = useState({ customer_id: "", case_id: "", technician_id: "", service: "", local_date: "", local_time: "09:00", duration_minutes: "60" });
   const [view, setView] = useState<AgendaCalendarView>("month");
   const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
@@ -165,6 +169,20 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     } catch (error) {
       setCreateFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined });
     }
+  };
+  const loadRoster = async () => {
+    setRosterRequested(true);
+    setRosterState("loading");
+    try {
+      const response = await fetchTechnicians();
+      setTechnicians(response?.technicians ?? []);
+      setRosterState("ready");
+    } catch {
+      setRosterState("error");
+    }
+  };
+  const expandRoster = (event: SyntheticEvent<HTMLDetailsElement>) => {
+    if (event.currentTarget.open && !rosterRequested) void loadRoster();
   };
   const create = async () => {
     if (createBusy) return;
@@ -284,8 +302,17 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /> : register}</Tabs></section>
-    </div>}
-    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita" icon={CalendarX} description="Indica el motivo de la cancelación de esta visita.">
+     </div>}
+     <details className="agenda-page__schedules" onToggle={expandRoster}>
+       <summary>Horarios de técnicos</summary>
+       <p>Define la disponibilidad semanal para que el asistente ofrezca horarios reales.</p>
+       {rosterState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}
+       {rosterState === "error" ? <div><StateMessage tone="danger" role="alert" title="No pudimos cargar los técnicos" detail="Intenta nuevamente para consultar sus horarios." /><Button variant="secondary" onClick={() => void loadRoster()}>Reintentar</Button></div> : null}
+       {rosterState === "ready" && technicians.length === 0 ? <p>No hay técnicos disponibles.</p> : null}
+       {rosterState === "ready" && technicians.length > 0 ? <ul className="agenda-page__schedules-list">{technicians.map((technician) => <li className="agenda-page__schedules-item" key={technician.id}><span>{technician.username}</span><Button variant="secondary" onClick={() => setScheduleTechnician(technician)}>Horarios</Button></li>)}</ul> : null}
+     </details>
+     {scheduleTechnician ? <TechnicianScheduleDialog open technician={scheduleTechnician} onClose={() => setScheduleTechnician(null)} /> : null}
+     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita" icon={CalendarX} description="Indica el motivo de la cancelación de esta visita.">
       {cancelTarget ? <div className="appointment-detail__selected-visit"><Icon icon={CalendarDays} /><div><strong>{cancelTarget.customer_name ?? "Cliente sin nombre"}</strong><time dateTime={cancelTarget.local_start}>{agendaPeriodLabel(localDate(cancelTarget.local_start), cancelTarget.timezone)} · {formatAgendaSlot(cancelTarget.starts_at, cancelTarget.timezone)}</time><span>Visita seleccionada</span></div></div> : null}
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />
       <p className="appointment-detail__closure-warning">Esta acción no se puede revertir desde la agenda.</p>

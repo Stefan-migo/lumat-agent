@@ -138,12 +138,12 @@ Any file outside this list needs a scope update here first.
       slot offer (the end-to-end unblock).
 
 ### T5 — Frontend editor
-- [ ] Web API client + types for the schedule routes.
-- [ ] Per-technician weekly schedule editor (reuse `HoursEditor` pattern) reachable from `AgendaPage`.
-- [ ] Vitest coverage for the editor behavior.
+- [x] Web API client + types for the schedule routes.
+- [x] Per-technician weekly schedule editor (reuse `HoursEditor` pattern) reachable from `AgendaPage`.
+- [x] Vitest coverage for the editor behavior.
 
 ### T6 — Evidence
-- [ ] Required checks run; results recorded below.
+- [x] Required checks run; results recorded below.
 
 ## Acceptance criteria
 
@@ -164,6 +164,18 @@ Any file outside this list needs a scope update here first.
 - `cd web && npx vitest run`
 - `cd web && npm run build`
 - `git diff --check`
+
+### Observed results (orchestrator, merged tree `e5d491bb`)
+
+- Focused web suite `npx vitest run src/api.test.ts src/components/primitives/Button.test.tsx
+  src/components/shared/TechnicianScheduleDialog.test.tsx src/components/pages/AgendaPage.test.tsx
+  src/stories/pages/AgendaPage.stories.test.tsx` — **115 passed** (EXIT=0).
+- `cd web && npm run build` — **EXIT=0** (existing >500 kB chunk advisory only).
+- Full backend suite `uv run pytest tests/ -q` on the merged tree — **EXIT=0**.
+- `git diff --check` — clean.
+- Full-page `npx vitest run` on the whole repo is **not** a usable signal in this environment: heavy
+  files exceed the 5s default timeout under load, producing spurious failures. `AgendaPage.test.tsx`
+  and `api.test.ts` are green in isolation (78/78 baseline).
 
 ## Graph Check (consulted)
 
@@ -187,6 +199,24 @@ runner `cd web && npx vitest run`.
 
 ## Progress log
 
+- **Frontend T5 authorized scope (2026-10-10).** Worktree `lumat-agent-odd-agenda-booking-slice2-frontend`; branch `odd/agenda-booking-slice2-frontend`; base `6cd5a72e`. Authorized frontend files are `web/src/types.ts`, `web/src/api.ts`, `web/src/api.test.ts`, `web/src/components/shared/TechnicianScheduleDialog.tsx`, `web/src/components/shared/TechnicianScheduleDialog.css`, `web/src/components/shared/TechnicianScheduleDialog.test.tsx`, `web/src/components/pages/AgendaPage.tsx`, `web/src/components/pages/AgendaPage.test.tsx`, `web/src/stories/pages/AgendaPage.stories.tsx`, `web/src/stories/pages/AgendaPage.stories.test.tsx`, `web/src/components/primitives/Button.tsx`, and `web/src/components/primitives/Button.test.tsx`. Button scope is added to forward `aria-pressed` for the schedule-day toggle, a newly authorized consumer. No other source files are authorized.
+- **T5 progress (2026-10-10).** Frontend implementation started in the dedicated worktree. Graph check consulted `AgendaPage()`, `apiFetch()`, `Dialog()`, `types.ts`, `api.test.ts`, `AgendaPage.test.tsx`, `AgendaPage.stories.tsx`, `AppointmentRescheduleDialog.tsx`, and the `AgendaPage.tsx` community; direct directed paths for the ambiguous AgendaPage→api.ts and Dialog→AppointmentRescheduleDialog queries were not found. Graph report freshness is at `576b07ef` while this branch is based on `6cd5a72e`.
+- **T5 complete (2026-10-10).** Added typed GET/PUT schedule clients; a weekly technician schedule dialog with loading, validation, save success/failure, and recoverable load error states; lazy technician roster on first native disclosure expansion; and roster/editor Storybook variants. `Button` now forwards `aria-pressed` after adding the authorized primitive scope. Verification: focused web suite **114 passed**; `npm run build` **EXIT=0** (Vite emitted its existing >500 kB chunk advisory); `git diff --check` clean. Commits: `46c04264` (scope update), `54572d3a` (Button ARIA), `2a889ece` (API), `8eded6df`   (dialog), `2906a919` (Agenda roster/stories).
+- **T5 finalized (2026-10-10, orchestrator).** Roster styling pass `9a14fc85` (`fix(agenda): style
+  technician schedule roster`) removed browser-default styling on the `Horarios de técnicos` disclosure
+  (tokenized summary + caret affordance, tokenized list rows), guarded by a CSS-contract assertion.
+  RDD assessment over `6cd5a72e..HEAD` (`--committed-only`): risk **medium**, changed_lines **386**,
+  `review_due: false` (`under_budget` — below the ~400 delivery budget), so no native review was
+  triggered. Pre-merge discipline: merged `origin/main` (`e5d491bb`; main had advanced to PR #559) with
+  no conflicts, then re-verified on the merged tree — focused web suite **115 passed**, `npm run build`
+  **EXIT=0**, full backend suite **EXIT=0**, `git diff --check` clean. Not pushed; PR/merge is the
+  owner's decision.
+- **Frontend slice reviewed (RDD, medium).** Lineage `review-28f10e678cb8f4bf`, 1 lens
+  (`review-reliability`); verdict **approved**, authority burned (`gentle-ai.review-acknowledged/v1`,
+  consumed revision `sha256:0386e586…`). Advisory non-blocking: **R3-001** — an in-flight schedule
+  load could overwrite the dialog with stale data if the selected technician changes before the
+  earlier request resolves (`web/src/components/shared/TechnicianScheduleDialog.tsx:31-45`). Recorded
+  as debt, not a blocker.
 - Worktree created from `origin/main` = `591f46eb`; branch `odd/agenda-booking-slice2`. Env: `uv sync`,
   `infra/.env` copied, test DB on port `6303`; sanity `tests/integration/test_scheduling.py` 18 passed
   (EXIT=0). Design settled (Option B). No source changes yet.
@@ -212,5 +242,12 @@ runner `cd web && npx vitest run`.
   generated from manually authored rows. Harmless while no product path creates manual blocks; revisit
   when one-off overrides/vacations are added (the deliberate "Out" item above). Cite:
   `app/services/technician_schedule.py:61-65`.
-- **Frontend editor (T5) — not started.** The backend is usable via the API today; the operator UI
-  lands in PR2.
+- **Frontend editor (T5) — delivered on `odd/agenda-booking-slice2-frontend` (PR2), pending merge.**
+  The operator UI (agenda technician roster + weekly schedule dialog) is implemented and verified;
+  the backend remains usable via the API independently.
+- **R3-001 — schedule-load race on technician change (from the frontend review, non-blocking).** In
+  `TechnicianScheduleDialog`, an in-flight `getTechnicianSchedule` for a previous technician could
+  resolve after a newer selection and replace the current draft. In the current Agenda integration the
+  dialog is remounted per selected technician (closed before another opens), so the window is
+  theoretical; revisit if the dialog becomes a master-detail with in-place technician switching. Cite:
+  `web/src/components/shared/TechnicianScheduleDialog.tsx:31-45`.

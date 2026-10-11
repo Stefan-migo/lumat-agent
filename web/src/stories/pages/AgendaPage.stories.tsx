@@ -117,3 +117,17 @@ export const Mobile: Story = {
   args: { data: DATA, state: "ready", width: 390 },
   parameters: { viewport: { defaultViewport: "mobile-compact" } },
 };
+export const TechnicianRoster: Story = {
+  args: { data: [], state: "empty", width: 1280 },
+  play: async ({ canvasElement }) => {
+    await userEvent.setup().click(within(canvasElement).getByText("Horarios de técnicos"));
+  },
+};
+export const TechnicianSchedule: Story = {
+  args: { data: [], state: "empty", width: 1280 },
+  play: async ({ canvasElement }) => {
+    const user = userEvent.setup();
+    await user.click(within(canvasElement).getByText("Horarios de técnicos"));
+    await user.click(await within(canvasElement).findByRole("button", { name: "Horarios" }));
+  },
+};
