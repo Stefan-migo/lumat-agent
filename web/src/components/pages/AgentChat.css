@@ -32,6 +32,8 @@
 .assistant-chat__surface--empty .assistant-chat__conversation { display: flex; flex-direction: column; justify-content: center; gap: var(--space-4); }
 .assistant-chat__surface--empty .assistant-chat__messages { flex: 0 0 auto; align-content: center; }
 .assistant-chat__surface--empty .assistant-chat__composer-stack { position: relative; align-self: center; }
+.assistant-chat__surface--empty .assistant-chat__conversation:has(.assistant-chat__hero--welcome) { min-height: 0; }
+.assistant-chat__surface--empty .assistant-chat__messages:has(.assistant-chat__hero--welcome) { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
 .assistant-chat__composer-controls .assistant-chat__send { margin-left: auto; }
 .assistant-chat__attachment-tray { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .assistant-chat__attachment { display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }

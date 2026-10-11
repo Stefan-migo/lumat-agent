@@ -357,7 +357,7 @@ describe("AgentChat", () => {
     expect(
       await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ }),
     ).toBeInTheDocument();
-    expect(screen.getByText("¿Con qué trabajamos hoy?")).toBeInTheDocument();
+    expect(screen.getByText("En qué trabajamos hoy")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/panel/api/chat/threads",

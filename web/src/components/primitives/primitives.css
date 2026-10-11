@@ -2697,7 +2697,9 @@
 .assistant-chat__messages { display: grid; align-content: start; gap: var(--space-4); min-width: 0; padding: var(--space-4) 0; }
 .assistant-chat__hero { display: grid; place-items: center; align-content: center; gap: var(--space-2); min-height: 18rem; padding: var(--space-6); text-align: center; }
 .assistant-chat__hero--welcome { gap: var(--space-4); }
-.assistant-chat__hero--welcome > .btn { margin-top: var(--space-3); }
+.assistant-chat__hero--welcome h2 { font-size: var(--text-3xl); }
+.assistant-chat__hero--welcome p { font-size: var(--text-xl); }
+.assistant-chat__hero--welcome > .btn { margin-top: var(--space-3); padding: var(--space-3) var(--space-5); font-size: var(--text-lg); }
 .assistant-chat__hero h2, .assistant-chat__hero p { margin: 0; }
 .assistant-chat__hero p { color: var(--corp-fg-muted); }
 .assistant-chat__message-content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
