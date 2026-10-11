@@ -48,7 +48,7 @@ export interface ProjectCreateRequest { slug: string; name: string; purpose: str
 export interface ProjectCreateResponse { project: Project; }
 
 export type CortexStatus = 'active' | 'closed';
-export interface PlanningSession { slug: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; }
+export interface PlanningSession { slug: string; proyecto: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; }
 export interface CortexArtifact { id: number; scope: string; entity_id: string; tipo: MemoryType; titulo: string; contenido: string; topic_key: string; status: MemoryStatus; created_at: string | null; updated_at: string | null; }
 export interface PlanningSessionsResponse { sessions: PlanningSession[]; }
 export interface PlanningSessionOpenResponse { session: PlanningSession; thread_id: number; }

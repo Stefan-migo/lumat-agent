@@ -288,7 +288,7 @@ export async function downloadProjectFile(slug: string, fileId: number, filename
 export async function downloadAssistantArtifact(threadId: number, artifactId: number, filename: string): Promise<void> {
   triggerDownload(await apiFetchBlob(`/panel/api/chat/threads/${threadId}/artifacts/${artifactId}/download`), filename);
 }
-export const listPlanningSessions = () => apiFetch<PlanningSessionsResponse>('/panel/api/planning/sessions');
+export const listPlanningSessions = (proyecto?: string) => apiFetch<PlanningSessionsResponse>(`/panel/api/planning/sessions${proyecto === undefined ? '' : `?proyecto=${encodeURIComponent(proyecto)}`}`);
 export const getPlanningSession = (slug: string) => apiFetch<PlanningSessionDetailResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}`);
 export const openPlanningSession = (topic: string, threadId?: number) => postJson<PlanningSessionOpenResponse>('/panel/api/planning/sessions', { topic, ...(threadId === undefined ? {} : { thread_id: threadId }) });
 export const closePlanningSession = (slug: string) => postJson<PlanningSessionCloseResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}/close`);

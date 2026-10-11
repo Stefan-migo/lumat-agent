@@ -122,6 +122,8 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/planning-sessions')).toEqual({ view: 'planning-sessions' });
     expect(parsePanelPath('/panel/app/planning-sessions/budget-review-8')).toEqual({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' });
     expect(pathForRoute({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' })).toBe('/panel/app/planning-sessions/budget-review-8');
+    expect(pathForRoute({ view: 'planning-sessions', projectSlug: 'project a' })).toBe('/panel/app/planning-sessions?proyecto=project%20a');
+    expect(parsePanelPath('/panel/app/planning-sessions?proyecto=ops')).toEqual({ view: 'planning-sessions', projectSlug: 'ops' });
   });
 
   it('keeps project and thread chat deep links URL-addressable', () => {

@@ -81,6 +81,7 @@ export function pathForRoute(route: PanelRoute): string {
   }
   if (route.view === 'projects' && route.projectSlug) return `${base}/${encodeURIComponent(route.projectSlug)}`;
   if (route.view === 'planning-sessions' && route.planningSessionSlug) return `${base}/${encodeURIComponent(route.planningSessionSlug)}`;
+  if (route.view === 'planning-sessions' && route.projectSlug) return `${base}?proyecto=${encodeURIComponent(route.projectSlug)}`;
   if (route.view === 'chat' && (route.projectSlug || route.threadId !== undefined)) {
     const params = new URLSearchParams();
     if (route.projectSlug) params.set('proyecto', route.projectSlug);
@@ -127,6 +128,10 @@ export function parsePanelPath(pathname: string): PanelRoute {
       const projectSlug = query.get('proyecto') || undefined;
       const threadId = query.get('thread_id') ? positiveId(query.get('thread_id')!) : null;
       return { view, ...(projectSlug ? { projectSlug } : {}), ...(threadId ? { threadId } : {}) };
+    }
+    if (view === 'planning-sessions') {
+      const projectSlug = query.get('proyecto') || undefined;
+      return { view, ...(projectSlug ? { projectSlug } : {}) };
     }
     return { view };
   }

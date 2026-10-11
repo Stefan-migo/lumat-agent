@@ -256,6 +256,9 @@ describe('planning session API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
     await listPlanningSessions();
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/planning/sessions', expect.anything());
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
+    await listPlanningSessions('project a');
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions?proyecto=project%20a', expect.anything());
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 201 }));
     await openPlanningSession('Budget review');
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions', expect.objectContaining({ method: 'POST', body: JSON.stringify({ topic: 'Budget review' }) }));
