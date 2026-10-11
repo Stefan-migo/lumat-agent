@@ -1050,3 +1050,48 @@ coordinating the batch, so the shared `uploading` boolean can be cleared by one 
 still in flight (`AgentChat.tsx:892-893`). Fold into a later slice alongside the earlier follow-ups
 (active-run poll error indicator, tool-chip "bloqueadas durante la ejecución" reason). No correction was
 opened; the reviewed boundary advances past `db11caa3`.
+
+## Slice 24 — Tab actions for unresolved threads, tab colours, and the tab-strip scrollbar (frontend)
+
+Owner visual review 2026-10-11 (4th round). Four items, one of them a real functional bug.
+
+**Bug — Renombrar (and Eliminar) silently do nothing.** Root cause (verified by reading the code):
+`listChatThreads` only returns threads that have **at least one message**
+(`app/panel/api/routes/chat.py:188-194`, the `EXISTS(InternalChatMessage)` clause), so a brand-new
+message-less thread is absent from `threads`, `defaultThreads.threads` and `projectThreads`. The per-tab
+menu resolves its summary from those lists and the handler runs `setRenameTarget(thread ?? null)` /
+`setDeleteTarget(thread ?? null)`, which is `null` when the summary is unresolved, so the dialog never
+opens. The tab label shows "Sin título" for exactly that unresolved case.
+- Make the per-tab actions carry the thread **`id`** (always known) instead of the resolved summary:
+  `renameTarget` / `deleteTarget` become `{ id: number; title: string | null }`, built from `id` and
+  `thread?.title ?? null`. Rename prefills the (possibly empty) title; the delete confirmation falls back
+  to "Sin título". `renameThread` / `deleteThread` keep using the target id; close is unchanged.
+- The rename PATCH returns `{ thread }`; use that response so the tab label updates **immediately** even
+  for a message-less thread the list endpoints omit (e.g. keep a `threadTitles` override map keyed by id,
+  or merge the returned summary into `threads`). Without this the rename would save but the label would
+  stay "Sin título".
+- Regression test: a tab whose thread is NOT in any loaded list still opens the rename dialog from its
+  `⋮`, submits `renameChatThread` with the tab id, and the label updates.
+
+**Visual.**
+- **Remove the strip separator:** `.assistant-workspace__thread-tabs` loses its `border-bottom`.
+- **Invert the tab fills:** active tab `background: var(--brand-bg)` (the general background) with **no**
+  bottom border, and drop the now-pointless `margin-bottom: -1px` / box-shadow separator mask (there is no
+  strip line to cover). Inactive tab takes a **perceptibly darker existing token** as its fill and
+  **keeps** a bottom border — `--bg` (#dbe1d6) is indistinguishable from `--brand-bg` (#dde2d6), so use
+  `--border` (#d5dad1), the next visibly darker token in the system.
+- **Kill the stray vertical scrollbar:** `.assistant-workspace__thread-tab-list` sets only
+  `overflow-x: auto`, so the block axis computes to `auto` too and a vertical scrollbar appears next to
+  the tabs. Add `overflow-y: hidden` (keep the horizontal scroll for many tabs).
+
+Tests: the regression above, plus the existing per-tab action coverage stays green.
+
+Implementation: `AssistantWorkspace.tsx` (rename/delete targets are now `{ id, title|null }` built from the
+tab id, and the rename response is applied so the label updates immediately for a message-less thread),
+`AssistantWorkspace.css` (strip `border-bottom` removed; `overflow-y: hidden` on the tab list; inactive
+fill `--border` with its bottom border kept; active fill `--brand-bg` with no bottom border and no mask),
+and the regression test in `AssistantWorkspace.test.tsx`. RED first: before the fix the "renames an open
+tab even when its thread is absent from loaded lists" test failed because the "Renombrar hilo" dialog never
+opened. Verification from `web/`: `npx tsc -b --force --noEmit` passed;
+`npx vitest run src/components/pages/AssistantWorkspace.test.tsx` → 16 passed; `npm run build` passed
+(existing >500 kB advisory). Commits: `6615d97b`, `aef6a5a7`.
