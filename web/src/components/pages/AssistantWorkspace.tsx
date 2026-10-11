@@ -19,11 +19,11 @@ import { pathForRoute } from "../domain/panelRoutes";
 import { assistantFileIcon } from "./assistantFileIcon";
 import "./AssistantWorkspace.css";
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
   const [search, setSearch] = useState("");
-  const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get("proyecto"));
+  const [expandedProjectSlug, setExpandedProjectSlug] = useState<string | null>(() => new URLSearchParams(window.location.search).get("proyecto"));
   const [projectThreads, setProjectThreads] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>>({});
   const [projectSessions, setProjectSessions] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; count: number }>>({});
   const [historySearch, setHistorySearch] = useState<Record<string, string>>({});
@@ -54,7 +54,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [contextSections, setContextSections] = useState<Record<string, boolean>>({ project: true });
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
-  const activeProjectSlug = route.get("proyecto") || selectedProject || undefined;
+  const routeProjectSlug = route.get("proyecto") || undefined;
+  const panelProjectSlug = activeProjectSlug ?? routeProjectSlug;
   const downloadArtifact = async (artifact: AssistantArtifact) => {
     setBusyArtifactId(artifact.id);
     setArtifactError(null);
@@ -67,9 +68,9 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
   const loadProjects = useCallback(() => listProjects(), []);
-  const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(activeProjectSlug));
+  const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(panelProjectSlug));
   const projects = projectsData.data?.projects ?? [];
-  const activeProject = projects.find((project) => project.slug === activeProjectSlug);
+  const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const activeThread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((thread) => thread.id === activeThreadId);
   const toggleContextSection = (id: string) => setContextSections((current) => ({ ...current, [id]: !(current[id] ?? false) }));
   const visibleProjects = useMemo(() => {
@@ -156,7 +157,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     return () => window.removeEventListener("popstate", onPopState);
   }, [loadThreadTabs]);
 
-  const navigateToThread = (threadId: number, projectSlug = activeProjectSlug) => {
+  const navigateToThread = (threadId: number, projectSlug = routeProjectSlug) => {
     setOpenThreadIds((current) => current.includes(threadId) ? current : [...current, threadId]);
     window.history.pushState({}, "", pathForRoute({
       view: "chat",
@@ -243,7 +244,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       setCreateProjectOpen(false);
       resetProjectForm();
       setSearch("");
-      setSelectedProject(project.slug);
+      setExpandedProjectSlug(project.slug);
       await projectsData.retry();
     } catch {
       setProjectCreateError("No pudimos crear el proyecto. Revisa los datos e inténtalo nuevamente.");
@@ -302,7 +303,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <EmptyState title="No encontramos proyectos" description="Prueba con otro nombre." />
           ) : (
             visibleProjects.map((project) => {
-              const expanded = selectedProject === project.slug;
+              const expanded = expandedProjectSlug === project.slug;
               return (
                   <div className="assistant-workspace__project-card" key={project.slug}>
                   <div className={`assistant-workspace__project-row${expanded ? " is-selected" : ""}`}>
@@ -311,7 +312,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                       className="assistant-workspace__project-select"
                       aria-label={`${expanded ? "Contraer" : "Expandir"} ${project.name}`}
                       aria-expanded={expanded}
-                      onClick={() => { setSelectedProject(expanded ? null : project.slug); if (!expanded && !projectSessions[project.slug]) void loadProjectSessions(project.slug); }}
+                      onClick={() => { setExpandedProjectSlug(expanded ? null : project.slug); if (!expanded && !projectSessions[project.slug]) void loadProjectSessions(project.slug); }}
                     >
                       <Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
                       <Icon icon={Folder} size="sm" />

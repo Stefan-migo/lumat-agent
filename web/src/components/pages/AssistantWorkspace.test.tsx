@@ -360,7 +360,7 @@ describe("AssistantWorkspace", () => {
   });
 
   it("shows the active thread title in the tab bar without redundant header chrome", async () => {
-    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=7");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
@@ -389,6 +389,28 @@ describe("AssistantWorkspace", () => {
     expect(screen.getAllByText("manual.pdf").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detalle del hilo" }).parentElement).toHaveTextContent("Agenda semanal");
+  });
+
+  it("uses the loaded thread project in the context panel, independently of sidebar expansion", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
+        { id: 2, slug: "archivo", name: "Archivo", purpose: "Registro", status: "archived", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [{ id: 7, title: "Agenda semanal", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.endsWith("/threads/7")) return new Response(JSON.stringify({ thread: { id: 7, proyecto: "archivo", status: "open" }, messages: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
+
+    expect(await screen.findByText("Registro")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expandir Archivo" }));
+    expect(screen.getByText("Registro")).toBeVisible();
+    expect(screen.queryByText("Gestión")).not.toBeInTheDocument();
   });
 
   it("renames an open tab even when its thread is absent from loaded lists", async () => {

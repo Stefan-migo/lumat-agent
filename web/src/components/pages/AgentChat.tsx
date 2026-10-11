@@ -834,6 +834,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}
       loadThreadTabs={Boolean(onThreadOpened)}
+      activeProjectSlug={thread?.proyecto ?? undefined}
       attachments={attachments}
       artifacts={artifacts}
     >
