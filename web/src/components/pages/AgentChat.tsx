@@ -897,7 +897,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
             {!thread && !loading ? (
               <div className="assistant-chat__hero assistant-chat__hero--welcome">
                 <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
-                <p>En qué trabajamos hoy</p>
+                <p>¿En qué trabajamos hoy?</p>
                 <Button onClick={() => void newChat()} disabled={loading}>Iniciar conversación</Button>
               </div>
             ) : null}

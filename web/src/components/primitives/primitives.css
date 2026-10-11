@@ -2699,7 +2699,7 @@
 .assistant-chat__hero--welcome { gap: var(--space-4); }
 .assistant-chat__hero--welcome h2 { font-size: var(--text-3xl); }
 .assistant-chat__hero--welcome p { font-size: var(--text-xl); }
-.assistant-chat__hero--welcome > .btn { margin-top: var(--space-3); padding: var(--space-3) var(--space-5); font-size: var(--text-lg); }
+.assistant-chat__hero--welcome > .btn { margin-top: var(--space-3); }
 .assistant-chat__hero h2, .assistant-chat__hero p { margin: 0; }
 .assistant-chat__hero p { color: var(--corp-fg-muted); }
 .assistant-chat__message-content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

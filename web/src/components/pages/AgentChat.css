@@ -1,7 +1,7 @@
-.assistant-chat { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; min-height: 0; }
+.assistant-chat { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .assistant-chat .page-frame__titlebar { display: none; }
 .page-frame.assistant-chat { max-width: none; margin: 0; }
-.assistant-chat .page-frame__content { display: grid; min-width: 0; min-height: 0; height: 100%; }
+.assistant-chat .page-frame__content { display: grid; grid-template-rows: minmax(0, 1fr); flex: 1 1 auto; min-width: 0; min-height: 0; }
 .assistant-chat__surface { min-width: 0; min-height: 0; height: 100%; }
 .assistant-chat__surface { align-items: stretch; }
 .assistant-chat__conversation { grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }

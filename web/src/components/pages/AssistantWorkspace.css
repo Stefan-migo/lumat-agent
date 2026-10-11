@@ -255,6 +255,7 @@
 }
 
 .assistant-workspace__thread > .page-frame {
+  grid-row: -2 / -1;
   min-width: 0;
   width: 100%;
   max-width: none;

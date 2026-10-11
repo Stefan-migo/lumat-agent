@@ -1128,3 +1128,35 @@ composer states are unaffected), and the updated assertion in `AgentChat.test.ts
 64 passed; `npm run build` passed (existing >500 kB advisory). Headless Chrome probe at 1200×800: the hero
 block's vertical centre measured 400px against a 400px viewport centre (measured against a fixture using
 the repository CSS, not the live app). Commit: `ca8c5441`.
+
+## Slice 26 — Welcome hero: real centring, smaller CTA, question marks (frontend)
+
+Owner visual review 2026-10-11 (6th round): the welcome block is still not centred (it sits near the top),
+the CTA is too large, and the second line needs its question marks.
+
+**Root cause — measured against the LIVE app with a headless-Chrome probe (the Slice 25 fixture probe was
+misleading).** Two layout breaks, both from empty grid tracks:
+1. `.assistant-workspace__thread` is a 3-row grid (`auto auto minmax(0, 1fr)`); with no open tab the tab nav
+   is not rendered, so `<main class="page-frame">` auto-placed into row 1 (`auto`) and the flexible row
+   stayed empty — the chat content was 360px inside a 669px area.
+2. `.assistant-chat` (the same `<main>`) also carried `grid-template-rows: auto auto minmax(0, 1fr)`
+   (`AgentChat.css:1`); with the titlebar hidden the content auto-placed into row 1 and row 3 stayed empty,
+   computing `320px 0px 277px`. So `.page-frame__content`'s `height: 100%` could not resolve and every
+   descendant collapsed to content height.
+
+Fixes:
+- `.assistant-workspace__thread > .page-frame { grid-row: -2 / -1; }` — the chat content occupies the
+  flexible row.
+- `.assistant-chat` becomes `display: flex; flex-direction: column` (no empty tracks; the flex gap applies
+  only between real items, so the hidden titlebar no longer injects a 20px offset), with
+  `.assistant-chat .page-frame__content { grid-template-rows: minmax(0, 1fr); flex: 1 1 auto; }` so the
+  surface resolves to the full height.
+
+Also: the welcome CTA returns to the default button size (the text stays large — the button does not), and
+the second line becomes `¿En qué trabajamos hoy?`.
+
+Measured (headless Chrome against the live app, 1200×800): hero centre **442** vs chat-area centre **442**
+(vertical delta 0); hero centre-x **612** vs area centre-x **612** (horizontal delta 0). Verification from
+`web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run src/components/pages/AgentChat.test.tsx
+src/components/pages/AssistantWorkspace.test.tsx` → 80 passed; `npm run build` passed (existing >500 kB
+advisory).
