@@ -1,9 +1,10 @@
 .assistant-chat { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; min-height: 0; }
+.assistant-chat .page-frame__titlebar { display: none; }
 .page-frame.assistant-chat { max-width: none; margin: 0; }
 .assistant-chat .page-frame__content { display: grid; min-width: 0; min-height: 0; height: 100%; }
 .assistant-chat__surface { min-width: 0; min-height: 0; height: 100%; }
 .assistant-chat__surface { align-items: stretch; }
-.assistant-chat__conversation { grid-template-rows: minmax(0, 1fr) auto; width: 100%; max-width: none; height: 100%; min-height: 0; }
+.assistant-chat__conversation { grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
 .assistant-chat__messages { min-height: 0; overflow-y: auto; }
 
 .assistant-chat .ai-agent-grammar__bubble-row { align-items: flex-start; }
@@ -14,6 +15,17 @@
 .assistant-chat__composer-wrap { padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .assistant-chat__composer { box-shadow: none; }
 .assistant-chat__composer-controls { justify-content: flex-start; }
+.assistant-chat__tool-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.assistant-chat__tool-chip, .assistant-chat__project-chip { padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--corp-text); font: inherit; font-size: var(--text-xs); }
+.assistant-chat__tool-chip { cursor: pointer; }
+.assistant-chat__tool-chip[aria-pressed="true"] { border-color: var(--primary-700); background: var(--primary-100); }
+.assistant-chat__tool-chip:disabled { opacity: .6; cursor: not-allowed; }
+.assistant-chat__stop-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.assistant-chat__stop-control p { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-xs); }
+.assistant-chat__status { gap: var(--space-1) var(--space-2); }
+.assistant-chat__surface--empty .assistant-chat__conversation { display: flex; flex-direction: column; justify-content: center; gap: var(--space-4); }
+.assistant-chat__surface--empty .assistant-chat__messages { flex: 0 0 auto; align-content: center; }
+.assistant-chat__surface--empty .assistant-chat__composer-wrap { position: static; align-self: center; }
 .assistant-chat__composer-controls .assistant-chat__send { margin-left: auto; }
 .assistant-chat__attachment-list { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .assistant-chat__attachment { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; overflow-wrap: anywhere; background: var(--surface); }

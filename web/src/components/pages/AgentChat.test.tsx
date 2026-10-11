@@ -23,9 +23,6 @@ const makeThread = (id = 4) => ({
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 
-const chatHistoryButton = () => screen.getAllByRole("button", { name: "Historial" })
-  .find((button) => button.classList.contains("popover__trigger"))!;
-
 const sseResponse = (events: unknown[]) => {
   const body = events
     .map((event) => `data: ${JSON.stringify(event)}\n\n`)
@@ -85,7 +82,6 @@ describe("AgentChat", () => {
     );
     render(<AgentChat threadId={4} />);
     await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
-    fireEvent.click(screen.getByRole("button", { name: "Herramientas" }));
     expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "tool.two" })).not.toBeChecked();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
@@ -99,7 +95,6 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
@@ -116,7 +111,6 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
     fireEvent.click(await screen.findByRole("button", { name: "Restablecer al proyecto" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
@@ -133,9 +127,7 @@ describe("AgentChat", () => {
       }),
     );
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
     expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Restablecer al proyecto" })).toBeDisabled();
   });
 
   it("shows stop only for an active run and sends its current run id", async () => {
@@ -177,7 +169,6 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
@@ -202,7 +193,6 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse({ detail: "denied" }, 403) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("denied");
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -212,7 +202,6 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse(policy({ available: [], opt_in_enabled: [] })) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
     expect(await screen.findByText("No hay herramientas opcionales disponibles.")).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -241,7 +230,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat role={undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Crear nuevo hilo" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
@@ -259,7 +248,7 @@ describe("AgentChat", () => {
   it("does not create a chat when the user has no projects", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ projects: [], threads: [] }));
     render(<AgentChat role={undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Crear nuevo hilo" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/proyecto primero/i);
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
   });
@@ -274,7 +263,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat role="admin" onThreadOpened={onThreadOpened} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Nueva conversación" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads",
@@ -293,7 +282,7 @@ describe("AgentChat", () => {
     );
 
     render(<AgentChat role="tecnico" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Crear nuevo hilo" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
@@ -404,7 +393,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat />);
     await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
-    fireEvent.click(screen.getByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crear nuevo hilo" }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -415,121 +404,12 @@ describe("AgentChat", () => {
     expect(createdPayload).toEqual({ proyecto: "ops" });
   });
 
-  it("renders history with Spanish grouping and no raw status", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("?limit=20")
-        ? jsonResponse({
-            threads: [
-              {
-                id: 1,
-                title: "Consulta",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              },
-            ],
-          })
-        : jsonResponse({ threads: [] }),
-    );
-
+  it("removes the redundant inline context panel", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
     render(<AgentChat />);
-    fireEvent.click(chatHistoryButton());
-
-    expect((await screen.findAllByText("Hoy")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("open")).not.toBeInTheDocument();
-  });
-
-  it("renames a thread through a prefilled dialog and cancels without a call", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const path = String(input);
-      if (path.includes("?limit=20")) {
-        return jsonResponse({
-          threads: [{ id: 1, title: "Consulta", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
-        });
-      }
-      return jsonResponse({ threads: [] });
-    });
-
-    render(<AgentChat />);
-    fireEvent.click(chatHistoryButton());
-    fireEvent.click(await screen.findByRole("button", { name: /renombrar consulta/i }));
-    expect(screen.getByLabelText(/nuevo nombre/i)).toHaveValue("Consulta");
-    fireEvent.click(screen.getAllByRole("button", { name: "Cancelar" })[0]);
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/panel/api/chat/threads/1",
-      expect.objectContaining({ method: "PATCH" }),
-    );
-  });
-
-  it("confirms deletion in a named dialog instead of using a browser confirm", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("?limit=20")
-        ? jsonResponse({
-            threads: [{ id: 1, title: "Consulta", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
-          })
-        : jsonResponse({ threads: [] }),
-    );
-
-    render(<AgentChat />);
-    fireEvent.click(chatHistoryButton());
-    fireEvent.click(await screen.findByRole("button", { name: /eliminar consulta/i }));
-    expect(screen.getByText(/Eliminar la conversación “Consulta”/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /eliminar consulta/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Eliminar conversación" }));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/chat/threads/1",
-        expect.objectContaining({ method: "DELETE" }),
-      ),
-    );
-  });
-
-  it("keeps Contexto closed until requested and renders assistant capabilities", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("/assistant/capabilities")
-        ? jsonResponse({
-            tools: [{ name: "kb.retrieve", description: "Busca en la base", read_only: true, write: false }],
-            personas: ["personas/assistant.md"],
-            prompts: [],
-            kb_available: true,
-            memory_available: false,
-          })
-        : jsonResponse({ threads: [] }),
-    );
-
-    render(<AgentChat />);
-    expect(
-      screen.queryByRole("complementary", { name: "Contexto" }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Contexto" }));
-
-    const context = screen.getByRole("complementary", { name: "Contexto" });
-    expect(await within(context).findByText("Herramientas disponibles: 1")).toBeInTheDocument();
-    expect(context).toHaveTextContent("Base de conocimientos: Disponible");
-    expect(context).toHaveTextContent("Memoria: No disponible");
-    expect(context).toHaveTextContent("Persona activa: Asistente Lumat");
-    expect(context).not.toHaveTextContent("Conexión");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/panel/api/assistant/capabilities",
-      expect.anything(),
-    );
-  });
-
-  it("shows an honest capabilities error in Contexto", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("/assistant/capabilities")
-        ? jsonResponse({ detail: "forbidden" }, 403)
-        : jsonResponse({ threads: [] }),
-    );
-
-    render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Contexto" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "No pudimos cargar las capacidades del asistente.",
-    );
-    expect(screen.getByRole("complementary", { name: "Contexto" })).not.toHaveTextContent(
-      "Cargando capacidades",
-    );
+    await screen.findByRole("heading", { name: "Comienza una conversación" });
+    expect(screen.queryByRole("button", { name: "Contexto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Contexto" })).not.toBeInTheDocument();
   });
 
   it("renders directional messages with exact timestamps and copy controls", async () => {
