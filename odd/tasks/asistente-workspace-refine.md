@@ -617,3 +617,48 @@ mechanism was added. CSS grid's existing auto-sized composer row provides bottom
 restructuring. No shortcut with a known ceiling was introduced.
 
 Implementation and tests: `c3796641` (`feat(assistant): dock composer for active conversations`).
+
+## Slice 12 — Composer popover direction and density
+
+Owner direction: empty-state composer popovers open downward, while the active-state `+` popover opens
+upward at chatbox width. Compact the tool, project, and files dialogs; tighten and rebalance the tray.
+
+- Keep accessible naming while visually hiding the `+` dialog title; render compact icon/name/toggle tool
+  rows with consistent toggle alignment and no per-tool descriptions.
+- Give every tool a Lucide icon with a neutral fallback; preserve grouped headers, master toggle, file
+  attachment, reset, active-run status, and footer.
+- Default empty-state `+`, project, and files popovers downward; scope upward positioning only to the
+  active-state `+` popover. Bound panel height and viewport width; match `+` width to the chatbox.
+- Compact project/files dialogs and vertically center tray controls, grouping General and Archivos on
+  the left while pushing Herramientas to the right.
+- Update focused tests for title accessibility, icon metadata/rendering, row descriptions, and tray layout.
+
+Graph Check (before source edits): `graphify query "assistant chat popover direction tray density tool rows"`
+consulted `AgentChat.tsx`, `Popover()`, `AssistantToolLabel`, and `Layered Composer Card + Tray` (community
+20/421); related nodes surfaced include `AgentChat()` and `Composer tray`. `graphify path "AgentChat()"
+"Popover()" --undirected` found no path (ambiguous source match). Read `graphify-out/GRAPH_REPORT.md`;
+god nodes include `make_user()`, `User`, `Customer`, `Conversation`, and `Message`; relevant UI hubs include
+`api.ts`, `AssistantWorkspace.tsx`, and `Lumat Panel Design System`. The report originally identified
+freshness `f460b09f`; an incremental graph update ran before editing and refreshed the queried graph.
+
+Implementation: `Popover` now supports `hideTitle` while retaining its labelled heading; the `+` menu uses
+it and renders icon/name/toggle rows without subtitles. Tool metadata maps Lucide glyphs with `Wrench` as
+the unknown-tool fallback. The assistant-chat-wide upward override was removed; empty-state popovers use
+the primitive's downward anchor placement and only active `+` is positioned upward. Popovers are
+viewport-bounded, `+` tracks the 56rem chatbox maximum, project/files menus and rows are tighter, and the
+tray now vertically centres its controls, groups General/Archivos at the left, and pushes Herramientas to
+the right with muted text.
+
+Verification from `web/`:
+- `npx tsc -b --force --noEmit` — passed (no output).
+- `npx vitest run src/components/pages/AgentChat.test.tsx src/components/pages/assistantToolLabels.test.ts src/components/primitives/Popover.test.tsx` — passed (3 files, 66 tests); existing React `act(...)` warnings remain in the AgentChat suite.
+- `npm run build` — passed; Vite emitted the existing advisory that the 848.80 kB JS chunk exceeds 500 kB.
+
+Ponytail: the existing native Popover/anchor positioning and Lucide dependency cover the behavior without
+new dependencies or custom positioning logic. Tool rows use a single three-column CSS grid for consistent
+toggle alignment; the master row overrides to flex because it has no leading icon. No further equivalent
+reduction found, no shortcut with a known ceiling was added, and no authorized behavior was deferred.
+
+Commits: `8da47ce7` (`feat(ui): allow visually hidden popover titles`), `87bfc07a`
+(`feat(assistant): map tool labels to Lucide icons`), and `4d593b59`
+(`feat(assistant): refine composer popovers and tray`).
