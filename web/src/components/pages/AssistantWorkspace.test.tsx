@@ -222,7 +222,8 @@ describe("AssistantWorkspace", () => {
     expect(window.location.search).toContain("thread_id=82");
   });
 
-  it("renders active orchestrator rows with resolved projects and stage labels", async () => {
+  it("renders open tabs with idle status and enriches matching runs with their stage", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=91");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [
@@ -237,12 +238,11 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" />);
     expect(await screen.findByText("Operaciones", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
     expect(screen.getByText("Planificando")).toBeInTheDocument();
-    expect(screen.getByText("Conversación rápida")).toBeInTheDocument();
-    expect(screen.getByText("Respondiendo")).toBeInTheDocument();
-    expect(screen.getAllByText("Orquestador")).toHaveLength(2);
+    expect(screen.queryByText("Conversación rápida")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Orquestador")).toHaveLength(1);
   });
 
-  it("shows honest empty and error states for active runs", async () => {
+  it("shows an honest empty state when no tab is open regardless of run-list results", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
@@ -256,12 +256,12 @@ describe("AssistantWorkspace", () => {
       ? new Response(JSON.stringify({ detail: "failure" }), { status: 500 })
       : new Response(JSON.stringify({ threads: [], projects: [] }), { status: 200 }));
     render(<AgentChat role="admin" />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar los agentes activos");
+    expect(await screen.findByText("No hay agentes activos")).toBeInTheDocument();
   });
 
-  it("lists recent threads as navigable tabs and exposes the real create action", async () => {
+  it("opens selected history threads as tabs and exposes the real create action", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones");
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/panel/api/chat/threads" && init?.method === "POST") return new Response(JSON.stringify({
         thread: { id: 42, proyecto: "operaciones", status: "open" }, messages: [],
@@ -280,12 +280,22 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" onThreadOpened={onThreadOpened} />);
 
-    const tab = await screen.findByRole("button", { name: "Revisión KB" });
+    const projectsSidebar = screen.getByRole("complementary", { name: "Proyectos" });
+    expect(within(projectsSidebar).getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revisión KB" })).not.toBeInTheDocument();
+    fireEvent.click(within(projectsSidebar).getByRole("button", { name: "Historial" }));
+    const historyThread = await screen.findByRole("button", { name: "Revisión KB" });
+    fireEvent.click(historyThread);
+    const workspace = screen.getByRole("region", { name: "Área del hilo" });
+    const tab = await within(workspace).findByRole("button", { name: "Revisión KB" });
     fireEvent.click(screen.getByRole("button", { name: "Crear nuevo hilo" }));
     await waitFor(() => expect(onThreadOpened).toHaveBeenCalledWith(42));
     fireEvent.click(tab);
-    expect(window.location.search).toBe("?proyecto=operaciones&thread_id=12");
+    expect(window.location.search).toBe("?proyecto=default&thread_id=12");
     expect(screen.getByRole("button", { name: "Crear nuevo hilo" })).toBeInTheDocument();
+    fireEvent.click(within(workspace).getByRole("button", { name: "Cerrar Revisión KB" }));
+    expect(window.location.search).toBe("");
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("/threads/12") && init?.method === "DELETE")).toBe(false);
   });
 
   it("shows the active thread title and real project name without a competing page title", async () => {

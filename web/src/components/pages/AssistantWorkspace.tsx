@@ -30,6 +30,10 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [defaultThreads, setDefaultThreads] = useState<{ state: "idle" | "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>({ state: "idle", threads: [] });
   const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
+  const [openThreadIds, setOpenThreadIds] = useState<number[]>(() => {
+    const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
+    return threadId ? [threadId] : [];
+  });
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
   const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
@@ -122,21 +126,41 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   }, [activeThreadId, loadThreadTabs, refreshThreads]);
 
   useEffect(() => {
+    if (loadThreadTabs && activeThreadId) {
+      setOpenThreadIds((current) => current.includes(activeThreadId) ? current : [...current, activeThreadId]);
+    }
+  }, [activeThreadId, loadThreadTabs]);
+
+  useEffect(() => {
     if (!loadThreadTabs) return;
     const onPopState = () => {
       setLocationKey(`${window.location.pathname}${window.location.search}`);
+      const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
+      if (threadId) setOpenThreadIds((current) => current.includes(threadId) ? current : [...current, threadId]);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [loadThreadTabs]);
 
   const navigateToThread = (threadId: number, projectSlug = activeProjectSlug) => {
+    setOpenThreadIds((current) => current.includes(threadId) ? current : [...current, threadId]);
     window.history.pushState({}, "", pathForRoute({
       view: "chat",
       ...(projectSlug ? { projectSlug } : {}),
       threadId,
     }));
     window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const closeThreadTab = (threadId: number) => {
+    const remaining = openThreadIds.filter((id) => id !== threadId);
+    setOpenThreadIds(remaining);
+    if (threadId !== activeThreadId) return;
+    if (remaining.length) navigateToThread(remaining[remaining.length - 1]);
+    else {
+      window.history.pushState({}, "", pathForRoute({ view: "chat" }));
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
   };
 
   const renameThread = async () => {
@@ -157,9 +181,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       await deleteChatThread(deleteTarget.id);
       const remaining = threads.filter((thread) => thread.id !== deleteTarget.id);
       setThreads(remaining);
+      setOpenThreadIds((ids) => ids.filter((id) => id !== deleteTarget.id));
       setDeleteTarget(null);
       if (deleteTarget.id === activeThreadId) {
-        if (remaining[0]) navigateToThread(remaining[0].id);
+        const nextId = openThreadIds.filter((id) => id !== deleteTarget.id).at(-1);
+        if (nextId) navigateToThread(nextId);
         else {
           window.history.pushState({}, "", pathForRoute({ view: "chat" }));
           window.dispatchEvent(new PopStateEvent("popstate"));
@@ -312,23 +338,30 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         </section>
         <section className="assistant-workspace__agents" aria-label="Agentes" hidden={!projectsVisible}>
           <header><h3>Agentes</h3></header>
-          {activeRuns.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando agentes activos" /> : activeRuns.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los agentes activos." /> : activeRuns.state === "empty" ? <EmptyState title="No hay agentes activos" /> : <ul>{activeRuns.runs.map((run) => <li key={`${run.thread_id}-${run.run_id}`}><strong>Orquestador</strong><p>{run.proyecto === "default" ? "Conversación rápida" : projects.find((project) => project.slug === run.proyecto)?.name ?? run.proyecto}</p><span>{stageLabel(run.stage)}</span></li>)}</ul>}
+          {openThreadIds.length === 0 ? <EmptyState title="No hay agentes activos" /> : <ul>{openThreadIds.map((id) => {
+            const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
+            const run = activeRuns.runs.find((item) => item.thread_id === id);
+            const slug = thread?.proyecto ?? run?.proyecto;
+            const projectName = slug === "default" ? "Conversación rápida" : slug ? projects.find((project) => project.slug === slug)?.name ?? slug : "—";
+            return <li key={id}><strong>Orquestador</strong><p>{projectName}</p><span>{run ? stageLabel(run.stage) : "Activo"}</span></li>;
+          })}</ul>}
         </section>
       </aside>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
-        <nav className="assistant-workspace__thread-tabs" aria-label="Hilos recientes">
+        <nav className="assistant-workspace__thread-tabs" aria-label="Hilos abiertos">
           <div className="assistant-workspace__thread-tab-list">
-            {threads.map((thread) => (
-              <div className="assistant-workspace__thread-tab" key={thread.id} data-active={thread.id === activeThreadId}>
-                <button type="button" aria-current={thread.id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(thread.id)}>
-                  {thread.title || "Sin título"}
+            {openThreadIds.map((id) => {
+              const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
+              return <div className="assistant-workspace__thread-tab" key={id} data-active={id === activeThreadId}>
+                <button type="button" aria-current={id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(id, thread?.proyecto)}>
+                  {thread?.title || "Sin título"}
                 </button>
-                <button type="button" className="assistant-workspace__thread-close" aria-label={`Cerrar ${thread.title || "hilo"}`} onClick={() => { setThreadActionError(null); setDeleteTarget(thread); }}>
+                <button type="button" className="assistant-workspace__thread-close" aria-label={`Cerrar ${thread?.title || "hilo"}`} onClick={() => closeThreadTab(id)}>
                   <Icon icon={X} size="sm" />
                 </button>
-              </div>
-            ))}
+              </div>;
+            })}
           </div>
           <Button variant="tertiary" aria-label="Crear nuevo hilo" title="Crear nuevo hilo" onClick={onCreateThread}>
             <Icon icon={Plus} />
