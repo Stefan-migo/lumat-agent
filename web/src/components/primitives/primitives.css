@@ -1063,6 +1063,9 @@
   margin: 0 0 var(--space-3);
   font-size: var(--text-md);
 }
+.popover__header { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.popover__header .popover__title { margin: 0; }
+.popover__close { margin-left: auto; padding: 0 var(--space-1); border: 0; background: transparent; color: inherit; font: inherit; font-size: var(--text-lg); line-height: 1; cursor: pointer; }
 .popover__panel [role="status"],
 .popover__panel [role="alert"] {
   margin: 0;
