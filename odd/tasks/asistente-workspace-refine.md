@@ -531,3 +531,42 @@ their tests. **Out:** backend (B4/B5 already exist); `PanelShell`.
   lines, `review_due: false` (`under_budget`). No review opened; the boundary stays at `1381346f` and
   accumulates. Note: the popover-display fix `ba05f577` sits after the S6+S7 receipt (a post-review byte
   change) and is folded into this accumulating range.
+
+## Slice 9 — Composer tray and tool controls
+
+Owner direction: refine the Slice 8 composer into a layered composer card + protruding tray, move tool
+state out of visible chips and into the `+` popover, and keep the bottom-row Herramientas affordance
+read-only. The tool count means opt-in tools available for activation (`toolPolicy.available.length`),
+not currently enabled tools.
+
+- Wrap the main composer and a narrower back tray in `.assistant-chat__composer-stack`; move the project
+  and attachment controls into the tray, preserving empty-state centring and attachment chips.
+- Replace emoji triggers with Lumat-style Lucide icons and `Badge` counts; remove the Herramientas popover.
+- Make the `+` trigger round and organize its popover into attachment, grouped tool switches, and a master
+  toggle, preserving reset, active-run status, and footer behavior.
+- Remove active tool chips from above the textarea while retaining attachment chips.
+- Extend `Popover` with an optional `trigger: ReactNode`, keeping `triggerLabel` as the accessible name
+  and preserving string-trigger compatibility.
+- Update focused tests for the new trigger semantics, switches, count source, and chip removal.
+
+Graph Check: queried `chat composer bottom bar tools popover project files`; consulted `AgentChat.tsx`,
+`Popover()`, `ProjectListFilesArgs`, `Composer-First Central Panel`, and `filesystem`. Path query
+`AgentChat()` → `Popover()` returned no directed path (source match ambiguous); no edge is claimed.
+`graphify-out/GRAPH_REPORT.md` read: hubs include `api.ts`, `Conversation`, `AssistantWorkspace.tsx`, and
+`Lumat Panel Design System`; relevant composer/popover relationships were checked via the query results.
+
+Delivered in `010bf1e5` (`feat(ui): render icon triggers in the popover primitive`) and `242f6fc3`
+(`feat(assistant): rebuild the composer as a layered tray`). Verification: `npx tsc -b --force --noEmit`
+passed; focused `AgentChat` + `Popover` suite 59/59; `npm run build` passed (existing >500 kB chunk-size
+advisory). Full `vitest` is pre-existing flaky: a clean-base run of the same suite also failed (6 tests
+across different, unrelated files — `AgendaPage`/`ClientFicha`/`UserManagement`), while the candidate's own
+files pass in isolation (149/149 for `AgentChat`+`ClientesList`+`ClientFicha`), so Slice 9 does not
+introduce the failures.
+
+RDD assessment `review assess --base-ref 1381346f --committed-only` → risk `medium` (executable
+`AgentChat.css`), 8 paths, 427 lines, `review_due: true` (`slice_budget_reached`). Native review opened and
+**approved/acknowledged (authority burned)**, 2026-10-11, lineage `review-bd24abaf0dc7ff21`, lens
+`review-reliability`. One non-blocking advisory (follow-up, do NOT re-review this candidate): **R3-001
+WARNING** — the Herramientas badge shows `toolPolicy.available.length` (available tools) rather than the
+enabled count, so disabling a tool does not lower the number. This is the **owner-decided semantics** (the
+bar shows the activatable opt-in tools, defaults excluded), so it is by design, not a defect.
