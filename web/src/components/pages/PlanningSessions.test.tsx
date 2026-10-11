@@ -4,7 +4,7 @@ import { PlanningSessions } from "./PlanningSessions";
 
 describe("planning sessions", () => {
   afterEach(() => vi.restoreAllMocks());
-  const session = { slug: "budget-review-8", topic: "Budget review", status: "closed" as const, thread_id: 8, opened_at: "2026-01-01", closed_at: "2026-01-02", report_key: "report" };
+  const session = { slug: "budget-review-8", proyecto: "default", topic: "Budget review", status: "closed" as const, thread_id: 8, opened_at: "2026-01-01", closed_at: "2026-01-02", report_key: "report" };
   it("renders list and detail with thread identity and report state", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [session] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, report: null }), { status: 200 }));
     const { rerender } = render(<PlanningSessions />);
