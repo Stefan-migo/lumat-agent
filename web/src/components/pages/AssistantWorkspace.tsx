@@ -421,8 +421,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         data-collapsed={!contextVisible}
       >
         <header className="assistant-workspace__pane-header assistant-workspace__context-header">
-          <div className="assistant-workspace__context-title"><Icon icon={PanelRight} /><div><h2>Detalle del hilo</h2><p>{threadTitles[activeThreadId ?? 0] ?? activeThread?.title ?? "Sin título"}</p></div></div>
-          <button type="button" className="assistant-workspace__pane-toggle" aria-label={contextVisible ? "Cerrar panel del hilo" : "Abrir panel del hilo"} aria-expanded={contextVisible} aria-controls="assistant-workspace-context" onClick={() => setContextVisible((visible) => !visible)}><Icon icon={contextVisible ? X : PanelRight} /></button>
+          <div className="assistant-workspace__context-title"><div><h2>Detalle del hilo</h2><p>{threadTitles[activeThreadId ?? 0] ?? activeThread?.title ?? "Sin título"}</p></div></div>
+          <button type="button" className="assistant-workspace__pane-toggle" aria-label={contextVisible ? "Cerrar panel del hilo" : "Abrir panel del hilo"} aria-expanded={contextVisible} aria-controls="assistant-workspace-context" onClick={() => setContextVisible((visible) => !visible)}><Icon icon={PanelRight} /></button>
         </header>
         {contextVisible ? <>
         <Tabs

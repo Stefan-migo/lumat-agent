@@ -166,6 +166,9 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" />);
     const projectsToggle = screen.getByRole("button", { name: "Expandir panel de proyectos" });
     const contextToggle = screen.getByRole("button", { name: "Abrir panel del hilo" });
+    const contextHeader = screen.getByRole("heading", { name: "Detalle del hilo" }).closest("header")!;
+    expect(within(contextHeader).getAllByRole("button")).toHaveLength(1);
+    expect(contextToggle.querySelector("svg")).toHaveClass("lucide-panel-right");
     expect(projectsToggle).toHaveAttribute("aria-expanded", "false");
     expect(projectsToggle).toHaveAttribute("aria-controls", "assistant-workspace-projects");
     expect(contextToggle).toHaveAttribute("aria-expanded", "false");
@@ -175,6 +178,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible();
     fireEvent.click(contextToggle);
     const closeContext = screen.getByRole("button", { name: "Cerrar panel del hilo" });
+    expect(closeContext.querySelector("svg")).toHaveClass("lucide-panel-right");
     expect(closeContext).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cerrar paneles" })).toBeInTheDocument();
