@@ -1041,3 +1041,12 @@ open), `AssistantWorkspace.tsx` (Pencil / X / Trash2 on the three items), and `A
 (each item carries an `svg`). Verification from `web/`: `npx tsc -b --force --noEmit` passed;
 `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` → 15 passed; `npm run build` passed
 (existing >500 kB advisory). Commit: `db11caa3`.
+
+**Slices 18–23 RDD review — approved and acknowledged (authority burned), 2026-10-11.** Lineage
+`review-56a9e16600b64f82`, tier `medium`, lens `review-reliability`, 10 paths / 405 lines
+(`slice_budget_reached`). One non-blocking advisory (follow-up, do NOT re-review this candidate):
+**R3-001 WARNING** — the conversation-level multi-file drop handler launches one `attach` per file without
+coordinating the batch, so the shared `uploading` boolean can be cleared by one operation while others are
+still in flight (`AgentChat.tsx:892-893`). Fold into a later slice alongside the earlier follow-ups
+(active-run poll error indicator, tool-chip "bloqueadas durante la ejecución" reason). No correction was
+opened; the reviewed boundary advances past `db11caa3`.
