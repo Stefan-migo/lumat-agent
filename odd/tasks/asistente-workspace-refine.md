@@ -884,6 +884,22 @@ Strict backend TDD RED→GREEN: delete removes it from `GET /chat/threads/{id}` 
 double-delete → 404; another owner's / another thread's attachment → 404; content returns bytes with the
 stored content type; content of a deleted attachment → 404; missing file → 404.
 
+Implementation: `app/panel/api/routes/chat.py:648-693` (owner-scoped delete with the active-run guard and a
+204, plus the inline `FileResponse` content route with a 404 for a missing file); `web/src/api.ts`
+(`deleteThreadAttachment`, `threadAttachmentContentUrl`, and 204 handling in `apiFetch`). Tests:
+`tests/integration/test_assistant_attachments.py:147-227` (delete unlinks + hides, double-delete 404,
+thread/owner scope, active-run 409, inline image content, missing-file 404) and `web/src/api.test.ts`.
+
+Verification: focused `uv run pytest tests/integration/test_assistant_attachments.py -q` → 19 passed;
+full backend `uv run pytest tests/ -q` → 1,898 collected, two pre-existing warnings; `npx tsc -b --force
+--noEmit` → passed. Commits: `5738ae70` (`feat(chat): delete and preview thread attachments`),
+`9f7fe4ad` (`docs(odd): plan attachment delete, preview, and drop slices`).
+
+**Slices 14–17 RDD review — approved and acknowledged (authority burned), 2026-10-11.** Lineage
+`review-35f4696e4b49e90b`, tier `medium`, lens `review-reliability`, 13 paths / 603 lines
+(`slice_budget_reached`). The reviewer inspected all 13 paths and returned **no findings**; no correction
+was opened and the reviewed boundary advances past `9f7fe4ad`.
+
 ## Slice 18 — Composer attachment tray, delete, and image preview (frontend)
 
 Owner visual review 2026-10-11: attachments must show more orderly (a dedicated tray above the
