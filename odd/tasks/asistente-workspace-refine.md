@@ -188,3 +188,8 @@ exists.
   existing >500 kB chunk-size advisory). Companion `AgentChat.test.tsx`: 58/58 passed.
   Graphify consulted `AssistantWorkspace()`, `api.ts`, `types.ts`, and active-conversation route nodes;
   directed `AssistantWorkspace()` → `api.ts`/`types.ts` paths were not present in this graph snapshot.
+- **Slice 2 RDD assessment (2026-10-10):** `review assess --base-ref 08581eff --committed-only` →
+  `risk: medium` (executable change in `app/panel/api/routes/chat.py`), 10 paths, 328 lines,
+  `review_due: false` (`under_budget`). No review opened; the reviewed boundary stays at `08581eff` and
+  accumulates with the next slice. Slice 2 is up for owner visual review against the isolated env
+  (Vite `:5174` → API `:8001`).
