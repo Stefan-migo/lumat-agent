@@ -238,3 +238,10 @@ Decisions (owner-confirmed):
   1,111/1,111 passed; `npm run build` passed (existing >500 kB chunk-size advisory). Tab close only
   removes session state and clearing the active tab resets the chat URL. Rollback boundary: the
   `AssistantWorkspace.tsx` and `.test.tsx` changes in `28e71da4`.
+- **Slice 2+3 RDD review — approved and acknowledged (authority burned), 2026-10-10.** Lineage
+  `review-989c693ae0dc93dc`, tier `medium`, lens `review-reliability`; owner granted consent via the
+  native envelope; `review acknowledge-approved` returned `authority: burned`. One non-blocking advisory
+  (follow-up, do NOT re-review this candidate): **R3-001 WARNING** — when the active-run poll fails the
+  `error` state is recorded but not rendered (`AssistantWorkspace.tsx:88-91`), so open-tab rows keep
+  showing "Activo" and a failed poll is indistinguishable from a successful empty result. Fold into a
+  later slice (honest error indicator in the Agentes section).
