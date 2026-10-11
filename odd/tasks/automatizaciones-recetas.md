@@ -250,7 +250,7 @@ Worktree `../lumat-agent-odd-automatizaciones-recetas-transversal`, branch
   `app/panel/api/routes/automation_rules.py`, `app/panel/api/serializers.py`, `web/src/types.ts`;
   migración nueva; tests actualizados + versión en `tests/integration/test_migrations.py`. El texto pasa
   a resolverse solo desde `payload.content` / `payload.text` / `rule.content`.
-- [ ] **T2 — D2 acotado: destinatario en payloads de caso**. Agregar el destinatario del cliente
+- [x] **T2 — D2 acotado: destinatario en payloads de caso**. Agregar el destinatario del cliente
   (`phone_e164`) a los eventos `case.*` donde el cliente se conoce, en `app/services/cases.py` (4 sitios
   `publish_event`: `case.created` ×2, `case.updated` ×2). Sin receta nueva; el único consumidor
   (`case_new_request`) es admin-targeted y resuelve desde settings, así que no cambia comportamiento.

@@ -175,6 +175,42 @@ def test_recipe_event_targets_admin_setting_and_uses_recipe_content(migrated_db)
         )
 
 
+def test_manual_case_created_event_includes_customer_recipient(migrated_db):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164=f"+569{uuid4().int % 10**8:08d}")
+        session.add(customer)
+        session.flush()
+
+        case = cases.create_manual_case(session, customer.id, "calefont")
+        event = session.scalar(select(DomainEvent).where(
+            DomainEvent.event_type == "case.created",
+            DomainEvent.entity_id == str(case.id),
+        ))
+
+        assert event.payload["recipient"] == customer.phone_e164
+
+
+def test_manual_case_created_event_omits_missing_customer_phone(migrated_db):
+    from types import SimpleNamespace
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164=f"+569{uuid4().int % 10**8:08d}")
+        session.add(customer)
+        session.flush()
+        original_get = session.get
+        session.get = lambda model, identity, **kwargs: (
+            SimpleNamespace(phone_e164=None) if model is Customer else original_get(model, identity, **kwargs)
+        )
+
+        case = cases.create_manual_case(session, customer.id, "calefont")
+        event = session.scalar(select(DomainEvent).where(
+            DomainEvent.event_type == "case.created",
+            DomainEvent.entity_id == str(case.id),
+        ))
+
+        assert "recipient" not in event.payload
+
+
 def test_free_rule_defaults_to_payload_recipient_and_message_content(migrated_db):
     from app.services.automation import evaluate_event
 
