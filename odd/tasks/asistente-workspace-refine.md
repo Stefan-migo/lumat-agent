@@ -760,4 +760,6 @@ layout and controls; no intentional shortcut with a known ceiling or deferred au
 Commit: `94a470bd` (`feat(ui): add native close controls to popovers`) — Popover accessory and native
 dismiss control, with primitive tests.
 
-Composer layout commit: pending.
+Composer layout commit: `650bbfb1` (`feat(assistant): refine thread tools popovers`) — single-column tools
+dialog and side-opening, scroll-bounded project-file popover with updated composer tests and Slice 14
+verification results.
