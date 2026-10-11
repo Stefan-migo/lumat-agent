@@ -39,8 +39,13 @@ describe("AssistantWorkspace", () => {
     }
     expect(screen.getByRole("button", { name: "Proyecto" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Los adjuntos y resultados pertenecen a este hilo.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Recursos del proyecto/ }));
-    expect(screen.getByText("Selección de recursos aún no disponible.")).toBeInTheDocument();
+    const resourcesToggle = screen.getByRole("button", { name: /Recursos del proyecto/ });
+    fireEvent.click(resourcesToggle);
+    expect(resourcesToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Selección de recursos aún no disponible.")).toBeVisible();
+    fireEvent.click(resourcesToggle);
+    expect(resourcesToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Selección de recursos aún no disponible.")).not.toBeVisible();
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
