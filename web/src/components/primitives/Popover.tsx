@@ -9,13 +9,14 @@ export interface PopoverProps {
   trigger?: ReactNode;
   children: ReactNode;
   state?: PopoverState;
+  hideTitle?: boolean;
 }
 
 /** Corporate Popover primitive (CST-PRIM-7): native Popover API ownership.
  *  The browser supplies toggle, Escape dismissal, top-layer placement and focus
  *  return. Anchor positioning is CSS enhancement; this component has no JS
  *  polyfill or dismissal handler. */
-export function Popover({ title, triggerLabel, trigger, children, state = "default" }: PopoverProps) {
+export function Popover({ title, triggerLabel, trigger, children, state = "default", hideTitle = false }: PopoverProps) {
   const id = useId();
   const titleId = `${id}-title`;
   const disabled = state === "disabled";
@@ -32,7 +33,7 @@ export function Popover({ title, triggerLabel, trigger, children, state = "defau
         {trigger ?? triggerLabel}
       </button>
       <div id={id} popover="auto" role="dialog" aria-labelledby={titleId} className="popover__panel">
-        <h2 id={titleId} className="popover__title">{title}</h2>
+        <h2 id={titleId} className={`popover__title${hideTitle ? " visually-hidden" : ""}`}>{title}</h2>
         {state === "loading" && <p role="status">Cargando</p>}
         {state === "empty" && <p role="status">No hay opciones disponibles</p>}
         {state === "error" && <p role="alert">No fue posible cargar las opciones</p>}

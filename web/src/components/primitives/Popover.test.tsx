@@ -27,6 +27,18 @@ describe("Popover (CST-PRIM-7)", () => {
     expect(screen.getByRole("button", { name: "Archivos 2" })).toHaveTextContent("IconArchivos 2");
   });
 
+  it("keeps a visually hidden title as the dialog accessible name", () => {
+    render(
+      <Popover title="Agregar al hilo" triggerLabel="+" hideTitle>
+        <span>Contenido</span>
+      </Popover>,
+    );
+
+    const panel = screen.getByRole("dialog", { name: "Agregar al hilo" });
+    expect(panel.querySelector("h2")).toHaveClass("visually-hidden");
+    expect(panel).toHaveAttribute("aria-labelledby", panel.querySelector("h2")?.id);
+  });
+
   it("keeps native controls for disabled and complete states", () => {
     const { rerender } = render(
       <Popover title="Acciones" triggerLabel="Abrir acciones" state="loading">
