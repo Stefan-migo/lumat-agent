@@ -168,6 +168,60 @@ Decisions (owner-confirmed):
 - [x] Honest empty state when no tab is open: **"No hay agentes activos"**.
 - [x] Keep the 5s poll of `active-runs` (only for the stage enrichment). No fabricated rows.
 
+## Slice 4 — Composer-first central panel (this pass)
+
+Owner direction 2026-10-10 (visual review of the current central panel): **delete the redundant chrome
+above the conversation and make the composer the centre of gravity.** Owner-confirmed model: **hybrid
+composer** — additive actions inside a `+` popover, and stateful tool toggles as **visible inline chips**
+(so their on/off state is never hidden).
+
+References: `LumatAgentNewthreadTools.png` (Lumat `+` popover) and the ChatGPT composer (separate bottom
+row). Neither is copied verbatim; the owner said the Lumat reference is "not quite right". Do **not** add
+a "Plugins" row — Lumat has no plugins.
+
+**In:** the central panel only — `AgentChat.tsx`/`.css`, the `AssistantWorkspace.tsx` centre column
+(`__thread-header`, `__thread-tabs`)/`.css`, `primitives.css` composer rules, and their tests.
+**Out (Slice 5):** removing `AssistantTabs` and rehoming the Projects/Planning doors. The section tabs are
+today the **only** door to the global `planning-sessions` admin view and the `projects` list (confirmed:
+`PanelShell` `NAVIGATION` excludes both; `AppShell` reaches them only via `sectionTabs`), so they cannot
+be removed before the new doors exist.
+
+### S9 — Composer-first central panel
+
+- [x] **Remove the redundant header chrome.**
+  - `AssistantWorkspace.tsx`: delete the `__thread-header` block (`<h1>` title + `<p>Proyecto: …</p>` + the
+    thread `Menu`). Relocate the thread `Menu` (Renombrar/Eliminar) into the `__thread-tabs` bar, right of
+    the tab list and next to the `+`. Preserve behaviour: rename; delete also drops the id from the open set.
+  - `AgentChat.tsx`: stop rendering the `PageFrame` `actions` row (`Detener ejecución`, `Herramientas`,
+    `Historial`, `Contexto`, `Planificar`, `Nuevo chat`). Hide the `PageFrame` titlebar
+    (`.assistant-chat .page-frame__titlebar { display: none }`) so the "Asistente Lumat" title/meta no
+    longer render. Keep the `state` banner (loading/error) and keep rendering `{sectionTabs}` for now.
+- [x] **Relocate the removed controls — no capability loss.**
+  - `Detener ejecución`: render above the composer (in `__composer-wrap`) only while a run is active, with
+    the existing title/copy.
+  - `Herramientas`: replaced by the visible tool chips (below). Remove the popover.
+  - `Historial`: the sidebar already lists default + per-project history; remove the header popover.
+  - `Contexto`: remove the header button **and** the inline `assistant-chat__context` aside — the right
+    `Actividad del hilo` pane already shows project/capabilities/files/artifacts.
+  - `Nuevo chat`: preserved by the sidebar `Nueva conversación` and the tab-bar `+`.
+  - `Planificar`: becomes a composer control (below).
+- [x] **Composer (hybrid).** Keep the attachment list and the `Textarea`.
+  - `+` popover ("Agregar al hilo"): **"Adjuntar archivo"** (existing upload) + **"Elegir del proyecto"**
+    (disabled, honest "Próximamente" — project resource selection is not available yet).
+  - **Visible tool chips:** one toggle chip per `toolPolicy.available` tool, showing its label + on/off
+    state; toggling calls the existing `updateThreadToolPolicy`. Disabled while a run is active / while
+    saving. Honest loading + error states — never hide the tool state.
+  - **Planificar:** a subtle toggle/button opening the existing planning dialog (disabled without a thread).
+  - **`@Agente`** chip, disabled ("Próximamente").
+  - **Project chip:** shows the current `thread.proyecto` name (relocating the deleted "Proyecto:" line);
+    informational only (no picker). `"default"` → "Conversación rápida".
+  - Send unchanged. Keep the status footer (Conexión/estado) but compact.
+- [x] **Narrow + centre.** Revert the full-width override so the conversation column is
+  `width: min(100%, 48rem)` and centred. Keep the existing responsive tiers.
+- [x] **Centre when empty.** When there is no thread or no messages and nothing is processing, centre the
+  composer vertically (ChatGPT behaviour); with messages, keep the composer docked at the bottom.
+- [x] Tests updated for every removed/relocated control; no fabricated data.
+
 ## Acceptance criteria
 
 1. `npx tsc -b --force --noEmit`, `npx vitest run --no-file-parallelism`, `npm run build` green (from `web/`).
@@ -245,3 +299,27 @@ Decisions (owner-confirmed):
   `error` state is recorded but not rendered (`AssistantWorkspace.tsx:88-91`), so open-tab rows keep
   showing "Activo" and a failed poll is indistinguishable from a successful empty result. Fold into a
   later slice (honest error indicator in the Agentes section).
+
+- **Slice 4 (S9) opened 2026-10-11.** Owner direction (visual review of the current central panel):
+  make it composer-first; owner confirmed the **hybrid composer** model (additive actions in a `+`
+  popover; stateful tool toggles as visible inline chips so their state is never hidden). Graph Check:
+  graph present in the worktree; consulted `AssistantWorkspace()`, `AgentChat()`, `Menu()`,
+  `PageFrame()`, `toolPolicy`, `listChatThreads()`, `api.ts`; no directed path between
+  `AssistantWorkspace()` and `AgentChat()` in this snapshot.
+- S9 — delivered in `d8ef52e1` (`refactor(assistant): remove redundant thread header chrome`) and
+  `f8b2fa3f` (`feat(assistant): build a hybrid composer with visible tool chips`), 6 files, net −372
+  lines. Removed the thread header (title + "Proyecto: X" + menu), the `PageFrame` titlebar/actions row,
+  and the inline context panel; relocated the thread menu to the tab bar, `Detener ejecución` above the
+  composer, tools to visible chips, `Planificar` to the composer, and the project label to a composer
+  chip. Composer narrowed (`min(100%, 48rem)`, centred) and centred-when-empty. Section tabs
+  (`AssistantTabs`) intentionally kept: they remain the only door to the global `planning-sessions` admin
+  view and the `projects` list — rehoming them is Slice 5.
+- Verification (S9): `npx tsc -b --force --noEmit` pass; focused `AgentChat` + `AssistantWorkspace`
+  suite 68/68; full `vitest` 104 files / 1,107 tests; `npm run build` pass (existing >500 kB advisory).
+- **Slice 4 RDD review — approved and acknowledged (authority burned), 2026-10-11.** Lineage
+  `review-9e58f874c2a8fd68`, tier `medium`, lens `review-reliability`; owner granted consent via the
+  native envelope; `review acknowledge-approved` returned `authority: burned`. One non-blocking advisory
+  (follow-up, do NOT re-review this candidate): **R3-001 WARNING** — the rehomed inline tool chips
+  dropped the old popover's explicit "Bloqueadas durante la ejecución" status, so while a run is active
+  the checkboxes are disabled without the reason being shown (`AgentChat.tsx:1065-1081`). Fold into a
+  later slice together with the earlier active-run poll error indicator.
