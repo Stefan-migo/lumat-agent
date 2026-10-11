@@ -1099,16 +1099,17 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                 className="assistant-chat__textarea"
               />
               <div className="assistant-chat__composer-controls">
-                <div className="assistant-chat__add-popover"><Popover title="Agregar al hilo" triggerLabel="+" hideTitle>
+                <div className="assistant-chat__add-popover"><Popover title="Herramientas del hilo" triggerLabel="+" dismissible titleAccessory={<span className="assistant-chat__tool-count">{toolPolicy?.opt_in_enabled.length ?? 0} de {toolPolicy?.available.length ?? 0} activadas</span>}>
                   <label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker">
                     <Icon icon={Paperclip} size="sm" />
                     <span><strong>Adjuntar archivo</strong><small>Sube un documento o una imagen</small></span>
                   </label>
-                  <div className="assistant-chat__tool-chips" aria-label="Herramientas disponibles">
+                  <hr className="assistant-chat__tool-divider" />
+                  <div className="assistant-chat__tool-chips assistant-chat__tool-chips--stacked" aria-label="Herramientas disponibles">
                     {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
                     {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
                     {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
-                    {toolPolicy && toolPolicy.available.length > 0 ? <label className="assistant-chat__tool-row assistant-chat__tool-master"><strong>Todas las herramientas</strong><input type="checkbox" checked={toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name))} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => void changeToolPolicy(() => updateThreadToolPolicy(thread.id, toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name)) ? [] : [...toolPolicy.available]))} /></label> : null}
+                    {toolPolicy && toolPolicy.available.length > 0 ? <label className="assistant-chat__tool-row assistant-chat__tool-master"><Icon icon={Wrench} size="sm" /><span><strong>Todas las herramientas</strong><small>Activar o desactivar todas</small></span><input type="checkbox" aria-label="Todas las herramientas" checked={toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name))} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => void changeToolPolicy(() => updateThreadToolPolicy(thread.id, toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name)) ? [] : [...toolPolicy.available]))} /></label> : null}
                     {[...new Set(toolPolicy?.available.map((name) => assistantToolLabel(name).group) ?? [])].map((group) => <section key={group} className="assistant-chat__tool-group"><h3>{group}</h3>{toolPolicy?.available.filter((name) => assistantToolLabel(name).group === group).map((name) => {
                       const enabled = toolPolicy.opt_in_enabled.includes(name);
                       const tool = assistantToolLabel(name);
@@ -1118,9 +1119,9 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                         void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
                       }} /></label>;
                     })}</section>)}
-                    {toolPolicy && !toolPolicy.inherited ? <Button variant="tertiary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}>Usar la selección del proyecto</Button> : null}
+                    {toolPolicy && !toolPolicy.inherited ? <><hr className="assistant-chat__tool-divider" /><button type="button" className="assistant-chat__tool-option assistant-chat__tool-reset" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}><Icon icon={RotateCcw} size="sm" /><span><strong>Usar la selección del proyecto</strong><small>Aplicar las herramientas definidas en el proyecto.</small></span></button></> : null}
                     {isRunActive ? <p role="status">Las herramientas están bloqueadas durante la ejecución.</p> : null}
-                    <p className="assistant-chat__popover-footer">ⓘ Herramientas disponibles para este hilo.</p>
+                    <p className="assistant-chat__popover-footer">La selección se aplica a este hilo.</p>
                   </div>
                 </Popover></div>
                 <Button variant="tertiary" className={`assistant-chat__planning-pill${cortex?.status === "active" ? " assistant-chat__planning-active" : ""}`} onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>

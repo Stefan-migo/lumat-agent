@@ -716,3 +716,48 @@ Commits: `f4ebc506` (`fix(ui): isolate popover anchor names`) and `077c717a`
 `review-da4e2aa15d1b6708`, tier `medium`, lens `review-reliability`, 11 paths / 457 lines
 (`slice_budget_reached`). The reviewer inspected all 11 paths and returned **no findings**. No correction
 was opened; the reviewed boundary advances past this range.
+
+## Slice 14 — Composer tools dialog and nested project files
+
+Owner visual review: redesign the `+` tools dialog as a single vertical, chatbox-width panel with a visible
+header/title, enabled/available badge, native close button, attachment row, master toggle, grouped tool
+rows, project-selection reset row, and footer note. Keep loading/error/empty states and active-run lock
+copy/semantics. Open the nested “Archivos del proyecto” panel beside its trigger with bounded scrolling
+and viewport-safe placement.
+
+- Extend `Popover` with optional dismissible native-popover close control and title accessory while
+  preserving hidden-title behavior and accessible label wiring.
+- Update `AgentChat` layout/copy and tests for title, count, reset row, master toggle, and vertical stacking;
+  preserve the existing file picker and tool-policy behavior.
+- Position the nested project-file popover to the side with a maximum height and vertical scrolling.
+
+Graph Check (before source edits): `graphify query "composer add popover tools dialog layout nested files popover"`
+consulted `Popover()`, `AgentChat.tsx`, `Popover.tsx`, `Popover.test.tsx`, and
+`web/src/components/primitives/primitives.css`. `graphify path "Popover.tsx" "AgentChat.tsx" --undirected`
+found `Popover.tsx <--imports_from-- AgentChat.tsx`; the `AgentChat.tsx` → `primitives.css` path query found
+no path. The directed Popover-to-AgentChat query was ambiguous and returned no path. Read
+`graphify-out/GRAPH_REPORT.md`; relevant hubs include `AgentChat.tsx`, `Popover.tsx`,
+`web/src/components/primitives/primitives.css`, and `Lumat Panel Design System`. Graph report built from
+`bdbc6da0`, behind starting HEAD `3b910a8e`.
+
+Implementation: the composer `+` panel now shows “Herramientas del hilo”, an enabled/available count,
+and a native Popover API close button; tool controls stack vertically, the attachment/master/reset rows
+include the requested supporting copy, and the thread selection note is retained. Existing tool policy
+states, lock copy, and reset action remain in place. The nested project-file panel uses side anchor
+placement with inline flip fallback and bounded vertical scrolling. `Popover` keeps `hideTitle` and
+`aria-labelledby` behavior for other callers.
+
+Verification from `web/`:
+- `npx tsc -b --force --noEmit` — passed (no output).
+- `npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` — passed (2 files, 65 tests); existing React `act(...)` warnings appeared in AgentChat tests.
+- `npm run build` — passed; Vite emitted the existing advisory that the 849.87 kB JS chunk exceeds 500 kB.
+
+Ponytail: native Popover API target-action and CSS anchor positioning provide dismissal/placement without
+custom JavaScript. One-column CSS grid is simpler and more reliable than the former wrapping flex layout;
+the inline-flip fallback handles constrained viewport width. No shorter equivalent preserves the requested
+layout and controls; no intentional shortcut with a known ceiling or deferred authorized behavior.
+
+Commit: `94a470bd` (`feat(ui): add native close controls to popovers`) — Popover accessory and native
+dismiss control, with primitive tests.
+
+Composer layout commit: pending.

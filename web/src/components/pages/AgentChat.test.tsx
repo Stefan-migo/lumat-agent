@@ -85,8 +85,13 @@ describe("AgentChat", () => {
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(toolToggle("tool.one")).not.toBeNull());
-    const dialog = screen.getByRole("dialog", { name: "Agregar al hilo" });
-    expect(dialog.querySelector("h2")).toHaveClass("visually-hidden");
+    const dialog = screen.getByRole("dialog", { name: "Herramientas del hilo" });
+    expect(dialog.querySelector("h2")).not.toHaveClass("visually-hidden");
+    expect(dialog).toHaveTextContent("1 de 2 activadas");
+    expect(screen.getByRole("button", { name: "Cerrar" })).toHaveAttribute("popovertarget", dialog.id);
+    expect(dialog).toHaveTextContent("Adjuntar archivo");
+    expect(dialog).toHaveTextContent("Sube un documento o una imagen");
+    expect(dialog.querySelector(".assistant-chat__tool-chips")).toHaveClass("assistant-chat__tool-chips--stacked");
     expect(document.querySelectorAll(".assistant-chat__tool-row:not(.assistant-chat__tool-master) small")).toHaveLength(0);
     expect(document.querySelector(".assistant-chat__tool-row:not(.assistant-chat__tool-master) svg")).toBeInTheDocument();
     expect(toolToggle("tool.one")).toBeChecked();
@@ -144,7 +149,7 @@ describe("AgentChat", () => {
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(document.querySelector(".assistant-chat__tool-chips button")).not.toBeNull());
-    expect(screen.getByRole("button", { name: "Usar la selección del proyecto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Usar la selección del proyecto/ })).toHaveTextContent("Aplicar las herramientas definidas en el proyecto.");
     fireEvent.click(document.querySelector(".assistant-chat__tool-chips button")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
