@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
@@ -643,3 +643,51 @@ def attach_project_file(
                  after={"thread_id": thread_id, "project_file_id": project_file.id, "kind": kind, "size": len(content)})
     session.commit()
     return {"attachment": to_assistant_attachment_dict(row)}
+
+
+@router.delete("/chat/threads/{thread_id}/attachments/{attachment_id}", status_code=204)
+def delete_thread_attachment(
+    thread_id: int,
+    attachment_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> Response:
+    result = get_thread(session, thread_id, current.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    row = session.scalar(select(AssistantAttachment).where(
+        AssistantAttachment.id == attachment_id,
+        AssistantAttachment.thread_id == thread_id,
+        AssistantAttachment.deleted_at.is_(None),
+    ))
+    if row is None:
+        raise HTTPException(status_code=404, detail="attachment not found")
+    _require_no_active_run(result[0])
+    Path(row.stored_path).unlink(missing_ok=True)
+    row.deleted_at = datetime.now(timezone.utc)
+    record_audit(session, actor=current.username, action="internal_chat.attachment_deleted",
+                 entity="assistant_attachment", entity_id=str(row.id), after={"thread_id": thread_id})
+    session.commit()
+    return Response(status_code=204)
+
+
+@router.get("/chat/threads/{thread_id}/attachments/{attachment_id}/content")
+def get_thread_attachment_content(
+    thread_id: int,
+    attachment_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> FileResponse:
+    if get_thread(session, thread_id, current.id) is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    row = session.scalar(select(AssistantAttachment).where(
+        AssistantAttachment.id == attachment_id,
+        AssistantAttachment.thread_id == thread_id,
+        AssistantAttachment.deleted_at.is_(None),
+    ))
+    if row is None:
+        raise HTTPException(status_code=404, detail="attachment not found")
+    if not Path(row.stored_path).is_file():
+        raise HTTPException(status_code=404, detail="attachment content not found")
+    return FileResponse(row.stored_path, filename=row.filename, media_type=row.content_type,
+                        content_disposition_type="inline")

@@ -144,6 +144,87 @@ def test_cross_thread_attachment_upload_is_denied(client):
     assert denied.status_code == 404
 
 
+def test_attachment_delete_unlinks_file_and_hides_metadata(client, monkeypatch, tmp_path):
+    username = "attachment-delete-owner"
+    with SessionLocal() as session:
+        session.add(User(username=username, password_hash=hash_password("pass"), role="admin"))
+        session.commit()
+    assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    uploaded = client.post(f"/panel/api/chat/threads/{thread_id}/attachments", files={"file": ("notes.txt", b"private notes", "text/plain")})
+    attachment_id = uploaded.json()["attachment"]["id"]
+    stored_file = next((tmp_path / "assistant" / str(thread_id)).iterdir())
+
+    deleted = client.delete(f"/panel/api/chat/threads/{thread_id}/attachments/{attachment_id}")
+
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    assert not stored_file.exists()
+    assert client.get(f"/panel/api/chat/threads/{thread_id}").json()["attachments"] == []
+    assert client.delete(f"/panel/api/chat/threads/{thread_id}/attachments/{attachment_id}").status_code == 404
+    get_settings.cache_clear()
+
+
+def test_attachment_delete_is_thread_and_owner_scoped_and_guarded(client, monkeypatch, tmp_path):
+    owners = ["attachment-delete-a", "attachment-delete-b"]
+    with SessionLocal() as session:
+        session.add_all(User(username=name, password_hash=hash_password("pass"), role="admin") for name in owners)
+        session.commit()
+    client.post("/panel/api/login", json={"username": owners[0], "password": "pass"})
+    own_thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    other_thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    attachment_id = client.post(f"/panel/api/chat/threads/{other_thread}/attachments", files={"file": ("x.txt", b"x", "text/plain")}).json()["attachment"]["id"]
+    assert client.delete(f"/panel/api/chat/threads/{own_thread}/attachments/{attachment_id}").status_code == 404
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, other_thread)
+        thread.assistant_state = {"live": {"status": "running"}}
+        session.commit()
+    assert client.delete(f"/panel/api/chat/threads/{other_thread}/attachments/{attachment_id}").status_code == 409
+    client.post("/panel/api/logout")
+    client.post("/panel/api/login", json={"username": owners[1], "password": "pass"})
+    assert client.delete(f"/panel/api/chat/threads/{other_thread}/attachments/{attachment_id}").status_code == 404
+    get_settings.cache_clear()
+
+
+def test_attachment_content_is_inline_owner_scoped_and_missing_file_is_404(client, monkeypatch, tmp_path):
+    username = "attachment-content-owner"
+    with SessionLocal() as session:
+        user = User(username=username, password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        owner_id = user.id
+        session.add(User(username="attachment-content-other", password_hash=hash_password("pass"), role="admin"))
+        session.commit()
+    client.post("/panel/api/login", json={"username": username, "password": "pass"})
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    uploaded = client.post(f"/panel/api/chat/threads/{thread_id}/attachments", files={"file": ("photo.png", b"png-bytes", "image/png")})
+    attachment_id = uploaded.json()["attachment"]["id"]
+    content_url = f"/panel/api/chat/threads/{thread_id}/attachments/{attachment_id}/content"
+    content = client.get(content_url)
+    assert content.status_code == 200
+    assert content.content == b"png-bytes"
+    assert content.headers["content-type"] == "image/png"
+    assert content.headers["content-disposition"].startswith('inline; filename="photo.png"')
+    client.post("/panel/api/logout")
+    client.post("/panel/api/login", json={"username": "attachment-content-other", "password": "pass"})
+    assert client.get(content_url).status_code == 404
+    client.post("/panel/api/logout")
+    client.post("/panel/api/login", json={"username": username, "password": "pass"})
+    with SessionLocal() as session:
+        row = session.get(AssistantAttachment, attachment_id)
+        Path(row.stored_path).unlink()
+    assert client.get(content_url).status_code == 404
+    client.delete(f"/panel/api/chat/threads/{thread_id}/attachments/{attachment_id}")
+    assert client.get(content_url).status_code == 404
+    get_settings.cache_clear()
+
+
 def _project_file(session, project_id, owner_id, path, *, filename="notes.txt", content_type="text/plain"):
     path.write_bytes(b"project notes")
     row = ProjectFile(

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -349,6 +349,15 @@ describe('internal chat thread API contracts', () => {
     await listChatThreads(12);
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads?limit=12', expect.anything());
+  });
+
+  it('deletes an attachment and builds its same-origin inline content URL', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(deleteThreadAttachment(12, 8)).resolves.toBeUndefined();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads/12/attachments/8', expect.objectContaining({ method: 'DELETE' }));
+    expect(threadAttachmentContentUrl(12, 8)).toBe('/panel/api/chat/threads/12/attachments/8/content');
   });
 
   it('preserves the typed navigator fields returned by the API', async () => {

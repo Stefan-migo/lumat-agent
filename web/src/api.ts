@@ -51,6 +51,7 @@ export async function apiFetch<T>(
     throw new ApiError(res.status, detail || `${res.status} ${res.statusText}`.trim(), structuredDetail);
   }
 
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -147,6 +148,7 @@ export const listActiveRuns = () => apiFetch<ActiveRunsResponse>('/panel/api/cha
 export const renameChatThread = (id: number, title: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) });
 export const setChatThreadProject = (id: number, proyecto: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ proyecto }) });
 export const deleteChatThread = (id: number) => apiFetch<{ ok: true }>(`/panel/api/chat/threads/${id}`, { method: 'DELETE' });
+export const deleteThreadAttachment = (threadId: number, attachmentId: number): Promise<void> => apiFetch<void>(`/panel/api/chat/threads/${threadId}/attachments/${attachmentId}`, { method: 'DELETE' });
 export const sendChatMessage = (id: number, content: string, attachment_ids: number[] = []) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content, attachment_ids });
 export const uploadAssistantAttachment = (id: number, file: File) => { const body = new FormData(); body.append('file', file); return apiFetch<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${id}/attachments`, { method: 'POST', body }); };
 export const attachProjectFileToThread = (threadId: number, projectFileId: number) => postJson<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${threadId}/attachments/from-project`, { project_file_id: projectFileId });
@@ -290,6 +292,8 @@ export async function downloadProjectFile(slug: string, fileId: number, filename
 export async function downloadAssistantArtifact(threadId: number, artifactId: number, filename: string): Promise<void> {
   triggerDownload(await apiFetchBlob(`/panel/api/chat/threads/${threadId}/artifacts/${artifactId}/download`), filename);
 }
+
+export const threadAttachmentContentUrl = (threadId: number, attachmentId: number): string => `/panel/api/chat/threads/${threadId}/attachments/${attachmentId}/content`;
 export const listPlanningSessions = (proyecto?: string) => apiFetch<PlanningSessionsResponse>(`/panel/api/planning/sessions${proyecto === undefined ? '' : `?proyecto=${encodeURIComponent(proyecto)}`}`);
 export const getPlanningSession = (slug: string) => apiFetch<PlanningSessionDetailResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}`);
 export const openPlanningSession = (topic: string, threadId?: number) => postJson<PlanningSessionOpenResponse>('/panel/api/planning/sessions', { topic, ...(threadId === undefined ? {} : { thread_id: threadId }) });
