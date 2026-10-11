@@ -222,6 +222,58 @@ be removed before the new doors exist.
   composer vertically (ChatGPT behaviour); with messages, keep the composer docked at the bottom.
 - [x] Tests updated for every removed/relocated control; no fabricated data.
 
+## Slice 5 — Rehome the section-tab doors, remove AssistantTabs (this pass)
+
+Owner direction 2026-10-11: remove the section tabs `Chat | Proyectos | Sesiones de planificación` and give
+each destination a proper home. Rationale (verified): `AssistantTabs` is the **only** door to the global
+`planning-sessions` admin view and the `projects` list (`PanelShell` `NAVIGATION` excludes both), so the new
+doors must exist before the row is removed. Chat becomes the only view.
+
+- **Proyectos page** → the sidebar **Proyectos** section header gets a `...` (kebab) `Menu` holding
+  **"Nuevo proyecto"** and **"Administrar proyectos"** (opens `/panel/app/projects`). **No standalone `+`** —
+  everything lives in the kebab (owner decision).
+- **Sesiones de planificación** → an item inside each project folder (next to "Contexto y archivos" /
+  "Historial de hilos"), **rendered only when that project has ≥1 session**, opening the planning-sessions
+  page scoped to that project.
+- **Per-project start-chat** → each project row gets a button that starts a new chat bound to that project
+  immediately. Reuse `navigateToProject(project, "threads")` → `?proyecto=<slug>`: `AgentChat`'s mount
+  effect already auto-creates a thread for that project (no new code path). Owner request.
+- **Chat** becomes the only view; the tab row disappears.
+
+### B3 — project scope for planning sessions (backend)
+`GET /panel/api/planning/sessions` lists **all** of the owner's sessions with no project filter, and the
+payload omits `proyecto` (`app/panel/api/routes/chat.py:296-299`, `to_cortex_session_dict`), so a
+per-project tree item is impossible today.
+- `app/panel/api/serializers.py` — `to_cortex_session_dict`: add `"proyecto": thread.proyecto`.
+- `app/panel/api/routes/chat.py` — `list_planning_sessions`: add optional
+  `proyecto: str | None = Query(default=None, max_length=100)`; when provided, filter
+  `InternalChatThread.proyecto == proyecto`. Keep the cortex-session filter, owner scope, and order.
+- `web/src/types.ts` — `PlanningSession` gains `proyecto: string`.
+- `web/src/api.ts` — `listPlanningSessions(proyecto?)` appends `?proyecto=<enc>` when provided.
+- Strict backend TDD RED→GREEN: the summary includes `proyecto`; `?proyecto=X` returns only that project's
+  sessions; without the param behaviour is unchanged.
+
+### S10 — Remove AssistantTabs and rehome its doors (frontend)
+- [ ] Sidebar **Proyectos** header: replace the standalone "Nuevo proyecto" button with a `...` kebab `Menu`
+      whose items are "Nuevo proyecto" and "Administrar proyectos" (navigates to `{ view: "projects" }`).
+- [ ] Each project row: add a start-chat control (icon) that calls `navigateToProject(project, "threads")`.
+- [ ] Each expanded project: add a "Sesiones de planificación" item, rendered **only when the project has
+      ≥1 session** (fetch `listPlanningSessions(project.slug)` lazily on expand); navigates to
+      `{ view: "planning-sessions", projectSlug }`.
+- [ ] `AppShell.tsx`: remove `AssistantTabs` + `sectionTabs` wiring; drop `assistantView`.
+- [ ] `TechnicianShell.tsx`: remove `AssistantTabs` + `sectionTabs` (its footer nav already covers
+      projects/planning).
+- [ ] `AgentChat.tsx`, `ProjectsPage.tsx`, `PlanningSessions.tsx`: remove the `sectionTabs` prop and render.
+- [ ] `PlanningSessions.tsx`: accept a `projectSlug` prop; when present, list that project's sessions
+      (`listPlanningSessions(projectSlug)`) and show the project in the header.
+- [ ] `panelRoutes.ts`: support `{ view: "planning-sessions", projectSlug }` →
+      `/panel/app/planning-sessions?proyecto=<slug>`; parse it back.
+- [ ] Delete `AssistantTabs.tsx` + `AssistantTabs.test.tsx` and its CSS.
+- [ ] Tests updated for every removed/relocated control; no fabricated data.
+
+**Out:** palette/tokens; the composer; `PanelShell` global chrome (leave the shell treatment of
+projects/planning-sessions as-is unless it looks wrong in the visual review).
+
 ## Acceptance criteria
 
 1. `npx tsc -b --force --noEmit`, `npx vitest run --no-file-parallelism`, `npm run build` green (from `web/`).
@@ -323,3 +375,24 @@ be removed before the new doors exist.
   dropped the old popover's explicit "Bloqueadas durante la ejecución" status, so while a run is active
   the checkboxes are disabled without the reason being shown (`AgentChat.tsx:1065-1081`). Fold into a
   later slice together with the earlier active-run poll error indicator.
+
+- **Slice 5 opened 2026-10-11.** Owner direction: remove the section tabs and rehome the two doors —
+  Proyectos via a sidebar kebab, Sesiones de planificación inside each project folder (only when it has
+  sessions); plus a per-project "start chat" button. Owner decision: everything in the kebab, no
+  standalone `+`. Graph Check: graph present; consulted `list_planning_sessions()`,
+  `to_cortex_session_dict()`, `AssistantWorkspace()`, `Menu()`, `AppShell()`, `TechnicianShell()`,
+  `pathForRoute()`, `parsePanelPath()`.
+- B3 — delivered in `f7903838` (`feat(assistant): scope planning sessions by project`). Strict TDD RED
+  (`KeyError: 'proyecto'`) → GREEN. `to_cortex_session_dict` adds `proyecto`; `list_planning_sessions`
+  accepts `?proyecto=`. Targeted 10 tests pass; full backend suite passes (two known warnings).
+- S10 — delivered in `f8d9f99b`, `fd26b1ad`, `a115cf50`, `f460b09f`. `AssistantTabs` deleted (+test);
+  `AppShell`/`TechnicianShell`/`AgentChat`/`ProjectsPage`/`PlanningSessions` stripped of `sectionTabs`;
+  `PlanningSessions` scoped by project; `panelRoutes`/`api`/`types` updated. Verification: tsc pass;
+  focused suite 83 tests; full frontend suite 103 files / 1,105 tests; build pass.
+- Follow-up fix: `assistant-workspace__project-chat:hover` used an undefined token `--surface-muted`;
+  switched to the established `--surface`.
+- **Slice 5 RDD assessment (2026-10-11):** `review assess --base-ref f8b2fa3f --committed-only` →
+  `risk: medium` (executable change in `app/panel/api/routes/chat.py`), 21 paths, 321 lines,
+  `review_due: false` (`under_budget`). No review opened; the reviewed boundary stays at `f8b2fa3f` and
+  accumulates with the next slice. Slice 5 is up for owner visual review against the isolated env
+  (Vite `:5174` → API `:8001`).
