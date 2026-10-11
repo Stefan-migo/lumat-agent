@@ -1017,3 +1017,27 @@ greeting and the CTA) and `primitives.css:2699-2700` (welcome-only spacing so th
 and the CTA read as separated centred lines; the thread-empty hero is unchanged). Tests in
 `AgentChat.test.tsx`. Verification: the same focused run → 69 passed; `npm run build` passed. Commit:
 `6fee9929`.
+
+## Slice 23 — Tab colour inversion, bare `⋮`, and menu icons (frontend)
+
+Owner visual review 2026-10-11 (3rd round):
+- **Invert the tab colours.** The general background is `--brand-bg` (what `.panel-shell` renders;
+  `primitives.css:1568`). The **active** tab must use `--brand-bg` (today it uses `--corp-surface`, which
+  reads lighter and detached) and hide the separator at its own bottom with a `--brand-bg` mask, so it
+  reads as a continuation of the content below. **Inactive** tabs keep a differentiating
+  `--brand-bg-elevated`.
+- **Bare, smaller `⋮`.** The per-tab `Menu` icon trigger is a bordered, filled 40px button
+  (`primitives.css:1126-1133`, `[data-state="open"]` at 1121). Scope an override to the tab so it is
+  smaller and shows only the three dots — no background, no border, including while open.
+- **Icons in the `⋮` menu.** Add `icon` to each item (`Menu` already renders `item.icon`): Renombrar →
+  `Pencil`, Cerrar pestaña → `X`, Eliminar hilo → `Trash2`.
+
+Tests: the three `⋮` items still render and act on the right tab (existing coverage) plus an assertion
+that each item carries an icon glyph; existing assertions preserved.
+
+Implementation: `AssistantWorkspace.css:296-319` (active tab fill + separator mask → `--brand-bg`; the tab
+menu trigger reduced to a `1.5rem` transparent, borderless control with a `1rem` glyph, transparent while
+open), `AssistantWorkspace.tsx` (Pencil / X / Trash2 on the three items), and `AssistantWorkspace.test.tsx`
+(each item carries an `svg`). Verification from `web/`: `npx tsc -b --force --noEmit` passed;
+`npx vitest run src/components/pages/AssistantWorkspace.test.tsx` → 15 passed; `npm run build` passed
+(existing >500 kB advisory). Commit: `db11caa3`.
