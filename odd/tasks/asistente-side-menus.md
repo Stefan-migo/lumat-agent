@@ -148,3 +148,68 @@ Removing the Actividad tab leaves these `AssistantWorkspace` props unused
 - **Pending**: owner's visual pass; `graphify --update` at session close (a
   mid-session incremental update was run by the writer but did not regenerate
   `GRAPH_REPORT.md`).
+
+## Slice 2 — owner feedback after the visual pass (2026-10-11)
+
+### S2-1 — Header: a single borderless toggle
+
+Remove the decorative accent icon that sits before "Detalle del hilo". The ONLY
+collapse/expand control is the button on the right, at the title's height, using
+the **`PanelRight`** glyph **always**, black (`var(--corp-text)`), with **no
+background and no border**. Do NOT touch the left pane's toggle styling (it
+shares the `.assistant-workspace__pane-toggle` class — scope the change to the
+context pane).
+
+### S2-2 — Sections never expand (BUG, verified in a real browser)
+
+Root cause: `ContextSection` defaults `expanded` to `false` and the parent only
+passes `expanded` for `project`. Clicking the others calls `toggleContextSection`
+and updates `contextSections`, but no section reads that value → `aria-expanded`
+stays `false` forever. Verified with Playwright: clicking "Recursos del proyecto"
+leaves `aria-expanded="false"` and the panel content hidden.
+
+Fix: pass `expanded={contextSections[id] ?? false}` for every section (the
+initial state already carries `project: true`). Strengthen the test to assert the
+panel is actually **visible** after the click (`toBeVisible`) — the current
+assertion only checked the text existed in the DOM, which is why a hidden panel
+passed.
+
+### S2-3 — The chatbox project selector is the source of truth
+
+Today the right panel's Proyecto section follows the LEFT sidebar:
+`activeProjectSlug = route.get("proyecto") || selectedProject`, where
+`selectedProject` is the folder expanded on the left. Expanding a left folder
+repaints the right panel while the chat's project (the composer's "Proyecto"
+popover, i.e. `thread.proyecto`) stays put — the discrepancy the owner reported.
+
+Decision: the composer's project selector wins. The left pane is navigation only;
+expanding a folder must NOT select the project. Only "start conversation" selects
+it (by creating/using a thread in that project).
+
+Fix: derive the panel's project from the active thread. Add
+`activeProjectSlug?: string` to `AssistantWorkspace` and pass
+`thread?.proyecto ?? undefined` from `AgentChat`. Drop `|| selectedProject`.
+Rename `selectedProject` → `expandedProjectSlug` so left-pane expansion state can
+never be mistaken for the current project again.
+
+### Slice 2 acceptance criteria
+
+- Clicking any section row expands it (`aria-expanded="true"`, content visible);
+  clicking again collapses it.
+- The context header has exactly ONE button: the `PanelRight` glyph, dark, no
+  background/border; it toggles the panel open/closed.
+- Expanding a left project folder does NOT change the right panel's project;
+  changing the project in the composer DOES.
+- The left pane toggle, the rest of the panel, and Settings are unchanged.
+
+### Slice 2 work units
+
+- **WU3** `fix(assistant): expand context sections on click`
+  — `AssistantWorkspace.tsx`, `AssistantWorkspace.test.tsx`.
+- **WU4** `fix(assistant): source the context panel project from the active thread`
+  — `AssistantWorkspace.tsx`, `AgentChat.tsx`, `AssistantWorkspace.test.tsx`.
+- **WU5** `fix(assistant): single borderless toggle in the context panel header`
+  — `AssistantWorkspace.tsx`, `AssistantWorkspace.css`, `AssistantWorkspace.test.tsx`.
+
+Checks: the same three as slice 1 (`tsc -b --force --noEmit`,
+`vitest run --no-file-parallelism`, `npm run build`), from `web/`.
