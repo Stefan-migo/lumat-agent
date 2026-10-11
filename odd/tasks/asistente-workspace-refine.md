@@ -254,22 +254,22 @@ per-project tree item is impossible today.
   sessions; without the param behaviour is unchanged.
 
 ### S10 — Remove AssistantTabs and rehome its doors (frontend)
-- [ ] Sidebar **Proyectos** header: replace the standalone "Nuevo proyecto" button with a `...` kebab `Menu`
+- [x] Sidebar **Proyectos** header: replace the standalone "Nuevo proyecto" button with a `...` kebab `Menu`
       whose items are "Nuevo proyecto" and "Administrar proyectos" (navigates to `{ view: "projects" }`).
-- [ ] Each project row: add a start-chat control (icon) that calls `navigateToProject(project, "threads")`.
-- [ ] Each expanded project: add a "Sesiones de planificación" item, rendered **only when the project has
+- [x] Each project row: add a start-chat control (icon) that calls `navigateToProject(project, "threads")`.
+- [x] Each expanded project: add a "Sesiones de planificación" item, rendered **only when the project has
       ≥1 session** (fetch `listPlanningSessions(project.slug)` lazily on expand); navigates to
       `{ view: "planning-sessions", projectSlug }`.
-- [ ] `AppShell.tsx`: remove `AssistantTabs` + `sectionTabs` wiring; drop `assistantView`.
-- [ ] `TechnicianShell.tsx`: remove `AssistantTabs` + `sectionTabs` (its footer nav already covers
+- [x] `AppShell.tsx`: remove `AssistantTabs` + `sectionTabs` wiring; drop `assistantView`.
+- [x] `TechnicianShell.tsx`: remove `AssistantTabs` + `sectionTabs` (its footer nav already covers
       projects/planning).
-- [ ] `AgentChat.tsx`, `ProjectsPage.tsx`, `PlanningSessions.tsx`: remove the `sectionTabs` prop and render.
-- [ ] `PlanningSessions.tsx`: accept a `projectSlug` prop; when present, list that project's sessions
+- [x] `AgentChat.tsx`, `ProjectsPage.tsx`, `PlanningSessions.tsx`: remove the `sectionTabs` prop and render.
+- [x] `PlanningSessions.tsx`: accept a `projectSlug` prop; when present, list that project's sessions
       (`listPlanningSessions(projectSlug)`) and show the project in the header.
-- [ ] `panelRoutes.ts`: support `{ view: "planning-sessions", projectSlug }` →
+- [x] `panelRoutes.ts`: support `{ view: "planning-sessions", projectSlug }` →
       `/panel/app/planning-sessions?proyecto=<slug>`; parse it back.
-- [ ] Delete `AssistantTabs.tsx` + `AssistantTabs.test.tsx` and its CSS.
-- [ ] Tests updated for every removed/relocated control; no fabricated data.
+- [x] Delete `AssistantTabs.tsx` + `AssistantTabs.test.tsx` and its CSS.
+- [x] Tests updated for every removed/relocated control; no fabricated data.
 
 **Out:** palette/tokens; the composer; `PanelShell` global chrome (leave the shell treatment of
 projects/planning-sessions as-is unless it looks wrong in the visual review).
@@ -482,6 +482,8 @@ their tests. **Out:** backend (B4/B5 already exist); `PanelShell`.
   `AppShell`/`TechnicianShell`/`AgentChat`/`ProjectsPage`/`PlanningSessions` stripped of `sectionTabs`;
   `PlanningSessions` scoped by project; `panelRoutes`/`api`/`types` updated. Verification: tsc pass;
   focused suite 83 tests; full frontend suite 103 files / 1,105 tests; build pass.
+  (Slice 5 checkboxes were left unchecked in the doc; marked done 2026-10-11 after confirming
+  `AssistantTabs.tsx` no longer exists and the delivery log matches the commits.)
 - Follow-up fix: `assistant-workspace__project-chat:hover` used an undefined token `--surface-muted`;
   switched to the established `--surface`.
 - **Slice 5 RDD assessment (2026-10-11):** `review assess --base-ref f8b2fa3f --committed-only` →
@@ -851,3 +853,70 @@ removed in favor of the shared panel rule. No intentional shortcut with a known 
 was deferred.
 
 Commit: `2df854b3` (`fix(assistant): bound composer popovers and filenames`).
+
+## Slice 17 — Attachment delete + inline content (backend)
+
+Owner visual review 2026-10-11: a thread attachment cannot be removed from anywhere (neither the
+composer nor the "Archivos de este hilo" popover), and an attached image cannot be opened/previewed.
+Both need backend support: today only upload (`chat.py:565`) and attach-from-project (`chat.py:599`)
+exist, the thread response lists attachments (`chat.py:370-381`), and a `FileResponse` exists only for
+artifacts (`chat.py:445-453`).
+
+### B6 — delete a thread attachment
+`DELETE /chat/threads/{thread_id}/attachments/{attachment_id}` (owner-scoped, `require_agent_surface_json`).
+- `get_thread(session, thread_id, current.id)` → 404; then load the attachment where
+  `id == attachment_id`, `thread_id == thread_id`, `deleted_at.is_(None)` → 404 otherwise.
+- Mirror the existing active-run guard (`_require_no_active_run`) used by the tool-policy routes.
+- Unlink the stored file (`Path(row.stored_path).unlink(missing_ok=True)`) and set `deleted_at` (the
+  same soft-delete shape as `cleanup_attachments`, `attachments.py:84-93`).
+- Audit `internal_chat.attachment_deleted`; commit; `204`.
+- `web/src/api.ts` — `deleteThreadAttachment(threadId, attachmentId)`.
+
+### B7 — serve attachment bytes for preview
+`GET /chat/threads/{thread_id}/attachments/{attachment_id}/content` (owner-scoped).
+- Same ownership/not-deleted resolution; a missing file on disk → 404 (never an uncaught `OSError`,
+  per the R3-002 lesson).
+- `FileResponse(row.stored_path, filename=row.filename, media_type=row.content_type,
+  content_disposition_type="inline")` so images render in the browser.
+- `web/src/api.ts` — `threadAttachmentContentUrl(threadId, attachmentId)` (same-origin path for `<img src>`).
+
+Strict backend TDD RED→GREEN: delete removes it from `GET /chat/threads/{id}` and unlinks the file;
+double-delete → 404; another owner's / another thread's attachment → 404; content returns bytes with the
+stored content type; content of a deleted attachment → 404; missing file → 404.
+
+## Slice 18 — Composer attachment tray, delete, and image preview (frontend)
+
+Owner visual review 2026-10-11: attachments must show more orderly (a dedicated tray above the
+composer, attachment-only), with a reduced (ellipsized) filename and an `x` to remove each one — from
+both the tray and the "Archivos de este hilo" popover — and attached images should be clickable to
+preview.
+
+- Move the composer attachment list out of the composer card into a dedicated top tray
+  (`.assistant-chat__attachment-tray`) rendered above the composer card while attachments exist; keep
+  the active-conversation state compact.
+- Each tray item: file-type icon + a single-line ellipsized filename (`title` = full name) + `x` →
+  `deleteThreadAttachment`, then drop the id from local `attachments`.
+- "Archivos de este hilo" popover rows: add a remove `x` per row (same handler); image rows become
+  clickable to preview.
+- Image preview: `kind === "image"` opens the existing `Dialog` primitive with an
+  `<img src={threadAttachmentContentUrl(...)}>`; non-images are not clickable. Honest error state if the
+  image fails to load.
+- Remove the old in-composer `.assistant-chat__attachment-list` markup.
+- Tests: delete calls the API and removes the row from both the tray and the popover; the tray renders
+  only with attachments; an image row opens the preview while a non-image does not; the filename carries
+  the full name via `title`.
+
+## Slice 19 — `+` dialog close placement and full-area drop (frontend)
+
+Owner visual review 2026-10-11: in the open `+` dialog the close `×` sits on its own line above the
+first row and the dialog can be tighter; drag & drop only works over the composer stack
+(`AgentChat.tsx:1054`) and takes a single file.
+
+- `Popover`: when `hideTitle` + `dismissible`, place the close `×` at the height of the first content row
+  instead of a standalone header line; keep the visible-title behavior unchanged for other callers.
+- Compact the `+` dialog further to match the owner's reference.
+- Drag & drop: attach the drop handlers to the whole chat area (conversation + composer), not only the
+  composer stack, and accept **multiple** dropped files (loop over `dataTransfer.files` into `attach`).
+  Preserve the existing picker path.
+- Tests: `×` renders aligned with the first row (no standalone header row when `hideTitle`); dropping N
+  files attaches N; the drop zone covers the conversation area.
