@@ -895,8 +895,9 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
           }}>
           <div className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
-              <div className="assistant-chat__hero">
+              <div className="assistant-chat__hero assistant-chat__hero--welcome">
                 <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
+                <p>¿Con qué trabajamos hoy?</p>
                 <Button onClick={() => void newChat()} disabled={loading}>Iniciar conversación</Button>
               </div>
             ) : null}
