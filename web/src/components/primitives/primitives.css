@@ -2718,18 +2718,6 @@
 .assistant-chat__thinking-dots i:nth-child(2) { animation-delay: 150ms; }
 .assistant-chat__thinking-dots i:nth-child(3) { animation-delay: 300ms; }
 @keyframes assistant-thinking { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
-.assistant-chat__composer-wrap { position: sticky; bottom: 0; display: grid; gap: var(--space-2); padding: var(--space-3) 0; background: var(--brand-bg); }
-/* Composer — one rounded unit: textarea on top, control row underneath
-   (attach left, send right). The textarea keeps its label in the DOM for the
-   accessible name but the label is visually hidden; the container carries the
-   focus ring so the whole surface reads as one control (industry standard). */
-.assistant-chat__composer { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-1); }
-.assistant-chat__composer:has(.assistant-chat__textarea:focus) { border-color: var(--primary-700); box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring); }
-.assistant-chat__composer .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-.assistant-chat__textarea { width: 100%; min-width: 0; min-height: var(--space-8); max-height: 10rem; padding: var(--space-2) 0; border: 0; background: transparent; resize: none; overflow-y: auto; }
-/* Beats `.field__control:focus` (same specificity, later in the file). */
-.assistant-chat__textarea:focus, .assistant-chat__textarea:disabled { border: 0; outline: none; background: transparent; }
-.assistant-chat__composer-controls { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .assistant-chat__attach { display: inline-flex; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-sm); color: var(--corp-primary); cursor: pointer; }
 .assistant-chat__attach:hover { background: color-mix(in srgb, var(--corp-primary) 10%, transparent); }
 .assistant-chat__attach:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }

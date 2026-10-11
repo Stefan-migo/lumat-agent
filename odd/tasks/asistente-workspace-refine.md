@@ -570,3 +570,22 @@ RDD assessment `review assess --base-ref 1381346f --committed-only` → risk `me
 WARNING** — the Herramientas badge shows `toolPolicy.available.length` (available tools) rather than the
 enabled count, so disabling a tool does not lower the number. This is the **owner-decided semantics** (the
 bar shows the activatable opt-in tools, defaults excluded), so it is by design, not a defect.
+
+## Slice 10 — Composer visual-review corrections
+
+Owner direction: apply visual-review corrections to the Slice 9 layered composer, scope the composer popovers upward without changing the global primitive behavior, and correct tool-count semantics and copy.
+
+- Give the tray vertical breathing room and distribute General left, Archivos centre, Herramientas right.
+- Consolidate composer wrapper/composer/textarea styling in `AgentChat.css`; keep a single outer card with a lighter surface and a darker protruding tray. Preserve wrapper focus ring and hidden label.
+- Increase control spacing; render Planificar as a tinted Workflow pill while preserving its active state.
+- Scope composer popovers to open upward with bounded height/viewport width; add project/file row icons and clearer menu structure. Map file types to Lucide icons with focused tests.
+- Count enabled tools in Herramientas; relabel the policy reset action to “Usar la selección del proyecto” without changing behavior.
+- Update `AgentChat` assertions for enabled count changes, reset label, slug-free project labels, and preserve existing behavior coverage.
+
+Graph Check: `graphify query "assistant chat composer textarea popover project file icon"` surfaced `AgentChat.tsx`, `Popover()`, `Textarea()`, `Icon()`, `Composer-First Central Panel`, and project/filesystem nodes. A narrower query surfaced `AgentChat()`, `Popover()`, `AgentChat.tsx`, `services/project_files.py`, and `Project`. `graphify path "AgentChat()" "Popover()"` did not find a directed path (ambiguous source match); the undirected retry also found no path. `graphify-out/GRAPH_REPORT.md` consulted: hubs include `api.ts`, `Conversation`, `AssistantWorkspace.tsx`, and `Lumat Panel Design System`; relevant AgentChat and Popover nodes were checked through query results.
+
+Implementation: the outer wrapper is the sole composer card; its inner composer has no visible box. Tray spacing/distribution, scoped upward popovers, icon-led menu rows, the Workflow planning pill, enabled-tool counting, and reset copy are in place. File-type icon mapping is covered by focused unit tests. Project selection continues to use the existing thread-project endpoint.
+
+Verification from `web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run src/components/pages/AgentChat.test.tsx src/components/pages/assistantFileIcon.test.ts src/components/primitives/Popover.test.tsx` passed (3 files, 67 tests; existing React `act(...)` warnings); `npm run build` passed (Vite reported the existing >500 kB chunk-size advisory).
+
+Ponytail: the new type-to-icon helper is the minimum reusable mapping needed by two row types and a unit test; native `:has()` and CSS anchor positioning are already-supported platform features used for the wrapper focus ring and upward popovers. No shortcut with a known ceiling was introduced. Commit SHAs: pending.
