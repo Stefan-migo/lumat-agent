@@ -850,4 +850,4 @@ the existing `hideTitle` API avoids primitive changes. Duplicate `+` panel sizin
 removed in favor of the shared panel rule. No intentional shortcut with a known ceiling or authorized behavior
 was deferred.
 
-Commit: pending.
+Commit: `2df854b3` (`fix(assistant): bound composer popovers and filenames`).
