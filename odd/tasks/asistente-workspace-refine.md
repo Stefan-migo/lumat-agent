@@ -952,3 +952,68 @@ rendered only for the hidden-title dismissible case), and tests in `AgentChat.te
 `npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` → 71
 passed (existing React `act(...)` warnings); `npm run build` passed (existing >500 kB advisory). Commit:
 `3ba006f7`.
+
+## Slice 20 — Remove the `+` dialog close control (frontend)
+
+Owner visual review 2026-10-11: the `+` dialog's `×` cannot sit at the first row's height, and the dialog
+already closes by clicking outside or the trigger — so the close control is unnecessary. Remove it.
+
+- `AgentChat.tsx`: drop `dismissible` from the `+` `Popover` (keep `hideTitle`).
+- `Popover.tsx`: remove the now-unused `dismissible` prop, the `.popover__header` wrapper and the
+  `.popover__close` button (revert to the plain labelled `h2`); `dismissible` has no other caller.
+- `primitives.css`: remove `.popover__header`, `.popover__header .popover__title`, and `.popover__close`.
+- `AgentChat.css`: remove the hidden-title dismissible alignment rules.
+- Tests: drop the `Popover.test.tsx` close-control tests and the `AgentChat.test.tsx` assertions on the
+  "Cerrar" button; keep the hidden-title accessible-name assertion and every other passing case.
+
+Implementation: `Popover.tsx` (removed `dismissible`, the `.popover__header` wrapper and the
+`.popover__close` button, reverting to the labelled `h2`), `primitives.css`, `AgentChat.css`, `AgentChat.tsx`
+(the `+` popover keeps only `hideTitle`), and both test files. Verification from `web/`:
+`npx tsc -b --force --noEmit` passed (an unused `fireEvent` import was cleaned up);
+`npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` → 69
+passed; `npm run build` passed (existing >500 kB advisory). Commit: `8d06113a`.
+
+## Slice 21 — Workspace tabs look like tabs, with a per-tab `⋮` menu (frontend)
+
+Owner visual review 2026-10-11 (reference: the panel's tab row): the current thread tabs do not read as
+tabs — the separator line sits far below them, every tab has a bottom border, and the active tab is not
+visually joined to the content. Each tab needs a small **vertical `⋮`** opening a menu to close or rename
+it.
+
+- `AssistantWorkspace.css`: the separator must sit at the tabs' baseline — remove the tab bar's
+  `padding-bottom` gap so `border-bottom` runs along the tabs' bottom edge; strip each tab's bottom border
+  (top/left/right only, rounded top); make the active tab join the content below (background matches the
+  content surface and it covers the separator at its own bottom). Match the reference geometry.
+- `AssistantWorkspace.tsx`: replace the per-tab `×` (`__thread-close`) with a small vertical-`⋮` `Menu`
+  per tab whose items are **Renombrar**, **Cerrar pestaña** (close the tab — remove it from the open set
+  only, no delete) and **Eliminar hilo** (the existing permanent delete). The third item is kept so the
+  documented delete capability is not silently lost and its dialog/handler do not become dead code; ask
+  the owner whether they want only Cerrar/Renombrar. Clicking the tab label still activates the tab. Remove
+  the single active-thread `Menu` beside the `+` now that each tab owns its actions; keep the `+` (new
+  thread).
+- Tests: each open tab renders its own `⋮` menu and its items act on that tab; the standalone actions menu
+  is gone; existing tab-navigation assertions preserved.
+
+Implementation: `AssistantWorkspace.css` (the bar separator moves to the tabs' baseline; tabs lose the
+bottom border; the active tab joins the content), `AssistantWorkspace.tsx` (per-tab vertical-`⋮` `Menu`
+with Renombrar / Cerrar pestaña / Eliminar hilo acting on that tab; the standalone active-thread menu
+removed; the `+` kept), and `AssistantWorkspace.test.tsx`. Verification from `web/`:
+`npx tsc -b --force --noEmit` passed; `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` →
+15 passed; `npm run build` passed (existing >500 kB advisory). Commit: `c1221058`.
+
+## Slice 22 — Empty-state greeting with a second line (frontend)
+
+Owner visual review 2026-10-11: with no chat open the state is minimal but needs a second sentence after
+the greeting (e.g. "¿Con qué trabajamos hoy?"), the CTA lower, all centred with line spacing.
+
+- `AgentChat.tsx`: under the time-based greeting (`Buenas tardes, admin`) add a second, muted sentence, and
+  keep the "Iniciar conversación" `Button` as the CTA clearly below it.
+- `primitives.css` `.assistant-chat__hero`: increase the vertical gap so the greeting, the second line and
+  the CTA read as separate centred lines (CTA lower), preserving the other hero (thread with no messages).
+- Tests: the no-chat empty state renders the second sentence and the CTA; existing assertions preserved.
+
+Implementation: `AgentChat.tsx:898-901` (a second muted line, `¿Con qué trabajamos hoy?`, between the
+greeting and the CTA) and `primitives.css:2699-2700` (welcome-only spacing so the greeting, the second line
+and the CTA read as separated centred lines; the thread-empty hero is unchanged). Tests in
+`AgentChat.test.tsx`. Verification: the same focused run → 69 passed; `npm run build` passed. Commit:
+`6fee9929`.
