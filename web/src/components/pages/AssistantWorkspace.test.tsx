@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AgentChat } from "./AgentChat";
 
 describe("AssistantWorkspace", () => {
@@ -103,7 +104,8 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo proyecto" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Nuevo proyecto" }));
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Nuevo Proyecto" } });
     expect(screen.getByLabelText("Slug")).toHaveValue("nuevo-proyecto");
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Organizar trabajo" } });
@@ -126,7 +128,8 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     render(<AgentChat role="admin" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo proyecto" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Nuevo proyecto" }));
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Proyecto" } });
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "proyecto" } });
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Propósito" } });
@@ -200,6 +203,7 @@ describe("AssistantWorkspace", () => {
   it("filters inline project history without rendering a static agent roster", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
       if (url.includes("proyecto=operaciones")) return new Response(JSON.stringify({ threads: [
         { id: 81, title: "Agenda semanal", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null },
         { id: 82, title: "Revisar inventario", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null },
@@ -220,6 +224,27 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revisar inventario" }));
     expect(window.location.search).toContain("proyecto=operaciones");
     expect(window.location.search).toContain("thread_id=82");
+  });
+
+  it("re-homes project management, project chat, and project planning sessions", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [{ slug: "plan-a", proyecto: "operaciones", topic: "Plan", status: "active", thread_id: 3, opened_at: null, closed_at: null, report_key: null }] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Administrar proyectos" }));
+    expect(window.location.pathname).toBe("/panel/app/projects");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
+    expect(await screen.findByRole("link", { name: "Sesiones de planificación" })).toHaveAttribute("href", "/panel/app/planning-sessions?proyecto=operaciones");
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar chat en Operaciones" }));
+    expect(window.location.search).toContain("proyecto=operaciones");
   });
 
   it("renders open tabs with idle status and enriches matching runs with their stage", async () => {

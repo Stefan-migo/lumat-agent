@@ -182,6 +182,22 @@
   outline-offset: 2px;
 }
 
+.assistant-workspace__project-chat {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.assistant-workspace__project-chat:hover { background: var(--surface-muted); }
+.assistant-workspace__project-chat:focus-visible { outline: 2px solid var(--focus-ring); }
+
 .assistant-workspace__project-details {
   padding-left: var(--space-6);
 }

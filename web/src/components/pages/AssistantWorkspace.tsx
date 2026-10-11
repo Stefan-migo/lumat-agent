@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Download, FileText, Folder, History, PanelRight, PanelLeft, Plus, X, MessageSquarePlus } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listProjects, renameChatThread } from "../../api";
+import { ChevronDown, ChevronRight, Download, FileText, Folder, History, PanelRight, PanelLeft, Plus, X, MessageSquarePlus, CalendarDays } from "lucide-react";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -25,6 +25,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get("proyecto"));
   const [projectThreads, setProjectThreads] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>>({});
+  const [projectSessions, setProjectSessions] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; count: number }>>({});
   const [historySearch, setHistorySearch] = useState<Record<string, string>>({});
   const [defaultHistoryOpen, setDefaultHistoryOpen] = useState(false);
   const [defaultThreads, setDefaultThreads] = useState<{ state: "idle" | "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>({ state: "idle", threads: [] });
@@ -97,6 +98,16 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       setProjectThreads((current) => ({ ...current, [slug]: { state: result.threads.length ? "ready" : "empty", threads: result.threads } }));
     } catch (error: unknown) {
       setProjectThreads((current) => ({ ...current, [slug]: { state: error instanceof ApiError && error.status === 403 ? "denied" : "error", threads: [] } }));
+    }
+  };
+
+  const loadProjectSessions = async (slug: string) => {
+    setProjectSessions((current) => ({ ...current, [slug]: { state: "loading", count: 0 } }));
+    try {
+      const result = await listPlanningSessions(slug);
+      setProjectSessions((current) => ({ ...current, [slug]: { state: result.sessions.length ? "ready" : "empty", count: result.sessions.length } }));
+    } catch (error: unknown) {
+      setProjectSessions((current) => ({ ...current, [slug]: { state: error instanceof ApiError && error.status === 403 ? "denied" : "error", count: 0 } }));
     }
   };
 
@@ -259,7 +270,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           </div> : null}
         </section>
         <section className="assistant-workspace__project-section" aria-label="Proyectos" hidden={!projectsVisible}>
-          <header className="assistant-workspace__section-header"><h2>Proyectos</h2><Button variant="tertiary" aria-label="Nuevo proyecto" title="Nuevo proyecto" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} /><span>Nuevo proyecto</span></Button></header>
+          <header className="assistant-workspace__section-header"><h2>Proyectos</h2><Menu label="Acciones de proyectos" trigger="icon" items={[{ value: "create", label: "Nuevo proyecto" }, { value: "manage", label: "Administrar proyectos" }]} onSelect={(value) => { if (value === "create") { setProjectCreateError(null); setCreateProjectOpen(true); } else { window.history.pushState({}, "", pathForRoute({ view: "projects" })); window.dispatchEvent(new PopStateEvent("popstate")); } }} /></header>
         {projectsVisible && defaultHistoryOpen ? <div className="assistant-workspace__default-history" aria-label="Hilos predeterminados">
           {defaultThreads.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
           {defaultThreads.state === "error" || defaultThreads.state === "denied" ? <StateMessage tone="danger" role="alert" title={defaultThreads.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
@@ -296,18 +307,23 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                       className="assistant-workspace__project-select"
                       aria-label={`${expanded ? "Contraer" : "Expandir"} ${project.name}`}
                       aria-expanded={expanded}
-                      onClick={() => setSelectedProject(expanded ? null : project.slug)}
+                      onClick={() => { setSelectedProject(expanded ? null : project.slug); if (!expanded && !projectSessions[project.slug]) void loadProjectSessions(project.slug); }}
                     >
                       <Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
                       <Icon icon={Folder} size="sm" />
                       <span>{project.name}</span>
                     </button>
+                    <button type="button" className="assistant-workspace__project-chat" aria-label={`Iniciar chat en ${project.name}`} title={`Iniciar chat en ${project.name}`} onClick={() => navigateToProject(project, "threads")}><Icon icon={MessageSquarePlus} size="sm" /></button>
                   </div>
                   {expanded ? (
                     <div className="assistant-workspace__project-details">
                       <nav aria-label={`Navegación de ${project.name}`}>
                         <a href={pathForRoute({ view: "projects", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToProject(project, "context"); }}><Icon icon={FileText} size="sm" />Contexto y archivos</a>
                           <button type="button" className="assistant-workspace__history-trigger" aria-expanded={projectThreads[project.slug] !== undefined} onClick={() => { if (projectThreads[project.slug]) setProjectThreads((current) => { const next = { ...current }; delete next[project.slug]; return next; }); else void loadProjectThreads(project.slug); }}><Icon icon={History} size="sm" />Historial de hilos</button>
+                          {projectSessions[project.slug]?.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando sesiones de planificación" /> : null}
+                          {projectSessions[project.slug]?.state === "error" || projectSessions[project.slug]?.state === "denied" ? <StateMessage tone="danger" role="alert" title={projectSessions[project.slug].state === "denied" ? "No tienes permiso para ver estas sesiones." : "No pudimos cargar las sesiones de planificación."} /> : null}
+                          {projectSessions[project.slug]?.state === "error" ? <Button variant="secondary" onClick={() => void loadProjectSessions(project.slug)}>Reintentar</Button> : null}
+                          {projectSessions[project.slug]?.state === "ready" ? <a href={pathForRoute({ view: "planning-sessions", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); window.history.pushState({}, "", pathForRoute({ view: "planning-sessions", projectSlug: project.slug })); window.dispatchEvent(new PopStateEvent("popstate")); }}><Icon icon={CalendarDays} size="sm" />Sesiones de planificación</a> : null}
                           {projectThreads[project.slug] ? <div className="assistant-workspace__project-history">
                             <SearchInput aria-label={`Buscar hilos de ${project.name}`} placeholder="Buscar hilo" onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} />
                             {projectThreads[project.slug].state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
