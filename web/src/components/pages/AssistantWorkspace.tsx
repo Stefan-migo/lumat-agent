@@ -363,31 +363,21 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
               </div>;
             })}
           </div>
+          {activeThread ? <Menu
+            label="Acciones del hilo"
+            trigger="icon"
+            items={[{ value: "rename", label: "Renombrar" }, { value: "delete", label: "Eliminar", tone: "danger" }]}
+            onSelect={(value) => {
+              setThreadActionError(null);
+              if (value === "rename") { setRenameTarget(activeThread); setRenameTitle(activeThread.title ?? ""); }
+              else setDeleteTarget(activeThread);
+            }}
+          /> : null}
           <Button variant="tertiary" aria-label="Crear nuevo hilo" title="Crear nuevo hilo" onClick={onCreateThread}>
             <Icon icon={Plus} />
           </Button>
         </nav>
         {threadListError ? <StateMessage tone="danger" role="alert" title={threadListError} /> : null}
-        <header className="assistant-workspace__thread-header">
-          <div>
-            <h1>{activeThread?.title || (activeThreadId ? "Sin título" : "Asistente Lumat")}</h1>
-            {activeProject ? <p>Proyecto: {activeProject.name}</p> : null}
-          </div>
-          <div className="assistant-workspace__header-actions">
-          {activeThread ? (
-            <Menu
-              label="Acciones del hilo"
-              trigger="icon"
-              items={[{ value: "rename", label: "Renombrar" }, { value: "delete", label: "Eliminar", tone: "danger" }]}
-              onSelect={(value) => {
-                setThreadActionError(null);
-                if (value === "rename") { setRenameTarget(activeThread); setRenameTitle(activeThread.title ?? ""); }
-                else setDeleteTarget(activeThread);
-              }}
-            />
-          ) : null}
-          </div>
-        </header>
         {threadActionError ? <StateMessage tone="danger" role="alert" title={threadActionError} /> : null}
         <Dialog open={renameTarget !== null} onClose={() => setRenameTarget(null)} title="Renombrar hilo">
           <div className="assistant-workspace__thread-dialog">

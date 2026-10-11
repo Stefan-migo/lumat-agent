@@ -25,7 +25,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Proyectos", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Agentes", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
-    expect(within(thread).getByRole("heading", { name: "Asistente Lumat" })).toBeInTheDocument();
+    expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
     expect(await within(thread).findByRole("heading", { name: "Comienza una conversación" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
@@ -298,7 +298,7 @@ describe("AssistantWorkspace", () => {
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes("/threads/12") && init?.method === "DELETE")).toBe(false);
   });
 
-  it("shows the active thread title and real project name without a competing page title", async () => {
+  it("shows the active thread title in the tab bar without redundant header chrome", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
@@ -319,9 +319,9 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
-    expect(await screen.findByRole("heading", { name: "Agenda semanal", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Agenda semanal" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Asistente Lumat", level: 1 })).not.toBeInTheDocument();
-    expect(screen.getByText("Proyecto: Operaciones")).toBeInTheDocument();
+    expect(screen.queryByText("Proyecto: Operaciones")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Acciones del hilo" })).toBeInTheDocument();
     expect(screen.getByText("Gestión")).toBeInTheDocument();
     expect(screen.getAllByText("manual.pdf")).toHaveLength(3);

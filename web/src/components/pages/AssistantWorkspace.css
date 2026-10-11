@@ -248,8 +248,7 @@
 
 .assistant-workspace__thread-tabs,
 .assistant-workspace__thread-tab-list,
-.assistant-workspace__thread-tab,
-.assistant-workspace__thread-header {
+.assistant-workspace__thread-tab {
   display: flex;
   align-items: center;
 }
@@ -312,23 +311,6 @@
 .assistant-workspace__thread-close:hover,
 .assistant-workspace__thread-close:focus-visible {
   background: var(--brand-bg);
-}
-
-.assistant-workspace__thread-header {
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--corp-border);
-}
-
-.assistant-workspace__thread-header h1 {
-  margin: 0;
-  font-size: var(--text-xl);
-}
-
-.assistant-workspace__thread-header p {
-  margin: var(--space-1) 0 0;
-  color: var(--text-muted);
 }
 
 .assistant-workspace__thread-dialog {
