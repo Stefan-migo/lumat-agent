@@ -31,7 +31,7 @@ describe("AssistantWorkspace", () => {
     expect(within(thread).queryByRole("navigation", { name: "Hilos abiertos" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
@@ -373,7 +373,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("button", { name: "Acciones del hilo" })).not.toBeInTheDocument();
     expect(screen.getByText("Gestión")).toBeInTheDocument();
     expect(screen.getAllByText("manual.pdf").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
   });
 
   it("renames an open tab even when its thread is absent from loaded lists", async () => {

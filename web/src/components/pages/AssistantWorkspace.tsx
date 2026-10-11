@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, MessageSquarePlus, PanelLeft, PanelRight, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread } from "../../api";
-import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project, Role } from "../../types";
+import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -19,7 +19,7 @@ import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
   const [search, setSearch] = useState("");
@@ -420,7 +420,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         {contextVisible ? <>
         <Tabs
           ariaLabel="Panel del hilo"
-          tabs={[{ id: "context", label: "Contexto" }, { id: "activity", label: "Actividad" }]}
+          tabs={[{ id: "context", label: "Contexto" }]}
         >
           {(tab) => tab === "context" ? <div className="assistant-workspace__context-content">
             <Card title="Proyecto">
@@ -436,14 +436,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
               {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
             </Card>
             <Card title="Fuentes del hilo"><EmptyState title="Fuentes no disponibles" description="El hilo no entrega fuentes asociadas a sus respuestas." /></Card>
-          </div> : <div className="assistant-workspace__context-content">
-            <Card title="Agentes del proyecto"><EmptyState title="Aún no hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." /></Card>
-            <Card title="Actividad del agente">
-              {processing ? <StateMessage tone="info" role="status" spinner title={lifecycle || "Ejecución en curso"} /> : null}
-              {plan?.tool ? <p><strong>Plan:</strong> {plan.summary || plan.tool}</p> : null}
-              {evidence.length ? evidence.map((item, index) => <div className="assistant-workspace__evidence" key={`${item.tool ?? "asistente"}-${index}`}><strong>{item.tool || "Asistente"}</strong><Badge tone={item.status === "error" ? "danger" : item.status === "completed" ? "success" : "neutral"}>{item.status}</Badge>{item.detail ? <p>{item.detail}</p> : null}</div>) : !processing ? <EmptyState title="Sin actividad registrada" description="La actividad de herramientas aparecerá aquí cuando exista." /> : null}
-            </Card>
-          </div>}
+          </div> : null}
         </Tabs>
         </> : null}
       </aside>
