@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentChat as AgentChatView, COMMAND_CENTER_BREAKPOINTS, commandCenterTier, type AgentChatProps } from "./AgentChat";
 
+vi.mock("../../api", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../api")>(),
+  listActiveRuns: vi.fn().mockResolvedValue({ active_runs: [] }),
+}));
+
 function AgentChat(props: Omit<AgentChatProps, "role"> & { role?: AgentChatProps["role"] }) {
   const role = Object.hasOwn(props, "role") ? props.role : "admin";
   return <AgentChatView {...props} role={role as AgentChatProps["role"]} />;
@@ -59,6 +64,7 @@ describe("AgentChat", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     window.history.replaceState({}, "", "/");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   });
 
   const policy = (overrides: Partial<{ available: string[]; opt_in_enabled: string[]; inherited: boolean }> = {}) => ({
@@ -67,22 +73,60 @@ describe("AgentChat", () => {
     inherited: true,
     ...overrides,
   });
+  const toolToggle = (name: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
 
   it("fetches and renders the thread tool policy", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).endsWith("/tool-policy")
-        ? jsonResponse(policy())
+        ? jsonResponse(policy({ available: ["web.search", "web.fetch"], opt_in_enabled: ["web.search"] }))
         : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
-    fireEvent.click(screen.getByRole("button", { name: "Herramientas" }));
-    expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "tool.two" })).not.toBeChecked();
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("Todas las herramientas")).not.toBeNull());
+    const dialog = screen.getByRole("dialog", { name: "Herramientas del hilo" });
+    expect(dialog.querySelector("h2")).toHaveClass("visually-hidden");
+    expect(dialog.querySelector("h2")).toHaveTextContent("Herramientas del hilo");
+    expect(dialog).not.toHaveTextContent(/\d+ de \d+ activadas/);
+    expect(dialog).toHaveTextContent("Adjuntar archivo");
+    expect(dialog).toHaveTextContent("Sube un documento o una imagen");
+    expect(dialog.querySelector(".assistant-chat__tool-chips")).toHaveClass("assistant-chat__tool-chips--stacked");
+    expect(screen.getByRole("checkbox", { name: "Buscar en la web" })).not.toBeChecked();
+    expect(dialog.querySelectorAll(".assistant-chat__tool-row")).toHaveLength(2);
+    expect(dialog).not.toHaveTextContent("CONSULTAR INFORMACIÓN");
+    expect(dialog).not.toHaveTextContent("ACCIONES DEL ASISTENTE");
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
   });
 
-  it("sends the full opt-in selection when toggling a tool", async () => {
+  it("toggles web search and fetch together", async () => {
+    let enabled: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/tool-policy")) {
+        if (init?.method === "PUT") enabled = JSON.parse(String(init.body)).opt_in_enabled;
+        return jsonResponse(policy({ available: ["web.search", "web.fetch"], opt_in_enabled: enabled }));
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    const toggle = await screen.findByRole("checkbox", { name: "Buscar en la web" });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["web.search", "web.fetch"] }) }),
+    ));
+    await waitFor(() => expect(toggle).toBeChecked());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: [] }) }),
+    ));
+    await waitFor(() => expect(toggle).not.toBeChecked());
+  });
+
+  it("enables all available optional tools from the master switch", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).endsWith("/tool-policy")) {
         return init?.method === "PUT" ? jsonResponse(policy({ opt_in_enabled: ["tool.one", "tool.two"] })) : jsonResponse(policy());
@@ -90,13 +134,15 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    const masterToggle = await screen.findByRole("checkbox", { name: "Todas las herramientas" });
+    expect(masterToggle).not.toBeChecked();
+    fireEvent.click(masterToggle);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
     ));
-    await waitFor(() => expect(screen.getByRole("checkbox", { name: "tool.two" })).toBeChecked());
   });
 
   it("resets the thread policy to the project selection", async () => {
@@ -107,26 +153,30 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Restablecer al proyecto" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tool-chips button")).not.toBeNull());
+    expect(screen.getByRole("button", { name: /Usar la selección del proyecto/ })).toHaveTextContent("Aplicar las herramientas definidas en el proyecto.");
+    fireEvent.click(document.querySelector(".assistant-chat__tool-chips button")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "DELETE" }),
     ));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Restablecer al proyecto" })).not.toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tool-chips button")).toBeNull());
   });
 
   it("locks policy controls while a persisted run is active", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).endsWith("/tool-policy") ? jsonResponse(policy({ inherited: false })) : jsonResponse({
+      String(input).endsWith("/tool-policy") ? jsonResponse(policy({ available: ["web.search", "web.fetch"], inherited: false })) : jsonResponse({
         thread: makeThread(),
         messages: [{ id: 1, author: "admin", content: "Working", status: "processing" }],
       }),
     );
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
-    expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Restablecer al proyecto" })).toBeDisabled();
+    await screen.findByRole("button", { name: "Planificar" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("Buscar en la web")).not.toBeNull());
+    expect(toolToggle("Buscar en la web")).toBeDisabled();
   });
 
   it("shows stop only for an active run and sends its current run id", async () => {
@@ -146,7 +196,7 @@ describe("AgentChat", () => {
       "/panel/api/chat/threads/4/stop",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-live" }) }),
     ));
-    expect(await screen.findByText("Deteniendo…")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Deteniendo…" })).toBeInTheDocument();
     expect(screen.queryByText("Cancelado")).not.toBeInTheDocument();
   });
 
@@ -155,21 +205,112 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(screen.queryByRole("button", { name: /detener ejecución/i })).not.toBeInTheDocument();
+  });
+
+  it("renders the reference composer actions and thread-context triggers", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
+      ? jsonResponse(policy())
+      : jsonResponse({ thread: { ...makeThread(), proyecto: "default" }, messages: [] }));
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary > span")).toHaveTextContent("1"));
+    expect(document.querySelector(".assistant-chat__tools-summary .badge")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Archivos 0" }).querySelector(".badge")).not.toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__active-chips")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Herramientas/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__composer-bottom-row")).toHaveClass("assistant-chat__composer-bottom-row--grouped");
+  });
+
+  it("hides the tray and applies compact active styling when messages exist", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: makeThread(),
+      messages: [{ id: 1, author: "admin", content: "Hola", status: "processed" }],
+    }));
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByText("Hola")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__composer-stack")).toHaveClass(
+      "assistant-chat__composer-stack--active",
+    );
+    expect(document.querySelector(".assistant-chat__composer-tray")).not.toBeInTheDocument();
+  });
+
+  it("keeps the tray rendered when the conversation has no messages", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+    render(<AgentChat threadId={4} />);
+
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    expect(document.querySelector(".assistant-chat__composer-tray")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__composer-stack")).not.toHaveClass(
+      "assistant-chat__composer-stack--active",
+    );
+  });
+
+  it("accepts multiple dropped files across the conversation area", async () => {
+    const uploads: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/attachments") && init?.method === "POST") {
+        const form = init.body as FormData;
+        const file = form.get("file") as File;
+        uploads.push(file.name);
+        return jsonResponse({ attachment: { id: uploads.length, filename: file.name, kind: "document", content_type: "text/plain" } });
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+
+    const zone = screen.getByRole("region", { name: "Conversación" });
+    expect(zone.querySelector(".assistant-chat__messages")).toBeInTheDocument();
+    expect(zone.querySelector(".assistant-chat__composer-stack")).toBeInTheDocument();
+    const files = [new File(["one"], "one.txt", { type: "text/plain" }), new File(["two"], "two.txt", { type: "text/plain" })];
+    fireEvent.drop(zone, { dataTransfer: { types: ["Files"], files } });
+    await waitFor(() => expect(uploads).toEqual(["one.txt", "two.txt"]));
+  });
+
+  it("shows project names without slugs and keeps selection functional", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [{ id: 1, slug: "ops-private-slug", name: "Operations" }] });
+      if (url === "/panel/api/chat/threads/4" && init?.method === "PATCH") return jsonResponse({ thread: { ...makeThread(), proyecto: "ops-private-slug" } });
+      return jsonResponse({ thread: { ...makeThread(), proyecto: "default" }, messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "General" }));
+    const projectOption = await screen.findByRole("button", { name: "Operations" });
+    expect(projectOption).not.toHaveTextContent("ops-private-slug");
+    fireEvent.click(projectOption);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ proyecto: "ops-private-slug" }) }),
+    ));
   });
 
   it("keeps the stop control off while only the tool policy is saving", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).endsWith("/tool-policy")) {
         if (init?.method === "PUT") return new Promise<Response>(() => {});
-        return jsonResponse(policy({ inherited: false }));
+        return jsonResponse(policy({ available: ["web.search", "web.fetch"], inherited: false }));
       }
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("Buscar en la web")).not.toBeNull());
+    fireEvent.click(toolToggle("Buscar en la web")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "PUT" }),
@@ -193,8 +334,7 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse({ detail: "denied" }, 403) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("denied");
+    expect(await screen.findAllByRole("alert")).toEqual(expect.arrayContaining([expect.objectContaining({ textContent: "denied" })]));
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
@@ -203,8 +343,7 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse(policy({ available: [], opt_in_enabled: [] })) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Herramientas" }));
-    expect(await screen.findByText("No hay herramientas opcionales disponibles.")).toBeInTheDocument();
+    expect(await screen.findAllByText("No hay herramientas opcionales disponibles.")).not.toHaveLength(0);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
@@ -216,8 +355,10 @@ describe("AgentChat", () => {
     render(<AgentChat role={undefined} />);
 
     expect(
-      await screen.findByRole("heading", { name: "Comienza una conversación" }),
+      await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ }),
     ).toBeInTheDocument();
+    expect(screen.getByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/panel/api/chat/threads",
       expect.anything(),
@@ -232,7 +373,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat role={undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar conversación" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
@@ -250,7 +391,7 @@ describe("AgentChat", () => {
   it("does not create a chat when the user has no projects", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ projects: [], threads: [] }));
     render(<AgentChat role={undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar conversación" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/proyecto primero/i);
     expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
   });
@@ -265,7 +406,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat role="admin" onThreadOpened={onThreadOpened} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Nueva conversación" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads",
@@ -284,7 +425,7 @@ describe("AgentChat", () => {
     );
 
     render(<AgentChat role="tecnico" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Iniciar conversación" }));
 
     expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
@@ -300,7 +441,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat threadId={9} />);
 
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/9",
       expect.anything(),
@@ -319,7 +460,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat />);
 
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/9",
       expect.anything(),
@@ -346,7 +487,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat onThreadOpened={onThreadOpened} />);
 
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(onThreadOpened).toHaveBeenCalledWith(7);
     expect(window.location.search).toBe("?thread_id=7");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -374,7 +515,7 @@ describe("AgentChat", () => {
         onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)}
       />,
     );
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     first.unmount();
     render(<AgentChat />);
 
@@ -394,8 +535,8 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat />);
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
-    fireEvent.click(screen.getByRole("button", { name: "Nuevo chat" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "Crear nuevo hilo" }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -406,121 +547,12 @@ describe("AgentChat", () => {
     expect(createdPayload).toEqual({ proyecto: "ops" });
   });
 
-  it("renders history with Spanish grouping and no raw status", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("?limit=20")
-        ? jsonResponse({
-            threads: [
-              {
-                id: 1,
-                title: "Consulta",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              },
-            ],
-          })
-        : jsonResponse({ threads: [] }),
-    );
-
+  it("removes the redundant inline context panel", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
     render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Historial" }));
-
-    expect((await screen.findAllByText("Hoy")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("open")).not.toBeInTheDocument();
-  });
-
-  it("renames a thread through a prefilled dialog and cancels without a call", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const path = String(input);
-      if (path.includes("?limit=20")) {
-        return jsonResponse({
-          threads: [{ id: 1, title: "Consulta", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
-        });
-      }
-      return jsonResponse({ threads: [] });
-    });
-
-    render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Historial" }));
-    fireEvent.click(await screen.findByRole("button", { name: /renombrar consulta/i }));
-    expect(screen.getByLabelText(/nuevo nombre/i)).toHaveValue("Consulta");
-    fireEvent.click(screen.getAllByRole("button", { name: "Cancelar" })[0]);
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/panel/api/chat/threads/1",
-      expect.objectContaining({ method: "PATCH" }),
-    );
-  });
-
-  it("confirms deletion in a named dialog instead of using a browser confirm", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("?limit=20")
-        ? jsonResponse({
-            threads: [{ id: 1, title: "Consulta", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
-          })
-        : jsonResponse({ threads: [] }),
-    );
-
-    render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Historial" }));
-    fireEvent.click(await screen.findByRole("button", { name: /eliminar consulta/i }));
-    expect(screen.getByText(/Eliminar la conversación “Consulta”/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /eliminar consulta/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Eliminar conversación" }));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/chat/threads/1",
-        expect.objectContaining({ method: "DELETE" }),
-      ),
-    );
-  });
-
-  it("keeps Contexto closed until requested and renders assistant capabilities", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("/assistant/capabilities")
-        ? jsonResponse({
-            tools: [{ name: "kb.retrieve", description: "Busca en la base", read_only: true, write: false }],
-            personas: ["personas/assistant.md"],
-            prompts: [],
-            kb_available: true,
-            memory_available: false,
-          })
-        : jsonResponse({ threads: [] }),
-    );
-
-    render(<AgentChat />);
-    expect(
-      screen.queryByRole("complementary", { name: "Contexto" }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Contexto" }));
-
-    const context = screen.getByRole("complementary", { name: "Contexto" });
-    expect(await within(context).findByText("Herramientas disponibles: 1")).toBeInTheDocument();
-    expect(context).toHaveTextContent("Base de conocimientos: Disponible");
-    expect(context).toHaveTextContent("Memoria: No disponible");
-    expect(context).toHaveTextContent("Persona activa: Asistente Lumat");
-    expect(context).not.toHaveTextContent("Conexión");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/panel/api/assistant/capabilities",
-      expect.anything(),
-    );
-  });
-
-  it("shows an honest capabilities error in Contexto", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).includes("/assistant/capabilities")
-        ? jsonResponse({ detail: "forbidden" }, 403)
-        : jsonResponse({ threads: [] }),
-    );
-
-    render(<AgentChat />);
-    fireEvent.click(await screen.findByRole("button", { name: "Contexto" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "No pudimos cargar las capacidades del asistente.",
-    );
-    expect(screen.getByRole("complementary", { name: "Contexto" })).not.toHaveTextContent(
-      "Cargando capacidades",
-    );
+    await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ });
+    expect(screen.queryByRole("button", { name: "Contexto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Contexto" })).not.toBeInTheDocument();
   });
 
   it("renders directional messages with exact timestamps and copy controls", async () => {
@@ -1110,8 +1142,9 @@ describe("AgentChat", () => {
   });
 
   it("submits the approval verb for a persisted pending plan", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
         thread: {
           ...makeThread(),
           active_run_id: "run-approve",
@@ -1119,19 +1152,20 @@ describe("AgentChat", () => {
           assistant_state: { approval: { token: "secret", status: "pending" } },
         },
         messages: [{ id: 1, author: "agent", content: "Confirma la agenda", status: "processed", assistant_metadata: { run_id: "run-approve" } }],
-      }))
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(jsonResponse({
+      });
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/approval" && init?.method === "POST") return jsonResponse({
         status: "consumed",
         message: { id: 2, author: "agent", content: "Aprobado", status: "processed" },
-      }))
-      .mockResolvedValueOnce(sseResponse([]));
+      });
+      if (url.includes("/panel/api/chat/threads/4/stream")) return sseResponse([]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     render(<AgentChat threadId={4} />);
     fireEvent.click(await screen.findByRole("button", { name: "Aprobar" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/approval",
       expect.objectContaining({
         method: "POST",
@@ -1175,14 +1209,21 @@ describe("AgentChat", () => {
   });
 
   it("uploads an attachment from the composer and shows its filename", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(
-        jsonResponse({
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      if (url === "/panel/api/chat/threads/4" && !init?.method) {
+        return jsonResponse({ thread: makeThread(), messages: [] });
+      }
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/attachments" && init?.method === "POST") {
+        return jsonResponse({
           attachment: { id: 9, thread_id: 4, filename: "photo.png", kind: "image", size: 3 },
-        }, 201),
-      );
+        }, 201);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     render(<AgentChat threadId={4} />);
     await screen.findByRole("textbox", { name: /mensaje/i });
@@ -1191,43 +1232,114 @@ describe("AgentChat", () => {
     });
 
     expect(await screen.findAllByText("photo.png")).toHaveLength(3);
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
+  it("keeps long thread filenames on a titled single-line row", async () => {
+    const filename = "screenshot-localhost-1234567890-with-a-very-long-name.png";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/tool-policy")) return jsonResponse(policy());
+      return jsonResponse({
+        thread: makeThread(),
+        messages: [],
+        attachments: [{ id: 1, thread_id: 4, filename, kind: "image", content_type: "image/png", size: 10 }],
+      });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 1" }));
+    await screen.findAllByText(filename);
+    const name = document.querySelector(`.assistant-chat__filename[title="${filename}"]`);
+    expect(name).not.toBeNull();
+    expect(name!).toHaveClass("assistant-chat__filename");
+    expect(name!).toHaveAttribute("title", filename);
+    expect(screen.getByRole("dialog", { name: "Archivos de este hilo" }).querySelector(`.assistant-chat__filename[title="${filename}"]`)?.parentElement?.querySelector("small")).toHaveTextContent("IMAGE · Adjuntado");
+  });
+
+  it("shows the attachment tray only when attachments exist and deletes from both views", async () => {
+    const filename = "manual-larguísimo-documento.pdf";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/attachments/12") && init?.method === "DELETE") return new Response(null, { status: 204 });
+      return jsonResponse({ thread: makeThread(), messages: [], attachments: [{ id: 12, thread_id: 4, filename, kind: "document", content_type: "application/pdf", size: 10 }] });
+    });
+    const { container } = render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    const tray = container.querySelector(".assistant-chat__attachment-tray");
+    expect(tray).toBeInTheDocument();
+    const trayName = tray!.querySelector(".assistant-chat__filename");
+    expect(trayName).toHaveAttribute("title", filename);
+    expect(trayName).toHaveClass("assistant-chat__filename");
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 1" }));
+    const popover = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+    fireEvent.click(within(popover).getByRole("button", { name: `Eliminar ${filename}` }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/attachments/12", expect.objectContaining({ method: "DELETE" })));
+    await waitFor(() => expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument());
+    expect(popover).not.toHaveTextContent(filename);
+  });
+
+  it("does not render an attachment tray for an empty thread", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
+      ? jsonResponse(policy())
+      : jsonResponse({ thread: makeThread(), messages: [], attachments: [] }));
+    const { container } = render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument();
+  });
+
+  it("opens image preview but keeps non-image filenames non-clickable", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
+      ? jsonResponse(policy())
+      : jsonResponse({ thread: makeThread(), messages: [], attachments: [
+        { id: 21, thread_id: 4, filename: "foto.png", kind: "image", content_type: "image/png", size: 10 },
+        { id: 22, thread_id: 4, filename: "manual.pdf", kind: "document", content_type: "application/pdf", size: 10 },
+      ] }));
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 2" }));
+    const files = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+    fireEvent.click(files.querySelector(".assistant-chat__file-preview")!);
+    const preview = await screen.findByRole("dialog", { name: "foto.png" });
+    expect(preview.querySelector("img")).toHaveAttribute("src", "/panel/api/chat/threads/4/attachments/21/content");
+    expect(preview.querySelector("img")).toHaveAttribute("alt", "foto.png");
+    expect(files.querySelector('.assistant-chat__file-row:has([title="manual.pdf"]) .assistant-chat__file-preview')).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
   it("shows the active Cortex indicator and closes through the planning endpoint", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        jsonResponse({
-          thread: {
-            ...makeThread(),
-            assistant_state: {
-              cortex_session: {
-                slug: "budget-4",
-                topic: "Budget",
-                status: "active",
-              },
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
+        thread: {
+          ...makeThread(),
+          assistant_state: {
+            cortex_session: {
+              slug: "budget-4",
+              topic: "Budget",
+              status: "active",
             },
           },
-          messages: [],
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          session: {},
-          report: { contenido: "Report" },
-        }),
-      );
+        },
+        messages: [],
+      });
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/planning/sessions/budget-4/close" && init?.method === "POST") return jsonResponse({
+        session: {},
+        report: { contenido: "Report" },
+      });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
 
     render(<AgentChat threadId={4} />);
     expect(await screen.findByText(/Planificación activa/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /cerrar planificación/i }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenLastCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/panel/api/planning/sessions/budget-4/close",
         expect.objectContaining({ method: "POST" }),
       ),

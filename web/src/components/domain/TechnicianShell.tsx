@@ -5,7 +5,6 @@ import type { User } from '../../types';
 import type { PanelRoute } from './panelRoutes';
 import { parsePanelPath, pathForRoute } from './panelRoutes';
 import { AgentChat } from '../pages/AgentChat';
-import { AssistantTabs, type AssistantView } from '../pages/AssistantTabs';
 import { PlanningSessions } from '../pages/PlanningSessions';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { TechnicianAgenda } from '../pages/TechnicianAgenda';
@@ -48,14 +47,12 @@ export function TechnicianShell({ user, onLogout, children }: TechnicianShellPro
     setRoute(safeRoute);
   };
   const view = route.view;
-  const assistantView: AssistantView = view === 'projects' || view === 'planning-sessions' ? view : 'chat';
-  const sectionTabs = <AssistantTabs active={assistantView} onSelect={(target) => navigate({ view: target })} />;
   const page = view === 'chat'
-    ? <AgentChat role="tecnico" sectionTabs={sectionTabs} onThreadOpened={(id) => navigate({ view: 'chat', threadId: id })} />
+    ? <AgentChat role="tecnico" userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigate({ view: 'chat', threadId: id })} />
     : view === 'projects'
-      ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigate({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigate({ view: 'chat', projectSlug: slug })} />
+       ? <ProjectsPage projectSlug={route.projectSlug} onOpenProject={(slug) => navigate({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigate({ view: 'chat', projectSlug: slug })} />
       : view === 'planning-sessions'
-        ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigate({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => navigate({ view: 'chat', threadId: id })} />
+         ? <PlanningSessions projectSlug={route.projectSlug} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigate({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => navigate({ view: 'chat', threadId: id })} />
          : view === 'profile'
            ? <SelfProfile />
            : children ?? <TechnicianAgenda />;

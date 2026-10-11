@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiFetch, ApiError, postJson } from './api';
+import { apiFetch, ApiError, fetchMe, postJson } from './api';
 import type { LoginResponse, User } from './types';
 import { AppShell } from './components/domain/AppShell';
 import { TechnicianShell } from './components/domain/TechnicianShell';
@@ -43,7 +43,9 @@ export default function App() {
     setState({ kind: 'anon' });
     try {
       const result = await postJson<LoginResponse>('/panel/api/login', { username, password });
-      setState({ kind: 'authed', user: { id: result.id, username, role: result.role } });
+      const user: User = { id: result.id, username, role: result.role };
+      setState({ kind: 'authed', user });
+      void fetchMe().then((profile) => setState({ kind: 'authed', user: { ...user, name: profile.name } })).catch(() => {});
     } catch (e) {
       const detail = e instanceof ApiError ? e.detail.toLowerCase() : '';
       setState({ kind: 'anon', error: detail.includes('locked') ? 'Cuenta bloqueada. Intenta más tarde.' : 'Credenciales inválidas' });

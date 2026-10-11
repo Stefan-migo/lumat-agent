@@ -5,29 +5,29 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import {
   ApiError,
   approveChatPlan,
   closePlanningSession,
   createChatThread,
-  deleteChatThread,
-  getAssistantCapabilities,
+  deleteThreadAttachment,
   getChatThread,
   getThreadToolPolicy,
-  listChatThreads,
+  listProjectFiles,
   listProjects,
   openPlanningSession,
-  renameChatThread,
   resetThreadToolPolicy,
   sendChatMessage,
   stopChatThread,
   streamChatEvents,
+  setChatThreadProject,
+  attachProjectFileToThread,
   updateThreadToolPolicy,
   uploadAssistantAttachment,
+  threadAttachmentContentUrl,
 } from "../../api";
-import { Check, Copy, Paperclip, RotateCcw, Send, Square } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -40,13 +40,12 @@ import type {
   InternalChatMessage,
   InternalChatResponse,
   InternalChatThread,
-  InternalChatThreadSummary,
-  AssistantCapabilities,
   ThreadToolPolicy,
   PlanningSession,
+  ProjectFile,
   Role,
 } from "../../types";
-import { realtimeClient, type ConnectionStatus } from "../../realtime";
+import { realtimeClient } from "../../realtime";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -59,7 +58,9 @@ import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { Icon } from "../primitives/Icon";
+import { SearchInput } from "../primitives/SearchInput";
 import { AssistantWorkspace } from "./AssistantWorkspace";
+import { assistantFileIcon } from "./assistantFileIcon";
 import "./AgentChat.css";
 
 export const COMMAND_CENTER_BREAKPOINTS = {
@@ -107,32 +108,6 @@ const runStillProcessing = (result: InternalChatResponse, run: string) =>
       message.assistant_metadata?.run_id === run &&
       message.status === "processing",
   );
-
-function relativeTime(value: string | null | undefined): string {
-  if (!value) return "Sin fecha";
-  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
-  if (days <= 0) return "Hoy";
-  if (days < 7) return `Hace ${days} día${days === 1 ? "" : "s"}`;
-  return new Intl.DateTimeFormat("es-CL", {
-    day: "numeric",
-    month: "short",
-  }).format(new Date(value));
-}
-
-function groupThreads(threads: InternalChatThreadSummary[]) {
-  return threads.reduce<Record<string, InternalChatThreadSummary[]>>(
-    (groups, item) => {
-      const age = item.updated_at ?? item.created_at;
-      const days = age
-        ? Math.floor((Date.now() - new Date(age).getTime()) / 86400000)
-        : 99;
-      const key = days <= 0 ? "Hoy" : days < 7 ? "Últimos 7 días" : "Anteriores";
-      (groups[key] ??= []).push(item);
-      return groups;
-    },
-    {},
-  );
-}
 
 function planningCommand(value: string) {
   const match = value.match(/^\/planning(?:\s+(.+))?$/);
@@ -285,12 +260,12 @@ function AgentActivity({
 
 export interface AgentChatProps {
   role: Role;
+  userName?: string;
   threadId?: number;
-  sectionTabs?: ReactNode;
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: AgentChatProps) {
+export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -302,7 +277,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [connection, setConnection] = useState<ConnectionStatus>("disconnected");
   const [stream, setStream] = useState("");
   const [recoverable, setRecoverable] = useState(false);
   const [plan, setPlan] = useState<AssistantPlan | null>(null);
@@ -311,23 +285,20 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const [runId, setRunId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
+  const [attachmentDeleteError, setAttachmentDeleteError] = useState<string | null>(null);
+  const [attachmentDeletingId, setAttachmentDeletingId] = useState<number | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<AssistantAttachment | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [artifacts, setArtifacts] = useState<AssistantArtifact[]>([]);
   const [uploading, setUploading] = useState(false);
   const [cortex, setCortex] = useState<PlanningSession | null>(null);
   const [report, setReport] = useState<CortexArtifact | null>(null);
-  const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
-  const [navigatorError, setNavigatorError] = useState<string | null>(null);
-  const [contextOpen, setContextOpen] = useState(false);
-  const [capabilities, setCapabilities] = useState<AssistantCapabilities | null>(null);
-  const [capabilitiesLoading, setCapabilitiesLoading] = useState(false);
-  const [capabilitiesError, setCapabilitiesError] = useState(false);
   const [toolPolicy, setToolPolicy] = useState<ThreadToolPolicy | null>(null);
   const [toolPolicyLoading, setToolPolicyLoading] = useState(false);
   const [toolPolicyError, setToolPolicyError] = useState<string | null>(null);
   const [toolPolicySaving, setToolPolicySaving] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [stopMessage, setStopMessage] = useState<string | null>(null);
-  const capabilitiesRequested = useRef(false);
   const [planningOpen, setPlanningOpen] = useState(false);
   // Copy feedback: the icon that was just used swaps to a check and says so,
   // then reverts. Without it the click is silent and reads as a no-op.
@@ -336,11 +307,15 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const copyTimer = useRef<number | null>(null);
   const [topic, setTopic] = useState("");
   const [topicError, setTopicError] = useState("");
-  const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
   const [projectChoices, setProjectChoices] = useState<{ slug: string; name: string }[]>([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [renameTitle, setRenameTitle] = useState("");
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [projectFilesLoading, setProjectFilesLoading] = useState(false);
+  const [projectFilesError, setProjectFilesError] = useState<string | null>(null);
+  const [projectActionLoading, setProjectActionLoading] = useState(false);
+  const [projectActionError, setProjectActionError] = useState<string | null>(null);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [fileSearch, setFileSearch] = useState("");
   const watchCancelledRef = useRef(false);
   const watchedRunRef = useRef<string | null>(null);
 
@@ -370,17 +345,20 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     setCortex(state?.cortex_session ?? null);
   };
 
-  const refreshThreads = () =>
-    listChatThreads(20)
-      .then((result) => {
-        setThreads(result.threads ?? []);
-        setNavigatorError(null);
-      })
-      .catch((reason: unknown) =>
-        setNavigatorError(
-          reason instanceof ApiError ? reason.detail : "No pudimos cargar el historial",
-        ),
-      );
+  const removeAttachment = async (attachment: AssistantAttachment) => {
+    if (!thread || attachmentDeletingId !== null) return;
+    setAttachmentDeletingId(attachment.id);
+    setAttachmentDeleteError(null);
+    try {
+      await deleteThreadAttachment(thread.id, attachment.id);
+      setAttachments((current) => current.filter((item) => item.id !== attachment.id));
+      if (previewAttachment?.id === attachment.id) setPreviewAttachment(null);
+    } catch (reason) {
+      setAttachmentDeleteError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el archivo. Inténtalo nuevamente.");
+    } finally {
+      setAttachmentDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const request = requestedId
@@ -402,7 +380,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat"),
       )
       .finally(() => setLoading(false));
-    if (!requestedId && !requestedProject) void refreshThreads();
   }, [requestedId, requestedProject]);
 
   useEffect(() => {
@@ -417,23 +394,11 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         ]);
       }
     });
-    const unsubscribeStatus = realtimeClient.subscribeStatus(setConnection);
     realtimeClient.connect();
     return () => {
       unsubscribe();
-      unsubscribeStatus();
     };
   }, [thread]);
-
-  useEffect(() => {
-    if (!contextOpen || capabilitiesRequested.current) return;
-    capabilitiesRequested.current = true;
-    setCapabilitiesLoading(true);
-    void getAssistantCapabilities()
-      .then(setCapabilities)
-      .catch(() => setCapabilitiesError(true))
-      .finally(() => setCapabilitiesLoading(false));
-  }, [contextOpen]);
 
   useEffect(() => {
     if (!thread) {
@@ -580,18 +545,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     }
   };
 
-  const selectThread = async (id: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      loadThread(await getChatThread(id));
-    } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const newChat = async () => {
     setError(null);
     let project = thread?.proyecto || requestedProject;
@@ -629,6 +582,21 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     setLoading(true);
     try {
       const result = await createChatThread(project);
+      loadThread(result);
+      onThreadOpened?.(result.thread.id);
+    } catch (reason: unknown) {
+      setError(reason instanceof ApiError ? reason.detail : "No pudimos crear el chat");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createDefaultChat = async () => {
+    if (role !== "admin" && role !== "operador") return;
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await createChatThread("default");
       loadThread(result);
       onThreadOpened?.(result.thread.id);
     } catch (reason: unknown) {
@@ -758,10 +726,9 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     }
   };
 
-  const attach = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const attach = async (file: File | undefined) => {
     if (!file || !thread) return;
+    setError(null);
     setUploading(true);
     try {
       const result = await uploadAssistantAttachment(thread.id, file);
@@ -771,6 +738,37 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleAttachmentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    void attach(file);
+  };
+
+  const changeProject = async (slug: string) => {
+    if (!thread) return;
+    setProjectActionLoading(true);
+    setProjectActionError(null);
+    try {
+      const result = await setChatThreadProject(thread.id, slug);
+      setThread(result.thread);
+      setProjectPickerOpen(false);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cambiar el proyecto.");
+    } finally { setProjectActionLoading(false); }
+  };
+
+  const attachProjectFile = async (fileId: number) => {
+    if (!thread) return;
+    setProjectActionLoading(true);
+    setProjectActionError(null);
+    try {
+      const result = await attachProjectFileToThread(thread.id, fileId);
+      setAttachments((current) => [...current, result.attachment]);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos adjuntar el archivo del proyecto.");
+    } finally { setProjectActionLoading(false); }
   };
 
   const planning = async () => {
@@ -807,34 +805,15 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     }
   };
 
-  const rename = async () => {
-    if (!renameTarget) return;
-    const title = renameTitle.trim();
-    if (!title) return;
-    await renameChatThread(renameTarget.id, title);
-    setRenameTarget(null);
-    setRenameTitle("");
-    await refreshThreads();
-  };
-
-  const remove = async () => {
-    if (!deleteTarget) return;
-    await deleteChatThread(deleteTarget.id);
-    setThreads((current) => current.filter((item) => item.id !== deleteTarget.id));
-    if (thread?.id === deleteTarget.id) {
-      setThread(null);
-      setMessages([]);
-    }
-    setDeleteTarget(null);
-  };
-
-  const groups = groupThreads(threads);
   const persistedActivity = (thread?.assistant_state?.events ?? [])
     .filter((event) => !runId || event.run_id === runId)
     .flatMap((event) => event.evidence ?? []);
   const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
-  const isRunActive = processing || messages.some((message) => message.status === "processing") || approval?.status === "pending";
+  const activeConversation = messages.length > 0;
+  const isRunActive = processing || messages.some((message) => message?.status === "processing") || approval?.status === "pending";
   const toolControlsDisabled = isRunActive || toolPolicySaving;
+  const webToolsAvailable = toolPolicy?.available.includes("web.search") && toolPolicy.available.includes("web.fetch");
+  const webToolsEnabled = webToolsAvailable && toolPolicy?.opt_in_enabled.includes("web.search") && toolPolicy.opt_in_enabled.includes("web.fetch");
   const state = loading ? (
     <StateMessage tone="info" role="status" spinner title="Cargando chat" />
   ) : error ? (
@@ -849,19 +828,18 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   // is the only place the Aprobar/Rechazar actions can live.
   const runsWithReply = new Set(
     messages
-      .filter((item) => item.author === "agent" && item.assistant_metadata?.run_id)
+      .filter((item) => item?.author === "agent" && item.assistant_metadata?.run_id)
       .map((item) => item.assistant_metadata?.run_id as string),
   );
 
   return (
     <AssistantWorkspace
       onCreateThread={() => void newChat()}
+      onCreateDefaultThread={() => void createDefaultChat()}
+      role={role}
       loadThreadTabs={Boolean(onThreadOpened)}
       attachments={attachments}
       artifacts={artifacts}
-      capabilities={capabilities}
-      capabilitiesLoading={capabilitiesLoading}
-      capabilitiesError={capabilitiesError}
       evidence={activityEvidence}
       plan={plan}
       lifecycle={lifecycle}
@@ -873,107 +851,12 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
       hideCopy
       state={state}
       className="assistant-chat"
-      actions={
-        <div className="assistant-chat__header-actions">
-          {thread && isRunActive ? (
-            <div>
-              <Button variant="secondary" onClick={() => void stopRun()} disabled={stopping} title="Se detiene en el siguiente paso seguro; no interrumpe una llamada en curso ni revierte efectos completados.">
-                <Icon icon={Square} size="sm" /> {stopping ? "Deteniendo…" : "Detener ejecución"}
-              </Button>
-              <p>La detención ocurre en el siguiente paso seguro; no interrumpe una llamada a herramienta o al modelo en curso ni revierte efectos completados.</p>
-            </div>
-          ) : null}
-          {stopMessage ? <p role="status">{stopMessage}</p> : null}
-          <Popover title="Herramientas" triggerLabel="Herramientas" state={!thread ? "disabled" : "default"}>
-            {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
-            {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
-            {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
-            {toolPolicy?.available.map((name) => (
-              <label key={name}>
-                <input
-                  type="checkbox"
-                  aria-label={name}
-                  checked={toolPolicy.opt_in_enabled.includes(name)}
-                  disabled={toolControlsDisabled || toolPolicyLoading}
-                  onChange={(event) => {
-                    const selected = new Set(toolPolicy.opt_in_enabled);
-                    if (event.target.checked) selected.add(name);
-                    else selected.delete(name);
-                    void changeToolPolicy(() => updateThreadToolPolicy(thread!.id, [...selected]));
-                  }}
-                />
-                {name}
-              </label>
-            ))}
-            {toolPolicy && !toolPolicy.inherited ? (
-              <Button variant="secondary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread!.id))}>
-                Restablecer al proyecto
-              </Button>
-            ) : null}
-            {toolControlsDisabled ? <p role="status">Bloqueadas durante la ejecución.</p> : null}
-          </Popover>
-          <Popover title="Historial" triggerLabel="Historial">
-            <div className="assistant-chat__navigator">
-              {navigatorError ? (
-                <StateMessage
-                  tone="danger"
-                  role="alert"
-                  title="No pudimos cargar el historial"
-                  detail={navigatorError}
-                />
-              ) : null}
-              {Object.entries(groups).map(([label, items]) => (
-                <section key={label}>
-                  <h3>{label}</h3>
-                  {items.map((item) => (
-                    <div className="assistant-chat__navigator-row" key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => void selectThread(item.id)}
-                        aria-current={thread?.id === item.id ? "page" : undefined}
-                      >
-                        <strong>{item.title || "Sin título"}</strong>
-                        <small>{relativeTime(item.updated_at ?? item.created_at)}</small>
-                      </button>
-                      <span aria-label={thread?.id === item.id ? "Conversación activa" : undefined}>
-                        {thread?.id === item.id ? "●" : ""}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={`Renombrar ${item.title || "conversación"}`}
-                        onClick={() => {
-                          setRenameTarget(item);
-                          setRenameTitle(item.title ?? "");
-                        }}
-                      >
-                        Renombrar
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Eliminar ${item.title || "conversación"}`}
-                        onClick={() => setDeleteTarget(item)}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  ))}
-                </section>
-              ))}
-            </div>
-          </Popover>
-          <Button variant="secondary" onClick={() => setContextOpen(true)}>Contexto</Button>
-          <Button variant="secondary" onClick={() => setPlanningOpen(true)} disabled={!thread}>
-            Planificar
-          </Button>
-          <Button onClick={() => void newChat()}>Nuevo chat</Button>
-        </div>
-      }
     >
-      {sectionTabs}
       <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto">
         <div className="assistant-chat__planning-form">
           <p>Elige el proyecto para este chat.</p>
-          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" onClick={() => void createProjectChat(project.slug)}>{project.name}</Button>)}
+          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" disabled={projectActionLoading} onClick={() => void (thread ? changeProject(project.slug) : createProjectChat(project.slug))}><Icon icon={Folder} size="sm" />{project.name}</Button>)}
+          {projectActionError ? <p role="alert">{projectActionError}</p> : null}
         </div>
       </Dialog>
       <Dialog
@@ -1001,83 +884,27 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
           </div>
         </div>
       </Dialog>
-      <Dialog
-        open={renameTarget !== null}
-        onClose={() => setRenameTarget(null)}
-        title="Renombrar conversación"
-      >
-        <div className="assistant-chat__planning-form">
-          <label htmlFor="rename-title">Nuevo nombre de la conversación</label>
-          <input
-            id="rename-title"
-            autoFocus
-            value={renameTitle}
-            onChange={(event) => setRenameTitle(event.target.value)}
-          />
-          <div>
-            <Button variant="secondary" onClick={() => setRenameTarget(null)}>Cancelar</Button>
-            <Button onClick={() => void rename()}>Guardar nombre</Button>
-          </div>
-        </div>
-      </Dialog>
-      <Dialog
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        title="Eliminar conversación"
-      >
-        <div className="assistant-chat__planning-form">
-          <p>
-            ¿Eliminar la conversación “{deleteTarget?.title || "Sin título"}”? Esta acción no se puede deshacer.
-          </p>
-          <div>
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button onClick={() => void remove()}>Eliminar conversación</Button>
-          </div>
-        </div>
-      </Dialog>
-      {contextOpen ? (
-        <aside className="assistant-chat__context" role="complementary" aria-label="Contexto">
-          <div>
-            <h2>Contexto operativo</h2>
-            <Button variant="secondary" onClick={() => setContextOpen(false)}>Cerrar</Button>
-          </div>
-          <p>Solo lectura. La aprobación se realiza en el flujo de conversación.</p>
-          {capabilitiesLoading ? <p role="status">Cargando capacidades…</p> : null}
-          {capabilitiesError ? (
-            <p role="alert">No pudimos cargar las capacidades del asistente.</p>
-          ) : null}
-          {capabilities ? (
-            <>
-              <p>Herramientas disponibles: {capabilities.tools.length}</p>
-              <p>
-                Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}
-              </p>
-              <p>Memoria: {capabilities.memory_available ? "Disponible" : "No disponible"}</p>
-              <p>
-                Persona activa: {capabilities.personas.map((persona) => (
-                  persona === "personas/assistant.md" ? "Asistente Lumat" : persona
-                )).join(", ") || "No configurada"}
-              </p>
-            </>
-          ) : null}
-          {lifecycle ? (
-            <p role="status">Ejecución: {stateLabels[lifecycle] ?? "En curso"}</p>
-          ) : null}
-        </aside>
-      ) : null}
-      <div className="assistant-chat__surface" data-tier={commandCenterTier(globalThis.innerWidth || 1024)}>
-        <section className="assistant-chat__conversation" aria-label="Conversación">
+      <div className={`assistant-chat__surface${!processing && !stream && messages.length === 0 ? " assistant-chat__surface--empty" : ""}`} data-tier={commandCenterTier(globalThis.innerWidth || 1024)}>
+        <section className="assistant-chat__conversation" aria-label="Conversación"
+          onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }}
+          onDrop={(event) => {
+            if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+            event.preventDefault();
+            if (!thread || isRunActive || uploading) return;
+            for (const file of Array.from(event.dataTransfer.files)) void attach(file);
+          }}>
           <div className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
-              <div className="assistant-chat__hero">
-                <h2>Comienza una conversación</h2>
-                <p>Escribe una consulta al asistente para iniciar un chat.</p>
+              <div className="assistant-chat__hero assistant-chat__hero--welcome">
+                <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
+                <p>¿En qué trabajamos hoy?</p>
+                <Button onClick={() => void newChat()} disabled={loading}>Iniciar conversación</Button>
               </div>
             ) : null}
             {thread && messages.length === 0 && !loading ? (
               <div className="assistant-chat__hero">
-                <h2>¿En qué podemos ayudarte?</h2>
-                <p>Describe una tarea o consulta para comenzar.</p>
+                <h2>¿En qué trabajamos hoy?</h2>
+                <p>Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.</p>
               </div>
             ) : null}
             <CollapsibleMessages total={messages.length} previewCount={10} expanded={messagesExpanded} onToggle={() => setMessagesExpanded((value) => !value)}>
@@ -1253,18 +1080,38 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
               </p>
             ) : null}
           </div>
-          <div className="assistant-chat__composer-wrap">
+          {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`}>
+            {attachments.length > 0 || uploading ? <div className="assistant-chat__attachment-tray" aria-label="Archivos adjuntos">
+              {attachments.map((item) => <div className="assistant-chat__attachment" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
+              {uploading ? <span role="status">Subiendo archivo…</span> : null}
+              {attachmentDeleteError ? <p role="alert">{attachmentDeleteError}</p> : null}
+            </div> : null}
+            {!activeConversation ? <div className="assistant-chat__composer-tray">
+                <div className="assistant-chat__composer-bottom-row assistant-chat__composer-bottom-row--grouped">
+                <div className="assistant-chat__project-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectActionLoading(true); setProjectActionError(null); void listProjects().then((result) => setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })))).catch((reason: unknown) => setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.")).finally(() => setProjectActionLoading(false)); }}><Popover title="Proyecto" triggerLabel={thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"} trigger={<><Icon icon={Folder} size="sm" />{thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"}<Icon icon={ChevronDown} size="sm" /></>} state={isRunActive ? "disabled" : "default"}>
+                  {projectActionLoading ? <p role="status">Cargando proyectos…</p> : null}
+                  {projectActionError ? <p role="alert">{projectActionError}</p> : null}
+                  <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto…" onSearch={setProjectSearch} />
+                  <button type="button" className="assistant-chat__project-option" disabled={isRunActive || projectActionLoading} aria-current={thread.proyecto === "default" ? "true" : undefined} onClick={() => void changeProject("default")}><Icon icon={Folder} size="sm" /><span className="assistant-chat__menu-label">General / Sin proyecto</span>{thread.proyecto === "default" ? "✓" : ""}</button>
+                  {projectChoices.filter((project) => project.slug !== "default" && `${project.name} ${project.slug}`.toLocaleLowerCase("es-CL").includes(projectSearch.toLocaleLowerCase("es-CL"))).map((project) => <button type="button" className="assistant-chat__project-option" key={project.slug} disabled={isRunActive || projectActionLoading} aria-current={thread.proyecto === project.slug ? "true" : undefined} onClick={() => void changeProject(project.slug)}><Icon icon={Folder} size="sm" /><span className="assistant-chat__menu-label">{project.name}</span>{thread.proyecto === project.slug ? "✓" : ""}</button>)}
+                  <p className="assistant-chat__popover-footer">El proyecto define el contexto de este hilo.</p>
+                </Popover></div>
+                <Popover title="Archivos de este hilo" triggerLabel={`Archivos ${attachments.length}`} trigger={<><Icon icon={Paperclip} size="sm" />Archivos <span>{attachments.length}</span></>}>
+                  <SearchInput aria-label="Buscar archivo" placeholder="Buscar archivo…" onSearch={setFileSearch} />
+                  {attachmentDeleteError ? <p role="alert">{attachmentDeleteError}</p> : null}
+                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <div className="assistant-chat__file-row" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" />{item.kind === "image" ? <button type="button" className="assistant-chat__file-preview" onClick={() => { setPreviewFailed(false); setPreviewAttachment(item); }}><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span></button> : <span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span>}<button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
+                  {attachments.length === 0 ? <p role="status">Este hilo aún no tiene archivos adjuntos.</p> : null}
+                  <div className="assistant-chat__file-actions"><label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker"><strong>+ Adjuntar archivo</strong></label>
+                  {thread.proyecto && thread.proyecto !== "default" ? <div className="assistant-chat__project-files-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectFilesLoading(true); setProjectFilesError(null); void listProjectFiles(thread.proyecto!).then((result) => setProjectFiles(Array.isArray(result.files) ? result.files : [])).catch((reason: unknown) => setProjectFilesError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los archivos del proyecto.")).finally(() => setProjectFilesLoading(false)); }}><Popover title="Archivos del proyecto" triggerLabel="Agregar del proyecto">{projectFilesLoading ? <p role="status">Cargando archivos…</p> : null}{projectFilesError ? <p role="alert">{projectFilesError}</p> : null}{projectFiles.filter((file) => file.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((file) => <button type="button" className="assistant-chat__project-option" key={file.id} disabled={projectActionLoading || isRunActive} onClick={() => void attachProjectFile(file.id)}><Icon icon={assistantFileIcon(file.filename, file.content_type)} size="sm" /><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={file.filename}>{file.filename}</span><small>{file.content_type}</small></span></button>)}{!projectFilesLoading && !projectFilesError && projectFiles.length === 0 ? <p role="status">Este proyecto no tiene archivos disponibles.</p> : null}</Popover></div> : null}</div>
+                </Popover>
+                <span className="assistant-chat__tools-summary"><Icon icon={Wrench} size="sm" />Herramientas <span>{toolPolicy?.opt_in_enabled.length ?? 0}</span></span>
+                {projectActionLoading ? <span role="status">Actualizando…</span> : null}
+              </div>
+            </div> : null}
+            <div className="assistant-chat__composer-wrap">
+            {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
-              {attachments.length > 0 || uploading ? (
-                <div className="assistant-chat__attachment-list" aria-label="Archivos adjuntos">
-                  {attachments.map((item) => (
-                    <span className="assistant-chat__attachment" key={item.id}>
-                      <Icon icon={Paperclip} size="sm" />{item.filename}
-                    </span>
-                  ))}
-                  {uploading ? <span role="status">Subiendo archivo…</span> : null}
-                </div>
-              ) : null}
+              <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
               <Textarea
                 label="Mensaje"
                 value={content}
@@ -1274,49 +1121,62 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
                 }}
                 onKeyDown={keyDown}
                 disabled={!thread || processing}
-                placeholder="Escribe tu mensaje al asistente..."
+                placeholder="Escribe un mensaje al asistente…"
                 className="assistant-chat__textarea"
               />
               <div className="assistant-chat__composer-controls">
-                <Popover title="Agregar al hilo" triggerLabel="Agregar al hilo">
-                  <label className="assistant-chat__tool-option">
+                <div className="assistant-chat__add-popover"><Popover title="Herramientas del hilo" triggerLabel="+" hideTitle>
+                  <label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker">
                     <Icon icon={Paperclip} size="sm" />
-                    <span>Adjuntar archivo</span>
-                    <input
-                      aria-label="Adjuntar archivo"
-                      type="file"
-                      accept="image/*,.pdf,.csv,.txt"
-                      onChange={(event) => void attach(event)}
-                      disabled={!thread || processing || uploading}
-                    />
+                    <span><strong>Adjuntar archivo</strong><small>Sube un documento o una imagen</small></span>
                   </label>
-                </Popover>
-                <Button variant="secondary" onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
+                  <hr className="assistant-chat__tool-divider" />
+                  <div className="assistant-chat__tool-chips assistant-chat__tool-chips--stacked" aria-label="Herramientas disponibles">
+                    {toolPolicyLoading ? <p role="status">Cargando herramientas…</p> : null}
+                    {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
+                    {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
+                    {toolPolicy && toolPolicy.available.length > 0 ? <label className="assistant-chat__tool-row assistant-chat__tool-master"><Icon icon={Wrench} size="sm" /><span><strong>Todas las herramientas</strong><small>Activar o desactivar todas</small></span><input type="checkbox" aria-label="Todas las herramientas" checked={toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name))} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => void changeToolPolicy(() => updateThreadToolPolicy(thread.id, toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name)) ? [] : [...toolPolicy.available]))} /></label> : null}
+                    {webToolsAvailable && toolPolicy ? <label className="assistant-chat__tool-row"><Icon icon={Globe} size="sm" /><span><strong>Buscar en la web</strong><small>Activa la búsqueda y consulta web</small></span><input type="checkbox" aria-label="Buscar en la web" checked={webToolsEnabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
+                      const selected = new Set(toolPolicy.opt_in_enabled);
+                      if (webToolsEnabled) {
+                        selected.delete("web.search");
+                        selected.delete("web.fetch");
+                      } else {
+                        selected.add("web.search");
+                        selected.add("web.fetch");
+                      }
+                      void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
+                    }} /></label> : null}
+                    {toolPolicy && !toolPolicy.inherited ? <><hr className="assistant-chat__tool-divider" /><button type="button" className="assistant-chat__tool-option assistant-chat__tool-reset" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}><Icon icon={RotateCcw} size="sm" /><span><strong>Usar la selección del proyecto</strong><small>Aplicar las herramientas definidas en el proyecto.</small></span></button></> : null}
+                    {isRunActive ? <p role="status">Las herramientas están bloqueadas durante la ejecución.</p> : null}
+                    <p className="assistant-chat__popover-footer">La selección se aplica a este hilo.</p>
+                  </div>
+                </Popover></div>
+                <Button variant="tertiary" className={`assistant-chat__planning-pill${cortex?.status === "active" ? " assistant-chat__planning-active" : ""}`} onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
+                  <Icon icon={Workflow} size="sm" />
                   Planificar
                 </Button>
+                <Button variant="tertiary" disabled title="Próximamente">@ Agente · Próximamente</Button>
                 <button
                   type="button"
                   className="assistant-chat__send"
-                  aria-label="Enviar"
-                  title="Enviar"
-                  onClick={() => void send()}
-                  disabled={!thread || processing || !content.trim()}
+                  aria-label={isRunActive ? stopping ? "Deteniendo…" : "Detener ejecución" : "Enviar"}
+                  title={isRunActive ? stopping ? "Deteniendo…" : "Detener ejecución" : "Enviar"}
+                  onClick={() => isRunActive ? void stopRun() : void send()}
+                  disabled={isRunActive ? stopping : !content.trim()}
                 >
-                  <Icon icon={Send} size="md" />
+                  <Icon icon={isRunActive ? Square : ArrowUp} size="md" />
                 </button>
               </div>
             </div>
-            <div className="assistant-chat__status">
-              <span>Conexión: {stateLabels[connection] ?? "No disponible"}</span>
-              <span>{processing ? stateLabels[lifecycle ?? "planning"] ?? "Procesando" : "Listo"}</span>
-              {uploading ? <span>Subiendo archivo…</span> : null}
-              {attachments.map((item) => (
-                <span className="assistant-chat__attachment" key={item.id}>{item.filename}</span>
-              ))}
             </div>
           </div>
+          : null}
         </section>
       </div>
+      <Dialog open={previewAttachment !== null} onClose={() => setPreviewAttachment(null)} title={previewAttachment?.filename ?? "Vista previa"} size="wide">
+        {previewAttachment && thread ? previewFailed ? <p role="alert">No pudimos cargar la vista previa de esta imagen.</p> : <img className="assistant-chat__image-preview" src={threadAttachmentContentUrl(thread.id, previewAttachment.id)} alt={previewAttachment.filename} onError={() => setPreviewFailed(true)} /> : null}
+      </Dialog>
       {cortex?.status === "active" ? (
         <p role="status">
           Planificación activa: {cortex.topic}{" "}
