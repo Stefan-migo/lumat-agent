@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Download, FileText, Folder, History, PanelRight, PanelLeft, Plus, X, MessageSquarePlus, CalendarDays } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, MessageSquarePlus, PanelLeft, PanelRight, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -375,7 +375,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                 <Menu
                   label={`Acciones de ${thread?.title || "hilo"}`}
                   trigger="icon"
-                  items={[{ value: "rename", label: "Renombrar" }, { value: "close", label: "Cerrar pestaña" }, { value: "delete", label: "Eliminar hilo", tone: "danger" }]}
+                  items={[{ value: "rename", label: "Renombrar", icon: Pencil }, { value: "close", label: "Cerrar pestaña", icon: X }, { value: "delete", label: "Eliminar hilo", icon: Trash2, tone: "danger" }]}
                   onSelect={(value) => {
                     setThreadActionError(null);
                     if (value === "rename") { setRenameTarget(thread ?? null); setRenameTitle(thread?.title ?? ""); }

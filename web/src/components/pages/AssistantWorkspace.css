@@ -297,8 +297,25 @@
   position: relative;
   z-index: 1;
   margin-bottom: -1px;
-  box-shadow: 0 1px 0 var(--corp-surface);
-  background: var(--corp-surface);
+  box-shadow: 0 1px 0 var(--brand-bg);
+  background: var(--brand-bg);
+}
+
+.assistant-workspace__thread-tab .menu__trigger--icon {
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+}
+
+.assistant-workspace__thread-tab .menu__trigger--icon[data-state="open"] {
+  background: transparent;
+}
+
+.assistant-workspace__thread-tab .menu__trigger--icon svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .assistant-workspace__thread-tab > button:first-child {

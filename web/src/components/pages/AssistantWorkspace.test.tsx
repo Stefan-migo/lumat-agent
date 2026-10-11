@@ -324,7 +324,13 @@ describe("AssistantWorkspace", () => {
     expect(within(workspace).getByRole("button", { name: "Acciones de Agenda semanal" })).toBeInTheDocument();
     expect(within(workspace).queryByRole("button", { name: "Acciones del hilo" })).not.toBeInTheDocument();
     await userEvent.setup().click(within(workspace).getByRole("button", { name: "Acciones de Revisión KB" }));
-    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Renombrar" }));
+    const renameItem = await screen.findByRole("menuitem", { name: "Renombrar" });
+    const closeItem = screen.getByRole("menuitem", { name: "Cerrar pestaña" });
+    const deleteItem = screen.getByRole("menuitem", { name: "Eliminar hilo" });
+    expect(renameItem.querySelector("svg")).not.toBeNull();
+    expect(closeItem.querySelector("svg")).not.toBeNull();
+    expect(deleteItem.querySelector("svg")).not.toBeNull();
+    await userEvent.setup().click(renameItem);
     expect(screen.getByRole("dialog", { name: "Renombrar hilo" })).toBeInTheDocument();
     expect(screen.getByLabelText("Nombre del hilo")).toHaveValue("Revisión KB");
     fireEvent.click(within(screen.getByRole("dialog", { name: "Renombrar hilo" })).getByRole("button", { name: "Cerrar" }));
