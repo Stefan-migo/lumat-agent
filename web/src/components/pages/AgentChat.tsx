@@ -5,7 +5,6 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import {
   ApiError,
@@ -254,11 +253,10 @@ function AgentActivity({
 export interface AgentChatProps {
   role: Role;
   threadId?: number;
-  sectionTabs?: ReactNode;
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: AgentChatProps) {
+export function AgentChat({ role, threadId, onThreadOpened }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -789,7 +787,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
       state={state}
       className="assistant-chat"
     >
-      {sectionTabs}
       <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto">
         <div className="assistant-chat__planning-form">
           <p>Elige el proyecto para este chat.</p>
