@@ -109,6 +109,25 @@ describe("AgentChat", () => {
     await waitFor(() => expect(toolToggle("tool.two")).toBeChecked());
   });
 
+  it("enables all available optional tools from the master switch", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/tool-policy")) {
+        return init?.method === "PUT" ? jsonResponse(policy({ opt_in_enabled: ["tool.one", "tool.two"] })) : jsonResponse(policy());
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    const masterToggle = await screen.findByRole("checkbox", { name: "Todas las herramientas" });
+    expect(masterToggle).not.toBeChecked();
+    fireEvent.click(masterToggle);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
+    ));
+  });
+
   it("resets the thread policy to the project selection", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).endsWith("/tool-policy")) {
@@ -173,19 +192,20 @@ describe("AgentChat", () => {
   });
 
   it("renders the reference composer actions and thread-context triggers", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
-      thread: { ...makeThread(), proyecto: "default" },
-      messages: [],
-    }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
+      ? jsonResponse(policy())
+      : jsonResponse({ thread: { ...makeThread(), proyecto: "default" }, messages: [] }));
     render(<AgentChat threadId={4} />);
 
     expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
     expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Proyecto · 📁 General/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "📎 Archivos 0" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "🛠 Herramientas 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
+    expect(screen.getByText("Herramientas").closest(".assistant-chat__tools-summary")).toHaveTextContent("2");
+    expect(document.querySelector(".assistant-chat__active-chips")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Herramientas/ })).not.toBeInTheDocument();
   });
 
   it("keeps the stop control off while only the tool policy is saving", async () => {
