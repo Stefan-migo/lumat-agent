@@ -59,6 +59,31 @@ def test_operator_can_book_and_conflict_is_actionable(client, make_user):
     assert conflict.json()["detail"]["code"] == "appointment_conflict"
 
 
+def test_operator_can_read_replace_and_validate_technician_schedule(client, make_user):
+    technician_id = make_user("schedule-tech", "schedule-pass", role="tecnico")
+    make_user("schedule-oper", "schedule-oper-pass", role="operador")
+    assert client.post("/panel/api/login", json={
+        "username": "schedule-oper", "password": "schedule-oper-pass"
+    }).status_code == 200
+
+    url = f"/panel/api/technicians/{technician_id}/schedule"
+    assert client.get(url).json() == {"technician_id": technician_id, "schedule": []}
+    response = client.put(url, json={"schedule": [
+        {"weekday": 2, "opens_at": "09:00", "closes_at": "17:00"},
+    ]})
+    assert response.status_code == 200
+    assert response.json() == {"technician_id": technician_id, "schedule": [
+        {"weekday": 2, "opens_at": "09:00:00", "closes_at": "17:00:00"},
+    ]}
+    assert client.get(url).json() == response.json()
+
+    invalid = client.put(url, json={"schedule": [
+        {"weekday": 8, "opens_at": "09:00", "closes_at": "17:00"},
+    ]})
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"]["code"] == "invalid_schedule"
+
+
 def test_operator_cannot_book_with_an_invalid_timezone(client, make_user):
     operator_id = make_user("oper", "oper-pass", role="operador")
     with SessionLocal() as session:

@@ -53,6 +53,7 @@ EXPECTED_TABLES = {
     "memory_relations",
     "memory_observations",
     "technician_availability",
+    "technician_weekly_schedule",
     "appointments",
     "appointment_history",
     "appointment_calendar_sync",
@@ -727,6 +728,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("045_automation_installations",),
         ("046_automation_rule_target_content",),
         ("047_appointment_calendar_sync_cascade",),
+        ("048_technician_weekly_schedule",),
     ]
 
 

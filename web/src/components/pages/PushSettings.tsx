@@ -21,17 +21,18 @@ export function PushSettings({ supported = typeof window !== "undefined" && "Pus
       const config = await fetchPushConfig();
       if (config.public_key === null || !("PushManager" in window)) { setPermission("unsupported"); return; }
       const result = await Notification.requestPermission();
-      setPermission(result);
-      if (result !== "granted") return;
+      if (result !== "granted") { setPermission(result); return; }
       const registration = await navigator.serviceWorker.ready;
       if (!registration.pushManager) { setPermission("unsupported"); return; }
-      const subscription = await registration.pushManager.subscribe({
+      const existing = await registration.pushManager.getSubscription();
+      const subscription = existing ?? (await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKeyFromBase64Url(config.public_key) as BufferSource,
-      });
+      }));
       const serialized = subscription.toJSON();
       if (!serialized.endpoint || !serialized.keys?.p256dh || !serialized.keys.auth) throw new Error("Incomplete push subscription");
       await savePushSubscription({ endpoint: serialized.endpoint, p256dh: serialized.keys.p256dh, auth: serialized.keys.auth, user_agent: navigator.userAgent });
+      setPermission("granted");
       setError(false);
     } catch {
       setError(true);
