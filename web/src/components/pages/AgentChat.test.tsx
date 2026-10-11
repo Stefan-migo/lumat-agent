@@ -73,6 +73,7 @@ describe("AgentChat", () => {
     inherited: true,
     ...overrides,
   });
+  const toolToggle = (name: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
 
   it("fetches and renders the thread tool policy", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
@@ -81,9 +82,11 @@ describe("AgentChat", () => {
         : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
-    expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "tool.two" })).not.toBeChecked();
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("tool.one")).not.toBeNull());
+    expect(toolToggle("tool.one")).toBeChecked();
+    expect(toolToggle("tool.two")).not.toBeChecked();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
   });
 
@@ -95,12 +98,15 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("tool.two")).not.toBeNull());
+    fireEvent.click(toolToggle("tool.two")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
     ));
-    await waitFor(() => expect(screen.getByRole("checkbox", { name: "tool.two" })).toBeChecked());
+    await waitFor(() => expect(toolToggle("tool.two")).toBeChecked());
   });
 
   it("resets the thread policy to the project selection", async () => {
@@ -111,12 +117,15 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Restablecer al proyecto" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tool-chips button")).not.toBeNull());
+    fireEvent.click(document.querySelector(".assistant-chat__tool-chips button")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "DELETE" }),
     ));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Restablecer al proyecto" })).not.toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tool-chips button")).toBeNull());
   });
 
   it("locks policy controls while a persisted run is active", async () => {
@@ -127,7 +136,10 @@ describe("AgentChat", () => {
       }),
     );
     render(<AgentChat threadId={4} />);
-    expect(await screen.findByRole("checkbox", { name: "tool.one" })).toBeDisabled();
+    await screen.findByRole("button", { name: "Planificar" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("tool.one")).not.toBeNull());
+    expect(toolToggle("tool.one")).toBeDisabled();
   });
 
   it("shows stop only for an active run and sends its current run id", async () => {
@@ -156,8 +168,24 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(screen.queryByRole("button", { name: /detener ejecución/i })).not.toBeInTheDocument();
+  });
+
+  it("renders the reference composer actions and thread-context triggers", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: { ...makeThread(), proyecto: "default" },
+      messages: [],
+    }));
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Proyecto · 📁 General/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "📎 Archivos 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "🛠 Herramientas 0" })).toBeInTheDocument();
   });
 
   it("keeps the stop control off while only the tool policy is saving", async () => {
@@ -169,7 +197,10 @@ describe("AgentChat", () => {
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "tool.two" }));
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    await waitFor(() => expect(toolToggle("tool.two")).not.toBeNull());
+    fireEvent.click(toolToggle("tool.two")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "PUT" }),
@@ -193,7 +224,7 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse({ detail: "denied" }, 403) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("denied");
+    expect(await screen.findAllByRole("alert")).toEqual(expect.arrayContaining([expect.objectContaining({ textContent: "denied" })]));
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
@@ -202,7 +233,7 @@ describe("AgentChat", () => {
       String(input).endsWith("/tool-policy") ? jsonResponse(policy({ available: [], opt_in_enabled: [] })) : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
-    expect(await screen.findByText("No hay herramientas opcionales disponibles.")).toBeInTheDocument();
+    expect(await screen.findAllByText("No hay herramientas opcionales disponibles.")).not.toHaveLength(0);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
@@ -298,7 +329,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat threadId={9} />);
 
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/9",
       expect.anything(),
@@ -317,7 +348,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat />);
 
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/9",
       expect.anything(),
@@ -344,7 +375,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat onThreadOpened={onThreadOpened} />);
 
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(onThreadOpened).toHaveBeenCalledWith(7);
     expect(window.location.search).toBe("?thread_id=7");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -372,7 +403,7 @@ describe("AgentChat", () => {
         onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)}
       />,
     );
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     first.unmount();
     render(<AgentChat />);
 
@@ -392,7 +423,7 @@ describe("AgentChat", () => {
     });
 
     render(<AgentChat />);
-    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "Crear nuevo hilo" }));
 
     await waitFor(() =>
