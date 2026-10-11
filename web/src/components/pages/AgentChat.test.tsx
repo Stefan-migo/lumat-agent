@@ -85,6 +85,10 @@ describe("AgentChat", () => {
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(toolToggle("tool.one")).not.toBeNull());
+    const dialog = screen.getByRole("dialog", { name: "Agregar al hilo" });
+    expect(dialog.querySelector("h2")).toHaveClass("visually-hidden");
+    expect(document.querySelectorAll(".assistant-chat__tool-row:not(.assistant-chat__tool-master) small")).toHaveLength(0);
+    expect(document.querySelector(".assistant-chat__tool-row:not(.assistant-chat__tool-master) svg")).toBeInTheDocument();
     expect(toolToggle("tool.one")).toBeChecked();
     expect(toolToggle("tool.two")).not.toBeChecked();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
@@ -208,6 +212,7 @@ describe("AgentChat", () => {
     await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary .badge")).toHaveTextContent("1"));
     expect(document.querySelector(".assistant-chat__active-chips")).toBeNull();
     expect(screen.queryByRole("button", { name: /Herramientas/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__composer-bottom-row")).toHaveClass("assistant-chat__composer-bottom-row--grouped");
   });
 
   it("hides the tray and applies compact active styling when messages exist", async () => {

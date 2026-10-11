@@ -1052,7 +1052,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
           </div>
           {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void attach(file); }}>
             {!activeConversation ? <div className="assistant-chat__composer-tray">
-              <div className="assistant-chat__composer-bottom-row">
+                <div className="assistant-chat__composer-bottom-row assistant-chat__composer-bottom-row--grouped">
                 <div className="assistant-chat__project-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectActionLoading(true); setProjectActionError(null); void listProjects().then((result) => setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })))).catch((reason: unknown) => setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.")).finally(() => setProjectActionLoading(false)); }}><Popover title="Proyecto" triggerLabel={thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"} trigger={<><Icon icon={Folder} size="sm" />{thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"}<Icon icon={ChevronDown} size="sm" /></>} state={isRunActive ? "disabled" : "default"}>
                   {projectActionLoading ? <p role="status">Cargando proyectos…</p> : null}
                   {projectActionError ? <p role="alert">{projectActionError}</p> : null}
@@ -1099,7 +1099,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                 className="assistant-chat__textarea"
               />
               <div className="assistant-chat__composer-controls">
-                <div className="assistant-chat__add-popover"><Popover title="Agregar al hilo" triggerLabel="+">
+                <div className="assistant-chat__add-popover"><Popover title="Agregar al hilo" triggerLabel="+" hideTitle>
                   <label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker">
                     <Icon icon={Paperclip} size="sm" />
                     <span><strong>Adjuntar archivo</strong><small>Sube un documento o una imagen</small></span>
@@ -1112,7 +1112,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                     {[...new Set(toolPolicy?.available.map((name) => assistantToolLabel(name).group) ?? [])].map((group) => <section key={group} className="assistant-chat__tool-group"><h3>{group}</h3>{toolPolicy?.available.filter((name) => assistantToolLabel(name).group === group).map((name) => {
                       const enabled = toolPolicy.opt_in_enabled.includes(name);
                       const tool = assistantToolLabel(name);
-                      return <label key={name} className="assistant-chat__tool-row"><span><strong>{tool.label}</strong>{tool.description ? <small>{tool.description}</small> : null}</span><input type="checkbox" aria-label={tool.label} checked={enabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
+                      return <label key={name} className="assistant-chat__tool-row"><Icon icon={tool.icon} size="sm" /><strong>{tool.label}</strong><input type="checkbox" aria-label={tool.label} checked={enabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
                         const selected = new Set(toolPolicy.opt_in_enabled);
                         if (enabled) selected.delete(name); else selected.add(name);
                         void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
