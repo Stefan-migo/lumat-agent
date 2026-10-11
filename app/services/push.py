@@ -1,6 +1,6 @@
 """Optional Web Push adapter; absence never blocks panel notifications."""
 
-from pywebpush import webpush
+from pywebpush import WebPushException, webpush
 
 from app.config import get_settings
 from app.db import session_scope
@@ -30,10 +30,16 @@ def send_push(recipient: str, content: str) -> str:
             "endpoint": subscription.endpoint,
             "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth},
         }
-        webpush(
-            subscription_info,
-            data=content,
-            vapid_private_key=settings.vapid_private_key,
-            vapid_claims={"sub": settings.vapid_subject},
-        )
+        try:
+            webpush(
+                subscription_info,
+                data=content,
+                vapid_private_key=settings.vapid_private_key,
+                vapid_claims={"sub": settings.vapid_subject},
+            )
+        except WebPushException as exc:
+            if exc.response is not None and exc.response.status_code in (404, 410):
+                subscription.active = False
+                session.commit()
+            raise
         return f"push:{subscription.id}"

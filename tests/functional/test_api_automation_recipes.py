@@ -17,6 +17,7 @@ def test_admin_can_list_recipe_catalog(client, make_user):
         "appointment_confirmation", "appointment_cancellation", "appointment_rescheduled",
         "appointment_no_show", "case_new_request",
         "appointment_review_request", "customer_maintenance",
+        "admin_daily_summary", "admin_weekly_summary",
     ]
     assert set(payload[0]) == {
         "recipe_id", "name", "description", "category", "trigger_kind", "event_type",

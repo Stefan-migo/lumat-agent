@@ -355,6 +355,9 @@ export interface UserRef {
 
 export interface TechniciansResponse { technicians: UserRef[]; }
 
+export interface TechnicianScheduleEntry { weekday: number; opens_at: string; closes_at: string; }
+export interface TechnicianScheduleResponse { technician_id: number; schedule: TechnicianScheduleEntry[]; }
+
 export interface Case {
   id: number;
   conversation_id: number | null;

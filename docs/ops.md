@@ -395,10 +395,9 @@ EOF
 crontab /tmp/cron && rm /tmp/cron)
 ```
 
-> `app.ops.daily_summary` is a thin script over existing services
-> (`list_open_cases`, `list_unresolved_questions`, cost sums) that emails the
-> digest via the same SMTP path as `monitor.sh`. Add it in T7.2 alongside the
-> seed if not present; the cron entry above is the ops contract.
+> Digest content is built by `app.ops.daily_summary.build_digest` and delivered
+> to the admin by the `admin_daily_summary` / `admin_weekly_summary` automation
+> recipes via the worker tick. The standalone cron remains deferred A1 ops work.
 
 ### 2.8.1 Appointment reminder sweep cron
 

@@ -96,6 +96,9 @@ export const deletePushSubscription = (endpoint: string) =>
 export function patchJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 }
+export function putJson<T>(path: string, body: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+}
 
 import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse, ProjectFile, ProjectFilesResponse } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
@@ -117,7 +120,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
   return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
 }
 
-import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, StopThreadRunResponse } from './types';
+import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, TechnicianScheduleEntry, TechnicianScheduleResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, StopThreadRunResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -268,6 +271,8 @@ export const getAdminUser = (id: number) => apiFetch<{ user: AdminUser }>(`/pane
 export const updateAdminUser = (id: number, body: AdminUserProfileUpdate) => patchJson<{ user: AdminUser }>(`/panel/api/users/${id}`, body);
 export const unlockUser = (id: number) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/unlock`);
 export const fetchTechnicians = () => apiFetch<TechniciansResponse>('/panel/api/technicians');
+export const getTechnicianSchedule = (technicianId: number) => apiFetch<TechnicianScheduleResponse>(`/panel/api/technicians/${technicianId}/schedule`);
+export const saveTechnicianSchedule = (technicianId: number, schedule: TechnicianScheduleEntry[]) => putJson<TechnicianScheduleResponse>(`/panel/api/technicians/${technicianId}/schedule`, { schedule });
 export const createUser = (body: { username: string; password: string; role: AdminUser['role'] }) => postJson<{ user: AdminUser }>('/panel/api/users', body);
 export const toggleUserActive = (id: number) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/toggle-active`);
 export const resetUserPassword = (id: number, password: string) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/reset-password`, { password });

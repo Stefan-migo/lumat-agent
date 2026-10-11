@@ -51,7 +51,7 @@ ADMIN_DB_URL = admin_database_url()
 
 # Tables truncated before each test (full set incl. users — panel accounts).
 TRUNCATE_TABLES = (
-    "appointment_history, appointments, technician_availability, settings, audit_log, kb_chunks, kb_documents, conversation_events, "
+    "appointment_history, appointments, technician_availability, technician_weekly_schedule, settings, audit_log, kb_chunks, kb_documents, conversation_events, "
     "automation_installations, automation_rules, automation_executions, domain_events, "
     "cases, messages, conversations, customer_notes, users, customers, "
     "memories, memory_relations, memory_observations"

@@ -11,6 +11,7 @@ from app.models import (
     Appointment, AppointmentHistory, AuditLog, Case, Conversation, Customer,
     Message, MessageDirection, MessageStatus, MessageType, TechnicianAvailability,
     User, UserRole,
+    TechnicianWeeklySchedule,
 )
 from app.services import scheduling
 from app.services.settings import set_setting
@@ -171,3 +172,19 @@ def test_no_technician_availability_hands_off(mock_openai_chat):
     assert any("asesor" in reply.lower() for reply in replies)
     with SessionLocal() as session:
         assert session.query(Appointment).count() == 0
+
+
+def test_weekly_schedule_alone_produces_chat_slot_offer(mock_openai_chat):
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        session.add_all(TechnicianWeeklySchedule(
+            technician_id=tech_id, weekday=weekday,
+            opens_at=time(0), closes_at=time(23, 59),
+        ) for weekday in range(1, 8))
+        session.commit()
+
+    replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.booking.weekly"))
+
+    assert any("1." in reply for reply in replies)
+    with SessionLocal() as session:
+        assert session.query(TechnicianAvailability).filter_by(technician_id=tech_id).count() > 0

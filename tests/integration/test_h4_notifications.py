@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import psycopg
 import pytest
+from pywebpush import WebPushException
 from sqlalchemy import select
 
 from app.db import SessionLocal
@@ -285,6 +286,27 @@ def test_send_push_uses_stored_subscription(monkeypatch):
     assert calls == [(({"endpoint": "https://push.example.test/1", "keys": {"p256dh": "public", "auth": "secret"}},), {
         "data": "hello", "vapid_private_key": "private.pem", "vapid_claims": {"sub": "mailto:ops@example.test"},
     })]
+
+
+def test_send_push_deactivates_subscription_on_gone_response(monkeypatch):
+    user_id = _user("push-gone")
+    with SessionLocal() as session:
+        subscription = PushSubscription(user_id=user_id, endpoint="https://push.example.test/gone", p256dh="public", auth="secret")
+        session.add(subscription)
+        session.commit()
+        subscription_id = subscription.id
+    monkeypatch.setattr(push, "get_settings", lambda: type("Settings", (), {
+        "vapid_public_key": "public-key", "vapid_private_key": "private.pem", "vapid_subject": "mailto:ops@example.test",
+    })())
+    monkeypatch.setattr(push, "webpush", lambda *args, **kwargs: (_ for _ in ()).throw(
+        WebPushException("gone", response=type("Response", (), {"status_code": 410})())
+    ))
+
+    with pytest.raises(WebPushException):
+        push.send_push(str(subscription_id), "hello")
+
+    with SessionLocal() as session:
+        assert session.get(PushSubscription, subscription_id).active is False
 
 
 @pytest.mark.parametrize("active", [True, False])

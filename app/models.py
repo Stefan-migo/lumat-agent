@@ -6,7 +6,7 @@ created by the migration (labels must match exactly).
 """
 
 import enum
-from datetime import datetime
+from datetime import datetime, time
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -19,7 +19,9 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    SmallInteger,
     Text,
+    Time,
     UniqueConstraint,
     func,
     text,
@@ -660,6 +662,17 @@ class TechnicianAvailability(Base):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     available: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class TechnicianWeeklySchedule(Base):
+    __tablename__ = "technician_weekly_schedule"
+    __table_args__ = (UniqueConstraint("technician_id", "weekday"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    technician_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    weekday: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    opens_at: Mapped[time] = mapped_column(Time, nullable=False)
+    closes_at: Mapped[time] = mapped_column(Time, nullable=False)
 
 
 class Appointment(Base):
