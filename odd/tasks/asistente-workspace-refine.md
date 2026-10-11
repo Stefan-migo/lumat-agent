@@ -800,5 +800,6 @@ could not launch because the installed Playwright browser executable is absent; 
 was attempted.
 
 Commits: `1ba689bd` (`feat(assistant): simplify thread tool controls`) covers the tool UI, composer
-anchoring, tests, and this Slice 15 record; `PENDING` removes the now-unused `Popover.titleAccessory`
-prop and its accessory-specific test; `PENDING` removes the now-unused tool-label map and its unit test.
+anchoring, tests, and this Slice 15 record; `9aa55c01` (`refactor(ui): remove unused popover accessory`)
+removes `Popover.titleAccessory` and its accessory-specific test; the final cleanup commit removes the
+now-unused tool-label map and its unit test.
