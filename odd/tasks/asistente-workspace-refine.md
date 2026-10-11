@@ -125,3 +125,12 @@ filter, so a per-project history/search is impossible today.
 - **Review env (owner visual review):** isolated compose project `lumat-asistente-lumat-frontend`
   (API `:8001`, db `:5433`), admin seeded via `db/seed.sh`, plus 3 seeded projects + 4 threads
   (script run in the api container). Vite `:5174` targets `VITE_API_TARGET=http://localhost:8001`.
+- **B2 backend — implemented and verified:** `app/panel/api/routes/chat.py` adds the owner-scoped,
+  bounded active-run route; `serializers.py` emits the stable orchestrator row shape; integration tests
+  cover running/terminal/cortex/other-owner filtering and limit bounds. Strict TDD RED: after tests
+  were added, `/panel/api/chat/active-runs` returned 404 (both the listing and limit test); GREEN:
+  targeted suite 66 passed. Full backend `uv run pytest tests/`: 1,895 passed, 2 warnings
+  (unawaited `_publish_all` coroutine; fastembed pooling notice). Commit: pending at this log update.
+- Graphify consulted nodes `list_chat_threads`, `InternalChatThread`, `app/panel/api/routes/chat.py`,
+  `app/models.py`, and `api/serializers.py`; focused path queries found no directed route-to-model
+  path in this graph snapshot.

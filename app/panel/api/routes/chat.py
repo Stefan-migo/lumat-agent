@@ -22,6 +22,7 @@ from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
     to_assistant_attachment_dict,
     to_assistant_artifact_dict,
+    to_active_chat_run_dict,
     to_cortex_report_dict,
     to_cortex_session_dict,
     to_internal_chat_thread_summary_dict,
@@ -208,6 +209,25 @@ def list_chat_threads(
             for row in threads
         ]
     }
+
+
+@router.get("/chat/active-runs")
+def list_active_chat_runs(
+    limit: int = Query(50, ge=1, le=100),
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    rows = session.scalars(
+        select(InternalChatThread)
+        .where(
+            InternalChatThread.user_id == current.id,
+            InternalChatThread.assistant_state["live"]["status"].as_string() == "running",
+            InternalChatThread.assistant_state["cortex_session"].as_string().is_(None),
+        )
+        .order_by(InternalChatThread.updated_at.desc())
+        .limit(limit)
+    ).all()
+    return {"active_runs": [to_active_chat_run_dict(thread) for thread in rows]}
 
 
 @router.patch("/chat/threads/{thread_id}")

@@ -578,6 +578,69 @@ def test_thread_list_rejects_unbounded_or_oversized_requests(client):
     assert client.get("/panel/api/chat/threads?limit=51").status_code == 422
 
 
+def test_active_run_list_is_owner_scoped_and_excludes_terminal_and_cortex_threads(client):
+    _user("active-run-owner", "admin")
+    _user("active-run-other", "admin")
+    _login(client, "active-run-owner")
+    running = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    terminal = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    planning = client.post("/panel/api/planning/sessions", json={"topic": "Planning only"}).json()["thread_id"]
+    with SessionLocal() as session:
+        running_thread = session.get(InternalChatThread, running)
+        running_thread.title = "Running work"
+        running_thread.proyecto = "workspace"
+        running_thread.assistant_state = {
+            "live": {"run_id": "live-run", "stage": "planning", "status": "running"},
+        }
+        terminal_thread = session.get(InternalChatThread, terminal)
+        terminal_thread.proyecto = "workspace"
+        terminal_thread.assistant_state = {
+            "live": {"run_id": "done-run", "stage": "completed", "status": "completed"},
+        }
+        session.commit()
+
+    client.post("/panel/api/logout")
+    _login(client, "active-run-other")
+    other_running = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    with SessionLocal() as session:
+        other_thread = session.get(InternalChatThread, other_running)
+        other_thread.proyecto = "other-project"
+        other_thread.assistant_state = {
+            "live": {"run_id": "private-run", "stage": "executing", "status": "running"},
+        }
+        session.commit()
+
+    client.post("/panel/api/logout")
+    _login(client, "active-run-owner")
+    response = client.get("/panel/api/chat/active-runs")
+
+    assert response.status_code == 200
+    rows = response.json()["active_runs"]
+    assert len(rows) == 1
+    assert {key: rows[0][key] for key in (
+        "thread_id", "title", "proyecto", "agent", "stage", "run_id",
+    )} == {
+        "thread_id": running,
+        "title": "Running work",
+        "proyecto": "workspace",
+        "agent": "orchestrator",
+        "stage": "planning",
+        "run_id": "live-run",
+    }
+    assert datetime.fromisoformat(rows[0]["updated_at"]).tzinfo is not None
+    assert terminal not in [row["thread_id"] for row in rows]
+    assert planning not in [row["thread_id"] for row in rows]
+    assert other_running not in [row["thread_id"] for row in rows]
+
+
+def test_active_run_list_limit_is_bounded(client):
+    _user("active-run-bounds", "admin")
+    _login(client, "active-run-bounds")
+
+    assert client.get("/panel/api/chat/active-runs?limit=0").status_code == 422
+    assert client.get("/panel/api/chat/active-runs?limit=101").status_code == 422
+
+
 def test_thread_list_does_not_fabricate_planning_sessions(client):
     _user("thread-list-planning", "admin")
     _login(client, "thread-list-planning")
