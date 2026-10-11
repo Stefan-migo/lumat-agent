@@ -325,6 +325,48 @@ Owner visual review 2026-10-11.
   - Badge "Conversación rápida" → **"General"**.
   - Remove the **"Conexión: … | Listo"** footer from the composer (the WS status is noise for this view).
 
+## Slice 8 — Composer to match the final reference (this pass)
+
+Owner direction 2026-10-11 (visual review): the composer must look like the **final references** — a wider
+composer, a **bottom bar of three items** (`Proyecto ▾` · `Archivos N` · `Herramientas N`) like ChatGPT's,
+active tool/attachment chips above the input, and a `+` popover that groups the tools. Owner: "el diseño
+tiene que verse así como en estas 3 imágenes".
+
+**Target structure (chat with a thread):**
+- Empty-thread hero (thread exists, no messages): title **"¿En qué trabajamos hoy?"** + subtitle
+  **"Consulta, planifica o trabaja en tus proyectos con el asistente Lumat."** (replaces
+  "¿En qué podemos ayudarte?" / "Describe una tarea o consulta para comenzar.").
+- Composer **wider**: `width: min(100%, 56rem)` (~900px like the reference), rounded + elevated.
+- **Above the input:** active **tool chips** (`Buscar en la web ×`) and **attachment chips**
+  (`Manual de atención.pdf · PDF · Listo ×`).
+- Input (textarea).
+- **Controls row:** `+` · **Planificar** (pill, highlighted when active) · **@ Agente · Próximamente** ·
+  spacer · **send `↑`**.
+- **Bottom bar** (a bordered row inside the composer card, below the controls): three items:
+  - **Proyecto** — `📁 <name> ▾` → dropdown: search `Buscar proyecto…`, then **"General / Sin proyecto"**
+    first (selected when `default`), then the projects; footer **"El proyecto define el contexto de este hilo."**
+    Selecting one calls `setChatThreadProject`.
+  - **Archivos** — `📎 Archivos N` (N = thread attachment count) → popover **"Archivos de este hilo"**:
+    search `Buscar archivo…`, the thread attachments (filename + kind + "Adjuntado" + remove), and a footer
+    with **`+ Adjuntar archivo`** (disk picker) **and** **`Agregar del proyecto`** (project files via
+    `attachProjectFileToThread`, only for a real project).
+  - **Herramientas** — `🛠 Herramientas N` (N = enabled tool count) → popover with the tool toggles.
+- **`+` popover ("Agregar al hilo"):** **"Adjuntar archivo — Sube un documento o una imagen"**, then the
+  tool toggles **grouped**: **"Consultar información"** and **"Acciones del asistente"**, each row with a
+  switch; footer **"ⓘ Herramientas disponibles para este hilo."**
+- **Tool labels** — a frontend map from raw tool name → `{ label, description, group }`; unknown tools fall
+  back to the raw name (no fabricated descriptions):
+  `web.search` → "Buscar en la web" / "Consulta información actualizada" / "Consultar información";
+  `web.fetch` → "Consultar una URL" / "Lee el contenido de un enlace" / "Consultar información";
+  `automation.create_rule` → "Crear automatización" / "Automatiza tareas recurrentes" / "Acciones del asistente";
+  `project.create` → "Crear proyecto" / "Organiza tu trabajo en un nuevo proyecto" / "Acciones del asistente";
+  `project.rename` → "Renombrar proyecto" / "Cambia el nombre de un proyecto" / "Acciones del asistente";
+  `project.archive` → "Archivar proyecto" / "Archiva un proyecto" / "Acciones del asistente";
+  `project.merge` → "Fusionar proyectos" / "Combina dos proyectos" / "Acciones del asistente".
+
+**In:** `web/src/components/pages/AgentChat.tsx` + `.css`, a small tool-label map (new file or inline), and
+their tests. **Out:** backend (B4/B5 already exist); `PanelShell`.
+
 ## Acceptance criteria
 
 1. `npx tsc -b --force --noEmit`, `npx vitest run --no-file-parallelism`, `npm run build` green (from `web/`).
@@ -472,3 +514,20 @@ Owner visual review 2026-10-11.
   error instead of a controlled response; wrap the read and answer honestly.
 - Known follow-ups to fold into a later slice: R3-001 and R3-002 above, plus the earlier tool-chip
   "bloqueadas durante la ejecución" reason and the active-run poll error indicator.
+
+- **Slice 8 opened 2026-10-11.** Owner gave the FINAL references: a wider composer, a bottom bar
+  (`Proyecto ▾` · `Archivos N` · `Herramientas N`), chips above the input, a `+` popover with grouped
+  tools, and the empty-thread hero "¿En qué trabajamos hoy?". Graph Check consulted `AgentChat()`,
+  `Popover()`, `ChatThreadToolPolicyBody`.
+- S8 — delivered in `320c74f3` (`feat(assistant): label composer tools`) and `ec460c9b`
+  (`feat(assistant): match final composer reference`). Composer widened to `min(100%, 56rem)`; active tool
+  + attachment chips above the input; empty-thread hero title/subtitle; controls row (`+`, Planificar pill
+  highlighted while planning, `@ Agente · Próximamente`, send `↑`); bottom bar with the Proyecto dropdown,
+  Archivos popover and Herramientas popover; `+` popover with "Adjuntar archivo" + grouped tool rows +
+  footer; new `assistantToolLabels.ts` map. The `+` circle styling was scoped to
+  `.assistant-chat__add-popover` so the bottom-bar popovers render as text triggers. Verification: tsc
+  pass; focused 57 tests; full 104 files / 1,110 tests; build pass.
+- Slice 8 RDD assessment: `review assess --base-ref 1381346f --committed-only` → medium, 6 paths, 322
+  lines, `review_due: false` (`under_budget`). No review opened; the boundary stays at `1381346f` and
+  accumulates. Note: the popover-display fix `ba05f577` sits after the S6+S7 receipt (a post-review byte
+  change) and is folded into this accumulating range.
