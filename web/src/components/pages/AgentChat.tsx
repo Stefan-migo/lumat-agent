@@ -25,7 +25,7 @@ import {
   updateThreadToolPolicy,
   uploadAssistantAttachment,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Paperclip, RotateCcw, Square, Wrench } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Paperclip, RotateCcw, Square, Workflow, Wrench } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -59,6 +59,7 @@ import { Icon } from "../primitives/Icon";
 import { SearchInput } from "../primitives/SearchInput";
 import { AssistantWorkspace } from "./AssistantWorkspace";
 import { assistantToolLabel } from "./assistantToolLabels";
+import { assistantFileIcon } from "./assistantFileIcon";
 import "./AgentChat.css";
 
 export const COMMAND_CENTER_BREAKPOINTS = {
@@ -831,7 +832,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
       <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto">
         <div className="assistant-chat__planning-form">
           <p>Elige el proyecto para este chat.</p>
-          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" disabled={projectActionLoading} onClick={() => void (thread ? changeProject(project.slug) : createProjectChat(project.slug))}>{project.name}</Button>)}
+          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" disabled={projectActionLoading} onClick={() => void (thread ? changeProject(project.slug) : createProjectChat(project.slug))}><Icon icon={Folder} size="sm" />{project.name}</Button>)}
           {projectActionError ? <p role="alert">{projectActionError}</p> : null}
         </div>
       </Dialog>
@@ -1055,18 +1056,18 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                   {projectActionLoading ? <p role="status">Cargando proyectos…</p> : null}
                   {projectActionError ? <p role="alert">{projectActionError}</p> : null}
                   <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto…" onSearch={setProjectSearch} />
-                  <button type="button" className="assistant-chat__project-option" disabled={isRunActive || projectActionLoading} aria-current={thread.proyecto === "default" ? "true" : undefined} onClick={() => void changeProject("default")}>General / Sin proyecto {thread.proyecto === "default" ? "✓" : ""}</button>
-                  {projectChoices.filter((project) => project.slug !== "default" && `${project.name} ${project.slug}`.toLocaleLowerCase("es-CL").includes(projectSearch.toLocaleLowerCase("es-CL"))).map((project) => <button type="button" className="assistant-chat__project-option" key={project.slug} disabled={isRunActive || projectActionLoading} aria-current={thread.proyecto === project.slug ? "true" : undefined} onClick={() => void changeProject(project.slug)}>{project.name} · {project.slug} {thread.proyecto === project.slug ? "✓" : ""}</button>)}
+                  <button type="button" className="assistant-chat__project-option" disabled={isRunActive || projectActionLoading} aria-current={thread.proyecto === "default" ? "true" : undefined} onClick={() => void changeProject("default")}><Icon icon={Folder} size="sm" /><span className="assistant-chat__menu-label">General / Sin proyecto</span>{thread.proyecto === "default" ? "✓" : ""}</button>
+                  {projectChoices.filter((project) => project.slug !== "default" && `${project.name} ${project.slug}`.toLocaleLowerCase("es-CL").includes(projectSearch.toLocaleLowerCase("es-CL"))).map((project) => <button type="button" className="assistant-chat__project-option" key={project.slug} disabled={isRunActive || projectActionLoading} aria-current={thread.proyecto === project.slug ? "true" : undefined} onClick={() => void changeProject(project.slug)}><Icon icon={Folder} size="sm" /><span className="assistant-chat__menu-label">{project.name}</span>{thread.proyecto === project.slug ? "✓" : ""}</button>)}
                   <p className="assistant-chat__popover-footer">El proyecto define el contexto de este hilo.</p>
                 </Popover></div>
                 <Popover title="Archivos de este hilo" triggerLabel={`Archivos ${attachments.length}`} trigger={<><Icon icon={Paperclip} size="sm" />Archivos <Badge>{attachments.length}</Badge></>}>
                   <SearchInput aria-label="Buscar archivo" placeholder="Buscar archivo…" onSearch={setFileSearch} />
-                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <p className="assistant-chat__file-row" key={item.id}>{item.filename} · {item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</p>)}
+                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <p className="assistant-chat__file-row" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__menu-label">{item.filename}<small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span></p>)}
                   {attachments.length === 0 ? <p role="status">Este hilo aún no tiene archivos adjuntos.</p> : null}
                   <div className="assistant-chat__file-actions"><label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker"><strong>+ Adjuntar archivo</strong></label>
-                  {thread.proyecto && thread.proyecto !== "default" ? <div className="assistant-chat__project-files-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectFilesLoading(true); setProjectFilesError(null); void listProjectFiles(thread.proyecto!).then((result) => setProjectFiles(Array.isArray(result.files) ? result.files : [])).catch((reason: unknown) => setProjectFilesError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los archivos del proyecto.")).finally(() => setProjectFilesLoading(false)); }}><Popover title="Archivos del proyecto" triggerLabel="Agregar del proyecto">{projectFilesLoading ? <p role="status">Cargando archivos…</p> : null}{projectFilesError ? <p role="alert">{projectFilesError}</p> : null}{projectFiles.filter((file) => file.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((file) => <button type="button" className="assistant-chat__project-option" key={file.id} disabled={projectActionLoading || isRunActive} onClick={() => void attachProjectFile(file.id)}>{file.filename} · {file.content_type}</button>)}{!projectFilesLoading && !projectFilesError && projectFiles.length === 0 ? <p role="status">Este proyecto no tiene archivos disponibles.</p> : null}</Popover></div> : null}</div>
+                  {thread.proyecto && thread.proyecto !== "default" ? <div className="assistant-chat__project-files-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectFilesLoading(true); setProjectFilesError(null); void listProjectFiles(thread.proyecto!).then((result) => setProjectFiles(Array.isArray(result.files) ? result.files : [])).catch((reason: unknown) => setProjectFilesError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los archivos del proyecto.")).finally(() => setProjectFilesLoading(false)); }}><Popover title="Archivos del proyecto" triggerLabel="Agregar del proyecto">{projectFilesLoading ? <p role="status">Cargando archivos…</p> : null}{projectFilesError ? <p role="alert">{projectFilesError}</p> : null}{projectFiles.filter((file) => file.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((file) => <button type="button" className="assistant-chat__project-option" key={file.id} disabled={projectActionLoading || isRunActive} onClick={() => void attachProjectFile(file.id)}><Icon icon={assistantFileIcon(file.filename, file.content_type)} size="sm" /><span className="assistant-chat__menu-label">{file.filename}<small>{file.content_type}</small></span></button>)}{!projectFilesLoading && !projectFilesError && projectFiles.length === 0 ? <p role="status">Este proyecto no tiene archivos disponibles.</p> : null}</Popover></div> : null}</div>
                 </Popover>
-                <span className="assistant-chat__tools-summary"><Icon icon={Wrench} size="sm" />Herramientas <Badge>{toolPolicy?.available.length ?? 0}</Badge></span>
+                <span className="assistant-chat__tools-summary"><Icon icon={Wrench} size="sm" />Herramientas <Badge>{toolPolicy?.opt_in_enabled.length ?? 0}</Badge></span>
                 {projectActionLoading ? <span role="status">Actualizando…</span> : null}
               </div>
             </div>
@@ -1076,9 +1077,9 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
               <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
               {attachments.length > 0 || uploading ? (
                 <div className="assistant-chat__attachment-list" aria-label="Archivos adjuntos">
-                  {attachments.map((item) => (
-                    <span className="assistant-chat__attachment" key={item.id}>
-                      <Icon icon={Paperclip} size="sm" /><span>{item.filename}</span><span>· {item.kind.toLocaleUpperCase("es-CL")} · Listo</span>
+                    {attachments.map((item) => (
+                      <span className="assistant-chat__attachment" key={item.id}>
+                      <Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span>{item.filename}</span><span>· {item.kind.toLocaleUpperCase("es-CL")} · Listo</span>
                     </span>
                   ))}
                   {uploading ? <span role="status">Subiendo archivo…</span> : null}
@@ -1116,12 +1117,13 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                         void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
                       }} /></label>;
                     })}</section>)}
-                    {toolPolicy && !toolPolicy.inherited ? <Button variant="tertiary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}>Restablecer al proyecto</Button> : null}
+                    {toolPolicy && !toolPolicy.inherited ? <Button variant="tertiary" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}>Usar la selección del proyecto</Button> : null}
                     {isRunActive ? <p role="status">Las herramientas están bloqueadas durante la ejecución.</p> : null}
                     <p className="assistant-chat__popover-footer">ⓘ Herramientas disponibles para este hilo.</p>
                   </div>
                 </Popover></div>
-                <Button variant="tertiary" className={cortex?.status === "active" ? "assistant-chat__planning-active" : ""} onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
+                <Button variant="tertiary" className={`assistant-chat__planning-pill${cortex?.status === "active" ? " assistant-chat__planning-active" : ""}`} onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
+                  <Icon icon={Workflow} size="sm" />
                   Planificar
                 </Button>
                 <Button variant="tertiary" disabled title="Próximamente">@ Agente · Próximamente</Button>

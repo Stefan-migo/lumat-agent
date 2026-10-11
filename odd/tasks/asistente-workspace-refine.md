@@ -588,4 +588,4 @@ Implementation: the outer wrapper is the sole composer card; its inner composer 
 
 Verification from `web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run src/components/pages/AgentChat.test.tsx src/components/pages/assistantFileIcon.test.ts src/components/primitives/Popover.test.tsx` passed (3 files, 67 tests; existing React `act(...)` warnings); `npm run build` passed (Vite reported the existing >500 kB chunk-size advisory).
 
-Ponytail: the new type-to-icon helper is the minimum reusable mapping needed by two row types and a unit test; native `:has()` and CSS anchor positioning are already-supported platform features used for the wrapper focus ring and upward popovers. No shortcut with a known ceiling was introduced. Commit SHAs: pending.
+Ponytail: the new type-to-icon helper is the minimum reusable mapping needed by two row types and a unit test; native `:has()` and CSS anchor positioning are already-supported platform features used for the wrapper focus ring and upward popovers. No shortcut with a known ceiling was introduced. Styling commit: `e85f51cd`; behavior/icon implementation commit: pending.

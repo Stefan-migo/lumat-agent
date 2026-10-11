@@ -107,6 +107,7 @@ describe("AgentChat", () => {
       expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
     ));
     await waitFor(() => expect(toolToggle("tool.two")).toBeChecked());
+    expect(document.querySelector(".assistant-chat__tools-summary .badge")).toHaveTextContent("2");
   });
 
   it("enables all available optional tools from the master switch", async () => {
@@ -139,6 +140,7 @@ describe("AgentChat", () => {
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(document.querySelector(".assistant-chat__tool-chips button")).not.toBeNull());
+    expect(screen.getByRole("button", { name: "Usar la selección del proyecto" })).toBeInTheDocument();
     fireEvent.click(document.querySelector(".assistant-chat__tool-chips button")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
@@ -203,9 +205,29 @@ describe("AgentChat", () => {
     expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
-    expect(screen.getByText("Herramientas").closest(".assistant-chat__tools-summary")).toHaveTextContent("2");
+    await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary .badge")).toHaveTextContent("1"));
     expect(document.querySelector(".assistant-chat__active-chips")).toBeNull();
     expect(screen.queryByRole("button", { name: /Herramientas/ })).not.toBeInTheDocument();
+  });
+
+  it("shows project names without slugs and keeps selection functional", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [{ id: 1, slug: "ops-private-slug", name: "Operations" }] });
+      if (url === "/panel/api/chat/threads/4" && init?.method === "PATCH") return jsonResponse({ thread: { ...makeThread(), proyecto: "ops-private-slug" } });
+      return jsonResponse({ thread: { ...makeThread(), proyecto: "default" }, messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "General" }));
+    const projectOption = await screen.findByRole("button", { name: "Operations" });
+    expect(projectOption).not.toHaveTextContent("ops-private-slug");
+    fireEvent.click(projectOption);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ proyecto: "ops-private-slug" }) }),
+    ));
   });
 
   it("keeps the stop control off while only the tool policy is saving", async () => {
@@ -1139,7 +1161,7 @@ describe("AgentChat", () => {
       target: { files: [new File(["png"], "photo.png", { type: "image/png" })] },
     });
 
-    expect(await screen.findAllByText("photo.png")).toHaveLength(2);
+    expect(await screen.findAllByText("photo.png")).toHaveLength(3);
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
