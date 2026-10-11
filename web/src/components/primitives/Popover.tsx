@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import "./primitives.css";
 
 export type PopoverState = "default" | "loading" | "empty" | "error" | "disabled";
@@ -19,10 +19,11 @@ export interface PopoverProps {
 export function Popover({ title, triggerLabel, trigger, children, state = "default", hideTitle = false }: PopoverProps) {
   const id = useId();
   const titleId = `${id}-title`;
+  const anchorName = `--pop-anchor-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const disabled = state === "disabled";
 
   return (
-    <div className="popover">
+    <div className="popover" style={{ "--pop-anchor": anchorName } as CSSProperties}>
       <button
         type="button"
         className="popover__trigger"

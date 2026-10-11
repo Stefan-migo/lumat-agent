@@ -17,6 +17,24 @@ describe("Popover (CST-PRIM-7)", () => {
     expect(panel).toHaveAttribute("popover", "auto");
   });
 
+  it("gives each instance a unique anchor shared by its trigger and panel", () => {
+    render(<><Popover title="First" triggerLabel="First"><span>One</span></Popover><Popover title="Second" triggerLabel="Second"><span>Two</span></Popover></>);
+
+    const roots = Array.from(document.querySelectorAll<HTMLElement>(".popover"));
+    const anchors = roots.map((root) => root.style.getPropertyValue("--pop-anchor"));
+    expect(anchors[0]).toMatch(/^--pop-anchor-/);
+    expect(anchors[1]).toMatch(/^--pop-anchor-/);
+    expect(anchors[0]).not.toBe(anchors[1]);
+    for (const [index, root] of roots.entries()) {
+      const trigger = root.querySelector<HTMLButtonElement>(".popover__trigger");
+      const panel = root.querySelector<HTMLElement>(".popover__panel");
+      expect(trigger).toBeInTheDocument();
+      expect(panel).toBeInTheDocument();
+      expect(trigger?.getAttribute("popovertarget")).toBe(panel?.id);
+      expect(anchors[index]).toBeTruthy();
+    }
+  });
+
   it("renders a custom trigger node without changing its accessible name", () => {
     render(
       <Popover title="Archivos" triggerLabel="Archivos 2" trigger={<><span aria-hidden="true">Icon</span>Archivos 2</>}>

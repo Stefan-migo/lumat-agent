@@ -1083,15 +1083,17 @@
   display: none;
 }
 @supports (anchor-name: --popover-trigger) {
-  .popover__trigger,
-  .tooltip__trigger {
-    anchor-name: --primitive-trigger;
+  .popover .popover__trigger {
+    anchor-name: var(--pop-anchor);
   }
   .popover__panel {
-    position-anchor: --primitive-trigger;
+    position-anchor: var(--pop-anchor);
     inset: auto;
     margin: var(--space-2) 0 0;
     position-area: bottom span-right;
+  }
+  .tooltip__trigger {
+    anchor-name: --primitive-trigger;
   }
   .tooltip__content {
     position-anchor: --primitive-trigger;
