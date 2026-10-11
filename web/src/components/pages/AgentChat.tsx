@@ -25,7 +25,7 @@ import {
   updateThreadToolPolicy,
   uploadAssistantAttachment,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Paperclip, RotateCcw, Square, Workflow, Wrench } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -58,7 +58,6 @@ import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { Icon } from "../primitives/Icon";
 import { SearchInput } from "../primitives/SearchInput";
 import { AssistantWorkspace } from "./AssistantWorkspace";
-import { assistantToolLabel } from "./assistantToolLabels";
 import { assistantFileIcon } from "./assistantFileIcon";
 import "./AgentChat.css";
 
@@ -792,6 +791,8 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
   const activeConversation = messages.length > 0;
   const isRunActive = processing || messages.some((message) => message?.status === "processing") || approval?.status === "pending";
   const toolControlsDisabled = isRunActive || toolPolicySaving;
+  const webToolsAvailable = toolPolicy?.available.includes("web.search") && toolPolicy.available.includes("web.fetch");
+  const webToolsEnabled = webToolsAvailable && toolPolicy?.opt_in_enabled.includes("web.search") && toolPolicy.opt_in_enabled.includes("web.fetch");
   const state = loading ? (
     <StateMessage tone="info" role="status" spinner title="Cargando chat" />
   ) : error ? (
@@ -1099,7 +1100,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                 className="assistant-chat__textarea"
               />
               <div className="assistant-chat__composer-controls">
-                <div className="assistant-chat__add-popover"><Popover title="Herramientas del hilo" triggerLabel="+" dismissible titleAccessory={<span className="assistant-chat__tool-count">{toolPolicy?.opt_in_enabled.length ?? 0} de {toolPolicy?.available.length ?? 0} activadas</span>}>
+                <div className="assistant-chat__add-popover"><Popover title="Herramientas del hilo" triggerLabel="+" dismissible>
                   <label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker">
                     <Icon icon={Paperclip} size="sm" />
                     <span><strong>Adjuntar archivo</strong><small>Sube un documento o una imagen</small></span>
@@ -1110,15 +1111,17 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                     {toolPolicyError ? <p role="alert">{toolPolicyError}</p> : null}
                     {toolPolicy && toolPolicy.available.length === 0 ? <p role="status">No hay herramientas opcionales disponibles.</p> : null}
                     {toolPolicy && toolPolicy.available.length > 0 ? <label className="assistant-chat__tool-row assistant-chat__tool-master"><Icon icon={Wrench} size="sm" /><span><strong>Todas las herramientas</strong><small>Activar o desactivar todas</small></span><input type="checkbox" aria-label="Todas las herramientas" checked={toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name))} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => void changeToolPolicy(() => updateThreadToolPolicy(thread.id, toolPolicy.available.every((name) => toolPolicy.opt_in_enabled.includes(name)) ? [] : [...toolPolicy.available]))} /></label> : null}
-                    {[...new Set(toolPolicy?.available.map((name) => assistantToolLabel(name).group) ?? [])].map((group) => <section key={group} className="assistant-chat__tool-group"><h3>{group}</h3>{toolPolicy?.available.filter((name) => assistantToolLabel(name).group === group).map((name) => {
-                      const enabled = toolPolicy.opt_in_enabled.includes(name);
-                      const tool = assistantToolLabel(name);
-                      return <label key={name} className="assistant-chat__tool-row"><Icon icon={tool.icon} size="sm" /><strong>{tool.label}</strong><input type="checkbox" aria-label={tool.label} checked={enabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
-                        const selected = new Set(toolPolicy.opt_in_enabled);
-                        if (enabled) selected.delete(name); else selected.add(name);
-                        void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
-                      }} /></label>;
-                    })}</section>)}
+                    {webToolsAvailable && toolPolicy ? <label className="assistant-chat__tool-row"><Icon icon={Globe} size="sm" /><span><strong>Buscar en la web</strong><small>Activa la búsqueda y consulta web</small></span><input type="checkbox" aria-label="Buscar en la web" checked={webToolsEnabled} disabled={toolControlsDisabled || toolPolicyLoading} onChange={() => {
+                      const selected = new Set(toolPolicy.opt_in_enabled);
+                      if (webToolsEnabled) {
+                        selected.delete("web.search");
+                        selected.delete("web.fetch");
+                      } else {
+                        selected.add("web.search");
+                        selected.add("web.fetch");
+                      }
+                      void changeToolPolicy(() => updateThreadToolPolicy(thread.id, [...selected]));
+                    }} /></label> : null}
                     {toolPolicy && !toolPolicy.inherited ? <><hr className="assistant-chat__tool-divider" /><button type="button" className="assistant-chat__tool-option assistant-chat__tool-reset" disabled={toolControlsDisabled} onClick={() => void changeToolPolicy(() => resetThreadToolPolicy(thread.id))}><Icon icon={RotateCcw} size="sm" /><span><strong>Usar la selección del proyecto</strong><small>Aplicar las herramientas definidas en el proyecto.</small></span></button></> : null}
                     {isRunActive ? <p role="status">Las herramientas están bloqueadas durante la ejecución.</p> : null}
                     <p className="assistant-chat__popover-footer">La selección se aplica a este hilo.</p>

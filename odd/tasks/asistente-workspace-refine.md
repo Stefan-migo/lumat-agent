@@ -763,3 +763,40 @@ dismiss control, with primitive tests.
 Composer layout commit: `650bbfb1` (`feat(assistant): refine thread tools popovers`) — single-column tools
 dialog and side-opening, scroll-bounded project-file popover with updated composer tests and Slice 14
 verification results.
+
+## Slice 15 — Simplify tool controls and align the dialog to the composer
+
+Owner direction: replace per-tool controls in the `+` dialog with only the master toggle and one web
+search toggle (controlling both `web.search` and `web.fetch`); keep attachment, policy reset, run-lock
+status, tool loading/error/empty states, and the thread-selection footer. Remove the header count while
+retaining the visible “Herramientas del hilo” title and dismiss button. Match the `+` panel exactly to the
+composer-card width; open below the card in the empty state and above it in active conversations, with
+bounded scrolling retained.
+
+Graph Check before source edits: `graphify query "composer add popover tools toggle width anchor chatbox"`
+consulted `AgentChat.tsx`, `Popover.tsx`, `Popover.test.tsx`, `assistantToolLabels.ts`, and the
+`AgentChat.tsx` community. `graphify query "assistant composer wrap anchor popover tool labels"` surfaced
+`AgentChat()`, `Popover()`, `AgentChat.tsx`, `assistantToolLabels.ts`, and `assistantToolLabel`. The path
+`AgentChat.tsx` → `Popover.tsx` was one extracted `imports_from` edge. Read `graphify-out/GRAPH_REPORT.md`;
+its UI community includes `AgentChat.tsx` and `Popover.tsx`, with `AgentChat.tsx` a community hub. The graph
+was built from starting HEAD `5b8bfbd4`.
+
+Implementation: the dialog now has only the master and combined web-search switches; the latter requires
+both web capabilities to be available, checks only when both are enabled, and sets/clears both together.
+The title and close button remain; the count accessory and unused tool-label map were removed. The composer
+card has the same named anchor in both states; the `+` panel uses anchor width and bottom/above-card placement
+in the empty/active states, with viewport-bounded width fallback, max-height, and scrolling retained.
+
+Verification from `web/`:
+- `npx tsc -b --force --noEmit` — passed (no output).
+- `npx vitest run src/components/pages/AgentChat.test.tsx src/components/primitives/Popover.test.tsx` — passed (2 files, 65 tests); existing React `act(...)` warnings appeared in AgentChat tests.
+- `npm run build` — passed; Vite emitted the existing advisory that the 848.29 kB JS chunk exceeds 500 kB.
+
+Ponytail: native CSS anchor positioning and the existing Popover primitive cover positioning and dismissal
+without custom JavaScript. Removing the no-longer-consumed tool-label map avoids retaining dead UI metadata.
+The viewport clamp is intentionally retained as the fallback ceiling when anchor positioning is unsupported
+or the full card width cannot fit; no authorized behavior was deferred. An optional Playwright geometry probe
+could not launch because the installed Playwright browser executable is absent; no browser package download
+was attempted.
+
+Commits: pending verification-record commits.

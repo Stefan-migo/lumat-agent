@@ -78,45 +78,52 @@ describe("AgentChat", () => {
   it("fetches and renders the thread tool policy", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).endsWith("/tool-policy")
-        ? jsonResponse(policy())
+        ? jsonResponse(policy({ available: ["web.search", "web.fetch"], opt_in_enabled: ["web.search"] }))
         : jsonResponse({ thread: makeThread(), messages: [] }),
     );
     render(<AgentChat threadId={4} />);
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
-    await waitFor(() => expect(toolToggle("tool.one")).not.toBeNull());
+    await waitFor(() => expect(toolToggle("Todas las herramientas")).not.toBeNull());
     const dialog = screen.getByRole("dialog", { name: "Herramientas del hilo" });
     expect(dialog.querySelector("h2")).not.toHaveClass("visually-hidden");
-    expect(dialog).toHaveTextContent("1 de 2 activadas");
+    expect(dialog).not.toHaveTextContent(/\d+ de \d+ activadas/);
     expect(screen.getByRole("button", { name: "Cerrar" })).toHaveAttribute("popovertarget", dialog.id);
     expect(dialog).toHaveTextContent("Adjuntar archivo");
     expect(dialog).toHaveTextContent("Sube un documento o una imagen");
     expect(dialog.querySelector(".assistant-chat__tool-chips")).toHaveClass("assistant-chat__tool-chips--stacked");
-    expect(document.querySelectorAll(".assistant-chat__tool-row:not(.assistant-chat__tool-master) small")).toHaveLength(0);
-    expect(document.querySelector(".assistant-chat__tool-row:not(.assistant-chat__tool-master) svg")).toBeInTheDocument();
-    expect(toolToggle("tool.one")).toBeChecked();
-    expect(toolToggle("tool.two")).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Buscar en la web" })).not.toBeChecked();
+    expect(dialog.querySelectorAll(".assistant-chat__tool-row")).toHaveLength(2);
+    expect(dialog).not.toHaveTextContent("CONSULTAR INFORMACIÓN");
+    expect(dialog).not.toHaveTextContent("ACCIONES DEL ASISTENTE");
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
   });
 
-  it("sends the full opt-in selection when toggling a tool", async () => {
+  it("toggles web search and fetch together", async () => {
+    let enabled: string[] = [];
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).endsWith("/tool-policy")) {
-        return init?.method === "PUT" ? jsonResponse(policy({ opt_in_enabled: ["tool.one", "tool.two"] })) : jsonResponse(policy());
+        if (init?.method === "PUT") enabled = JSON.parse(String(init.body)).opt_in_enabled;
+        return jsonResponse(policy({ available: ["web.search", "web.fetch"], opt_in_enabled: enabled }));
       }
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
-    await waitFor(() => expect(toolToggle("tool.two")).not.toBeNull());
-    fireEvent.click(toolToggle("tool.two")!);
+    const toggle = await screen.findByRole("checkbox", { name: "Buscar en la web" });
+    fireEvent.click(toggle);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
-      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["tool.one", "tool.two"] }) }),
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: ["web.search", "web.fetch"] }) }),
     ));
-    await waitFor(() => expect(toolToggle("tool.two")).toBeChecked());
-    expect(document.querySelector(".assistant-chat__tools-summary")).toHaveTextContent(/Herramientas\s+2/);
+    await waitFor(() => expect(toggle).toBeChecked());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith(
+      "/panel/api/chat/threads/4/tool-policy",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ opt_in_enabled: [] }) }),
+    ));
+    await waitFor(() => expect(toggle).not.toBeChecked());
   });
 
   it("enables all available optional tools from the master switch", async () => {
@@ -160,7 +167,7 @@ describe("AgentChat", () => {
 
   it("locks policy controls while a persisted run is active", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-      String(input).endsWith("/tool-policy") ? jsonResponse(policy({ inherited: false })) : jsonResponse({
+      String(input).endsWith("/tool-policy") ? jsonResponse(policy({ available: ["web.search", "web.fetch"], inherited: false })) : jsonResponse({
         thread: makeThread(),
         messages: [{ id: 1, author: "admin", content: "Working", status: "processing" }],
       }),
@@ -168,8 +175,8 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
     await screen.findByRole("button", { name: "Planificar" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
-    await waitFor(() => expect(toolToggle("tool.one")).not.toBeNull());
-    expect(toolToggle("tool.one")).toBeDisabled();
+    await waitFor(() => expect(toolToggle("Buscar en la web")).not.toBeNull());
+    expect(toolToggle("Buscar en la web")).toBeDisabled();
   });
 
   it("shows stop only for an active run and sends its current run id", async () => {
@@ -271,15 +278,15 @@ describe("AgentChat", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).endsWith("/tool-policy")) {
         if (init?.method === "PUT") return new Promise<Response>(() => {});
-        return jsonResponse(policy({ inherited: false }));
+        return jsonResponse(policy({ available: ["web.search", "web.fetch"], inherited: false }));
       }
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
     render(<AgentChat threadId={4} />);
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
-    await waitFor(() => expect(toolToggle("tool.two")).not.toBeNull());
-    fireEvent.click(toolToggle("tool.two")!);
+    await waitFor(() => expect(toolToggle("Buscar en la web")).not.toBeNull());
+    fireEvent.click(toolToggle("Buscar en la web")!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/tool-policy",
       expect.objectContaining({ method: "PUT" }),
