@@ -589,3 +589,31 @@ Implementation: the outer wrapper is the sole composer card; its inner composer 
 Verification from `web/`: `npx tsc -b --force --noEmit` passed; `npx vitest run src/components/pages/AgentChat.test.tsx src/components/pages/assistantFileIcon.test.ts src/components/primitives/Popover.test.tsx` passed (3 files, 67 tests; existing React `act(...)` warnings); `npm run build` passed (Vite reported the existing >500 kB chunk-size advisory).
 
 Ponytail: the new type-to-icon helper is the minimum reusable mapping needed by two row types and a unit test; native `:has()` and CSS anchor positioning are already-supported platform features used for the wrapper focus ring and upward popovers. No shortcut with a known ceiling was introduced. Commits: `e85f51cd` (layered composer styling), `f6cb23d6` (popover menus, icons, enabled count, copy, and tests).
+
+## Slice 11 — Active-conversation composer
+
+Owner direction: when `messages.length > 0`, dock the composer at the bottom of the conversation, remove the project/files/tools tray from rendering, and compact the composer to a single-row baseline that grows with wrapped input. Preserve the existing empty-state centered card and tray unchanged.
+
+- Derive `activeConversation` from `messages.length > 0`; apply an active modifier to the composer stack and do not render the tray in that state.
+- In active mode remove the reserved tray padding, compact the wrapper while retaining the `+`, Planificar, `@ Agente`, and send controls, and keep the composer width at `min(100%, 56rem)`.
+- Confirm the grid composer row is bottom-docked; retain the existing textarea input auto-resize and set its baseline to one line.
+- Add focused tests that verify the active modifier and absent tray with messages, and the tray remains with no messages.
+
+Graph Check (before source edits): `graphify query "assistant chat composer active conversation messages layout bottom"` consulted `AgentChat()`, `AssistantWorkspace()`, `messages`, `Composer tray (layered composer card)`, and `ODD: conversation-inspector-layout`. `graphify path "AgentChat()" "AssistantWorkspace()"` returned no directed path (ambiguous source/target matches). Read `graphify-out/GRAPH_REPORT.md`; relevant hubs include `AssistantWorkspace.tsx`, `Conversation`, and `Lumat Panel Design System`. The graph report freshness is `f460b09f`, while this worktree starts at `485132f8`.
+
+Implementation: `AgentChat` derives active state directly from `messages.length`, applies
+`assistant-chat__composer-stack--active`, and omits the tray subtree in active conversations (so its
+controls leave the accessibility tree). The existing conversation grid's `minmax(0, 1fr) auto` rows
+already dock the composer at the bottom; active mode removes tray reservation, reduces wrapper padding,
+and sets a one-line textarea minimum while preserving the existing input auto-resize (capped at 160px).
+The 56rem width and empty-state card/tray remain unchanged. Focused tests cover both active and empty states.
+
+Verification from `web/`: `npx tsc -b --force --noEmit` passed (no output); `npx vitest run
+src/components/pages/AgentChat.test.tsx` passed (1 file, 59 tests; existing React `act(...)` warnings);
+`npm run build` passed (Vite reported the existing >500 kB chunk-size advisory).
+
+Ponytail: the existing `resize` handler already supports multi-line growth, so no second resizing
+mechanism was added. CSS grid's existing auto-sized composer row provides bottom docking without layout
+restructuring. No shortcut with a known ceiling was introduced.
+
+Commit containing implementation and tests: to be recorded in the tracking follow-up.

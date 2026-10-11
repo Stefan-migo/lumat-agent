@@ -210,6 +210,31 @@ describe("AgentChat", () => {
     expect(screen.queryByRole("button", { name: /Herramientas/ })).not.toBeInTheDocument();
   });
 
+  it("hides the tray and applies compact active styling when messages exist", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: makeThread(),
+      messages: [{ id: 1, author: "admin", content: "Hola", status: "processed" }],
+    }));
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByText("Hola")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__composer-stack")).toHaveClass(
+      "assistant-chat__composer-stack--active",
+    );
+    expect(document.querySelector(".assistant-chat__composer-tray")).not.toBeInTheDocument();
+  });
+
+  it("keeps the tray rendered when the conversation has no messages", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+    render(<AgentChat threadId={4} />);
+
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    expect(document.querySelector(".assistant-chat__composer-tray")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__composer-stack")).not.toHaveClass(
+      "assistant-chat__composer-stack--active",
+    );
+  });
+
   it("shows project names without slugs and keeps selection functional", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);

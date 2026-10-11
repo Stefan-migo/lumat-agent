@@ -789,6 +789,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
     .filter((event) => !runId || event.run_id === runId)
     .flatMap((event) => event.evidence ?? []);
   const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
+  const activeConversation = messages.length > 0;
   const isRunActive = processing || messages.some((message) => message?.status === "processing") || approval?.status === "pending";
   const toolControlsDisabled = isRunActive || toolPolicySaving;
   const state = loading ? (
@@ -1049,8 +1050,8 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
               </p>
             ) : null}
           </div>
-          {thread ? <div className="assistant-chat__composer-stack" onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void attach(file); }}>
-            <div className="assistant-chat__composer-tray">
+          {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void attach(file); }}>
+            {!activeConversation ? <div className="assistant-chat__composer-tray">
               <div className="assistant-chat__composer-bottom-row">
                 <div className="assistant-chat__project-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectActionLoading(true); setProjectActionError(null); void listProjects().then((result) => setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })))).catch((reason: unknown) => setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.")).finally(() => setProjectActionLoading(false)); }}><Popover title="Proyecto" triggerLabel={thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"} trigger={<><Icon icon={Folder} size="sm" />{thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"}<Icon icon={ChevronDown} size="sm" /></>} state={isRunActive ? "disabled" : "default"}>
                   {projectActionLoading ? <p role="status">Cargando proyectos…</p> : null}
@@ -1070,7 +1071,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                 <span className="assistant-chat__tools-summary"><Icon icon={Wrench} size="sm" />Herramientas <Badge>{toolPolicy?.opt_in_enabled.length ?? 0}</Badge></span>
                 {projectActionLoading ? <span role="status">Actualizando…</span> : null}
               </div>
-            </div>
+            </div> : null}
             <div className="assistant-chat__composer-wrap">
             {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
