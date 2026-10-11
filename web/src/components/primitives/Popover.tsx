@@ -6,6 +6,7 @@ export type PopoverState = "default" | "loading" | "empty" | "error" | "disabled
 export interface PopoverProps {
   title: string;
   triggerLabel: string;
+  trigger?: ReactNode;
   children: ReactNode;
   state?: PopoverState;
 }
@@ -14,7 +15,7 @@ export interface PopoverProps {
  *  The browser supplies toggle, Escape dismissal, top-layer placement and focus
  *  return. Anchor positioning is CSS enhancement; this component has no JS
  *  polyfill or dismissal handler. */
-export function Popover({ title, triggerLabel, children, state = "default" }: PopoverProps) {
+export function Popover({ title, triggerLabel, trigger, children, state = "default" }: PopoverProps) {
   const id = useId();
   const titleId = `${id}-title`;
   const disabled = state === "disabled";
@@ -28,7 +29,7 @@ export function Popover({ title, triggerLabel, children, state = "default" }: Po
         disabled={disabled}
         aria-label={triggerLabel}
       >
-        {triggerLabel}
+        {trigger ?? triggerLabel}
       </button>
       <div id={id} popover="auto" role="dialog" aria-labelledby={titleId} className="popover__panel">
         <h2 id={titleId} className="popover__title">{title}</h2>

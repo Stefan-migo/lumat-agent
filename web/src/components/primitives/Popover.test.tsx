@@ -17,6 +17,16 @@ describe("Popover (CST-PRIM-7)", () => {
     expect(panel).toHaveAttribute("popover", "auto");
   });
 
+  it("renders a custom trigger node without changing its accessible name", () => {
+    render(
+      <Popover title="Archivos" triggerLabel="Archivos 2" trigger={<><span aria-hidden="true">Icon</span>Archivos 2</>}>
+        <span>Contenido</span>
+      </Popover>,
+    );
+
+    expect(screen.getByRole("button", { name: "Archivos 2" })).toHaveTextContent("IconArchivos 2");
+  });
+
   it("keeps native controls for disabled and complete states", () => {
     const { rerender } = render(
       <Popover title="Acciones" triggerLabel="Abrir acciones" state="loading">
