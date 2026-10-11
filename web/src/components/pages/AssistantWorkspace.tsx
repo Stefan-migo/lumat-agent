@@ -31,15 +31,16 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [defaultThreads, setDefaultThreads] = useState<{ state: "idle" | "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>({ state: "idle", threads: [] });
   const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
+  const [threadTitles, setThreadTitles] = useState<Record<number, string>>({});
   const [openThreadIds, setOpenThreadIds] = useState<number[]>(() => {
     const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
     return threadId ? [threadId] : [];
   });
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
-  const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: number; title: string | null } | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string | null } | null>(null);
   const [threadActionError, setThreadActionError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -176,7 +177,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const renameThread = async () => {
     if (!renameTarget || !renameTitle.trim()) return;
     try {
-      await renameChatThread(renameTarget.id, renameTitle.trim());
+      const { thread } = await renameChatThread(renameTarget.id, renameTitle.trim());
+      setThreadTitles((current) => ({ ...current, [thread.id]: thread.title ?? "" }));
       setRenameTarget(null);
       setRenameTitle("");
       await refreshThreads();
@@ -370,7 +372,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
               const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
               return <div className="assistant-workspace__thread-tab" key={id} data-active={id === activeThreadId}>
                 <button type="button" aria-current={id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(id, thread?.proyecto)}>
-                  {thread?.title || "Sin título"}
+                  {threadTitles[id] ?? thread?.title ?? "Sin título"}
                 </button>
                 <Menu
                   label={`Acciones de ${thread?.title || "hilo"}`}
@@ -378,9 +380,9 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                   items={[{ value: "rename", label: "Renombrar", icon: Pencil }, { value: "close", label: "Cerrar pestaña", icon: X }, { value: "delete", label: "Eliminar hilo", icon: Trash2, tone: "danger" }]}
                   onSelect={(value) => {
                     setThreadActionError(null);
-                    if (value === "rename") { setRenameTarget(thread ?? null); setRenameTitle(thread?.title ?? ""); }
+                    if (value === "rename") { setRenameTarget({ id, title: thread?.title ?? null }); setRenameTitle(thread?.title ?? ""); }
                     else if (value === "close") closeThreadTab(id);
-                    else setDeleteTarget(thread ?? null);
+                    else setDeleteTarget({ id, title: thread?.title ?? null });
                   }}
                 />
               </div>;

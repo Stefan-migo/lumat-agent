@@ -376,6 +376,34 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
   });
 
+  it("renames an open tab even when its thread is absent from loaded lists", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=404");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+      if (url === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.endsWith("/threads/404") && init?.method === "PATCH") return new Response(JSON.stringify({ thread: { id: 404, title: "Hilo renombrado" } }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" />);
+    const workspace = screen.getByRole("region", { name: "Área del hilo" });
+    const actions = await within(workspace).findByRole("button", { name: "Acciones de hilo" });
+    await userEvent.setup().click(actions);
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Renombrar" }));
+    expect(screen.getByRole("dialog", { name: "Renombrar hilo" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Nombre del hilo"), { target: { value: "Hilo renombrado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar nombre" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/404", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ title: "Hilo renombrado" }),
+    })));
+    expect(await within(workspace).findByRole("button", { name: "Hilo renombrado" })).toBeInTheDocument();
+  });
+
   it("lists and downloads thread artifacts, and shows an honest empty state when none exist", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
