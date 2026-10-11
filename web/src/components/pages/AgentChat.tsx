@@ -11,6 +11,7 @@ import {
   approveChatPlan,
   closePlanningSession,
   createChatThread,
+  deleteThreadAttachment,
   getChatThread,
   getThreadToolPolicy,
   listProjectFiles,
@@ -24,8 +25,9 @@ import {
   attachProjectFileToThread,
   updateThreadToolPolicy,
   uploadAssistantAttachment,
+  threadAttachmentContentUrl,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -283,6 +285,10 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
   const [runId, setRunId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
+  const [attachmentDeleteError, setAttachmentDeleteError] = useState<string | null>(null);
+  const [attachmentDeletingId, setAttachmentDeletingId] = useState<number | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<AssistantAttachment | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [artifacts, setArtifacts] = useState<AssistantArtifact[]>([]);
   const [uploading, setUploading] = useState(false);
   const [cortex, setCortex] = useState<PlanningSession | null>(null);
@@ -337,6 +343,21 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
     setAttachments(result.attachments ?? []);
     setArtifacts(result.artifacts ?? []);
     setCortex(state?.cortex_session ?? null);
+  };
+
+  const removeAttachment = async (attachment: AssistantAttachment) => {
+    if (!thread || attachmentDeletingId !== null) return;
+    setAttachmentDeletingId(attachment.id);
+    setAttachmentDeleteError(null);
+    try {
+      await deleteThreadAttachment(thread.id, attachment.id);
+      setAttachments((current) => current.filter((item) => item.id !== attachment.id));
+      if (previewAttachment?.id === attachment.id) setPreviewAttachment(null);
+    } catch (reason) {
+      setAttachmentDeleteError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el archivo. Inténtalo nuevamente.");
+    } finally {
+      setAttachmentDeletingId(null);
+    }
   };
 
   useEffect(() => {
@@ -1052,6 +1073,11 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
             ) : null}
           </div>
           {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void attach(file); }}>
+            {attachments.length > 0 || uploading ? <div className="assistant-chat__attachment-tray" aria-label="Archivos adjuntos">
+              {attachments.map((item) => <div className="assistant-chat__attachment" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
+              {uploading ? <span role="status">Subiendo archivo…</span> : null}
+              {attachmentDeleteError ? <p role="alert">{attachmentDeleteError}</p> : null}
+            </div> : null}
             {!activeConversation ? <div className="assistant-chat__composer-tray">
                 <div className="assistant-chat__composer-bottom-row assistant-chat__composer-bottom-row--grouped">
                 <div className="assistant-chat__project-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectActionLoading(true); setProjectActionError(null); void listProjects().then((result) => setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })))).catch((reason: unknown) => setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.")).finally(() => setProjectActionLoading(false)); }}><Popover title="Proyecto" triggerLabel={thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"} trigger={<><Icon icon={Folder} size="sm" />{thread.proyecto === "default" ? "General" : projectChoices.find((project) => project.slug === thread.proyecto)?.name ?? thread.proyecto ?? "General"}<Icon icon={ChevronDown} size="sm" /></>} state={isRunActive ? "disabled" : "default"}>
@@ -1064,7 +1090,8 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
                 </Popover></div>
                 <Popover title="Archivos de este hilo" triggerLabel={`Archivos ${attachments.length}`} trigger={<><Icon icon={Paperclip} size="sm" />Archivos <span>{attachments.length}</span></>}>
                   <SearchInput aria-label="Buscar archivo" placeholder="Buscar archivo…" onSearch={setFileSearch} />
-                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <p className="assistant-chat__file-row" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span></p>)}
+                  {attachmentDeleteError ? <p role="alert">{attachmentDeleteError}</p> : null}
+                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <div className="assistant-chat__file-row" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" />{item.kind === "image" ? <button type="button" className="assistant-chat__file-preview" onClick={() => { setPreviewFailed(false); setPreviewAttachment(item); }}><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span></button> : <span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span>}<button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
                   {attachments.length === 0 ? <p role="status">Este hilo aún no tiene archivos adjuntos.</p> : null}
                   <div className="assistant-chat__file-actions"><label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker"><strong>+ Adjuntar archivo</strong></label>
                   {thread.proyecto && thread.proyecto !== "default" ? <div className="assistant-chat__project-files-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectFilesLoading(true); setProjectFilesError(null); void listProjectFiles(thread.proyecto!).then((result) => setProjectFiles(Array.isArray(result.files) ? result.files : [])).catch((reason: unknown) => setProjectFilesError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los archivos del proyecto.")).finally(() => setProjectFilesLoading(false)); }}><Popover title="Archivos del proyecto" triggerLabel="Agregar del proyecto">{projectFilesLoading ? <p role="status">Cargando archivos…</p> : null}{projectFilesError ? <p role="alert">{projectFilesError}</p> : null}{projectFiles.filter((file) => file.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((file) => <button type="button" className="assistant-chat__project-option" key={file.id} disabled={projectActionLoading || isRunActive} onClick={() => void attachProjectFile(file.id)}><Icon icon={assistantFileIcon(file.filename, file.content_type)} size="sm" /><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={file.filename}>{file.filename}</span><small>{file.content_type}</small></span></button>)}{!projectFilesLoading && !projectFilesError && projectFiles.length === 0 ? <p role="status">Este proyecto no tiene archivos disponibles.</p> : null}</Popover></div> : null}</div>
@@ -1077,16 +1104,6 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
             {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
               <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
-              {attachments.length > 0 || uploading ? (
-                <div className="assistant-chat__attachment-list" aria-label="Archivos adjuntos">
-                    {attachments.map((item) => (
-                      <span className="assistant-chat__attachment" key={item.id}>
-                      <Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span>{item.filename}</span><span>· {item.kind.toLocaleUpperCase("es-CL")} · Listo</span>
-                    </span>
-                  ))}
-                  {uploading ? <span role="status">Subiendo archivo…</span> : null}
-                </div>
-              ) : null}
               <Textarea
                 label="Mensaje"
                 value={content}
@@ -1149,6 +1166,9 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
           : null}
         </section>
       </div>
+      <Dialog open={previewAttachment !== null} onClose={() => setPreviewAttachment(null)} title={previewAttachment?.filename ?? "Vista previa"} size="wide">
+        {previewAttachment && thread ? previewFailed ? <p role="alert">No pudimos cargar la vista previa de esta imagen.</p> : <img className="assistant-chat__image-preview" src={threadAttachmentContentUrl(thread.id, previewAttachment.id)} alt={previewAttachment.filename} onError={() => setPreviewFailed(true)} /> : null}
+      </Dialog>
       {cortex?.status === "active" ? (
         <p role="status">
           Planificación activa: {cortex.topic}{" "}

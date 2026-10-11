@@ -1231,7 +1231,58 @@ describe("AgentChat", () => {
     expect(name).not.toBeNull();
     expect(name!).toHaveClass("assistant-chat__filename");
     expect(name!).toHaveAttribute("title", filename);
-    expect(name!.parentElement?.querySelector("small")).toHaveTextContent("IMAGE · Adjuntado");
+    expect(screen.getByRole("dialog", { name: "Archivos de este hilo" }).querySelector(`.assistant-chat__filename[title="${filename}"]`)?.parentElement?.querySelector("small")).toHaveTextContent("IMAGE · Adjuntado");
+  });
+
+  it("shows the attachment tray only when attachments exist and deletes from both views", async () => {
+    const filename = "manual-larguísimo-documento.pdf";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/attachments/12") && init?.method === "DELETE") return new Response(null, { status: 204 });
+      return jsonResponse({ thread: makeThread(), messages: [], attachments: [{ id: 12, thread_id: 4, filename, kind: "document", content_type: "application/pdf", size: 10 }] });
+    });
+    const { container } = render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    const tray = container.querySelector(".assistant-chat__attachment-tray");
+    expect(tray).toBeInTheDocument();
+    const trayName = tray!.querySelector(".assistant-chat__filename");
+    expect(trayName).toHaveAttribute("title", filename);
+    expect(trayName).toHaveClass("assistant-chat__filename");
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 1" }));
+    const popover = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+    fireEvent.click(within(popover).getByRole("button", { name: `Eliminar ${filename}` }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/attachments/12", expect.objectContaining({ method: "DELETE" })));
+    await waitFor(() => expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument());
+    expect(popover).not.toHaveTextContent(filename);
+  });
+
+  it("does not render an attachment tray for an empty thread", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
+      ? jsonResponse(policy())
+      : jsonResponse({ thread: makeThread(), messages: [], attachments: [] }));
+    const { container } = render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument();
+  });
+
+  it("opens image preview but keeps non-image filenames non-clickable", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
+      ? jsonResponse(policy())
+      : jsonResponse({ thread: makeThread(), messages: [], attachments: [
+        { id: 21, thread_id: 4, filename: "foto.png", kind: "image", content_type: "image/png", size: 10 },
+        { id: 22, thread_id: 4, filename: "manual.pdf", kind: "document", content_type: "application/pdf", size: 10 },
+      ] }));
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 2" }));
+    const files = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+    fireEvent.click(files.querySelector(".assistant-chat__file-preview")!);
+    const preview = await screen.findByRole("dialog", { name: "foto.png" });
+    expect(preview.querySelector("img")).toHaveAttribute("src", "/panel/api/chat/threads/4/attachments/21/content");
+    expect(preview.querySelector("img")).toHaveAttribute("alt", "foto.png");
+    expect(files.querySelector('.assistant-chat__file-row:has([title="manual.pdf"]) .assistant-chat__file-preview')).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it("shows the active Cortex indicator and closes through the planning endpoint", async () => {

@@ -33,8 +33,12 @@
 .assistant-chat__surface--empty .assistant-chat__messages { flex: 0 0 auto; align-content: center; }
 .assistant-chat__surface--empty .assistant-chat__composer-stack { position: relative; align-self: center; }
 .assistant-chat__composer-controls .assistant-chat__send { margin-left: auto; }
-.assistant-chat__attachment-list { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
-.assistant-chat__attachment { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; overflow-wrap: anywhere; background: var(--surface); }
+.assistant-chat__attachment-tray { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.assistant-chat__attachment { display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.assistant-chat__attachment > .assistant-chat__filename { flex: 1 1 auto; min-width: 0; }
+.assistant-chat__attachment-remove { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-6); height: var(--space-6); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--corp-fg-muted); cursor: pointer; }
+.assistant-chat__attachment-remove:hover { background: var(--primary-100); color: var(--corp-text); }
+.assistant-chat__attachment-remove:disabled { cursor: wait; opacity: .6; }
 .assistant-chat__tool-option { position: relative; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); line-height: 1.25; cursor: pointer; }
 .assistant-chat__tool-option:hover { background: var(--surface); }
 .assistant-chat__tool-option input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -78,7 +82,9 @@
 .assistant-chat__project-option { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 2px var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--corp-text); text-align: left; font: inherit; line-height: 1.25; cursor: pointer; }
 .assistant-chat__project-option[aria-current="true"] { background: var(--primary-100); }
 .assistant-chat__planning-active { border-color: var(--primary-700); background: var(--primary-100); }
-.assistant-chat__file-row { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: 2px var(--space-2); line-height: 1.25; }
+.assistant-chat__file-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin: 0; padding: 2px var(--space-2); line-height: 1.25; }
+.assistant-chat__file-row > .assistant-chat__menu-label { flex: 1 1 auto; }
+.assistant-chat__file-preview { flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
 .assistant-chat__menu-label { display: grid; gap: var(--space-1); min-width: 0; }
 .assistant-chat__menu-label > :first-child { overflow-wrap: anywhere; }
 .assistant-chat__filename { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -90,6 +96,7 @@
   .assistant-chat__project-files-popover .popover__panel:popover-open { position-area: right span-top; margin: 0 0 0 var(--space-2); position-try-fallbacks: flip-inline, flip-block; }
 }
 .assistant-chat__file-picker { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.assistant-chat__image-preview { display: block; max-width: 100%; max-height: min(75vh, 60rem); margin: 0 auto; object-fit: contain; }
 @media (max-width: 40rem) {
   .assistant-chat .ai-agent-grammar__bubble { max-width: 90%; }
 }
