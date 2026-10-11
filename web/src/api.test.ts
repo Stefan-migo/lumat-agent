@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -362,6 +362,18 @@ describe('internal chat thread API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ thread: {}, messages: [] }), { status: 201 }));
     await createChatThread('ops');
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads', expect.objectContaining({ method: 'POST', body: JSON.stringify({ proyecto: 'ops' }) }));
+  });
+
+  it('changes a thread project with the PATCH contract', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ thread: {} }), { status: 200 }));
+    await setChatThreadProject(12, 'ops');
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads/12', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ proyecto: 'ops' }) }));
+  });
+
+  it('attaches a project file with the project file identifier', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ attachment: {} }), { status: 201 }));
+    await attachProjectFileToThread(12, 34);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads/12/attachments/from-project', expect.objectContaining({ method: 'POST', body: JSON.stringify({ project_file_id: 34 }) }));
   });
 
   it('creates projects with the bounded API payload', async () => {

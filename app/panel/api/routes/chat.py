@@ -3,22 +3,24 @@
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
-from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, User
+from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, ProjectFile, User
 from app.config import get_settings
 from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
-from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
+from app.services.agent_chat import BUSINESS_MEMORY_ROLES, approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
 from app.chat.assistant.state import merge_assistant_state
 from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
+from app.services.project_files import owned_project
 from app.panel.api.serializers import (
     to_assistant_attachment_dict,
     to_assistant_artifact_dict,
@@ -63,7 +65,14 @@ class PlanningSessionBody(BaseModel):
 
 
 class ChatThreadTitleBody(BaseModel):
-    title: str = Field(min_length=1, max_length=255)
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    proyecto: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def require_title_or_project(self):
+        if self.title is None and self.proyecto is None:
+            raise ValueError("at least one of title or proyecto is required")
+        return self
 
 
 class ChatThreadBody(BaseModel):
@@ -240,9 +249,23 @@ def rename_chat_thread(
     thread = session.get(InternalChatThread, thread_id)
     if thread is None or thread.user_id != current.id:
         raise HTTPException(status_code=404, detail="chat thread not found")
-    thread.title = body.title.strip()
-    if not thread.title:
-        raise HTTPException(status_code=422, detail="title must not be blank")
+    _require_no_active_run(thread)
+    if body.title is not None:
+        thread.title = body.title.strip()
+        if not thread.title:
+            raise HTTPException(status_code=422, detail="title must not be blank")
+    if body.proyecto is not None:
+        if body.proyecto == "default":
+            if current.role.value not in BUSINESS_MEMORY_ROLES:
+                raise HTTPException(status_code=400, detail="role is not allowed to bind a thread to business-shared memory")
+            thread.proyecto = "default"
+        else:
+            try:
+                thread.proyecto = projects.agent_context(session, body.proyecto, owner_id=current.id).slug
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_audit(session, actor=current.username, action="internal_chat.thread_project_changed",
+                     entity="internal_chat_thread", entity_id=str(thread.id), after={"proyecto": thread.proyecto})
     session.flush()
     return {"thread": to_internal_chat_thread_summary_dict(thread)}
 
@@ -565,5 +588,58 @@ def upload_attachment(
     session.flush()
     record_audit(session, actor=current.username, action="internal_chat.attachment_uploaded",
                  entity="assistant_attachment", entity_id=str(row.id), after={"thread_id": thread_id, "kind": kind, "size": len(content)})
+    session.commit()
+    return {"attachment": to_assistant_attachment_dict(row)}
+
+
+class ProjectFileAttachmentBody(BaseModel):
+    project_file_id: int
+
+
+@router.post("/chat/threads/{thread_id}/attachments/from-project", status_code=201)
+def attach_project_file(
+    thread_id: int,
+    body: ProjectFileAttachmentBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    result = get_thread(session, thread_id, current.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    thread = result[0]
+    if not thread.proyecto or thread.proyecto == "default":
+        raise HTTPException(status_code=400, detail="default chat threads do not have a project")
+    try:
+        authorized_project = projects.agent_context(session, thread.proyecto, owner_id=current.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    project = owned_project(session, current.id, slug=authorized_project.slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project file not found")
+    project_file = session.scalar(
+        select(ProjectFile).where(ProjectFile.id == body.project_file_id, ProjectFile.project_id == project.id)
+    )
+    if project_file is None:
+        raise HTTPException(status_code=404, detail="project file not found")
+    cleanup_expired(session, datetime.now(timezone.utc) - timedelta(days=get_settings().assistant_attachment_expiry_days), {thread_id})
+    count = session.scalar(select(func.count(AssistantAttachment.id)).where(
+        AssistantAttachment.thread_id == thread_id, AssistantAttachment.deleted_at.is_(None)
+    )) or 0
+    if count >= get_settings().assistant_attachment_max_count:
+        raise HTTPException(status_code=400, detail="attachment count limit reached")
+    content = Path(project_file.stored_path).read_bytes()
+    try:
+        kind, path, digest = store_attachment(thread_id, project_file.filename, project_file.content_type, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"project file cannot be attached: {exc}") from exc
+    row = AssistantAttachment(
+        thread_id=thread_id, filename=project_file.filename, kind=kind,
+        content_type=project_file.content_type, size=len(content), sha256=digest, stored_path=str(path),
+    )
+    session.add(row)
+    session.flush()
+    record_audit(session, actor=current.username, action="internal_chat.attachment_attached_from_project",
+                 entity="assistant_attachment", entity_id=str(row.id),
+                 after={"thread_id": thread_id, "project_file_id": project_file.id, "kind": kind, "size": len(content)})
     session.commit()
     return {"attachment": to_assistant_attachment_dict(row)}

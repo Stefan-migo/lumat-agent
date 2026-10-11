@@ -145,9 +145,11 @@ export const createChatThread = (proyecto: string) => postJson<InternalChatRespo
 export const listChatThreads = (limit: number, proyecto?: string) => apiFetch<InternalChatThreadsResponse>(`/panel/api/chat/threads?limit=${encodeURIComponent(limit)}${proyecto === undefined ? '' : `&proyecto=${encodeURIComponent(proyecto)}`}`);
 export const listActiveRuns = () => apiFetch<ActiveRunsResponse>('/panel/api/chat/active-runs');
 export const renameChatThread = (id: number, title: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) });
+export const setChatThreadProject = (id: number, proyecto: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ proyecto }) });
 export const deleteChatThread = (id: number) => apiFetch<{ ok: true }>(`/panel/api/chat/threads/${id}`, { method: 'DELETE' });
 export const sendChatMessage = (id: number, content: string, attachment_ids: number[] = []) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content, attachment_ids });
 export const uploadAssistantAttachment = (id: number, file: File) => { const body = new FormData(); body.append('file', file); return apiFetch<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${id}/attachments`, { method: 'POST', body }); };
+export const attachProjectFileToThread = (threadId: number, projectFileId: number) => postJson<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${threadId}/attachments/from-project`, { project_file_id: projectFileId });
 export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);
 export const getThreadToolPolicy = (id: number) => apiFetch<ThreadToolPolicy>(`/panel/api/chat/threads/${id}/tool-policy`);
 export const updateThreadToolPolicy = (id: number, optInEnabled: string[]) => apiFetch<ThreadToolPolicy>(`/panel/api/chat/threads/${id}/tool-policy`, { method: 'PUT', body: JSON.stringify({ opt_in_enabled: optInEnabled }) });

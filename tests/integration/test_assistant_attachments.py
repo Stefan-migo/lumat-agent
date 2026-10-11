@@ -5,7 +5,7 @@ import httpx
 import respx
 from app.db import SessionLocal
 from app.config import get_settings
-from app.models import AssistantAttachment, AuditLog, InternalChatThread, User
+from app.models import AssistantAttachment, AuditLog, InternalChatThread, Project, ProjectFile, User
 from app.services.users import hash_password
 
 from app.chat.assistant.attachments import (
@@ -142,6 +142,104 @@ def test_cross_thread_attachment_upload_is_denied(client):
     assert client.post("/panel/api/login", json={"username": second, "password": "pass"}).status_code == 200
     denied = client.post(f"/panel/api/chat/threads/{own}/attachments", files={"file": ("x.txt", b"x", "text/plain")})
     assert denied.status_code == 404
+
+
+def _project_file(session, project_id, owner_id, path, *, filename="notes.txt", content_type="text/plain"):
+    path.write_bytes(b"project notes")
+    row = ProjectFile(
+        project_id=project_id, owner_id=owner_id, filename=filename, content_type=content_type,
+        size=len(b"project notes"), sha256="a" * 64, stored_path=str(path), status="ready",
+    )
+    session.add(row)
+    session.flush()
+    return row.id
+
+
+def test_project_file_can_be_attached_to_its_project_thread(client, tmp_path, monkeypatch):
+    username = "project-attachment-owner"
+    with SessionLocal() as session:
+        user = User(username=username, password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        project = Project(slug="project-attachment", name="Project", purpose="A", purpose_embedding=[0.0] * 384, owner_id=user.id)
+        session.add(project)
+        session.flush()
+        project_id = project.id
+        source_path = tmp_path / "source.txt"
+        file_id = _project_file(session, project_id, user.id, source_path)
+        session.commit()
+    assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "project-attachment"}).json()["thread"]["id"]
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path / "media"))
+    get_settings.cache_clear()
+
+    response = client.post(
+        f"/panel/api/chat/threads/{thread_id}/attachments/from-project", json={"project_file_id": file_id}
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["attachment"]["filename"] == "notes.txt"
+    assert list((tmp_path / "media").glob(f"assistant/{thread_id}/*"))
+
+
+def test_project_file_attachment_rejects_other_project_and_unsupported_type(client, tmp_path):
+    username = "project-attachment-boundary"
+    with SessionLocal() as session:
+        user = User(username=username, password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        first = Project(slug="project-first", name="First", purpose="A", purpose_embedding=[0.0] * 384, owner_id=user.id)
+        second = Project(slug="project-second", name="Second", purpose="A", purpose_embedding=[0.0] * 384, owner_id=user.id)
+        session.add_all([first, second])
+        session.flush()
+        foreign_id = _project_file(session, second.id, user.id, tmp_path / "foreign.txt")
+        unsupported_id = _project_file(
+            session, first.id, user.id, tmp_path / "unsupported.md", filename="notes.md", content_type="text/markdown"
+        )
+        session.commit()
+    assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "project-first"}).json()["thread"]["id"]
+
+    foreign = client.post(
+        f"/panel/api/chat/threads/{thread_id}/attachments/from-project", json={"project_file_id": foreign_id}
+    )
+    unsupported = client.post(
+        f"/panel/api/chat/threads/{thread_id}/attachments/from-project", json={"project_file_id": unsupported_id}
+    )
+
+    assert foreign.status_code == 404
+    assert unsupported.status_code == 400
+    assert "unsupported attachment type" in unsupported.json()["detail"]
+
+
+def test_project_file_attachment_obeys_count_limit_and_default_thread_has_no_project(client, monkeypatch, tmp_path):
+    username = "project-attachment-limit"
+    with SessionLocal() as session:
+        user = User(username=username, password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        project = Project(slug="project-limit", name="Project", purpose="A", purpose_embedding=[0.0] * 384, owner_id=user.id)
+        session.add(project)
+        session.flush()
+        file_id = _project_file(session, project.id, user.id, tmp_path / "limit.txt")
+        session.commit()
+    assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
+    project_thread = client.post("/panel/api/chat/threads", json={"proyecto": "project-limit"}).json()["thread"]["id"]
+    default_thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    monkeypatch.setenv("ASSISTANT_ATTACHMENT_MAX_COUNT", "0")
+    get_settings.cache_clear()
+
+    limited = client.post(
+        f"/panel/api/chat/threads/{project_thread}/attachments/from-project", json={"project_file_id": file_id}
+    )
+    no_project = client.post(
+        f"/panel/api/chat/threads/{default_thread}/attachments/from-project", json={"project_file_id": file_id}
+    )
+
+    assert limited.status_code == 400
+    assert "count limit" in limited.json()["detail"]
+    assert no_project.status_code == 400
+    get_settings.cache_clear()
 
 
 def test_expired_cleanup_deletes_metadata_for_active_thread(tmp_path):
