@@ -32,7 +32,7 @@
 .assistant-chat__tool-option input:focus-visible + span { outline: var(--focus-ring-width) solid var(--focus-ring); }
 .assistant-chat .popover__trigger { display: flex; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); padding: 0; overflow: hidden; border-radius: 50%; font-size: 0; line-height: 1; }
 .assistant-chat .popover__trigger::after { content: "+"; display: block; font-size: var(--text-lg); line-height: 1; }
-.assistant-chat .popover__panel { display: grid; gap: var(--space-2); min-width: min(20rem, calc(100vw - 2rem)); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--corp-text); box-shadow: var(--shadow-2); }
+.assistant-chat .popover__panel:popover-open { display: grid; gap: var(--space-2); min-width: min(20rem, calc(100vw - 2rem)); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--corp-text); box-shadow: var(--shadow-2); }
 .assistant-chat__tool-chips { padding: var(--space-2) 0; border-top: 1px solid var(--border); }
 .assistant-chat__tool-chip { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; }
 .assistant-chat__tool-chip:hover { background: var(--surface); }
