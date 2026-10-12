@@ -175,7 +175,7 @@ def test_push_failure_creates_and_delivers_policy_fallback(monkeypatch):
         )
         rule = AutomationRule(
             name="Fallback WhatsApp", event_type="case.created", conditions={}, channel="whatsapp",
-            template_event="case.created", created_by="admin",
+            created_by="admin",
         )
         session.add(rule)
         session.flush()
@@ -240,7 +240,7 @@ def test_push_failure_uses_configured_email_fallback(monkeypatch):
         )
         rule = AutomationRule(
             name="Fallback email", event_type="case.created", conditions={}, channel="email",
-            template_event="case.created", created_by="admin",
+            created_by="admin",
         )
         session.add(rule)
         session.flush()

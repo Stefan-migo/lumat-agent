@@ -800,7 +800,6 @@ class AutomationRule(Base):
         String(30), nullable=False, server_default="customer", default="customer"
     )
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    template_event: Mapped[str] = mapped_column(String(100), nullable=False)
     cooldown_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
