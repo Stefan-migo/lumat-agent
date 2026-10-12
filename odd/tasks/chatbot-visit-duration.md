@@ -112,3 +112,17 @@ Work **only** in `/home/stefan/repos/lumat-agent-odd-chatbot-visit-duration` on 
 
 - Created 2026-10-12. Worktree `../lumat-agent-odd-chatbot-visit-duration`, branch
   `odd/chatbot-visit-duration`, base `main` = `8063a050`.
+- **S1** (`b981226e`): `SETTINGS_DEFAULTS["booking.service_durations"] = {}` + `get_service_duration()`
+  (normalized lookup, non-positive/non-int → fallback). Strict-TDD RED: `ImportError: cannot import name
+  'get_service_duration'`; GREEN: `5 passed`.
+- **S2** (`2c1c8a25`): `booking.py` resolves the duration from `case.service` in `_new_offer` (slot
+  search) and `booking()` (commit); `DURATION_MINUTES` → `DEFAULT_DURATION_MINUTES` (fallback). RED: a
+  mapped `Caldera: 90` case booked 60; GREEN: mapped case + empty-map fallback `2 passed`.
+- **S3** (`7f6d8bc5`): SS-1 amended with the per-service resolution + fallback scenarios.
+- Task record commit `d9af7f55`.
+- **Verification:** focused `13 passed`; full backend suite `uv run pytest tests/ -q` → **1922 passed,
+  exit 0** (warnings: unawaited `_publish_all` in `test_startup_sweep_reprocesses_received`; fastembed
+  pooling notice). Parent spot check re-ran the focused suite: `13 passed`.
+- **Native assessment:** `risk: medium` (`executable_change`, `booking.py`), 227 changed lines, 6 paths,
+  **`review_due: false` (`under_budget`)**. No review started.
+- Not done (owner's decision): push, PR, merge.
