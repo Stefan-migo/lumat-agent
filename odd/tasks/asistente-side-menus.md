@@ -515,3 +515,40 @@ project-scoped history, planning sessions, and the project context page into
   - `a0d96fdf` — `fix(assistant): keep inline project details ordered and compact`
   - documentation-only commit — recorded in this entry's commit history.
 - No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (compact rail + sidebar polish)
+
+- Added the compact left rail in reference order: panel toggle, separators,
+  primary new-conversation action, history action, and accessible Proyectos / Agentes
+  icon buttons with native hover tooltips and focus/hover states. The two rail
+  navigation buttons reopen the expanded sidebar.
+- Anchored the default-history popover below the action buttons, removed its
+  duplicate border declaration, and retained the button's open/close toggle.
+  Removed the project-section menu trigger's border/background. The default
+  project label now uses the loaded `default` project name when available and
+  otherwise falls back to `General` (never “Conversación rápida”).
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`,
+  `web/src/components/pages/AssistantWorkspace.test.tsx`.
+- **Graph check**: read `graphify-out/GRAPH_REPORT.md` (report built from
+  `71f23739`; HEAD was `f0deafb7`), then ran
+  `graphify query "assistant workspace collapsed rail sidebar projects agents tooltip"`
+  and `graphify query "AssistantWorkspace defaultHistoryOpen default project agent card"`.
+  Consulted `AssistantWorkspace.tsx` / `AssistantWorkspace()`, `Tooltip()`,
+  `WorkspaceTab`, `Project`, and `listProjects()`. The report's left-sidebar
+  hyperedge connects the project tree, workspace tab model, thread history, and
+  planning sessions. Directed path attempts from `AssistantWorkspace.tsx` to
+  `Tooltip.tsx` and “Project list” found no path. At close, `graphify --update`
+  re-extracted the graph, but emitted out-of-scope attribution warnings and did
+  not regenerate `GRAPH_REPORT.md`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --no-emit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → first attempt: 104/105 files and
+    1,152/1,153 tests passed; unrelated `ClientFicha.test.tsx` test timed out at
+    5 seconds. Retry: 105/105 files and 1,153/1,153 tests passed. Existing React
+    `act(...)` warnings were emitted.
+  - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
+    chunk-size warning.
+- **Implementation commit**: `e2e3ae40` —
+  `fix(assistant): complete compact sidebar rail and polish`.
+- Task-doc update is committed separately. No push, PR, or merge.
