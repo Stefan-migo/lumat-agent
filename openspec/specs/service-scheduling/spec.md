@@ -8,7 +8,7 @@ Provide local, auditable appointment scheduling linked to customers and cases.
 
 ### Requirement: SS-1 — Appointment Lifecycle and Time
 
-The system MUST store each appointment with a service, customer, case, technician, fixed duration, canonical timezone, and lifecycle state. It MUST preserve the represented local time across DST transitions and support cancellation and rebooking with history.
+The system MUST store each appointment with a service, customer, case, technician, fixed duration, canonical timezone, and lifecycle state. It MUST preserve the represented local time across DST transitions and support cancellation and rebooking with history. For chatbot bookings, the system MUST resolve the appointment duration from the case's service using `booking.service_durations`; when the service has no valid configured duration, it MUST use 60 minutes.
 
 #### Scenario: Book and rebook
 - GIVEN an available technician and valid local time
@@ -19,6 +19,16 @@ The system MUST store each appointment with a service, customer, case, technicia
 - GIVEN a nonexistent or ambiguous DST local time
 - WHEN booking is requested
 - THEN the system rejects it with a deterministic validation error
+
+#### Scenario: Chatbot duration resolved by service
+- GIVEN a case has a service with a valid positive integer duration in `booking.service_durations`
+- WHEN the chatbot searches availability and books the appointment
+- THEN both operations use the configured duration
+
+#### Scenario: Chatbot duration falls back when unset
+- GIVEN the case's service has no valid duration in `booking.service_durations`
+- WHEN the chatbot searches availability and books the appointment
+- THEN both operations use 60 minutes
 
 ### Requirement: SS-2 — Availability and Conflicts
 
