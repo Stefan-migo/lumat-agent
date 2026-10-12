@@ -62,46 +62,38 @@ describe('AgendaPage', () => {
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
   });
 
-  it('loads the technician roster only on first expansion and opens that technician schedule', async () => {
+  it('loads technician roster and summaries only when the technician tab is selected', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis Pérez' }] });
-    vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 30, schedule: [] });
+    vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 30, schedule: [{ weekday: 1, opens_at: '09:00:00', closes_at: '18:00:00' }] });
     render(<AgendaPage data={[]} state="empty" />);
 
     expect(fetchTechnicians).not.toHaveBeenCalled();
-    const disclosure = screen.getByText('Horarios de técnicos').closest('details')!;
-    expect(disclosure).toHaveClass('agenda-page__schedules');
-    expect(within(disclosure).getByText('Horarios de técnicos').tagName).toBe('SUMMARY');
-    await user.click(within(disclosure).getByText('Horarios de técnicos'));
-    expect(await within(disclosure).findByText('Luis Pérez')).toBeInTheDocument();
+    expect(getTechnicianSchedule).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('tab', { name: 'Técnicos' }));
+    expect((await screen.findAllByText('Luis Pérez')).length).toBeGreaterThan(0);
     expect(fetchTechnicians).toHaveBeenCalledOnce();
-    expect(within(disclosure).getByRole('list').tagName).toBe('UL');
-    expect(within(disclosure).getByRole('list')).toHaveClass('agenda-page__schedules-list');
-    expect(within(disclosure).getAllByRole('button', { name: 'Horarios' })).toHaveLength(1);
-    await user.click(within(disclosure).getByRole('button', { name: 'Horarios' }));
-    const scheduleDialog = await screen.findByRole('dialog', { name: 'Horario semanal' });
-    expect(scheduleDialog).toHaveTextContent('Define los días y horarios de atención de Luis Pérez.');
-    await user.click(within(scheduleDialog).getByRole('button', { name: 'Cancelar' }));
-    await user.click(within(disclosure).getByText('Horarios de técnicos'));
-    await user.click(within(disclosure).getByText('Horarios de técnicos'));
+    await waitFor(() => expect(getTechnicianSchedule).toHaveBeenCalledWith(30));
+    expect(screen.getByText('Lun 09:00–18:00')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Horario semanal' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Activas' }));
+    await user.click(screen.getByRole('tab', { name: 'Técnicos' }));
     expect(fetchTechnicians).toHaveBeenCalledOnce();
   });
 
-  it('styles the technician roster with tokenized Agenda section and row rules', () => {
+  it('removes the old disclosure CSS surface', () => {
     const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
-
-    expect(stylesheet).toMatch(/\.agenda-page__schedules > summary\s*\{[^}]*font-size:\s*var\(--text-lg\)[^}]*font-weight:\s*var\(--weight-semibold\)[^}]*\}[\s\S]*\.agenda-page__schedules-list\s*\{[^}]*display:\s*grid[^}]*list-style:\s*none[^}]*\}[\s\S]*\.agenda-page__schedules-item\s*\{[^}]*padding:\s*var\(--space-3\)[^}]*border:\s*1px solid var\(--border\)[^}]*border-radius:\s*var\(--radius-md\)/s);
+    expect(stylesheet).not.toMatch(/agenda-page__schedules/);
   });
 
   it('shows roster errors with a retry and an explicit empty state', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchTechnicians).mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce({ technicians: [] });
     render(<AgendaPage data={[]} state="empty" />);
-    const disclosure = screen.getByText('Horarios de técnicos').closest('details')!;
-    await user.click(within(disclosure).getByText('Horarios de técnicos'));
-    expect(await within(disclosure).findByRole('alert')).toHaveTextContent('No pudimos cargar los técnicos');
-    await user.click(within(disclosure).getByRole('button', { name: 'Reintentar' }));
-    expect(await within(disclosure).findByText('No hay técnicos disponibles.')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Técnicos' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los técnicos');
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByText('No hay técnicos disponibles.')).toBeInTheDocument();
     expect(fetchTechnicians).toHaveBeenCalledTimes(2);
   });
 
