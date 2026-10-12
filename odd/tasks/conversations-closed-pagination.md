@@ -48,6 +48,7 @@ conversations and the footer shows "12 de 12" on a single page.
   - `web/src/api.ts` (`ConversationFilters`)
   - `web/src/components/pages/ConversationsList.tsx` (+ `.test.tsx`)
   - `web/src/stories/pages/ConversationsList.stories.tsx` (only if variants need updating)
+  - `web/src/stories/pages/ConversationsList.stories.test.tsx` (assertion updated for the new query)
   - `web/src/components/pages/ConversationsList.css` (only if the footer/pagination needs it)
 
 Any file outside this list needs a scope update here first.
@@ -131,3 +132,4 @@ communities: `ConversationsList.tsx` and `api.ts`.
 - RED: new backend filter/count test failed because params were ignored and counts included closed/acknowledged cases; frontend suite had 4 failures because it still requested unfiltered 20-row data and the range/pagination contract was absent.
 - GREEN: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/functional/test_api_conversations.py -q` (27 passed); `cd web && npx vitest run src/components/pages/ConversationsList.test.tsx` (16 passed); `cd web && npm run build` (passed; existing chunk-size advisory); full backend `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -q` (passed, 100%; two existing warnings); `git diff --check` (passed).
 - Graph check: consulted `Pagination()`, `ConversationsList.tsx`, `queue()`, `conversations`, and `routes/conversations.py`; report communities include `ConversationsList.tsx`/`ConversationThread.tsx`, `api.ts`, and `routes/conversations.py`. Directed path between frontend list and route was not found.
+- **CI caught a missed assertion (orchestrator).** The `panel` job runs the full web suite and failed in `web/src/stories/pages/ConversationsList.stories.test.tsx`: it still expected the bare `/panel/api/conversations` URL. Fixed to match the new filtered query (`exclude_closed=true&limit=10`) and added to the authorized scope. Local focused runs had missed this file; the full web suite is only reachable via CI in this environment.
