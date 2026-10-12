@@ -534,22 +534,40 @@ function ProjectHistory({ projectSlug, projectName, history, search, onSearch, o
     {!history || history.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
     {history?.state === "error" || history?.state === "denied" ? <><StateMessage tone="danger" role="alert" title={history.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /><Button variant="secondary" onClick={onRetry}>Reintentar</Button></> : null}
     {history?.state === "empty" ? <EmptyState title="No hay hilos" description="Este proyecto aún no tiene hilos." /> : null}
-    {history?.state === "ready" ? <GroupedThreadList projectName={projectName} threads={history.threads} search={search} onSearch={onSearch} onOpen={onOpen} onThreadAction={onThreadAction} /> : null}
+    {history?.state === "ready" ? <GroupedThreadList projectName={projectName} projectSlug={projectSlug} threads={history.threads} search={search} onSearch={onSearch} onOpen={onOpen} onThreadAction={onThreadAction} paginate /> : null}
       </Card>
     </PageFrame>
   </section>;
 }
 
-function GroupedThreadList({ projectName, threads, search, onSearch, onOpen, onThreadAction }: { projectName: string; threads: InternalChatThreadSummary[]; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void; onThreadAction: (thread: InternalChatThreadSummary, action: "rename" | "delete") => void }) {
-  const filtered = threads.filter((thread) => (thread.title || "Sin título").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const groups = groupThreadsByDate(filtered);
+function GroupedThreadList({ projectName, projectSlug, threads, search, onSearch, onOpen, onThreadAction, paginate = false }: { projectName: string; projectSlug?: string; threads: InternalChatThreadSummary[]; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void; onThreadAction: (thread: InternalChatThreadSummary, action: "rename" | "delete") => void; paginate?: boolean }) {
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [projectSlug, search]);
+  const filtered = threads
+    .filter((thread) => (thread.title || "Sin título").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    .sort((a, b) => activityTime(b) - activityTime(a));
+  const pageSize = 20;
+  const pageCount = Math.ceil(filtered.length / pageSize);
+  const pageThreads = paginate ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered;
+  const groups = groupThreadsByDate(pageThreads);
   return <>
     <SearchInput aria-label={`Buscar hilos de ${projectName}`} placeholder="Buscar hilo" onSearch={onSearch} />
-    {groups.length ? <div className="assistant-workspace__thread-date-groups">{groups.map((group) => <section key={group.label} aria-label={group.label}>
+     {groups.length ? <div className="assistant-workspace__thread-date-groups">{groups.map((group) => <section key={group.label} aria-label={group.label}>
       <h4>{group.label}</h4>
       <ul>{group.threads.map((thread) => <li key={thread.id} className="assistant-workspace__thread-row"><button type="button" className="assistant-workspace__thread-row-open" onClick={() => onOpen(thread)}><Icon icon={MessageSquareText} size="sm" /><span>{thread.title || "Sin título"}</span></button><Menu label={`Acciones de ${thread.title || "hilo"}`} trigger="icon" items={[{ value: "rename", label: "Renombrar", icon: Pencil }, { value: "delete", label: "Eliminar hilo", icon: Trash2, tone: "danger" }]} onSelect={(value) => onThreadAction(thread, value as "rename" | "delete")} /></li>)}</ul>
-    </section>)}</div> : <EmptyState title="No encontramos hilos" description="Prueba con otro nombre." />}
-  </>;
+     </section>)}</div> : <EmptyState title="No encontramos hilos" description="Prueba con otro nombre." />}
+     {paginate && pageCount > 1 ? <nav className="assistant-workspace__history-pagination" aria-label={`Paginación del historial de ${projectName}`}>
+       <Button variant="secondary" aria-label="Página anterior" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>Anterior</Button>
+       <span aria-live="polite">Página {page} de {pageCount}</span>
+       <Button variant="secondary" aria-label="Página siguiente" disabled={page === pageCount} onClick={() => setPage((current) => current + 1)}>Siguiente</Button>
+     </nav> : null}
+   </>;
+}
+
+function activityTime(thread: InternalChatThreadSummary): number {
+  const value = thread.updated_at || thread.created_at;
+  const time = value ? new Date(value).getTime() : Number.NEGATIVE_INFINITY;
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
 function ContextSection({ id, title, icon, count, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {

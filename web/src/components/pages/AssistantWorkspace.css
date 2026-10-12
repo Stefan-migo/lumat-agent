@@ -120,9 +120,10 @@
 .assistant-workspace__view-all-history { justify-self: start; padding: var(--space-2); color: var(--corp-accent); text-decoration: none; }
 .assistant-workspace__view-all-history:hover,
 .assistant-workspace__view-all-history:focus-visible { text-decoration: underline; }
-.assistant-workspace__full-history { grid-row: -2 / -1; min-width: 0; min-height: 0; overflow: auto; }
-.assistant-workspace__full-history > .page-frame { min-width: 0; width: 100%; max-width: none; min-height: 100%; }
+.assistant-workspace__full-history { min-width: 0; min-height: 0; overflow: auto; }
+.assistant-workspace__full-history > .page-frame { min-width: 0; width: 100%; max-width: none; }
 .assistant-workspace__history-card { align-content: start; }
+.assistant-workspace__history-pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); }
 
 .assistant-workspace__context {
   border-right: 0;

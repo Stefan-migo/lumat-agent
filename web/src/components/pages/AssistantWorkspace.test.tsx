@@ -335,6 +335,39 @@ describe("AssistantWorkspace", () => {
     expect(window.location.search).toContain("thread_id=92");
   });
 
+  it("paginates filtered full history at 20 threads per page", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?history=operaciones");
+    const threads = Array.from({ length: 25 }, (_, index) => ({
+      id: index + 1,
+      title: `Coincidencia ${String(index + 1).padStart(2, "0")}`,
+      proyecto: "operaciones",
+      created_at: new Date(Date.UTC(2026, 9, 12, 12, 25 - index)).toISOString(),
+      updated_at: new Date(Date.UTC(2026, 9, 12, 12, 25 - index)).toISOString(),
+      run_status: null,
+      approval_status: null,
+    }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("limit=50")) return new Response(JSON.stringify({ threads }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    const history = await screen.findByRole("region", { name: /Historial de Operaciones/i });
+    const search = await within(history).findByRole("searchbox", { name: "Buscar hilos de Operaciones" });
+    fireEvent.change(search, { target: { value: "Coincidencia" } });
+
+    expect(await within(history).findByText("Página 1 de 2")).toBeInTheDocument();
+    expect(within(history).getByRole("button", { name: "Coincidencia 01" })).toBeInTheDocument();
+    expect(within(history).queryByRole("button", { name: "Coincidencia 25" })).not.toBeInTheDocument();
+    fireEvent.click(within(history).getByRole("button", { name: "Página siguiente" }));
+    expect(within(history).getByText("Página 2 de 2")).toBeInTheDocument();
+    expect(within(history).getByRole("button", { name: "Coincidencia 25" })).toBeInTheDocument();
+    expect(within(history).queryByRole("button", { name: "Coincidencia 01" })).not.toBeInTheDocument();
+  });
+
   it("re-homes project management, project chat, and project planning sessions", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
