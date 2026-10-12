@@ -531,6 +531,8 @@ project-scoped history, planning sessions, and the project context page into
   inner `.empty-state` surface (its own border + elevated background) nested
   inside the already-bordered popover, not a duplicate declaration. Flattened it
   with `.assistant-workspace__default-history .empty-state { padding: 0; border: 0; background: transparent; }`.
+- **Owner follow-up**: added icons to the Proyectos section menu items (Nuevo
+  proyecto / Administrar proyectos) and removed the unnecessary agent-card ⋮ menu.
 - **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
   `web/src/components/pages/AssistantWorkspace.css`,
   `web/src/components/pages/AssistantWorkspace.test.tsx`.

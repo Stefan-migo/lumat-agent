@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, Trash2, Users, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, PlanningSession, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -362,7 +362,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           </> : null}
           </section>
         <section className="assistant-workspace__project-section" aria-label="Proyectos" hidden={!projectsVisible}>
-          <header className="assistant-workspace__section-header"><h2>Proyectos</h2><Menu label="Acciones de proyectos" trigger="icon" items={[{ value: "create", label: "Nuevo proyecto" }, { value: "manage", label: "Administrar proyectos" }]} onSelect={(value) => { if (value === "create") { setProjectCreateError(null); setCreateProjectOpen(true); } else { window.history.pushState({}, "", pathForRoute({ view: "projects" })); window.dispatchEvent(new PopStateEvent("popstate")); } }} /></header>
+          <header className="assistant-workspace__section-header"><h2>Proyectos</h2><Menu label="Acciones de proyectos" trigger="icon" items={[{ value: "create", label: "Nuevo proyecto", icon: Plus }, { value: "manage", label: "Administrar proyectos", icon: SlidersHorizontal }]} onSelect={(value) => { if (value === "create") { setProjectCreateError(null); setCreateProjectOpen(true); } else { window.history.pushState({}, "", pathForRoute({ view: "projects" })); window.dispatchEvent(new PopStateEvent("popstate")); } }} /></header>
         <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
           {projectsData.state === "loading" ? (
@@ -450,7 +450,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             const run = activeRuns.runs.find((item) => item.thread_id === id);
             const slug = thread?.proyecto ?? run?.proyecto ?? (id === activeThreadId ? activeProjectSlug : undefined);
             const projectName = slug === "default" ? projects.find((project) => project.slug === slug)?.name ?? "General" : slug ? projects.find((project) => project.slug === slug)?.name ?? slug : "—";
-            return <li key={id}><Avatar name="Orquestador" /><div className="assistant-workspace__agent-copy"><strong>Orquestador</strong><span className="assistant-workspace__agent-status"><i aria-hidden="true" />{run ? stageLabel(run.stage) : "Activo"}</span><p>{projectName}</p></div><Menu label="Acciones de Orquestador" trigger="icon" items={[{ value: "details", label: "Detalles" }]} onSelect={() => undefined} /></li>;
+            return <li key={id}><Avatar name="Orquestador" /><div className="assistant-workspace__agent-copy"><strong>Orquestador</strong><span className="assistant-workspace__agent-status"><i aria-hidden="true" />{run ? stageLabel(run.stage) : "Activo"}</span><p>{projectName}</p></div></li>;
           })}</ul>}
           </> : null}</>;
           })()}

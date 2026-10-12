@@ -523,7 +523,6 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Nueva conversación" }));
     expect(await screen.findByText("Calidad de atención", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
     expect(screen.getByText("Activo", { selector: ".assistant-workspace__agent-status" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Acciones de Orquestador" })).toBeInTheDocument();
   });
 
   it("shows the loaded General project name for a default-space agent", async () => {
