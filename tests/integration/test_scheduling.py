@@ -341,7 +341,7 @@ def test_reschedule_publishes_event_accepted_by_automation():
         }
         rule = AutomationRule(
             name="Rescheduled", event_type="appointment.rescheduled", conditions={},
-            channel="whatsapp", template_event="appointment.rescheduled",
+            channel="whatsapp", content="Appointment rescheduled",
             cooldown_seconds=0, enabled=True, created_by="admin",
         )
         session.add(rule)

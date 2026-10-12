@@ -26,13 +26,11 @@ class RuleValidationError(ValueError):
 
 def validate_rule_input(data: dict) -> dict:
     """Validate the bounded authoring contract without changing evaluation policy."""
-    for field in ("name", "event_type", "channel", "template_event"):
+    for field in ("name", "event_type", "channel"):
         if not isinstance(data.get(field), str) or not data[field].strip():
             raise RuleValidationError(field, "must be a non-empty string")
     if data["event_type"] not in ALLOWED_EVENTS:
         raise RuleValidationError("event_type", "unsupported event")
-    if data["template_event"] not in ALLOWED_EVENTS:
-        raise RuleValidationError("template_event", "unsupported event")
     if data["channel"] not in ALLOWED_CHANNELS:
         raise RuleValidationError("channel", "unsupported channel")
     cooldown = data.get("cooldown_seconds")
@@ -49,7 +47,6 @@ def validate_rule_input(data: dict) -> dict:
         "event_type": data["event_type"],
         "conditions": conditions,
         "channel": data["channel"],
-        "template_event": data["template_event"],
         "cooldown_seconds": cooldown,
     }
 
@@ -61,7 +58,6 @@ def rule_snapshot(rule: AutomationRule) -> dict:
         "event_type": rule.event_type,
         "conditions": rule.conditions or {},
         "channel": rule.channel,
-        "template_event": rule.template_event,
         "cooldown_seconds": rule.cooldown_seconds,
         "enabled": rule.enabled,
         "created_by": rule.created_by,
@@ -137,7 +133,7 @@ def evaluate_event(session: Session, event: DomainEvent) -> list[int]:
         if not rule.enabled:
             outcome, reason = "skipped", "disabled"
             record_audit(session, actor="system", action="automation.skipped", entity="automation_rule", entity_id=str(rule.id), after={"reason": reason, "event_id": event.id})
-        elif event.event_type not in ALLOWED_EVENTS or rule.channel not in ALLOWED_CHANNELS or rule.template_event not in ALLOWED_EVENTS:
+        elif event.event_type not in ALLOWED_EVENTS or rule.channel not in ALLOWED_CHANNELS:
             outcome, reason = "skipped", "policy_not_allowed"
         elif not _matches(rule.conditions or {}, event.payload or {}):
             outcome, reason = "skipped", "conditions_not_matched"
@@ -155,7 +151,7 @@ def evaluate_event(session: Session, event: DomainEvent) -> list[int]:
             else:
                 payload = event.payload or {}
                 recipient = _resolve_recipient(session, rule, event)
-                content = payload.get("content") or payload.get("text") or rule.content or rule.template_event
+                content = payload.get("content") or payload.get("text") or rule.content
                 if not recipient:
                     outcome, reason = "skipped", "missing_recipient"
                 else:
