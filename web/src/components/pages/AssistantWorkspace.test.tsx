@@ -258,9 +258,11 @@ describe("AssistantWorkspace", () => {
     const { unmount } = render(<AgentChat role="admin" onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)} />);
     const newConversation = await screen.findByRole("button", { name: "Nueva conversación" });
     expect(newConversation).toHaveClass("btn--primary");
+    expect(newConversation).toHaveAttribute("title", "Nueva conversación");
     expect(newConversation.closest(".assistant-workspace__default-actions")).toHaveClass("assistant-workspace__default-actions");
     const historyButton = within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial de conversaciones" });
     expect(historyButton).toHaveClass("btn--secondary");
+    expect(historyButton).toHaveAttribute("title", "Historial de conversaciones");
     fireEvent.click(historyButton);
     expect(historyButton).toHaveAttribute("aria-expanded", "true");
     await screen.findByRole("button", { name: "Consulta general" });

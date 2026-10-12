@@ -341,8 +341,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             {projectsVisible ? <><h2>Asistente Lumat</h2><button type="button" className="assistant-workspace__pane-toggle" aria-label="Contraer panel de proyectos" aria-expanded="true" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(false)}><Icon icon={PanelLeft} /></button></> : <button type="button" className="assistant-workspace__pane-toggle" aria-label="Expandir panel de proyectos" aria-expanded="false" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(true)}><Icon icon={PanelLeft} /></button>}
           </header>
           {(role === "admin" || role === "operador") ? <div className="assistant-workspace__default-actions">
-            <Button variant="primary" aria-label="Nueva conversación" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /><span>Nueva conversación</span></Button>
-            <Button variant="secondary" aria-label="Historial de conversaciones" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /><span>Historial de conversaciones</span></Button>
+            <Button variant="primary" aria-label="Nueva conversación" title="Nueva conversación" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /><span>Nueva conversación</span></Button>
+            <Button variant="secondary" aria-label="Historial de conversaciones" title="Historial de conversaciones" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /><span>Historial de conversaciones</span></Button>
           </div> : null}
         </section>
         <section className="assistant-workspace__project-section" aria-label="Proyectos" hidden={!projectsVisible}>
