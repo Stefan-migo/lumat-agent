@@ -213,3 +213,100 @@ never be mistaken for the current project again.
 
 Checks: the same three as slice 1 (`tsc -b --force --noEmit`,
 `vitest run --no-file-parallelism`, `npm run build`), from `web/`.
+
+---
+
+## Slice 3 — left sidebar: project tree + in-assistant tabs (2026-10-12)
+
+Branch: `odd/asistente-menu-izquierdo`
+Worktree: `/home/stefan/repos/lumat-agent-odd-asistente-menu-izquierdo`
+Base: `origin/main` `0046e4c6` (PR #564 merged)
+Status: **planning** — open decisions D1–D3 pending owner confirmation before
+implementation.
+
+### Objective
+
+Redesign the Asistente Lumat **left sidebar** to the owner's reference and turn
+project-scoped history, planning sessions, and the project context page into
+**in-assistant tabs**, so the user never leaves the assistant panel.
+
+### Owner references
+
+- Sidebar variants: **(01)** full sidebar, projects collapsed; **(02)** full
+  sidebar, one project expanded; **(03)** compact icon rail (64 px) with tooltips.
+- **Historial de hilos (04)**: per project, inline expand with a search box,
+  threads grouped by date (**Hoy / Ayer**) and a **"Ver todos los hilos"** action.
+- **Sesiones de planificación (05)**: per project only, inline in the directory
+  tree (search + session list + **"Ver todas las sesiones"**). Opening a session
+  opens it as a **new tab**.
+- **Contexto y archivos**: opens as a **new tab** inside the assistant and is
+  manageable from the same panel (no navigation away).
+- The global planning-sessions route (`/panel/app/planning-sessions`) is
+  **deprecated**.
+
+### Current state (verified 2026-10-12)
+
+- The project tree already exists (`AssistantWorkspace.tsx:301-343`):
+  - "Contexto y archivos" → **navigates OUT** to `/panel/app/projects/:slug`.
+  - "Historial de hilos" → inline expand, **flat list** + search (no date groups,
+    no "Ver todos").
+  - "Sesiones de planificación" → **links OUT** to the global route, only when
+    `projectSessions[slug].state === "ready"`.
+- Tab model is **thread-only**: `openThreadIds: number[]` local state, synced with
+  `?thread_id=`. No router (`pushState` + `panelRoutes.ts`).
+- `listPlanningSessions(slug)` is already called per project
+  (`AssistantWorkspace.tsx:107`); the backend already filters by `?proyecto=`.
+- The global planning view is mounted in **three** places: `PanelShell`
+  (view `planning-sessions`), `AppShell`, and `TechnicianShell` (plus the
+  `PlanningSessions` page).
+- `ProjectResources` renders the project-files view — reusable for the context tab.
+
+### Work units (one commit each, Conventional Commits, no AI attribution)
+
+- **S3-1** `feat(assistant): generalize the workspace tab model` — a tab union
+  (`thread | planning | context`) with URL sync; today's `openThreadIds` is
+  thread-only. Files: `AssistantWorkspace.tsx`, types, tests.
+- **S3-2** `feat(assistant): redesign the left sidebar to the reference` — layout
+  per variants 01/02 and the compact rail (03). Files: `AssistantWorkspace.tsx`,
+  `AssistantWorkspace.css`, tests.
+- **S3-3** `feat(assistant): group project history by date` — Hoy / Ayer groups +
+  "Ver todos los hilos".
+- **S3-4** `feat(assistant): open project planning sessions as tabs` — per-project
+  inline tree + open a session as a tab.
+- **S3-5** `feat(assistant): open project context as a tab` — embed
+  `ProjectResources` instead of navigating away.
+- **S3-6** `refactor(assistant): deprecate the global planning sessions route` —
+  remove the nav entry + view in `PanelShell` / `AppShell` / `TechnicianShell`.
+
+### Open decisions (owner confirmation before implementation)
+
+- **D1 — tab semantics.** Interpretation: a tree item expands **inline** (refs
+  04/05) AND clicking an individual thread/session opens it as a **tab**;
+  "Ver todos/Ver todas" opens the full list as a tab. Confirm or correct.
+- **D2 — deprecation depth.** Remove the global nav entry + view **entirely**, or
+  keep a redirect for old links?
+- **D3 — compact rail scope.** Variant 03 (64 px icon rail) in **this slice**, or
+  deferred?
+
+### Acceptance criteria
+
+- Sidebar matches the reference (variants 01/02; 03 if in scope).
+- "Historial de hilos" groups threads by date and offers "Ver todos los hilos".
+- "Sesiones de planificación" lists per project and opens a session as a tab.
+- "Contexto y archivos" opens as a tab; the user never leaves the assistant.
+- The global planning route is deprecated per D2.
+- No regression in the right panel, composer, thread tabs, or Settings.
+
+### Checks (run from `web/`)
+
+- `npx tsc -b --force --noEmit`
+- `npx vitest run --no-file-parallelism`
+- `npm run build`
+
+### Notes / environment
+
+- Graph `graphify-out/` is **stale** (built from `576b07ef`; HEAD `0046e4c6`) and
+  lists a removed file (`AssistantTabs.tsx`). Refresh with `graphify <root>
+  --update` once at session close.
+- Worktree born without `infra/.env`, `web/node_modules`, or `.venv` — provision
+  before the browser pass.
