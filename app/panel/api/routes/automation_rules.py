@@ -18,7 +18,6 @@ class RuleBody(BaseModel):
     event_type: str
     conditions: dict[str, object]
     channel: str
-    template_event: str
     cooldown_seconds: int
 
 

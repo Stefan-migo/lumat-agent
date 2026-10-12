@@ -10,7 +10,6 @@ RULE = {
     "event_type": "case.created",
     "conditions": {"priority": "high", "attempts": 2, "urgent": True, "note": None},
     "channel": "whatsapp",
-    "template_event": "case.created",
     "cooldown_seconds": 60,
 }
 
@@ -100,7 +99,6 @@ def test_automation_validation_is_bounded_and_atomic(client, make_user):
     _login(client, make_user, "validation-admin", "validation-pass", "admin")
     for field, value in (
         ("event_type", "unknown.event"),
-        ("template_event", "unknown.event"),
         ("channel", "sms"),
         ("cooldown_seconds", -1),
         ("cooldown_seconds", 2592001),

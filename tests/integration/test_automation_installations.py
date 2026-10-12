@@ -46,7 +46,7 @@ def test_recipe_catalog_compiles_and_validates_parameters():
     fields = SYNTHETIC.compile_rule_fields(parameters)
     assert fields == {
         "event_type": "case.created", "conditions": {}, "channel": "email",
-        "template_event": "case.created", "cooldown_seconds": 60,
+        "cooldown_seconds": 60,
         "recipient_target": "customer", "content": "",
     }
     assert len(recipes.RECIPES) == len({r.recipe_id for r in recipes.RECIPES.values()})
@@ -108,7 +108,6 @@ def test_offset_recipe_catalog_and_compilation(recipe_id, trigger_event, paramet
     assert numeric.type == "number" and numeric.default == default
     fields = recipe.compile_rule_fields({"channel": "whatsapp"})
     assert fields["event_type"] == trigger_event
-    assert fields["template_event"] == trigger_event
     assert fields["channel"] == "whatsapp"
 
 
@@ -152,7 +151,7 @@ def test_install_update_enable_and_lookup(migrated_db, synthetic_recipe):
         rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation.id))
         assert rule.event_type == "case.created"
         assert rule.conditions == {} and rule.channel == "email"
-        assert rule.template_event == "case.created" and rule.cooldown_seconds == 60
+        assert rule.cooldown_seconds == 60
         assert rule.enabled is installation.enabled is False
         with pytest.raises(ValueError, match="already installed"):
             install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="admin")
