@@ -406,3 +406,45 @@ project-scoped history, planning sessions, and the project context page into
 - **Implementation commit**: `101d6d38` —
   `fix(assistant): hug content in the history tab and paginate at 20`.
 - No planning-session (sub-unit 1b) changes. No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (1b)
+
+- **Implementation** `5a444a2c` — `feat(assistant): open project planning sessions as tabs`.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx` and
+  `AssistantWorkspace.test.tsx`; `web/src/components/pages/PlanningSessions.tsx`;
+  `web/src/components/domain/panelRoutes.ts` and `panelRoutes.test.ts`; this
+  task document.
+- Replaced the project planning-sessions route link with an expandable inline
+  tree section: searchable project sessions show topic, status, and thread ID;
+  empty/error/denied/loading states remain explicit. “Ver todas las sesiones”
+  opens a project list tab at `?sessions=<projectSlug>`. Selecting a session
+  opens its `?planning=<sessionSlug>` tab, labelled from the loaded topic, and
+  the detail back action returns to the project list tab. Thread and reopen
+  actions continue through the workspace thread navigation. The global route
+  keeps its default browser-back behavior.
+- Added `sessionsProjectSlug` route serialization/parsing with the precedence
+  thread > context > planning > history > sessions, plus a searchable list in
+  the existing `PlanningSessions` surface.
+- **Graph check** (report built from `71f23739`, queried before implementation):
+  consulted `AssistantWorkspace.tsx`, `WorkspaceTab`, `PlanningSessions.tsx`,
+  `panelRoutes.ts`, `listPlanningSessions()`, `PlanningSessionsResponse`, and
+  `sessionStatusLabel()` / `sessionStatusTone()`. Edges observed:
+  `AssistantWorkspace() --calls--> listPlanningSessions()` and
+  `PlanningSessions.tsx --references--> panelRoutes.ts` (1 hop). The requested
+  directed `AssistantWorkspace.tsx` → `PlanningSessions.tsx` path was not found.
+  The graph report's left-sidebar community also connects the workspace tab
+  model, planning sessions, project tree, and global planning route.
+- **Route / trigger evidence**: delegated direct selectors use
+  `pathForRoute` / `parsePanelPath`; assertions cover `?planning=` and
+  `?sessions=` plus precedence. Trigger evidence covers opening inline sessions,
+  the all-sessions tab, the detail tab, and returning to the list without leaving
+  the assistant.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,149 tests
+    passed. Existing React `act(...)` warnings were emitted.
+  - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
+    chunk-size warning.
+- **Documentation commit**: `docs(odd): record asistente-side-menus slice 3 1b`
+  (separate documentation-only commit; the feature commit is `5a444a2c`).
+- No push, PR, or merge.
