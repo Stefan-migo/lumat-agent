@@ -351,3 +351,16 @@ project-scoped history, planning sessions, and the project context page into
   - `npx vitest run --no-file-parallelism` → 105 files / 1,145 tests passed.
   - `npm run build` → passed; existing >500 kB chunk-size warning.
 - **Feature commit** and this task-doc commit: pending.
+
+### Progress / Evidence — slice 3 (1a)
+
+- **Implementation** `7616cd05` — `feat(assistant): group project history by date and open the full history as a tab`.
+- Added a pure Chile-timezone date grouping helper using last activity (`updated_at`, falling back to `created_at`); inline and full history share the same searchable grouped list. The full project history fetches up to 100 threads and opens in an in-assistant `history` tab at `?history=<slug>`, with thread > context > planning > history selector precedence.
+- **Date-label evidence** (unit test with reference date 2026-10-12): today → `Hoy`; yesterday → `Ayer`; 2026-10-05 → `5 oct`. The test also verifies creation-time fallback and newest-first ordering.
+- **Graph check**: queried `assistant workspace project history threads tabs` and `AssistantWorkspace project history WorkspaceTab panelRoutes listChatThreads`; consulted `AssistantWorkspace()`, `WorkspaceTab`, `listChatThreads()`, and `pathForRoute()`. Path: `AssistantWorkspace() --calls--> pathForRoute()`. The supplied stale-graph note said `576b07ef`, but the current `GRAPH_REPORT.md` and HEAD both identified `71f23739` before implementation.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → passed, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → passed, 105 files / 1,147 tests.
+  - `npm run build` → passed; Vite emitted the existing >500 kB chunk-size warning.
+- No planning-session (sub-unit 1b) changes were made.
+- **Task-doc commit**: pending.
