@@ -449,6 +449,43 @@ project-scoped history, planning sessions, and the project context page into
   (separate documentation-only commit; the feature commit is `5a444a2c`).
 - No push, PR, or merge.
 
+### Progress / Evidence — slice 3 (S3-2 header + agents)
+
+- Replaced the inline tertiary header actions with full-width primary
+  **Nueva conversación** and secondary **Historial de conversaciones** buttons;
+  retained the existing callbacks, history loading/toggle behavior, and admin /
+  operator role gate. Redesigned the agents section with a live count, working
+  collapse control, circular avatar, status indicator, project, and ⋮ menu;
+  replaced the boxed empty state with a compact muted message.
+- **Agent-project root cause**: `AgentChat` receives the created conversation's
+  project in `result.thread.proyecto` and passes it to `AssistantWorkspace` as
+  `activeProjectSlug`. The new summary is not in `threads` / `defaultThreads` /
+  `projectThreads` until a later list refresh, and an idle thread has no
+  corresponding `activeRuns` entry. The agent card previously consulted only
+  those absent list/run records, so rendered `—`. It now falls back to
+  `activeProjectSlug` only for the currently active thread; its slug is resolved
+  to the loaded project name, and genuinely unknown projects remain `—`.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`,
+  `web/src/components/pages/AssistantWorkspace.test.tsx`,
+  `web/src/components/primitives/Button.tsx`, and this task document.
+- **Graph check**: queried `assistant workspace sidebar header agents active runs
+  project`, read `graphify-out/GRAPH_REPORT.md`, and traversed
+  `AssistantWorkspace.tsx --references--> AgentChat.tsx`. Consulted nodes:
+  `AssistantWorkspace.tsx`, `AgentChat.tsx`, `WorkspaceTab`, and active run /
+  project data represented by `ActiveRun` and `InternalChatThreadSummary`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,152 tests
+    passed; known React `act(...)` warnings. Two earlier full-suite attempts
+    exceeded tool time limits; the third completed successfully.
+  - `npm run build` → exit 0; existing >500 kB chunk-size warning.
+- **Commits**:
+  - `366a6778` — `feat(assistant): redesign the agents section and show the active project`
+  - `69caa6cf` — `feat(assistant): align the sidebar header with the reference`
+  - Documentation commit — recorded below.
+- No push, PR, or merge.
+
 ### Progress / Evidence — slice 3 (1b corrections, owner browser pass)
 
 - Corrected the project-tree order so the history panel is immediately beneath
