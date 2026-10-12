@@ -28,7 +28,7 @@ def clean_booking_db(migrated_db):
         )
 
 
-def _seed_conversation(*, captured=None):
+def _seed_conversation(*, captured=None, service="Visita técnica", service_durations=None):
     with SessionLocal() as session:
         customer = get_or_create_customer(session, "+56912345678")
         conv = get_or_create_conversation(session, customer, customer.phone_e164)
@@ -37,13 +37,15 @@ def _seed_conversation(*, captured=None):
             "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
             "availability": "flexible", "_pending": "consent",
         }
-        case = Case(conversation_id=conv.id, customer_id=customer.id, service="Visita técnica")
+        case = Case(conversation_id=conv.id, customer_id=customer.id, service=service)
         technician = User(
             username="booking-technician", password_hash="test", role=UserRole.TECNICO
         )
         session.add_all([case, technician])
         session.flush()
         set_setting(session, "hours.timezone", "UTC")
+        if service_durations is not None:
+            set_setting(session, "booking.service_durations", service_durations)
         conv_id, customer_id, case_id, technician_id = conv.id, customer.id, case.id, technician.id
         inbound = Message(
             wamid="wamid.booking.seed", conversation_id=conv.id,
@@ -110,6 +112,30 @@ def test_customer_confirms_numbered_offer_and_books_with_audit_and_history(
         assert appointment.case_id == case_id and appointment.technician_id == tech_id
         assert appointment.history[0].actor == "assistant"
         assert session.query(AuditLog).filter_by(action="appointment.booked").count() == 1
+
+
+@pytest.mark.parametrize(
+    ("service_durations", "expected_duration"),
+    [({"Caldera": 90}, 90), ({}, 60)],
+)
+def test_chat_booking_uses_configured_service_duration(
+    mock_openai_chat, service_durations, expected_duration
+):
+    conv_id, customer_id, _, tech_id, _ = _seed_conversation(
+        service="Caldera", service_durations=service_durations
+    )
+    with SessionLocal() as session:
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.booking.duration.ask"))
+    _invoke(conv_id, _add_message(conv_id, "1", "wamid.booking.duration.confirm"))
+
+    with SessionLocal() as session:
+        appointment = session.scalar(
+            select(Appointment).where(Appointment.customer_id == customer_id)
+        )
+        assert appointment.duration_minutes == expected_duration
 
 
 def test_no_confirmation_does_not_book(mock_openai_chat):
