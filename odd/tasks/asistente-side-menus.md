@@ -377,3 +377,32 @@ project-scoped history, planning sessions, and the project context page into
   - `npm run build` → passed; existing >500 kB chunk-size warning.
 - No planning-session (sub-unit 1b) changes were made. No push, PR, or merge.
 - **Implementation commit**: `b0875299`.
+
+### Progress / Evidence — slice 3 (1a fix2)
+
+- Removed the forced full-history grid placement and page minimum height from
+  `.assistant-workspace__full-history` and its `> .page-frame`; the history area
+  remains scrollable with `overflow: auto`, while the page and card now size to
+  their content.
+- Full project history sorts filtered threads newest-first by last activity,
+  slices 20 rows per page, then groups the current page by date. Prev/next
+  controls use the existing `Button` primitive and accessible Spanish labels;
+  the live page indicator reads `Página N de M`. Project and search changes
+  reset pagination to page 1. Fetch remains client-side over the existing
+  50-thread backend limit; backend behavior is unchanged.
+- Added a test with 25 matching threads verifying the two-page indicator and
+  page navigation. Existing region and date heading semantics remain intact.
+- **Graph check**: read `graphify-out/GRAPH_REPORT.md`; queried the assistant
+  workspace history/list and CSS layout area. Consulted `ProjectHistory()`,
+  `GroupedThreadList()`, `AssistantWorkspace()`, `groupThreadsByDate()`, and
+  `Card()`. Path: `AssistantWorkspace.tsx --imports_from--> threadDateGroups.ts`;
+  directed AssistantWorkspace → GroupedThreadList and AssistantWorkspace →
+  AssistantWorkspace.css paths were not found.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,148 tests passed
+    (351.06s). Existing React `act(...)` warnings were emitted.
+  - `npm run build` → passed; Vite emitted the existing >500 kB chunk warning.
+- **Implementation commit**: `101d6d38` —
+  `fix(assistant): hug content in the history tab and paginate at 20`.
+- No planning-session (sub-unit 1b) changes. No push, PR, or merge.
