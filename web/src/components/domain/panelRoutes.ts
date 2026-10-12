@@ -12,6 +12,10 @@ export type PanelRoute = {
   appointmentId?: number;
   projectSlug?: string;
   threadId?: number;
+  contextProjectSlug?: string;
+  planningSlug?: string;
+  historyProjectSlug?: string;
+  sessionsProjectSlug?: string;
   planningSessionSlug?: string;
 };
 
@@ -82,10 +86,14 @@ export function pathForRoute(route: PanelRoute): string {
   if (route.view === 'projects' && route.projectSlug) return `${base}/${encodeURIComponent(route.projectSlug)}`;
   if (route.view === 'planning-sessions' && route.planningSessionSlug) return `${base}/${encodeURIComponent(route.planningSessionSlug)}`;
   if (route.view === 'planning-sessions' && route.projectSlug) return `${base}?proyecto=${encodeURIComponent(route.projectSlug)}`;
-  if (route.view === 'chat' && (route.projectSlug || route.threadId !== undefined)) {
+  if (route.view === 'chat' && (route.projectSlug || route.threadId !== undefined || route.contextProjectSlug || route.planningSlug || route.historyProjectSlug || route.sessionsProjectSlug)) {
     const params = new URLSearchParams();
     if (route.projectSlug) params.set('proyecto', route.projectSlug);
     if (route.threadId !== undefined) params.set('thread_id', String(route.threadId));
+    else if (route.contextProjectSlug) params.set('context', route.contextProjectSlug);
+    else if (route.planningSlug) params.set('planning', route.planningSlug);
+    else if (route.historyProjectSlug) params.set('history', route.historyProjectSlug);
+    else if (route.sessionsProjectSlug) params.set('sessions', route.sessionsProjectSlug);
     return `${base}?${params.toString()}`;
   }
   return base;
@@ -127,7 +135,12 @@ export function parsePanelPath(pathname: string): PanelRoute {
     if (view === 'chat') {
       const projectSlug = query.get('proyecto') || undefined;
       const threadId = query.get('thread_id') ? positiveId(query.get('thread_id')!) : null;
-      return { view, ...(projectSlug ? { projectSlug } : {}), ...(threadId ? { threadId } : {}) };
+      const contextProjectSlug = query.get('context') || undefined;
+      const planningSlug = query.get('planning') || undefined;
+      const historyProjectSlug = query.get('history') || undefined;
+      const sessionsProjectSlug = query.get('sessions') || undefined;
+      // Selector precedence: thread > context > planning > history > sessions.
+      return { view, ...(projectSlug ? { projectSlug } : {}), ...(threadId ? { threadId } : {}), ...(!threadId && contextProjectSlug ? { contextProjectSlug } : {}), ...(!threadId && !contextProjectSlug && planningSlug ? { planningSlug } : {}), ...(!threadId && !contextProjectSlug && !planningSlug && historyProjectSlug ? { historyProjectSlug } : {}), ...(!threadId && !contextProjectSlug && !planningSlug && !historyProjectSlug && sessionsProjectSlug ? { sessionsProjectSlug } : {}) };
     }
     if (view === 'planning-sessions') {
       const projectSlug = query.get('proyecto') || undefined;

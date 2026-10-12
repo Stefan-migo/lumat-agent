@@ -213,3 +213,348 @@ never be mistaken for the current project again.
 
 Checks: the same three as slice 1 (`tsc -b --force --noEmit`,
 `vitest run --no-file-parallelism`, `npm run build`), from `web/`.
+
+---
+
+## Slice 3 — left sidebar: project tree + in-assistant tabs (2026-10-12)
+
+Branch: `odd/asistente-menu-izquierdo`
+Worktree: `/home/stefan/repos/lumat-agent-odd-asistente-menu-izquierdo`
+Base: `origin/main` `0046e4c6` (PR #564 merged)
+Status: **planning** — open decisions D1–D3 pending owner confirmation before
+implementation.
+
+### Objective
+
+Redesign the Asistente Lumat **left sidebar** to the owner's reference and turn
+project-scoped history, planning sessions, and the project context page into
+**in-assistant tabs**, so the user never leaves the assistant panel.
+
+### Owner references
+
+- Sidebar variants: **(01)** full sidebar, projects collapsed; **(02)** full
+  sidebar, one project expanded; **(03)** compact icon rail (64 px) with tooltips.
+- **Historial de hilos (04)**: per project, inline expand with a search box,
+  threads grouped by date (**Hoy / Ayer**) and a **"Ver todos los hilos"** action.
+- **Sesiones de planificación (05)**: per project only, inline in the directory
+  tree (search + session list + **"Ver todas las sesiones"**). Opening a session
+  opens it as a **new tab**.
+- **Contexto y archivos**: opens as a **new tab** inside the assistant and is
+  manageable from the same panel (no navigation away).
+- The global planning-sessions route (`/panel/app/planning-sessions`) is
+  **deprecated**.
+
+### Current state (verified 2026-10-12)
+
+- The project tree already exists (`AssistantWorkspace.tsx:301-343`):
+  - "Contexto y archivos" → **navigates OUT** to `/panel/app/projects/:slug`.
+  - "Historial de hilos" → inline expand, **flat list** + search (no date groups,
+    no "Ver todos").
+  - "Sesiones de planificación" → **links OUT** to the global route, only when
+    `projectSessions[slug].state === "ready"`.
+- Tab model is **thread-only**: `openThreadIds: number[]` local state, synced with
+  `?thread_id=`. No router (`pushState` + `panelRoutes.ts`).
+- `listPlanningSessions(slug)` is already called per project
+  (`AssistantWorkspace.tsx:107`); the backend already filters by `?proyecto=`.
+- The global planning view is mounted in **three** places: `PanelShell`
+  (view `planning-sessions`), `AppShell`, and `TechnicianShell` (plus the
+  `PlanningSessions` page).
+- `ProjectResources` renders the project-files view — reusable for the context tab.
+
+### Work units (one commit each, Conventional Commits, no AI attribution)
+
+- **S3-1** `feat(assistant): generalize the workspace tab model` — a tab union
+  (`thread | planning | context`) with URL sync; today's `openThreadIds` is
+  thread-only. Files: `AssistantWorkspace.tsx`, types, tests.
+- **S3-2** `feat(assistant): redesign the left sidebar to the reference` — layout
+  per variants 01/02 and the compact rail (03). Files: `AssistantWorkspace.tsx`,
+  `AssistantWorkspace.css`, tests.
+- **S3-3** `feat(assistant): group project history by date` — Hoy / Ayer groups +
+  "Ver todos los hilos".
+- **S3-4** `feat(assistant): open project planning sessions as tabs` — per-project
+  inline tree + open a session as a tab.
+- **S3-5** `feat(assistant): open project context as a tab` — embed
+  `ProjectResources` instead of navigating away.
+- **S3-6** `refactor(assistant): deprecate the global planning sessions route` —
+  remove the nav entry + view in `PanelShell` / `AppShell` / `TechnicianShell`.
+
+### Open decisions (owner confirmation before implementation)
+
+- **D1 — tab semantics.** Interpretation: a tree item expands **inline** (refs
+  04/05) AND clicking an individual thread/session opens it as a **tab**;
+  "Ver todos/Ver todas" opens the full list as a tab. Confirm or correct.
+- **D2 — deprecation depth.** Remove the global nav entry + view **entirely**, or
+  keep a redirect for old links?
+- **D3 — compact rail scope.** Variant 03 (64 px icon rail) in **this slice**, or
+  deferred?
+
+### Acceptance criteria
+
+- Sidebar matches the reference (variants 01/02; 03 if in scope).
+- "Historial de hilos" groups threads by date and offers "Ver todos los hilos".
+- "Sesiones de planificación" lists per project and opens a session as a tab.
+- "Contexto y archivos" opens as a tab; the user never leaves the assistant.
+- The global planning route is deprecated per D2.
+- No regression in the right panel, composer, thread tabs, or Settings.
+
+### Checks (run from `web/`)
+
+- `npx tsc -b --force --noEmit`
+- `npx vitest run --no-file-parallelism`
+- `npm run build`
+
+### Notes / environment
+
+- Graph `graphify-out/` is **stale** (built from `576b07ef`; HEAD `0046e4c6`) and
+  lists a removed file (`AssistantTabs.tsx`). Refresh with `graphify <root>
+  --update` once at session close.
+- Worktree born without `infra/.env`, `web/node_modules`, or `.venv` — provision
+  before the browser pass.
+
+### Progress / Evidence — slice 3 (S3-1)
+
+- **Implementation** `3717b66e` — `feat(assistant): generalize the workspace tab model`.
+- Replaced thread-only open-tab state with the `thread | planning | context` union;
+  added `context` and `planning` selectors to chat URL parsing/building, using
+  thread > context > planning precedence. Project context now opens in the
+  assistant tab strip and renders `ProjectResources`; planning-session navigation
+  remains unchanged for S3-4.
+- **Graph check** (stale graph from `576b07ef`): queried
+  `assistant workspace tabs projects planning sessions`; consulted
+  `AssistantWorkspace.tsx`, `AgentChat.tsx`, `panelRoutes.ts`, `ProjectResources.tsx`,
+  and the `api.ts` hub. `AssistantWorkspace.tsx` ↔ `ProjectResources.tsx` has an
+  undirected path through `api.ts` (`imports_from`); directed AssistantWorkspace
+  → panelRoutes path was not found.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,145 tests passed.
+  - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
+    chunk-size warning.
+- **Task-doc commit**: pending as a separate documentation-only commit.
+
+### Progress / Evidence — slice 3 (S3-1 fix)
+
+- Reused `assistant-workspace__history-trigger` for the context tree button; the
+  context tab now embeds the full `ProjectsPage` and uses the shared thread-tab
+  title/menu pattern (planning tab aligned), labelled
+  `Configuración · ${project?.name ?? activeContextSlug}`. The embedded page
+  omits only “Volver a proyectos”; “Abrir asistente” closes the context tab via
+  the existing `closeTab` navigation helper.
+- Updated `AssistantWorkspace.test.tsx` to verify the four project tabs, project
+  label, and menu-based closing.
+- **Graph check** (refreshed from `cd96b65b`): consulted `AssistantWorkspace()`
+  and `ProjectsPage()` with path
+  `AssistantWorkspace() --calls--> createProject() <--calls-- ProjectsPage()`;
+  the direct directed path was not present.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → passed, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,145 tests passed.
+  - `npm run build` → passed; existing >500 kB chunk-size warning.
+- **Feature commit** and this task-doc commit: pending.
+
+### Progress / Evidence — slice 3 (1a)
+
+- **Implementation** `7616cd05` — `feat(assistant): group project history by date and open the full history as a tab`.
+- Added a pure Chile-timezone date grouping helper using last activity (`updated_at`, falling back to `created_at`); inline and full history share the same searchable grouped list. The full project history fetches up to 100 threads and opens in an in-assistant `history` tab at `?history=<slug>`, with thread > context > planning > history selector precedence.
+- **Date-label evidence** (unit test with reference date 2026-10-12): today → `Hoy`; yesterday → `Ayer`; 2026-10-05 → `5 oct`. The test also verifies creation-time fallback and newest-first ordering.
+- **Graph check**: queried `assistant workspace project history threads tabs` and `AssistantWorkspace project history WorkspaceTab panelRoutes listChatThreads`; consulted `AssistantWorkspace()`, `WorkspaceTab`, `listChatThreads()`, and `pathForRoute()`. Path: `AssistantWorkspace() --calls--> pathForRoute()`. The supplied stale-graph note said `576b07ef`, but the current `GRAPH_REPORT.md` and HEAD both identified `71f23739` before implementation.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → passed, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → passed, 105 files / 1,147 tests.
+  - `npm run build` → passed; Vite emitted the existing >500 kB chunk-size warning.
+- No planning-session (sub-unit 1b) changes were made.
+
+### Progress / Evidence — slice 3 (1a fix)
+
+- **Implementation** `b0875299` — `fix(assistant): cap the history fetch at the API limit and style the project tree and history tab`.
+- Fixed the full-history 422 by using the backend maximum: `AssistantWorkspace.tsx:178` calls `loadProjectThreads(activeHistorySlug, 50)`; the retry also uses 50. The API contract was not changed.
+- Reused `Menu` with its `trigger="icon"` / `.menu__trigger--icon` for borderless per-thread actions; each row uses the `MessageSquareText` icon and the existing rename/delete targets and handlers. The project tree now indents details and inline history with existing `--space-*` tokens.
+- Full history now uses shared `PageFrame` and `Card`, retains its `Historial de <proyecto>` region, date-group headings and search, and renders the same row/menu building blocks as inline history.
+- **Graph check**: read the target worktree's `graphify-out/GRAPH_REPORT.md`; queried `AssistantWorkspace project history threads tabs` and `AssistantWorkspace thread history grouped list menus page frame primitives CSS`; path `AssistantWorkspace.tsx --references--> AgentChat.tsx --imports_from--> shared/PageFrame.tsx` (2 hops; directed `AssistantWorkspace` → `ProjectHistory` was not found). Consulted `AssistantWorkspace()`, `GroupedThreadList()`, `PageFrame()`, `listChatThreads()`, and shared `PageFrame.tsx`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,147 tests passed (482.36s).
+  - `npm run build` → passed; existing >500 kB chunk-size warning.
+- No planning-session (sub-unit 1b) changes were made. No push, PR, or merge.
+- **Implementation commit**: `b0875299`.
+
+### Progress / Evidence — slice 3 (1a fix2)
+
+- Removed the forced full-history grid placement and page minimum height from
+  `.assistant-workspace__full-history` and its `> .page-frame`; the history area
+  remains scrollable with `overflow: auto`, while the page and card now size to
+  their content.
+- Full project history sorts filtered threads newest-first by last activity,
+  slices 20 rows per page, then groups the current page by date. Prev/next
+  controls use the existing `Button` primitive and accessible Spanish labels;
+  the live page indicator reads `Página N de M`. Project and search changes
+  reset pagination to page 1. Fetch remains client-side over the existing
+  50-thread backend limit; backend behavior is unchanged.
+- Added a test with 25 matching threads verifying the two-page indicator and
+  page navigation. Existing region and date heading semantics remain intact.
+- **Graph check**: read `graphify-out/GRAPH_REPORT.md`; queried the assistant
+  workspace history/list and CSS layout area. Consulted `ProjectHistory()`,
+  `GroupedThreadList()`, `AssistantWorkspace()`, `groupThreadsByDate()`, and
+  `Card()`. Path: `AssistantWorkspace.tsx --imports_from--> threadDateGroups.ts`;
+  directed AssistantWorkspace → GroupedThreadList and AssistantWorkspace →
+  AssistantWorkspace.css paths were not found.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,148 tests passed
+    (351.06s). Existing React `act(...)` warnings were emitted.
+  - `npm run build` → passed; Vite emitted the existing >500 kB chunk warning.
+- **Implementation commit**: `101d6d38` —
+  `fix(assistant): hug content in the history tab and paginate at 20`.
+- No planning-session (sub-unit 1b) changes. No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (1b)
+
+- **Implementation** `5a444a2c` — `feat(assistant): open project planning sessions as tabs`.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx` and
+  `AssistantWorkspace.test.tsx`; `web/src/components/pages/PlanningSessions.tsx`;
+  `web/src/components/domain/panelRoutes.ts` and `panelRoutes.test.ts`; this
+  task document.
+- Replaced the project planning-sessions route link with an expandable inline
+  tree section: searchable project sessions show topic, status, and thread ID;
+  empty/error/denied/loading states remain explicit. “Ver todas las sesiones”
+  opens a project list tab at `?sessions=<projectSlug>`. Selecting a session
+  opens its `?planning=<sessionSlug>` tab, labelled from the loaded topic, and
+  the detail back action returns to the project list tab. Thread and reopen
+  actions continue through the workspace thread navigation. The global route
+  keeps its default browser-back behavior.
+- Added `sessionsProjectSlug` route serialization/parsing with the precedence
+  thread > context > planning > history > sessions, plus a searchable list in
+  the existing `PlanningSessions` surface.
+- **Graph check** (report built from `71f23739`, queried before implementation):
+  consulted `AssistantWorkspace.tsx`, `WorkspaceTab`, `PlanningSessions.tsx`,
+  `panelRoutes.ts`, `listPlanningSessions()`, `PlanningSessionsResponse`, and
+  `sessionStatusLabel()` / `sessionStatusTone()`. Edges observed:
+  `AssistantWorkspace() --calls--> listPlanningSessions()` and
+  `PlanningSessions.tsx --references--> panelRoutes.ts` (1 hop). The requested
+  directed `AssistantWorkspace.tsx` → `PlanningSessions.tsx` path was not found.
+  The graph report's left-sidebar community also connects the workspace tab
+  model, planning sessions, project tree, and global planning route.
+- **Route / trigger evidence**: delegated direct selectors use
+  `pathForRoute` / `parsePanelPath`; assertions cover `?planning=` and
+  `?sessions=` plus precedence. Trigger evidence covers opening inline sessions,
+  the all-sessions tab, the detail tab, and returning to the list without leaving
+  the assistant.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,149 tests
+    passed. Existing React `act(...)` warnings were emitted.
+  - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
+    chunk-size warning.
+- **Documentation commit**: `docs(odd): record asistente-side-menus slice 3 1b`
+  (separate documentation-only commit; the feature commit is `5a444a2c`).
+- No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (S3-2 header + agents)
+
+- Replaced the inline tertiary header actions with full-width primary
+  **Nueva conversación** and secondary **Historial de conversaciones** buttons;
+  retained the existing callbacks, history loading/toggle behavior, and admin /
+  operator role gate. Redesigned the agents section with a live count, working
+  collapse control, circular avatar, status indicator, project, and ⋮ menu;
+  replaced the boxed empty state with a compact muted message.
+- **Agent-project root cause**: `AgentChat` receives the created conversation's
+  project in `result.thread.proyecto` and passes it to `AssistantWorkspace` as
+  `activeProjectSlug`. The new summary is not in `threads` / `defaultThreads` /
+  `projectThreads` until a later list refresh, and an idle thread has no
+  corresponding `activeRuns` entry. The agent card previously consulted only
+  those absent list/run records, so rendered `—`. It now falls back to
+  `activeProjectSlug` only for the currently active thread; its slug is resolved
+  to the loaded project name, and genuinely unknown projects remain `—`.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`,
+  `web/src/components/pages/AssistantWorkspace.test.tsx`,
+  `web/src/components/primitives/Button.tsx`, and this task document.
+- **Graph check**: queried `assistant workspace sidebar header agents active runs
+  project`, read `graphify-out/GRAPH_REPORT.md`, and traversed
+  `AssistantWorkspace.tsx --references--> AgentChat.tsx`. Consulted nodes:
+  `AssistantWorkspace.tsx`, `AgentChat.tsx`, `WorkspaceTab`, and active run /
+  project data represented by `ActiveRun` and `InternalChatThreadSummary`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,152 tests
+    passed; known React `act(...)` warnings. Two earlier full-suite attempts
+    exceeded tool time limits; the third completed successfully.
+  - `npm run build` → exit 0; existing >500 kB chunk-size warning.
+- **Commits**:
+  - `366a6778` — `feat(assistant): redesign the agents section and show the active project`
+  - `69caa6cf` — `feat(assistant): align the sidebar header with the reference`
+  - `b31e8e86` — `fix(ui): forward button titles to native controls` (a latent shared-`Button` defect surfaced while asserting the header tooltips; kept in its own commit because it touches a shared primitive)
+  - `33c7683d` — `docs(odd): record asistente-side-menus slice 3 S3-2`
+- No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (1b corrections, owner browser pass)
+
+- Corrected the project-tree order so the history panel is immediately beneath
+  its trigger and before the planning-sessions trigger/panel, including when both
+  sections are expanded. Added a `CalendarDays` icon to each planning-session
+  row, and replaced only the inline history/session empty and filtered states
+  with compact muted notes. Planning detail back navigation now uses a known
+  project slug or browser history, never a fabricated `default` slug.
+- Restored a focused assertion that **Acciones de proyectos** →
+  **Administrar proyectos** navigates to `/panel/app/projects`.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`,
+  `web/src/components/pages/AssistantWorkspace.test.tsx`, and this task document.
+- **Graph check**: queried `assistant workspace project tree inline history
+  planning sessions`; read `graphify-out/GRAPH_REPORT.md` and its left-sidebar
+  project-tree community. Consulted `AssistantWorkspace.tsx`, `WorkspaceTab`,
+  `PlanningSessions.tsx`, `PlanningSessions()`, and the left-sidebar hyperedge
+  linking project tree, workspace tabs, thread history, and planning sessions.
+  Path observed: `AssistantWorkspace.tsx --imports_from--> PlanningSessions.tsx`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,151 tests
+    passed; existing React `act(...)` warnings were emitted.
+  - `npm run build` → exit 0; existing >500 kB chunk-size warning.
+- **Commits**:
+  - `a0d96fdf` — `fix(assistant): keep inline project details ordered and compact`
+  - documentation-only commit — recorded in this entry's commit history.
+- No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (compact rail + sidebar polish)
+
+- Added the compact left rail in reference order: panel toggle, separators,
+  primary new-conversation action, history action, and accessible Proyectos / Agentes
+  icon buttons with native hover tooltips and focus/hover states. The two rail
+  navigation buttons reopen the expanded sidebar.
+- Anchored the default-history popover below the action buttons, removed its
+  duplicate border declaration, and retained the button's open/close toggle.
+  Removed the project-section menu trigger's border/background. The default
+  project label now uses the loaded `default` project name when available and
+  otherwise falls back to `General` (never “Conversación rápida”).
+- **Follow-up fix** (owner browser pass): the reported double border was the
+  inner `.empty-state` surface (its own border + elevated background) nested
+  inside the already-bordered popover, not a duplicate declaration. Flattened it
+  with `.assistant-workspace__default-history .empty-state { padding: 0; border: 0; background: transparent; }`.
+- **Owner follow-up**: added icons to the Proyectos section menu items (Nuevo
+  proyecto / Administrar proyectos) and removed the unnecessary agent-card ⋮ menu.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`,
+  `web/src/components/pages/AssistantWorkspace.test.tsx`.
+- **Graph check**: read `graphify-out/GRAPH_REPORT.md` (report built from
+  `71f23739`; HEAD was `f0deafb7`), then ran
+  `graphify query "assistant workspace collapsed rail sidebar projects agents tooltip"`
+  and `graphify query "AssistantWorkspace defaultHistoryOpen default project agent card"`.
+  Consulted `AssistantWorkspace.tsx` / `AssistantWorkspace()`, `Tooltip()`,
+  `WorkspaceTab`, `Project`, and `listProjects()`. The report's left-sidebar
+  hyperedge connects the project tree, workspace tab model, thread history, and
+  planning sessions. Directed path attempts from `AssistantWorkspace.tsx` to
+  `Tooltip.tsx` and “Project list” found no path. At close, `graphify --update`
+  re-extracted the graph, but emitted out-of-scope attribution warnings and did
+  not regenerate `GRAPH_REPORT.md`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --no-emit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → first attempt: 104/105 files and
+    1,152/1,153 tests passed; unrelated `ClientFicha.test.tsx` test timed out at
+    5 seconds. Retry: 105/105 files and 1,153/1,153 tests passed. Existing React
+    `act(...)` warnings were emitted.
+  - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
+    chunk-size warning.
+- **Implementation commit**: `e2e3ae40` —
+  `fix(assistant): complete compact sidebar rail and polish`.
+- Task-doc update is committed separately. No push, PR, or merge.

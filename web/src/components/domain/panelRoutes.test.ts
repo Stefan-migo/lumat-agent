@@ -133,6 +133,21 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/chat?thread_id=4')).toEqual({ view: 'chat', threadId: 4 });
   });
 
+  it('round-trips context and planning workspace tab selectors with thread precedence', () => {
+    expect(pathForRoute({ view: 'chat', contextProjectSlug: 'ops' })).toBe('/panel/app/chat?context=ops');
+    expect(parsePanelPath('/panel/app/chat?context=ops')).toEqual({ view: 'chat', contextProjectSlug: 'ops' });
+    expect(pathForRoute({ view: 'chat', planningSlug: 'budget-review' })).toBe('/panel/app/chat?planning=budget-review');
+    expect(parsePanelPath('/panel/app/chat?planning=budget-review')).toEqual({ view: 'chat', planningSlug: 'budget-review' });
+    expect(pathForRoute({ view: 'chat', sessionsProjectSlug: 'ops' })).toBe('/panel/app/chat?sessions=ops');
+    expect(parsePanelPath('/panel/app/chat?sessions=ops')).toEqual({ view: 'chat', sessionsProjectSlug: 'ops' });
+    expect(parsePanelPath('/panel/app/chat?planning=plan&history=old&sessions=ops')).toEqual({ view: 'chat', planningSlug: 'plan' });
+    expect(parsePanelPath('/panel/app/chat?history=old&sessions=ops')).toEqual({ view: 'chat', historyProjectSlug: 'old' });
+    expect(parsePanelPath('/panel/app/chat?planning=budget-review&sessions=ops')).toEqual({ view: 'chat', planningSlug: 'budget-review' });
+    expect(parsePanelPath('/panel/app/chat?thread_id=7&context=ops&planning=plan')).toEqual({ view: 'chat', threadId: 7 });
+    expect(parsePanelPath('/panel/app/chat?context=ops&planning=plan')).toEqual({ view: 'chat', contextProjectSlug: 'ops' });
+    expect(pathForRoute({ view: 'chat', threadId: 7, contextProjectSlug: 'ops', planningSlug: 'plan' })).toBe('/panel/app/chat?thread_id=7');
+  });
+
   it('falls back to dashboard for legacy automation detail paths', () => {
     expect(parsePanelPath('/panel/app/automation-rules/0')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/automation-rules/not-an-id')).toEqual({ view: 'dashboard' });
