@@ -13,12 +13,12 @@ from app.db import session_scope
 from app.models import Case, Conversation
 from app.services import scheduling
 from app.services import technician_schedule
-from app.services.settings import get_hours_timezone
+from app.services.settings import get_hours_timezone, get_service_duration
 
 OFFER_TTL = timedelta(minutes=30)
 MAX_INVALID_REPLIES = 1
 SERVICE = "Visita técnica"
-DURATION_MINUTES = 60
+DEFAULT_DURATION_MINUTES = 60
 
 
 def _fold(value: str) -> str:
@@ -56,9 +56,10 @@ def _new_offer(session, state: ConversationState, now: datetime, *, attempts: in
     )
     if case is None:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_missing_case"}
+    duration = get_service_duration(session, case.service, default=DEFAULT_DURATION_MINUTES)
     technician_schedule.ensure_horizon(session, now)
     assignments = scheduling.open_slots_for_assignment(
-        session, now=now, days=7, duration_minutes=DURATION_MINUTES, limit=3
+        session, now=now, days=7, duration_minutes=duration, limit=3
     )
     if not assignments:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}
@@ -127,6 +128,7 @@ def booking(state: ConversationState) -> dict:
         if case is None or conversation is None or conversation.customer_id != state.customer_id:
             _persist_offer(session, state, None)
             return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_missing_case"}
+        duration = get_service_duration(session, case.service, default=DEFAULT_DURATION_MINUTES)
         timezone_name = get_hours_timezone(session)
         local_date = date.fromisoformat(selected_slot["date"])
         local_time = time.fromisoformat(selected_slot["time"])
@@ -135,7 +137,7 @@ def booking(state: ConversationState) -> dict:
                 session, service=SERVICE, customer_id=state.customer_id, case_id=case.id,
                 technician_id=int(selected_slot["technician_id"]), local_date=local_date,
                 local_time=local_time, timezone_name=timezone_name,
-                duration_minutes=DURATION_MINUTES, actor="assistant",
+                duration_minutes=duration, actor="assistant",
             )
         except (scheduling.Unavailable, scheduling.AppointmentConflict):
             _persist_offer(session, state, None)
