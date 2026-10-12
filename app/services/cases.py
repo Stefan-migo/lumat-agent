@@ -65,9 +65,14 @@ def get_or_create_case(session: Session, conversation_id: int, customer_id: int)
         case = Case(conversation_id=conversation_id, customer_id=customer_id)
         session.add(case)
         session.flush()
+        customer = session.get(Customer, customer_id)
         publish_event(
             session, event_type="case.created", entity_type="case", entity_id=case.id,
-            payload={"customer_id": customer_id, "conversation_id": conversation_id},
+            payload={
+                "customer_id": customer_id,
+                "conversation_id": conversation_id,
+                **({"recipient": customer.phone_e164} if customer and customer.phone_e164 else {}),
+            },
             dedupe_key=f"case:{case.id}:created",
         )
     return case
@@ -80,9 +85,14 @@ def create_manual_case(
     case = Case(conversation_id=None, customer_id=customer_id, service=service, summary=summary)
     session.add(case)
     session.flush()
+    customer = session.get(Customer, customer_id)
     publish_event(
         session, event_type="case.created", entity_type="case", entity_id=case.id,
-        payload={"customer_id": customer_id, "conversation_id": None},
+        payload={
+            "customer_id": customer_id,
+            "conversation_id": None,
+            **({"recipient": customer.phone_e164} if customer and customer.phone_e164 else {}),
+        },
         dedupe_key=f"case:{case.id}:created",
     )
     return case
@@ -147,9 +157,15 @@ def create_handoff_case(
         session, state, summary_text=summary_text, reason=reason
     )
     session.flush()
+    customer = session.get(Customer, case.customer_id)
     publish_event(
         session, event_type="case.updated", entity_type="case", entity_id=case.id,
-        payload={"customer_id": case.customer_id, "conversation_id": case.conversation_id, "status": case.status},
+        payload={
+            "customer_id": case.customer_id,
+            "conversation_id": case.conversation_id,
+            "status": case.status,
+            **({"recipient": customer.phone_e164} if customer and customer.phone_e164 else {}),
+        },
         dedupe_key=f"case:{case.id}:handoff",
     )
     return case
@@ -237,12 +253,14 @@ def update_case(
         },
     )
     session.flush()
+    customer = session.get(Customer, case.customer_id)
     publish_event(
         session, event_type="case.updated", entity_type="case", entity_id=case.id,
         payload={
             "status": case.status,
             "responsible_id": case.responsible_id,
             "amount": float(case.amount) if case.amount is not None else None,
+            **({"recipient": customer.phone_e164} if customer and customer.phone_e164 else {}),
         },
         dedupe_key=f"case:{case.id}:updated:{case.status}:{case.responsible_id}:{case.amount}",
     )

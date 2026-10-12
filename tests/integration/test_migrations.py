@@ -729,6 +729,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("046_automation_rule_target_content",),
         ("047_appointment_calendar_sync_cascade",),
         ("048_technician_weekly_schedule",),
+        ("049_drop_automation_rule_template_event",),
     ]
 
 

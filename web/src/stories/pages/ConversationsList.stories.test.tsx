@@ -19,7 +19,7 @@ describe("ConversationsList", () => {
     await waitFor(() => expect(document.querySelector(".table-card__desktop")).toBeTruthy());
     const desktop = document.querySelector(".table-card__desktop") as HTMLElement;
     expect((await within(desktop).findAllByText(`Cliente #${conversations[0].customer_id}`)).length).toBeGreaterThan(0);
-    expect(fetchMock).toHaveBeenCalledWith("/panel/api/conversations", expect.objectContaining({ credentials: "include" }));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/panel\/api\/conversations\?.*exclude_closed=true.*limit=10/), expect.objectContaining({ credentials: "include" }));
     fetchMock.mockRestore();
   });
 

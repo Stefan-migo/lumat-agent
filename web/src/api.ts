@@ -121,7 +121,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
 }
 
 import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, TechnicianScheduleEntry, TechnicianScheduleResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, StopThreadRunResponse } from './types';
-export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
+export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; exclude_closed?: boolean; emergency?: boolean; has_case?: boolean; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
 export function listConversations(filters: ConversationFilters = {}) {
@@ -129,6 +129,9 @@ export function listConversations(filters: ConversationFilters = {}) {
   if (filters.state) params.set('state', filters.state);
   if (filters.responsible_id !== undefined) params.set('responsible_id', String(filters.responsible_id));
   if (filters.q) params.set('q', filters.q);
+  if (filters.exclude_closed) params.set('exclude_closed', 'true');
+  if (filters.emergency) params.set('emergency', 'true');
+  if (filters.has_case) params.set('has_case', 'true');
   if (filters.limit !== undefined) params.set('limit', String(filters.limit));
   if (filters.offset !== undefined) params.set('offset', String(filters.offset));
   const query = params.toString();

@@ -17,8 +17,7 @@ import {
   SectionEmpty,
   Stale,
   SyncFailure,
-  TechnicianRoster,
-  TechnicianSchedule,
+  Technicians,
 } from "./AgendaPage.stories";
 
 vi.mock("../../api", () => ({
@@ -184,20 +183,19 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     // Agenda actions remain independently available beside optional schedule editing.
     expect(screen.getByRole("button", { name: "Nueva visita" })).toBeInTheDocument();
-    expect(screen.getByText("Horarios de técnicos")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Técnicos" })).toBeInTheDocument();
   });
 
-  it("provides expanded-roster and technician-schedule story variants", async () => {
+  it("provides a technician register story variant", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: "Luis Pérez" }] });
     vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 30, schedule: [] });
-    expect(TechnicianRoster).toBeDefined();
-    expect(TechnicianSchedule).toBeDefined();
+    expect(Technicians).toBeDefined();
 
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
-    await user.click(screen.getByText("Horarios de técnicos"));
-    await user.click(await screen.findByRole("button", { name: "Horarios" }));
-    expect(await screen.findByRole("dialog", { name: "Horario semanal" })).toHaveTextContent("Luis Pérez");
+    await user.click(screen.getByRole("tab", { name: "Técnicos" }));
+    expect((await screen.findAllByText("Luis Pérez")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Editar horario" })).toBeInTheDocument();
     expect(saveTechnicianSchedule).not.toHaveBeenCalled();
   });
 });

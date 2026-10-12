@@ -703,6 +703,42 @@ def test_list_supports_state_and_assignee_filters(client, make_user):
     assert [row["id"] for row in assignee.json()["conversations"]] == [human_id]
 
 
+def test_conversation_queue_filters_and_counts_are_tab_independent(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977778889", name="Queue Filters")
+        session.add(customer)
+        session.flush()
+        rows = [
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT),
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.HUMAN),
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.CLOSED),
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT),
+        ]
+        session.add_all(rows)
+        session.flush()
+        session.add_all([
+            Case(conversation_id=rows[0].id, customer_id=customer.id, status="escalado", emergency=True, acknowledged_at=None),
+            Case(conversation_id=rows[1].id, customer_id=customer.id, status="pendiente", emergency=True, acknowledged_at=datetime.now(timezone.utc)),
+            Case(conversation_id=rows[2].id, customer_id=customer.id, status="pendiente", emergency=True, acknowledged_at=None),
+            Case(conversation_id=rows[3].id, customer_id=customer.id, status="pendiente", emergency=False),
+        ])
+        session.commit()
+        expected = [rows[0].id, rows[1].id, rows[2].id, rows[3].id]
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    all_response = client.get("/panel/api/conversations?exclude_closed=true")
+    emergency_response = client.get("/panel/api/conversations?exclude_closed=true&emergency=true")
+    case_response = client.get("/panel/api/conversations?exclude_closed=true&has_case=true")
+    closed_response = client.get("/panel/api/conversations?state=closed")
+
+    assert all_response.json()["counts"] == {"all": 3, "human": 1, "emergency": 1, "case": 3, "closed": 1}
+    assert {row["id"] for row in all_response.json()["items"]} == set(expected) - {expected[2]}
+    assert [row["id"] for row in emergency_response.json()["items"]] == [expected[0]]
+    assert {row["id"] for row in case_response.json()["items"]} == {expected[0], expected[1], expected[3]}
+    assert [row["id"] for row in closed_response.json()["items"]] == [expected[2]]
+
+
 def test_command_contract_rejects_missing_preconditions_as_json_422(client, make_user):
     _, conversation_id = _seed_conversation(state=ConversationState.BOT)
     make_user("oper", "oper-pass", role="operador")

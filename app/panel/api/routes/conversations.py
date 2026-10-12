@@ -126,6 +126,9 @@ def _queue_base(
     q: str | None,
     state: ConversationState | None,
     responsible_id: int | None,
+    exclude_closed: bool = False,
+    emergency: bool = False,
+    has_case: bool = False,
 ):
     ranked = _ranked_case_ids()
     selected_case = aliased(Case)
@@ -150,6 +153,12 @@ def _queue_base(
     filters = []
     if state is not None:
         filters.append(Conversation.state == state)
+    if exclude_closed:
+        filters.append(Conversation.state != ConversationState.CLOSED)
+    if emergency:
+        filters.extend((selected_case.emergency.is_(True), selected_case.acknowledged_at.is_(None)))
+    if has_case:
+        filters.append(selected_case.id.is_not(None))
     if responsible_id is not None:
         filters.append(Conversation.responsible_id == responsible_id)
     if q:
@@ -162,10 +171,10 @@ def _queue_counts(session: Session, base) -> dict[str, int]:
     filtered = base.subquery()
     row = session.execute(
         select(
-            func.count().label("all"),
+            func.count().filter(filtered.c.state != ConversationState.CLOSED).label("all"),
             func.count().filter(filtered.c.state == ConversationState.HUMAN).label("human"),
-            func.count().filter(filtered.c.selected_case_emergency.is_(True), filtered.c.selected_case_acknowledged_at.is_(None)).label("emergency"),
-            func.count().filter(filtered.c.selected_case_id.is_not(None)).label("case"),
+            func.count().filter(filtered.c.state != ConversationState.CLOSED, filtered.c.selected_case_emergency.is_(True), filtered.c.selected_case_acknowledged_at.is_(None)).label("emergency"),
+            func.count().filter(filtered.c.state != ConversationState.CLOSED, filtered.c.selected_case_id.is_not(None)).label("case"),
             func.count().filter(filtered.c.state == ConversationState.CLOSED).label("closed"),
         ).select_from(filtered)
     ).one()
@@ -178,11 +187,18 @@ def _queue_response(
     q: str | None = None,
     state: ConversationState | None = None,
     responsible_id: int | None = None,
+    exclude_closed: bool = False,
+    emergency: bool = False,
+    has_case: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
     limit = min(max(limit, 1), 100)
-    base = _queue_base(session, q=q, state=state, responsible_id=responsible_id)
+    counts_base = _queue_base(session, q=q, state=None, responsible_id=responsible_id)
+    base = _queue_base(
+        session, q=q, state=state, responsible_id=responsible_id,
+        exclude_closed=exclude_closed, emergency=emergency, has_case=has_case,
+    )
     filtered = base.subquery()
     total = session.scalar(select(func.count()).select_from(filtered)) or 0
     rows = session.execute(
@@ -200,7 +216,7 @@ def _queue_response(
         "total": int(total),
         "offset": offset,
         "limit": limit,
-        "counts": _queue_counts(session, base),
+        "counts": _queue_counts(session, counts_base),
     }
 
 
@@ -209,6 +225,9 @@ def conversations_list(
     state: ConversationState | None = None,
     responsible_id: int | None = None,
     q: str | None = None,
+    exclude_closed: bool = False,
+    emergency: bool = False,
+    has_case: bool = False,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_db),
@@ -216,7 +235,9 @@ def conversations_list(
 ) -> dict:
     """List conversation metadata, most recently active first."""
     return _queue_response(
-        session, q=q, state=state, responsible_id=responsible_id, limit=limit, offset=offset
+        session, q=q, state=state, responsible_id=responsible_id,
+        exclude_closed=exclude_closed, emergency=emergency, has_case=has_case,
+        limit=limit, offset=offset
     )
 
 

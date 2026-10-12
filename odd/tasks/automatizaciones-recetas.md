@@ -224,9 +224,44 @@ local `now >= due_time` (today at HH:MM; the configured weekday at HH:MM for wee
   (tsc -b + vite) green; full serialized `npm test` **104 files, 1108 tests** green.
 
 ### Transversal
-- [ ] **D1 — Evento de pago**.
-- [ ] **D2 — Destinatario en eventos de caso**.
-- [ ] **D3 — Redefinir `template_event`** (contenido vs nombre de evento).
+- [ ] **D1 — Evento de pago** — **FUERA DE ALCANCE (por ahora)**. Confirmado por el owner (2026-10-12):
+  no hay pagos en el sistema y quedan fuera de este alcance. La **Integración de pagos** es un entregable
+  con **presupuesto aparte** dentro del Milestone 3 (`LumatRequest.md` §3.8 / línea 322); los avisos de
+  pago del requisito (`:310`) dependen de eso. El backend no tiene ningún concepto de pago (cero matches
+  de Payment/Quote/Invoice/Stripe/Transbank/MercadoPago/Webpay/Flow/Khipu) y `Case.amount`
+  (`app/models.py:361-378`) es el monto del servicio, no un estado de pago. **D1 no se retoma hasta que
+  exista la integración de pagos.** Recon: Engram `odd/automatizaciones-recetas/d1-d2-recon`.
+- [x] **D2 — Destinatario en eventos de caso** — cerrado en Slice 4 (acotado): el destinatario del
+  cliente (`phone_e164`) viaja en los payloads `case.*` donde se conoce. Sin receta nueva.
+- [x] **D3 — Redefinir `template_event`** — cerrado en Slice 4: removido de raíz (migración `049`). El
+  texto de la notificación se resuelve solo desde `payload.content` / `payload.text` / `rule.content`.
+
+### Slice 4 — Transversal acotado (D2 + D3)
+
+Worktree `../lumat-agent-odd-automatizaciones-recetas-transversal`, branch
+`odd/automatizaciones-recetas-transversal`, base `00e09e3c`. Strict TDD ON
+(`openspec/config.yaml`, runner `uv run pytest tests/`). Migración **049**.
+
+- [x] **T1 — D3: remover `template_event` de raíz** (migración `049_drop_automation_rule_template_event.sql`).
+  El campo hoy duplica `event_type` (las recetas lo setean igual, `recipes.py:78`) y su único rol extra
+  es ser fallback final de texto (`automation.py:158`) + gate redundante de política (`:140`). No está
+  enganchado al registry de plantillas de notificaciones (verificado: `NotificationTemplateVersion` se
+  elige por settings, no por `AutomationRule.template_event`). Removerlo de: `app/models.py` (columna),
+  `app/services/automation.py` (`validate_rule_input`, gate de evaluación, fallback de contenido,
+  serializer), `app/services/recipes.py` (`compile_rule_fields`),
+  `app/panel/api/routes/automation_rules.py`, `app/panel/api/serializers.py`, `web/src/types.ts`;
+  migración nueva; tests actualizados + versión en `tests/integration/test_migrations.py`. El texto pasa
+  a resolverse solo desde `payload.content` / `payload.text` / `rule.content`.
+- [x] **T2 — D2 acotado: destinatario en payloads de caso**. Agregar el destinatario del cliente
+  (`phone_e164`) a los eventos `case.*` donde el cliente se conoce, en `app/services/cases.py` (4 sitios
+  `publish_event`: `case.created` ×2, `case.updated` ×2). Sin receta nueva; el único consumidor
+  (`case_new_request`) es admin-targeted y resuelve desde settings, así que no cambia comportamiento.
+- [x] **T3 — Cerrar slice**: task doc actualizado; verificación backend/frontend verde; review nativo RDD
+  aprobado (lineage `review-5ca037e6e4ca9962`, 4 lentes, 0 hallazgos, authority burned); PR **#563**
+  mergeado a `main` (`1d98576e`) con CI verde (`test` + `panel`).
+
+Route (ODD): T1 y T2 delegados a un writer (2+ archivos no triviales); verificación observada por el
+writer; review nativo RDD por candidato (base `00e09e3c`).
 
 ## Review follow-ups (non-blocking — from A2 RDD `review-9b4846fa6e0c8eb8`)
 
@@ -287,3 +322,14 @@ they are separate later work.
   `4a81fc61` (WU3 tick), `d5a048cf` (WU3 fix R3-003), `8ffd0c64` (WU4 UI). Backend suite **1903**,
   frontend serializado **1108**, `npm run build` verde. Pendiente: review RDD del slice (base `576b07ef`)
   y push/PR del owner.
+- 2026-10-11 — Slice 3 mergeado (PR #561, main `00e09e3c`). Recon read-only de los pendientes:
+  el catálogo tiene 9 recetas y los 11 objetivos del diseño están cubiertos (9 recetas + 2 mecanismos
+  nativos: `_maintain_reminder`, emergencia por `notify.py`). **D1 (pago) queda BLOQUEADO**: no existe
+  concepto de pago en el backend; la integración de pagos es entregable aparte (Milestone 3). Owner
+  decide: diferir D1 y cerrar **D2 acotado + D3** en un slice nuevo. Slice 4 abierto en worktree
+  `../lumat-agent-odd-automatizaciones-recetas-transversal`, branch `odd/automatizaciones-recetas-transversal`,
+  base `00e09e3c`. D3 = remover `template_event` de raíz (migración 049).
+- 2026-10-12 — **Slice 4 cerrado**: D2 (acotado) + D3 mergeados (PR **#563**, main `1d98576e`). Backend
+  **1925** tests verdes; `npm run build` verde; CI verde (`test` + `panel`). Review nativo RDD
+  `review-5ca037e6e4ca9962` aprobado (4 lentes, 0 hallazgos, authority burned). **D1 (pago) queda fuera
+  de alcance**: presupuesto aparte (Milestone 3 §3.8), no hay pagos en el sistema.

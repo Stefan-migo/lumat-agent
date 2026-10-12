@@ -29,5 +29,10 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     globals: true,
     exclude: ['**/node_modules/**', '**/.storybook/quarantine/**/*.test.tsx', 'playwright/**'],
+    // Heavy page-component suites (ClientFicha, ConversationsList) render large
+    // trees across dozens of tests. Under parallel load a single test that runs
+    // in ~1s alone can blow past the 5s default and flake the whole suite. 15s
+    // keeps a real hang bounded while absorbing contention spikes.
+    testTimeout: 15000,
   },
 });
