@@ -304,7 +304,7 @@ describe("AssistantWorkspace", () => {
       const url = String(input);
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
       if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
-      if (url.includes("limit=100")) return new Response(JSON.stringify({ threads: [
+      if (url.includes("limit=50")) return new Response(JSON.stringify({ threads: [
         { id: 91, title: "Hilo de hoy", proyecto: "operaciones", created_at: isoDate(today), updated_at: isoDate(today), run_status: null, approval_status: null },
         { id: 92, title: "Hilo de ayer", proyecto: "operaciones", created_at: isoDate(yesterday), updated_at: isoDate(yesterday), run_status: null, approval_status: null },
         { id: 93, title: "Hilo anterior", proyecto: "operaciones", created_at: isoDate(lastWeek), updated_at: isoDate(lastWeek), run_status: null, approval_status: null },
@@ -326,6 +326,11 @@ describe("AssistantWorkspace", () => {
     expect(await within(fullHistory).findByRole("heading", { name: "Hoy" })).toBeInTheDocument();
     expect(within(fullHistory).getByRole("heading", { name: "Ayer" })).toBeInTheDocument();
     expect(within(fullHistory).getByRole("button", { name: "Hilo anterior" })).toBeInTheDocument();
+    expect(within(fullHistory).getByRole("main")).toBeInTheDocument();
+    await userEvent.setup().click(within(fullHistory).getByRole("button", { name: "Acciones de Hilo de ayer" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Renombrar" }));
+    expect(screen.getByRole("dialog", { name: "Renombrar hilo" })).toBeInTheDocument();
+    await userEvent.setup().keyboard("{Escape}");
     fireEvent.click(within(fullHistory).getByRole("button", { name: "Hilo de ayer" }));
     expect(window.location.search).toContain("thread_id=92");
   });

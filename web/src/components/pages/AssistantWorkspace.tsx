@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, Trash2, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, Trash2, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
+import { Card } from "../primitives/Card";
 import { Icon } from "../primitives/Icon";
 import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
@@ -12,6 +13,7 @@ import { Tabs } from "../primitives/Tabs";
 import { EmptyState } from "../shared/EmptyState";
 import { Dialog } from "../primitives/Dialog";
 import { StateMessage } from "../shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
 import { Input } from "../primitives/Input";
 import { Textarea } from "../primitives/Textarea";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
@@ -173,7 +175,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   }, [loadThreadTabs]);
 
   useEffect(() => {
-    if (activeHistorySlug) void loadProjectThreads(activeHistorySlug, 100);
+    if (activeHistorySlug) void loadProjectThreads(activeHistorySlug, 50);
   }, [activeHistorySlug]);
 
   const navigateToThread = (threadId: number, projectSlug = routeProjectSlug) => {
@@ -382,7 +384,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                             {projectThreads[project.slug].state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
                             {projectThreads[project.slug].state === "error" || projectThreads[project.slug].state === "denied" ? <StateMessage tone="danger" role="alert" title={projectThreads[project.slug].state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
                             {projectThreads[project.slug].state === "empty" ? <EmptyState title="No hay hilos" description="Este proyecto aún no tiene hilos." /> : null}
-                            {projectThreads[project.slug].state === "ready" ? <GroupedThreadList projectName={project.name} threads={projectThreads[project.slug].threads} search={historySearch[project.slug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} onOpen={(thread) => navigateToThread(thread.id, project.slug)} /> : null}
+                            {projectThreads[project.slug].state === "ready" ? <GroupedThreadList projectName={project.name} threads={projectThreads[project.slug].threads} search={historySearch[project.slug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} onOpen={(thread) => navigateToThread(thread.id, project.slug)} onThreadAction={(thread, action) => { setThreadActionError(null); if (action === "rename") { setRenameTarget({ id: thread.id, title: thread.title }); setRenameTitle(thread.title ?? ""); } else setDeleteTarget({ id: thread.id, title: thread.title }); }} /> : null}
                             {projectThreads[project.slug].state === "error" ? <Button variant="secondary" onClick={() => void loadProjectThreads(project.slug)}>Reintentar</Button> : null}
                             <a className="assistant-workspace__view-all-history" href={pathForRoute({ view: "chat", historyProjectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToHistory(project.slug); }}>Ver todos los hilos →</a>
                           </div> : null}
@@ -482,7 +484,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
           </div>
         </Dialog>
-        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} embedded /> : activeHistorySlug ? <ProjectHistory projectSlug={activeHistorySlug} projectName={projects.find((item) => item.slug === activeHistorySlug)?.name ?? activeHistorySlug} history={projectThreads[activeHistorySlug]} search={historySearch[activeHistorySlug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [activeHistorySlug]: value }))} onOpen={(thread) => navigateToThread(thread.id, activeHistorySlug)} onRetry={() => void loadProjectThreads(activeHistorySlug, 100)} /> : children}
+        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} embedded /> : activeHistorySlug ? <ProjectHistory projectSlug={activeHistorySlug} projectName={projects.find((item) => item.slug === activeHistorySlug)?.name ?? activeHistorySlug} history={projectThreads[activeHistorySlug]} search={historySearch[activeHistorySlug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [activeHistorySlug]: value }))} onOpen={(thread) => navigateToThread(thread.id, activeHistorySlug)} onThreadAction={(thread, action) => { setThreadActionError(null); if (action === "rename") { setRenameTarget({ id: thread.id, title: thread.title }); setRenameTitle(thread.title ?? ""); } else setDeleteTarget({ id: thread.id, title: thread.title }); }} onRetry={() => void loadProjectThreads(activeHistorySlug, 50)} /> : children}
       </section>
 
       <aside
@@ -525,24 +527,27 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   );
 }
 
-function ProjectHistory({ projectSlug, projectName, history, search, onSearch, onOpen, onRetry }: { projectSlug: string; projectName: string; history?: { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void; onRetry: () => void }) {
+function ProjectHistory({ projectSlug, projectName, history, search, onSearch, onOpen, onThreadAction, onRetry }: { projectSlug: string; projectName: string; history?: { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void; onThreadAction: (thread: InternalChatThreadSummary, action: "rename" | "delete") => void; onRetry: () => void }) {
   return <section className="assistant-workspace__full-history" aria-label={`Historial de ${projectName}`} data-project={projectSlug}>
-    <h1>Historial · {projectName}</h1>
+    <PageFrame title={`Historial · ${projectName}`}>
+      <Card title="Hilos" className="assistant-workspace__history-card">
     {!history || history.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
     {history?.state === "error" || history?.state === "denied" ? <><StateMessage tone="danger" role="alert" title={history.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /><Button variant="secondary" onClick={onRetry}>Reintentar</Button></> : null}
     {history?.state === "empty" ? <EmptyState title="No hay hilos" description="Este proyecto aún no tiene hilos." /> : null}
-    {history?.state === "ready" ? <GroupedThreadList projectName={projectName} threads={history.threads} search={search} onSearch={onSearch} onOpen={onOpen} /> : null}
+    {history?.state === "ready" ? <GroupedThreadList projectName={projectName} threads={history.threads} search={search} onSearch={onSearch} onOpen={onOpen} onThreadAction={onThreadAction} /> : null}
+      </Card>
+    </PageFrame>
   </section>;
 }
 
-function GroupedThreadList({ projectName, threads, search, onSearch, onOpen }: { projectName: string; threads: InternalChatThreadSummary[]; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void }) {
+function GroupedThreadList({ projectName, threads, search, onSearch, onOpen, onThreadAction }: { projectName: string; threads: InternalChatThreadSummary[]; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void; onThreadAction: (thread: InternalChatThreadSummary, action: "rename" | "delete") => void }) {
   const filtered = threads.filter((thread) => (thread.title || "Sin título").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const groups = groupThreadsByDate(filtered);
   return <>
     <SearchInput aria-label={`Buscar hilos de ${projectName}`} placeholder="Buscar hilo" onSearch={onSearch} />
     {groups.length ? <div className="assistant-workspace__thread-date-groups">{groups.map((group) => <section key={group.label} aria-label={group.label}>
       <h4>{group.label}</h4>
-      <ul>{group.threads.map((thread) => <li key={thread.id}><button type="button" onClick={() => onOpen(thread)}>{thread.title || "Sin título"}</button></li>)}</ul>
+      <ul>{group.threads.map((thread) => <li key={thread.id} className="assistant-workspace__thread-row"><button type="button" className="assistant-workspace__thread-row-open" onClick={() => onOpen(thread)}><Icon icon={MessageSquareText} size="sm" /><span>{thread.title || "Sin título"}</span></button><Menu label={`Acciones de ${thread.title || "hilo"}`} trigger="icon" items={[{ value: "rename", label: "Renombrar", icon: Pencil }, { value: "delete", label: "Eliminar hilo", icon: Trash2, tone: "danger" }]} onSelect={(value) => onThreadAction(thread, value as "rename" | "delete")} /></li>)}</ul>
     </section>)}</div> : <EmptyState title="No encontramos hilos" description="Prueba con otro nombre." />}
   </>;
 }
