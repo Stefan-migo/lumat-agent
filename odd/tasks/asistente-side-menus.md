@@ -483,7 +483,8 @@ project-scoped history, planning sessions, and the project context page into
 - **Commits**:
   - `366a6778` — `feat(assistant): redesign the agents section and show the active project`
   - `69caa6cf` — `feat(assistant): align the sidebar header with the reference`
-  - Documentation commit — recorded below.
+  - `b31e8e86` — `fix(ui): forward button titles to native controls` (a latent shared-`Button` defect surfaced while asserting the header tooltips; kept in its own commit because it touches a shared primitive)
+  - `33c7683d` — `docs(odd): record asistente-side-menus slice 3 S3-2`
 - No push, PR, or merge.
 
 ### Progress / Evidence — slice 3 (1b corrections, owner browser pass)
