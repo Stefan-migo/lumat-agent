@@ -363,7 +363,6 @@ project-scoped history, planning sessions, and the project context page into
   - `npx vitest run --no-file-parallelism` → passed, 105 files / 1,147 tests.
   - `npm run build` → passed; Vite emitted the existing >500 kB chunk-size warning.
 - No planning-session (sub-unit 1b) changes were made.
-- **Task-doc commit**: pending.
 
 ### Progress / Evidence — slice 3 (1a fix)
 
@@ -377,4 +376,4 @@ project-scoped history, planning sessions, and the project context page into
   - `npx vitest run --no-file-parallelism` → 105 files / 1,147 tests passed (482.36s).
   - `npm run build` → passed; existing >500 kB chunk-size warning.
 - No planning-session (sub-unit 1b) changes were made. No push, PR, or merge.
-- **Implementation commit**: `b0875299`; **task-doc commit**: pending.
+- **Implementation commit**: `b0875299`.
