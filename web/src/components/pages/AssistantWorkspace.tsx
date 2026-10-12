@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, Trash2, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, Trash2, Users, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, PlanningSession, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -340,20 +340,29 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           <header className="assistant-workspace__pane-header">
             {projectsVisible ? <><h2>Asistente Lumat</h2><button type="button" className="assistant-workspace__pane-toggle" aria-label="Contraer panel de proyectos" aria-expanded="true" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(false)}><Icon icon={PanelLeft} /></button></> : <button type="button" className="assistant-workspace__pane-toggle" aria-label="Expandir panel de proyectos" aria-expanded="false" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(true)}><Icon icon={PanelLeft} /></button>}
           </header>
+          {!projectsVisible ? <div className="assistant-workspace__rail-separator" aria-hidden="true" /> : null}
           {(role === "admin" || role === "operador") ? <div className="assistant-workspace__default-actions">
             <Button variant="primary" aria-label="Nueva conversación" title="Nueva conversación" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /><span>Nueva conversación</span></Button>
             <Button variant="secondary" aria-label="Historial de conversaciones" title="Historial de conversaciones" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /><span>Historial de conversaciones</span></Button>
+            {projectsVisible && defaultHistoryOpen ? <div className="assistant-workspace__default-history" aria-label="Hilos predeterminados">
+              {defaultThreads.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
+              {defaultThreads.state === "error" || defaultThreads.state === "denied" ? <StateMessage tone="danger" role="alert" title={defaultThreads.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
+              {defaultThreads.state === "empty" ? <EmptyState title="No hay hilos" description="Todavía no hay hilos en el espacio predeterminado." /> : null}
+              {defaultThreads.state === "ready" ? <ul>{defaultThreads.threads.map((thread) => <li key={thread.id}><button type="button" onClick={() => navigateToThread(thread.id, "default")}>{thread.title || "Sin título"}</button></li>)}</ul> : null}
+              {defaultThreads.state === "error" ? <Button variant="secondary" onClick={() => void loadDefaultThreads()}>Reintentar</Button> : null}
+            </div> : null}
           </div> : null}
-        </section>
+          {!projectsVisible ? <>
+            <div className="assistant-workspace__rail-separator" aria-hidden="true" />
+            <nav className="assistant-workspace__rail-actions" aria-label="Navegación del panel de proyectos">
+              <button type="button" aria-label="Proyectos" title="Proyectos" onClick={() => setProjectsVisible(true)}><Icon icon={Folder} /></button>
+              <button type="button" aria-label="Agentes" title="Agentes" onClick={() => { setAgentsExpanded(true); setProjectsVisible(true); }}><Icon icon={Users} /></button>
+            </nav>
+            <div className="assistant-workspace__rail-separator" aria-hidden="true" />
+          </> : null}
+          </section>
         <section className="assistant-workspace__project-section" aria-label="Proyectos" hidden={!projectsVisible}>
           <header className="assistant-workspace__section-header"><h2>Proyectos</h2><Menu label="Acciones de proyectos" trigger="icon" items={[{ value: "create", label: "Nuevo proyecto" }, { value: "manage", label: "Administrar proyectos" }]} onSelect={(value) => { if (value === "create") { setProjectCreateError(null); setCreateProjectOpen(true); } else { window.history.pushState({}, "", pathForRoute({ view: "projects" })); window.dispatchEvent(new PopStateEvent("popstate")); } }} /></header>
-        {projectsVisible && defaultHistoryOpen ? <div className="assistant-workspace__default-history" aria-label="Hilos predeterminados">
-          {defaultThreads.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
-          {defaultThreads.state === "error" || defaultThreads.state === "denied" ? <StateMessage tone="danger" role="alert" title={defaultThreads.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
-          {defaultThreads.state === "empty" ? <EmptyState title="No hay hilos" description="Todavía no hay hilos en el espacio predeterminado." /> : null}
-          {defaultThreads.state === "ready" ? <ul>{defaultThreads.threads.map((thread) => <li key={thread.id}><button type="button" onClick={() => navigateToThread(thread.id, "default")}>{thread.title || "Sin título"}</button></li>)}</ul> : null}
-          {defaultThreads.state === "error" ? <Button variant="secondary" onClick={() => void loadDefaultThreads()}>Reintentar</Button> : null}
-        </div> : null}
         <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
           {projectsData.state === "loading" ? (
@@ -440,7 +449,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
             const run = activeRuns.runs.find((item) => item.thread_id === id);
             const slug = thread?.proyecto ?? run?.proyecto ?? (id === activeThreadId ? activeProjectSlug : undefined);
-            const projectName = slug === "default" ? "Conversación rápida" : slug ? projects.find((project) => project.slug === slug)?.name ?? slug : "—";
+            const projectName = slug === "default" ? projects.find((project) => project.slug === slug)?.name ?? "General" : slug ? projects.find((project) => project.slug === slug)?.name ?? slug : "—";
             return <li key={id}><Avatar name="Orquestador" /><div className="assistant-workspace__agent-copy"><strong>Orquestador</strong><span className="assistant-workspace__agent-status"><i aria-hidden="true" />{run ? stageLabel(run.stage) : "Activo"}</span><p>{projectName}</p></div><Menu label="Acciones de Orquestador" trigger="icon" items={[{ value: "details", label: "Detalles" }]} onSelect={() => undefined} /></li>;
           })}</ul>}
           </> : null}</>;

@@ -226,19 +226,24 @@ describe("AssistantWorkspace", () => {
     expect(contextToggle.querySelector("svg")).toHaveClass("lucide-panel-right");
     expect(projectsToggle).toHaveAttribute("aria-expanded", "false");
     expect(projectsToggle).toHaveAttribute("aria-controls", "assistant-workspace-projects");
+    expect(screen.getByRole("button", { name: "Proyectos" })).toHaveAttribute("title", "Proyectos");
+    expect(screen.getByRole("button", { name: "Agentes" })).toHaveAttribute("title", "Agentes");
     expect(contextToggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(projectsToggle);
     const collapseProjects = screen.getByRole("button", { name: "Contraer panel de proyectos" });
     expect(collapseProjects).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Proyectos" })).not.toBeInTheDocument();
     fireEvent.click(contextToggle);
     const closeContext = screen.getByRole("button", { name: "Cerrar panel del hilo" });
     expect(closeContext.querySelector("svg")).toHaveClass("lucide-panel-right");
     expect(closeContext).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cerrar paneles" })).toBeInTheDocument();
-    fireEvent.click(collapseProjects);
+    fireEvent.click(screen.getByRole("button", { name: "Contraer panel de proyectos" }));
     expect(screen.getByRole("button", { name: "Expandir panel de proyectos" })).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Agentes" }));
+    expect(screen.getByRole("button", { name: "Contraer panel de proyectos" })).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(closeContext);
     expect(screen.getByRole("button", { name: "Abrir panel del hilo" })).toHaveAttribute("aria-expanded", "false");
     expect(within(screen.getByRole("region", { name: "Área del hilo" })).queryByRole("button", { name: /panel de/ })).not.toBeInTheDocument();
@@ -263,6 +268,12 @@ describe("AssistantWorkspace", () => {
     const historyButton = within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial de conversaciones" });
     expect(historyButton).toHaveClass("btn--secondary");
     expect(historyButton).toHaveAttribute("title", "Historial de conversaciones");
+    fireEvent.click(historyButton);
+    expect(historyButton).toHaveAttribute("aria-expanded", "true");
+    await screen.findByRole("button", { name: "Consulta general" });
+    fireEvent.click(historyButton);
+    expect(historyButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Hilos predeterminados")).not.toBeInTheDocument();
     fireEvent.click(historyButton);
     expect(historyButton).toHaveAttribute("aria-expanded", "true");
     await screen.findByRole("button", { name: "Consulta general" });
@@ -513,6 +524,23 @@ describe("AssistantWorkspace", () => {
     expect(await screen.findByText("Calidad de atención", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
     expect(screen.getByText("Activo", { selector: ".assistant-workspace__agent-status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Acciones de Orquestador" })).toBeInTheDocument();
+  });
+
+  it("shows the loaded General project name for a default-space agent", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=92");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/active-runs")) return new Response(JSON.stringify({ active_runs: [{ thread_id: 92, title: "Consulta", proyecto: "default", agent: "orchestrator", stage: "streaming", run_id: "run-92", updated_at: null }] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "default", name: "General", purpose: "Espacio general", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" />);
+
+    expect(await screen.findByText("General", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
+    expect(screen.queryByText("Conversación rápida")).not.toBeInTheDocument();
   });
 
   it("opens selected history threads as tabs and exposes the real create action", async () => {
