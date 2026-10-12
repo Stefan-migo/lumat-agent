@@ -5,7 +5,7 @@ import { ConversationsList } from './ConversationsList';
 
 const row = (id: number, state: string, responsible_id: number | null, extra: Record<string, unknown> = {}) => ({ id, customer_id: id, wa_phone: `+569${id}`, state, responsible_id, version: 2, summary: 'Needs visit', latest_inbound_at: '2026-08-27T10:00:00Z', reply_window_open: true, delivery_summary: { failed: 0, pending: 0, sending: 0, sent: 0, unknown: 0 }, last_message_at: '2026-08-27T10:00:00Z', created_at: '2026-08-27T09:00:00Z', closed_at: null, customer: { id, name: `Cliente ${id}`, phone_e164: `+569${id}` }, case: null, case_id: null, emergency: false, acknowledged_at: null, case_status: null, case_priority: null, captured_data: null, ...extra });
 
-const queue = (items: ReturnType<typeof row>[], counts = { all: items.length, human: 0, emergency: 0, case: 0, closed: 0 }) => ({ items, total: items.length, offset: 0, limit: 20, counts });
+const queue = (items: ReturnType<typeof row>[], counts = { all: items.length, human: 0, emergency: 0, case: 0, closed: 0 }) => ({ items, total: items.length, offset: 0, limit: 10, counts });
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -23,7 +23,7 @@ describe('production conversations list', () => {
     expect(await within(desktop).findByText('Needs visit')).toBeInTheDocument();
     expect(within(desktop).getByText('Cliente 4')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /atención humana/i })).toHaveTextContent('1');
-    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations?exclude_closed=true&limit=10&offset=0', expect.anything());
   });
 
   it('renders markdown summaries as clean plain text', () => {
@@ -83,8 +83,7 @@ describe('production conversations list', () => {
     await userEvent.setup().click(screen.getByRole('tab', { name: /cerradas/i }));
     desktop = document.querySelector('.table-card__desktop') as HTMLElement;
     rows = within(desktop).getAllByRole('row');
-    expect(rows).toHaveLength(2);
-    expect(rows[1]).toHaveTextContent('Cliente 2');
+    expect(rows).toHaveLength(5);
   });
 
   it('requests search and page changes and renders empty state as a DOM row', async () => {
@@ -92,7 +91,7 @@ describe('production conversations list', () => {
     const user = userEvent.setup();
     render(<ConversationsList />);
     await user.type(screen.getByRole('searchbox'), 'heater');
-    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&limit=20&offset=0', expect.anything()));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&exclude_closed=true&limit=10&offset=0', expect.anything()));
     expect(screen.getByText(/no hay conversaciones/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /siguiente/i })).toBeInTheDocument();
   });
@@ -119,7 +118,27 @@ describe('production conversations list', () => {
     expect(trigger).toHaveTextContent('Responsable:');
     await user.click(trigger);
     await user.click(await screen.findByRole('menuitemradio', { name: 'Asignadas a mí' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?responsible_id=7&limit=20&offset=0', expect.anything()));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?responsible_id=7&exclude_closed=true&limit=10&offset=0', expect.anything()));
+  });
+
+  it('maps each tab to server filters and displays the server page range', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ...queue(Array.from({ length: 10 }, (_, index) => row(index + 1, 'bot', null))), total: 34 }), { status: 200 }));
+    const user = userEvent.setup();
+    render(<ConversationsList />);
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?exclude_closed=true&limit=10&offset=0', expect.anything()));
+    expect(screen.getByText(/Mostrando 1–10 de 34 conversaciones/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /página siguiente/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?exclude_closed=true&limit=10&offset=10', expect.anything()));
+    await user.click(screen.getByRole('button', { name: /página anterior/i }));
+    for (const [name, query] of [
+      [/atención humana/i, 'state=human&limit=10&offset=0'],
+      [/emergencias/i, 'exclude_closed=true&emergency=true&limit=10&offset=0'],
+      [/con caso/i, 'exclude_closed=true&has_case=true&limit=10&offset=0'],
+      [/cerradas/i, 'state=closed&limit=10&offset=0'],
+    ] as const) {
+      await user.click(screen.getByRole('tab', { name }));
+      await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith(`/panel/api/conversations?${query}`, expect.anything()));
+    }
   });
 
   it('posts emergency acknowledgement to the case acknowledgement route', async () => {
