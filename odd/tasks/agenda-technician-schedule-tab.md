@@ -126,4 +126,6 @@ nodes `AgendaPage.tsx` (community `AgendaPage.tsx`), `HoursEditor()` / `Settings
   `npx vitest run src/components/pages/AgendaPage.test.tsx -t "loads technician roster|removes the old disclosure|shows roster errors"`
   failed (3 tests) because the `Técnicos` tab did not exist. GREEN:
   `npx vitest run src/components/pages/AgendaPage.test.tsx src/components/shared/TechnicianScheduleEditor.test.tsx src/stories/pages/AgendaPage.stories.test.tsx`
-  passed (3 files, 64 tests). `npm run build` and `git diff --check` passed.
+  passed (3 files, 65 tests). `npm run build` and `git diff --check` passed. Added an additional
+  RED/GREEN test for compact weekday-range summaries: the first run failed because it rendered each
+  weekday separately; the formatter now combines consecutive days with identical hours.

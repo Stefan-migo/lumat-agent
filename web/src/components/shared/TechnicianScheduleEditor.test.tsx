@@ -2,10 +2,21 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getTechnicianSchedule, saveTechnicianSchedule } from "../../api";
-import { TechnicianScheduleEditor } from "./TechnicianScheduleEditor";
+import { formatTechnicianSchedule, TechnicianScheduleEditor } from "./TechnicianScheduleEditor";
 
 vi.mock("../../api", () => ({ ApiError: class ApiError extends Error {}, getTechnicianSchedule: vi.fn(), saveTechnicianSchedule: vi.fn() }));
 describe("TechnicianScheduleEditor", () => {
+  it("summarizes consecutive days that share the same hours", () => {
+    expect(formatTechnicianSchedule([
+      { weekday: 1, opens_at: "09:00:00", closes_at: "18:00:00" },
+      { weekday: 2, opens_at: "09:00:00", closes_at: "18:00:00" },
+      { weekday: 3, opens_at: "09:00:00", closes_at: "18:00:00" },
+      { weekday: 4, opens_at: "09:00:00", closes_at: "18:00:00" },
+      { weekday: 5, opens_at: "09:00:00", closes_at: "18:00:00" },
+      { weekday: 6, opens_at: "09:00:00", closes_at: "14:00:00" },
+    ])).toBe("Lun–Vie 09:00–18:00 · Sáb 09:00–14:00");
+  });
+
   it("loads seven weekdays, validates intervals, saves and reports the updated summary", async () => {
     vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 4, schedule: [] });
     vi.mocked(saveTechnicianSchedule).mockResolvedValue({ technician_id: 4, schedule: [] });

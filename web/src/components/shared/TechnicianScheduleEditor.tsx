@@ -11,7 +11,20 @@ type Day = { enabled: boolean; opens_at: string; closes_at: string };
 const emptyWeek = (): Day[] => DAYS.map(() => ({ enabled: false, opens_at: "09:00", closes_at: "18:00" }));
 export function formatTechnicianSchedule(schedule: TechnicianScheduleEntry[]): string {
   if (!schedule.length) return "Sin horario";
-  return schedule.map(({ weekday, opens_at, closes_at }) => `${DAYS[weekday - 1]} ${opens_at.slice(0, 5)}–${closes_at.slice(0, 5)}`).join(" · ");
+  const days = [...schedule].sort((left, right) => left.weekday - right.weekday);
+  const groups: TechnicianScheduleEntry[][] = [];
+  days.forEach((entry) => {
+    const previous = groups.at(-1);
+    const last = previous?.at(-1);
+    if (previous && last && last.weekday === entry.weekday - 1 && last.opens_at === entry.opens_at && last.closes_at === entry.closes_at) previous.push(entry);
+    else groups.push([entry]);
+  });
+  return groups.map((group) => {
+    const first = group[0];
+    const last = group.at(-1)!;
+    const day = first.weekday === last.weekday ? DAYS[first.weekday - 1] : `${DAYS[first.weekday - 1]}–${DAYS[last.weekday - 1]}`;
+    return `${day} ${first.opens_at.slice(0, 5)}–${first.closes_at.slice(0, 5)}`;
+  }).join(" · ");
 }
 
 export function TechnicianScheduleEditor({ technician, onSaved }: { technician: UserRef; onSaved: (summary: string) => void }) {
