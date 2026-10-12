@@ -527,6 +527,10 @@ project-scoped history, planning sessions, and the project context page into
   Removed the project-section menu trigger's border/background. The default
   project label now uses the loaded `default` project name when available and
   otherwise falls back to `General` (never “Conversación rápida”).
+- **Follow-up fix** (owner browser pass): the reported double border was the
+  inner `.empty-state` surface (its own border + elevated background) nested
+  inside the already-bordered popover, not a duplicate declaration. Flattened it
+  with `.assistant-workspace__default-history .empty-state { padding: 0; border: 0; background: transparent; }`.
 - **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
   `web/src/components/pages/AssistantWorkspace.css`,
   `web/src/components/pages/AssistantWorkspace.test.tsx`.
