@@ -1,7 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { InternalChatThreadSummary } from "../../types";
+import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
 import { AgentChat } from "./AgentChat";
+import { groupThreadsByDate } from "./threadDateGroups";
+
+describe("groupThreadsByDate", () => {
+  it("groups by last activity, uses creation as a fallback, and sorts newest first", () => {
+    const thread = (id: number, updated_at: string | null, created_at: string | null = null): InternalChatThreadSummary => ({ id, title: `Thread ${id}`, proyecto: "ops", updated_at, created_at, run_status: null, approval_status: null });
+    const groups = groupThreadsByDate([
+      thread(1, "2026-10-12T12:00:00-03:00"), thread(2, "2026-10-11T12:00:00-03:00"),
+      thread(3, "2026-10-05T12:00:00-03:00"), thread(4, null, "2026-10-12T09:00:00-03:00"),
+      thread(5, "2026-10-12T08:00:00-03:00"),
+    ], new Date("2026-10-12T15:00:00Z"));
+    expect(groups.map(({ label, threads }) => [label, threads.map(({ id }) => id)])).toEqual([["Hoy", [1, 4, 5]], ["Ayer", [2]], ["5 oct", [3]]]);
+  });
+});
 
 describe("AssistantWorkspace", () => {
   afterEach(() => {
@@ -270,6 +285,49 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revisar inventario" }));
     expect(window.location.search).toContain("proyecto=operaciones");
     expect(window.location.search).toContain("thread_id=82");
+  });
+
+  it("opens the full project history as a tab and renders date groups", async () => {
+    expect(pathForRoute({ view: "chat", historyProjectSlug: "operaciones" })).toBe("/panel/app/chat?history=operaciones");
+    expect(parsePanelPath("/panel/app/chat?history=operaciones")).toEqual({ view: "chat", historyProjectSlug: "operaciones" });
+    expect(parsePanelPath("/panel/app/chat?thread_id=8&context=ops&planning=plan&history=other")).toEqual({ view: "chat", threadId: 8 });
+    expect(parsePanelPath("/panel/app/chat?context=ops&planning=plan&history=other")).toEqual({ view: "chat", contextProjectSlug: "ops" });
+    expect(parsePanelPath("/panel/app/chat?planning=plan&history=other")).toEqual({ view: "chat", planningSlug: "plan" });
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones");
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const lastWeek = new Date(today);
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    const isoDate = (date: Date) => date.toISOString();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
+      if (url.includes("limit=100")) return new Response(JSON.stringify({ threads: [
+        { id: 91, title: "Hilo de hoy", proyecto: "operaciones", created_at: isoDate(today), updated_at: isoDate(today), run_status: null, approval_status: null },
+        { id: 92, title: "Hilo de ayer", proyecto: "operaciones", created_at: isoDate(yesterday), updated_at: isoDate(yesterday), run_status: null, approval_status: null },
+        { id: 93, title: "Hilo anterior", proyecto: "operaciones", created_at: isoDate(lastWeek), updated_at: isoDate(lastWeek), run_status: null, approval_status: null },
+      ] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    await screen.findByRole("button", { name: "Contraer Operaciones" });
+    fireEvent.click(screen.getByRole("button", { name: "Historial de hilos" }));
+    const allThreads = await screen.findByRole("link", { name: "Ver todos los hilos →" });
+    fireEvent.click(allThreads);
+
+    expect(window.location.search).toBe("?history=operaciones");
+    expect(await screen.findByRole("button", { name: "Historial · Operaciones" })).toBeInTheDocument();
+    const fullHistory = screen.getByRole("region", { name: "Historial de Operaciones" });
+    expect(await within(fullHistory).findByRole("heading", { name: "Hoy" })).toBeInTheDocument();
+    expect(within(fullHistory).getByRole("heading", { name: "Ayer" })).toBeInTheDocument();
+    expect(within(fullHistory).getByRole("button", { name: "Hilo anterior" })).toBeInTheDocument();
+    fireEvent.click(within(fullHistory).getByRole("button", { name: "Hilo de ayer" }));
+    expect(window.location.search).toContain("thread_id=92");
   });
 
   it("re-homes project management, project chat, and project planning sessions", async () => {

@@ -18,12 +18,14 @@ import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
+import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
 export type WorkspaceTab =
   | { kind: "thread"; threadId: number }
   | { kind: "planning"; slug: string }
-  | { kind: "context"; projectSlug: string };
+  | { kind: "context"; projectSlug: string }
+  | { kind: "history"; projectSlug: string };
 
 export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
@@ -41,7 +43,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(() => {
     const params = new URLSearchParams(window.location.search);
     const threadId = Number(params.get("thread_id"));
-    return threadId ? [{ kind: "thread", threadId }] : params.get("context") ? [{ kind: "context", projectSlug: params.get("context")! }] : params.get("planning") ? [{ kind: "planning", slug: params.get("planning")! }] : [];
+    return threadId ? [{ kind: "thread", threadId }] : params.get("context") ? [{ kind: "context", projectSlug: params.get("context")! }] : params.get("planning") ? [{ kind: "planning", slug: params.get("planning")! }] : params.get("history") ? [{ kind: "history", projectSlug: params.get("history")! }] : [];
   });
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
@@ -63,6 +65,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const activeThreadId = Number(route.get("thread_id")) || undefined;
   const activeContextSlug = !activeThreadId ? route.get("context") || undefined : undefined;
   const activePlanningSlug = !activeThreadId && !activeContextSlug ? route.get("planning") || undefined : undefined;
+  const activeHistorySlug = !activeThreadId && !activeContextSlug && !activePlanningSlug ? route.get("history") || undefined : undefined;
   const routeProjectSlug = route.get("proyecto") || undefined;
   const panelProjectSlug = activeContextSlug ?? activeProjectSlug ?? routeProjectSlug;
   const downloadArtifact = async (artifact: AssistantArtifact) => {
@@ -104,10 +107,10 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
 
   const stageLabel = (stage: string) => ({ planning: "Planificando", executing: "Ejecutando", verifying: "Verificando", streaming: "Respondiendo" }[stage] ?? "En curso");
 
-  const loadProjectThreads = async (slug: string) => {
+  const loadProjectThreads = async (slug: string, limit = 20) => {
     setProjectThreads((current) => ({ ...current, [slug]: { state: "loading", threads: [] } }));
     try {
-      const result = await listChatThreads(20, slug);
+      const result = await listChatThreads(limit, slug);
       setProjectThreads((current) => ({ ...current, [slug]: { state: result.threads.length ? "ready" : "empty", threads: result.threads } }));
     } catch (error: unknown) {
       setProjectThreads((current) => ({ ...current, [slug]: { state: error instanceof ApiError && error.status === 403 ? "denied" : "error", threads: [] } }));
@@ -163,10 +166,15 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       if (threadId) setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === threadId) ? current : [...current, { kind: "thread", threadId }]);
       else if (params.get("context")) setOpenTabs((current) => current.some((tab) => tab.kind === "context" && tab.projectSlug === params.get("context")) ? current : [...current, { kind: "context", projectSlug: params.get("context")! }]);
       else if (params.get("planning")) setOpenTabs((current) => current.some((tab) => tab.kind === "planning" && tab.slug === params.get("planning")) ? current : [...current, { kind: "planning", slug: params.get("planning")! }]);
+      else if (params.get("history")) setOpenTabs((current) => current.some((tab) => tab.kind === "history" && tab.projectSlug === params.get("history")) ? current : [...current, { kind: "history", projectSlug: params.get("history")! }]);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [loadThreadTabs]);
+
+  useEffect(() => {
+    if (activeHistorySlug) void loadProjectThreads(activeHistorySlug, 100);
+  }, [activeHistorySlug]);
 
   const navigateToThread = (threadId: number, projectSlug = routeProjectSlug) => {
     setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === threadId) ? current : [...current, { kind: "thread", threadId }]);
@@ -184,22 +192,35 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       ? pathForRoute({ view: "chat", ...((thread?.proyecto ?? routeProjectSlug) ? { projectSlug: thread?.proyecto ?? routeProjectSlug } : {}), threadId: tab.threadId })
       : tab.kind === "context"
         ? pathForRoute({ view: "chat", contextProjectSlug: tab.projectSlug })
-        : pathForRoute({ view: "chat", planningSlug: tab.slug });
+        : tab.kind === "planning"
+          ? pathForRoute({ view: "chat", planningSlug: tab.slug })
+          : pathForRoute({ view: "chat", historyProjectSlug: tab.projectSlug });
     window.history.pushState({}, "", target);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const closeTab = (tab: WorkspaceTab) => {
-    const sameTab = (candidate: WorkspaceTab) => candidate.kind === tab.kind && (candidate.kind === "thread" ? candidate.threadId === (tab as Extract<WorkspaceTab, {kind:"thread"}>).threadId : candidate.kind === "context" ? candidate.projectSlug === (tab as Extract<WorkspaceTab, {kind:"context"}>).projectSlug : candidate.slug === (tab as Extract<WorkspaceTab, {kind:"planning"}>).slug);
+    const sameTab = (candidate: WorkspaceTab) => {
+      if (candidate.kind !== tab.kind) return false;
+      if (candidate.kind === "thread" && tab.kind === "thread") return candidate.threadId === tab.threadId;
+      if (candidate.kind === "planning" && tab.kind === "planning") return candidate.slug === tab.slug;
+      return (candidate.kind === "context" || candidate.kind === "history") && (tab.kind === "context" || tab.kind === "history") && candidate.projectSlug === tab.projectSlug;
+    };
     const remaining = openTabs.filter((candidate) => !sameTab(candidate));
     setOpenTabs(remaining);
-    const active = tab.kind === "thread" ? tab.threadId === activeThreadId : tab.kind === "context" ? tab.projectSlug === activeContextSlug : tab.slug === activePlanningSlug;
+    const active = tab.kind === "thread" ? tab.threadId === activeThreadId : tab.kind === "context" ? tab.projectSlug === activeContextSlug : tab.kind === "planning" ? tab.slug === activePlanningSlug : tab.projectSlug === activeHistorySlug;
     if (!active) return;
     if (remaining.length) navigateToTab(remaining[remaining.length - 1]);
     else {
       window.history.pushState({}, "", pathForRoute({ view: "chat" }));
       window.dispatchEvent(new PopStateEvent("popstate"));
     }
+  };
+
+  const navigateToHistory = (slug: string) => {
+    setOpenTabs((current) => current.some((tab) => tab.kind === "history" && tab.projectSlug === slug) ? current : [...current, { kind: "history", projectSlug: slug }]);
+    window.history.pushState({}, "", pathForRoute({ view: "chat", historyProjectSlug: slug }));
+    window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const renameThread = async () => {
@@ -358,12 +379,12 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                           {projectSessions[project.slug]?.state === "error" ? <Button variant="secondary" onClick={() => void loadProjectSessions(project.slug)}>Reintentar</Button> : null}
                           {projectSessions[project.slug]?.state === "ready" ? <a href={pathForRoute({ view: "planning-sessions", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); window.history.pushState({}, "", pathForRoute({ view: "planning-sessions", projectSlug: project.slug })); window.dispatchEvent(new PopStateEvent("popstate")); }}><Icon icon={CalendarDays} size="sm" />Sesiones de planificación</a> : null}
                           {projectThreads[project.slug] ? <div className="assistant-workspace__project-history">
-                            <SearchInput aria-label={`Buscar hilos de ${project.name}`} placeholder="Buscar hilo" onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} />
                             {projectThreads[project.slug].state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
                             {projectThreads[project.slug].state === "error" || projectThreads[project.slug].state === "denied" ? <StateMessage tone="danger" role="alert" title={projectThreads[project.slug].state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /> : null}
                             {projectThreads[project.slug].state === "empty" ? <EmptyState title="No hay hilos" description="Este proyecto aún no tiene hilos." /> : null}
-                            {projectThreads[project.slug].state === "ready" ? (() => { const filtered = projectThreads[project.slug].threads.filter((thread) => (thread.title || "Sin título").toLocaleLowerCase().includes((historySearch[project.slug] || "").trim().toLocaleLowerCase())); return filtered.length ? <ul>{filtered.map((thread) => <li key={thread.id}><button type="button" onClick={() => navigateToThread(thread.id, project.slug)}>{thread.title || "Sin título"}</button></li>)}</ul> : <EmptyState title="No encontramos hilos" description="Prueba con otro nombre." />; })() : null}
+                            {projectThreads[project.slug].state === "ready" ? <GroupedThreadList projectName={project.name} threads={projectThreads[project.slug].threads} search={historySearch[project.slug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} onOpen={(thread) => navigateToThread(thread.id, project.slug)} /> : null}
                             {projectThreads[project.slug].state === "error" ? <Button variant="secondary" onClick={() => void loadProjectThreads(project.slug)}>Reintentar</Button> : null}
+                            <a className="assistant-workspace__view-all-history" href={pathForRoute({ view: "chat", historyProjectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToHistory(project.slug); }}>Ver todos los hilos →</a>
                           </div> : null}
                       </nav>
                     </div>
@@ -414,6 +435,14 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                 <button type="button" aria-current={tab.slug === activePlanningSlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{tab.slug}</button>
                 <Menu label={`Acciones de ${tab.slug}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
               </div>;
+              if (tab.kind === "history") {
+                const project = projects.find((item) => item.slug === tab.projectSlug);
+                const label = `Historial · ${project?.name ?? tab.projectSlug}`;
+                return <div className="assistant-workspace__thread-tab" key={`history:${tab.projectSlug}`} data-active={tab.projectSlug === activeHistorySlug}>
+                  <button type="button" aria-current={tab.projectSlug === activeHistorySlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{label}</button>
+                  <Menu label={`Acciones de ${label}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
+                </div>;
+              }
               const id = tab.threadId;
               const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
               return <div className="assistant-workspace__thread-tab" key={id} data-active={id === activeThreadId}>
@@ -453,7 +482,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
           </div>
         </Dialog>
-        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} embedded /> : children}
+        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} embedded /> : activeHistorySlug ? <ProjectHistory projectSlug={activeHistorySlug} projectName={projects.find((item) => item.slug === activeHistorySlug)?.name ?? activeHistorySlug} history={projectThreads[activeHistorySlug]} search={historySearch[activeHistorySlug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [activeHistorySlug]: value }))} onOpen={(thread) => navigateToThread(thread.id, activeHistorySlug)} onRetry={() => void loadProjectThreads(activeHistorySlug, 100)} /> : children}
       </section>
 
       <aside
@@ -494,6 +523,28 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       </aside>
     </div>
   );
+}
+
+function ProjectHistory({ projectSlug, projectName, history, search, onSearch, onOpen, onRetry }: { projectSlug: string; projectName: string; history?: { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void; onRetry: () => void }) {
+  return <section className="assistant-workspace__full-history" aria-label={`Historial de ${projectName}`} data-project={projectSlug}>
+    <h1>Historial · {projectName}</h1>
+    {!history || history.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando hilos" /> : null}
+    {history?.state === "error" || history?.state === "denied" ? <><StateMessage tone="danger" role="alert" title={history.state === "denied" ? "No tienes permiso para ver estos hilos." : "No pudimos cargar los hilos."} /><Button variant="secondary" onClick={onRetry}>Reintentar</Button></> : null}
+    {history?.state === "empty" ? <EmptyState title="No hay hilos" description="Este proyecto aún no tiene hilos." /> : null}
+    {history?.state === "ready" ? <GroupedThreadList projectName={projectName} threads={history.threads} search={search} onSearch={onSearch} onOpen={onOpen} /> : null}
+  </section>;
+}
+
+function GroupedThreadList({ projectName, threads, search, onSearch, onOpen }: { projectName: string; threads: InternalChatThreadSummary[]; search: string; onSearch: (value: string) => void; onOpen: (thread: InternalChatThreadSummary) => void }) {
+  const filtered = threads.filter((thread) => (thread.title || "Sin título").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const groups = groupThreadsByDate(filtered);
+  return <>
+    <SearchInput aria-label={`Buscar hilos de ${projectName}`} placeholder="Buscar hilo" onSearch={onSearch} />
+    {groups.length ? <div className="assistant-workspace__thread-date-groups">{groups.map((group) => <section key={group.label} aria-label={group.label}>
+      <h4>{group.label}</h4>
+      <ul>{group.threads.map((thread) => <li key={thread.id}><button type="button" onClick={() => onOpen(thread)}>{thread.title || "Sin título"}</button></li>)}</ul>
+    </section>)}</div> : <EmptyState title="No encontramos hilos" description="Prueba con otro nombre." />}
+  </>;
 }
 
 function ContextSection({ id, title, icon, count, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {
