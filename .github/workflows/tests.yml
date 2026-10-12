@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       # Disposable localhost credentials for a throwaway container — not project
@@ -57,11 +57,13 @@ jobs:
   # bare install it fails when package.json and the lockfile disagree, instead of
   # silently rewriting the lockfile.
   #
-  # Known flake: `npm test` carries one timeout-prone test (the AgendaPage
-  # manual-case flow). If it starts flaking here, split this job or harden that
-  # test — never delete the suite.
+  # Suite stability: heavy page-component suites (ClientFicha, ConversationsList)
+  # used to time out under parallel load and flake the run non-deterministically.
+  # The vitest per-test timeout is now 15s (web/vite.config.ts) to absorb that.
+  # If it flakes again, lower vitest concurrency or harden the slow suite —
+  # never delete it.
   panel:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
