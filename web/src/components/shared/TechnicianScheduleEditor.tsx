@@ -56,8 +56,8 @@ export function TechnicianScheduleEditor({ technician, onSaved }: { technician: 
     <div className="technician-schedule-editor__days" aria-label="Días y horarios de atención">
       {week.map((day, index) => <div className="technician-schedule-editor__row" key={DAYS[index]}>
         <Button variant="secondary" className="technician-schedule-editor__day" aria-pressed={day.enabled} disabled={state === "saving"} onClick={() => update(index, { enabled: !day.enabled })}>{DAYS[index]}</Button>
-        <Input label={`Inicio ${DAYS[index]}`} type="time" value={day.opens_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { opens_at: event.target.value })} />
-        <Input label={`Fin ${DAYS[index]}`} type="time" value={day.closes_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { closes_at: event.target.value })} />
+        <Input label="Inicio" aria-label={`Inicio ${DAYS[index]}`} type="time" value={day.opens_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { opens_at: event.target.value })} />
+        <Input label="Fin" aria-label={`Fin ${DAYS[index]}`} type="time" value={day.closes_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { closes_at: event.target.value })} />
       </div>)}
     </div>
     {invalid ? <StateMessage tone="danger" role="alert" title="El horario de fin debe ser posterior al de inicio." /> : null}

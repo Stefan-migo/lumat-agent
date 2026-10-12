@@ -313,7 +313,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
         {rosterState === "error" ? <div className="agenda-recovery"><StateMessage tone="danger" role="alert" title="No pudimos cargar los técnicos" detail="Intenta nuevamente para consultar sus horarios." /><Button variant="secondary" onClick={() => void loadRoster()}>Reintentar</Button></div> : null}
         {rosterState === "ready" && technicians.length === 0 ? <EmptyState title="No hay técnicos disponibles." description="No hay técnicos para configurar." /> : null}
         {rosterState === "ready" && technicians.length > 0 ? <ul className="agenda-technicians__list">{technicians.map((technician) => <li className="settings-hours__item" key={technician.id}>
-          <strong>{technician.username}</strong><span>{scheduleSummaries[technician.id] ?? "Sin horario"}</span>
+          <span className="agenda-technicians__identity"><Icon icon={UserRound} size="sm" /><strong>{technician.username}</strong></span><span className="agenda-technicians__schedule">{scheduleSummaries[technician.id] ?? "Sin horario"}</span>
           <Button variant="secondary" aria-expanded={expandedTechnician === technician.id} onClick={() => setExpandedTechnician(expandedTechnician === technician.id ? null : technician.id)}>{expandedTechnician === technician.id ? "Cerrar editor" : "Editar horario"}</Button>
           {expandedTechnician === technician.id ? <div className="agenda-technicians__editor"><TechnicianScheduleEditor technician={technician} onSaved={(summary) => setScheduleSummaries((current) => ({ ...current, [technician.id]: summary }))} /></div> : null}
         </li>)}</ul> : null}
