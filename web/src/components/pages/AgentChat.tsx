@@ -805,10 +805,6 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
     }
   };
 
-  const persistedActivity = (thread?.assistant_state?.events ?? [])
-    .filter((event) => !runId || event.run_id === runId)
-    .flatMap((event) => event.evidence ?? []);
-  const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
   const activeConversation = messages.length > 0;
   const isRunActive = processing || messages.some((message) => message?.status === "processing") || approval?.status === "pending";
   const toolControlsDisabled = isRunActive || toolPolicySaving;
@@ -838,12 +834,9 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}
       loadThreadTabs={Boolean(onThreadOpened)}
+      activeProjectSlug={thread?.proyecto ?? undefined}
       attachments={attachments}
       artifacts={artifacts}
-      evidence={activityEvidence}
-      plan={plan}
-      lifecycle={lifecycle}
-      processing={processing}
     >
     <PageFrame
       title="Asistente Lumat"
