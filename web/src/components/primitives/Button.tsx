@@ -28,6 +28,7 @@ export function Button({
   role,
   "aria-checked": ariaChecked,
   "aria-pressed": ariaPressed,
+  "aria-expanded": ariaExpanded,
 }: ButtonProps) {
   const classes = ["btn", `btn--${variant}`, className]
     .filter(Boolean)
@@ -58,6 +59,7 @@ export function Button({
       role={role}
       aria-checked={ariaChecked}
       aria-pressed={ariaPressed}
+      aria-expanded={ariaExpanded}
       onClick={onClick}
     >
       {children}

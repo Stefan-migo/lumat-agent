@@ -16,6 +16,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { PageFrame } from "../shared/PageFrame";
 import { Input } from "../primitives/Input";
 import { Textarea } from "../primitives/Textarea";
+import { Avatar } from "../primitives/Avatar";
 import { projectStatusLabel, projectStatusTone, sessionStatusLabel, sessionStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { assistantFileIcon } from "./assistantFileIcon";
@@ -42,6 +43,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [expandedSessions, setExpandedSessions] = useState<Record<string, boolean>>({});
   const [historySearch, setHistorySearch] = useState<Record<string, string>>({});
   const [defaultHistoryOpen, setDefaultHistoryOpen] = useState(false);
+  const [agentsExpanded, setAgentsExpanded] = useState(true);
   const [defaultThreads, setDefaultThreads] = useState<{ state: "idle" | "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>({ state: "idle", threads: [] });
   const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
@@ -339,8 +341,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             {projectsVisible ? <><h2>Asistente Lumat</h2><button type="button" className="assistant-workspace__pane-toggle" aria-label="Contraer panel de proyectos" aria-expanded="true" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(false)}><Icon icon={PanelLeft} /></button></> : <button type="button" className="assistant-workspace__pane-toggle" aria-label="Expandir panel de proyectos" aria-expanded="false" aria-controls="assistant-workspace-projects" onClick={() => setProjectsVisible(true)}><Icon icon={PanelLeft} /></button>}
           </header>
           {(role === "admin" || role === "operador") ? <div className="assistant-workspace__default-actions">
-            <Button variant="tertiary" aria-label="Nueva conversación" title="Nueva conversación" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /><span>Nueva conversación</span></Button>
-            <Button variant="tertiary" aria-label="Historial" title="Historial" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /><span>Historial</span></Button>
+            <Button variant="primary" aria-label="Nueva conversación" onClick={onCreateDefaultThread}><Icon icon={MessageSquarePlus} /><span>Nueva conversación</span></Button>
+            <Button variant="secondary" aria-label="Historial de conversaciones" aria-expanded={defaultHistoryOpen} onClick={() => { const open = !defaultHistoryOpen; setDefaultHistoryOpen(open); if (open) void loadDefaultThreads(); }}><Icon icon={History} /><span>Historial de conversaciones</span></Button>
           </div> : null}
         </section>
         <section className="assistant-workspace__project-section" aria-label="Proyectos" hidden={!projectsVisible}>
@@ -430,14 +432,19 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         </Dialog>
         </section>
         <section className="assistant-workspace__agents" aria-label="Agentes" hidden={!projectsVisible}>
-          <header><h3>Agentes</h3></header>
-          {openTabs.filter((tab): tab is Extract<WorkspaceTab, { kind: "thread" }> => tab.kind === "thread").length === 0 ? <EmptyState title="No hay agentes activos" /> : <ul>{openTabs.filter((tab): tab is Extract<WorkspaceTab, { kind: "thread" }> => tab.kind === "thread").map(({threadId: id}) => {
+          {(() => {
+            const agentTabs = openTabs.filter((tab): tab is Extract<WorkspaceTab, { kind: "thread" }> => tab.kind === "thread");
+            return <><header><h3>Agentes <span className="assistant-workspace__agent-count">{agentTabs.length}</span></h3><button type="button" className="assistant-workspace__agents-toggle" aria-label={agentsExpanded ? "Contraer Agentes" : "Expandir Agentes"} aria-expanded={agentsExpanded} onClick={() => setAgentsExpanded((expanded) => !expanded)}><Icon icon={agentsExpanded ? ChevronDown : ChevronRight} size="sm" /></button></header>
+          {agentsExpanded ? <>
+          {agentTabs.length === 0 ? <p className="assistant-workspace__agents-empty">No hay agentes activos</p> : <ul>{agentTabs.map(({threadId: id}) => {
             const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
             const run = activeRuns.runs.find((item) => item.thread_id === id);
-            const slug = thread?.proyecto ?? run?.proyecto;
+            const slug = thread?.proyecto ?? run?.proyecto ?? (id === activeThreadId ? activeProjectSlug : undefined);
             const projectName = slug === "default" ? "Conversación rápida" : slug ? projects.find((project) => project.slug === slug)?.name ?? slug : "—";
-            return <li key={id}><strong>Orquestador</strong><p>{projectName}</p><span>{run ? stageLabel(run.stage) : "Activo"}</span></li>;
+            return <li key={id}><Avatar name="Orquestador" /><div className="assistant-workspace__agent-copy"><strong>Orquestador</strong><span className="assistant-workspace__agent-status"><i aria-hidden="true" />{run ? stageLabel(run.stage) : "Activo"}</span><p>{projectName}</p></div><Menu label="Acciones de Orquestador" trigger="icon" items={[{ value: "details", label: "Detalles" }]} onSelect={() => undefined} /></li>;
           })}</ul>}
+          </> : null}</>;
+          })()}
         </section>
       </aside>
 

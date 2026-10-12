@@ -39,7 +39,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Asistente Lumat", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Proyectos", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Agentes", level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Agentes 0", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
     expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
     expect(await within(thread).findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
@@ -256,9 +256,15 @@ describe("AssistantWorkspace", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
 
     const { unmount } = render(<AgentChat role="admin" onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)} />);
-    expect(await screen.findByRole("button", { name: "Nueva conversación" })).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Consulta general" }));
+    const newConversation = await screen.findByRole("button", { name: "Nueva conversación" });
+    expect(newConversation).toHaveClass("btn--primary");
+    expect(newConversation.closest(".assistant-workspace__default-actions")).toHaveClass("assistant-workspace__default-actions");
+    const historyButton = within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial de conversaciones" });
+    expect(historyButton).toHaveClass("btn--secondary");
+    fireEvent.click(historyButton);
+    expect(historyButton).toHaveAttribute("aria-expanded", "true");
+    await screen.findByRole("button", { name: "Consulta general" });
+    fireEvent.click(screen.getByRole("button", { name: "Consulta general" }));
     expect(window.location.search).toContain("thread_id=72");
     fireEvent.click(screen.getByRole("button", { name: "Nueva conversación" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" })));
@@ -267,11 +273,11 @@ describe("AssistantWorkspace", () => {
     unmount();
     const operator = render(<AgentChat role="operador" />);
     expect(await screen.findByRole("button", { name: "Nueva conversación" })).toBeInTheDocument();
-    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
     operator.unmount();
     render(<AgentChat role="tecnico" />);
     expect(screen.queryByRole("button", { name: "Nueva conversación" })).not.toBeInTheDocument();
-    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).queryByRole("button", { name: "Historial" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Proyectos" })).queryByRole("button", { name: "Historial de conversaciones" })).not.toBeInTheDocument();
   });
 
   it("filters inline project history without rendering a static agent roster", async () => {
@@ -491,6 +497,22 @@ describe("AssistantWorkspace", () => {
     expect(await screen.findByText("No hay agentes activos")).toBeInTheDocument();
   });
 
+  it("shows the selected project's name for a newly created chat before thread lists refresh", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=calidad-atencion");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads" && init?.method === "POST") return new Response(JSON.stringify({ thread: { id: 88, proyecto: "calidad-atencion", status: "open" }, messages: [] }), { status: 201 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "calidad-atencion", name: "Calidad de atención", purpose: "Calidad", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?proyecto=calidad-atencion&thread_id=${id}`)} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Nueva conversación" }));
+    expect(await screen.findByText("Calidad de atención", { selector: ".assistant-workspace__agents li p" })).toBeInTheDocument();
+    expect(screen.getByText("Activo", { selector: ".assistant-workspace__agent-status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de Orquestador" })).toBeInTheDocument();
+  });
+
   it("opens selected history threads as tabs and exposes the real create action", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -513,9 +535,9 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" onThreadOpened={onThreadOpened} />);
 
     const projectsSidebar = screen.getByRole("complementary", { name: "Proyectos" });
-    expect(within(projectsSidebar).getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    expect(within(projectsSidebar).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Revisión KB" })).not.toBeInTheDocument();
-    fireEvent.click(within(projectsSidebar).getByRole("button", { name: "Historial" }));
+    fireEvent.click(within(projectsSidebar).getByRole("button", { name: "Historial de conversaciones" }));
     fireEvent.click(await screen.findByRole("button", { name: "Agenda semanal" }));
     const historyThread = await screen.findByRole("button", { name: "Revisión KB" });
     fireEvent.click(historyThread);
