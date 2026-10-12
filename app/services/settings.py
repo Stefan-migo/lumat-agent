@@ -25,6 +25,7 @@ app/services/customers.py / audit.py style).
 from __future__ import annotations
 
 import logging
+import unicodedata
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -141,6 +142,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cost.llm_rates": DEFAULT_LLM_RATES,
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
+    "booking.service_durations": {},
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
     "emergency.keywords": DEFAULT_EMERGENCY_KEYWORDS,
     # EM-3: safety protocol content delivered by the emergency node (T4.2).
@@ -178,6 +180,30 @@ def get_setting(session: Session, key: str, default: Any = None) -> Any:
         return row.value
     if key in SETTINGS_DEFAULTS:
         return SETTINGS_DEFAULTS[key]
+    return default
+
+
+def get_service_duration(
+    session: Session, service: str | None, default: int = 60
+) -> int:
+    """Return a configured positive duration for a normalized service name."""
+    if not isinstance(service, str) or not service.strip():
+        return default
+
+    durations = get_setting(session, "booking.service_durations", default={})
+    if not isinstance(durations, dict):
+        return default
+
+    def normalize(value: str) -> str:
+        decomposed = unicodedata.normalize("NFKD", value.casefold().strip())
+        return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+    service_key = normalize(service)
+    for key, duration in durations.items():
+        if isinstance(key, str) and normalize(key) == service_key:
+            if isinstance(duration, int) and not isinstance(duration, bool) and duration > 0:
+                return duration
+            return default
     return default
 
 
