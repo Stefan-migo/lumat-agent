@@ -173,6 +173,19 @@ describe("AssistantWorkspace", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
+  it("navigates from project actions to project management", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).includes("/panel/api/projects")
+      ? new Response(JSON.stringify({ projects: [] }), { status: 200 })
+      : new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 }));
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de proyectos" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Administrar proyectos" }));
+
+    expect(window.location.pathname).toBe("/panel/app/projects");
+  });
+
   it("keeps the project dialog open and reports API failures honestly", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -385,6 +398,7 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(sessionsToggle);
     expect(await screen.findByRole("link", { name: "Ver todas las sesiones →" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Plan/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Plan/ }).querySelector("svg")).toHaveClass("lucide-calendar-days");
     expect(screen.getByText("Activa")).toBeInTheDocument();
     expect(screen.getByText("Hilo 3")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Ver todas las sesiones →" }));
@@ -402,6 +416,29 @@ describe("AssistantWorkspace", () => {
     expect(window.location.search).toContain("proyecto=operaciones");
   });
 
+  it("keeps each expanded project detail directly below its trigger", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
+      if (url.includes("proyecto=operaciones")) return new Response(JSON.stringify({ threads: [{ id: 85, title: "Hilo de prueba", proyecto: "operaciones", created_at: null, updated_at: null, run_status: null, approval_status: null }] }), { status: 200 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
+    const historyTrigger = screen.getByRole("button", { name: "Historial de hilos" });
+    fireEvent.click(historyTrigger);
+    const historyBlock = await screen.findByRole("searchbox", { name: "Buscar hilos de Operaciones" });
+    const sessionsTrigger = screen.getByRole("button", { name: "Sesiones de planificación" });
+    fireEvent.click(sessionsTrigger);
+    const sessionsBlock = await screen.findByText("No hay sesiones de planificación. Este proyecto aún no tiene sesiones.");
+
+    expect(historyTrigger.compareDocumentPosition(historyBlock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(historyBlock.compareDocumentPosition(sessionsTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sessionsTrigger.compareDocumentPosition(sessionsBlock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows an honest empty state for a project without planning sessions", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
@@ -413,7 +450,7 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" />);
     fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
     fireEvent.click(screen.getByRole("button", { name: "Sesiones de planificación" }));
-    expect(await screen.findByText("Este proyecto aún no tiene sesiones.")).toBeInTheDocument();
+    expect(await screen.findByText("No hay sesiones de planificación. Este proyecto aún no tiene sesiones.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Ver todas las sesiones →" })).not.toBeInTheDocument();
   });
 
