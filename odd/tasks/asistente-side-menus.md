@@ -448,3 +448,32 @@ project-scoped history, planning sessions, and the project context page into
 - **Documentation commit**: `docs(odd): record asistente-side-menus slice 3 1b`
   (separate documentation-only commit; the feature commit is `5a444a2c`).
 - No push, PR, or merge.
+
+### Progress / Evidence — slice 3 (1b corrections, owner browser pass)
+
+- Corrected the project-tree order so the history panel is immediately beneath
+  its trigger and before the planning-sessions trigger/panel, including when both
+  sections are expanded. Added a `CalendarDays` icon to each planning-session
+  row, and replaced only the inline history/session empty and filtered states
+  with compact muted notes. Planning detail back navigation now uses a known
+  project slug or browser history, never a fabricated `default` slug.
+- Restored a focused assertion that **Acciones de proyectos** →
+  **Administrar proyectos** navigates to `/panel/app/projects`.
+- **Files**: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`,
+  `web/src/components/pages/AssistantWorkspace.test.tsx`, and this task document.
+- **Graph check**: queried `assistant workspace project tree inline history
+  planning sessions`; read `graphify-out/GRAPH_REPORT.md` and its left-sidebar
+  project-tree community. Consulted `AssistantWorkspace.tsx`, `WorkspaceTab`,
+  `PlanningSessions.tsx`, `PlanningSessions()`, and the left-sidebar hyperedge
+  linking project tree, workspace tabs, thread history, and planning sessions.
+  Path observed: `AssistantWorkspace.tsx --imports_from--> PlanningSessions.tsx`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,151 tests
+    passed; existing React `act(...)` warnings were emitted.
+  - `npm run build` → exit 0; existing >500 kB chunk-size warning.
+- **Commits**:
+  - `a0d96fdf` — `fix(assistant): keep inline project details ordered and compact`
+  - documentation-only commit — recorded in this entry's commit history.
+- No push, PR, or merge.
