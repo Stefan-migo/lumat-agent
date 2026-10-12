@@ -331,3 +331,23 @@ project-scoped history, planning sessions, and the project context page into
   - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
     chunk-size warning.
 - **Task-doc commit**: pending as a separate documentation-only commit.
+
+### Progress / Evidence — slice 3 (S3-1 fix)
+
+- Reused `assistant-workspace__history-trigger` for the context tree button; the
+  context tab now embeds the full `ProjectsPage` and uses the shared thread-tab
+  title/menu pattern (planning tab aligned), labelled
+  `Configuración · ${project?.name ?? activeContextSlug}`. The embedded page
+  omits only “Volver a proyectos”; “Abrir asistente” closes the context tab via
+  the existing `closeTab` navigation helper.
+- Updated `AssistantWorkspace.test.tsx` to verify the four project tabs, project
+  label, and menu-based closing.
+- **Graph check** (refreshed from `cd96b65b`): consulted `AssistantWorkspace()`
+  and `ProjectsPage()` with path
+  `AssistantWorkspace() --calls--> createProject() <--calls-- ProjectsPage()`;
+  the direct directed path was not present.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → passed, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,145 tests passed.
+  - `npm run build` → passed; existing >500 kB chunk-size warning.
+- **Feature commit** and this task-doc commit: pending.
