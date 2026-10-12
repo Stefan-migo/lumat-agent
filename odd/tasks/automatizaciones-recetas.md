@@ -224,13 +224,13 @@ local `now >= due_time` (today at HH:MM; the configured weekday at HH:MM for wee
   (tsc -b + vite) green; full serialized `npm test` **104 files, 1108 tests** green.
 
 ### Transversal
-- [ ] **D1 — Evento de pago** — **DIFERIDO / BLOQUEADO**. No existe ningún concepto de pago en el
-  backend: ni entidad, ni columna, ni evento (cero matches de Payment/Quote/Invoice/Stripe/Transbank/
-  MercadoPago/Webpay/Flow/Khipu). `Case.amount` (`app/models.py:361-378`) es el monto del servicio
-  (CLP), no un estado de pago, y `update_case` no emite evento de pago. Los avisos de pago sí están en
-  el requisito (`LumatRequest.md:310`) pero "Integración de pagos" es un entregable aparte del
-  Milestone 3 (`LumatRequest.md:322`). Requiere decisión de producto (fuente de verdad de "pagado")
-  antes de tocar código. Recon: Engram `odd/automatizaciones-recetas/d1-d2-recon`.
+- [ ] **D1 — Evento de pago** — **FUERA DE ALCANCE (por ahora)**. Confirmado por el owner (2026-10-12):
+  no hay pagos en el sistema y quedan fuera de este alcance. La **Integración de pagos** es un entregable
+  con **presupuesto aparte** dentro del Milestone 3 (`LumatRequest.md` §3.8 / línea 322); los avisos de
+  pago del requisito (`:310`) dependen de eso. El backend no tiene ningún concepto de pago (cero matches
+  de Payment/Quote/Invoice/Stripe/Transbank/MercadoPago/Webpay/Flow/Khipu) y `Case.amount`
+  (`app/models.py:361-378`) es el monto del servicio, no un estado de pago. **D1 no se retoma hasta que
+  exista la integración de pagos.** Recon: Engram `odd/automatizaciones-recetas/d1-d2-recon`.
 - [x] **D2 — Destinatario en eventos de caso** — cerrado en Slice 4 (acotado): el destinatario del
   cliente (`phone_e164`) viaja en los payloads `case.*` donde se conoce. Sin receta nueva.
 - [x] **D3 — Redefinir `template_event`** — cerrado en Slice 4: removido de raíz (migración `049`). El
@@ -331,5 +331,5 @@ they are separate later work.
   base `00e09e3c`. D3 = remover `template_event` de raíz (migración 049).
 - 2026-10-12 — **Slice 4 cerrado**: D2 (acotado) + D3 mergeados (PR **#563**, main `1d98576e`). Backend
   **1925** tests verdes; `npm run build` verde; CI verde (`test` + `panel`). Review nativo RDD
-  `review-5ca037e6e4ca9962` aprobado (4 lentes, 0 hallazgos, authority burned). **D1 (pago) sigue
-  bloqueado por decisión de producto** (no existe dominio de pago en el backend).
+  `review-5ca037e6e4ca9962` aprobado (4 lentes, 0 hallazgos, authority burned). **D1 (pago) queda fuera
+  de alcance**: presupuesto aparte (Milestone 3 §3.8), no hay pagos en el sistema.
