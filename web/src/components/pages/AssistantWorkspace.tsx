@@ -17,7 +17,7 @@ import { Textarea } from "../primitives/Textarea";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { assistantFileIcon } from "./assistantFileIcon";
-import { ProjectResources } from "./ProjectResources";
+import { ProjectsPage } from "./ProjectsPage";
 import "./AssistantWorkspace.css";
 
 export type WorkspaceTab =
@@ -351,7 +351,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                   {expanded ? (
                     <div className="assistant-workspace__project-details">
                       <nav aria-label={`Navegación de ${project.name}`}>
-                      <button type="button" onClick={() => navigateToProject(project, "context")}><Icon icon={FileText} size="sm" />Contexto y archivos</button>
+                      <button type="button" className="assistant-workspace__history-trigger" onClick={() => navigateToProject(project, "context")}><Icon icon={FileText} size="sm" />Contexto y archivos</button>
                           <button type="button" className="assistant-workspace__history-trigger" aria-expanded={projectThreads[project.slug] !== undefined} onClick={() => { if (projectThreads[project.slug]) setProjectThreads((current) => { const next = { ...current }; delete next[project.slug]; return next; }); else void loadProjectThreads(project.slug); }}><Icon icon={History} size="sm" />Historial de hilos</button>
                           {projectSessions[project.slug]?.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando sesiones de planificación" /> : null}
                           {projectSessions[project.slug]?.state === "error" || projectSessions[project.slug]?.state === "denied" ? <StateMessage tone="danger" role="alert" title={projectSessions[project.slug].state === "denied" ? "No tienes permiso para ver estas sesiones." : "No pudimos cargar las sesiones de planificación."} /> : null}
@@ -404,14 +404,15 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
               if (tab.kind === "context") {
                 const project = projects.find((item) => item.slug === tab.projectSlug);
                 const active = tab.projectSlug === activeContextSlug;
+                const label = `Configuración · ${project?.name ?? tab.projectSlug}`;
                 return <div className="assistant-workspace__thread-tab" key={`context:${tab.projectSlug}`} data-active={active}>
-                  <button type="button" aria-current={active ? "page" : undefined} onClick={() => navigateToTab(tab)}>{project?.name ?? "Contexto y archivos"}</button>
-                  <Button variant="tertiary" aria-label={`Cerrar pestaña ${project?.name ?? "Contexto y archivos"}`} onClick={() => closeTab(tab)}><Icon icon={X} size="sm" /></Button>
+                  <button type="button" aria-current={active ? "page" : undefined} onClick={() => navigateToTab(tab)}>{label}</button>
+                  <Menu label={`Acciones de ${label}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
                 </div>;
               }
               if (tab.kind === "planning") return <div className="assistant-workspace__thread-tab" key={`planning:${tab.slug}`} data-active={tab.slug === activePlanningSlug}>
                 <button type="button" aria-current={tab.slug === activePlanningSlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{tab.slug}</button>
-                <Button variant="tertiary" aria-label={`Cerrar pestaña ${tab.slug}`} onClick={() => closeTab(tab)}><Icon icon={X} size="sm" /></Button>
+                <Menu label={`Acciones de ${tab.slug}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
               </div>;
               const id = tab.threadId;
               const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
@@ -452,7 +453,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
           </div>
         </Dialog>
-        {activeContextSlug ? (activeProject ? <ProjectResources projectSlug={activeProject.slug} projectId={activeProject.id} role={role} /> : projectsData.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyectos" /> : <EmptyState title="Proyecto no disponible" description="No encontramos este proyecto." />) : children}
+        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} embedded /> : children}
       </section>
 
       <aside

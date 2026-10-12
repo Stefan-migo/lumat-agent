@@ -85,6 +85,7 @@ describe("AssistantWorkspace", () => {
   it("opens project context as a tab and closes it without changing thread tab behavior", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
+      if (url.endsWith("/panel/api/projects/operaciones")) return new Response(JSON.stringify({ project: { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", config: { instructions: "Instrucciones del proyecto", skills: [] }, created_at: null, updated_at: null } }), { status: 200 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
       if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
@@ -96,9 +97,13 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
     fireEvent.click(screen.getByRole("button", { name: "Contexto y archivos" }));
     expect(window.location.search).toBe("?context=operaciones");
-    expect(await screen.findByRole("button", { name: /Cerrar pestaña/ })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Archivos y conocimiento" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Cerrar pestaña/ }));
+    expect(await screen.findByRole("button", { name: "Configuración · Operaciones" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Instrucciones del proyecto" })).toBeInTheDocument();
+    const projectPage = screen.getByRole("main");
+    for (const label of ["Contexto", "Hilos", "Agentes", "Skills"]) expect(within(projectPage).getByRole("tab", { name: label })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de Configuración · Operaciones" })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de Configuración · Operaciones" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
     expect(window.location.search).toBe("");
     expect(screen.queryByRole("heading", { name: "Archivos y conocimiento" })).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
