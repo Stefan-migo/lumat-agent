@@ -75,11 +75,33 @@ describe("AssistantWorkspace", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyecto" }), { target: { value: "operaciones" } });
     await waitFor(() => expect(screen.getByText("Operaciones")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Operaciones").closest("button")!);
-    expect(screen.getByRole("link", { name: "Contexto y archivos" })).toHaveAttribute("href", "/panel/app/projects/operaciones");
+    expect(screen.getByRole("button", { name: "Contexto y archivos" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Historial de hilos" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Agregar agente" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Contraer Operaciones" }));
     expect(screen.queryByRole("link", { name: "Contexto y archivos" })).not.toBeInTheDocument();
+  });
+
+  it("opens project context as a tab and closes it without changing thread tab behavior", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [{ id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null }] }), { status: 200 });
+      if (url.includes("/planning/sessions")) return new Response(JSON.stringify({ sessions: [] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.includes("/project-files")) return new Response(JSON.stringify({ files: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Expandir Operaciones" }));
+    fireEvent.click(screen.getByRole("button", { name: "Contexto y archivos" }));
+    expect(window.location.search).toBe("?context=operaciones");
+    expect(await screen.findByRole("button", { name: /Cerrar pestaña/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Archivos y conocimiento" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar pestaña/ }));
+    expect(window.location.search).toBe("");
+    expect(screen.queryByRole("heading", { name: "Archivos y conocimiento" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
   });
 
   it("shows a retryable error instead of fabricated project rows", async () => {

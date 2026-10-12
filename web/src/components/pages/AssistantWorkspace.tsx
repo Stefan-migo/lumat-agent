@@ -17,7 +17,13 @@ import { Textarea } from "../primitives/Textarea";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { assistantFileIcon } from "./assistantFileIcon";
+import { ProjectResources } from "./ProjectResources";
 import "./AssistantWorkspace.css";
+
+export type WorkspaceTab =
+  | { kind: "thread"; threadId: number }
+  | { kind: "planning"; slug: string }
+  | { kind: "context"; projectSlug: string };
 
 export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
@@ -32,9 +38,10 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [threadTitles, setThreadTitles] = useState<Record<number, string>>({});
-  const [openThreadIds, setOpenThreadIds] = useState<number[]>(() => {
-    const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
-    return threadId ? [threadId] : [];
+  const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const threadId = Number(params.get("thread_id"));
+    return threadId ? [{ kind: "thread", threadId }] : params.get("context") ? [{ kind: "context", projectSlug: params.get("context")! }] : params.get("planning") ? [{ kind: "planning", slug: params.get("planning")! }] : [];
   });
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
@@ -54,8 +61,10 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [contextSections, setContextSections] = useState<Record<string, boolean>>({ project: true });
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
+  const activeContextSlug = !activeThreadId ? route.get("context") || undefined : undefined;
+  const activePlanningSlug = !activeThreadId && !activeContextSlug ? route.get("planning") || undefined : undefined;
   const routeProjectSlug = route.get("proyecto") || undefined;
-  const panelProjectSlug = activeProjectSlug ?? routeProjectSlug;
+  const panelProjectSlug = activeContextSlug ?? activeProjectSlug ?? routeProjectSlug;
   const downloadArtifact = async (artifact: AssistantArtifact) => {
     setBusyArtifactId(artifact.id);
     setArtifactError(null);
@@ -68,7 +77,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
   const loadProjects = useCallback(() => listProjects(), []);
-  const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(panelProjectSlug));
+  const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
   const projects = projectsData.data?.projects ?? [];
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const activeThread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((thread) => thread.id === activeThreadId);
@@ -142,23 +151,25 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
 
   useEffect(() => {
     if (loadThreadTabs && activeThreadId) {
-      setOpenThreadIds((current) => current.includes(activeThreadId) ? current : [...current, activeThreadId]);
+      setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === activeThreadId) ? current : [...current, { kind: "thread", threadId: activeThreadId }]);
     }
   }, [activeThreadId, loadThreadTabs]);
 
   useEffect(() => {
-    if (!loadThreadTabs) return;
     const onPopState = () => {
       setLocationKey(`${window.location.pathname}${window.location.search}`);
       const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
-      if (threadId) setOpenThreadIds((current) => current.includes(threadId) ? current : [...current, threadId]);
+      const params = new URLSearchParams(window.location.search);
+      if (threadId) setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === threadId) ? current : [...current, { kind: "thread", threadId }]);
+      else if (params.get("context")) setOpenTabs((current) => current.some((tab) => tab.kind === "context" && tab.projectSlug === params.get("context")) ? current : [...current, { kind: "context", projectSlug: params.get("context")! }]);
+      else if (params.get("planning")) setOpenTabs((current) => current.some((tab) => tab.kind === "planning" && tab.slug === params.get("planning")) ? current : [...current, { kind: "planning", slug: params.get("planning")! }]);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [loadThreadTabs]);
 
   const navigateToThread = (threadId: number, projectSlug = routeProjectSlug) => {
-    setOpenThreadIds((current) => current.includes(threadId) ? current : [...current, threadId]);
+    setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === threadId) ? current : [...current, { kind: "thread", threadId }]);
     window.history.pushState({}, "", pathForRoute({
       view: "chat",
       ...(projectSlug ? { projectSlug } : {}),
@@ -167,11 +178,24 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
-  const closeThreadTab = (threadId: number) => {
-    const remaining = openThreadIds.filter((id) => id !== threadId);
-    setOpenThreadIds(remaining);
-    if (threadId !== activeThreadId) return;
-    if (remaining.length) navigateToThread(remaining[remaining.length - 1]);
+  const navigateToTab = (tab: WorkspaceTab) => {
+    const thread = tab.kind === "thread" ? [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === tab.threadId) : undefined;
+    const target = tab.kind === "thread"
+      ? pathForRoute({ view: "chat", ...((thread?.proyecto ?? routeProjectSlug) ? { projectSlug: thread?.proyecto ?? routeProjectSlug } : {}), threadId: tab.threadId })
+      : tab.kind === "context"
+        ? pathForRoute({ view: "chat", contextProjectSlug: tab.projectSlug })
+        : pathForRoute({ view: "chat", planningSlug: tab.slug });
+    window.history.pushState({}, "", target);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const closeTab = (tab: WorkspaceTab) => {
+    const sameTab = (candidate: WorkspaceTab) => candidate.kind === tab.kind && (candidate.kind === "thread" ? candidate.threadId === (tab as Extract<WorkspaceTab, {kind:"thread"}>).threadId : candidate.kind === "context" ? candidate.projectSlug === (tab as Extract<WorkspaceTab, {kind:"context"}>).projectSlug : candidate.slug === (tab as Extract<WorkspaceTab, {kind:"planning"}>).slug);
+    const remaining = openTabs.filter((candidate) => !sameTab(candidate));
+    setOpenTabs(remaining);
+    const active = tab.kind === "thread" ? tab.threadId === activeThreadId : tab.kind === "context" ? tab.projectSlug === activeContextSlug : tab.slug === activePlanningSlug;
+    if (!active) return;
+    if (remaining.length) navigateToTab(remaining[remaining.length - 1]);
     else {
       window.history.pushState({}, "", pathForRoute({ view: "chat" }));
       window.dispatchEvent(new PopStateEvent("popstate"));
@@ -197,11 +221,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       await deleteChatThread(deleteTarget.id);
       const remaining = threads.filter((thread) => thread.id !== deleteTarget.id);
       setThreads(remaining);
-      setOpenThreadIds((ids) => ids.filter((id) => id !== deleteTarget.id));
+      setOpenTabs((tabs) => tabs.filter((tab) => tab.kind !== "thread" || tab.threadId !== deleteTarget.id));
       setDeleteTarget(null);
       if (deleteTarget.id === activeThreadId) {
-        const nextId = openThreadIds.filter((id) => id !== deleteTarget.id).at(-1);
-        if (nextId) navigateToThread(nextId);
+        const nextTab = openTabs.filter((tab) => tab.kind !== "thread" || tab.threadId !== deleteTarget.id).at(-1);
+        if (nextTab) navigateToTab(nextTab);
         else {
           window.history.pushState({}, "", pathForRoute({ view: "chat" }));
           window.dispatchEvent(new PopStateEvent("popstate"));
@@ -213,9 +237,13 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   };
 
   const navigateToProject = (project: Project, destination: "context" | "threads") => {
-    const route = destination === "context"
-      ? { view: "projects" as const, projectSlug: project.slug }
-      : { view: "chat" as const, projectSlug: project.slug };
+    if (destination === "context") {
+      setOpenTabs((tabs) => tabs.some((tab) => tab.kind === "context" && tab.projectSlug === project.slug) ? tabs : [...tabs, { kind: "context", projectSlug: project.slug }]);
+      window.history.pushState({}, "", pathForRoute({ view: "chat", contextProjectSlug: project.slug }));
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      return;
+    }
+    const route = { view: "chat" as const, projectSlug: project.slug };
     window.history.pushState({}, "", pathForRoute(route));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
@@ -323,7 +351,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                   {expanded ? (
                     <div className="assistant-workspace__project-details">
                       <nav aria-label={`Navegación de ${project.name}`}>
-                        <a href={pathForRoute({ view: "projects", projectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToProject(project, "context"); }}><Icon icon={FileText} size="sm" />Contexto y archivos</a>
+                      <button type="button" onClick={() => navigateToProject(project, "context")}><Icon icon={FileText} size="sm" />Contexto y archivos</button>
                           <button type="button" className="assistant-workspace__history-trigger" aria-expanded={projectThreads[project.slug] !== undefined} onClick={() => { if (projectThreads[project.slug]) setProjectThreads((current) => { const next = { ...current }; delete next[project.slug]; return next; }); else void loadProjectThreads(project.slug); }}><Icon icon={History} size="sm" />Historial de hilos</button>
                           {projectSessions[project.slug]?.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando sesiones de planificación" /> : null}
                           {projectSessions[project.slug]?.state === "error" || projectSessions[project.slug]?.state === "denied" ? <StateMessage tone="danger" role="alert" title={projectSessions[project.slug].state === "denied" ? "No tienes permiso para ver estas sesiones." : "No pudimos cargar las sesiones de planificación."} /> : null}
@@ -359,7 +387,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         </section>
         <section className="assistant-workspace__agents" aria-label="Agentes" hidden={!projectsVisible}>
           <header><h3>Agentes</h3></header>
-          {openThreadIds.length === 0 ? <EmptyState title="No hay agentes activos" /> : <ul>{openThreadIds.map((id) => {
+          {openTabs.filter((tab): tab is Extract<WorkspaceTab, { kind: "thread" }> => tab.kind === "thread").length === 0 ? <EmptyState title="No hay agentes activos" /> : <ul>{openTabs.filter((tab): tab is Extract<WorkspaceTab, { kind: "thread" }> => tab.kind === "thread").map(({threadId: id}) => {
             const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
             const run = activeRuns.runs.find((item) => item.thread_id === id);
             const slug = thread?.proyecto ?? run?.proyecto;
@@ -370,9 +398,22 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       </aside>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
-        {openThreadIds.length > 0 ? <nav className="assistant-workspace__thread-tabs" aria-label="Hilos abiertos">
+        {openTabs.length > 0 ? <nav className="assistant-workspace__thread-tabs" aria-label="Pestañas abiertas">
           <div className="assistant-workspace__thread-tab-list">
-            {openThreadIds.map((id) => {
+            {openTabs.map((tab) => {
+              if (tab.kind === "context") {
+                const project = projects.find((item) => item.slug === tab.projectSlug);
+                const active = tab.projectSlug === activeContextSlug;
+                return <div className="assistant-workspace__thread-tab" key={`context:${tab.projectSlug}`} data-active={active}>
+                  <button type="button" aria-current={active ? "page" : undefined} onClick={() => navigateToTab(tab)}>{project?.name ?? "Contexto y archivos"}</button>
+                  <Button variant="tertiary" aria-label={`Cerrar pestaña ${project?.name ?? "Contexto y archivos"}`} onClick={() => closeTab(tab)}><Icon icon={X} size="sm" /></Button>
+                </div>;
+              }
+              if (tab.kind === "planning") return <div className="assistant-workspace__thread-tab" key={`planning:${tab.slug}`} data-active={tab.slug === activePlanningSlug}>
+                <button type="button" aria-current={tab.slug === activePlanningSlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{tab.slug}</button>
+                <Button variant="tertiary" aria-label={`Cerrar pestaña ${tab.slug}`} onClick={() => closeTab(tab)}><Icon icon={X} size="sm" /></Button>
+              </div>;
+              const id = tab.threadId;
               const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
               return <div className="assistant-workspace__thread-tab" key={id} data-active={id === activeThreadId}>
                 <button type="button" aria-current={id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(id, thread?.proyecto)}>
@@ -385,7 +426,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                   onSelect={(value) => {
                     setThreadActionError(null);
                     if (value === "rename") { setRenameTarget({ id, title: thread?.title ?? null }); setRenameTitle(thread?.title ?? ""); }
-                    else if (value === "close") closeThreadTab(id);
+                    else if (value === "close") closeTab(tab);
                     else setDeleteTarget({ id, title: thread?.title ?? null });
                   }}
                 />
@@ -411,7 +452,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
           </div>
         </Dialog>
-        {children}
+        {activeContextSlug ? (activeProject ? <ProjectResources projectSlug={activeProject.slug} projectId={activeProject.id} role={role} /> : projectsData.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyectos" /> : <EmptyState title="Proyecto no disponible" description="No encontramos este proyecto." />) : children}
       </section>
 
       <aside
