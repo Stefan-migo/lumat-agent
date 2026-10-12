@@ -364,3 +364,17 @@ project-scoped history, planning sessions, and the project context page into
   - `npm run build` → passed; Vite emitted the existing >500 kB chunk-size warning.
 - No planning-session (sub-unit 1b) changes were made.
 - **Task-doc commit**: pending.
+
+### Progress / Evidence — slice 3 (1a fix)
+
+- **Implementation** `b0875299` — `fix(assistant): cap the history fetch at the API limit and style the project tree and history tab`.
+- Fixed the full-history 422 by using the backend maximum: `AssistantWorkspace.tsx:178` calls `loadProjectThreads(activeHistorySlug, 50)`; the retry also uses 50. The API contract was not changed.
+- Reused `Menu` with its `trigger="icon"` / `.menu__trigger--icon` for borderless per-thread actions; each row uses the `MessageSquareText` icon and the existing rename/delete targets and handlers. The project tree now indents details and inline history with existing `--space-*` tokens.
+- Full history now uses shared `PageFrame` and `Card`, retains its `Historial de <proyecto>` region, date-group headings and search, and renders the same row/menu building blocks as inline history.
+- **Graph check**: read the target worktree's `graphify-out/GRAPH_REPORT.md`; queried `AssistantWorkspace project history threads tabs` and `AssistantWorkspace thread history grouped list menus page frame primitives CSS`; path `AssistantWorkspace.tsx --references--> AgentChat.tsx --imports_from--> shared/PageFrame.tsx` (2 hops; directed `AssistantWorkspace` → `ProjectHistory` was not found). Consulted `AssistantWorkspace()`, `GroupedThreadList()`, `PageFrame()`, `listChatThreads()`, and shared `PageFrame.tsx`.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → 105 files / 1,147 tests passed (482.36s).
+  - `npm run build` → passed; existing >500 kB chunk-size warning.
+- No planning-session (sub-unit 1b) changes were made. No push, PR, or merge.
+- **Implementation commit**: `b0875299`; **task-doc commit**: pending.
