@@ -231,8 +231,10 @@ local `now >= due_time` (today at HH:MM; the configured weekday at HH:MM for wee
   el requisito (`LumatRequest.md:310`) pero "Integración de pagos" es un entregable aparte del
   Milestone 3 (`LumatRequest.md:322`). Requiere decisión de producto (fuente de verdad de "pagado")
   antes de tocar código. Recon: Engram `odd/automatizaciones-recetas/d1-d2-recon`.
-- [ ] **D2 — Destinatario en eventos de caso** (Slice 4, acotado).
-- [ ] **D3 — Redefinir `template_event`** (Slice 4 — removerlo de raíz, migración 049).
+- [x] **D2 — Destinatario en eventos de caso** — cerrado en Slice 4 (acotado): el destinatario del
+  cliente (`phone_e164`) viaja en los payloads `case.*` donde se conoce. Sin receta nueva.
+- [x] **D3 — Redefinir `template_event`** — cerrado en Slice 4: removido de raíz (migración `049`). El
+  texto de la notificación se resuelve solo desde `payload.content` / `payload.text` / `rule.content`.
 
 ### Slice 4 — Transversal acotado (D2 + D3)
 
@@ -254,7 +256,9 @@ Worktree `../lumat-agent-odd-automatizaciones-recetas-transversal`, branch
   (`phone_e164`) a los eventos `case.*` donde el cliente se conoce, en `app/services/cases.py` (4 sitios
   `publish_event`: `case.created` ×2, `case.updated` ×2). Sin receta nueva; el único consumidor
   (`case_new_request`) es admin-targeted y resuelve desde settings, así que no cambia comportamiento.
-- [ ] **T3 — Cerrar slice**: actualizar este task doc + verificación backend/frontend + review RDD + PR.
+- [x] **T3 — Cerrar slice**: task doc actualizado; verificación backend/frontend verde; review nativo RDD
+  aprobado (lineage `review-5ca037e6e4ca9962`, 4 lentes, 0 hallazgos, authority burned); PR **#563**
+  mergeado a `main` (`1d98576e`) con CI verde (`test` + `panel`).
 
 Route (ODD): T1 y T2 delegados a un writer (2+ archivos no triviales); verificación observada por el
 writer; review nativo RDD por candidato (base `00e09e3c`).
@@ -325,3 +329,7 @@ they are separate later work.
   decide: diferir D1 y cerrar **D2 acotado + D3** en un slice nuevo. Slice 4 abierto en worktree
   `../lumat-agent-odd-automatizaciones-recetas-transversal`, branch `odd/automatizaciones-recetas-transversal`,
   base `00e09e3c`. D3 = remover `template_event` de raíz (migración 049).
+- 2026-10-12 — **Slice 4 cerrado**: D2 (acotado) + D3 mergeados (PR **#563**, main `1d98576e`). Backend
+  **1925** tests verdes; `npm run build` verde; CI verde (`test` + `panel`). Review nativo RDD
+  `review-5ca037e6e4ca9962` aprobado (4 lentes, 0 hallazgos, authority burned). **D1 (pago) sigue
+  bloqueado por decisión de producto** (no existe dominio de pago en el backend).
