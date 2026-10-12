@@ -310,3 +310,24 @@ project-scoped history, planning sessions, and the project context page into
   --update` once at session close.
 - Worktree born without `infra/.env`, `web/node_modules`, or `.venv` — provision
   before the browser pass.
+
+### Progress / Evidence — slice 3 (S3-1)
+
+- **Implementation** `3717b66e` — `feat(assistant): generalize the workspace tab model`.
+- Replaced thread-only open-tab state with the `thread | planning | context` union;
+  added `context` and `planning` selectors to chat URL parsing/building, using
+  thread > context > planning precedence. Project context now opens in the
+  assistant tab strip and renders `ProjectResources`; planning-session navigation
+  remains unchanged for S3-4.
+- **Graph check** (stale graph from `576b07ef`): queried
+  `assistant workspace tabs projects planning sessions`; consulted
+  `AssistantWorkspace.tsx`, `AgentChat.tsx`, `panelRoutes.ts`, `ProjectResources.tsx`,
+  and the `api.ts` hub. `AssistantWorkspace.tsx` ↔ `ProjectResources.tsx` has an
+  undirected path through `api.ts` (`imports_from`); directed AssistantWorkspace
+  → panelRoutes path was not found.
+- **Checks** (from `web/`, observed):
+  - `npx tsc -b --force --noEmit` → exit 0, no diagnostics.
+  - `npx vitest run --no-file-parallelism` → exit 0, 105 files / 1,145 tests passed.
+  - `npm run build` → exit 0; Vite build succeeded with the existing >500 kB
+    chunk-size warning.
+- **Task-doc commit**: pending as a separate documentation-only commit.
