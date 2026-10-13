@@ -764,6 +764,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "memory.update": frozenset(UserRole),
     "memory.delete": frozenset(UserRole),
     "dashboard.summary": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "analytics.chatbot_metrics": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "web.search": frozenset(UserRole),
     "web.fetch": frozenset(UserRole),
     "automation.create_rule": frozenset({UserRole.ADMIN}),

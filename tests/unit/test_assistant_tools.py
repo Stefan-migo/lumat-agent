@@ -59,6 +59,10 @@ def test_chatbot_metrics_is_a_typed_bounded_read_only_tool():
         get_tool("analytics.chatbot_metrics").args_model.model_validate({"extra": True})
 
 
+def test_chatbot_metrics_is_in_assistant_whitelist():
+    assert "analytics.chatbot_metrics" in load_assistant_config().tools_whitelist
+
+
 def test_skill_propose_is_owner_scoped_approval_write_and_upserts_project_skill(monkeypatch):
     from app.chat.assistant.approval import consume_approval
 
