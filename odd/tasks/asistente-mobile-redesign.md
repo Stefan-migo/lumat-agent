@@ -81,7 +81,27 @@ of D2/D4 above:
 - **R2-4 — centre the empty state.** The hero text **and** the composer must be
   centred horizontally **and vertically**; today they sit too high.
 
+## Round 3 — owner corrections (2026-10-13, after the round-2 pass)
 
+- **R3-1 — the desktop hero variants, exactly as desktop uses them.** The owner
+  clarified R2-1: mobile must use the **same two variants** desktop uses, with no
+  breakpoint split — hero 1 (`!thread`) = `Buenos días, {nombre}` +
+  `¿En qué trabajamos hoy?` + the button; hero 2 (thread without messages) =
+  `¿En qué trabajamos hoy?` + `Consulta, planifica o trabaja en tus proyectos con
+  el asistente Lumat.` **No sparkle icon** (desktop has none).
+- **R3-2 — centre the project dropdown in the assistant header.** Measured before
+  the fix: the button is 276px wide with `center=195` (the header's centre) but
+  its **content was left-aligned**; the icon + name + chevron must be centred.
+- **R3-3 — the project dropdown opens a lean project-selection dialog.** Only the
+  available projects plus `General` (not the context/history/sessions rows). The
+  button's text **font must be the real Lumat font** — measured before the fix:
+  every assistant-header button computed `font-family: Arial` at `13.33px`.
+- **R3-4 — `Crear proyecto` was invisible on a phone.** Verified: the dialog
+  opened but measured **0×0** with `visible: false` inputs, because the `Dialog`
+  (`AssistantWorkspace.tsx:509`) is a **child of `.assistant-workspace__projects`**,
+  which M1's phone CSS hides with `display: none`.
+
+## Visual reference — target (4 surfaces)
 
 Shared, across all four: the shell mobile bar (hamburger · project selector
 `TestProject ⌄` · info icon) and the five bottom tabs remain visible.
