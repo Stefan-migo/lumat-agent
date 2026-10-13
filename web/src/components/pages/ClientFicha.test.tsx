@@ -173,10 +173,38 @@ describe("ClientFicha page grammar", () => {
     await clickCaseMenuItem(user, "Editar caso");
     expect(screen.getByLabelText("Estado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Casos" }));
+    expect(screen.queryByRole("heading", { name: "Caso activo" })).not.toBeInTheDocument();
+    expect(document.querySelector(".client-ficha__case-panel")).toBeInTheDocument();
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getAllByText("#1").length).toBeGreaterThan(0);
-    expect(within(archive).getByText("Mostrando 1 caso anterior")).toBeInTheDocument();
+    expect(within(archive).getByText("Mostrando 1–1 de 1 casos anteriores")).toBeInTheDocument();
+  });
+
+  it("paginates previous cases across desktop and mobile and clamps after the case count changes", async () => {
+    const user = userEvent.setup();
+    const archivedCases = [...ficha.history.cases, ...Array.from({ length: 7 }, (_, index) => ({ ...ficha.history.cases[1], id: index + 10, service: `Caso ${index + 1}` }))];
+    const manyCases = { ...ficha, history: { ...ficha.history, cases: archivedCases } };
+    const { rerender } = render(<ClientFicha data={manyCases} memories={memories} />);
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+
+    const archive = screen.getByRole("region", { name: "Casos anteriores" });
+    const desktopTable = archive.querySelector(".table-card__desktop tbody");
+    const mobileCards = archive.querySelector(".table-cards--mobile");
+    expect(desktopTable?.querySelectorAll("tr")).toHaveLength(5);
+    expect(mobileCards?.querySelectorAll("li")).toHaveLength(5);
+    expect(within(archive).getByText("Mostrando 1–5 de 8 casos anteriores")).toBeInTheDocument();
+
+    await user.click(within(archive).getByRole("button", { name: "Página siguiente" }));
+    expect(desktopTable?.querySelectorAll("tr")).toHaveLength(3);
+    expect(mobileCards?.querySelectorAll("li")).toHaveLength(3);
+    expect(within(archive).getByText("Mostrando 6–8 de 8 casos anteriores")).toBeInTheDocument();
+
+    rerender(<ClientFicha data={ficha} memories={memories} />);
+    expect(within(archive).queryByRole("navigation", { name: "Paginación de casos anteriores" })).not.toBeInTheDocument();
+    expect(desktopTable?.querySelectorAll("tr")).toHaveLength(1);
+    expect(mobileCards?.querySelectorAll("li")).toHaveLength(1);
+    expect(within(archive).getByText("Mostrando 1–1 de 1 casos anteriores")).toBeInTheDocument();
   });
 
   it("renders the active case summary as markdown and keeps conversation options plain", async () => {
@@ -200,6 +228,39 @@ describe("ClientFicha page grammar", () => {
     await user.click(screen.getByRole('tab', { name: 'Conversaciones' }));
     expect(screen.getByRole('option', { name: '#3 · Atención humana · Coordinar visita' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /\*\*/ })).not.toBeInTheDocument();
+  });
+
+  it("segments known fields in an active case summary", () => {
+    const structured = {
+      ...ficha,
+      history: {
+        ...ficha.history,
+        cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, summary: "Cliente: Marcela. Motivo: Calefón no enciende. Datos capturados: modelo antiguo. Clasificación del caso: urgente. Siguiente paso: coordinar visita." } : row),
+      },
+    };
+    render(<ClientFicha data={structured} memories={memories} />);
+
+    const summary = document.querySelector(".client-ficha__case-summary") as HTMLElement;
+    expect(within(summary).getByText("Cliente", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("Motivo", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("Calefón no enciende")).toBeInTheDocument();
+    expect(within(summary).getByText("Clasificación", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("coordinar visita")).toBeInTheDocument();
+  });
+
+  it("keeps the full summary text when it does not start with a known marker", () => {
+    const withPreamble = {
+      ...ficha,
+      history: {
+        ...ficha.history,
+        cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, summary: "Nota libre sin formato. Cliente: Marcela. Motivo: Calefón no enciende." } : row),
+      },
+    };
+    render(<ClientFicha data={withPreamble} memories={memories} />);
+
+    const summary = document.querySelector(".client-ficha__case-summary") as HTMLElement;
+    expect(within(summary).queryByText("Cliente", { selector: "dt" })).not.toBeInTheDocument();
+    expect(within(summary).getByText(/Nota libre sin formato/)).toBeInTheDocument();
   });
 
   it("renders a nullable CLP case amount and saves it through the existing update API", async () => {

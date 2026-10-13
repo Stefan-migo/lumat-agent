@@ -11,6 +11,7 @@ import { Icon } from '../primitives/Icon';
 import { PageFrame } from '../shared/PageFrame';
 import { AppointmentClosureDialog, type AppointmentClosureOutcome } from '../shared/AppointmentClosureDialog';
 import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from '../shared/AppointmentRescheduleDialog';
+import { ConversationSummary } from '../shared/ConversationSummary';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
 import { composeAgendaTime } from '../shared/agendaTime';
@@ -196,7 +197,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         </Card>
       </section>
       <div className="detail-region__main">
-        {summary ? <Card title="Resumen de la conversación"><p>{summary}</p></Card> : null}
+        {summary ? <Card title="Resumen de la conversación"><ConversationSummary summary={summary} /></Card> : null}
         <Card title="Historial de la visita" icon={FileText} className="appointment-detail__history">
           {appointment.history.length ? <ol aria-label="Historial de la visita">
             {appointment.history.map((entry) => <li key={entry.id}>
