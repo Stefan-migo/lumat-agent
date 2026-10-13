@@ -34,7 +34,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import AuditLog, KbDocument, Project, Settings  # noqa: E402
+from app.models import AuditLog, KbChunk, KbDocument, Project, Settings  # noqa: E402
 from app.services import kb as kb_service  # noqa: E402
 
 
@@ -59,6 +59,33 @@ def _seed_doc(*, title: str = "Tarifas 2026", content: bytes = b"# Tarifas\nRevi
         )
         session.commit()
         return doc.id
+
+
+def test_delete_kb_document_is_admin_only_and_audited(client, make_user):
+    doc_id = _seed_doc(title="Permanent delete", content=b"content " * 400)
+    make_user("op", "op-pass", role="operador")
+    make_user("adm", "adm-pass", role="admin")
+    _login(client, username="op", password="op-pass")
+    assert client.delete(f"/panel/api/kb/{doc_id}").status_code == 403
+    client.cookies.clear()
+    assert client.delete(f"/panel/api/kb/{doc_id}").status_code == 401
+
+    _login(client)
+    response = client.delete(f"/panel/api/kb/{doc_id}")
+    assert response.status_code == 200, response.text
+    assert response.json()["ok"] is True
+    assert response.json()["doc"]["title"] == "Permanent delete"
+    with SessionLocal() as session:
+        assert session.get(KbDocument, doc_id) is None
+        assert session.scalar(select(KbChunk.id).where(KbChunk.document_id == doc_id)) is None
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "kb.document_delete"))
+        assert audit is not None and audit.actor == "adm" and audit.entity_id == str(doc_id)
+
+
+def test_delete_missing_kb_document_returns_404(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    assert client.delete("/panel/api/kb/999999").status_code == 404
 
 
 def _seed_version2(*, doc_id: int, content: str = "version two content") -> None:
@@ -92,6 +119,7 @@ def test_kb_endpoints_require_login_401_json(client):
         ("post", "/panel/api/kb/1/enable"),
         ("post", "/panel/api/kb/1/restore"),
         ("post", "/panel/api/kb/1/visibility"),
+        ("delete", "/panel/api/kb/1"),
     ]
     for method, path in kb_calls:
         resp = getattr(client, method)(path, follow_redirects=False)

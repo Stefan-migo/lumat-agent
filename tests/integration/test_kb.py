@@ -81,6 +81,23 @@ def _chunk_rows(doc_id: int) -> list[KbChunk]:
         )
 
 
+def test_delete_document_removes_document_and_chunks(fake_embedder):
+    with SessionLocal() as session:
+        doc = kb.ingest_document(
+            session, "Delete me", DocumentFormat.MD,
+            ("# Delete me\n" + "content " * 400).encode(),
+        )
+        session.commit()
+        doc_id = doc.id
+        assert _chunk_rows(doc_id)
+        kb.delete_document(session, doc_id, actor="admin")
+        session.commit()
+
+    with SessionLocal() as session:
+        assert session.get(KbDocument, doc_id) is None
+        assert _chunk_rows(doc_id) == []
+
+
 # ---------------------------------------------------------------------------
 # KB-1 — ingestion: MD / PDF / CSV + provider/model/cost recorded
 # ---------------------------------------------------------------------------

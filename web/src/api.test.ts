@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule } from './api';
+import { apiFetch, ApiError, postJson, deleteKbDocument, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -68,6 +68,14 @@ describe('apiFetch', () => {
       detail: JSON.stringify({ detail }),
       structuredDetail: detail,
     });
+  });
+});
+
+describe('KB API contracts', () => {
+  it('deletes a KB document with DELETE', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true, doc: {} }), { status: 200 }));
+    await deleteKbDocument(42);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/kb/42', expect.objectContaining({ method: 'DELETE' }));
   });
 });
 
