@@ -6,6 +6,47 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.2] - 2026-10-13
+
+This release turns the automation catalog into real time- and calendar-driven
+triggers on the worker tick, redesigns the Asistente Lumat workspace, reworks
+Agenda booking around per-technician schedules, and adds panel web push.
+
+### Added
+
+- **Time- and calendar-driven automation recipes.** The worker tick now
+  evaluates time-offset recipes (appointment review requests, post-visit
+  maintenance) and calendar summary recipes (daily and weekly summaries),
+  alongside the event-driven recipes.
+- **Per-technician weekly schedules.** Define and edit each technician's weekly
+  availability from the Agenda, in a register tab with an inline editor, and use
+  it to drive booking.
+- **Panel web push.** Deliver real Web Push notifications for panel alerts, with
+  a PWA install path and hardened subscription reliability.
+- **Per-service chatbot visit duration.** Configure how long the chatbot treats
+  a visit as lasting, per service.
+
+### Changed
+
+- **Automatizaciones redesigned.** Reworked the recipe catalog page with real
+  recipe descriptions.
+- **Asistente Lumat redesigned.** New workspace and composer, a left sidebar
+  with tabs, history, and planning sessions plus a compact rail, and a
+  redesigned thread detail panel.
+- **Conversaciones queue.** Closed conversations are excluded from the live
+  queue and paginated at 10.
+
+### Fixed
+
+- **Automation configuration errors in the dialog.** Surface configuration
+  errors inside the open recipe dialog instead of only outside it.
+- **Cooperative-stop follow-ups.** Close the terminal race and revoke stale
+  approvals.
+- **Development seeder re-runs.** Purge child rows when the development seeder
+  re-runs.
+- **Worker observability.** Log one summary line per worker run, so the
+  standalone cron log gains evidence on each tick.
+
 ## [2026.10.1] - 2026-10-09
 
 This catch-up release brings a broad redesign of the administration panel and a project-scoped workspace for Asistente Lumat. It also expands the knowledge base, customer intake, notifications, and automation recipes, alongside usability and reliability fixes across the panel and assistant.

@@ -87,7 +87,16 @@ def health_counts() -> dict[str, int]:
 
 
 def main() -> None:
-    run_cycle(limit=int(os.getenv("H4_WORKER_LIMIT", DEFAULT_BATCH_SIZE)), owner=os.getenv("H4_WORKER_OWNER", "h4-worker"))
+    processed = run_cycle(
+        limit=int(os.getenv("H4_WORKER_LIMIT", DEFAULT_BATCH_SIZE)),
+        owner=os.getenv("H4_WORKER_OWNER", "h4-worker"),
+    )
+    counts = health_counts()
+    print(
+        f"worker cycle: processed={processed} "
+        f"pending={counts['pending']} failed={counts['failed']} leased={counts['leased']}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

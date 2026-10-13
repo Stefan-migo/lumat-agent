@@ -1,133 +1,96 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { ApiError } from '../../api';
 import { AutomationRecipesPage } from './AutomationRecipesPage';
 
-const recipe = { recipe_id: 'booking-confirmation', name: 'Confirmación de reserva', description: 'Confirma una reserva.', category: 'Reservas', trigger_kind: 'event', event_type: 'appointment.booked', channel_allowed: ['whatsapp', 'email'], recipient_target: 'customer', content: 'Tu reserva está confirmada.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'string', required: true, default: 'whatsapp' }] };
-const offsetRecipe = { recipe_id: 'appointment_review_request', name: 'Pedir evaluación', description: 'Solicita una evaluación después de la visita.', category: 'postventa', trigger_kind: 'offset', event_type: 'appointment.review_due', channel_allowed: ['whatsapp'], recipient_target: 'customer', content: '¿Cómo estuvo tu visita? Nos encantaría conocer tu opinión.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: null }, { key: 'days_after', label: 'Días después de la visita', type: 'number', required: true, default: 3 }] };
-const weeklyRecipe = { recipe_id: 'admin_weekly_summary', name: 'Resumen semanal', description: 'Envía un resumen semanal.', category: 'administración', trigger_kind: 'schedule', channel_allowed: ['whatsapp'], recipient_target: 'admin', content: 'Resumen semanal.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: 'whatsapp' }, { key: 'weekday', label: 'Día de la semana', type: 'weekday', required: true, default: 1 }, { key: 'time', label: 'Hora', type: 'time', required: true, default: '07:00' }] };
-const installation = { id: 8, recipe_id: recipe.recipe_id, parameters: { channel: 'email' }, enabled: false, created_by: 'ana', created_at: null, updated_at: null };
+const recipes = [
+  { recipe_id: 'appointment_confirmation', name: 'Confirmación de reserva', description: 'Envía un mensaje automático al confirmar una reserva.', category: 'reservas', trigger_kind: 'event', event_type: 'appointment.booked', channel_allowed: ['whatsapp'], recipient_target: 'customer', content: 'Tu visita quedó registrada.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: 'whatsapp' }] },
+  { recipe_id: 'appointment_review_request', name: 'Pedir evaluación', description: 'Solicita una evaluación después de la visita.', category: 'postventa', trigger_kind: 'offset', event_type: 'appointment.review_due', channel_allowed: ['whatsapp'], recipient_target: 'customer', content: '¿Cómo estuvo tu visita?', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: 'whatsapp' }, { key: 'days_after', label: 'Días después de la visita', type: 'number', required: true, default: 3 }] },
+];
+const installation = { id: 8, recipe_id: recipes[0].recipe_id, parameters: { channel: 'whatsapp' }, enabled: false, created_by: 'ana', created_at: null, updated_at: null };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+const page = (loadInstallations = async () => ({ installations: [] as typeof installation[] })) => render(<AutomationRecipesPage loadRecipes={async () => ({ recipes })} loadInstallations={loadInstallations} />);
 
 describe('AutomationRecipesPage', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('renders catalog details, installs with selected channel, and refreshes installations', async () => {
+  it('renders truthful catalog counts, descriptions, channels, and filters by search and category', async () => {
+    page();
+    expect(await screen.findByText(recipes[0].description)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Catálogo (2)' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Instaladas (0)' })).toBeInTheDocument();
+    expect(screen.getAllByText('WhatsApp')).toHaveLength(2);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar automatización' }), { target: { value: 'evaluación' } });
+    await waitFor(() => expect(screen.queryByText('Confirmación de reserva')).not.toBeInTheDocument());
+    expect(screen.queryByText('Confirmación de reserva')).not.toBeInTheDocument();
+    expect(screen.getByText('Pedir evaluación')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Categoría'), { target: { value: 'reservas' } });
+    expect(screen.queryByText('Pedir evaluación')).not.toBeInTheDocument();
+    expect(screen.getByText('No encontramos automatizaciones')).toBeInTheDocument();
+  });
+
+  it('creates a catalog installation from the configuration dialog', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/automation-installations') && init?.method === 'POST') return json({ installation }, 201);
+      return json(String(input).endsWith('/automation-recipes') ? { recipes } : { installations: [] });
+    });
+    page();
+    fireEvent.click((await screen.findAllByRole('button', { name: '+ Configurar' }))[0]);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations', expect.objectContaining({ method: 'POST', body: JSON.stringify({ recipe_id: recipes[0].recipe_id, parameters: { channel: 'whatsapp' } }) })));
+  });
+
+  it('surfaces a failed configuration inside the open dialog', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/automation-installations') && init?.method === 'POST') return json({ detail: 'No se pudo instalar.' }, 400);
+      return json(String(input).endsWith('/automation-recipes') ? { recipes } : { installations: [] });
+    });
+    page();
+    fireEvent.click((await screen.findAllByRole('button', { name: '+ Configurar' }))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('No se guardaron los cambios')).toBeInTheDocument();
+    expect(within(dialog).getByText('No se pudo instalar.')).toBeInTheDocument();
+  });
+
+  it('edits parameters and toggles an installed recipe', async () => {
+    let enabled = false;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const path = String(input);
-      if (path.endsWith('/automation-recipes')) return json({ recipes: [recipe] });
-      if (init?.method === 'POST') return json({ installation }, 201);
-      return json({ installations: path.endsWith('/automation-installations') && fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/automation-installations')).length > 1 ? [installation] : [] });
+      if (path.endsWith('/automation-recipes')) return json({ recipes });
+      if (path.endsWith('/automation-installations/8/enable')) { enabled = true; return json({ ok: true, installation: { ...installation, enabled } }); }
+      if (init?.method === 'PATCH') return json({ installation: { ...installation, parameters: { channel: 'whatsapp', days_after: 5 } } });
+      return json({ installations: [{ ...installation, enabled }] });
     });
-    render(<AutomationRecipesPage />);
-    expect(await screen.findByText('Tu reserva está confirmada.')).toBeInTheDocument();
-    expect(screen.getByText('Canales: whatsapp, email')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Instalar' }));
-    expect(screen.getByLabelText('Canal')).toHaveValue('whatsapp');
-    fireEvent.change(screen.getByLabelText('Canal'), { target: { value: 'email' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar instalación' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations', expect.objectContaining({ method: 'POST', body: '{"recipe_id":"booking-confirmation","parameters":{"channel":"email"}}' })));
-    expect(await screen.findByRole('button', { name: 'Activar' })).toBeInTheDocument();
-    expect(screen.getByText('Inactiva')).toBeInTheDocument();
+    page(async () => ({ installations: [installation] }));
+    fireEvent.click(screen.getByRole('button', { name: /Ver instaladas/ }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Instaladas (1)' })).toHaveAttribute('aria-selected', 'true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    fireEvent.change(screen.getByLabelText('Canal'), { target: { value: 'whatsapp' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations/8', expect.objectContaining({ method: 'PATCH' })));
+    fireEvent.click(await screen.findByRole('button', { name: 'Activar' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations/8/enable', expect.objectContaining({ method: 'POST' })));
   });
 
-  it('installs an offset recipe with its numeric parameter', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const path = String(input);
-      if (path.endsWith('/automation-recipes')) return json({ recipes: [offsetRecipe] });
-      if (init?.method === 'POST') return json({ installation: { ...installation, recipe_id: offsetRecipe.recipe_id, parameters: { channel: 'whatsapp', days_after: 5 } } }, 201);
-      return json({ installations: [] });
-    });
-    render(<AutomationRecipesPage />);
-    expect(await screen.findByText(offsetRecipe.content)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Instalar' }));
-    expect(screen.getByLabelText('Días después de la visita')).toHaveValue(3);
-    fireEvent.change(screen.getByLabelText('Días después de la visita'), { target: { value: '5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar instalación' }));
-    await waitFor(() => {
-      const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/automation-installations') && init?.method === 'POST');
-      expect(postCall).toBeDefined();
-      const body = JSON.parse(String(postCall?.[1]?.body));
-      expect(body.parameters.days_after).toBe(5);
-      expect(typeof body.parameters.days_after).toBe('number');
-    });
-  });
+  it('shows loading, denied, retryable error, and honest empty installed states', async () => {
+    let resolveRecipes!: (value: { recipes: typeof recipes }) => void;
+    const loading = render(<AutomationRecipesPage loadRecipes={() => new Promise((resolve) => { resolveRecipes = resolve; })} loadInstallations={async () => ({ installations: [] })} />);
+    expect(screen.getByRole('status', { name: 'Cargando el catálogo' })).toBeInTheDocument();
+    resolveRecipes({ recipes });
+    fireEvent.click(screen.getByRole('button', { name: /Ver instaladas/ }));
+    expect(await screen.findByText('Aún no hay automatizaciones instaladas')).toBeInTheDocument();
+    loading.unmount();
 
-  it('installs a weekly summary with numeric weekday and time parameters', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const path = String(input);
-      if (path.endsWith('/automation-recipes')) return json({ recipes: [weeklyRecipe] });
-      if (init?.method === 'POST') return json({ installation: { ...installation, recipe_id: weeklyRecipe.recipe_id, parameters: { channel: 'whatsapp', weekday: 3, time: '09:30' } } }, 201);
-      return json({ installations: [] });
-    });
-    render(<AutomationRecipesPage />);
-    expect(await screen.findByText(weeklyRecipe.content)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Instalar' }));
-    expect(screen.getByLabelText('Día de la semana')).toHaveValue('1');
-    expect(screen.getByLabelText('Hora')).toHaveValue('07:00');
-    fireEvent.change(screen.getByLabelText('Día de la semana'), { target: { value: '3' } });
-    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '09:30' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar instalación' }));
-    await waitFor(() => {
-      const postCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/automation-installations') && init?.method === 'POST');
-      expect(postCall).toBeDefined();
-      const body = JSON.parse(String(postCall?.[1]?.body));
-      expect(body.parameters.weekday).toBe(3);
-      expect(typeof body.parameters.weekday).toBe('number');
-      expect(body.parameters.time).toBe('09:30');
-    });
-  });
-
-  it.each([[false, 'Activar'], [true, 'Desactivar']] as const)('toggles an installation currently %s and refreshes', async (enabled, action) => {
-    let currentEnabled = enabled;
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const path = String(input);
-      if (path.endsWith('/automation-recipes')) return json({ recipes: [recipe] });
-      if (path.endsWith('/automation-installations/8/enable') || path.endsWith('/automation-installations/8/disable')) { currentEnabled = !enabled; return json({ ok: true, installation: { ...installation, enabled: currentEnabled } }); }
-      return json({ installations: [ { ...installation, enabled: currentEnabled } ] });
-    });
-    render(<AutomationRecipesPage />);
-    fireEvent.click(await screen.findByRole('button', { name: action }));
-    expect(await screen.findByRole('button', { name: enabled ? 'Desactivar' : 'Activar' })).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(`/panel/api/automation-installations/8/${enabled ? 'disable' : 'enable'}`, expect.objectContaining({ method: 'POST' }));
-  });
-
-  it('shows loading, retryable errors, denied access, and an empty installation state honestly', async () => {
-    let resolve!: (value: Response) => void;
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).endsWith('/automation-recipes')
-      ? new Promise<Response>((done) => { resolve = done; })
-      : Promise.resolve(json({ installations: [] })));
-    render(<AutomationRecipesPage />);
-    expect(screen.getByText('Cargando el catálogo')).toBeInTheDocument();
-    resolve(json({ recipes: [recipe] }));
-    expect(await screen.findByText('Aún no hay recetas instaladas')).toBeInTheDocument();
-
-    vi.restoreAllMocks();
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('/automation-recipes') ? json({ detail: 'Forbidden' }, 403) : json({ installations: [] }));
-    const denied = render(<AutomationRecipesPage />);
-    expect((await screen.findAllByText('No tienes permiso para ver estas automatizaciones')).length).toBeGreaterThan(0);
+    const denied = render(<AutomationRecipesPage loadRecipes={async () => { throw new ApiError(403, 'Forbidden'); }} loadInstallations={async () => ({ installations: [] })} />);
+    expect(await screen.findByText('No tienes permiso para ver estas automatizaciones')).toBeInTheDocument();
     denied.unmount();
 
-    vi.restoreAllMocks();
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'));
-    render(<AutomationRecipesPage />);
+    let attempts = 0;
+    render(<AutomationRecipesPage loadRecipes={async () => { attempts += 1; throw new Error('network'); }} loadInstallations={async () => ({ installations: [] })} />);
     expect(await screen.findByText('No pudimos cargar el catálogo')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Reintentar' })[0]);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-  });
-
-  it('disables the install control while its request is pending', async () => {
-    let finish!: (value: Response) => void;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const path = String(input);
-      if (path.endsWith('/automation-recipes')) return json({ recipes: [recipe] });
-      if (init?.method === 'POST') return new Promise<Response>((resolve) => { finish = resolve; });
-      return json({ installations: [] });
-    });
-    render(<AutomationRecipesPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Instalar' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar instalación' }));
-    expect(screen.getByRole('button', { name: 'Instalando…' })).toBeDisabled();
-    finish(json({ installation }, 201));
-    await screen.findByRole('button', { name: 'Instalar' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(attempts).toBe(2));
   });
 });
