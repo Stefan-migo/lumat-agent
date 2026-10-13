@@ -80,6 +80,7 @@ assistant:
     - memory.update
     - memory.delete
     - dashboard.summary
+    - analytics.chatbot_metrics
     - web.search
     - web.fetch
     - automation.create_rule
