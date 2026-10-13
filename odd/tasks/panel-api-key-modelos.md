@@ -1,6 +1,7 @@
 # panel-api-key-modelos — API key de modelos configurable desde el panel
 
-Estado: en curso. Rama `odd/panel-api-key-modelos`, base `origin/main 870de162`.
+Estado: en curso. Rama `odd/panel-api-key-modelos`, base `origin/main 0299d8e1`
+(main avanzó con el merge del PR #586 `asistente-lumat-memoria-tukulpan`; el branch se creó desde ahí).
 Worktree: `/home/stefan/repos/lumat-agent-odd-panel-api-key-modelos`.
 Origen: handoff `odd/handoffs/panel-model-api-key-config.md` + memoria `architecture/panel-model-api-key-config`.
 
