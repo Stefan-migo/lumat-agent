@@ -49,12 +49,27 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. The own read MUST preserve that axis interleave before applying its limit and MUST return a bounded digest with `contenido` limited to 500 characters plus identifying metadata. Entity-scoped reads MUST retain their existing full projection. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. The own read MUST preserve that axis interleave before applying its limit and MUST return a bounded digest with `contenido` limited to 500 characters plus identifying metadata. Within each axis the own read MUST order rows by pin first, then handoff, then most-recently-updated, before the axes are interleaved. Entity-scoped reads MUST retain their existing full projection. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. A `memory.read` initiated by the runtime at the start of a turn, delivered as a tool result and never injected into the assembled context, satisfies the explicit-read requirement. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
 - WHEN context is assembled without a `memory.read` tool call
 - THEN no hybrid search runs and no memory row is added to the panel context
+
+#### Scenario: Code-initiated startup read
+- GIVEN a panel turn starts while the thread or its project holds memory
+- WHEN the runtime emits a `memory.read` for the own scope before planning and it returns rows
+- THEN the bounded digest is delivered as a tool result and no memory row is loaded into the assembled panel context
+
+#### Scenario: No memory, no startup read
+- GIVEN a panel turn starts while the thread and its project hold no memory
+- WHEN the runtime performs the startup own read
+- THEN the read returns no rows and no tool result is added
+
+#### Scenario: Own read order and bounded digest
+- GIVEN an own-scope read where a pinned row, a handoff row, and a more recently updated row exist on both the thread axis and the agent axis
+- WHEN the own read returns
+- THEN each axis is ordered pin first, then handoff, then most-recently-updated, the axes are interleaved before the limit, and every `contenido` is limited to 500 characters
 
 #### Scenario: Threshold recall
 - GIVEN memories where one is semantically close to the query

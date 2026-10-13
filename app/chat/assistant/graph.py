@@ -10,6 +10,7 @@ from app.chat.assistant.nodes import (
     delegation_node,
     execute,
     guardrails,
+    memory_bootstrap,
     panel_cost_gate,
     plan_llm,
     retrieve_kb,
@@ -67,13 +68,14 @@ def _after_plan(state: AssistantState) -> str:
 
 
 def _after_cost_gate(state: AssistantState) -> str:
-    return "evidence" if state.get("cost_mode") == "blocked" else "plan_llm"
+    return "evidence" if state.get("cost_mode") == "blocked" else "memory_bootstrap"
 
 
 def build_assistant_graph():
     builder = StateGraph(AssistantState)
     builder.add_node("assemble_context", assemble_context_node)
     builder.add_node("panel_cost_gate", panel_cost_gate)
+    builder.add_node("memory_bootstrap", memory_bootstrap)
     builder.add_node("plan_llm", plan_llm)
     builder.add_node("guardrails", guardrails)
     builder.add_node("delegation_span", delegation_node)
@@ -85,7 +87,8 @@ def build_assistant_graph():
     builder.add_node("evidence", collect_evidence)
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
-    builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"plan_llm": "plan_llm", "evidence": "evidence"})
+    builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"memory_bootstrap": "memory_bootstrap", "evidence": "evidence"})
+    builder.add_edge("memory_bootstrap", "plan_llm")
     builder.add_conditional_edges(
         "plan_llm", _after_plan,
         {"guardrails": "guardrails"},

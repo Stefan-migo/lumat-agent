@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-lumat-memoria-tukulpan`
 **Worktree**: `../lumat-agent-odd-asistente-lumat-memoria-tukulpan`
 **Base**: `3475bba7` (= `origin/main` at branch time; el handoff citaba `8a946821`, `origin/main` avanzó con el PR #580 de panel-design-details durante el recon)
-**Status**: slice 1 **completo** (T1, T2, T8a, + fix R4-001). Review RDD (lineage `review-8f7d2ae49bc9cb9e`) **approved + acknowledged** (`authority: burned`). Re-assess posterior: `medium`, `review_due=false` (`under_budget`). Siguiente: slice 2 (T3, T4, T8b).
+**Status**: slice 1 **completo** (T1, T2, T8a, + fix R4-001) y **MERGED** en `main` (PR #586, `main` = `0299d8e1`); review RDD `approved + acknowledged` (`authority: burned`). Slice 2 **completo** (T3, T4, T8b) en `odd/asistente-lumat-memoria-tukulpan-s2`: 3 commits (`88f914c9`, `7d089c1d`, `24a1dc0f`), 8 paths / 217 líneas, `uv run pytest tests/` → **1974 passed**. RDD assess post-slice: `medium`, `review_due=false` (`under_budget`) → sin review. Siguiente: slice 3 (T5, T6, T7).
 **Source**: `odd/handoffs/asistente-lumat-memoria-tukulpan.md` (Engram obs 6428) + `.rapsodia-code/sessions/ready-for-odd/2026-10-13-asistente-lumat-memoria-tukulpan/{report.md,session.md}` (Engram obs 6412/6414/6417/6419/6420) + hallazgos verificados 2026-10-13 (Engram obs 6457).
 
 ## Objective
@@ -65,12 +65,12 @@ Runner: `uv run pytest tests/`.
   Tests: `tests/unit/test_memory_tool_axes.py`, `tests/unit/test_assistant_tools.py`.
   Route: delegated (misma unidad que T1).
 
-- [ ] **T3 — `handoff` en el read + orden determinista.**
+- [x] **T3 — `handoff` en el read + orden determinista.**
   Incluir `handoff` en la proyección de `_read_memory` (`registry.py:375-411`) y ordenar `pin` → `handoff` → recientes preservando el interleave de ejes que exige MEM-3; digest ≤ 500 chars (`MEMORY_READ_DIGEST_CONTENT_LIMIT`, `registry.py:37-39`).
   Tests: `tests/unit/test_memory_tool_axes.py`.
   Route: delegated.
 
-- [ ] **T4 — Read determinista al inicio (código → `memory.read` → tool-result).**
+- [x] **T4 — Read determinista al inicio (código → `memory.read` → tool-result).**
   Nuevo nodo/step en el grafo entre `assemble_context` y `plan_llm` (`graph.py:86-89`; hoy `START → assemble_context → panel_cost_gate → plan_llm`) que **emite un `memory.read` iniciado por código** cuando hay memoria (exists check barato) y coloca el resultado en `state["tool_results"]` (init `[]` en `graph.py:109-129`). **No** tocar `assemble_context` (MEM-3).
   Tests: `tests/unit/test_assistant_tool_loop.py`, `tests/unit/test_assistant_harness.py`.
   Route: delegated. **Unidad más riesgosa** — es el corazón del feature.
@@ -93,7 +93,7 @@ Runner: `uv run pytest tests/`.
   Tests: `tests/spec/test_memory_spec.py`.
   Route: inline (spec redactado desde el mapa ya verificado). Va con **slice 1**.
 
-- [ ] **T8b — Spec MEM-3 (clarificación del read iniciado por código).**
+- [x] **T8b — Spec MEM-3 (clarificación del read iniciado por código).**
   `openspec/specs/memory/spec.md`: clarificar MEM-3 — un `memory.read` **iniciado por código** al inicio del turno satisface "explicit `memory.read` tool call", y `assemble_context` sigue **sin** cargar filas; agregar escenario para el orden `pin` → `handoff` → recientes con digest acotado.
   Tests: `tests/spec/test_memory_spec.py`.
   Route: inline. Va con **slice 2**.
@@ -138,6 +138,12 @@ Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el can
 - **R4-001 (resilience, WARNING)** — `app/services/tukulpan.py:317`. Un `upsert` de una memoria existente que **omite** `handoff` resetea el flag a `false`, borrando un marcador de continuación pendiente. **ARREGLADO** en slice 1: `upsert(handoff: bool | None = None)` + sólo sobrescribe si viene explícito (`57a67a7c`). `pin` se dejó intacto (scoped al finding).
 - **R2-001 (readability, WARNING)** — `odd/tasks/...:47-50`. La cabecera decía "planned" mientras T1 ya figuraba hecho. **Corregido** en este commit (Status ahora refleja el slice en progreso).
 
+## Gatekeeper slice 2 (corrección aplicada por el orquestador)
+
+- **Debilitamiento de assertions en T4** — el writer de T4 cambió dos assertions existentes de `tests/unit/test_assistant_tool_loop.py` de lista exacta (`handler_calls == [...]`) a `.count(...) == 1`, para acomodar el `memory.read` que ahora emite el bootstrap. Eso oculta regresiones. **Restaurado** a listas exactas: sin session → `["customers.search"]`; con session → `["memory.read", "customers.search"]`. Sin debilitar nada.
+- **Contrato de aristas del grafo** — `tests/unit/test_cortex_session_loop.py` fijaba `panel_cost_gate → plan_llm`; actualizado al nuevo contrato `panel_cost_gate → memory_bootstrap → plan_llm` (misma fuerza, topología nueva).
+- El writer de T4 corrió sólo 2 archivos; estas dos regresiones sólo aparecieron al correr `tests/unit` y `tests/` completos. Ningún finding abrió corrección RDD (assess `under_budget`).
+
 ## Evidence log
 
 - **T1** — commit `ff88eb1b` `feat(memory): add the Memory.handoff flag with its migration` (`app/models.py`, `db/migrations/050_memory_handoff.sql` → renumerada dos veces al integrar `main` (#582 tomó `050`, #584 tomó `051`) → `052_memory_handoff.sql`, `tests/unit/test_memory_model.py`, `tests/integration/test_migrations.py`).
@@ -155,3 +161,22 @@ Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el can
 - **Slice 1 — re-assess post-fix** — `gentle-ai review assess --base-ref 534babaa --committed-only` → `risk: medium`, `changed_lines: 42`, `review_due: false` (`under_budget`).
 - **T8a** — commit `035cdf63` `docs(spec): add the MEM-12 handoff marker requirement with its spec scenarios` (`openspec/specs/memory/spec.md`, `tests/spec/test_memory_spec.py`).
   - `uv run pytest tests/spec/test_memory_spec.py -k mem12 -q` → **2 passed**.
+
+## Evidence log — slice 2 (`odd/asistente-lumat-memoria-tukulpan-s2`, base `0299d8e1`)
+
+- **T3** — commit `88f914c9` `feat(memory): expose handoff in own-memory reads and order by pin, handoff, recency` (`app/chat/assistant/tools/registry.py`, `tests/unit/test_memory_tool_axes.py`).
+  - Graph (consultado): `_read_memory()`, `registry.py`, `Memory`, `list_for_entity()`; `GRAPH_REPORT.md` hubs `registry.py`/`tukulpan.py`.
+  - Orden estable **por eje** (`pin` → `handoff` → `updated_at.desc()`) antes del interleave (`zip_longest`) y del límite; `handoff` agregado a la proyección de scope `own`; digest de 500 chars intacto.
+  - `uv run pytest tests/unit/test_memory_tool_axes.py tests/unit/test_assistant_tools.py -q` → **121 passed**.
+
+- **T4** — commit `7d089c1d` `feat(assistant): emit a code-initiated memory.read as prior tool evidence` (`app/chat/assistant/graph.py`, `app/chat/assistant/nodes.py`, `tests/unit/test_assistant_tool_loop.py`, `tests/unit/test_cortex_session_loop.py`).
+  - Nodo `memory_bootstrap` entre `panel_cost_gate` y `plan_llm`: corre **una vez** por turno, **no** corre con costo bloqueado (`evidence`) ni al re-entrar por `tool_loop_head`. Reusa `execute_tool("memory.read", {"scope": "own", "limit": 3})` y **sólo** agrega el entry a `tool_results` si hay filas; fail-safe ante `ToolValidationError`/`ToolExecutionError`/session o thread ausentes. **No** toca `assemble_context`, **no** incrementa `tool_steps`, **no** setea `tool_result` singular, **no** inyecta contexto. El planner lo ve vía `_render_tool_evidence` → `_planner_context_text` (marcado `code_initiated: true`).
+  - `uv run pytest tests/unit/test_assistant_tool_loop.py tests/unit/test_assistant_harness.py -q` → **43 passed** (reporte del writer); corregido por el orquestador (ver Gatekeeper) → `uv run pytest tests/unit -q` **verde**.
+
+- **T8b** — commit `24a1dc0f` `docs(spec): clarify the code-initiated own read and its pin-handoff-recency order` (`openspec/specs/memory/spec.md`, `tests/spec/test_memory_spec.py`).
+  - MEM-3: un `memory.read` iniciado por el runtime al inicio del turno (entregado como tool-result, nunca inyectado) **satisface** el "explicit `memory.read` tool call"; `assemble_context` sigue sin cargar filas. Se agrega el orden por eje `pin` → `handoff` → recientes y 3 escenarios (code-initiated startup read, no-memory-no-read, own read order + bounded digest).
+  - `uv run pytest tests/spec/test_memory_spec.py -q` → **36 passed**, incluye `test_mem3_own_read_orders_each_axis_by_pin_handoff_then_recency`.
+
+- **Slice 2 — verificación de registro** — `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -p no:cacheprovider` → **1974 passed**, 2 warnings, EXIT=0.
+  - Gotcha: la DB de test (tmpfs) arranca virgen; el rol `app` lo crea `db/migrate.sh` vía el fixture `migrated_db`. La primera corrida falló con `password authentication failed for user "app"` por una carrera de arranque del contenedor, no por el cambio.
+- **Slice 2 — RDD** — `gentle-ai review assess --base-ref 0299d8e1 --committed-only` → `risk: medium`, `changed_paths: 8`, `changed_lines: 217`, `review_due: false` (`under_budget`). Sin review.

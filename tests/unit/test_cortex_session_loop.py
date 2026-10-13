@@ -25,7 +25,8 @@ def test_graph_planner_routes_to_guardrails_without_cortex_turn():
     names = [(edge.source, edge.target) for edge in edges]
 
     assert ("assemble_context", "panel_cost_gate") in names
-    assert ("panel_cost_gate", "plan_llm") in names
+    assert ("panel_cost_gate", "memory_bootstrap") in names
+    assert ("memory_bootstrap", "plan_llm") in names
     assert _after_plan({"tool_steps": 0}) == "guardrails"
     assert ("plan_llm", "guardrails") in names
     assert "cortex_turn" not in graph.get_graph().nodes
