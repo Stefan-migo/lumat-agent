@@ -198,9 +198,20 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Progress
 
-- [x] T0 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+- [x] T0 · [x] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+
+### Evidence
+
+- T0 — design closed in this doc (commits `ac2d9c77`, `36319971`).
+- T1 — `9be75a52` `feat(settings): add message template validation`. Adds
+  `ALLOWED_MESSAGE_TEMPLATE_SLOTS`, `MESSAGE_TEMPLATES_KEY` (+ default in `SETTINGS_DEFAULTS`),
+  `get_message_templates` (defensive) and `validate_message_templates` in
+  `app/services/settings.py`; unit + integration tests. Focused suite re-run by the parent:
+  **40 passed**. Notes: the slot regex is **mirrored** from `prompts._SLOT_RE` because
+  `prompts -> agent_registry -> tools.registry -> settings` is a real import cycle; existing
+  `FakeSession` was widened to any key (verified it does not change prior assertions).
 
 ## Next step
 
-T0 done (design + code map; D3–D6 resolved, slot vocabulary and hook point fixed). Start T1.
+T1 done. Start T2 (admin-only GET/PUT for `messages.templates`).
 The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) — do not mix it in.
