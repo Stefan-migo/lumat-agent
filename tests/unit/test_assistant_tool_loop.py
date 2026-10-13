@@ -5,13 +5,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.chat.assistant.graph import END, _after_execute, _after_guardrails, _after_tool_loop, build_assistant_graph, run_assistant
+from app.chat.assistant.graph import END, _after_cost_gate, _after_execute, _after_guardrails, _after_tool_loop, build_assistant_graph, run_assistant
 from app.chat.assistant.nodes import (
     MAX_ASSISTANT_TOOL_STEPS,
     PANEL_LOOP_WRITE_REFUSAL,
     _TOOL_EVIDENCE_LIMIT,
     _context_text,
     execute,
+    memory_bootstrap,
     guardrails,
     plan_llm,
     tool_loop_head,
@@ -72,6 +73,75 @@ def test_completed_tool_routes_through_opt_in_loop_head():
     assert ("tool_loop_head", "assemble_context") not in edges
     assert ("tool_loop_head", "panel_cost_gate") not in edges
     assert all(source != "cortex_turn" and target != "cortex_turn" for source, target in edges)
+
+
+def test_memory_bootstrap_is_on_initial_plan_path_only():
+    graph = build_assistant_graph()
+    edges = {(edge.source, edge.target) for edge in graph.get_graph().edges}
+
+    assert ("panel_cost_gate", "memory_bootstrap") in edges
+    assert ("memory_bootstrap", "plan_llm") in edges
+    assert ("tool_loop_head", "memory_bootstrap") not in edges
+    assert _after_cost_gate({"cost_mode": "blocked"}) == "evidence"
+    assert _after_cost_gate({"cost_mode": "normal"}) == "memory_bootstrap"
+
+
+def test_memory_bootstrap_adds_bounded_code_initiated_read_as_planner_evidence(monkeypatch):
+    calls = []
+
+    def read(_session, name, arguments, **kwargs):
+        calls.append((name, arguments, kwargs))
+        return {"tool": name, "status": "completed", "result": [{"contenido": "remembered"}]}
+
+    monkeypatch.setattr("app.chat.assistant.nodes.execute_tool", read)
+    state = {"thread_id": 7, "user_id": 2, "session": object(), "tool_results": [], "tool_steps": 0, "context": {"items": []}}
+    result = memory_bootstrap(state)
+    merged = {**state, **result}
+
+    assert len(calls) == 1
+    assert calls[0][0] == "memory.read"
+    assert calls[0][1]["scope"] == "own"
+    assert len(merged["tool_results"]) == 1
+    assert merged["tool_results"][0]["code_initiated"] is True
+    client = _client(calls, ['{"kind":"respond","tool":null,"arguments":{},"summary":"Done","requires_approval":false}'])
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+    plan_llm({**merged, "content": "What do you remember?", "plan": None})
+    assert "remembered" in calls[-1]["messages"][-1]["content"]
+    assert merged.get("tool_steps", 0) == 0
+    assert "tool_result" not in result
+    assert "context" not in result
+    monkeypatch.setattr("app.chat.assistant.nodes.run_verification", lambda **_kwargs: pytest.fail("read must not require verification"))
+    assert verify_effects(merged) == {}
+
+
+def test_memory_bootstrap_empty_and_missing_scope_are_noop(monkeypatch):
+    from app.chat.assistant.nodes import assemble_context_node
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *_args, **_kwargs: {"tool": "memory.read", "status": "completed", "result": []},
+    )
+    state = {"thread_id": 7, "user_id": 2, "session": object(), "tool_results": [], "context": {"items": []}, "status": "planned"}
+    assert memory_bootstrap(state) == {}
+    assert memory_bootstrap({**state, "session": None}) == {}
+    assert memory_bootstrap({**state, "thread_id": None}) == {}
+    assert "memory" not in assemble_context_node({"session": None, "context": {"items": [], "meta": {}}})["context"]
+
+
+def test_memory_bootstrap_failure_does_not_change_turn_or_verification(monkeypatch):
+    from app.chat.assistant.nodes import ToolExecutionError, ToolValidationError
+    from app.chat.assistant.verification import verification_required
+
+    for error in (ToolExecutionError("unavailable"), ToolValidationError("invalid")):
+        def fail(*_args, _error=error, **_kwargs):
+            raise _error
+
+        monkeypatch.setattr("app.chat.assistant.nodes.execute_tool", fail)
+        state = {"thread_id": 7, "user_id": 2, "session": object(), "tool_results": [], "tool_steps": 0, "status": "planned"}
+        assert memory_bootstrap(state) == {}
+        assert state["status"] == "planned"
+        assert state["tool_steps"] == 0
+        assert verification_required(dispatched_tools=["memory.read"]) == (False, "not-required")
 
 
 def test_verify_effects_is_noop_without_gate(monkeypatch):
@@ -355,7 +425,7 @@ def test_cost_mode_flip_stops_loop_before_second_planner(monkeypatch, flipped_mo
         on_token=lambda _token: None,
     )
 
-    assert handler_calls == ["customers.search"]
+    assert handler_calls == ["memory.read", "customers.search"]
     assert len([call for call in calls if not call.get("stream")]) == 1
     assert final["response"] == "Ana is a customer"
     assert final["guardrails"]["decision"] == "loop_cost_stopped"

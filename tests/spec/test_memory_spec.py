@@ -928,6 +928,56 @@ def test_mem3_top_k_caps_results(fake_embedder, migrated_db):
         assert len(results) <= 5
 
 
+def test_mem3_own_read_orders_each_axis_by_pin_handoff_then_recency(fake_embedder, migrated_db):
+    """Own read orders each axis pin -> handoff -> recency before interleaving (MEM-3).
+
+    Scenario: Own read order and bounded digest. Both axes carry a pinned row, a
+    handoff row, and a more recently updated row, so the ordering must hold per
+    axis and survive the interleave, with every `contenido` bounded.
+    """
+    from app.chat.assistant.tools import registry
+
+    with SessionLocal() as session:
+        for scope, entity_id, prefix in (
+            ("panel", "thread:42", ""),
+            ("agent", "agent:default", "agent:"),
+        ):
+            for topic_key, pin, handoff in (
+                ("pin", True, False),
+                ("handoff", False, True),
+                ("recent", False, False),
+            ):
+                memory.upsert(
+                    session, scope=scope, entity_id=entity_id,
+                    topic_key=f"{prefix}{topic_key}", tipo=MemoryType.DECISION,
+                    titulo=f"{prefix}{topic_key}", contenido=f"{prefix}{topic_key}",
+                    pin=pin, handoff=handoff,
+                    visibility=MemoryVisibility.THREAD if scope == "panel" else MemoryVisibility.GLOBAL,
+                )
+        session.flush()
+
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        offsets = {"pin": 0, "handoff": 1, "recent": 2}
+        for row in session.query(Memory).all():
+            row.updated_at = base + timedelta(days=offsets[row.topic_key.removeprefix("agent:")])
+        session.commit()
+
+        digest = registry._read_memory(
+            session, registry.MemoryArgs.model_validate({"limit": 10}),
+            trusted_thread_id=42, proyecto="default",
+        )
+
+    assert [item["topic_key"] for item in digest] == [
+        "pin", "agent:pin", "handoff", "agent:handoff", "recent", "agent:recent",
+    ]
+    assert all(
+        item["handoff"] is (item["topic_key"] in {"handoff", "agent:handoff"}) for item in digest
+    )
+    assert all(
+        len(item["contenido"]) <= registry.MEMORY_READ_DIGEST_CONTENT_LIMIT for item in digest
+    )
+
+
 def test_mem9_global_visibility_records_provenance_and_cross_thread_read(
     fake_embedder, migrated_db
 ):
