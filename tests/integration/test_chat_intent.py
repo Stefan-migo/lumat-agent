@@ -257,7 +257,10 @@ def test_sh4_user_text_only_in_user_input_slot(mock_chat):
     # system prompt is static: no user text leaked into it
     assert "mi calefont no enciende" not in system
     # user text is data, wrapped in <user_input>
-    assert user == "<user_input>mi calefont no enciende</user_input>"
+    assert user == (
+        "<conversation>(sin mensajes previos)</conversation>\n\n"
+        "<user_input>mi calefont no enciende</user_input>\n"
+    )
 
 
 def test_sh4_injection_escalates_without_llm_call(mock_chat):
