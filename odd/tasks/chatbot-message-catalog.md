@@ -72,15 +72,20 @@ anti-injection delimiting + test coverage.
 
 ### UI placement (decided by owner)
 
-The catalog lives in the **same Settings tab "Mensajes"**, but as **its own card**, separate
-from the existing "Mensajes del asistente" card (the 5 fixed system messages). The card copy
-must explain the difference to the owner: the 5 fixed messages fire on their own in specific
-code paths; the catalog templates are **chosen by the bot** per turn and sent filled with
-real data.
+The catalog lives in the **same Settings tab "Mensajes"**, **below** the existing "Mensajes
+del asistente" card, as **its own card**. Card title: **"Respuestas prediseñadas"**. The 5
+fixed messages and `MessagesBody` stay as they are (low blast radius).
+
+Card copy (product UI is Spanish — match the existing strings' register):
+
+- Description: "Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían
+  con los datos reales ya cargados (nombre, fecha, hora)."
+- Difference note: "A diferencia de los Mensajes del asistente de arriba —que son fijos y se
+  disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas
+  respuestas las selecciona el bot en cada conversación."
 
 Frontend delta: `MESSAGE_TEMPLATES` (`Settings.tsx:43-49`) stops being the source of truth —
-the new card renders the backend list. The 5 fixed messages and `MessagesBody` stay as they
-are (low blast radius).
+the new card renders the backend list.
 
 ## Tasks
 
