@@ -105,6 +105,11 @@ services:
       CHAT_MODEL: ${CHAT_MODEL:-deepseek-chat}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Panel-configurable model API key keystore (AES-256-GCM KEK). Optional at
+      # boot; required only when an admin saves a key from the panel. KEK lives
+      # here (env), ciphertext in the DB. Generate:
+      # python -c "import base64,secrets;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
       # Panel assistant (AgentChat) provider is configured independently from
       # the WhatsApp chat provider. These MUST be forwarded here: without them
       # the container silently falls back to app/config.py defaults

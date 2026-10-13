@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     chat_provider: str = "deepseek"  # "deepseek" | "openrouter"
     deepseek_api_key: str | None = None
     openrouter_api_key: str | None = None
+    settings_encryption_key: str | None = None
     chat_model: str = "deepseek-chat"
     assistant_chat_provider: str = "openrouter"
     assistant_chat_model: str = "google/gemini-2.5-flash"

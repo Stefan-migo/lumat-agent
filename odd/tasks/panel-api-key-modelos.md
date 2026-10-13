@@ -68,29 +68,29 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
 ## Tareas (IDs estables)
 
 ### Work unit 1 — Almacén cifrado del secreto (backend core)
-- [ ] **AK-1 — Migración.** `db/migrations/053_panel_secrets.sql`: tabla
+- [x] **AK-1 — Migración.** `db/migrations/053_panel_secrets.sql`: tabla
   `panel_secrets(key text PRIMARY KEY, ciphertext bytea NOT NULL, nonce bytea NOT NULL, updated_by int
   REFERENCES users(id), updated_at timestamptz NOT NULL DEFAULT now())`. Rollback comentado. **Agregar
   `("053_panel_secrets",)` a `tests/integration/test_migrations.py`.**
-- [ ] **AK-2 — Modelo ORM.** `PanelSecret` en `app/models.py`.
-- [ ] **AK-3 — Config KEK.** `settings_encryption_key: str | None = None` en `app/config.py`; documentar en
+- [x] **AK-2 — Modelo ORM.** `PanelSecret` en `app/models.py`.
+- [x] **AK-3 — Config KEK.** `settings_encryption_key: str | None = None` en `app/config.py`; documentar en
   `infra/.env.example` (con comando de generación) y pasar en `infra/docker-compose.yml`.
-- [ ] **AK-4 — Cifrado.** `app/services/crypto.py`: AES-256-GCM. `encrypt(plaintext) -> (ciphertext, nonce)`,
+- [x] **AK-4 — Cifrado.** `app/services/crypto.py`: AES-256-GCM. `encrypt(plaintext) -> (ciphertext, nonce)`,
   `decrypt(ciphertext, nonce) -> str`; KEK derivada de `settings_encryption_key`; error claro si falta.
-- [ ] **AK-5 — Dependencia.** `cryptography` en `pyproject.toml`.
-- [ ] **AK-6 — Servicio de secretos.** `app/services/model_secrets.py`: `get_model_api_key(session)`
+- [x] **AK-5 — Dependencia.** `cryptography` en `pyproject.toml`.
+- [x] **AK-6 — Servicio de secretos.** `app/services/model_secrets.py`: `get_model_api_key(session)`
   (DB → env), `set_model_api_key(session, key, actor)` (cifra + audit redactado `model_api_key.set`),
   `clear_model_api_key(session, actor)` (`model_api_key.clear`). El audit **nunca** guarda el valor.
-- [ ] **AK-7 — Tests unit.** Round-trip crypto; KEK faltante → error claro; audit redactado (el valor
+- [x] **AK-7 — Tests unit.** Round-trip crypto; KEK faltante → error claro; audit redactado (el valor
   NO aparece en `audit_log`).
 
 ### Work unit 2 — Resolución hot-apply en runtime
-- [ ] **AK-8 — Resolver con caché.** `model_secrets.resolve_model_api_key()` con caché en proceso
+- [x] **AK-8 — Resolver con caché.** `model_secrets.resolve_model_api_key()` con caché en proceso
   (valor + expiración, TTL ~30-60s) que lee la DB vía `session_scope()`; fallback a env.
   `invalidate_model_key_cache()` para invalidación on-write.
-- [ ] **AK-9 — Wiring en `llm.py`.** `openai_client(provider)`: para `deepseek` resuelve vía el resolver
+- [x] **AK-9 — Wiring en `llm.py`.** `openai_client(provider)`: para `deepseek` resuelve vía el resolver
   (no `settings.deepseek_api_key` directo); `openrouter` sin cambios. Mismo error claro si no hay key.
-- [ ] **AK-10 — Tests del requisito duro.** Probar que la key del panel alimenta **AMBOS** caminos:
+- [x] **AK-10 — Tests del requisito duro.** Probar que la key del panel alimenta **AMBOS** caminos:
   `openai_client()` (chatbot, `chat_provider=deepseek`) **y** `openai_client("deepseek")` (asistente,
   `assistant_chat_provider=deepseek`); fallback a env cuando no hay key en DB; `openrouter` sigue usando su key.
 
@@ -129,3 +129,12 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
 - Grafo consultado (Graph Check): comunidades `session_scope`, `get_settings`, `routes/settings.py`,
   `agent_chat.py`, `chat/graph.py`, `Settings.tsx`, `api.ts`. Sin path directed `llm.py → routes/settings.py`
   (el cableado es nuevo).
+
+## Evidencia (PR1 — WU1+WU2)
+- `uv run pytest tests/` → **1974 passed**, exit 0 (12 tests nuevos sobre los 1962 de `main`).
+- Tests nuevos: `tests/unit/test_model_secrets.py` (5), `tests/integration/test_model_secrets.py` (1, requisito duro).
+- **Gotcha encontrado y corregido**: la migración `053` creaba `panel_secrets` sin `GRANT` al rol `app`
+  (least privilege) → el resolver chocaba con `permission denied` en cada llamada al LLM, tumbando ~40
+  tests de chat. Fix: `GRANT SELECT, INSERT, UPDATE, DELETE ON panel_secrets TO app;`.
+- **Gotcha encontrado y corregido**: `panel_secrets` faltaba en `EXPECTED_TABLES` (`test_migrations.py`).
+- La DB de test se reseteó (`test-db.sh down`+`up`) para reaplicar la migración con el GRANT.
