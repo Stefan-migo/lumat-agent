@@ -36,22 +36,22 @@ Refresh hecho al inicio de sesión (9429 nodos). Nodos consultados: `Dashboard.t
 `ConversationThread.tsx`, `api.ts`, `api/serializers.py`, `models.py`.
 
 ## Tareas (IDs estables)
-- [ ] **F1 — Dashboard "Agenda de hoy": hora formateada.** Hoy `Dashboard.tsx:176` renderiza
+- [x] **F1 — Dashboard "Agenda de hoy": hora formateada.** Hoy `Dashboard.tsx:176` renderiza
   `row.local_start` crudo (ISO con microsegundos, ej. `2026-10-13T16:22:05.811220`). Fix: formatear
   con el util compartido `web/src/components/shared/agendaTime.ts` (`formatAgendaSlot`, tz-aware, 24h).
   Frontend-only.
-- [ ] **F2 — Conversaciones + ConversationThread: banner de conexión.** Causa raíz:
+- [x] **F2 — Conversaciones + ConversationThread: banner de conexión.** Causa raíz:
   `realtime.ts:78` `subscribeStatus()` no emite el estado actual; las páginas arrancan en
   `"disconnected"` y, al navegar con el socket ya abierto (`connect()` hace early-return en
   `realtime.ts:80`), nunca reciben `connected` → banner permanente falso. Arreglo mínimo: trackear el
   status actual y emitirlo al suscribir (corrige también el indicador de `AgentChat.tsx`).
   **Decisión pendiente del owner**: ¿arreglar y dejar el banner, o arreglar y sacarlo?
-- [ ] **F3 — Clientes → card "Casos del cliente": renombrar a "Caso activo".** `ClientFicha.tsx:684`.
+- [x] **F3 — Clientes → card "Casos del cliente": renombrar a "Caso activo".** `ClientFicha.tsx:684`.
   Frontend-only.
-- [ ] **F4 — Clientes → "Casos anteriores": paginación máx 5/página.** Reusar
+- [x] **F4 — Clientes → "Casos anteriores": paginación máx 5/página.** Reusar
   `web/src/components/primitives/Pagination.tsx` en tabla desktop y cards mobile; clamp de página al
   cambiar cliente/conteo. Frontend-only. (Archivar casos → diferido.)
-- [ ] **F5 — Presentación del resumen (blob de texto libre).** `ClientFicha.tsx` (caso activo, ~:485)
+- [x] **F5 — Presentación del resumen (blob de texto libre).** `ClientFicha.tsx` (caso activo, ~:485)
   y `AppointmentDetail.tsx:199` (visita técnica). El resumen lo genera el LLM como texto libre
   (`personas/summary.md`); no se parsea a mano. Fix: mejorar tipografía/espaciado/estructura de lectura.
   Una mejora con label/value requeriría contrato backend → follow-up, fuera de este slice.
@@ -71,7 +71,16 @@ El banner es un **bug de estado desactualizado**, no una caída real. Opciones:
 - Backend: no aplica en este slice.
 
 ## Progreso
-- (nada aún)
+- [x] F1 — `22940bdb`
+- [x] F2 — `48e0bd04` (decisión owner: arreglar y **dejar** el banner; el fix lo vuelve preciso)
+- [x] F3 — `5c528417`
+- [x] F4 — `d9b414de`
+- [x] F5 — `1d24885d` + `4965c623` (guard: un resumen que no arranca con un marcador conocido cae al texto completo, nunca se recorta)
+
+Verificación: `npm run build` ✅. Suites Dashboard / realtime / ClientFicha / ConversationsList
+/ ConversationThread / AppointmentDetail / AgentChat ✅ (214 tests). `AgentChat` flakea por timeout
+bajo carga paralela; aislado pasa 68/68 (flake conocido, no regresión).
 
 ## Próximo paso
-Resolver la decisión de F2 y arrancar por F1.
+Owner revisa en http://127.0.0.1:5174/panel/app/. Después: integrar `origin/main`, chequeo
+pre-merge y PR. El CRUD de backend (KB, usuarios, archivar casos) va a un worktree aparte.
