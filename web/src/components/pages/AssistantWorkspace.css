@@ -483,7 +483,15 @@
 .assistant-workspace--context-collapsed .assistant-workspace__context { grid-column: 3; }
 
 @media (min-width: 40rem) and (max-width: 64rem) {
-  .assistant-workspace {
+  /* Same specificity reason as the phone block: the collapsed templates use
+     `:not()` pairs (0,3,0), so a bare `.assistant-workspace` would lose and the
+     tablet would keep the 3-column grid instead of the single-column + overlay
+     layout. Repeat every modifier combination. */
+  .assistant-workspace,
+  .assistant-workspace:not(.assistant-workspace--projects-visible):not(.assistant-workspace--context-visible),
+  .assistant-workspace:not(.assistant-workspace--projects-visible).assistant-workspace--context-visible,
+  .assistant-workspace.assistant-workspace--projects-visible:not(.assistant-workspace--context-visible),
+  .assistant-workspace--projects-visible.assistant-workspace--context-visible {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
     height: 100%;
@@ -524,7 +532,16 @@
 }
 
 @media (max-width: 40rem) {
-  .assistant-workspace {
+  /* Every modifier combination must be repeated here: the collapsed templates
+     below use `:not()` pairs (specificity 0,3,0) and would otherwise win over a
+     bare `.assistant-workspace` (0,1,0) regardless of this media query — which
+     left the phone in a 3-column grid with the thread squeezed into the 3.5rem
+     rail column. */
+  .assistant-workspace,
+  .assistant-workspace:not(.assistant-workspace--projects-visible):not(.assistant-workspace--context-visible),
+  .assistant-workspace:not(.assistant-workspace--projects-visible).assistant-workspace--context-visible,
+  .assistant-workspace.assistant-workspace--projects-visible:not(.assistant-workspace--context-visible),
+  .assistant-workspace--projects-visible.assistant-workspace--context-visible {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
