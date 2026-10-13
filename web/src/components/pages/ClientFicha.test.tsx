@@ -178,7 +178,33 @@ describe("ClientFicha page grammar", () => {
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getAllByText("#1").length).toBeGreaterThan(0);
-    expect(within(archive).getByText("Mostrando 1 caso anterior")).toBeInTheDocument();
+    expect(within(archive).getByText("Mostrando 1–1 de 1 casos anteriores")).toBeInTheDocument();
+  });
+
+  it("paginates previous cases across desktop and mobile and clamps after the case count changes", async () => {
+    const user = userEvent.setup();
+    const archivedCases = [...ficha.history.cases, ...Array.from({ length: 7 }, (_, index) => ({ ...ficha.history.cases[1], id: index + 10, service: `Caso ${index + 1}` }))];
+    const manyCases = { ...ficha, history: { ...ficha.history, cases: archivedCases } };
+    const { container, rerender } = render(<ClientFicha data={manyCases} memories={memories} />);
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+
+    const archive = screen.getByRole("region", { name: "Casos anteriores" });
+    const desktopTable = archive.querySelector(".table-card__desktop tbody");
+    const mobileCards = archive.querySelector(".table-cards--mobile");
+    expect(desktopTable?.querySelectorAll("tr")).toHaveLength(5);
+    expect(mobileCards?.querySelectorAll("li")).toHaveLength(5);
+    expect(within(archive).getByText("Mostrando 1–5 de 8 casos anteriores")).toBeInTheDocument();
+
+    await user.click(within(archive).getByRole("button", { name: "Página siguiente" }));
+    expect(desktopTable?.querySelectorAll("tr")).toHaveLength(3);
+    expect(mobileCards?.querySelectorAll("li")).toHaveLength(3);
+    expect(within(archive).getByText("Mostrando 6–8 de 8 casos anteriores")).toBeInTheDocument();
+
+    rerender(<ClientFicha data={ficha} memories={memories} />);
+    expect(within(archive).queryByRole("navigation", { name: "Paginación de casos anteriores" })).not.toBeInTheDocument();
+    expect(desktopTable?.querySelectorAll("tr")).toHaveLength(1);
+    expect(mobileCards?.querySelectorAll("li")).toHaveLength(1);
+    expect(within(archive).getByText("Mostrando 1–1 de 1 casos anteriores")).toBeInTheDocument();
   });
 
   it("renders the active case summary as markdown and keeps conversation options plain", async () => {

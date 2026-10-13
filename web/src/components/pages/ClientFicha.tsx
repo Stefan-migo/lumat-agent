@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X, Bot, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, getConversation, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -16,6 +16,7 @@ import { Menu } from "../primitives/Menu";
 import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { Tabs } from "../primitives/Tabs";
+import { Pagination } from "../primitives/Pagination";
 import "./ClientFichaDialogs.css";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -119,6 +120,7 @@ const priorityLabel = (priority: string | null) => priority ? priority.charAt(0)
 
 export function ClientFicha({ customerId, initialTab, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState(initialTab ?? "summary");
+  const [archivedCasePage, setArchivedCasePage] = useState(1);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [caseEditTarget, setCaseEditTarget] = useState<FichaCase | null>(null);
@@ -186,6 +188,11 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   const equipmentData = useAsyncData(fetchEquipment, fichaCustomerId !== undefined, equipmentRefresh + (mergedCustomerId ?? 0));
   const equipmentRows = equipmentData.data ?? [];
   const data = mergedCustomerId !== null ? fetched.data?.ficha : refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
+  const caseCount = data?.history.cases.length ?? 0;
+  const archivedCaseCount = Math.max(0, caseCount - Number(data?.history.cases.some((row) => row.is_open) ?? false));
+  const archivedCasePageCount = Math.ceil(archivedCaseCount / 5);
+  useEffect(() => setArchivedCasePage(1), [fichaCustomerId, caseCount]);
+  useEffect(() => setArchivedCasePage((page) => Math.min(page, Math.max(1, archivedCasePageCount))), [archivedCasePageCount]);
   const memories = mergedCustomerId !== null ? fetched.data?.memories ?? [] : refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
   const state: FichaState = controlledState ?? (controlledData ? "ready" : fetched.state);
@@ -207,6 +214,10 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   const { customer, history } = data;
   const activeCase = history.cases.filter((row) => row.is_open).at(-1) ?? null;
   const archivedCases = history.cases.filter((row) => row.id !== activeCase?.id);
+  const currentArchivedCasePage = Math.min(archivedCasePage, Math.max(1, archivedCasePageCount));
+  const visibleArchivedCases = archivedCases.slice((currentArchivedCasePage - 1) * 5, currentArchivedCasePage * 5);
+  const archivedRangeStart = archivedCases.length ? (currentArchivedCasePage - 1) * 5 + 1 : 0;
+  const archivedRangeEnd = Math.min(currentArchivedCasePage * 5, archivedCases.length);
   const appointments = history.appointments ?? [];
   const openCaseCount = history.cases.filter((row) => row.is_open).length;
   const futureAppointmentCount = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now()).length;
@@ -685,16 +696,16 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
           {customerDataCard}
           <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores">
             {archivedCases.length ? <>
-              <div className="data-region table-card__desktop"><DataTable columns={archivedCaseColumns} rows={archivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
+              <div className="data-region table-card__desktop"><DataTable columns={archivedCaseColumns} rows={visibleArchivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
               <ul className="table-cards table-cards--mobile client-ficha__archived-cards" aria-label="Lista de casos anteriores">
-                {archivedCases.map((row) => <li className="table-card__item client-ficha__archived-card" key={row.id}>
+                {visibleArchivedCases.map((row) => <li className="table-card__item client-ficha__archived-card" key={row.id}>
                   <div className="client-ficha__archived-card-head"><strong>#{row.id}</strong><span>{row.service}</span>{archivedCaseMenu(row)}</div>
                   <div className="client-ficha__archived-card-badges">{row.priority ? <Badge tone="warning">{priorityLabel(row.priority)}</Badge> : null}<Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge></div>
                   <div className="client-ficha__archived-card-facts"><div><small>Responsable</small><strong>{data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto CLP</small><strong>{row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount)}</strong></div></div>
                 </li>)}
               </ul>
             </> : <EmptyState title="No hay casos anteriores" />}
-            <p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p>
+            <footer className="table-footer"><span className="table-footer__count">Mostrando {archivedRangeStart}–{archivedRangeEnd} de {archivedCases.length} casos anteriores</span>{archivedCasePageCount > 1 ? <Pagination page={currentArchivedCasePage} pageCount={archivedCasePageCount} onPageChange={setArchivedCasePage} ariaLabel="Paginación de casos anteriores" /> : null}</footer>
           </Card></section>
         </div> : null}
       {activeTab === "visits" ? <div className="detail-region__main">
