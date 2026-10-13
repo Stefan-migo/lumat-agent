@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
+import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, PlanningSession, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -23,7 +23,6 @@ import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
 import { PlanningSessions } from "./PlanningSessions";
 import { groupThreadsByDate } from "./threadDateGroups";
-import type { AssistantMobileActions } from "../domain/PanelShell";
 import "./AssistantWorkspace.css";
 
 export type WorkspaceTab =
@@ -51,7 +50,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, registerAssistantMobileActions, onChangeProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; registerAssistantMobileActions?: (actions: AssistantMobileActions | null) => void; onChangeProject?: () => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -126,11 +125,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     const query = search.trim().toLocaleLowerCase();
     return query ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : projects;
   }, [projects, search]);
-
-  useEffect(() => {
-    registerAssistantMobileActions?.({ openNavigation: () => setNavigationOpen(true), openThreadDetail: () => setThreadDetailOpen(true) });
-    return () => registerAssistantMobileActions?.(null);
-  }, [registerAssistantMobileActions]);
 
   useEffect(() => {
     let current = true;
@@ -405,6 +399,15 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         </div> : null}
       </Dialog>
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
+      <header className="assistant-workspace__mobile-header" aria-label="Controles del asistente">
+        <button type="button" aria-label="Abrir navegación del asistente" aria-haspopup="dialog" onClick={() => setNavigationOpen(true)}><MenuIcon aria-hidden="true" /></button>
+        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${activeProject?.name ?? selectedProject?.name ?? "General"}`} onClick={() => setProjectSheetOpen(true)}>
+          <Icon icon={Folder} size="sm" />
+          <span>{activeProject?.name ?? selectedProject?.name ?? "General"}</span>
+          <Icon icon={ChevronDown} size="sm" />
+        </button>
+        <button type="button" aria-label="Detalle del hilo" aria-haspopup="dialog" onClick={() => setThreadDetailOpen(true)}><Info aria-hidden="true" /></button>
+      </header>
       <aside
         id="assistant-workspace-projects"
         className="assistant-workspace__projects"

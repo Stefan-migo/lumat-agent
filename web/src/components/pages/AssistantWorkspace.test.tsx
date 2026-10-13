@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { InternalChatThreadSummary } from "../../types";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
-import { PanelShell } from "../domain/PanelShell";
 import { AgentChat } from "./AgentChat";
 import { AssistantWorkspace } from "./AssistantWorkspace";
 import { groupThreadsByDate } from "./threadDateGroups";
@@ -86,7 +85,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
   });
 
-  it("registers the navigation opener and opens the sheet with the real project count and existing actions", async () => {
+  it("opens navigation from its own mobile header with the real project count and existing actions", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
@@ -97,12 +96,10 @@ describe("AssistantWorkspace", () => {
     });
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const createThread = vi.fn();
-    const registration: { actions: { openNavigation: () => void; openThreadDetail: () => void } | null } = { actions: null };
-    render(<AgentChat role="admin" onThreadOpened={createThread} registerAssistantMobileActions={(actions) => { registration.actions = actions; }} />);
+    render(<AgentChat role="admin" onThreadOpened={createThread} />);
 
-    expect(registration.actions?.openNavigation).toEqual(expect.any(Function));
-    expect(registration.actions?.openThreadDetail).toEqual(expect.any(Function));
-    act(() => registration.actions?.openNavigation());
+    expect(screen.getByRole("button", { name: "Elegir proyecto: General" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Abrir navegación del asistente" }));
     const navigation = await screen.findByRole("dialog", { name: "Navegación" });
     expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
     expect(within(navigation).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
@@ -119,30 +116,13 @@ describe("AssistantWorkspace", () => {
     expect(within(projectSheet).getByRole("heading", { name: "Dos" })).toBeInTheDocument();
   });
 
-  it("routes the phone assistant hamburger to the sheet instead of the app drawer", () => {
-    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-    const openNavigation = vi.fn();
-    const openThreadDetail = vi.fn();
-    const { rerender } = render(<PanelShell user={{ username: "ana", role: "admin" }} currentView="chat" assistantMobileActions={{ openNavigation, openThreadDetail }}><p>Contenido</p></PanelShell>);
-
-    fireEvent.click(document.querySelector(".panel-shell__menu-button")!);
-
-    expect(openNavigation).toHaveBeenCalledOnce();
-    expect(screen.getByTestId("panel-drawer-backdrop")).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
-    expect(openThreadDetail).toHaveBeenCalledOnce();
-    rerender(<PanelShell user={{ username: "ana", role: "admin" }} currentView="clients"><p>Contenido</p></PanelShell>);
-    expect(screen.queryByRole("button", { name: "Detalle del hilo" })).not.toBeInTheDocument();
-  });
-
   it("shows thread detail with honest counts and reuses the project-change action", async () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
-    const register: { actions: { openNavigation: () => void; openThreadDetail: () => void } | null } = { actions: null };
     const onChangeProject = vi.fn();
-    render(<AssistantWorkspace onCreateThread={vi.fn()} attachments={[{ id: 1, thread_id: 7, filename: "brief.pdf", kind: "document", content_type: "application/pdf", size: 42 }]} artifacts={[]} registerAssistantMobileActions={(actions) => { register.actions = actions; }} onChangeProject={onChangeProject}><p>Thread</p></AssistantWorkspace>);
+    render(<AssistantWorkspace onCreateThread={vi.fn()} attachments={[{ id: 1, thread_id: 7, filename: "brief.pdf", kind: "document", content_type: "application/pdf", size: 42 }]} artifacts={[]} onChangeProject={onChangeProject}><p>Thread</p></AssistantWorkspace>);
 
-    act(() => register.actions?.openThreadDetail());
+    fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
     const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
     expect(within(detail).getByRole("button", { name: /Archivos del hilo 1/ })).toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: /Artefactos del hilo 0/ })).toBeInTheDocument();
@@ -167,17 +147,18 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" />);
 
-    const project = await screen.findByText("Operaciones");
+    const projectPane = within(screen.getByRole("complementary", { name: "Proyectos" }));
+    const project = await projectPane.findByText("Operaciones");
     expect(project).toBeInTheDocument();
-    expect(screen.getByText("Archivo")).toBeInTheDocument();
+    expect(projectPane.getByText("Archivo")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyecto" }), { target: { value: "arch" } });
-    await waitFor(() => expect(screen.queryByText("Operaciones")).not.toBeInTheDocument());
-    expect(screen.getByText("Archivo")).toBeInTheDocument();
+    await waitFor(() => expect(projectPane.queryByText("Operaciones")).not.toBeInTheDocument());
+    expect(projectPane.getByText("Archivo")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyecto" }), { target: { value: "operaciones" } });
-    await waitFor(() => expect(screen.getByText("Operaciones")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Operaciones").closest("button")!);
+    await waitFor(() => expect(projectPane.getByText("Operaciones")).toBeInTheDocument());
+    fireEvent.click(projectPane.getByText("Operaciones").closest("button")!);
     expect(screen.getByRole("button", { name: "Contexto y archivos" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Historial de hilos" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Agregar agente" })).not.toBeInTheDocument();

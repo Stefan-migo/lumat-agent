@@ -45,7 +45,6 @@ import type {
   ProjectFile,
   Role,
 } from "../../types";
-import type { AssistantMobileActions } from "../domain/PanelShell";
 import { realtimeClient } from "../../realtime";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
@@ -284,10 +283,9 @@ export interface AgentChatProps {
   userName?: string;
   threadId?: number;
   onThreadOpened?: (id: number) => void;
-  registerAssistantMobileActions?: (actions: AssistantMobileActions | null) => void;
 }
 
-export function AgentChat({ role, userName, threadId, onThreadOpened, registerAssistantMobileActions }: AgentChatProps) {
+export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentChatProps) {
   const isPhone = usePhoneViewport();
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
@@ -867,7 +865,6 @@ export function AgentChat({ role, userName, threadId, onThreadOpened, registerAs
 
   return (
     <AssistantWorkspace
-      registerAssistantMobileActions={registerAssistantMobileActions}
       onChangeProject={() => void openProjectPicker()}
       onCreateThread={() => void newChat()}
       onCreateDefaultThread={() => void createDefaultChat()}
