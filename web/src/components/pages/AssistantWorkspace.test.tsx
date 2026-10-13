@@ -100,9 +100,17 @@ describe("AssistantWorkspace", () => {
 
     expect(screen.getByRole("button", { name: "Elegir proyecto: General" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Elegir proyecto: General" }));
-    const directProjectSheet = await screen.findByRole("dialog", { name: "Proyecto" });
-    expect(within(directProjectSheet).getByRole("button", { name: "Uno Seleccionado" })).toBeInTheDocument();
-    fireEvent.click(within(directProjectSheet).getByRole("button", { name: "Cerrar" }));
+    const picker = await screen.findByRole("dialog", { name: "Elegir proyecto" });
+    expect(within(picker).getByRole("button", { name: "Uno" })).toBeInTheDocument();
+    expect(within(picker).getByRole("button", { name: "General" })).toBeInTheDocument();
+    expect(within(picker).queryByText("Contexto y archivos")).not.toBeInTheDocument();
+    expect(within(picker).getByRole("button", { name: "Crear proyecto" })).toBeInTheDocument();
+    fireEvent.click(within(picker).getByRole("button", { name: "Crear proyecto" }));
+    const createDialog = await screen.findByRole("dialog", { name: "Crear proyecto" });
+    expect(within(createDialog).getByLabelText("Nombre")).toBeVisible();
+    expect(within(createDialog).getByLabelText("Slug")).toBeVisible();
+    expect(within(createDialog).getByLabelText("Propósito")).toBeVisible();
+    fireEvent.click(within(createDialog).getByRole("button", { name: "Cerrar" }));
     fireEvent.click(screen.getByRole("button", { name: "Abrir navegación del asistente" }));
     const navigation = await screen.findByRole("dialog", { name: "Navegación" });
     expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
@@ -133,6 +141,26 @@ describe("AssistantWorkspace", () => {
     expect(within(detail).getByRole("button", { name: /Fuentes del hilo 0/ })).toBeInTheDocument();
     fireEvent.click(within(detail).getByRole("button", { name: "Cambiar" }));
     expect(onChangeProject).toHaveBeenCalledOnce();
+  });
+
+  it("changes the active thread project from the lean mobile picker", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [{ id: 1, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" }] }), { status: 200 });
+      if (url === "/panel/api/chat/threads/4" && init?.method === "PATCH") return new Response(JSON.stringify({ thread: { id: 4, proyecto: "ops", status: "open" } }), { status: 200 });
+      if (url === "/panel/api/chat/threads/4") return new Response(JSON.stringify({ thread: { id: 4, proyecto: "default", status: "open" }, messages: [] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    render(<AgentChat role="admin" threadId={4} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Elegir proyecto: General" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Operaciones" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ proyecto: "ops" }) }),
+    ));
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {

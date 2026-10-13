@@ -50,7 +50,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -85,6 +85,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [projectSheetOpen, setProjectSheetOpen] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [threadDetailOpen, setThreadDetailOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
@@ -115,7 +116,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
   const loadProjects = useCallback(() => listProjects(), []);
-  const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || projectSheetOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
+  const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || projectSheetOpen || projectPickerOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
   const projects = projectsData.data?.projects ?? [];
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const selectedProject = projects.find((project) => project.slug === (expandedProjectSlug ?? routeProjectSlug ?? activeProjectSlug)) ?? projects[0];
@@ -398,10 +399,17 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           <Button variant="secondary" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} size="sm" />Crear proyecto</Button>
         </div> : null}
       </Dialog>
+      <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto" variant="sheet">
+        <div className="assistant-workspace__project-picker">
+          <button type="button" aria-pressed={activeProjectSlug === "default"} onClick={() => { setProjectPickerOpen(false); onSelectProject?.("default"); }}>General{activeProjectSlug === "default" ? <span aria-label="Seleccionado">✓</span> : null}</button>
+          {projects.filter((project) => project.slug !== "default").map((project) => <button type="button" key={project.slug} aria-pressed={activeProjectSlug === project.slug} onClick={() => { setProjectPickerOpen(false); onSelectProject?.(project.slug); }}>{project.name}{activeProjectSlug === project.slug ? <span aria-label="Seleccionado">✓</span> : null}</button>)}
+          <Button variant="secondary" onClick={() => { setProjectPickerOpen(false); setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} size="sm" />Crear proyecto</Button>
+        </div>
+      </Dialog>
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
       <header className="assistant-workspace__mobile-header" aria-label="Controles del asistente">
         <button type="button" aria-label="Abrir navegación del asistente" aria-haspopup="dialog" onClick={() => setNavigationOpen(true)}><MenuIcon aria-hidden="true" /></button>
-        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${activeProject?.name ?? selectedProject?.name ?? "General"}`} onClick={() => setProjectSheetOpen(true)}>
+        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${activeProject?.name ?? selectedProject?.name ?? "General"}`} onClick={() => setProjectPickerOpen(true)}>
           <Icon icon={Folder} size="sm" />
           <span>{activeProject?.name ?? selectedProject?.name ?? "General"}</span>
           <Icon icon={ChevronDown} size="sm" />
@@ -506,17 +514,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             })
           )}
         </div>
-        <Dialog open={createProjectOpen} onClose={() => { setCreateProjectOpen(false); resetProjectForm(); }} title="Crear proyecto">
-          <div className="assistant-workspace__thread-dialog">
-            <Input label="Nombre" value={projectName} onChange={(event) => updateProjectName(event.target.value)} autoComplete="off" />
-            <Input label="Slug" value={projectSlug} onChange={(event) => { setProjectSlugEdited(true); setProjectSlug(event.target.value); }} autoComplete="off" />
-            <Textarea label="Propósito" value={projectPurpose} onChange={(event) => setProjectPurpose(event.target.value)} />
-            {projectCreateError ? <p role="alert">{projectCreateError}</p> : null}
-            <Button onClick={() => void submitProject()} disabled={projectSubmitting || !projectName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(projectSlug.trim()) || !projectPurpose.trim()}>
-              {projectSubmitting ? "Creando…" : "Crear proyecto"}
-            </Button>
-          </div>
-        </Dialog>
         </section>
         <section className="assistant-workspace__agents" aria-label="Agentes" hidden={!projectsVisible}>
           {(() => {
@@ -534,6 +531,18 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           })()}
         </section>
       </aside>
+
+      <Dialog open={createProjectOpen} onClose={() => { setCreateProjectOpen(false); resetProjectForm(); }} title="Crear proyecto" variant="sheet">
+        <div className="assistant-workspace__thread-dialog">
+          <Input label="Nombre" value={projectName} onChange={(event) => updateProjectName(event.target.value)} autoComplete="off" />
+          <Input label="Slug" value={projectSlug} onChange={(event) => { setProjectSlugEdited(true); setProjectSlug(event.target.value); }} autoComplete="off" />
+          <Textarea label="Propósito" value={projectPurpose} onChange={(event) => setProjectPurpose(event.target.value)} />
+          {projectCreateError ? <p role="alert">{projectCreateError}</p> : null}
+          <Button onClick={() => void submitProject()} disabled={projectSubmitting || !projectName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(projectSlug.trim()) || !projectPurpose.trim()}>
+            {projectSubmitting ? "Creando…" : "Crear proyecto"}
+          </Button>
+        </div>
+      </Dialog>
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
         {openTabs.length > 0 ? <nav className="assistant-workspace__thread-tabs" aria-label="Pestañas abiertas">
