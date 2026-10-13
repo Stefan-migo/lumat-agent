@@ -693,7 +693,7 @@
 .client-ficha-page .detail-region--cases > .client-ficha__data-card { grid-column: 2; grid-row: 1; }
 .client-ficha-page .detail-region--cases > .client-ficha__archived-cases { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
 /* The active case lives in its own inset panel, separated from the card title/subtitle. */
-.client-ficha__case-panel { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.client-ficha__case-panel { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 /* Mobile: the archived cases become cards (`.table-cards--mobile` reveals this list at <=40rem). */
 .client-ficha__archived-card { grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: var(--space-3); }
 .client-ficha__archived-card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); }
