@@ -254,7 +254,60 @@ desktop compact rail does **not** exist on mobile.
 - Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
 - **Not verified**: no browser visual pass yet.
 
-### M3 — mobile project sheet
+### M4 — mobile thread detail sheet
+
+- Commit `24cbe6f6` `feat(assistant): mobile thread detail sheet`.
+- `Detalle del hilo` bottom sheet: a project row with the `Cambiar` action (reuses
+  `changeProject` / the existing project picker) and the rows `Contexto del
+  proyecto`, `Recursos del proyecto`, `Capacidades del asistente`,
+  `Archivos del hilo N`, `Artefactos del hilo N`, `Fuentes del hilo N` — counts
+  are real (`attachments.length`, `artifacts.length`; sources stay `0`, matching
+  the desktop section) — plus the footer note.
+- **Trigger**: an info (ⓘ) control added to the shell mobile bar, shown only in
+  the assistant on a phone. **This placement is the orchestrator's inference from
+  the reference — the owner must confirm it in the visual pass.**
+- The M2 bare opener was generalised to a typed
+  `AssistantMobileActions { openNavigation, openThreadDetail }` (AppShell bridges
+  via a ref); no globals.
+- Tests: **64 passed**. Checks: `npx tsc -b --force --noEmit` pass · focused
+  vitest 64 passed · `npm run build` pass.
+- Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
+- **Not verified**: no browser visual pass yet.
+
+### M6 — full checks
+
+- Full web suite: `npx vitest run --no-file-parallelism` → **105 files / 1161
+  tests passed** (360s).
+- `npm run build` pass (existing >500 kB chunk warning only).
+- `npx tsc -b --force --noEmit` pass.
+- **Remaining**: the owner's browser pass at a phone viewport (the worktree's dev
+  stack must be brought up first).
+
+- Commits: `f0fd1ca5` `feat(assistant): mobile composer and empty state`, then
+  `a8cdef47` `fix(assistant): keep the desktop empty-state copy and scope the
+  reference copy to the phone`.
+- Phone (`< 40rem`) layout for the empty state, the composer (input, `+`,
+  **Planificar** pill, send) and the status row. The composer, handlers and the
+  status row are reused; the status-row **rendering condition is unchanged** (D3
+  is still open). The composer placeholder stays
+  `Escribe un mensaje al asistente…`.
+- **Defect found by the orchestrator readback**: the first version changed the
+  empty-state copy **globally** — it deleted the time-based greeting from the
+  whole repo and left `userName` as a dead prop, violating the approved criterion
+  "desktop pixel-unchanged". A first correction attempt (CSS-only duplicate
+  variants) was **rejected**: JSDOM does not apply CSS, so both copies landed in
+  the DOM and 21 tests failed on duplicate headings. The shipped fix uses a
+  reactive `usePhoneViewport()` so **exactly one variant renders**.
+- Per **D4 (option b)** the reference copy applies only at `< 40rem`; desktop
+  keeps the greeting and its original copy.
+- Tests: **98 passed**. Checks: `npx tsc -b --force --noEmit` pass · focused
+  vitest 98 passed · `npm run build` pass.
+- Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
+- **Known duplication (follow-up, not fixed here)**: there are now three similar
+  local breakpoint hooks — `useIsPhone()` (`PanelShell.tsx`), `useDesktopWorkspace()`
+  (`AssistantWorkspace.tsx`) and `usePhoneViewport()` (`AgentChat.tsx`). They
+  should be consolidated into one shared hook.
+- **Not verified**: no browser visual pass yet.
 
 - Commit `53334dcf` `feat(assistant): mobile project sheet`.
 - `Proyecto` bottom sheet (`Dialog variant="sheet"`): `Buscar proyecto` input,
