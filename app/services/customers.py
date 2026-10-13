@@ -720,7 +720,8 @@ def unarchive_customer(session: Session, customer: Customer, *, actor: str) -> C
 
 
 def customer_history(
-    session: Session, customer_id: int, messages_limit: int | None = None
+    session: Session, customer_id: int, messages_limit: int | None = None, *,
+    include_archived_cases: bool = False,
 ) -> dict:
     """Complete linked history: conversations, cases, messages (CR-5).
 
@@ -737,11 +738,10 @@ def customer_history(
         .where(Conversation.customer_id == customer_id)
         .order_by(Conversation.created_at, Conversation.id)
     ).all()
-    cases = session.scalars(
-        select(Case)
-        .where(Case.customer_id == customer_id)
-        .order_by(Case.id)
-    ).all()
+    cases_query = select(Case).where(Case.customer_id == customer_id)
+    if not include_archived_cases:
+        cases_query = cases_query.where(Case.archived_at.is_(None))
+    cases = session.scalars(cases_query.order_by(Case.id)).all()
     messages_total = session.scalar(
         select(func.count(Message.id))
         .join(Conversation, Message.conversation_id == Conversation.id)
@@ -795,6 +795,7 @@ def customer_history(
                 "responsible_id": ca.responsible_id,
                 "escalated_at": ca.escalated_at,
                 "closed_at": ca.closed_at,
+                "archived_at": ca.archived_at,
                 "acknowledged_at": ca.acknowledged_at,
                 "ack_by": ca.ack_by,
                 "is_open": case_is_open(ca),

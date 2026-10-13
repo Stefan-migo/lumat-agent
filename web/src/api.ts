@@ -217,12 +217,14 @@ export const updateCustomerProfile = (id: number, body: CustomerProfileUpdateReq
 export const updateCustomerConsent = (id: number, consent: boolean) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/consent`, { consent });
 export const archiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/archive`);
 export const unarchiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/unarchive`);
-export const getClientFicha = (id: number) => apiFetch<ClientFichaResponse>(`/panel/api/clients/${id}`);
+export const getClientFicha = (id: number, includeArchivedCases = false) => apiFetch<ClientFichaResponse>(`/panel/api/clients/${id}${includeArchivedCases ? '?include_archived_cases=true' : ''}`);
 export const previewClientMerge = (id: number, otherId: number) => apiFetch<ClientMergePreview>(`/panel/api/clients/${id}/merge-preview?with=${otherId}`);
 export const mergeClient = (id: number, otherId: number) => postJson<ClientMergeResponse>(`/panel/api/clients/${id}/merge`, { other_id: otherId });
 export const fetchCases = () => apiFetch<CasesResponse>('/panel/api/cases');
 export const createCase = (body: ManualCaseRequest) => postJson<{ ok: true; case: Case }>('/panel/api/cases', body);
 export const updateCaseAmount = (id: number, amount: number | null) => postJson<{ ok: true; case: Case }>(`/panel/api/cases/${id}/update`, { amount });
+export const archiveCase = (id: number) => postJson<{ ok: true; case: Case }>(`/panel/api/cases/${id}/archive`);
+export const unarchiveCase = (id: number) => postJson<{ ok: true; case: Case }>(`/panel/api/cases/${id}/unarchive`);
 export const changeClientState = (id: number, state: CustomerState) => postJson<ClientStateMutationResponse>(`/panel/api/clients/${id}/state`, { state });
 export const addClientNote = (id: number, note: string) => postJson<ClientNoteMutationResponse>(`/panel/api/clients/${id}/notes`, { note });
 export const updateClientNote = (id: number, noteId: number, note: string) => patchJson<ClientNoteMutationResponse>(`/panel/api/clients/${id}/notes/${noteId}`, { note });

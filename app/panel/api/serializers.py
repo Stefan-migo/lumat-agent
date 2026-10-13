@@ -187,6 +187,7 @@ def to_case_dict(case: Case) -> dict:
         "summary": case.summary,
         "escalated_at": _iso(case.escalated_at),
         "closed_at": _iso(case.closed_at),
+        "archived_at": _iso(case.archived_at),
         "acknowledged_at": _iso(case.acknowledged_at),
         "ack_by": case.ack_by,
     }

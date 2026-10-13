@@ -567,3 +567,54 @@ def test_case_ack_missing_404_json(client, make_user):
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("application/json")
     assert resp.json() == {"detail": "case not found"}
+
+
+def test_case_archive_requires_closed_case_and_is_reversible(client, make_user):
+    open_id = _seed_case(status="escalado")
+    closed_id = _seed_case(status="cerrado", phone="+56912121212")
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    rejected = client.post(f"/panel/api/cases/{open_id}/archive")
+    archived = client.post(f"/panel/api/cases/{closed_id}/archive")
+    restored = client.post(f"/panel/api/cases/{closed_id}/unarchive")
+
+    assert rejected.status_code == 409
+    assert rejected.json() == {"detail": "only closed cases can be archived"}
+    assert archived.status_code == restored.status_code == 200
+    assert archived.json()["case"]["archived_at"] is not None
+    assert restored.json()["case"]["archived_at"] is None
+    with SessionLocal() as session:
+        audits = session.scalars(select(AuditLog).where(AuditLog.entity_id == str(closed_id))).all()
+    assert [(audit.action, audit.actor) for audit in audits] == [
+        ("case.archived", "oper"), ("case.unarchived", "oper")
+    ]
+
+
+def test_case_archive_routes_require_operator(client, make_user):
+    case_id = _seed_case(status="cerrado")
+    assert client.post(f"/panel/api/cases/{case_id}/archive").status_code == 401
+    make_user("tech", "tech-pass", role="tecnico")
+    _login(client, "tech", "tech-pass")
+    assert client.post(f"/panel/api/cases/{case_id}/archive").status_code == 403
+    client.post("/panel/api/logout")
+    make_user("boss", "boss-pass", role="admin")
+    _login(client, "boss", "boss-pass")
+    assert client.post(f"/panel/api/cases/{case_id}/archive").status_code == 200
+
+
+def test_client_ficha_hides_archived_cases_unless_requested(client, make_user):
+    case_id = _seed_case(status="cerrado")
+    with SessionLocal() as session:
+        case = session.get(Case, case_id)
+        customer_id = case.customer_id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    assert client.post(f"/panel/api/cases/{case_id}/archive").status_code == 200
+
+    hidden = client.get(f"/panel/api/clients/{customer_id}").json()["history"]["cases"]
+    included = client.get(
+        f"/panel/api/clients/{customer_id}?include_archived_cases=true"
+    ).json()["history"]["cases"]
+    assert all(row["id"] != case_id for row in hidden)
+    assert any(row["id"] == case_id and row["archived_at"] for row in included)

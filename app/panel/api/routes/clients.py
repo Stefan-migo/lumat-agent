@@ -267,6 +267,7 @@ def client_consent_update(
 def client_ficha(
     customer_id: int,
     messages_limit: int | None = None,
+    include_archived_cases: bool = False,
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
@@ -283,7 +284,10 @@ def client_ficha(
     )
     return {
         "customer": to_customer_dict(customer),
-        "history": customers.customer_history(session, customer_id, messages_limit),
+        "history": customers.customer_history(
+            session, customer_id, messages_limit,
+            include_archived_cases=include_archived_cases,
+        ),
         "notes": [
             to_note_dict(n) for n in customers.list_notes(session, customer_id)
         ],
