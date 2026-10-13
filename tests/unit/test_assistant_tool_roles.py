@@ -50,6 +50,12 @@ def test_business_memory_roles_match_business_tool_permissions():
     assert {UserRole.ADMIN, UserRole.OPERADOR} <= registry.ROLE_TOOL_ALLOWLIST["customers.search"]
 
 
+def test_chatbot_metrics_is_allowed_to_admin_and_operator_only():
+    assert registry.ROLE_TOOL_ALLOWLIST["analytics.chatbot_metrics"] == frozenset({
+        UserRole.ADMIN, UserRole.OPERADOR,
+    })
+
+
 def test_role_tool_map_is_complete_and_covers_every_role():
     assert set(registry.ROLE_TOOL_ALLOWLIST) == set(registry.TOOL_REGISTRY)
     assert set(ROLE_TOOL_EXPECTATIONS) == set(UserRole)

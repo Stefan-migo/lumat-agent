@@ -26,6 +26,7 @@ DEFAULT_TOOLS = {
     "memory.update",
     "memory.delete",
     "dashboard.summary",
+    "analytics.chatbot_metrics",
     "project.list",
     "project.find",
     "list_project_files",
