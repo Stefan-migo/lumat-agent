@@ -319,7 +319,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               </div>
               <div className="settings-messages__footer">{footer()}<Button disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button></div>
            </Card>
-           <Card title="Respuestas prediseñadas" description="Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, fecha, hora).">
+           <Card title="Respuestas prediseñadas" description="Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada).">
              <p className="settings-messages__info">A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.</p>
              <p className="settings-messages__helper">Datos disponibles: <code>{"{{nombre}}, {{comuna}}, {{direccion}}, {{equipo}}, {{problema}}, {{disponibilidad}}, {{visita}}"}</code></p>
              <div className="settings-messages__templates" aria-label="Respuestas prediseñadas">
