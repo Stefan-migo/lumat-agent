@@ -106,6 +106,10 @@ mezclarlas con pulido cosmético degradaba la review.
 ## Criterios de aceptación
 - **(KB)** El delete borra el documento y sus chunks (cascade); 404 si no existe; solo admin;
   audit `kb.document_delete` con actor = username del admin.
+- **(Usuarios)** Delete admin-only; 404 si no existe; 403 auto-borrado; 409 si es el último admin o
+  si está referenciado por FKs (sin cascada); audit `user.delete`.
+- **(Casos)** Archivar solo casos cerrados (409 si está abierto); reversible; oculto por defecto en la
+  ficha y visible con `include_archived_cases`; audit `case.archived`/`case.unarchived`.
 
 ## Entrega
 Presupuesto advisory ~400 líneas por work unit (no es cap duro). Estrategia: un work unit por commit;
@@ -125,3 +129,16 @@ PR(s) a decidir al cerrar el primer work unit. Si el acumulado supera ~400 líne
 - RDD `review assess` (`--base-ref 3475bba7 --committed-only`): `risk: medium`, `review_due: false` (`under_budget`, 227 líneas < 400) → sin review aún; el boundary queda pendiente en el slice hasta que un commit posterior alcance el presupuesto.
 - Nota de entorno: la DB de test se levanta con `bash infra/test-db.sh up` (puerto derivado 6026) y `eval "$(bash infra/test-db.sh env)"`; sin esa env `db/migrate.sh` apunta a un puerto muerto.
 - RDD review del slice (lineage `review-bf916289a918a2f1`, 1 lente `review-reliability`, `approved`, authority **burned**): **1 hallazgo advisory no bloqueante** — **R3-001** (`web/src/components/pages/KbDocumentDetail.tsx:119`): tras borrar usa `window.history.back()`, que no garantiza volver a la lista si el detalle se abrió directo o el historial previo está fuera del panel (mismo patrón que el botón "Volver" ya existente). Trabajo posterior; NO re-corre la review sobre este candidato.
+
+### WU2 — Usuarios delete
+- Commit `2690c80e` `feat(users): hard delete with self/last-admin guards and FK conflict` (8 archivos).
+- Backend: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/functional/test_api_users.py -q` — 13 passed (spot-check del padre). Frontend vitest 61 passed. `npm run build` passed.
+- RDD assess (base `3475bba7`, committed-only): medium, 422 líneas → `review_due: true` (`slice_budget_reached`) → review del slice KB+Usuarios.
+- Nota: la guardia de último admin es redundante con la de auto-borrado (el admin que actúa es activo y se cuenta); se conserva como defensa en profundidad.
+
+### WU3 — Casos archivados
+- Commit `60e600ec` `feat(cases): soft-archive closed cases with ficha toggle` (14 archivos, +210/-23).
+- Backend: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py -q` — 23 passed (spot-check del padre). Frontend vitest 94 passed. `npm run build` passed.
+- RDD assess (base `2690c80e`, committed-only): medium, **234 líneas**, `review_due: false` (`under_budget`) → **sin review** para WU3; el native review solo se dispara al alcanzar ~400 líneas o riesgo alto.
+- Desvío TDD declarado por el writer: el test de componente `ClientFicha` se agregó después de implementar la UI (no se observó RED); backend y contratos de API sí tuvieron RED observado.
+- Aviso: la corrida de vitest imprimió warnings de React `act(...)` (no fallos). `ruff` no está instalado en el entorno → lint no ejecutado.
