@@ -567,6 +567,7 @@ class Memory(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     pin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    handoff: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     review_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[MemoryStatus] = mapped_column(
         pg_enum(MemoryStatus, "memory_status"),
