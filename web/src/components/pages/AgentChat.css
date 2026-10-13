@@ -114,9 +114,12 @@
   .assistant-chat__composer-controls > .btn:disabled[title="Próximamente"] { display: none; }
   .assistant-chat__composer-controls .assistant-chat__planning-pill { margin-left: 0; padding-inline: var(--space-2); }
   .assistant-chat__composer-tray { right: var(--space-2); left: var(--space-2); padding-inline: var(--space-2); }
-  .assistant-chat__composer-bottom-row { gap: var(--space-2); }
+  /* One line, like the reference. `wrap` + `margin-left: auto` made the row
+     break into two lines on a phone, leaving the first line hidden behind the
+     composer card. */
+  .assistant-chat__composer-bottom-row { flex-wrap: nowrap; gap: var(--space-2); }
   .assistant-chat__project-popover { min-width: 0; max-width: 100%; padding-right: var(--space-2); }
   .assistant-chat__project-popover .popover__trigger { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .assistant-chat__composer-bottom-row > .popover { padding-right: var(--space-2); }
-  .assistant-chat__tools-summary { margin-left: auto; }
+  .assistant-chat__composer-bottom-row > .popover { min-width: 0; padding-right: var(--space-2); }
+  .assistant-chat__tools-summary { flex: 0 0 auto; margin-left: auto; }
 }
