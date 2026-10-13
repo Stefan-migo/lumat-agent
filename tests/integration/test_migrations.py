@@ -74,6 +74,7 @@ EXPECTED_TABLES = {
     "project_audit",
     "project_files",  # 042_project_files.sql (durable project-scoped file store)
     "assistant_artifacts",  # 044_assistant_artifacts.sql (assistant-produced files)
+    "panel_secrets",  # 053_panel_secrets.sql (encrypted panel-managed credentials)
     "schema_migrations",
 }
 
@@ -744,6 +745,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("050_kb_chunks_cascade",),
         ("051_cases_archived_at",),
         ("052_memory_handoff",),
+        ("053_panel_secrets",),
     ]
 
 

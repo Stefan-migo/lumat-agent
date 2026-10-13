@@ -77,7 +77,7 @@ from app.main import create_app  # noqa: E402
 
 # Tables truncated before each test (full set — shared test DB).
 TRUNCATE_TABLES = (
-    "notification_attempts, notification_operations, appointment_history, appointments, technician_availability, technician_weekly_schedule, settings, audit_log, kb_chunks, kb_documents, conversation_events, "
+    "notification_attempts, notification_operations, appointment_history, appointments, technician_availability, technician_weekly_schedule, panel_secrets, settings, audit_log, kb_chunks, kb_documents, conversation_events, "
     "automation_installations, automation_rules, automation_executions, domain_events, "
     "memories, memory_relations, memory_observations, "
     "cases, internal_chat_messages, internal_chat_threads, messages, conversations, customer_notes, users, customers"

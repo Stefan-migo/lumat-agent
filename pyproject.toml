@@ -16,6 +16,7 @@ dependencies = [
     "openai>=1.40",
     "pypdf>=4.3",
     "httpx>=0.27",
+    "cryptography>=42",
     "fastembed>=0.3",
     # Panel stack (design D7): Jinja2 templates, signed-cookie sessions,
     # bcrypt password hashing (AP-1). itsdangerous is Starlette's cookie
