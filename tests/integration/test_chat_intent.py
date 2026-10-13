@@ -256,9 +256,11 @@ def test_sh4_user_text_only_in_user_input_slot(mock_chat):
     user = body["messages"][-1]["content"]
     # system prompt is static: no user text leaked into it
     assert "mi calefont no enciende" not in system
-    # user text is data, wrapped in <user_input>
+    # user text is data, wrapped in <user_input>; the preset catalog (empty
+    # here) rides in an inert <templates> DATA block (T4/T6).
     assert user == (
         "<conversation>(sin mensajes previos)</conversation>\n\n"
+        "<templates>(sin respuestas prediseñadas)</templates>\n\n"
         "<user_input>mi calefont no enciende</user_input>\n"
     )
 

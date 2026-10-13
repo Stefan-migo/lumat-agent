@@ -62,6 +62,7 @@ def test_prompt_respond_template(repo_root):
 def test_prompt_classify_template(repo_root):
     assert _read(repo_root, "prompts/classify.md") == (
         "<conversation>{{conversation}}</conversation>\n\n"
+        "<templates>{{templates}}</templates>\n\n"
         "<user_input>{{user_input}}</user_input>\n"
     )
 
@@ -369,9 +370,12 @@ def classify_client():
         yield client
 
 
-def test_classify_llm_classify_persona_and_template(classify_client):
+def test_classify_llm_classify_persona_and_template(classify_client, monkeypatch):
     # AC-3 static slot unchanged + template identical: persona via loader,
-    # user text inside the <user_input> slot (SH-4 input-as-data).
+    # user text inside the <user_input> slot (SH-4 input-as-data). The catalog
+    # is injected into the USER message as an inert <templates> DATA block.
+    catalog = [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}]
+    monkeypatch.setattr(_ci, "get_message_templates", lambda session: catalog)
     result = _ci._llm_classify(
         "necesito una caldera", message_id=5, conversation="Cliente: Quiero agendar una visita"
     )
@@ -379,10 +383,53 @@ def test_classify_llm_classify_persona_and_template(classify_client):
     assert call["messages"][0]["content"] == prompts.load("personas/classify.md")
     assert call["messages"][1]["content"] == prompts.render(
         "prompts/classify.md", conversation="Cliente: Quiero agendar una visita",
-        user_input="necesito una caldera"
+        templates="- id=horarios: Atendemos de {{disponibilidad}}.",
+        user_input="necesito una caldera",
     )
     assert result["intent"] == "caldera"
     assert result["injection"] is False
+
+
+def _classify_result_client(monkeypatch, reply_content: str, catalog: list[dict]):
+    """Spy the classifier's LLM boundaries with a catalog; returns the fake client."""
+    client = _FakeClient(reply_content=reply_content)
+    monkeypatch.setattr(_ci, "openai_client", lambda: client)
+    monkeypatch.setattr(_ci, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_ci, "record_llm_cost", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(_ci, "get_message_templates", lambda session: catalog)
+    return client
+
+
+def test_classify_llm_returns_selected_template_id(monkeypatch):
+    # T4: the same classifier call returns the id it picked from the catalog.
+    _classify_result_client(
+        monkeypatch,
+        '{"intent": "consulta", "template_id": "horarios", "injection": false}',
+        [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}],
+    )
+    result = _ci._llm_classify("a qué hora abren", message_id=1)
+    assert result["template_id"] == "horarios"
+
+
+def test_classify_llm_drops_template_id_outside_the_catalog(monkeypatch):
+    # The LLM is untrusted: an id that was never offered must not survive.
+    _classify_result_client(
+        monkeypatch,
+        '{"intent": "consulta", "template_id": "no-existe", "injection": false}',
+        [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}],
+    )
+    result = _ci._llm_classify("a qué hora abren", message_id=1)
+    assert result["template_id"] is None
+
+
+def test_classify_llm_empty_catalog_neutralizes_templates(monkeypatch):
+    # No catalog -> no behaviour change: neutral block, no id picked.
+    client = _classify_result_client(
+        monkeypatch, '{"intent": "consulta", "injection": false}', []
+    )
+    result = _ci._llm_classify("a qué hora abren", message_id=1)
+    assert result["template_id"] is None
+    assert "(sin respuestas prediseñadas)" in client.captured[-1]["messages"][1]["content"]
 
 
 def _dummy_state(**overrides):
