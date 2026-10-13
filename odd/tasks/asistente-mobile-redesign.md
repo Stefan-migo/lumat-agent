@@ -101,6 +101,26 @@ of D2/D4 above:
   (`AssistantWorkspace.tsx:509`) is a **child of `.assistant-workspace__projects`**,
   which M1's phone CSS hides with `display: none`.
 
+## Round 4 — mobile header project label (2026-10-13)
+
+The owner reported that the header's project selector looked hardcoded to
+`Proyecto Test`: the picker showed the check on `General` while the header still
+read `Proyecto Test`. Reproduced with a browser probe and traced to the label:
+
+- the picker checks `activeProjectSlug` (correct);
+- the header used `activeProject?.name ?? selectedProject?.name ?? "General"`, and
+  `selectedProject` ends in **`?? projects[0]`**. `projects` does **not** contain
+  the implicit `default`, so with `General` selected `activeProject` was
+  `undefined` and the header fell through to `projects[0]` — an arbitrary project.
+- The DB proved the selection *was* applied (thread 29: `proyecto = default`), so
+  only the label was wrong.
+
+Fixed with a single `headerProjectName` derived from `activeProjectSlug`
+(`"default"` → `General`, original `General` fallback kept) plus a JSDOM
+regression test (this class of bug *is* testable without a browser, unlike the
+CSS defects). Verified in a browser: `General` → `Proyecto Test` → `General` all
+update correctly; **31 tests** in `AssistantWorkspace.test.tsx`.
+
 ## Visual reference — target (4 surfaces)
 
 Shared, across all four: the shell mobile bar (hamburger · project selector
