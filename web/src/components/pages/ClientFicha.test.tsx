@@ -173,6 +173,8 @@ describe("ClientFicha page grammar", () => {
     await clickCaseMenuItem(user, "Editar caso");
     expect(screen.getByLabelText("Estado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Casos" }));
+    expect(screen.getByRole("heading", { name: "Caso activo" })).toBeInTheDocument();
+    expect(screen.queryByText("Caso activo e historial de atención.")).not.toBeInTheDocument();
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getAllByText("#1").length).toBeGreaterThan(0);
