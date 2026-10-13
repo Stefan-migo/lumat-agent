@@ -5,8 +5,8 @@ Admin-only JSON wrappers over `app/services/settings.py` + `app/services/costs.p
 upserts the KV row AND audits with the acting admin, SH-5):
 
 - GET /settings -> all sections + spend snapshot (design #18):
-  {"scope_rules", "keywords", "tone", "messages", "conversation_limit",
-  "daily_limit", "meta_cost", "snapshot"}
+  {"scope_rules", "keywords", "tone", "messages", "templates",
+  "conversation_limit", "daily_limit", "meta_cost", "snapshot"}
 - POST /settings/{section} -> per-section KV upsert + audit (design #19, #18):
   scope  {"rules": {cat: mode}}           -> scope_rules
   keywords {"keywords": [str]}            -> emergency.keywords
@@ -14,6 +14,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   messages {"greeting": str, ...}         -> messages.*
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
+- POST /settings/message-templates -> validated additive message-template catalog
 
 Section names mirror the Jinja POST routes (/panel/settings/{scope,keywords,
 tone,limits,meta}); an unknown section is a 400 (PDW-API-3). Role enforcement
@@ -71,6 +72,10 @@ class MessagesBody(BaseModel):
     out_of_hours: str
 
 
+class MessageTemplatesBody(BaseModel):
+    templates: list[Any]
+
+
 class HoursBody(BaseModel):
     timezone: Any
     schedule: Any
@@ -115,6 +120,13 @@ def _parse_tone(body: ToneBody) -> str:
             detail=f"tone must be one of {settings_service.TONE_STYLES}",
         )
     return tone
+
+
+def _parse_message_templates(body: MessageTemplatesBody) -> list[dict]:
+    try:
+        return settings_service.validate_message_templates(body.templates)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def _parse_hours(body: HoursBody) -> tuple[str, list[dict[str, Any]]]:
@@ -179,6 +191,7 @@ def settings_get(
             key: settings_service.get_message(session, key)
             for key in settings_service.MESSAGE_DEFAULTS
         },
+        "templates": settings_service.get_message_templates(session),
         "hours": {
             "timezone": settings_service.get_hours_timezone(session),
             "schedule": settings_service.get_hours_schedule(session),
@@ -239,6 +252,18 @@ def settings_messages(
     return {"ok": True}
 
 
+@router.post("/settings/message-templates")
+def settings_message_templates(
+    body: MessageTemplatesBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    parsed = _parse_message_templates(body)
+    _save(session, settings_service.MESSAGE_TEMPLATES_KEY, parsed, current)
+    session.commit()
+    return {"ok": True}
+
+
 @router.post("/settings/hours")
 def settings_hours(
     body: HoursBody,
@@ -290,8 +315,8 @@ def settings_meta(
     return {"ok": True}
 
 
-# Catch-all MUST stay registered AFTER the specific {scope,keywords,tone,limits,
-# meta} POST routes above: FastAPI matches routes in registration order, so the
+# Catch-all MUST stay registered AFTER the specific POST routes above: FastAPI
+# matches routes in registration order, so the
 # literal sections win and anything else is an unknown section (PDW-API-3).
 _KNOWN_SECTIONS = {"scope", "keywords", "tone", "messages", "hours", "limits", "meta"}
 

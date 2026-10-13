@@ -16,8 +16,9 @@ KB (endpoints 13-17):
 - POST /panel/api/kb/{id}/restore  -> {"version":n} pointer flip, audited (D8)
 - POST /panel/api/kb/{id}/visibility -> {"visibility":...} reclassification, audited
 
-Settings (endpoints 18-19):
+Settings (endpoints 18-20):
 - GET  /panel/api/settings                         -> all sections + snapshot
+- POST /panel/api/settings/message-templates       -> validated template catalog
 - POST /panel/api/settings/{section}               -> KV upsert + audit
                                      (section: scope|keywords|tone|limits|meta)
 
@@ -140,6 +141,7 @@ def test_settings_endpoints_require_login_401_json(client):
         ("post", "/panel/api/settings/tone", {"tone": "casual"}),
         ("post", "/panel/api/settings/limits", {"conversation_limit": 2.0, "daily_limit": 5.0}),
         ("post", "/panel/api/settings/meta", {"service_message_cost": 0.01}),
+        ("post", "/panel/api/settings/message-templates", {"templates": []}),
         ("post", "/panel/api/settings/unknown", {}),
     ]
     for method, path, *body in settings_calls:
@@ -187,6 +189,7 @@ def test_settings_endpoints_denied_403_for_operador_json(client, make_user):
         ("get", "/panel/api/settings", None),
         ("post", "/panel/api/settings/scope", {"rules": {"valores": "always_escalate"}}),
         ("post", "/panel/api/settings/tone", {"tone": "casual"}),
+        ("post", "/panel/api/settings/message-templates", {"templates": []}),
     ]
     for method, path, body in settings_calls:
         kwargs = {"follow_redirects": False}
@@ -819,13 +822,14 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     body = resp.json()
     # design #18 shape plus the effective standard messages.
     expected_keys = {
-        "scope_rules", "keywords", "tone", "messages",
+        "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
     assert body["scope_rules"] == {}
     assert body["tone"] == "cercano"
+    assert body["templates"] == []
     assert set(body["messages"]) == {
         "greeting",
         "cannot_answer",
@@ -841,6 +845,30 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     # spend snapshot present (SS-4)
     snap = body["snapshot"]
     assert "date" in snap and "daily_limit" in snap and "daily_spend" in snap
+
+
+def test_settings_message_templates_validate_persist_and_return(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    initial = client.get("/panel/api/settings", follow_redirects=False)
+    assert initial.status_code == 200
+    assert initial.json()["templates"] == []
+
+    templates = [{"id": "appointment-confirmation", "text": "Hola {{nombre}}"}]
+    saved = client.post(
+        "/panel/api/settings/message-templates", json={"templates": templates}
+    )
+    assert saved.status_code == 200
+    assert saved.json() == {"ok": True}
+    assert client.get("/panel/api/settings").json()["templates"] == templates
+
+    invalid = client.post(
+        "/panel/api/settings/message-templates",
+        json={"templates": [{"id": "bad", "text": "{{unknown_slot}}"}]},
+    )
+    assert invalid.status_code == 400
+    assert client.get("/panel/api/settings").json()["templates"] == templates
 
 
 def test_settings_update_scope_audited(client, make_user):
