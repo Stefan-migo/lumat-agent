@@ -16,8 +16,8 @@ pgvector test DB.
 
 import psycopg
 import pytest
-from uuid import uuid4
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 from sqlalchemy import func, select
 
 from app.chat.state import WINDOW_SIZE, ConversationState, get_or_create_conversation  # noqa: E402
