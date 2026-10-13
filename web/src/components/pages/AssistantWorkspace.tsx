@@ -120,6 +120,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const projects = projectsData.data?.projects ?? [];
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const selectedProject = projects.find((project) => project.slug === (expandedProjectSlug ?? routeProjectSlug ?? activeProjectSlug)) ?? projects[0];
+  // The mobile header must show the THREAD's project — the same source the picker
+  // checks. `projects` does not contain the implicit `default` project, so
+  // falling back to `selectedProject` (which ends in `?? projects[0]`) made the
+  // header keep showing an arbitrary project whenever "General" was selected.
+  const headerProjectName = activeProjectSlug === "default" ? "General" : (activeProject?.name ?? selectedProject?.name ?? "General");
   const activeThread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((thread) => thread.id === activeThreadId);
   const toggleContextSection = (id: string) => setContextSections((current) => ({ ...current, [id]: !(current[id] ?? false) }));
   const visibleProjects = useMemo(() => {
@@ -409,9 +414,9 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
       <header className="assistant-workspace__mobile-header" aria-label="Controles del asistente">
         <button type="button" aria-label="Abrir navegación del asistente" aria-haspopup="dialog" onClick={() => setNavigationOpen(true)}><MenuIcon aria-hidden="true" /></button>
-        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${activeProject?.name ?? selectedProject?.name ?? "General"}`} onClick={() => setProjectPickerOpen(true)}>
+        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${headerProjectName}`} onClick={() => setProjectPickerOpen(true)}>
           <Icon icon={Folder} size="sm" />
-          <span>{activeProject?.name ?? selectedProject?.name ?? "General"}</span>
+          <span>{headerProjectName}</span>
           <Icon icon={ChevronDown} size="sm" />
         </button>
         <button type="button" aria-label="Detalle del hilo" aria-haspopup="dialog" onClick={() => setThreadDetailOpen(true)}><Info aria-hidden="true" /></button>

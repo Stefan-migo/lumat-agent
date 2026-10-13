@@ -128,6 +128,25 @@ describe("AssistantWorkspace", () => {
     expect(within(projectSheet).getByRole("heading", { name: "Dos" })).toBeInTheDocument();
   });
 
+  it("shows the thread's project in the mobile header, including the implicit General", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 2, slug: "dos", name: "Dos", purpose: "Dos", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    const { rerender } = render(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="default"><p>Thread</p></AssistantWorkspace>);
+
+    // `default` is absent from `projects`; the header used to fall back to
+    // `projects[0]` and showed an arbitrary project instead of "General".
+    expect(await screen.findByRole("button", { name: "Elegir proyecto: General" })).toBeInTheDocument();
+
+    rerender(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="dos"><p>Thread</p></AssistantWorkspace>);
+    expect(await screen.findByRole("button", { name: "Elegir proyecto: Dos" })).toBeInTheDocument();
+  });
+
   it("shows thread detail with honest counts and reuses the project-change action", async () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
