@@ -21,6 +21,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Appointment,
+    AppointmentStatus,
     Conversation,
     ConversationEvent,
     ConversationState as ConvState,
@@ -37,6 +39,18 @@ WINDOW_SIZE = 10
 
 # Standard replies (SS-5 settings source).
 GREETING_HEADER = MESSAGE_DEFAULTS["greeting"]
+
+
+def conversation_transcript(window: list[dict], limit: int = 6) -> str:
+    """Render recent prior turns, excluding the current message."""
+    prior_messages = window[:-1]
+    messages = prior_messages[-limit:] if limit > 0 else []
+    if not messages:
+        return "(sin mensajes previos)"
+    return "\n".join(
+        f"{'Cliente' if message['direction'] == 'inbound' else 'Asistente'}: {message['text']}"
+        for message in messages
+    )
 
 
 def greeting(header: str = GREETING_HEADER) -> str:
@@ -167,17 +181,25 @@ class ConversationState:
     # CM-7: the customer's persistent memory context, loaded from the DB for
     # this message (empty string on first contact -> reply never blocked).
     memory_context: str = ""
+    booking: dict | None = None
 
     @classmethod
-    def from_db(cls, session: Session, conversation_id: int) -> "ConversationState":
+    def from_db(
+        cls,
+        session: Session,
+        conversation_id: int,
+        through_message_id: int | None = None,
+    ) -> "ConversationState":
         """Rebuild the state from the DB for one message (D2, no checkpointer)."""
         conversation = session.get(Conversation, conversation_id)
         if conversation is None:
             raise ValueError(f"conversation {conversation_id} not found")
 
+        window_query = select(Message).where(Message.conversation_id == conversation_id)
+        if through_message_id is not None:
+            window_query = window_query.where(Message.id <= through_message_id)
         last_messages = session.scalars(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
+            window_query
             .order_by(Message.id.desc())
             .limit(WINDOW_SIZE)
         ).all()
@@ -191,6 +213,15 @@ class ConversationState:
             }
             for m in reversed(last_messages)
         ]
+        appointment = session.scalar(
+            select(Appointment)
+            .where(
+                Appointment.customer_id == conversation.customer_id,
+                Appointment.status == AppointmentStatus.BOOKED,
+            )
+            .order_by(Appointment.starts_at.desc())
+            .limit(1)
+        )
         turn = session.scalar(
             select(func.count(Message.id)).where(
                 Message.conversation_id == conversation_id,
@@ -214,4 +245,13 @@ class ConversationState:
             captured=dict(conversation.captured_data or {}),
             window=window,
             memory_context=load_customer_context(session, conversation.customer_id),
+            booking=(
+                {
+                    "service": appointment.service,
+                    "label": appointment.local_start.strftime("%d/%m/%Y a las %H:%M"),
+                    "status": appointment.status.value,
+                }
+                if appointment
+                else None
+            ),
         )

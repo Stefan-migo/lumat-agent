@@ -42,7 +42,7 @@ def _persist_offer(session, state: ConversationState, offer: dict | None) -> Non
 
 def _offer_text(slots: list[dict]) -> str:
     return "Tengo estos horarios disponibles para la visita técnica:\n" + "\n".join(
-        f"{index}. {slot['date']} {slot['time']}"
+        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
         for index, slot in enumerate(slots, 1)
     ) + "\nResponde con el número del horario que prefieres."
 
