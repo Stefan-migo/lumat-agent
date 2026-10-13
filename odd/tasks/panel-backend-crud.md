@@ -32,9 +32,12 @@ mezclarlas con pulido cosmético degradaba la review.
 - **KB delete (opción A)**: el delete aplica a cualquier documento que el admin ya ve (todo el
   corpus — así lo sirve `GET /panel/api/kb`). Accountabilidad por confirmación explícita en UI +
   audit `kb.document_delete`. (Owner, 2026-10-13.)
+- **Usuarios delete (opción A)**: delete real admin-only. Guardias: auto-borrado → 403; último
+  admin activo → 409; usuario referenciado por FKs → 409 ("desactivá en su lugar"), vía violación
+  de FK de Postgres (sin enumerar las 15 tablas, sin cascada silenciosa). Audit `user.delete`.
+  (Owner, 2026-10-13.)
 
 ## Decisiones abiertas (pendientes)
-- **Usuarios**: ¿delete real con guardia de conflicto (409 FKs), o filtro "ocultar inactivos"?
 - **Casos**: ¿archivar = ocultar de la ficha (reversible)? ¿archivados visibles en export/diálogo?
   ¿se permiten múltiples casos abiertos?
 
@@ -59,7 +62,20 @@ mezclarlas con pulido cosmético degradaba la review.
   chunks), `web/src/components/pages/KbDocumentDetail.test.tsx`, `web/src/api.test.ts`.
 
 ### Work unit 2 — Usuarios delete
-- [ ] **USR-*** — pendiente de decisión.
+- [x] **USR-1 — Servicio.** `app/services/users.py`: `delete_user(session, user)` (`session.delete`) +
+  helper `active_admin_count(session) -> int` (guardia de último admin activo).
+- [x] **USR-2 — Route.** `app/panel/api/routes/users.py`: `DELETE /users/{user_id}` admin-only.
+  `_get_user` (404) → auto-borrado 403 (espejo de `toggle-active`) → último admin activo 409 →
+  audit `user.delete` (before=`to_admin_user_dict`) → `session.delete` → commit con
+  `except IntegrityError: rollback + 409` (patrón ya presente en `routes/users.py:99-103`).
+- [x] **USR-3 — Frontend API.** `web/src/api.ts`: `deleteUser(id)` (`method: 'DELETE'`).
+- [x] **USR-4 — UI.** `web/src/components/pages/UserManagement.tsx`: acción de borrado en el menú
+  desktop y en el action sheet mobile, con diálogo de confirmación fuerte (nombra el usuario +
+  "permanente"); el self ya muestra "Acciones no disponibles". Superficie el 409 sin romper.
+- [x] **USR-5 — Tests.** `tests/functional/test_api_users.py` (admin-only, 404, self 403, último
+  admin 409, referenciado 409, éxito + audit `user.delete`; sumar la ruta al auth matrix),
+  `web/src/components/pages/UserManagement.test.tsx` (confirmación + llamada + refresh + error 409),
+  `web/src/api.test.ts`.
 
 ### Work unit 3 — Casos archivados
 - [ ] **CASE-*** — pendiente de decisión.

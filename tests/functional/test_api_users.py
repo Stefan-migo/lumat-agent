@@ -29,6 +29,7 @@ def test_every_users_endpoint_returns_json_auth_errors(client, make_user):
         ("get", "/panel/api/users", {}),
         ("post", "/panel/api/users", {"json": {"username": "new", "password": "long-pass", "role": "admin"}}),
         ("post", "/panel/api/users/1/toggle-active", {}),
+        ("delete", "/panel/api/users/1", {}),
         ("post", "/panel/api/users/1/reset-password", {"json": {"password": "long-pass"}}),
         ("get", "/panel/api/users/1", {}),
         ("patch", "/panel/api/users/1", {"json": {"name": "x"}}),
@@ -298,3 +299,54 @@ def test_new_user_admin_routes_denied_for_each_non_admin(client, make_user):
         for method, path, kwargs in routes:
             assert getattr(client, method)(path, **kwargs).status_code == 403
         client.post("/panel/api/logout")
+
+
+def test_delete_user_guards_references_and_audits(client, make_user, monkeypatch):
+    from app.services import users as user_service
+    from app.models import Project
+
+    admin_id = _admin(client, make_user)
+    assert client.delete("/panel/api/users/999999").status_code == 404
+    assert client.delete(f"/panel/api/users/{admin_id}").status_code == 403
+
+    inactive_admin_id = make_user("inactive-admin", "password1", role="admin")
+    with SessionLocal() as session:
+        session.get(User, inactive_admin_id).active = False
+        session.commit()
+    assert client.delete(f"/panel/api/users/{inactive_admin_id}").status_code == 200
+
+    last_admin_id = make_user("last-admin", "password1", role="admin")
+    monkeypatch.setattr(user_service, "active_admin_count", lambda _session: 1)
+    assert client.delete(f"/panel/api/users/{last_admin_id}").status_code == 409
+    monkeypatch.undo()
+    with SessionLocal() as session:
+        another_admin = User(username="second-admin", password_hash="unused", role="admin", active=True)
+        target = User(username="referenced-user", password_hash="unused", role="operador", active=True)
+        session.add_all([another_admin, target])
+        session.flush()
+        session.add(Project(slug="referenced-user-project", name="Owned", purpose="Purpose", purpose_embedding=[0.0] * 384, owner_id=target.id))
+        session.commit()
+        another_admin_id, target_id = another_admin.id, target.id
+
+    assert client.delete(f"/panel/api/users/{target_id}").status_code == 409
+    with SessionLocal() as session:
+        target = session.get(User, target_id)
+        target.active = False
+        session.commit()
+    assert client.delete(f"/panel/api/users/{target_id}").status_code == 409
+
+    assert client.delete(f"/panel/api/users/{another_admin_id}").status_code == 200
+    with SessionLocal() as session:
+        assert session.get(User, another_admin_id) is None
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "user.delete", AuditLog.entity_id == str(another_admin_id)))
+        assert audit is not None
+        assert audit.actor == "users-admin"
+
+
+def test_delete_route_is_denied_to_non_admin_and_unauthenticated(client, make_user):
+    target_id = make_user("delete-target", "password1", role="operador")
+    assert client.delete(f"/panel/api/users/{target_id}", follow_redirects=False).status_code == 401
+    for role in ("operador", "tecnico"):
+        client.post("/panel/api/logout")
+        _login(client, make_user, f"delete-{role}", "role-pass", role)
+        assert client.delete(f"/panel/api/users/{target_id}").status_code == 403

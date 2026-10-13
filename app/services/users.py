@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -83,6 +83,20 @@ def reset_login_state(session: Session, user: User) -> None:
 def list_users(session: Session) -> list[User]:
     """Return panel users in the stable administrative order."""
     return list(session.scalars(select(User).order_by(User.username.asc(), User.id.asc())))
+
+
+def active_admin_count(session: Session) -> int:
+    """Count active administrators for last-admin deletion guards."""
+    return session.scalar(
+        select(func.count()).select_from(User).where(
+            User.role == UserRole.ADMIN, User.active.is_(True)
+        )
+    ) or 0
+
+
+def delete_user(session: Session, user: User) -> None:
+    """Mark a user for deletion; the caller commits the transaction."""
+    session.delete(user)
 
 
 def create_user(session: Session, username: str, password: str, role: str) -> User:
