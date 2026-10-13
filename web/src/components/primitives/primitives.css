@@ -689,7 +689,7 @@
 .client-ficha-page .detail-region__main { display: contents; }
 /* The cases tab keeps the active case and customer facts side by side, then spans archived history below. */
 .client-ficha-page .detail-region--cases { align-items: stretch; }
-.client-ficha-page .detail-region--cases > .client-ficha__case-card { grid-column: 1; grid-row: 1; }
+.client-ficha-page .detail-region--cases > .client-ficha__case-card { grid-column: 1; grid-row: 1; display: grid; }
 .client-ficha-page .detail-region--cases > .client-ficha__data-card { grid-column: 2; grid-row: 1; }
 .client-ficha-page .detail-region--cases > .client-ficha__archived-cases { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
 /* The active case lives in its own inset panel, separated from the card title/subtitle. */
