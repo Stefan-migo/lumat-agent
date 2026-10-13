@@ -16,12 +16,16 @@ pgvector test DB.
 
 import psycopg
 import pytest
+from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 
 from app.chat.state import WINDOW_SIZE, ConversationState, get_or_create_conversation  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
+    Appointment,
+    AppointmentStatus,
+    Case,
     Conversation,
     ConversationState as ConvState,
     Customer,
@@ -29,6 +33,8 @@ from app.models import (  # noqa: E402
     MessageDirection,
     MessageStatus,
     MessageType,
+    User,
+    UserRole,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.services import memory as memory_service  # noqa: E402
@@ -173,6 +179,47 @@ def test_d2_state_rebuilt_from_db():
     assert state.escalate is False
     # S2 (CM-7): no stored memory on first contact -> empty context, flow unblocked
     assert state.memory_context == ""
+
+
+def test_d2_state_carries_latest_booked_appointment():
+    conv_id = _seed(["hola"])
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        case = Case(
+            conversation_id=conv_id,
+            customer_id=conversation.customer_id,
+            service="Visita técnica",
+        )
+        technician = User(username=f"booking-state-tech-{uuid4().hex}", password_hash="test", role=UserRole.TECNICO)
+        session.add_all([case, technician])
+        session.flush()
+        starts_at = datetime(2030, 5, 6, 15, 30, tzinfo=timezone.utc)
+        appointment = Appointment(
+            service="Visita técnica",
+            customer_id=conversation.customer_id,
+            case_id=case.id,
+            technician_id=technician.id,
+            local_start=datetime(2030, 5, 6, 15, 30),
+            timezone="UTC",
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=1),
+            duration_minutes=60,
+            status=AppointmentStatus.BOOKED,
+        )
+        session.add(appointment)
+        session.commit()
+        state_with_booking = ConversationState.from_db(session, conv_id)
+
+        appointment.status = AppointmentStatus.CANCELLED
+        session.commit()
+        state_without_booking = ConversationState.from_db(session, conv_id)
+
+    assert state_with_booking.booking == {
+        "service": "Visita técnica",
+        "label": "06/05/2030 a las 15:30",
+        "status": "booked",
+    }
+    assert state_without_booking.booking is None
 
 
 def test_d2_window_capped_at_10():
