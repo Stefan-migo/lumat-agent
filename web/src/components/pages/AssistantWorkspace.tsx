@@ -115,7 +115,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
   const loadProjects = useCallback(() => listProjects(), []);
-  const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
+  const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || projectSheetOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
   const projects = projectsData.data?.projects ?? [];
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const selectedProject = projects.find((project) => project.slug === (expandedProjectSlug ?? routeProjectSlug ?? activeProjectSlug)) ?? projects[0];

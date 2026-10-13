@@ -99,6 +99,10 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" onThreadOpened={createThread} />);
 
     expect(screen.getByRole("button", { name: "Elegir proyecto: General" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Elegir proyecto: General" }));
+    const directProjectSheet = await screen.findByRole("dialog", { name: "Proyecto" });
+    expect(within(directProjectSheet).getByRole("button", { name: "Uno Seleccionado" })).toBeInTheDocument();
+    fireEvent.click(within(directProjectSheet).getByRole("button", { name: "Cerrar" }));
     fireEvent.click(screen.getByRole("button", { name: "Abrir navegación del asistente" }));
     const navigation = await screen.findByRole("dialog", { name: "Navegación" });
     expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
