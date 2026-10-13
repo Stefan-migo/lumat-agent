@@ -48,6 +48,16 @@ This is the mobile counterpart of the desktop work shipped in PR #573
   hamburger keeps opening the app drawer. Consequence: the shell mobile bar is
   the bar drawn in the reference, so while in the assistant it also hosts the
   assistant's project selector and info control.
+- **D4 — the empty-state copy (decided 2026-10-13, option b).** The reference's
+  empty-state copy (`¿En qué trabajamos hoy?` + `Consulta, planifica o trabaja en
+  tus proyectos.` + the sparkle icon) applies **only at `< 40rem`**. Desktop
+  (`>= 40rem`) keeps its existing copy **exactly**:
+  - hero 1 (`!thread`): `h2` = the time-based greeting
+    `Buenos días|Buenas tardes|Buenas noches{, nombre}` and `p` =
+    `¿En qué trabajamos hoy?`, plus the existing `Iniciar conversación` button;
+  - hero 2 (thread with no messages): `h2` = `¿En qué trabajamos hoy?` and `p` =
+    `Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.`
+  The `userName` prop must stay **used** (M5 left it dead).
 
 ## Visual reference — target (4 surfaces)
 
