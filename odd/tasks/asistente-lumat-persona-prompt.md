@@ -41,6 +41,20 @@ La persona/respond KB-céntrica **no es un accidente**: la instaló el ODD `assi
 - v1 decía `memory.*` como allowlist de escritura; el allowlist **real** es `AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})` (`app/chat/assistant/tools/registry.py:35`). Se usa el wording exacto (ya presente en la persona actual).
 - La persona actual dice *"never load or execute skills"* (contradice D8: el planner **declara** skills que sí se cargan) → se reemplaza.
 
+### Contratos que la persona/prompts DEBEN preservar verbatim (descubiertos al correr la suite con DB)
+
+Varias aserciones fijan el **texto exacto** de la persona/prompt. Preservarlos evitó editar tests de integración:
+
+| Frase fijada | Asertada por |
+|---|---|
+| la persona **empieza** con `You are the Lumat internal executive operator` | `tests/integration/test_assistant_harness_production.py:60,92` (`.startswith`) |
+| contiene `Lumat internal executive operator` | `tests/integration/test_h4_chat.py:96`, `tests/unit/test_assistant_config.py:14` |
+| NO contiene `You are Lumat's internal operations assistant.` | `tests/integration/test_assistant_harness_production.py:93` |
+| `ask for approval before any write operation` (minúscula), `already authorized and runs without asking`, `Every other write still needs approval`, los 4 nombres del allowlist | `tests/unit/test_assistant_config.py:32-42` |
+| `web.fetch` + `the URL that evidence reports after redirects` **en una sola línea** | `tests/unit/test_assistant_config.py:54-57` |
+
+Lección: **los saltos de línea importan** — un substring fijado partido por un wrap falla. La cláusula de cita de `web.fetch` se re-wrapeó para quedar contigua, y la línea de identidad se preservó (en vez de tocar 2 tests de integración que no son ejecutables sin DB).
+
 ## Constraints (preservar)
 
 - **Preservar** el párrafo de delegación en `assistant_plan.md` (`kind: "delegate"` + `sub_agent: "customer_records"`): lo assertea `tests/unit/test_assistant_delegation.py:349-353`.
@@ -83,9 +97,13 @@ La persona/respond KB-céntrica **no es un accidente**: la instaló el ODD `assi
 
 ## Evidence log
 
-- Commit 1: `793a2cb3` — `docs(odd): record the assistant persona/prompt act-first ODD`.
-- Verification 1 (as requested): `uv run pytest tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py tests/unit/test_assistant_config.py -q` — EXIT=1; 4 failures in `tests/unit/test_assistant_config.py` because its existing assertions require persona wording that the mandated exact replacement removes. Prompt contract, grounding gate, prompt, delegation, and registry tests passed.
-- Verification 1 (compatible subset): `uv run pytest tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py -q` — EXIT=0.
-- Verification 2: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_harness_guardrails.py tests/integration/test_assistant_harness_context.py tests/integration/test_assistant_harness_session.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_production.py tests/functional/test_api_assistant_capabilities.py -q` — EXIT=1; PostgreSQL at `127.0.0.1:6271` refused connections during migration (connection refused).
-- Commit 2: `07c46fe2` — `feat(assistant): make the panel persona act-first with the KB as one source`.
-- Evidence-log follow-up: this task-document-only commit records the completed commit-2 hash; it was needed because that hash does not exist until commit 2 is created.
+- Commit `793a2cb3` — `docs(odd): record the assistant persona/prompt act-first ODD` (task doc).
+- Commit `07c46fe2` — `feat(assistant): make the panel persona act-first with the KB as one source` (persona + 2 prompts + `tests/unit/test_assistant_prompt_contract.py`).
+- Commit `7fef7dd5` — `docs(odd): record assistant prompt implementation evidence`.
+- Commit `0bf4cfcb` — `fix(assistant): keep the pinned persona write and fetch-citation contracts` (restaura el wording de escritura y de cita de `web.fetch` en la persona).
+- Commit `c9021f33` — `fix(assistant): preserve the pinned persona identity and fetch-citation lines` (preserva la línea de identidad, re-wrapea la cita de `web.fetch`, revierte la única edición de test).
+- **Unit final** — `uv run pytest tests/unit/test_assistant_config.py tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py tests/unit/test_assistant_planner.py -q` → **EXIT=0**.
+- **Integration/functional final** — `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_harness_{guardrails,context,session,compatibility,production}.py tests/integration/test_h4_chat.py tests/integration/test_assistant_effective_config.py tests/integration/test_agent_chat_realtime.py tests/functional/test_api_assistant_capabilities.py -q` → **EXIT=0**.
+- `tests/unit/test_assistant_grounding_gate.py` verde y **sin cambios**.
+- Ediciones de tests en el árbol final: **ninguna**. La edición intermedia de `test_assistant_config.py:14` se revirtió en `c9021f33` al preservar la línea de identidad.
+- **Límite honesto**: la reproducción end-to-end del caso de producción (provider real emitiendo el tool call) NO se corrió — requiere provider/credenciales. La cobertura es a nivel prompt + suite del harness.
