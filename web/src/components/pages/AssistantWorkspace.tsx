@@ -50,7 +50,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, registerAssistantMenuOpener }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; registerAssistantMenuOpener?: (opener: (() => void) | null) => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -83,6 +83,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string | null } | null>(null);
   const [threadActionError, setThreadActionError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [navigationOpen, setNavigationOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [projectPurpose, setProjectPurpose] = useState("");
@@ -112,7 +113,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
   const loadProjects = useCallback(() => listProjects(), []);
-  const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
+  const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
   const projects = projectsData.data?.projects ?? [];
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const activeThread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((thread) => thread.id === activeThreadId);
@@ -121,6 +122,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     const query = search.trim().toLocaleLowerCase();
     return query ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : projects;
   }, [projects, search]);
+
+  useEffect(() => {
+    registerAssistantMenuOpener?.(() => setNavigationOpen(true));
+    return () => registerAssistantMenuOpener?.(null);
+  }, [registerAssistantMenuOpener]);
 
   useEffect(() => {
     let current = true;
@@ -352,6 +358,16 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       className={`assistant-workspace${projectsVisible ? " assistant-workspace--projects-visible" : " assistant-workspace--projects-collapsed"}${contextVisible ? " assistant-workspace--context-visible" : " assistant-workspace--context-collapsed"}`}
       data-testid="assistant-workspace"
     >
+      <Dialog open={navigationOpen} onClose={() => setNavigationOpen(false)} title="Navegación" variant="sheet">
+        <div className="assistant-workspace__navigation-sheet">
+          {(role === "admin" || role === "operador") ? <Button variant="primary" onClick={() => { setNavigationOpen(false); onCreateDefaultThread?.(); }}>Nueva conversación</Button> : null}
+          <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); navigateToHistory(routeProjectSlug ?? "default"); }}>Historial de conversaciones <Icon icon={ChevronRight} size="sm" /></button>
+          <section aria-labelledby="assistant-navigation-workspace-title">
+            <h3 id="assistant-navigation-workspace-title">Espacio de trabajo</h3>
+            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); window.history.pushState({}, "", pathForRoute({ view: "projects" })); window.dispatchEvent(new PopStateEvent("popstate")); }}>Proyectos ({projects.length}) <Icon icon={ChevronRight} size="sm" /></button>
+          </section>
+        </div>
+      </Dialog>
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
       <aside
         id="assistant-workspace-projects"

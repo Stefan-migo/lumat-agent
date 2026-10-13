@@ -32,6 +32,11 @@
 
 .assistant-workspace__scrim { display: none; }
 
+.assistant-workspace__navigation-sheet { display: grid; gap: var(--space-3); }
+.assistant-workspace__navigation-sheet > .btn { width: 100%; justify-content: center; }
+.assistant-workspace__navigation-sheet section h3 { margin: var(--space-2) 0; font-size: var(--text-sm); }
+.assistant-workspace__navigation-sheet .assistant-workspace__history-trigger { justify-content: space-between; color: var(--corp-text); }
+
 .assistant-workspace__projects,
 .assistant-workspace__context {
   position: relative;

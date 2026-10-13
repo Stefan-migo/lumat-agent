@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { InternalChatThreadSummary } from "../../types";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
+import { PanelShell } from "../domain/PanelShell";
 import { AgentChat } from "./AgentChat";
 import { groupThreadsByDate } from "./threadDateGroups";
 
@@ -79,6 +80,39 @@ describe("AssistantWorkspace", () => {
 
     await waitFor(() => expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible());
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
+  });
+
+  it("registers the navigation opener and opens the sheet with the real project count and existing actions", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "uno", name: "Uno", purpose: "Uno", status: "active", created_at: null, updated_at: null },
+        { id: 2, slug: "dos", name: "Dos", purpose: "Dos", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const createThread = vi.fn();
+    const registration: { opener: (() => void) | null } = { opener: null };
+    render(<AgentChat role="admin" onThreadOpened={createThread} registerAssistantMenuOpener={(opener) => { registration.opener = opener; }} />);
+
+    expect(registration.opener).toEqual(expect.any(Function));
+    act(() => registration.opener?.());
+    const navigation = await screen.findByRole("dialog", { name: "Navegación" });
+    expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
+    expect(within(navigation).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
+    expect(await within(navigation).findByRole("button", { name: "Proyectos (2)" })).toBeInTheDocument();
+  });
+
+  it("routes the phone assistant hamburger to the sheet instead of the app drawer", () => {
+    const onMobileMenuClick = vi.fn();
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    render(<PanelShell user={{ username: "ana", role: "admin" }} currentView="chat" onMobileMenuClick={onMobileMenuClick}><p>Contenido</p></PanelShell>);
+
+    fireEvent.click(document.querySelector(".panel-shell__menu-button")!);
+
+    expect(onMobileMenuClick).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("panel-drawer-backdrop")).not.toHaveAttribute("open");
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {

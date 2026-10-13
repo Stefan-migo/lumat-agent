@@ -89,6 +89,24 @@ const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
 
+function useIsPhone() {
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia?.("(min-width: 40rem)").matches ?? window.innerWidth < 640);
+
+  useEffect(() => {
+    const query = window.matchMedia?.("(min-width: 40rem)");
+    const update = () => setIsPhone(query ? !query.matches : window.innerWidth < 640);
+    update();
+    if (query) {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  return isPhone;
+}
+
 export interface PanelShellProps {
   children: ReactNode;
   currentView?: PanelView;
@@ -97,6 +115,7 @@ export interface PanelShellProps {
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
   onBack?: () => void;
+  onMobileMenuClick?: () => void;
   onLogout?: () => void | Promise<void>;
   user: User;
   /** Optional badge/chip rendered to the right of the panel header (e.g. a
@@ -336,6 +355,7 @@ export function PanelShell({
   drawerInitiallyOpen = false,
   onNavigate,
   onBack,
+  onMobileMenuClick,
   user,
   statusBadge,
   onLogout,
@@ -344,6 +364,7 @@ export function PanelShell({
   notifications = [],
   onMarkAllNotificationsRead,
 }: PanelShellProps) {
+  const isPhone = useIsPhone();
   const currentBreadcrumbView = breadcrumbView ?? currentView;
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -526,11 +547,11 @@ export function PanelShell({
           ref={menuButtonRef}
           type="button"
           className="panel-shell__menu-button"
-          aria-expanded={drawerOpen}
-          aria-controls="panel-navigation-drawer"
+          aria-expanded={onMobileMenuClick && isPhone ? undefined : drawerOpen}
+          aria-controls={onMobileMenuClick && isPhone ? undefined : "panel-navigation-drawer"}
           aria-label="Abrir menú de navegación"
           title="Abrir menú de navegación"
-          onClick={(event) => openDrawer(event.currentTarget)}
+          onClick={(event) => onMobileMenuClick && isPhone ? onMobileMenuClick() : openDrawer(event.currentTarget)}
         >
           <Icon icon={Menu} />
         </button>

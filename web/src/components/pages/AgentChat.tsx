@@ -263,9 +263,10 @@ export interface AgentChatProps {
   userName?: string;
   threadId?: number;
   onThreadOpened?: (id: number) => void;
+  registerAssistantMenuOpener?: (opener: (() => void) | null) => void;
 }
 
-export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentChatProps) {
+export function AgentChat({ role, threadId, onThreadOpened, userName, registerAssistantMenuOpener }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -830,6 +831,7 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
 
   return (
     <AssistantWorkspace
+      registerAssistantMenuOpener={registerAssistantMenuOpener}
       onCreateThread={() => void newChat()}
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}
