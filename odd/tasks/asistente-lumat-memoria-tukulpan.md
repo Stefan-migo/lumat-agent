@@ -88,10 +88,15 @@ Runner: `uv run pytest tests/`.
   `agent/personas/assistant.md` sección Memory (`:19-21`): una línea sobre marcar handoff. **Preservar** los contratos fijados por tests.
   Route: inline (una línea, ya entendida).
 
-- [ ] **T8 — Spec MEM.**
-  `openspec/specs/memory/spec.md`: clarificar MEM-3 (un `memory.read` iniciado por código al inicio del turno satisface "explicit memory.read tool call"; `assemble_context` sigue sin cargar filas) + **requirement nuevo MEM-12** para el flag `handoff` y el orden `pin` → `handoff` → recientes con digest acotado.
+- [ ] **T8a — Spec MEM-12 (`handoff`).**
+  `openspec/specs/memory/spec.md`: **requirement nuevo MEM-12** para el flag `handoff` (escribe, se lee, prioriza) con escenarios Given/When/Then.
   Tests: `tests/spec/test_memory_spec.py`.
-  Route: inline (spec redactado desde el mapa ya verificado).
+  Route: inline (spec redactado desde el mapa ya verificado). Va con **slice 1**.
+
+- [ ] **T8b — Spec MEM-3 (clarificación del read iniciado por código).**
+  `openspec/specs/memory/spec.md`: clarificar MEM-3 — un `memory.read` **iniciado por código** al inicio del turno satisface "explicit `memory.read` tool call", y `assemble_context` sigue **sin** cargar filas; agregar escenario para el orden `pin` → `handoff` → recientes con digest acotado.
+  Tests: `tests/spec/test_memory_spec.py`.
+  Route: inline. Va con **slice 2**.
 
 - [ ] **T9 — Commits atómicos** (Conventional Commits, sin atribución IA).
 
@@ -114,7 +119,17 @@ Runner: `uv run pytest tests/`.
 ## Delivery
 
 - Forecast (authored lines, +y−): T1 ~40, T2 ~50, T3 ~40, T4 ~80, T5 ~20, T6 ~20, T7 ~10, T8 ~60, tests ~200 → **~520 líneas** > 400.
-- **Estrategia de entrega**: PENDIENTE de decisión del owner (>400 líneas → split o `size:exception`).
+- **Estrategia de entrega** (decidida por el owner 2026-10-13): **chained PRs**, cadena **`stacked-to-main`** (cada PR mergea a `main` en orden).
+- **Slices** (cada uno ≤ ~400 líneas; las slices se apilan: la rama de la slice N+1 nace de la slice N y su PR apunta a `main` — se retargetea al mergear la anterior):
+
+| Slice | Tareas | Tema | Forecast |
+|-------|--------|------|----------|
+| **S1** | T1, T2, T8a + tests | Flag `handoff` end-to-end (schema + write + spec MEM-12) | ~190 |
+| **S2** | T3, T4, T8b + tests | Read determinista + orden `pin`→`handoff`→recientes + clarificación MEM-3 | ~250 |
+| **S3** | T5, T6, T7 + tests | Skill `memoria-tukulpan` siempre-on + docs + persona | ~120 |
+
+- **RDD**: `gentle-ai review assess --cwd <wt> --base-ref <slice-base> --committed-only --json` tras cada commit de work-unit; el boundary avanza al git-sha revisado.
+- **Push / PR / merge**: decisión del owner (el ODD autoriza los commits de work-unit en la rama, no el push/PR).
 
 ## Evidence log
 
