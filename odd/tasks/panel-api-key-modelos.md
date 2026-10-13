@@ -146,8 +146,18 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   - Follow-up (AK-17): el test de integración prueba el contrato de la fábrica
     (`openai_client`), no los consumidores reales (`chat/graph.py`, `agent_chat.py`).
 
+## Review nativa RDD (PR1)
+- Con Gentle AI 4.1.1 (3.7.0 tenía el defecto #5058), la review nativa corrió: tier **medium**,
+  lens `review-reliability`, lineage `review-ee9ee3eb4ae97252`.
+- Resultado: **APPROVED**. Advisory non-blocking **R3-001** (WARNING, `app/services/model_secrets.py:54`)
+  → registrado como **AK-18**. La autoridad fue **quemada** (`review-acknowledged/v1`).
+
 ## Follow-ups (no bloqueantes)
 - **AK-17 — Cobertura de consumidores.** Un test que ejercite el camino real del chatbot
   (`chat/graph.py`) y del asistente (`agent_chat.py` / `chat/assistant/nodes.py`) contra la key del
   panel, no solo `openai_client()`. Hoy el contrato de la fábrica está cubierto y los consumidores
   pasan por ella, pero un bypass futuro no lo detectaría.
+- **AK-18 — Invalidar la caché después del commit (R3-001).** `set_model_api_key`/`clear_model_api_key`
+  invalidan **antes** de que el caller haga commit; un `resolve` que corre entre la invalidación y el
+  commit puede leer el valor viejo y publicarlo por hasta 45s. Fix probable: mover la invalidación al
+  caller post-commit (o que el resolver compare una revisión barata). Bounded por el TTL, non-blocking.
