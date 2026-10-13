@@ -117,10 +117,18 @@ def test_event_operation_linkage_and_health_counts(migrated_db):
     assert counts["leased"] == 0
 
 
-def test_worker_main_invokes_bounded_entrypoint(monkeypatch):
+def test_worker_main_invokes_bounded_entrypoint(monkeypatch, capsys):
     calls = []
     monkeypatch.setenv("H4_WORKER_LIMIT", "7")
     monkeypatch.setenv("H4_WORKER_OWNER", "cli-worker")
-    monkeypatch.setattr(worker, "run_cycle", lambda *, limit, owner: calls.append((limit, owner)) or 0)
+    monkeypatch.setattr(worker, "run_cycle", lambda *, limit, owner: calls.append((limit, owner)) or 2)
+    monkeypatch.setattr(
+        worker, "health_counts", lambda: {"pending": 3, "failed": 1, "leased": 0}
+    )
     worker.main()
     assert calls == [(7, "cli-worker")]
+    out = capsys.readouterr().out
+    assert "worker cycle: processed=2" in out
+    assert "pending=3" in out
+    assert "failed=1" in out
+    assert "leased=0" in out
