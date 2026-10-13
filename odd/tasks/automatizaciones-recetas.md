@@ -103,9 +103,10 @@ otras secciones del panel, otras ramas en vuelo. No revivir capacidades ya entre
 ## Work units (stable IDs)
 
 ### Slice 1 — Runner + recetas de evento (actual)
-- [ ] **A1 — Runner del worker**: cron cada 5 min que dispare `run_cycle()` (patrón `app.ops.sweep`);
-  documentar en `docs/ops.md`; verificar el entrypoint `python -m app.ops.worker`. (Parte operativa
-  — armar el cron en el VPS — requiere autorización remota aparte.)
+- [x] **A1 — Runner del worker**: cron cada 5 min que dispare `run_cycle()` (patrón `app.ops.sweep`);
+  documentado en `docs/ops.md` §2.8.2; entrypoint `python -m app.ops.worker` verificado. Instalado en
+  el VPS bajo el crontab de `deploy` el 2026-10-13 (release `v2026.10.2`, con autorización remota del
+  owner) y observado disparando solo; el primer run drenó 25 `domain_events` pendientes (0 failed).
 - [x] **A2 — Modelo de receta**: catálogo de recetas en código (definiciones) + tabla de
   instalaciones + migración idempotente + servicio de instalación/parametrización.
   Commits `71a0b693` (modelo) y `47c1e4f4` (harness). Suite verde: 1834 passed.
@@ -333,3 +334,10 @@ they are separate later work.
   **1925** tests verdes; `npm run build` verde; CI verde (`test` + `panel`). Review nativo RDD
   `review-5ca037e6e4ca9962` aprobado (4 lentes, 0 hallazgos, authority burned). **D1 (pago) queda fuera
   de alcance**: presupuesto aparte (Milestone 3 §3.8), no hay pagos en el sistema.
+- 2026-10-13 — **A1 cerrado**. El release `v2026.10.2` (`668bcba1`) se cortó y desplegó al VPS, y el
+  cron del worker se instaló bajo el crontab de `deploy` (documentado en `docs/ops.md` §2.8.2) y se
+  observó disparar solo (tick 14:10 UTC). Prerrequisito: la imagen deployada ahora trae
+  `app/services/time_triggers.py` (faltaba en `v2026.10.1`) y `worker.main()` emite un resumen de una
+  línea (PR #576). Prod al cierre: 25 `domain_events` completed / 0 pending / 0 failed;
+  `automation_installations = 0`, así que ninguna receta se ejercitó end to end todavía — eso requiere
+  que el owner instale una receta. D1 (pago) sigue fuera de alcance.
