@@ -299,8 +299,78 @@ def test_skill_context_skips_missing_validated_body(monkeypatch, caplog):
     assert "missing" in caplog.text
 
 
-def test_skill_context_is_empty_without_validated_skills():
-    assert _skill_context({"guardrails": {"skills": []}}) == ""
+def test_skill_context_injects_always_on_memory_skill_without_declared_skills(monkeypatch):
+    from app.services.skills import SkillDefinition
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._effective_skill_index",
+        lambda state: (SkillDefinition("memoria-tukulpan", "Memory", "global", body="MEMORY BODY"),),
+    )
+
+    assert _skill_context({"guardrails": {"skills": []}}) == "### Skill: memoria-tukulpan\nMEMORY BODY"
+
+
+def test_skill_context_injects_always_on_memory_skill_alongside_declared(monkeypatch):
+    from app.services.skills import SkillDefinition
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._effective_skill_index",
+        lambda state: (
+            SkillDefinition("memoria-tukulpan", "Memory", "global", body="MEMORY BODY"),
+            SkillDefinition("guide", "Guidance", "project", body="GUIDE BODY"),
+        ),
+    )
+
+    context = _skill_context({"guardrails": {"skills": ["guide"]}})
+
+    assert "### Skill: memoria-tukulpan\nMEMORY BODY" in context
+    assert "### Skill: guide\nGUIDE BODY" in context
+
+
+def test_skill_context_skips_always_on_skill_absent_from_effective_index(monkeypatch):
+    from app.services.skills import SkillDefinition
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._effective_skill_index",
+        lambda state: (SkillDefinition("guide", "Guidance", "project", body="GUIDE BODY"),),
+    )
+
+    context = _skill_context({"guardrails": {"skills": ["guide"]}})
+
+    assert "memoria-tukulpan" not in context
+    assert context == "### Skill: guide\nGUIDE BODY"
+
+
+def test_planner_index_carries_only_name_and_description_never_the_always_on_body(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "<available_skills>{{available_skills}}</available_skills>"},
+                                tools_whitelist=[], skills=(), persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: (captured.update(kwargs) or SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"respond","summary":"Done."}'))]
+            )),
+        ))),
+    )
+    from app.services.skills import SkillDefinition
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._effective_skill_index",
+        lambda state: (SkillDefinition("memoria-tukulpan", "Memory summary", "global", body="ALWAYS ON SECRET BODY"),),
+    )
+
+    plan_llm({"content": "Help", "context": {"items": []},
+              "effective": {"tools_whitelist": [], "skills_index": []}})
+
+    prompt = captured["messages"][1]["content"]
+    index = json.loads(prompt.split("<available_skills>", 1)[1].split("</available_skills>", 1)[0])
+    assert index == [{"name": "memoria-tukulpan", "description": "Memory summary"}]
+    assert "ALWAYS ON SECRET BODY" not in prompt
+    assert "ALWAYS ON SECRET BODY" not in captured["messages"][0]["content"]
 
 
 def test_responder_system_prompt_includes_validated_body_but_planner_does_not(monkeypatch):
