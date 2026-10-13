@@ -9,7 +9,6 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
-  Info,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -89,24 +88,6 @@ const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
-
-function useIsPhone() {
-  const [isPhone, setIsPhone] = useState(() => window.matchMedia?.("(min-width: 40rem)").matches ?? window.innerWidth < 640);
-
-  useEffect(() => {
-    const query = window.matchMedia?.("(min-width: 40rem)");
-    const update = () => setIsPhone(query ? !query.matches : window.innerWidth < 640);
-    update();
-    if (query) {
-      query.addEventListener("change", update);
-      return () => query.removeEventListener("change", update);
-    }
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  return isPhone;
-}
 
 export interface PanelShellProps {
   children: ReactNode;
@@ -361,7 +342,6 @@ export function PanelShell({
   drawerInitiallyOpen = false,
   onNavigate,
   onBack,
-  assistantMobileActions,
   user,
   statusBadge,
   onLogout,
@@ -370,7 +350,6 @@ export function PanelShell({
   notifications = [],
   onMarkAllNotificationsRead,
 }: PanelShellProps) {
-  const isPhone = useIsPhone();
   const currentBreadcrumbView = breadcrumbView ?? currentView;
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -553,16 +532,15 @@ export function PanelShell({
           ref={menuButtonRef}
           type="button"
           className="panel-shell__menu-button"
-          aria-expanded={assistantMobileActions && isPhone ? undefined : drawerOpen}
-          aria-controls={assistantMobileActions && isPhone ? undefined : "panel-navigation-drawer"}
+          aria-expanded={drawerOpen}
+          aria-controls="panel-navigation-drawer"
           aria-label="Abrir menú de navegación"
           title="Abrir menú de navegación"
-          onClick={(event) => assistantMobileActions && isPhone ? assistantMobileActions.openNavigation() : openDrawer(event.currentTarget)}
+          onClick={(event) => openDrawer(event.currentTarget)}
         >
           <Icon icon={Menu} />
         </button>
         <Brand mobile line />
-        {assistantMobileActions && isPhone ? <button type="button" className="panel-shell__header-action" aria-label="Detalle del hilo" title="Detalle del hilo" onClick={assistantMobileActions.openThreadDetail}><Icon icon={Info} /></button> : null}
         <div className="panel-shell__mobile-actions">
           {/* PNL-APP-10: the header exposes the bell and the avatar at every tier. The mobile popover lives inside
               the desktop header (hidden below 64rem), so the mobile bell navigates to the notification center. */}
