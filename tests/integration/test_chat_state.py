@@ -186,6 +186,24 @@ def test_d2_window_capped_at_10():
     assert state.window[-1]["text"] == "msg-11"
 
 
+def test_d2_window_can_be_anchored_to_message_id():
+    conv_id = _seed(["primero", "segundo", "tercero"])
+    with SessionLocal() as session:
+        through_message_id = session.scalar(
+            select(Message.id)
+            .where(Message.conversation_id == conv_id)
+            .order_by(Message.id)
+            .offset(1)
+            .limit(1)
+        )
+        state = ConversationState.from_db(
+            session, conv_id, through_message_id=through_message_id
+        )
+
+    assert state.window[-1]["id"] == through_message_id
+    assert [message["text"] for message in state.window] == ["primero", "segundo"]
+
+
 def test_d2_run_conversation_persists_outbound_replies(mock_openai_chat):
     conv_id = _seed(["hola"])
     from app.chat.graph import run_conversation

@@ -169,15 +169,22 @@ class ConversationState:
     memory_context: str = ""
 
     @classmethod
-    def from_db(cls, session: Session, conversation_id: int) -> "ConversationState":
+    def from_db(
+        cls,
+        session: Session,
+        conversation_id: int,
+        through_message_id: int | None = None,
+    ) -> "ConversationState":
         """Rebuild the state from the DB for one message (D2, no checkpointer)."""
         conversation = session.get(Conversation, conversation_id)
         if conversation is None:
             raise ValueError(f"conversation {conversation_id} not found")
 
+        window_query = select(Message).where(Message.conversation_id == conversation_id)
+        if through_message_id is not None:
+            window_query = window_query.where(Message.id <= through_message_id)
         last_messages = session.scalars(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
+            window_query
             .order_by(Message.id.desc())
             .limit(WINDOW_SIZE)
         ).all()
