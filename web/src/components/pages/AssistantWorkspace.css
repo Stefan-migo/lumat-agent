@@ -554,6 +554,7 @@
   .assistant-workspace__scrim { display: none; }
 
   .assistant-workspace__thread { grid-column: 1; min-width: 0; }
+  .assistant-workspace__thread-tabs { display: none; }
   .assistant-workspace { grid-template-rows: auto minmax(0, 1fr); }
   .assistant-workspace__mobile-header { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin: var(--space-2) var(--space-2) 0; padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-lg); background: var(--corp-surface); }
   .assistant-workspace__mobile-header > button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); padding: 0; border: 0; border-radius: var(--radius-md); color: var(--corp-text); background: transparent; cursor: pointer; }
