@@ -180,4 +180,22 @@ desktop compact rail does **not** exist on mobile.
 
 ## Progress / Evidence
 
-_(filled per work unit)_
+### M1 — phone breakpoint foundation
+
+- Commit `21620755` `fix(assistant): define the phone breakpoint and drop the
+  side-overlay model below it`.
+- `AssistantWorkspace.css`: the tablet side-overlay rules are now scoped to
+  `@media (min-width: 40rem) and (max-width: 64rem)`; a new `< 40rem` block makes
+  the workspace a single column and hides the side panes + scrim
+  (`.assistant-workspace__projects`, `__context`, `__scrim`), with the thread at
+  `grid-column: 1`.
+- `AssistantWorkspace.tsx`: new `useDesktopWorkspace()` replaces the one-shot
+  `window.innerWidth > 1024` read — `matchMedia("(min-width: 64rem)")` with a
+  `resize` fallback, subscribed on mount and cleaned up on unmount; pane
+  visibility now follows breakpoint changes.
+- Tests: `AssistantWorkspace.test.tsx` +1 phone-visibility / resize regression.
+- Checks: `npx tsc -b --force --noEmit` pass · `npx vitest run
+  src/components/pages/AssistantWorkspace.test.tsx` **27 passed** · `npm run
+  build` pass.
+- Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
+- **Not verified**: no browser visual pass yet.
