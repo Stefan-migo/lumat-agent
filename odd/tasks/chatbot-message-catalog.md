@@ -147,9 +147,9 @@ the new card renders the backend list.
 | T1 | RED+GREEN: curated template list accessor on the settings KV + save-time validation (D4/D5) | delegated (writer) |
 | T2 | RED+GREEN: admin-only GET/PUT for the list (D6) | delegated (writer) |
 | T3 | RED+GREEN: Settings → tab "Mensajes" → **new dedicated card** to manage the list, with copy explaining the difference vs the 5 fixed messages | delegated (writer) |
-| T4 | RED+GREEN: `classify.md` + `_llm_classify` carry the picked template key (D3); update `FALLBACKS` + byte-coupling test | delegated (writer) |
+| T4 | RED+GREEN: `classify.md` + `_llm_classify` carry the picked template key (D3); update `FALLBACKS` + byte-coupling test | inline (no writer trigger: single understood unit, no parallelism, no context backstop) |
 | T5 | RED+GREEN: bot renders the picked template via `prompts.render` with slots from `captured`/`booking`; no match → `cannot_answer` + escalation (D13/D9) | delegated (writer) |
-| T6 | Anti-injection delimiting for template text injected into the prompt (D5) | delegated (writer) |
+| T6 | Anti-injection delimiting for template text injected into the prompt (D5) — **absorbed into T4**: the `<templates>` DATA block *is* the injection mechanism | in T4 |
 | T7 | Full checks (`uv run pytest tests/ -q` + targeted panel), close with verification evidence | inline |
 
 Single writer. Each task closes with one work-unit commit (Conventional Commit).
@@ -198,7 +198,7 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Progress
 
-- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [x] T4 (absorbs T6) · [ ] T5 · [ ] T7
 
 ### Evidence
 
@@ -226,7 +226,25 @@ Task shape may be refined after T0 — keep IDs stable.
   isolation and in the parent run) — unrelated to this change; cosmetic 1-space indent drift on the
   adjacent card; template rows use index-based React keys.
 
+- T4 (absorbs T6) — `0f3eafce` `feat(chat): let the classifier pick a preset message`.
+  The catalog is read in `_llm_classify` via `session_scope()` + `get_message_templates` and
+  injected into the **USER** message as an inert `<templates>- id=<id>: <text></templates>`
+  DATA block (empty catalog → `(sin respuestas prediseñadas)`) — never the static system
+  prompt (SH-4). `agent/prompts/classify.md` gains `{{templates}}`; `agent/personas/classify.md`
+  gains the selection rule + `"template_id": string|null`; both `FALLBACKS` entries updated
+  byte-identically (the `test_fallbacks_equal_agent_files` guard still passes).
+  `_llm_classify` returns `template_id`, keeping it **only** when it is an offered id (D13,
+  untrusted LLM output); `classify_intent` propagates it on the non-injection paths;
+  `ConversationState` gains `template_id: str | None = None`.
+  RED first (KeyError/AssertionError), then GREEN. Routed **inline** (no writer trigger fired).
+  Parent checks: focused `tests/unit/test_prompts.py` + `tests/integration/test_realtime_writers.py`
+  + `tests/integration/test_chat_intent.py` + `tests/injection/` → **69 passed**; full backend
+  `uv run pytest tests/ -q` → **green**. Behaviour for an empty catalog is unchanged
+  (`template_id=None`); T5 owns the render/send path.
+
 ## Next step
 
-T3 done (UI card shipped). Start T4 (`classify.md` + `_llm_classify` carry the picked template id).
-The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) — do not mix it in.
+T4 done (classifier carries the picked template id; T6 absorbed). Start T5
+(`respond` renders the picked template via `prompts.render` before the KB path;
+no match → `cannot_answer` + escalation). The greeting bug is a **separate** unit
+(`chatbot-first-turn-greeting`) — do not mix it in.
