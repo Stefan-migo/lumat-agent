@@ -91,7 +91,7 @@ The mock shows 7 recipes / 3 categories; the **real** catalog is **9 recipes / 4
 
 ### WU1 — Backend: real recipe descriptions
 
-- [ ] Add a `description` parameter to `_event_recipe`, `_offset_recipe`, `_schedule_recipe` and
+- [x] Add a `description` parameter to `_event_recipe`, `_offset_recipe`, `_schedule_recipe` and
   populate all 9 `RECIPES` entries. Do NOT reorder or rename. Finance wording (Chilean neutral
   Spanish), matching the reference:
   - `appointment_confirmation` → "Envía un mensaje automático al confirmar una reserva."
@@ -103,33 +103,43 @@ The mock shows 7 recipes / 3 categories; the **real** catalog is **9 recipes / 4
   - `customer_maintenance` → "Envía un recordatorio automático según el intervalo configurado."
   - `admin_daily_summary` → "Envía un resumen diario de la operación al administrador."
   - `admin_weekly_summary` → "Envía un resumen semanal de la operación al administrador."
-- [ ] Guard test asserting every recipe has a non-empty `description` (strict TDD: observed RED
+- [x] Guard test asserting every recipe has a non-empty `description` (strict TDD: observed RED
   first, then GREEN).
-- [ ] Verify: `uv run pytest tests/integration/test_automation_installations.py
+- [x] Verify: `uv run pytest tests/integration/test_automation_installations.py
   tests/functional/test_api_automation_recipes.py` green; then full `uv run pytest tests/`.
-- Commit.
+- Commit `a8767cf4` (feat(automations): add recipe catalog descriptions). Observed: full backend
+  suite **1933 passed**.
 
 ### WU2 — Frontend: redesigned Automatizaciones page
 
-- [ ] `web/src/components/pages/AutomationRecipesPage.tsx` redesigned; new
+- [x] `web/src/components/pages/AutomationRecipesPage.tsx` redesigned; new
   `web/src/components/pages/AutomationRecipesPage.css` (imported): namespaced `.automation-recipes__*`,
   token-only.
-- [ ] Category map (slug → label + lucide icon) and per-recipe icon map (frontend).
-- [ ] Header: title + subtitle; action button **"Ver instaladas (N)"** → Instaladas tab.
-- [ ] Banner (`PageFrame` `state`): "Aún no tienes automatizaciones instaladas." only when there
+- [x] Category map (slug → label + lucide icon) and per-recipe icon map (frontend).
+- [x] Header: title + subtitle; action button **"Ver instaladas (N)"** → Instaladas tab.
+- [x] Banner (`PageFrame` `state`): "Aún no tienes automatizaciones instaladas." only when there
   are none.
-- [ ] `Tabs`: "Catálogo (N)" / "Instaladas (M)".
-- [ ] Catálogo: `SearchInput` + category `Select`; panel "Plantillas disponibles"; rows with icon,
+- [x] `Tabs`: "Catálogo (N)" / "Instaladas (M)".
+- [x] Catálogo: `SearchInput` + category `Select`; panel "Plantillas disponibles"; rows with icon,
   name, description, category chip, channel chips, "+ Configurar" → `Dialog` form (channel/time/
   weekday/number) → create; already-installed recipes show a success `Badge` + "Editar" → PATCH.
-- [ ] Instaladas: rows with name, parameters summary, `Badge` Activa/Inactiva, Activar/Desactivar
+- [x] Instaladas: rows with name, parameters summary, `Badge` Activa/Inactiva, Activar/Desactivar
   (+ Editar).
-- [ ] States: loading (`Skeleton`/`StateMessage`), denied, error (+ Reintentar), filtered-empty,
+- [x] States: loading (`Skeleton`/`StateMessage`), denied, error (+ Reintentar), filtered-empty,
   empty installed.
-- [ ] Tests (`AutomationRecipesPage.test.tsx`): catalog render, search filter, category filter,
+- [x] Tests (`AutomationRecipesPage.test.tsx`): catalog render, search filter, category filter,
   configure-dialog create, installed toggle, honest states. Story updated.
-- [ ] Verify: `cd web && npm run build` + focused `npm test`.
-- Commit(s).
+- [x] Verify: `cd web && npm run build` + focused `npm test`.
+- Commits `2fce30b1` (page redesign) + `33fd2474` (CSS `.btn` fix, from the parent spot check that
+  found dead `.button` selectors). Observed: `npm run build` green; serialized `npm test`
+  **105 files / 1150 tests** green.
+
+## Review follow-ups (non-blocking — from RDD `review-c281e351db664dee`)
+
+- [ ] **R3-001** (`web/src/components/pages/AutomationRecipesPage.tsx:154`) — when a create/edit save
+  fails inside the `Dialog`, `actionError` renders outside the dialog (above the tabs) while the
+  sheet stays open, so the failure may not be visible; the form has no inline error. Add inline
+  error feedback inside the dialog. Advisory WARNING, non-blocking — does NOT reopen the review.
 
 ## Delivery strategy
 
@@ -156,3 +166,11 @@ The mock shows 7 recipes / 3 categories; the **real** catalog is **9 recipes / 4
   `odd/automatizaciones-frontend`, base main `89cd1494`. Graph nodes consulted:
   `AutomationRecipesPage.tsx`, `PageFrame()`, `Badge()`, `Dialog()`, `Tabs()`, `SearchInput()`,
   `Icon()`, `PanelShell.tsx`, `AppShell.tsx`, `panelRoutes.ts`, `types.ts`, `api.ts`.
+- 2026-10-13 — WU1 implemented (`a8767cf4`): descriptions for all 9 recipes; guard test added.
+  Backend suite **1933 passed**.
+- 2026-10-13 — WU2 implemented (`2fce30b1`): redesigned page + CSS (tabs, buscador, filtro, filas
+  con chips, Configurar dialog, tab Instaladas). Parent spot check caught dead `.button` selectors
+  (Button renders `.btn`) → fixed in `33fd2474`. `npm run build` green; serialized `npm test`
+  **105 files / 1150 tests** green.
+- 2026-10-13 — RDD review `review-c281e351db664dee` (1 lens review-reliability, medium, 757 lines):
+  **approved**, 0 blockers, 1 advisory (R3-001). Authority **burned**.
