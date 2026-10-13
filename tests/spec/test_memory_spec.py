@@ -25,7 +25,7 @@ from app.models import (
 )
 from app.services import memory, tukulpan  # noqa: F401  (services under test)
 
-pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9 MEM-10")
+pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9 MEM-10 MEM-12")
 
 
 # ---------------------------------------------------------------------------
@@ -1025,3 +1025,65 @@ def test_mem9_coherence_constraint_rejects_global_panel_row(migrated_db, admin_c
             "VALUES ('panel', 'thread:13', 'invalid', 'Invalid', 'Invalid', %s::vector, 'global')",
             ("[" + ",".join(["0.1"] * 384) + "]",),
         )
+
+
+# ---------------------------------------------------------------------------
+# MEM-12 — Handoff Marker
+# ---------------------------------------------------------------------------
+
+
+def test_mem12_default_handoff_is_false(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        row = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="handoff-default",
+            topic_key="agent:plain",
+            tipo=MemoryType.DECISION,
+            titulo="Plain memory",
+            contenido="No continuation marker",
+        )
+        session.commit()
+
+        assert row.handoff is False
+
+
+def test_mem12_handoff_survives_an_omitted_handoff_and_clears_explicitly(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        written = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="handoff-marker",
+            topic_key="agent:continuation",
+            tipo=MemoryType.DECISION,
+            titulo="Continuation point",
+            contenido="Resume the migration work here",
+            handoff=True,
+        )
+        session.commit()
+        assert written.handoff is True
+
+        repeated = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="handoff-marker",
+            topic_key="agent:continuation",
+            tipo=MemoryType.DECISION,
+            titulo="Continuation point",
+            contenido="Resume the migration work here",
+        )
+        session.commit()
+        assert repeated.handoff is True
+
+        cleared = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="handoff-marker",
+            topic_key="agent:continuation",
+            tipo=MemoryType.DECISION,
+            titulo="Continuation point",
+            contenido="Resume the migration work here",
+            handoff=False,
+        )
+        session.commit()
+        assert cleared.handoff is False

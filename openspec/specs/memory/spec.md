@@ -272,6 +272,30 @@ MUST write no relation and MUST NOT fail the memory write. `SESSION` and
 - AND a human verdict MUST use `supersedes`, `conflicts`, `related`, `compatible`, `scoped`, or `not_conflict`
 - AND pending relations whose memories are outside the selected customer's scope MUST NOT be listed there
 
+### Requirement: MEM-12 — Handoff Marker
+
+The assistant MAY mark an agent-authored memory as a **handoff** — a continuation point across threads (an open line of work or the ordering of pending tasks) — by passing `handoff: true` to `memory.write`. The marker MUST persist on the stored row, MUST default to `false` for rows written without it, and MUST remain `false` for pre-existing rows. A repeat upsert of the same `(proyecto, scope, entity_id, topic_key)` that OMITS `handoff` MUST leave the stored marker unchanged; only an explicit `handoff: false` MAY clear it.
+
+#### Scenario: A handoff write persists the marker
+- GIVEN an agent writes a memory through `memory.write` with `handoff: true`
+- WHEN the row is persisted
+- THEN the stored memory has `handoff` set to true
+
+#### Scenario: Default is false
+- GIVEN a memory is written without passing `handoff`
+- WHEN it is persisted
+- THEN the stored memory has `handoff` set to false
+
+#### Scenario: An omitted handoff preserves the marker
+- GIVEN an existing memory holds `handoff` true
+- WHEN the same `(proyecto, scope, entity_id, topic_key)` is upserted again without passing `handoff`
+- THEN the stored `handoff` remains true
+
+#### Scenario: An explicit false clears the marker
+- GIVEN an existing memory holds `handoff` true
+- WHEN it is upserted with `handoff: false`
+- THEN the stored `handoff` becomes false
+
 ## MODIFIED Requirements
 
 ## Boundary
