@@ -59,7 +59,7 @@ La persona/respond KB-céntrica **no es un accidente**: la instaló el ODD `assi
   - Route: delegated.
 - [x] **T4** — Guard test de regresión: assert que el plan prompt prefiere tool y que el respond prompt ya no tiene el gate KB-only. (Consistente con `test_planner_prompt_advertises_executable_delegation`.)
   - Route: delegated (misma unidad).
-- [ ] **T5** — Commits atómicos con Conventional Commits, sin atribución IA.
+- [x] **T5** — Commits atómicos con Conventional Commits, sin atribución IA.
 
 ## Verification
 
@@ -87,4 +87,5 @@ La persona/respond KB-céntrica **no es un accidente**: la instaló el ODD `assi
 - Verification 1 (as requested): `uv run pytest tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py tests/unit/test_assistant_config.py -q` — EXIT=1; 4 failures in `tests/unit/test_assistant_config.py` because its existing assertions require persona wording that the mandated exact replacement removes. Prompt contract, grounding gate, prompt, delegation, and registry tests passed.
 - Verification 1 (compatible subset): `uv run pytest tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py -q` — EXIT=0.
 - Verification 2: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_harness_guardrails.py tests/integration/test_assistant_harness_context.py tests/integration/test_assistant_harness_session.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_production.py tests/functional/test_api_assistant_capabilities.py -q` — EXIT=1; PostgreSQL at `127.0.0.1:6271` refused connections during migration (connection refused).
-- Commit 2: prompt/persona implementation and test; hash to be recorded in the follow-up evidence update after commit.
+- Commit 2: `07c46fe2` — `feat(assistant): make the panel persona act-first with the KB as one source`.
+- Evidence-log follow-up: this task-document-only commit records the completed commit-2 hash; it was needed because that hash does not exist until commit 2 is created.
