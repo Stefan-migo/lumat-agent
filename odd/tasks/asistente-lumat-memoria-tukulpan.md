@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-lumat-memoria-tukulpan`
 **Worktree**: `../lumat-agent-odd-asistente-lumat-memoria-tukulpan`
 **Base**: `3475bba7` (= `origin/main` at branch time; el handoff citaba `8a946821`, `origin/main` avanzó con el PR #580 de panel-design-details durante el recon)
-**Status**: in progress — slice 1: T1 y T2 hechos; T8a pendiente. Review RDD (lineage `review-8f7d2ae49bc9cb9e`) **approved + acknowledged** (`authority: burned`); 2 findings advisory no bloqueantes registrados abajo.
+**Status**: slice 1 **completo** (T1, T2, T8a, + fix R4-001). Review RDD (lineage `review-8f7d2ae49bc9cb9e`) **approved + acknowledged** (`authority: burned`). Re-assess posterior: `medium`, `review_due=false` (`under_budget`). Siguiente: slice 2 (T3, T4, T8b).
 **Source**: `odd/handoffs/asistente-lumat-memoria-tukulpan.md` (Engram obs 6428) + `.rapsodia-code/sessions/ready-for-odd/2026-10-13-asistente-lumat-memoria-tukulpan/{report.md,session.md}` (Engram obs 6412/6414/6417/6419/6420) + hallazgos verificados 2026-10-13 (Engram obs 6457).
 
 ## Objective
@@ -60,7 +60,7 @@ Runner: `uv run pytest tests/`.
   Tests: `tests/unit/test_memory_model.py` (columna + default), `tests/integration/test_migrations.py` (migración aplica).
   Route: **delegated** (writer). Trigger: writer trigger (schema + migración son una unidad no trivial).
 
-- [ ] **T2 — Arg `handoff` en `memory.write`.**
+- [x] **T2 — Arg `handoff` en `memory.write`.**
   `handoff: bool = Field(default=False, description="...")` en `MemoryWriteArgs` (`registry.py:159-166`); el `description` documenta el **cuándo** (viaja al planner por el schema). Persistir: propagar `handoff` por `tukulpan.upsert` (`app/services/tukulpan.py:323-383`, `_upsert_resolved:223-320`, junto a `pin` en `:266-285`/`:308-318`).
   Tests: `tests/unit/test_memory_tool_axes.py`, `tests/unit/test_assistant_tools.py`.
   Route: delegated (misma unidad que T1).
@@ -88,7 +88,7 @@ Runner: `uv run pytest tests/`.
   `agent/personas/assistant.md` sección Memory (`:19-21`): una línea sobre marcar handoff. **Preservar** los contratos fijados por tests.
   Route: inline (una línea, ya entendida).
 
-- [ ] **T8a — Spec MEM-12 (`handoff`).**
+- [x] **T8a — Spec MEM-12 (`handoff`).**
   `openspec/specs/memory/spec.md`: **requirement nuevo MEM-12** para el flag `handoff` (escribe, se lee, prioriza) con escenarios Given/When/Then.
   Tests: `tests/spec/test_memory_spec.py`.
   Route: inline (spec redactado desde el mapa ya verificado). Va con **slice 1**.
@@ -135,7 +135,7 @@ Runner: `uv run pytest tests/`.
 
 Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el candidato `3475bba7..HEAD` (10 archivos, 190 líneas). Ningún finding abrió corrección.
 
-- **R4-001 (resilience, WARNING)** — `app/services/tukulpan.py:317`. Un `upsert` de una memoria existente que **omite** `handoff` resetea el flag a `false`, borrando un marcador de continuación pendiente. *Nota*: espeja la semántica de `pin` (que ya se comporta así), así que puede ser por diseño — **decisión pendiente** (arreglar o documentar como consistente con `pin`).
+- **R4-001 (resilience, WARNING)** — `app/services/tukulpan.py:317`. Un `upsert` de una memoria existente que **omite** `handoff` resetea el flag a `false`, borrando un marcador de continuación pendiente. **ARREGLADO** en slice 1: `upsert(handoff: bool | None = None)` + sólo sobrescribe si viene explícito (`57a67a7c`). `pin` se dejó intacto (scoped al finding).
 - **R2-001 (readability, WARNING)** — `odd/tasks/...:47-50`. La cabecera decía "planned" mientras T1 ya figuraba hecho. **Corregido** en este commit (Status ahora refleja el slice en progreso).
 
 ## Evidence log
@@ -145,3 +145,13 @@ Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el can
   - `uv run pytest tests/unit/test_memory_model.py -q` → **passed** (2).
   - `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_migrations.py -q` → **35 passed**. El writer la reportó `partial` por DB caída; el orquestador levantó la DB (`bash infra/test-db.sh up`) y la corrió → verde. `EXPECTED_TABLES` sin cambios.
   - Ponytail: sin hallazgos.
+
+- **T2** — commit `534babaa` `feat(assistant): persist handoff from memory.write` (`app/chat/assistant/tools/registry.py`, `app/services/tukulpan.py`, `tests/unit/test_memory_tool_axes.py`, `tests/unit/test_assistant_tools.py`, `tests/unit/test_assistant_delegation.py`).
+  - `handoff: bool` con `description` (viaja al planner por el schema). Persistido en insert y update de `_upsert_resolved`.
+  - `tests/unit/{test_memory_tool_axes,test_assistant_tools,test_assistant_delegation}.py` → **verde** (spot check del orquestador). El 5º archivo es un **snapshot legítimo** del hash del catálogo del planner (cambió el schema), no un debilitamiento.
+- **R4-001 fix** — commit `57a67a7c` `fix(memory): preserve handoff across repeat upserts` (`app/services/tukulpan.py`, `tests/unit/test_tukulpan.py`).
+  - `upsert(handoff: bool | None = None)`; update sólo si `handoff is not None`; insert `bool(handoff)`. `tests/unit/test_tukulpan.py` → **verde**.
+- **Slice 1 — review RDD** — lineage `review-8f7d2ae49bc9cb9e`: `approved` + `acknowledged` (`authority: burned`). Consent relayado y otorgado por el owner. 0 bloqueantes, 2 advisory (R4-001 arreglado, R2-001 corregido en `13d9e054`).
+- **Slice 1 — re-assess post-fix** — `gentle-ai review assess --base-ref 534babaa --committed-only` → `risk: medium`, `changed_lines: 42`, `review_due: false` (`under_budget`).
+- **T8a** — commit `035cdf63` `docs(spec): add the MEM-12 handoff marker requirement with its spec scenarios` (`openspec/specs/memory/spec.md`, `tests/spec/test_memory_spec.py`).
+  - `uv run pytest tests/spec/test_memory_spec.py -k mem12 -q` → **2 passed**.
