@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Code2, FileText, Layers, LockKeyhole, Pause, Play } from "lucide-react";
-import { ApiError, disableKbDocument, editKbDocument, enableKbDocument, getKbDocument, restoreKbDocument, setKbVisibility } from "../../api";
+import { Code2, FileText, Layers, LockKeyhole, Pause, Play, Trash2 } from "lucide-react";
+import { ApiError, deleteKbDocument, disableKbDocument, editKbDocument, enableKbDocument, getKbDocument, restoreKbDocument, setKbVisibility } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { KbDocument, KbVisibility } from "../../types";
 import { Badge } from "../primitives/Badge";
@@ -30,8 +30,8 @@ function stateMessage(state: AsyncDataState) {
   return null;
 }
 
-type Mutation = "edit" | "disable" | "enable" | "restore" | "visibility";
-type Confirmation = { kind: "disable"; doc: KbDocument } | { kind: "restore"; doc: KbDocument; version: number };
+type Mutation = "edit" | "disable" | "enable" | "restore" | "visibility" | "delete";
+type Confirmation = { kind: "disable" | "delete"; doc: KbDocument } | { kind: "restore"; doc: KbDocument; version: number };
 type Feedback = { tone: "success" | "danger"; title: string };
 
 function docStatus(doc: KbDocument): "activo" | "deshabilitado" {
@@ -110,6 +110,18 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
       setBusy(null);
     }
   };
+  const removeDocument = async (target: KbDocument) => {
+    if (busy) return;
+    setBusy("delete");
+    setFeedback(null);
+    try {
+      await deleteKbDocument(target.id);
+      window.history.back();
+    } catch (error) {
+      setFeedback({ tone: "danger", title: safeMutationError(error) });
+      setBusy(null);
+    }
+  };
 
   if (!doc) {
     return <PageFrame title="Documento de base de conocimientos" meta="Contenido y versiones del documento" actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>{state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</PageFrame>;
@@ -135,7 +147,7 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
     <Button variant="secondary" disabled={busy !== null || contentState !== "ready"} onClick={() => void mutate("edit", () => editKbDocument(current.id, { title: (document.getElementById(`kb-title-${current.id}`) as HTMLInputElement).value, content: content ?? "" }))}>Guardar (nueva versión)</Button>
   </div>;
 
-  return <PageFrame title={current.title} titleAdornment={<>{fileAdornment}<Badge tone={kbStatusTone(docStatus(current))}>{kbStatusLabel(docStatus(current))}</Badge></>} meta={`#${current.id} · ${current.format.toUpperCase()} · Creado el ${current.created_at ? DATE_FORMAT.format(new Date(current.created_at)) : "—"}`} actions={<Button onClick={editContent}>Editar contenido</Button>} state={stateMessage(state)}>
+  return <PageFrame title={current.title} titleAdornment={<>{fileAdornment}<Badge tone={kbStatusTone(docStatus(current))}>{kbStatusLabel(docStatus(current))}</Badge></>} meta={`#${current.id} · ${current.format.toUpperCase()} · Creado el ${current.created_at ? DATE_FORMAT.format(new Date(current.created_at)) : "—"}`} actions={<><Button onClick={editContent}>Editar contenido</Button><Button variant="danger" disabled={busy !== null} onClick={() => setConfirmation({ kind: "delete", doc: current })}><Icon icon={Trash2} />Eliminar</Button></>} state={stateMessage(state)}>
     <div className="detail-region__main">
       {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
       <Tabs tabs={DETAIL_TABS} activeTab={activeTab} ariaLabel="Secciones del documento" onTabChange={(tab) => { setActiveTab(tab); if (tab === "content" && contentState === "idle") void loadContent(); }}>
@@ -177,7 +189,7 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
           </section>
         </div> : <div className="kb-document__content-panel">{editForm}<Card title="Versiones"><p>Versión activa: v{current.active_version} · {current.version} versiones disponibles.</p>{current.version > 1 ? <div className="kb-actions__restore"><Select label="Restaurar" value={String(restoreVersion)} options={Array.from({ length: current.version }, (_, index) => ({ value: String(index + 1), label: `v${index + 1}` }))} size="sm" disabled={busy !== null} onChange={(event) => setRestoreVersion(Number(event.target.value))} /><Button variant="secondary" disabled={busy !== null} onClick={() => setConfirmation({ kind: "restore", doc: current, version: restoreVersion })}>Restaurar</Button></div> : null}</Card></div>}
       </Tabs>
-      {confirmation ? <><StateMessage tone="warning" role="alert" title={confirmation.kind === "restore" ? "Confirma la restauración" : "Confirma la desactivación"} detail={confirmation.kind === "restore" ? "El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente y Lumat nuevamente." : `Al deshabilitar «${confirmation.doc.title}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /><div className="kb-actions__confirmation"><Button disabled={busy !== null} onClick={() => { const pending = confirmation; setConfirmation(null); void mutate(pending.kind, () => pending.kind === "restore" ? restoreKbDocument(pending.doc.id, pending.version) : disableKbDocument(pending.doc.id)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setConfirmation(null)}>Cancelar</Button></div></> : null}
+      {confirmation ? <><StateMessage tone="warning" role="alert" title={confirmation.kind === "restore" ? "Confirma la restauración" : confirmation.kind === "delete" ? "Confirma la eliminación permanente" : "Confirma la desactivación"} detail={confirmation.kind === "restore" ? "El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente y Lumat nuevamente." : confirmation.kind === "delete" ? `Esto elimina «${confirmation.doc.title}» de forma permanente. No se puede deshacer.` : `Al deshabilitar «${confirmation.doc.title}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /><div className="kb-actions__confirmation"><Button variant={confirmation.kind === "delete" ? "danger" : "primary"} disabled={busy !== null} onClick={() => { const pending = confirmation; setConfirmation(null); if (pending.kind === "delete") void removeDocument(pending.doc); else void mutate(pending.kind, () => pending.kind === "restore" ? restoreKbDocument(pending.doc.id, pending.version) : disableKbDocument(pending.doc.id)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setConfirmation(null)}>Cancelar</Button></div></> : null}
     </div>
   </PageFrame>;
 }

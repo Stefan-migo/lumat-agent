@@ -12,6 +12,7 @@ logic; the mutation audits are the existing service calls, SH-5):
 - POST /kb/{id}/enable  -> enable without changing version or visibility
 - POST /kb/{id}/restore -> {"version":n}: active_version pointer flip (D8)
 - POST /kb/{id}/visibility -> {"visibility":...}: explicit audience reclassification
+- DELETE /kb/{id}        -> permanently delete document and chunks
 
 Role enforcement server-side (PDW-API-4): `require_admin_json` -> operador 403
 {"detail":"admin role required"}; unauthenticated 401 {"detail":"unauthorized"}
@@ -232,3 +233,17 @@ def kb_set_visibility(
         raise HTTPException(status_code=400, detail=str(exc))
     session.commit()
     return {"ok": True, "doc": to_doc_dict(doc)}
+
+
+@router.delete("/kb/{doc_id}")
+def kb_delete(
+    doc_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Permanently delete a document and its chunks (admin-only)."""
+    _doc_or_404(session, doc_id)
+    doc = kb_service.delete_document(session, doc_id, actor=current.username)
+    serialized = to_doc_dict(doc)
+    session.commit()
+    return {"ok": True, "doc": serialized}

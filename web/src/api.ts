@@ -113,6 +113,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const enableKbDocument = (id: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/enable`);
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const setKbVisibility = (id: number, visibility: KbVisibility) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/visibility`, { visibility });
+export const deleteKbDocument = (id: number) => apiFetch<KbMutationResponse>(`/panel/api/kb/${id}`, { method: 'DELETE' });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 export const getKbDocument = (id: number) => apiFetch<KbDocument>(`/panel/api/kb/${id}`);
 export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim: number }) {
