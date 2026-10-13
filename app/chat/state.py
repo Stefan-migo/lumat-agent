@@ -41,6 +41,18 @@ WINDOW_SIZE = 10
 GREETING_HEADER = MESSAGE_DEFAULTS["greeting"]
 
 
+def conversation_transcript(window: list[dict], limit: int = 6) -> str:
+    """Render recent prior turns, excluding the current message."""
+    prior_messages = window[:-1]
+    messages = prior_messages[-limit:] if limit > 0 else []
+    if not messages:
+        return "(sin mensajes previos)"
+    return "\n".join(
+        f"{'Cliente' if message['direction'] == 'inbound' else 'Asistente'}: {message['text']}"
+        for message in messages
+    )
+
+
 def greeting(header: str = GREETING_HEADER) -> str:
     """The CM-1 first-contact open greeting."""
     return header

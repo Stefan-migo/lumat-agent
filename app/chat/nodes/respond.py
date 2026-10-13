@@ -18,7 +18,7 @@ import logging
 
 from sqlalchemy import select
 
-from app.chat.state import ConversationState
+from app.chat.state import ConversationState, conversation_transcript
 from app.db import session_scope
 from app.models import KbVisibility, Message
 from app.services import kb, prompts
@@ -70,6 +70,8 @@ def _answer_from_kb(
     message_id: int,
     brief: bool = False,
     memory_context: str = "",
+    conversation: str = "(sin mensajes previos)",
+    booking: str = "El cliente no tiene ninguna visita agendada.",
 ) -> str:
     """Grounded answer; records the LLM cost on the current message (D6).
 
@@ -93,6 +95,8 @@ def _answer_from_kb(
                 "role": "user",
                 "content": prompts.render(
                     "prompts/respond.md",
+                    conversation=conversation,
+                    booking=booking,
                     kb_text=kb_text + memory_block,
                     user_input=text,
                 ),
@@ -169,5 +173,12 @@ def respond(state: ConversationState) -> dict:
         message_id=state.window[-1]["id"],
         brief=state.cost_mode == "conservative",
         memory_context=state.memory_context,
+        conversation=conversation_transcript(state.window),
+        booking=(
+            f"El cliente tiene una visita agendada: {state.booking['service']} "
+            f"el {state.booking['label']} (estado {state.booking['status']})."
+            if state.booking
+            else "El cliente no tiene ninguna visita agendada."
+        ),
     )
     return {"replies": [answer]}
