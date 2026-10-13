@@ -70,6 +70,18 @@ anti-injection delimiting + test coverage.
 - **KB + tone path (for coexistence, D7)**: `app/chat/nodes/respond.py:85-88` (tone),
   `:120-167` (retrieve → `_answer_from_kb` → `kb_miss`).
 
+### UI placement (decided by owner)
+
+The catalog lives in the **same Settings tab "Mensajes"**, but as **its own card**, separate
+from the existing "Mensajes del asistente" card (the 5 fixed system messages). The card copy
+must explain the difference to the owner: the 5 fixed messages fire on their own in specific
+code paths; the catalog templates are **chosen by the bot** per turn and sent filled with
+real data.
+
+Frontend delta: `MESSAGE_TEMPLATES` (`Settings.tsx:43-49`) stops being the source of truth —
+the new card renders the backend list. The 5 fixed messages and `MessagesBody` stay as they
+are (low blast radius).
+
 ## Tasks
 
 | ID | Task | Route |
@@ -77,7 +89,7 @@ anti-injection delimiting + test coverage.
 | T0 | Design: resolve D3–D6; fix the template data shape and the exact integration point (node + prompt key) | inline (design) |
 | T1 | RED+GREEN: curated template list accessor on the settings KV + save-time validation (D4/D5) | delegated (writer) |
 | T2 | RED+GREEN: admin-only GET/PUT for the list (D6) | delegated (writer) |
-| T3 | RED+GREEN: Settings UI section to manage the list | delegated (writer) |
+| T3 | RED+GREEN: Settings → tab "Mensajes" → **new dedicated card** to manage the list, with copy explaining the difference vs the 5 fixed messages | delegated (writer) |
 | T4 | RED+GREEN: `classify.md` + `_llm_classify` carry the picked template key (D3); update `FALLBACKS` + byte-coupling test | delegated (writer) |
 | T5 | RED+GREEN: bot renders the picked template via `prompts.render` with slots from `captured`/`booking`; no match → `cannot_answer` + escalation (D13/D9) | delegated (writer) |
 | T6 | Anti-injection delimiting for template text injected into the prompt (D5) | delegated (writer) |
