@@ -243,3 +243,33 @@ desktop compact rail does **not** exist on mobile.
   `npm run build` pass.
 - Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
 - **Not verified**: no browser visual pass yet.
+
+### M3 — mobile project sheet
+
+- Commit `53334dcf` `feat(assistant): mobile project sheet`.
+- `Proyecto` bottom sheet (`Dialog variant="sheet"`): `Buscar proyecto` input,
+  project list with `aria-pressed` selection + a check on the selected row, the
+  selected project's section (`Contexto y archivos` / `Historial de hilos` /
+  `Sesiones de planificación`), and `+ Crear proyecto`. All reuse existing
+  project state, search, navigation handlers and the create-project flow.
+- The `Navegación` sheet's `Proyectos (N) ›` row now opens this sheet (flow
+  02 → 03), instead of the standalone `projects` route.
+- Tests: `AssistantWorkspace.test.tsx` extended (sheet contents, real count,
+  selection reveals the section, `Navegación` → `Proyecto`); **63 passed**.
+- Checks: `npx tsc -b --force --noEmit` pass · focused vitest 63 passed ·
+  `npm run build` pass.
+- **Native review**: assessment `review_due: true` (`slice_budget_reached`, 444
+  lines). Review START granted by the owner; risk `medium` → one lens
+  (`review-reliability`); result **approved**; acknowledgement burned
+  (`authority: burned`). The reviewed boundary now advances to `53334dcf`.
+- **Review findings — non-blocking, recorded as follow-ups (do not re-review
+  this candidate):**
+  - **R3-001** `web/src/components/pages/AssistantWorkspace.tsx:380` — selecting a
+    project in the sheet sets `expandedProjectSlug`, but the wider project-panel
+    state/route (`panelProjectSlug` / `activeProject`) is not updated, so the
+    sheet's selection and the panel context can diverge.
+  - **R3-002** `web/src/components/domain/PanelShell.tsx:90` — `useIsPhone()`
+    reads `window` in the `useState` initializer (guards `matchMedia`, not
+    `window`), so it is SSR-unsafe. The panel is a client SPA today, so this is
+    theoretical, but worth guarding if SSR ever lands.
+- **Not verified**: no browser visual pass yet.
