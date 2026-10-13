@@ -57,6 +57,15 @@ describe("Dashboard operational surface", () => {
     expect(screen.queryByText(data.today.appointments_today[0].local_start)).not.toBeInTheDocument();
   });
 
+  it("orders the agenda row: customer name and time on the title line, service below", () => {
+    render(<Dashboard data={data} state="ready" />);
+    const agenda = screen.getByRole("heading", { level: 3, name: "Agenda de hoy" }).closest(".dashboard__card-ops") as HTMLElement;
+    const row = agenda.querySelector(".dashboard__row") as HTMLElement;
+    expect(row.querySelector(".dashboard__row__head > strong")).toHaveTextContent("Ana");
+    expect(row.querySelector(".dashboard__row__head .dashboard__row__time")).toHaveTextContent("10:00");
+    expect(row.querySelector("small")).toHaveTextContent("visita");
+  });
+
   it("labels the activity section as Actividad del período", () => {
     render(<Dashboard data={data} state="ready" />);
     expect(screen.getByRole("heading", { level: 2, name: "Actividad del período" })).toBeInTheDocument();

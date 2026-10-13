@@ -174,9 +174,11 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           {opsCard("Agenda de hoy", "calendar", "primary", today.appointments_today.length, "Ver agenda", "agenda",
             <ul className="dashboard__list">{today.appointments_today.length ? today.appointments_today.slice(0, 3).map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("agenda")} aria-label={row.customer_name ?? row.service}>
-                <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{formatAgendaSlot(row.starts_at, today.tz)}</span>
-                <strong>{row.service}</strong>
-                <small>{row.customer_name ?? "Sin nombre"}</small>
+                <span className="dashboard__row__head">
+                  <strong>{row.customer_name ?? "Sin nombre"}</strong>
+                  <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{formatAgendaSlot(row.starts_at, today.tz)}</span>
+                </span>
+                <small>{row.service}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.calendar} size="sm" /><span>No hay visitas para hoy</span></li>}</ul>)}
           {opsCard("Sin respuesta", "inbox", "info", today.unanswered_conversations.length, "Ver conversaciones", "conversations",
