@@ -122,22 +122,50 @@ chatbot telemetry ("assistant optimizer") work, which would only measure a broke
 
 ## Tasks
 
-- [ ] **T1** — this record.
-- [ ] **T2 (A1)** — RED: a booking-offer test expecting a readable slot label fails on the raw
-      datetime; GREEN: `booking.py` formats slots like the confirmation.
-- [ ] **T3 (A2)** — RED: `is_farewell("eso fue todo gracias")` is False and the flow escalates;
-      GREEN: phrasal farewells recognised without over-matching questions.
-- [ ] **T4 (A3)** — RED: the clarification copy references a non-existent menu; GREEN: neutral
-      clarification copy in `MESSAGE_DEFAULTS`.
-- [ ] **T5 (A)** — full suite green; work-unit commit 1.
-- [ ] **T6 (B1)** — RED: a booked conversation's state has no appointment; GREEN:
+- [x] **T1** — this record.
+- [x] **T2 (A1)** — booking slots humanized; RED/GREEN in `tests/unit/test_booking.py`.
+- [x] **T3 (A2)** — phrasal farewell; RED/GREEN in `tests/unit/test_closure_gate.py`.
+- [x] **T4 (A3)** — clarification copy without a menu; RED/GREEN in `tests/unit/test_settings.py`.
+      Commit `24eb9254`.
+- [x] **T5 (A-attr)** — RED: `test_retry_storm_single_processing_pass` failed (batch answered the
+      wrong message). GREEN: `ConversationState.from_db` accepts `through_message_id` and anchors
+      `window` to `id <= through_message_id`; `run_conversation` passes `message.id`. `turn` left
+      unchanged (follow-up). Commit `48bb0cdb`.
+- [x] **T6 (A)** — full suite green after the attribution fix (**1940 passed**). Work-unit commits
+      `24eb9254` (A1/A2/A3) and `48bb0cdb` (attribution).
+- [ ] **T7 (B1)** — RED: a booked conversation's state has no appointment; GREEN:
       `ConversationState.from_db` loads the relevant appointment.
-- [ ] **T7 (B2)** — RED: "is my visit booked?" fabricates; GREEN: `respond` receives the transcript +
+- [ ] **T8 (B2)** — RED: "is my visit booked?" fabricates; GREEN: `respond` receives the transcript +
       booking status and answers from them. Prompt + `FALLBACKS` + identity test.
-- [ ] **T8 (B3)** — RED: a contextual follow-up classifies `unknown`; GREEN: `classify` receives the
+- [ ] **T9 (B3)** — RED: a contextual follow-up classifies `unknown`; GREEN: `classify` receives the
       transcript. Prompt + `FALLBACKS` + identity test.
-- [ ] **T9 (B)** — full suite green; work-unit commit(s) 2+.
-- [ ] **T10** — verification: `uv run pytest tests/` observed; write Findings.
+- [ ] **T10 (B)** — full suite green; work-unit commit(s) 3+.
+- [ ] **T11** — verification: `uv run pytest tests/` observed; write final Findings.
+
+## Findings
+
+### F1 — batch message attribution (found while implementing Slice A)
+
+`run_conversation` (`app/chat/graph.py:348-355`) rebuilds state with
+`ConversationState.from_db(session, message.conversation_id)`, whose `window` is the last 10 messages
+of the conversation ordered by id (`app/chat/state.py:178-193`). Every node reads the current message
+as `state.window[-1]` (e.g. `classify_intent.py:66`, `handoff_gate.py:95`, `capture.py:98`).
+
+A webhook batch persists **all** messages before processing (`ingest_payload`, persist-before-process),
+and the sweep then processes them one by one (`sweep_received` → `process_message`). So when message
+`a` of a batch `[a, b, c]` is processed, the window already ends at `c`, and the graph classifies
+**`c`**, not `a`. Message `b`'s turn then reads `window[-1]` = *the bot's own reply to `a`*.
+
+- Confirmed by instrumentation: processing `[a,b,c]` classified `c`, then the bot's own clarification
+  text, then its own capture question.
+- The new clarification copy (A3) contains "visita", which the integration classifier maps to
+  `solicitar_visita` → capture → 3 outbound. The OLD copy contained "Hablar con una persona", which
+  the deterministic `handoff_gate` caught → handoff → state `human` → later messages skipped. **The
+  legacy test passed for the wrong reason.**
+- Real production impact: in any multi-message batch the bot answers the wrong message and can answer
+  itself.
+- Fix belongs in `from_db` (anchor the window to the processed message). This is the same
+  "no context" family as Slice B.
 
 ## Acceptance criteria
 
