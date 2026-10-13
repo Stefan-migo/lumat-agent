@@ -49,7 +49,7 @@ const MESSAGE_TEMPLATES = [
 ] as const;
 type HoursData = SettingsData["hours"];
 type Drafts = {
-  scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; hours: HoursData;
+  scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData;
   conversationLimit: string; dailyLimit: string; metaCost: string;
 };
 type DraftKey = keyof Drafts;
@@ -60,6 +60,7 @@ function draftsFrom(data?: SettingsData | null): Drafts {
   return {
     scope: data ? Object.entries(data.scope_rules).sort(([a], [b]) => a.localeCompare(b)).map(([category, mode]) => `${category}=${mode}`).join("\n") : "",
     keywords: data?.keywords.join("\n") ?? "", tone: data?.tone ?? "", messages: data?.messages ?? EMPTY_MESSAGES,
+    templates: data?.templates ?? [],
     hours: data?.hours ?? { timezone: "America/Santiago", schedule: [] },
     conversationLimit: String(data?.conversation_limit ?? ""), dailyLimit: String(data?.daily_limit ?? ""), metaCost: String(data?.meta_cost ?? ""),
   };
@@ -295,7 +296,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
         </> : null}
         {active === "messages" ? <>
           <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
-          <Card title="Mensajes del asistente" className="settings-messages__editor">
+           <Card title="Mensajes del asistente" className="settings-messages__editor">
               <div className="settings-messages__panel">
                 <div className="settings-messages__layout">
                   <div className="settings-messages__mobile-selector">
@@ -317,7 +318,22 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                 </div>
               </div>
               <div className="settings-messages__footer">{footer()}<Button disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button></div>
-          </Card>
+           </Card>
+           <Card title="Respuestas prediseñadas" description="Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, fecha, hora).">
+             <p className="settings-messages__info">A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.</p>
+             <p className="settings-messages__helper">Datos disponibles: <code>{"{{nombre}}, {{comuna}}, {{direccion}}, {{equipo}}, {{problema}}, {{disponibilidad}}, {{visita}}"}</code></p>
+             <div className="settings-messages__templates" aria-label="Respuestas prediseñadas">
+               {draft.templates.map((template, index) => <div className="settings-messages__template" key={index}>
+                 <Input label={`ID de respuesta ${index + 1}`} value={template.id} onChange={(event) => update("templates", draft.templates.map((item, current) => current === index ? { ...item, id: event.target.value } : item))} />
+                 <Textarea label={`Texto de respuesta ${index + 1}`} rows={3} value={template.text} onChange={(event) => update("templates", draft.templates.map((item, current) => current === index ? { ...item, text: event.target.value } : item))} />
+                 <Button variant="tertiary" aria-label={`Eliminar respuesta ${index + 1}`} onClick={() => update("templates", draft.templates.filter((_, current) => current !== index))}><Trash2 aria-hidden="true" /></Button>
+               </div>)}
+             </div>
+             <div className="settings-messages__footer">
+               <Button variant="tertiary" onClick={() => update("templates", [...draft.templates, { id: "", text: "" }])}><Plus aria-hidden="true" />Agregar respuesta</Button>
+               <Button disabled={saving("templates") || draft.templates.some(({ id, text }) => !id.trim() || !text.trim())} onClick={() => void save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates)}>Guardar respuestas</Button>
+             </div>
+           </Card>
         </> : null}
         {active === "schedule" ? <div className="settings-hours__layout">
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>

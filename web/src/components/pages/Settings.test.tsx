@@ -7,6 +7,7 @@ import { Settings } from "./Settings";
 const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
   messages: { greeting: "Hola", cannot_answer: "No sé", clarification: "¿Cuál?", farewell: "Chao", out_of_hours: "Cerrado" },
+  templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
   conversation_limit: 4, daily_limit: 20, meta_cost: 0.05,
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
@@ -102,6 +103,44 @@ describe("Settings", () => {
     expect(selector).toHaveTextContent("Despedida");
     expect(screen.getByText("Cierre de conversación", { selector: ".settings-messages__mobile-selector p" })).toBeInTheDocument();
     expect(screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-farewell"))).toBeInTheDocument();
+  });
+
+  it("renders the preset answers card and explains how it differs from fixed messages", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
+    expect(screen.getByText("A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.")).toBeInTheDocument();
+  });
+
+  it("adds a preset answer row and saves its templates", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
+    await user.type(screen.getByLabelText("ID de respuesta 1"), "saludo_personalizado");
+    fireEvent.change(screen.getByLabelText("Texto de respuesta 1"), { target: { value: "Hola {{nombre}}" } });
+    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/message-templates", expect.objectContaining({ method: "POST", body: JSON.stringify({ templates: [{ id: "saludo_personalizado", text: "Hola {{nombre}}" }] }) })));
+  });
+
+  it("removes a preset answer row", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
+    expect(screen.getByLabelText("ID de respuesta 1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Eliminar respuesta 1" }));
+    expect(screen.queryByLabelText("ID de respuesta 1")).not.toBeInTheDocument();
+  });
+
+  it("disables saving preset answers while a row is blank", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
+    expect(screen.getByRole("button", { name: "Guardar respuestas" })).toBeDisabled();
   });
 
   it("keeps an edited draft when refreshed persisted data changes", () => {
