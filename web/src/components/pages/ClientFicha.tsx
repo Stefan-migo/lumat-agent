@@ -693,7 +693,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       </div>
       </> : null}
         {activeTab === "cases" ? <div className="detail-region detail-region--cases">
-          <Card className="client-ficha__case-card client-ficha__case-card--primary" title="Caso activo"><div className="client-ficha__case-panel">{activeCaseBody}</div></Card>
+          <section className="client-ficha__case-card client-ficha__case-card--primary"><div className="client-ficha__case-panel">{activeCaseBody}</div></section>
           {customerDataCard}
           <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores">
             {archivedCases.length ? <>
