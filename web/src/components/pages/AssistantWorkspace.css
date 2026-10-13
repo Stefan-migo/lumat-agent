@@ -533,6 +533,8 @@
 }
 
 @media (max-width: 40rem) {
+  .panel-shell__content-area--immersive { grid-template-rows: minmax(0, 1fr); }
+
   /* Every modifier combination must be repeated here: the collapsed templates
      below use `:not()` pairs (specificity 0,3,0) and would otherwise win over a
      bare `.assistant-workspace` (0,1,0) regardless of this media query — which
