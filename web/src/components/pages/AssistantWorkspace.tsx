@@ -84,6 +84,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [threadActionError, setThreadActionError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [projectSheetOpen, setProjectSheetOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [projectPurpose, setProjectPurpose] = useState("");
@@ -116,6 +117,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
   const projects = projectsData.data?.projects ?? [];
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
+  const selectedProject = projects.find((project) => project.slug === (expandedProjectSlug ?? routeProjectSlug ?? activeProjectSlug)) ?? projects[0];
   const activeThread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((thread) => thread.id === activeThreadId);
   const toggleContextSection = (id: string) => setContextSections((current) => ({ ...current, [id]: !(current[id] ?? false) }));
   const visibleProjects = useMemo(() => {
@@ -364,9 +366,32 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); navigateToHistory(routeProjectSlug ?? "default"); }}>Historial de conversaciones <Icon icon={ChevronRight} size="sm" /></button>
           <section aria-labelledby="assistant-navigation-workspace-title">
             <h3 id="assistant-navigation-workspace-title">Espacio de trabajo</h3>
-            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); window.history.pushState({}, "", pathForRoute({ view: "projects" })); window.dispatchEvent(new PopStateEvent("popstate")); }}>Proyectos ({projects.length}) <Icon icon={ChevronRight} size="sm" /></button>
+            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); setProjectSheetOpen(true); }}>Proyectos ({projects.length}) <Icon icon={ChevronRight} size="sm" /></button>
           </section>
         </div>
+      </Dialog>
+      <Dialog open={projectSheetOpen} onClose={() => setProjectSheetOpen(false)} title="Proyecto" variant="sheet">
+        {projectSheetOpen ? <div className="assistant-workspace__project-sheet">
+          <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
+          <div className="assistant-workspace__project-sheet-list" aria-label="Lista de proyectos">
+            {projectsData.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyectos" /> : null}
+            {projectsData.state === "error" || projectsData.state === "denied" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los proyectos" /> : null}
+            {projectsData.state === "ready" && visibleProjects.length === 0 ? <EmptyState title={projects.length ? "No encontramos proyectos" : "No hay proyectos"} description={projects.length ? "Prueba con otro nombre." : "No hay espacios de proyecto registrados para mostrar."} /> : null}
+            {projectsData.state === "ready" ? visibleProjects.map((project) => {
+              const selected = selectedProject?.slug === project.slug;
+              return <button type="button" key={project.slug} className={`assistant-workspace__project-sheet-option${selected ? " is-selected" : ""}`} aria-pressed={selected} onClick={() => { setExpandedProjectSlug(project.slug); if (!projectSessions[project.slug]) void loadProjectSessions(project.slug); }}>
+                <span>{project.name}</span>{selected ? <span aria-label="Seleccionado">✓</span> : null}
+              </button>;
+            }) : null}
+          </div>
+          {selectedProject ? <section className="assistant-workspace__project-sheet-details" aria-label={`Opciones de ${selectedProject.name}`}>
+            <h3>{selectedProject.name}</h3>
+            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setProjectSheetOpen(false); navigateToProject(selectedProject, "context"); }}>Contexto y archivos <Icon icon={ChevronRight} size="sm" /></button>
+            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setProjectSheetOpen(false); navigateToHistory(selectedProject.slug); }}>Historial de hilos <Icon icon={ChevronRight} size="sm" /></button>
+            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setProjectSheetOpen(false); navigateToSessions(selectedProject.slug); }}>Sesiones de planificación <Icon icon={ChevronRight} size="sm" /></button>
+          </section> : null}
+          <Button variant="secondary" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} size="sm" />Crear proyecto</Button>
+        </div> : null}
       </Dialog>
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
       <aside

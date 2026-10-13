@@ -101,7 +101,17 @@ describe("AssistantWorkspace", () => {
     const navigation = await screen.findByRole("dialog", { name: "Navegación" });
     expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
     expect(within(navigation).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
-    expect(await within(navigation).findByRole("button", { name: "Proyectos (2)" })).toBeInTheDocument();
+    fireEvent.click(await within(navigation).findByRole("button", { name: "Proyectos (2)" }));
+    const projectSheet = await screen.findByRole("dialog", { name: "Proyecto" });
+    expect(within(projectSheet).getByRole("searchbox", { name: "Buscar proyecto" })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: "Uno Seleccionado" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(projectSheet).getByRole("button", { name: "Dos" })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("heading", { name: "Uno" })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: /Contexto y archivos/ })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: /Historial de hilos/ })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: /Sesiones de planificación/ })).toBeInTheDocument();
+    fireEvent.click(within(projectSheet).getByRole("button", { name: "Dos" }));
+    expect(within(projectSheet).getByRole("heading", { name: "Dos" })).toBeInTheDocument();
   });
 
   it("routes the phone assistant hamburger to the sheet instead of the app drawer", () => {
