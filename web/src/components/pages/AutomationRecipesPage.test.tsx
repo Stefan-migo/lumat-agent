@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ApiError } from '../../api';
 import { AutomationRecipesPage } from './AutomationRecipesPage';
 
@@ -39,6 +39,19 @@ describe('AutomationRecipesPage', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations', expect.objectContaining({ method: 'POST', body: JSON.stringify({ recipe_id: recipes[0].recipe_id, parameters: { channel: 'whatsapp' } }) })));
+  });
+
+  it('surfaces a failed configuration inside the open dialog', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/automation-installations') && init?.method === 'POST') return json({ detail: 'No se pudo instalar.' }, 400);
+      return json(String(input).endsWith('/automation-recipes') ? { recipes } : { installations: [] });
+    });
+    page();
+    fireEvent.click((await screen.findAllByRole('button', { name: '+ Configurar' }))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('No se guardaron los cambios')).toBeInTheDocument();
+    expect(within(dialog).getByText('No se pudo instalar.')).toBeInTheDocument();
   });
 
   it('edits parameters and toggles an installed recipe', async () => {

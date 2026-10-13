@@ -120,7 +120,7 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
     state={showEmptyInstallBanner ? <div className="automation-recipes__empty-banner"><Icon icon={Timer} /><StateMessage tone="info" role="status" title="Aún no tienes automatizaciones instaladas." detail="Elige una plantilla para comenzar." /></div> : undefined}
     className="automation-recipes"
   >
-    {actionError ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={actionError} /> : null}
+    {actionError && selected === null ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={actionError} /> : null}
     {recipes.state === 'denied' ? stateBlock(recipes.state, recipes.retry, 'el catálogo') : null}
     {installations.state === 'denied' ? stateBlock(installations.state, installations.retry, 'las instalaciones') : null}
     {recipes.state === 'error' ? stateBlock(recipes.state, recipes.retry, 'el catálogo') : null}
@@ -176,6 +176,7 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
     </Tabs>
     <Dialog open={selected !== null} onClose={() => setSelected(null)} title={selected ? `${selected.installation ? 'Editar' : 'Configurar'} ${selected.recipe.name}` : 'Configurar automatización'} description="Revisa los parámetros antes de activar la automatización." icon={selected ? recipeIcons[selected.recipe.recipe_id] ?? Timer : undefined} variant="sheet">
       {selected ? <form className="automation-recipes__form" onSubmit={submitConfiguration}>
+        {actionError ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={actionError} /> : null}
         {selected.recipe.parameters.map((parameter) => parameter.key === 'channel' ? <Select key={parameter.key} label={parameter.label} required={parameter.required} value={String(parameters[parameter.key] ?? '')} disabled={pending !== null} onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: event.target.value }))} options={selected.recipe.channel_allowed.map((value) => ({ value, label: channelLabel[value] ?? value }))} /> : parameter.type === 'weekday' ? <Select key={parameter.key} label={parameter.label} required={parameter.required} value={String(parameters[parameter.key] ?? '')} disabled={pending !== null} onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: Number(event.target.value) }))} options={weekdayOptions} /> : <Input key={parameter.key} label={parameter.label} type={parameter.type === 'time' ? 'time' : parameter.type === 'number' ? 'number' : 'text'} required={parameter.required} value={String(parameters[parameter.key] ?? '')} disabled={pending !== null} onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: parameter.type === 'number' ? Number(event.target.value) : event.target.value }))} />)}
         <div className="automation-recipes__dialog-actions"><Button type="submit" disabled={pending !== null}>{pending ? selected.installation ? 'Guardando…' : 'Configurando…' : selected.installation ? 'Guardar cambios' : 'Configurar'}</Button><Button type="button" variant="secondary" disabled={pending !== null} onClick={() => setSelected(null)}>Cancelar</Button></div>
       </form> : null}
