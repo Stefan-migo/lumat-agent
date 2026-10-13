@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-lumat-memoria-tukulpan`
 **Worktree**: `../lumat-agent-odd-asistente-lumat-memoria-tukulpan`
 **Base**: `3475bba7` (= `origin/main` at branch time; el handoff citaba `8a946821`, `origin/main` avanzó con el PR #580 de panel-design-details durante el recon)
-**Status**: planned. Nada implementado.
+**Status**: in progress — slice 1: T1 y T2 hechos; T8a pendiente. Review RDD (lineage `review-8f7d2ae49bc9cb9e`) **approved + acknowledged** (`authority: burned`); 2 findings advisory no bloqueantes registrados abajo.
 **Source**: `odd/handoffs/asistente-lumat-memoria-tukulpan.md` (Engram obs 6428) + `.rapsodia-code/sessions/ready-for-odd/2026-10-13-asistente-lumat-memoria-tukulpan/{report.md,session.md}` (Engram obs 6412/6414/6417/6419/6420) + hallazgos verificados 2026-10-13 (Engram obs 6457).
 
 ## Objective
@@ -130,6 +130,13 @@ Runner: `uv run pytest tests/`.
 
 - **RDD**: `gentle-ai review assess --cwd <wt> --base-ref <slice-base> --committed-only --json` tras cada commit de work-unit; el boundary avanza al git-sha revisado.
 - **Push / PR / merge**: decisión del owner (el ODD autoriza los commits de work-unit en la rama, no el push/PR).
+
+## Review findings (advisory, non-blocking) — lineage review-8f7d2ae49bc9cb9e
+
+Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el candidato `3475bba7..HEAD` (10 archivos, 190 líneas). Ningún finding abrió corrección.
+
+- **R4-001 (resilience, WARNING)** — `app/services/tukulpan.py:317`. Un `upsert` de una memoria existente que **omite** `handoff` resetea el flag a `false`, borrando un marcador de continuación pendiente. *Nota*: espeja la semántica de `pin` (que ya se comporta así), así que puede ser por diseño — **decisión pendiente** (arreglar o documentar como consistente con `pin`).
+- **R2-001 (readability, WARNING)** — `odd/tasks/...:47-50`. La cabecera decía "planned" mientras T1 ya figuraba hecho. **Corregido** en este commit (Status ahora refleja el slice en progreso).
 
 ## Evidence log
 
