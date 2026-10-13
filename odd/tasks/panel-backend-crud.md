@@ -142,3 +142,16 @@ PR(s) a decidir al cerrar el primer work unit. Si el acumulado supera ~400 líne
 - RDD assess (base `2690c80e`, committed-only): medium, **234 líneas**, `review_due: false` (`under_budget`) → **sin review** para WU3; el native review solo se dispara al alcanzar ~400 líneas o riesgo alto.
 - Desvío TDD declarado por el writer: el test de componente `ClientFicha` se agregó después de implementar la UI (no se observó RED); backend y contratos de API sí tuvieron RED observado.
 - Aviso: la corrida de vitest imprimió warnings de React `act(...)` (no fallos). `ruff` no está instalado en el entorno → lint no ejecutado.
+
+### Pre-merge integration check (rama apilada sobre `origin/main f03e6ad7`)
+- Corrida completa sobre el stack (rama tope): backend **1962 passed / 0 failed** (247s), frontend **1174 passed** + `npm run build` OK.
+- **Hallazgo del check** (los 3 fallos eran nuestros, tests desactualizados, NO bugs de producción): `tests/integration/test_migrations.py` exige la lista EXACTA de migraciones (faltaban 050 y 051) y dos asserts de shape exacto del dict de caso (`tests/functional/test_api_clients.py`, `tests/integration/test_customers.py`) no contemplaban `archived_at`. La verificación por work unit (solo archivos target) no los detectó.
+- Corregidos: `test(migrations)`: 050 en la rama KB (PR1); `test(cases)`: 051 + `archived_at` en las dos asserts, en la rama de casos (PR3).
+- PR1/PR2 re-verificados con la DB de test **reseteada** (`test-db.sh down/up`): la DB compartida conserva migraciones entre ramas → falso fallo. PR1 34/0, PR2 119/0.
+
+### Entrega — chained PRs `stacked-to-main`
+- Estrategia (owner): **(B) stacked-to-main**. 3 PRs, cada uno <400 líneas.
+- PR1 `odd/panel-backend-crud-kb` (base `main`): KB delete — 231 líneas.
+- PR2 `odd/panel-backend-crud-users` (base PR1): usuarios delete — 198 líneas.
+- PR3 `odd/panel-backend-crud-cases` (base PR2): casos archivar — 250 líneas.
+- Tras el merge del padre → retarget del hijo a `main`.
