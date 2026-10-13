@@ -6,6 +6,40 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.3] - 2026-10-13
+
+This release brings the phone layout of Asistente Lumat: a dedicated mobile
+control header, bottom sheets for navigation, projects, and thread detail, and a
+composer sized for phones — while preserving the tablet and desktop behavior it
+builds on.
+
+### Added
+
+- **Asistente Lumat on phones.** A dedicated mobile control header, a bottom
+  navigation sheet (new conversation, history, projects), a project picker
+  sheet, and a thread-detail sheet, all reachable from the assistant view below
+  the phone breakpoint.
+- **Mobile composer and empty state.** A composer and empty state sized for
+  phones, with the reference empty-state copy scoped below the breakpoint.
+
+### Changed
+
+- **Single-column assistant workspace below the breakpoint.** The phone and
+  tablet workspace collapses to a single column, thread tabs are hidden on
+  phones, and the thread's project is shown in the mobile header.
+
+### Fixed
+
+- **Assistant navigation.** Restore the app drawer in the assistant view and
+  drop obsolete assistant actions from the panel shell.
+- **Mobile project selection.** Load projects from the mobile selector and
+  streamline the project picker.
+
+### Docs
+
+- Record the mobile redesign work units (M1–M6), the D2/D4 decisions, and the
+  visual-pass and native-review outcomes.
+
 ## [2026.10.2] - 2026-10-13
 
 This release turns the automation catalog into real time- and calendar-driven
