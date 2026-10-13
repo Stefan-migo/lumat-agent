@@ -25,6 +25,7 @@ app/services/customers.py / audit.py style).
 from __future__ import annotations
 
 import logging
+import re
 import unicodedata
 from datetime import datetime
 from typing import Any
@@ -36,6 +37,20 @@ from app.models import Settings
 from app.services.audit import record_audit
 
 logger = logging.getLogger(__name__)
+_MESSAGE_TEMPLATE_SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+
+ALLOWED_MESSAGE_TEMPLATE_SLOTS: frozenset[str] = frozenset(
+    {
+        "nombre",
+        "comuna",
+        "direccion",
+        "equipo",
+        "problema",
+        "disponibilidad",
+        "visita",
+    }
+)
+MESSAGE_TEMPLATES_KEY = "messages.templates"
 
 # SS-1: the two legal scope modes per category. Anything else behaves as unset.
 SCOPE_MODES: tuple[str, ...] = ("bot_resolve", "always_escalate")
@@ -165,6 +180,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "messages.clarification": MESSAGE_DEFAULTS["clarification"],
     "messages.farewell": MESSAGE_DEFAULTS["farewell"],
     "messages.out_of_hours": MESSAGE_DEFAULTS["out_of_hours"],
+    MESSAGE_TEMPLATES_KEY: [],
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
@@ -340,3 +356,39 @@ def get_message(session: Session, key: str, default: str | None = None) -> str:
     """SS-5: override for `messages.<key>`, else the built-in default."""
     fallback = MESSAGE_DEFAULTS.get(key, default)
     return get_setting(session, f"messages.{key}", default=fallback)
+
+
+def get_message_templates(session: Session) -> list[dict]:
+    """Return the stored message-template list, or an empty list if malformed."""
+    templates = get_setting(session, MESSAGE_TEMPLATES_KEY, default=[])
+    return templates if isinstance(templates, list) else []
+
+
+def validate_message_templates(templates: Any) -> list[dict]:
+    """Validate message templates before persistence and return them unchanged."""
+    if not isinstance(templates, list):
+        raise ValueError("Message templates must be a list")
+
+    seen_ids: set[str] = set()
+    for index, template in enumerate(templates):
+        if not isinstance(template, dict):
+            raise ValueError(f"Message template at index {index} must be an object")
+
+        template_id = template.get("id")
+        if not isinstance(template_id, str) or not template_id.strip():
+            raise ValueError(f"Message template at index {index} must have a non-empty string id")
+        if template_id in seen_ids:
+            raise ValueError(f"Message template id {template_id!r} must be unique")
+        seen_ids.add(template_id)
+
+        text = template.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"Message template {template_id!r} must have non-empty string text")
+        unknown_slots = set(_MESSAGE_TEMPLATE_SLOT_RE.findall(text)) - ALLOWED_MESSAGE_TEMPLATE_SLOTS
+        if unknown_slots:
+            raise ValueError(
+                f"Message template {template_id!r} contains unsupported slots: "
+                f"{sorted(unknown_slots)}"
+            )
+
+    return templates

@@ -318,6 +318,23 @@ def test_message_override_wins_over_caller_default():
         assert settings.get_message(session, "unknown_message", "Chao") == "Chao"
 
 
+def test_message_templates_round_trip_and_invalid_input_is_not_written():
+    templates = [{"id": "visit-confirmation", "text": "Hola {{nombre}}, visita {{visita}}"}]
+    with SessionLocal() as session:
+        settings.set_setting(session, settings.MESSAGE_TEMPLATES_KEY, templates, actor="admin1")
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_message_templates(session) == templates
+
+    before = _count_settings()
+    with SessionLocal() as session:
+        with pytest.raises(ValueError):
+            settings.validate_message_templates(
+                [{"id": "invalid", "text": "Hola {{unknown_slot}}"}]
+            )
+    assert _count_settings() == before
+
+
 # ---------------------------------------------------------------------------
 # T4.1.2 — Audit on semantic writes (SH-5)
 # ---------------------------------------------------------------------------
