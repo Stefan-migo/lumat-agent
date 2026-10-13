@@ -14,13 +14,17 @@ function displayLabel(marker: string) {
 }
 
 function parseSummary(summary: string): SummarySegment[] {
-  const markers = [...summary.matchAll(SUMMARY_MARKER)];
+  const text = summary.trim();
+  const markers = [...text.matchAll(SUMMARY_MARKER)];
+  // Only segment when the text starts with a known marker. Otherwise the caller
+  // falls back to the full text, so leading prose is never dropped.
+  if (!markers.length || (markers[0].index ?? 0) !== 0) return [];
   return markers.flatMap((marker, index) => {
     const matchStart = marker.index ?? 0;
     const label = marker[1];
     const valueStart = matchStart + marker[0].length;
-    const valueEnd = markers[index + 1]?.index ?? summary.length;
-    const value = summary.slice(valueStart, valueEnd).trim().replace(/[\s,;.!?]+$/u, "");
+    const valueEnd = markers[index + 1]?.index ?? text.length;
+    const value = text.slice(valueStart, valueEnd).trim().replace(/[\s,;.!?]+$/u, "");
     return value ? [{ label: displayLabel(label), value }] : [];
   });
 }

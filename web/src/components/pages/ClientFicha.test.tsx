@@ -248,6 +248,21 @@ describe("ClientFicha page grammar", () => {
     expect(within(summary).getByText("coordinar visita")).toBeInTheDocument();
   });
 
+  it("keeps the full summary text when it does not start with a known marker", () => {
+    const withPreamble = {
+      ...ficha,
+      history: {
+        ...ficha.history,
+        cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, summary: "Nota libre sin formato. Cliente: Marcela. Motivo: Calefón no enciende." } : row),
+      },
+    };
+    render(<ClientFicha data={withPreamble} memories={memories} />);
+
+    const summary = document.querySelector(".client-ficha__case-summary") as HTMLElement;
+    expect(within(summary).queryByText("Cliente", { selector: "dt" })).not.toBeInTheDocument();
+    expect(within(summary).getByText(/Nota libre sin formato/)).toBeInTheDocument();
+  });
+
   it("renders a nullable CLP case amount and saves it through the existing update API", async () => {
     const user = userEvent.setup();
     vi.mocked(updateCaseAmount).mockResolvedValue({ ok: true, case: { ...ficha.history.cases[0], amount: 200000, customer: ficha.customer } });
