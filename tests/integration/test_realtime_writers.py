@@ -43,7 +43,7 @@ def test_classification_persists_classified_activity(migrated_db, monkeypatch):
         session.commit()
         monkeypatch.setattr(
             "app.chat.nodes.classify_intent._llm_classify",
-            lambda text, message_id: {
+            lambda text, message_id, conversation="": {
                 "intent": "calefont",
                 "service": "calefont",
                 "priority": "media",
@@ -71,7 +71,7 @@ def test_unknown_classification_also_persists_classified_activity(migrated_db, m
         session.commit()
         monkeypatch.setattr(
             "app.chat.nodes.classify_intent._llm_classify",
-            lambda text, message_id: {"intent": "unknown", "injection": False},
+            lambda text, message_id, conversation="": {"intent": "unknown", "injection": False},
         )
         state = ConversationState(
             customer_id=customer.id,

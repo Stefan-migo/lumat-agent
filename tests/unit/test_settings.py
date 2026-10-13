@@ -1,4 +1,4 @@
-from app.services.settings import get_service_duration
+from app.services.settings import MESSAGE_DEFAULTS, get_service_duration
 
 
 class FakeSession:
@@ -33,3 +33,10 @@ def test_get_service_duration_rejects_malformed_values():
 
 def test_get_service_duration_empty_map_defaults():
     assert get_service_duration(FakeSession({}), "Caldera") == 60
+
+
+def test_clarification_default_does_not_invent_a_menu():
+    clarification = MESSAGE_DEFAULTS["clarification"].lower()
+
+    assert "menú" not in clarification
+    assert "elige una opción" not in clarification

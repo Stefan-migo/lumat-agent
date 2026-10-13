@@ -178,7 +178,8 @@ def test_sh4_llm_flag_layer_isolates_payload_as_data(
     # (a) the payload lives ONLY in the <user_input> data slot (classify call)
     assert len(classify_user_slots) == 1
     assert payload in classify_user_slots[0]
-    assert classify_user_slots[0].startswith("<user_input>")
+    assert classify_user_slots[0].startswith("<conversation>")
+    assert "<user_input>" in classify_user_slots[0]
     # and NEVER in any system prompt (data vs instructions isolation)
     assert all(payload not in s for s in system_slots)
 

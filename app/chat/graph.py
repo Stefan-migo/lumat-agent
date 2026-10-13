@@ -351,7 +351,9 @@ def run_conversation(session: Session, message: Message) -> list[str]:
     Rebuilds the state from the DB (D2), runs the graph, persists the replies
     as outbound messages, and returns them for sending (T3.6).
     """
-    state = ConversationState.from_db(session, message.conversation_id)
+    state = ConversationState.from_db(
+        session, message.conversation_id, through_message_id=message.id
+    )
     result = build_graph().invoke(state)
     replies = result.get("replies") or []
     persist_replies(session, state, replies)

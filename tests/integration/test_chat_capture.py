@@ -402,8 +402,8 @@ def test_cm3_extracts_multiple_fields_from_one_message(mock_openai_chat, monkeyp
 
     real = ci._llm_classify
 
-    def fake(text: str, message_id: int) -> dict:
-        result = real(text, message_id)
+    def fake(text: str, message_id: int, conversation: str = "") -> dict:
+        result = real(text, message_id, conversation)
         if "Los Leones" in text:
             result["fields"] = {
                 "name": "Juan Pérez",

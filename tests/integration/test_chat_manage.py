@@ -72,7 +72,7 @@ def test_customer_confirms_cancellation_through_graph(mock_openai_chat, monkeypa
 
     monkeypatch.setattr(
         classify_intent, "_llm_classify",
-        lambda text, message_id: {"intent": "cancelar_visita", "service": None, "priority": None, "status": None, "injection": False},
+        lambda text, message_id, conversation="": {"intent": "cancelar_visita", "service": None, "priority": None, "status": None, "injection": False},
     )
     conv_id, customer_id, appointment_id = _seed_conversation()
     offer = _invoke(conv_id, _add_message(conv_id, "quiero cancelar mi visita", "wamid.manage.ask"))
@@ -95,7 +95,7 @@ def _classify_cancel(monkeypatch):
 
     monkeypatch.setattr(
         classify_intent, "_llm_classify",
-        lambda text, message_id: {"intent": "cancelar_visita", "service": None, "priority": None, "status": None, "injection": False},
+        lambda text, message_id, conversation="": {"intent": "cancelar_visita", "service": None, "priority": None, "status": None, "injection": False},
     )
 
 
@@ -104,7 +104,7 @@ def _classify_reschedule(monkeypatch):
 
     monkeypatch.setattr(
         classify_intent, "_llm_classify",
-        lambda text, message_id: {"intent": "reagendar_visita", "service": None, "priority": None, "status": None, "injection": False},
+        lambda text, message_id, conversation="": {"intent": "reagendar_visita", "service": None, "priority": None, "status": None, "injection": False},
     )
 
 

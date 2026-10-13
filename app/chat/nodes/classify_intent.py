@@ -24,7 +24,7 @@ import re
 
 from sqlalchemy import func, select
 
-from app.chat.state import ConversationState
+from app.chat.state import ConversationState, conversation_transcript
 from app.chat.nodes.capture import EXTRACTABLE_FIELDS
 from app.db import session_scope
 from app.models import ConversationEvent
@@ -66,7 +66,9 @@ def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
 
 
-def _llm_classify(text: str, message_id: int) -> dict:
+def _llm_classify(
+    text: str, message_id: int, conversation: str = "(sin mensajes previos)"
+) -> dict:
     """Call gpt-4o-mini with input-as-data (SH-4); returns the parsed JSON.
 
     Records the token cost on the current message (D6 via costs.py).
@@ -78,7 +80,9 @@ def _llm_classify(text: str, message_id: int) -> dict:
             {"role": "system", "content": prompts.load("personas/classify.md")},
             {
                 "role": "user",
-                "content": prompts.render("prompts/classify.md", user_input=text),
+                "content": prompts.render(
+                    "prompts/classify.md", conversation=conversation, user_input=text
+                ),
             },
         ],
         temperature=0,
@@ -175,7 +179,11 @@ def classify_intent(state: ConversationState) -> dict:
         }
 
     try:
-        result = _llm_classify(text, message_id=state.window[-1]["id"] if state.window else 0)
+        result = _llm_classify(
+            text,
+            message_id=state.window[-1]["id"] if state.window else 0,
+            conversation=conversation_transcript(state.window),
+        )
     except Exception:
         logger.exception("LLM classify failed for conversation %s", state.conversation_id)
         result = {"intent": "unknown"}
