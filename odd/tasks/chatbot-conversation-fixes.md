@@ -1,0 +1,197 @@
+# ODD: chatbot-conversation-fixes
+
+**The WhatsApp chatbot must hold a coherent conversation: human-readable slots, a booking it
+remembers, a closing it honours.**
+
+## Objective
+
+Fix the observed failure modes of the customer WhatsApp chatbot so a real conversation stays
+coherent end to end, without redesigning the deterministic pipeline. Two work-unit slices:
+
+- **Slice A (deterministic, low risk):** human-readable booking slots, farewells that close instead
+  of escalate, and a clarification fallback that does not invent a menu.
+- **Slice B (context):** the graph must know a booking exists, and the two LLM calls must see the
+  recent conversation instead of only the current message.
+
+## Problem
+
+Measured on a real conversation (owner, 2026-10-13) against `main` = `2554af2` (`v2026.10.3`).
+
+| # | message | intent | node | reply | defect |
+|---|---------|--------|------|-------|--------|
+| 5 | (booking) | — | `booking` | `1. 2026-10-13 13:23:10.986884 …` | raw datetime, microseconds |
+| 7 | "cual es el precio?" | `valores` | `respond` | `$18.000 … ¿registro tu solicitud?` | re-suggests booking already made |
+| 8 | "quiero confirmar que la visita esté agendada" | `consulta` | `respond` | "quedó escalado para gestión manual" | **fabricated** — text absent from repo |
+| 9 | "ya agende una visita" | `unknown` | `respond` | clarification menu | contextual message, no history |
+| 10 | "eso fue todo gracias" | `unknown` (2nd) | `handoff` | "Un asesor revisará tu caso" | closure escalated to a human |
+
+Root cause, one sentence: **the LLM calls are blind to the conversation, and the graph does not
+carry booking state.** `state.window` holds the last 10 messages (`app/chat/state.py:184-193`) but no
+LLM call receives it; `ConversationState.from_db` (`app/chat/state.py:208-217`) never loads the
+appointment. Evidence per defect:
+
+- **Raw slots** — `app/chat/nodes/booking.py:43-47` renders `f"{slot['date']} {slot['time']}"` from
+  `day.isoformat()` + `clock.isoformat()`; `time` carries microseconds. The confirmation path formats
+  correctly (`booking.py:146`, `strftime("%d/%m/%Y a las %H:%M")`).
+- **Farewell escalated** — `app/chat/nodes/closure_gate.py:46-52` requires *every* token in
+  `CLOSING_TOKENS`; `"eso fue todo gracias"` → `["eso","fue","todo","gracias"]`, three tokens absent.
+  Falls to `classify_intent` → `unknown` → 2nd unknown escalates (`classify_intent.py:200-219`).
+- **Blind LLM** — `respond` (`app/chat/nodes/respond.py:88-99`) sends only `{{kb_text}}` +
+  `{{user_input}}`; `classify` (`classify_intent.py:75-85`) sends only `{{user_input}}`.
+- **No booking state** — only `_booking_offer` in `captured`, cleared on confirm
+  (`booking.py:145`); the appointment table is never read into state.
+
+## Why now
+
+The bot cannot hold a conversation today. This is the owner's live blocker and precedes any
+chatbot telemetry ("assistant optimizer") work, which would only measure a broken bot.
+
+## Scope
+
+**In:**
+
+- `app/chat/nodes/booking.py` — human-readable slot offer.
+- `app/chat/nodes/closure_gate.py` — recognise phrasal farewells/thanks without over-matching.
+- `app/services/settings.py` — `MESSAGE_DEFAULTS["clarification"]` no longer references a menu.
+- `app/chat/state.py` — load the customer's relevant appointment into `ConversationState`.
+- `app/chat/nodes/respond.py` + `agent/prompts/respond.md` — receive the recent transcript and the
+  booking status.
+- `app/chat/nodes/classify_intent.py` + `agent/prompts/classify.md` (and `agent/personas/classify.md`
+  if needed) — receive the recent transcript.
+- `app/services/prompts.py` — keep `FALLBACKS` byte-identical to every edited `agent/*.md` (AC-3).
+- `tests/unit/*`, `tests/integration/*` — RED/GREEN coverage for each behaviour.
+- This record.
+
+**Out (explicitly):**
+
+- **The deterministic gates.** `emergency_gate`, `cost_gate`, `handoff_gate`, injection detection and
+  the SH-4 input-as-data contract stay exactly as they are. The LLM never decides safety or cost.
+- **The LLM as flow router (agentic dispatch).** Considered and rejected for this unit; the
+  deterministic envelope is preserved. Reducing LLM responsibility is not the goal; giving the
+  existing calls context is.
+- **Tukulpan memory personalisation** (greeting by name, structured thread recap, memo on handoff).
+  Real gap, deferred to its own unit — see Findings.
+- **`analytics.chatbot_metrics` / assistant tooling.** Frente 2, separate ODD.
+- **The classifier's intent vocabulary.** No new intent is added (no `confirmar_visita`); a booked
+  customer is handled by carrying booking state, not by inventing a label.
+
+## Spec constraints (binding)
+
+- `openspec/specs/conversation-manager/spec.md` — CM-1 (greeting/resume), CM-2 (progressive capture),
+  CM-3 (classification), CM-4 (grounded answers, never invent), CM-5 (summary), CM-7 (memory).
+- `openspec/specs/agent-orchestration/spec.md` — AO-3 (deterministic dispatch stays LLM-free).
+- CM-4 is the reason `respond` fabrication is a contract violation, not just a quality bug: the
+  persona forbids inventing availability (`agent/personas/orchestrator.md`).
+- Strict TDD (`openspec/config.yaml` `testing.strict_tdd: true`).
+
+## Authorized scope
+
+- Worktree: `/home/stefan/repos/lumat-agent-odd-chatbot-conversation-fixes`
+- Branch: `odd/chatbot-conversation-fixes`
+- Base: `2554af2` (= `origin/main`, verified `git merge-base HEAD origin/main` before this record).
+- Files: those listed in **In** above.
+
+## Constraints
+
+- **Strict TDD: ON** — runner `uv run pytest tests/`. RED before GREEN, evidence recorded.
+- Fresh worktree has no `.venv`: `uv sync` first.
+- Test DB: `eval "$(bash infra/test-db.sh env)"` before pytest; a fresh DB needs `bash db/migrate.sh`.
+- `infra/.env` is gitignored; copied from main worktree (never committed).
+- Known worktree artifact: `rapso worktree create` leaves `.opencode/tools/package-lock.json`
+  untracked. Declare it to review; never commit it.
+- `agent/*.md` prompts are byte-coupled to `FALLBACKS`; editing one means editing both and passing
+  the identity test (`tests/unit/test_prompts.py`).
+- No commit/push/PR from a delegated phase without orchestrator authorization. Work-unit commits on
+  the feature branch are authorized; push/PR is a human decision.
+
+## Delivery
+
+- Strategy: `ask-on-risk`. Forecast: well under 400 authored lines.
+- Slices: **A** (work-unit commit 1) → **B** (work-unit commit 2+).
+
+## Decisions
+
+- **D1 — Two slices, A first.** A is small, safe and independently mergeable; B carries the prompt
+  coupling. Sequenced so a revert of B never drags A down.
+- **D2 — Carry booking state, don't add an intent.** A `confirmar_visita` intent would fight the
+  classifier's ASK/REPORT vocabulary. The graph knowing the appointment answers "is my visit booked?"
+  honestly instead of hallucinating.
+- **D3 — The transcript is DATA.** The conversation block passed to `classify`/`respond` is delimited
+  and declared non-instructional, preserving SH-4 and CM-4.
+- **D4 — Deterministic gates untouched.** No safety/cost decision moves to the LLM.
+
+## Tasks
+
+- [x] **T1** — this record.
+- [x] **T2 (A1)** — booking slots humanized; RED/GREEN in `tests/unit/test_booking.py`.
+- [x] **T3 (A2)** — phrasal farewell; RED/GREEN in `tests/unit/test_closure_gate.py`.
+- [x] **T4 (A3)** — clarification copy without a menu; RED/GREEN in `tests/unit/test_settings.py`.
+      Commit `24eb9254`.
+- [x] **T5 (A-attr)** — RED: `test_retry_storm_single_processing_pass` failed (batch answered the
+      wrong message). GREEN: `ConversationState.from_db` accepts `through_message_id` and anchors
+      `window` to `id <= through_message_id`; `run_conversation` passes `message.id`. `turn` left
+      unchanged (follow-up). Commit `48bb0cdb`.
+- [x] **T6 (A)** — full suite green after the attribution fix (**1940 passed**). Work-unit commits
+      `24eb9254` (A1/A2/A3) and `48bb0cdb` (attribution).
+- [x] **T7 (B1)** — `ConversationState.booking` carries the customer's latest BOOKED appointment;
+      RED/GREEN in `tests/integration/test_chat_state.py`. Commit `dcb61372`.
+- [x] **T8 (B2)** — `respond` receives `{{conversation}}` + `{{booking}}`; persona + `FALLBACKS` +
+      identity test. Commits `0053d582`, `97db70ac`.
+- [x] **T9 (B3)** — `classify` receives `{{conversation}}`; persona + `FALLBACKS` + identity test.
+      Commits `0053d582`, `97db70ac`.
+- [x] **T10 (B)** — full suite green (**1943 passed**). Coupled test doubles updated
+      (`_llm_classify` signature, prompt-slot assertions). Commits `35180ad5`, `f210742b`.
+- [x] **T11** — verification: `uv run pytest tests/` observed; parent spot check green (74 focused
+      tests, exit 0).
+
+## Findings
+
+### F1 — batch message attribution (found while implementing Slice A)
+
+`run_conversation` (`app/chat/graph.py:348-355`) rebuilds state with
+`ConversationState.from_db(session, message.conversation_id)`, whose `window` is the last 10 messages
+of the conversation ordered by id (`app/chat/state.py:178-193`). Every node reads the current message
+as `state.window[-1]` (e.g. `classify_intent.py:66`, `handoff_gate.py:95`, `capture.py:98`).
+
+A webhook batch persists **all** messages before processing (`ingest_payload`, persist-before-process),
+and the sweep then processes them one by one (`sweep_received` → `process_message`). So when message
+`a` of a batch `[a, b, c]` is processed, the window already ends at `c`, and the graph classifies
+**`c`**, not `a`. Message `b`'s turn then reads `window[-1]` = *the bot's own reply to `a`*.
+
+- Confirmed by instrumentation: processing `[a,b,c]` classified `c`, then the bot's own clarification
+  text, then its own capture question.
+- The new clarification copy (A3) contains "visita", which the integration classifier maps to
+  `solicitar_visita` → capture → 3 outbound. The OLD copy contained "Hablar con una persona", which
+  the deterministic `handoff_gate` caught → handoff → state `human` → later messages skipped. **The
+  legacy test passed for the wrong reason.**
+- Real production impact: in any multi-message batch the bot answers the wrong message and can answer
+  itself.
+- Fix belongs in `from_db` (anchor the window to the processed message). This is the same
+  "no context" family as Slice B.
+
+### F2 — B3's quality is wired, not measured
+
+The integration classifier is a keyword mock (`tests/integration/conftest.py:117-141`) that never
+reads the prompt, so the suite can assert that `<conversation>` reaches the classify call but cannot
+assert that the real classifier now resolves contextual follow-ups. The wiring is verified; the
+quality claim requires a real-provider harness and is NOT made here.
+
+### F3 — `turn` is intentionally not anchored
+
+`from_db` anchors the message window to `through_message_id` but leaves `turn` as the conversation's
+total inbound count. Consequence: the first message of a multi-message first-contact batch is
+processed with `turn > 1` and gets no greeting. Out of scope for this unit; recorded as a follow-up.
+
+## Acceptance criteria
+
+- **A1** — the slot offer shows a human-readable date/time (no microseconds); a unit test asserts the
+  rendered text.
+- **A2** — `"eso fue todo gracias"` (and close variants) closes with the farewell, does not increment
+  `unknown_count`, does not escalate; a question containing a closing word is still not a farewell.
+- **A3** — the clarification reply no longer instructs picking from a menu.
+- **B1** — for a customer with a confirmed appointment, `ConversationState.from_db` exposes it.
+- **B2** — asked about an existing booking, `respond` answers with the booking, never fabricates
+  escalation/availability; a test with a mocked LLM asserts the booking context reaches the prompt.
+- **B3** — a contextual follow-up with history present is not classified `unknown`; the transcript
+  reaches the classification call.
+- **All** — `uv run pytest tests/` passes; `FALLBACKS` identity test passes.

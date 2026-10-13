@@ -18,6 +18,7 @@ from app.chat.nodes.closure_gate import CLOSING_TOKENS, is_farewell
         "muchas gracias",
         "ok gracias",
         "gracias",
+        "eso fue todo gracias",
         "ok",
         "listo",
         "bye",
@@ -43,6 +44,14 @@ def test_closing_vocabulary_is_flattened():
 )
 def test_non_closing_tokens_or_questions_are_not_farewells(phrase):
     assert not is_farewell(phrase)
+
+
+def test_question_containing_thanks_is_not_a_farewell():
+    assert not is_farewell("gracias, ¿puedes coordinar una visita?")
+
+
+def test_booking_request_is_not_a_farewell():
+    assert not is_farewell("ya agende una visita")
 
 
 def test_farewell_detector_rejects_length_and_questions():

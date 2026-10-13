@@ -165,9 +165,9 @@ def test_non_farewell_messages_are_not_closed(text, mock_openai_chat):
     assert mock_openai_chat
 
 
-@pytest.mark.parametrize("text", ["gracias, chau"])
+@pytest.mark.parametrize("text", ["gracias, chau", "eso fue todo gracias"])
 def test_farewell_gets_farewell(text, mock_openai_chat):
-    replies = _turn(_start_conversation(), text, "wamid.farewell.1")
+    replies = _turn(_start_conversation(), text, f"wamid.farewell.{text[:3]}")
 
     assert replies == [FAREWELL]
     assert mock_openai_chat == []

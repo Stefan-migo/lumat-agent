@@ -52,13 +52,17 @@ AGENT_KEYS = (
 
 def test_prompt_respond_template(repo_root):
     assert _read(repo_root, "prompts/respond.md") == (
-        "<kb>{{kb_text}}</kb>\n\n<user_input>{{user_input}}</user_input>"
+        "<conversation>{{conversation}}</conversation>\n\n"
+        "<booking>{{booking}}</booking>\n\n"
+        "<kb>{{kb_text}}</kb>\n\n"
+        "<user_input>{{user_input}}</user_input>\n"
     )
 
 
 def test_prompt_classify_template(repo_root):
     assert _read(repo_root, "prompts/classify.md") == (
-        "<user_input>{{user_input}}</user_input>"
+        "<conversation>{{conversation}}</conversation>\n\n"
+        "<user_input>{{user_input}}</user_input>\n"
     )
 
 
@@ -161,22 +165,28 @@ def test_render_substitutes_all_slots():
     # AC-5 "All variables provided": every {{name}} is replaced.
     out = prompts.render(
         "prompts/respond.md",
+        conversation="<prior turns>",
+        booking="No booking.",
         kb_text="<kb text>",
         user_input="hola",
     )
-    assert out == "<kb><kb text></kb>\n\n<user_input>hola</user_input>"
+    assert out == (
+        "<conversation><prior turns></conversation>\n\n"
+        "<booking>No booking.</booking>\n\n"
+        "<kb><kb text></kb>\n\n<user_input>hola</user_input>\n"
+    )
 
 
 def test_render_missing_var_raises():
     # AC-5 "Missing variable": rendering without a required var raises.
     with pytest.raises(KeyError):
-        prompts.render("prompts/respond.md", kb_text="x")
+        prompts.render("prompts/respond.md", conversation="", booking="", kb_text="x")
 
 
 def test_render_unknown_var_raises():
     # AC-5: a typo'd extra var is rejected too.
     with pytest.raises(KeyError):
-        prompts.render("prompts/classify.md", user_input="hola", bogus="x")
+        prompts.render("prompts/classify.md", conversation="", user_input="hola", bogus="x")
 
 
 def test_render_missing_key_raises():
@@ -216,6 +226,23 @@ from unittest import mock  # noqa: E402
 from app.chat.nodes import classify_intent as _ci  # noqa: E402
 from app.chat.nodes import respond as _rn  # noqa: E402
 from app.chat.nodes import summary as _sm  # noqa: E402
+from app.chat.state import conversation_transcript  # noqa: E402
+
+
+def test_conversation_transcript_renders_six_prior_turns_and_excludes_current():
+    window = [
+        {"direction": "inbound", "text": f"cliente-{index}"}
+        if index % 2 == 0
+        else {"direction": "outbound", "text": f"asistente-{index}"}
+        for index in range(8)
+    ]
+
+    assert conversation_transcript(window) == "\n".join(
+        f"{'Cliente' if index % 2 == 0 else 'Asistente'}: "
+        f"{'cliente' if index % 2 == 0 else 'asistente'}-{index}"
+        for index in range(1, 7)
+    )
+    assert conversation_transcript([window[-1]]) == "(sin mensajes previos)"
 
 
 class _FakeCompletion:
@@ -266,15 +293,41 @@ def respond_client():
 def test_respond_answer_from_kb_persona_and_template(respond_client):
     # AC-3 static slot unchanged: system == orchestrator persona via loader.
     # AC-3 typed template identical: user == render(prompts/respond.md).
-    _rn._answer_from_kb("hola", "chunk uno\nchunk dos", message_id=7)
+    _rn._answer_from_kb(
+        "hola", "chunk uno\nchunk dos", message_id=7,
+        conversation="(sin mensajes previos)",
+        booking="El cliente no tiene ninguna visita agendada.",
+    )
     call = respond_client.captured[-1]
     assert call["messages"][0]["content"] == (
         prompts.load("personas/orchestrator.md")
         + "\nResponde con un tono cercano, amable y claro."
     )
     assert call["messages"][1]["content"] == prompts.render(
-        "prompts/respond.md", kb_text="chunk uno\nchunk dos", user_input="hola"
+        "prompts/respond.md", conversation="(sin mensajes previos)",
+        booking="El cliente no tiene ninguna visita agendada.",
+        kb_text="chunk uno\nchunk dos", user_input="hola"
     )
+
+
+def test_respond_model_call_receives_conversation_and_booking(respond_client):
+    state = SimpleNamespace(
+        intent="consulta",
+        window=[
+            {"direction": "inbound", "text": "Quiero una visita"},
+            {"direction": "outbound", "text": "¿Qué día?"},
+            {"direction": "inbound", "id": 77, "text": "ya agendé una visita"},
+        ],
+        booking={"service": "Visita técnica", "label": "06/05/2030 a las 15:30", "status": "booked"},
+        turn=3,
+        cost_mode="normal",
+        memory_context="",
+    )
+    with mock.patch.object(_rn.kb, "retrieve", return_value=[{"content": "chunk"}]):
+        _rn.respond(state)
+    user_prompt = respond_client.captured[-1]["messages"][1]["content"]
+    assert "<conversation>Cliente: Quiero una visita\nAsistente: ¿Qué día?</conversation>" in user_prompt
+    assert "<booking>El cliente tiene una visita agendada: Visita técnica el 06/05/2030 a las 15:30 (estado booked).</booking>" in user_prompt
 
 
 def test_respond_answer_from_kb_brief_mode_appends_brief_persona(respond_client):
@@ -319,11 +372,14 @@ def classify_client():
 def test_classify_llm_classify_persona_and_template(classify_client):
     # AC-3 static slot unchanged + template identical: persona via loader,
     # user text inside the <user_input> slot (SH-4 input-as-data).
-    result = _ci._llm_classify("necesito una caldera", message_id=5)
+    result = _ci._llm_classify(
+        "necesito una caldera", message_id=5, conversation="Cliente: Quiero agendar una visita"
+    )
     call = classify_client.captured[-1]
     assert call["messages"][0]["content"] == prompts.load("personas/classify.md")
     assert call["messages"][1]["content"] == prompts.render(
-        "prompts/classify.md", user_input="necesito una caldera"
+        "prompts/classify.md", conversation="Cliente: Quiero agendar una visita",
+        user_input="necesito una caldera"
     )
     assert result["intent"] == "caldera"
     assert result["injection"] is False
@@ -482,5 +538,5 @@ def test_canned_replies_still_reexported():
     from app.chat.nodes.handoff import HANDOFF_REPLY
 
     assert _rn.CANNOT_ANSWER_REPLY.startswith("Lo siento, no puedo responder")
-    assert _rn.CLARIFICATION_REPLY.startswith("No entendí tu mensaje")
+    assert _rn.CLARIFICATION_REPLY.startswith("Disculpá, no te entendí bien")
     assert HANDOFF_REPLY  # import resolves; value non-empty
