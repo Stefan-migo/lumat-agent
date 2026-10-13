@@ -81,3 +81,7 @@ PR(s) a decidir al cerrar el primer work unit. Si el acumulado supera ~400 líne
 - Frontend: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/api.test.ts` — 53 passed.
 - Build/typecheck: `cd web && npm run build` — passed (`tsc -b` + Vite build; existing chunk-size warning).
 - Constraint verified in PostgreSQL as `kb_chunks_document_id_fkey` before migration: `FOREIGN KEY (document_id) REFERENCES kb_documents(id) ON DELETE CASCADE` after applying migration.
+- Commit del work unit: `73073e24` — `feat(kb): hard delete admin-visible documents` (10 archivos, +218/-9).
+- Spot-check del padre (re-corrida independiente de la suite backend con la env de `test-db.sh`): 89 passed.
+- RDD `review assess` (`--base-ref 3475bba7 --committed-only`): `risk: medium`, `review_due: false` (`under_budget`, 227 líneas < 400) → sin review aún; el boundary queda pendiente en el slice hasta que un commit posterior alcance el presupuesto.
+- Nota de entorno: la DB de test se levanta con `bash infra/test-db.sh up` (puerto derivado 6026) y `eval "$(bash infra/test-db.sh env)"`; sin esa env `db/migrate.sh` apunta a un puerto muerto.
