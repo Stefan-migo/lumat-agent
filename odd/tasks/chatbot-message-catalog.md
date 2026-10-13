@@ -42,14 +42,38 @@ anti-injection delimiting + test coverage.
 | D13 | **LLM picks / system fills** via deterministic slots. The LLM does **not** rewrite |
 | D14 | WhatsApp chatbot only. The bot pipeline LLM **is not** the Lumat Agent |
 
-## Open implementation decisions (resolved in T0)
+## T0 — implementation decisions (resolved)
 
-- **D3** — How it picks: new field in `classify_intent`'s structured output (**reuses the
-  call that already runs**) vs new node/call. *Report recommends: reuse.*
-- **D4** — Where templates live: settings KV (`messages.templates`) vs own table, and
-  validation on save.
-- **D5** — How injected templates are delimited/marked as DATA (anti-injection).
-- **D6** — Confirm admin-only with no extra approval (Settings precedent).
+- **D3** — How it picks: **reuse** `classify_intent`'s structured output — add the picked
+  template id to the same JSON the classifier already returns (one LLM call per turn, no new
+  node/call).
+- **D4** — Where templates live: **settings KV** under `messages.templates` (a JSON list),
+  reusing the generic KV surface + admin-only routes + audit. No new table (YAGNI — the
+  report caps the list at *dozens*).
+- **D5** — Anti-injection: injected templates are delimited/marked as **DATA** exactly like
+  `<kb>`/`<user_input>`; validate on save.
+- **D6** — Routes stay **admin-only** (`require_admin_json`), Settings precedent.
+
+### Data shape (D4)
+
+`settings` key `messages.templates` -> JSON list of `{"id": "<slug>", "text": "<template with
+{{slots}}>"}`. Validation on save: `id` is a **unique slug**; `text` non-empty; every slot is
+in the **allowed vocabulary** (pending below) so the bot can always fill it — otherwise
+`prompts.render` would `KeyError` at send time.
+
+### Integration point (design intent)
+
+- Classifier: the same `_llm_classify` JSON gains the picked template id (`null` when none).
+- Send path: if a template was picked -> render it with `prompts.render` from
+  `captured`/`booking` and send it, **pre-empting** the KB path (this is what "freezes the
+  voice" of what the catalog covers, D7). If none was picked -> the existing KB/`tone` path is
+  **unchanged**; a KB miss still escalates with `cannot_answer` (D9). Keeps D7 coexistence and
+  minimizes blast radius.
+
+### Remaining T0 detail (short code map before T1)
+
+- Exact **slot vocabulary + Spanish->state mapping** (`{{nombre}}` -> `captured["name"]`, etc.)
+  and the precise hook line in `respond.py`.
 
 ## Integration map (verified against code)
 
