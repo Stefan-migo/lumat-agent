@@ -231,6 +231,7 @@ def _upsert_resolved(
     contenido: str,
     proyecto: str,
     pin: bool,
+    handoff: bool,
     producer: MemoryProducer,
     origin_thread_id: str | None,
     visibility: MemoryVisibility,
@@ -277,6 +278,7 @@ def _upsert_resolved(
             duplicate_count=1,
             last_seen_at=func.now(),
             pin=pin,
+            handoff=handoff,
             producer=producer,
             origin_thread_id=origin_thread_id,
             visibility=visibility,
@@ -312,6 +314,7 @@ def _upsert_resolved(
         row.normalized_hash = normalized_hash
         row.last_seen_at = func.now()
         row.pin = pin
+        row.handoff = handoff
         row.producer = producer
         row.origin_thread_id = origin_thread_id
         row.visibility = visibility
@@ -331,6 +334,7 @@ def upsert(
     contenido: str,
     proyecto: str = WRITABLE_PROYECTO,
     pin: bool = False,
+    handoff: bool = False,
     producer: MemoryProducer = MemoryProducer.SYSTEM,
     origin_thread_id: str | None = None,
     visibility: MemoryVisibility = MemoryVisibility.THREAD,
@@ -370,6 +374,7 @@ def upsert(
                     contenido=contenido,
                     proyecto=proyecto,
                     pin=pin,
+                    handoff=handoff,
                     producer=producer,
                     origin_thread_id=origin_thread_id,
                     visibility=visibility,

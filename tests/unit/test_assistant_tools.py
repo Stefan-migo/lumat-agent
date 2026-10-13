@@ -1106,6 +1106,9 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
+    handoff_schema = MemoryWriteArgs.model_json_schema()["properties"]["handoff"]
+    assert handoff_schema["type"] == "boolean"
+    assert "when" in handoff_schema["description"].lower() or "true when" in handoff_schema["description"].lower()
     with pytest.raises(ValueError):
         MemoryWriteArgs.model_validate({"titulo": "x", "contenido": "y", "topic_key": "system:row"})
 

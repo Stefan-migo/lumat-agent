@@ -163,6 +163,10 @@ class MemoryWriteArgs(BaseModel):
     topic_key: str = Field(min_length=1, max_length=200, pattern=r"^agent:")
     tipo: Literal["decision", "discovery", "pattern", "preference"]
     visibility: Literal["thread", "global"] = "global"
+    handoff: bool = Field(
+        default=False,
+        description="True when this memory leaves a continuation point—an open thread of work or the ordering of pending tasks—so later turns prioritize it.",
+    )
 
 
 class MemoryUpdateArgs(BaseModel):
@@ -479,6 +483,7 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, pro
                 producer=memory.MemoryProducer.AGENT,
                 origin_thread_id=str(trusted_thread_id),
                 visibility=args.visibility,
+                handoff=args.handoff,
                 authorization=authorization,
             )
             relations.judge_memory_relations(session, row)

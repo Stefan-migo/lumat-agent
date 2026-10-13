@@ -40,7 +40,7 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
 
     # SHA-256 of the serialized assistant catalog at the post-tool-catalog-trim baseline.
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "c9d61b1fe4018f6f25a7f54c09ab2b1c94b52ccd75dcc3aa29c1cc5f0ff594ac"
+        "97b8024ec3f5ae72cab23424668a9cb161389fab6431083532e260102a055402"
     )
 
 
