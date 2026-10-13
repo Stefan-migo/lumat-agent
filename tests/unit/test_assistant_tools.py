@@ -46,6 +46,19 @@ def test_registry_exposes_typed_bounded_tools():
     assert get_tool("automation.create_rule").read_only is False
 
 
+def test_chatbot_metrics_is_a_typed_bounded_read_only_tool():
+    schemas = tool_schemas()
+    assert "analytics.chatbot_metrics" in schemas
+    assert get_tool("analytics.chatbot_metrics").read_only is True
+    assert get_tool("analytics.chatbot_metrics").tier == "default"
+    assert get_tool("analytics.chatbot_metrics").args_model.model_validate({}).window_days == 7
+
+    with pytest.raises(ValueError):
+        get_tool("analytics.chatbot_metrics").args_model.model_validate({"window_days": 32})
+    with pytest.raises(ValueError):
+        get_tool("analytics.chatbot_metrics").args_model.model_validate({"extra": True})
+
+
 def test_skill_propose_is_owner_scoped_approval_write_and_upserts_project_skill(monkeypatch):
     from app.chat.assistant.approval import consume_approval
 

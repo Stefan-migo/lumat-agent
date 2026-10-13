@@ -92,6 +92,11 @@ class KpiArgs(BaseModel):
     window_days: int = Field(default=7, ge=1, le=31)
 
 
+class ChatbotMetricsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    window_days: int = Field(default=7, ge=1, le=31)
+
+
 class _MemoryReadBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     topic: str | None = Field(default=None, max_length=255)
@@ -370,6 +375,12 @@ def _kpis(session, args: KpiArgs):
     from app.services import dashboard
 
     return dashboard.compute_kpis(session, args.window_days)
+
+
+def _chatbot_metrics(session, args: ChatbotMetricsArgs):
+    from app.services import analytics
+
+    return analytics.chatbot_metrics(session, args.window_days)
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
@@ -711,6 +722,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "memory.update": ToolDefinition("memory.update", MemoryUpdateArgs, False, _update_memory, "Update an agent-authored memory.", tier="default"),
     "memory.delete": ToolDefinition("memory.delete", MemoryDeleteArgs, False, _delete_memory, "Delete an agent-authored memory.", tier="default"),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary.", tier="default"),
+    "analytics.chatbot_metrics": ToolDefinition("analytics.chatbot_metrics", ChatbotMetricsArgs, True, _chatbot_metrics, "Read chatbot performance metrics for a bounded time window.", tier="default"),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
     "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
     "automation.create_rule": ToolDefinition(
