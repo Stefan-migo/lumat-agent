@@ -11,7 +11,7 @@ def test_complete_assistant_configuration_loads_declared_skill_index(repo_root):
     config = load_assistant_config(repo_root / "agent" / "registry.yaml")
 
     assert config.name == "assistant"
-    assert "the internal operator of the Lumat panel" in config.persona
+    assert "Lumat internal executive operator" in config.persona
     assert set(config.prompts) == {"plan", "respond"}
     assert "<available_tools>" in config.prompts["plan"]
     assert "<available_skills>{{available_skills}}</available_skills>" in config.prompts["plan"]
