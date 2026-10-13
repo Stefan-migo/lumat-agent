@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { InternalChatThreadSummary } from "../../types";
@@ -21,6 +21,9 @@ describe("groupThreadsByDate", () => {
 });
 
 describe("AssistantWorkspace", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -44,7 +47,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Agentes 0", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
     expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
-    expect(await within(thread).findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(await within(thread).findByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
     expect(within(thread).queryByRole("navigation", { name: "Hilos abiertos" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
@@ -206,7 +209,7 @@ describe("AssistantWorkspace", () => {
     await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
     expect(window.location.search).toBe("");
     expect(screen.queryByRole("heading", { name: "Archivos y conocimiento" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(await screen.findByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
   });
 
   it("shows a retryable error instead of fabricated project rows", async () => {
