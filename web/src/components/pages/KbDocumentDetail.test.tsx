@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "../domain/AppShell";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
@@ -33,6 +33,27 @@ afterEach(() => {
 });
 
 describe("KB document detail route", () => {
+  it("requires explicit confirmation before deleting and returns to the KB list", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, "", "/panel/app/kb");
+    window.history.pushState({}, "", `/panel/app/kb/${document.id}`);
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const path = new URL(String(input), "http://localhost").pathname;
+      if (init?.method === "DELETE") return new Response(JSON.stringify({ ok: true, doc: document }), { status: 200 });
+      if (path === "/panel/api/notifications") return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+      if (path === `/panel/api/kb/${document.id}`) return new Response(JSON.stringify(document), { status: 200 });
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    });
+    render(<AppShell user={admin} />);
+    await screen.findByRole("heading", { name: document.title });
+    await user.click(screen.getByRole("button", { name: "Eliminar" }));
+    expect(screen.getByText(`Esto elimina «${document.title}» de forma permanente. No se puede deshacer.`)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(`/panel/api/kb/${document.id}`, expect.objectContaining({ method: "DELETE" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(fetch).toHaveBeenCalledWith(`/panel/api/kb/${document.id}`, expect.objectContaining({ method: "DELETE" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/panel/app/kb"));
+  });
+
   it("builds and parses a KB document route", () => {
     expect(pathForRoute({ view: "kb", kbDocId: document.id })).toBe(`/panel/app/kb/${document.id}`);
     expect(parsePanelPath(`/panel/app/kb/${document.id}`)).toEqual({ view: "kb", kbDocId: document.id });

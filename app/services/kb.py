@@ -300,6 +300,23 @@ def disable_document(session: Session, doc_id: int, actor: str = "system") -> Kb
     return doc
 
 
+def delete_document(session: Session, doc_id: int, actor: str = "system") -> KbDocument:
+    """Permanently delete a document; the database cascades its chunks."""
+    doc = session.get(KbDocument, doc_id)
+    if doc is None:
+        raise ValueError(f"kb document {doc_id} not found")
+    record_audit(
+        session,
+        actor=actor,
+        action="kb.document_delete",
+        entity="kb_document",
+        entity_id=str(doc_id),
+        before={"title": doc.title, "version": doc.version, "active_version": doc.active_version},
+    )
+    session.delete(doc)
+    return doc
+
+
 def enable_document(session: Session, doc_id: int, actor: str = "system") -> KbDocument:
     """Enable a document without changing its version or visibility."""
     doc = session.get(KbDocument, doc_id)
