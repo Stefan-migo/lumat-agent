@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-lumat-persona-prompt`
 **Worktree**: `../lumat-agent-odd-asistente-lumat-persona-prompt`
 **Base**: `2554aff2` (= `main` at branch time; el handoff citaba `63fde6d9`, main avanzó 2 commits de release/docs)
-**Status**: in progress
+**Status**: implemented and verified. RDD assess (branch vs `2554aff2`): risk `medium`, `review_due=false` (`under_budget`) → boundary pendiente en el slice. Sin push, sin PR (decisión del owner).
 **Source**: `odd/handoffs/asistente-lumat-persona-prompt.md` (Engram obs 6408) + `.rapsodia-code/sessions/ready-for-odd/2026-10-13-asistente-lumat-ejecucion-y-prompt/{report.md,session.md}` (Engram obs 6405/6402/6398).
 
 ## Objective
@@ -92,8 +92,9 @@ Lección: **los saltos de línea importan** — un substring fijado partido por 
 
 ## Delivery
 
-- Cadena: PR único sobre `main` (forecast chico: 3 prompts + 1 test).
-- RDD: `gentle-ai review assess` sobre el commit.
+- Cadena: PR único sobre `main` (real: 5 archivos, +189/−7; forecast chico).
+- RDD: `gentle-ai review assess --base-ref 2554aff2 --committed-only --json` → risk `medium`, `review_due=false` (`under_budget`) → no se entra al lifecycle de review todavía; el boundary sigue pendiente hasta que un commit posterior llegue al presupuesto (~400 líneas).
+- Push / PR / merge: **pendientes**, son decisión del owner.
 
 ## Evidence log
 
