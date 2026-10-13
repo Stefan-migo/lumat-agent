@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule } from './api';
+import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -81,9 +81,23 @@ describe('KB API contracts', () => {
 
 describe('user API contracts', () => {
   it('deletes a panel user with DELETE', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     await deleteUser(42);
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/users/42', expect.objectContaining({ method: 'DELETE' }));
+  });
+});
+
+describe('case archive API contracts', () => {
+  it('posts archive and unarchive and optionally includes archived ficha cases', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    await archiveCase(42);
+    await unarchiveCase(42);
+    await getClientFicha(7);
+    await getClientFicha(7, true);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/panel/api/cases/42/archive', expect.objectContaining({ method: 'POST' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/cases/42/unarchive', expect.objectContaining({ method: 'POST' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/panel/api/clients/7', expect.anything());
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/panel/api/clients/7?include_archived_cases=true', expect.anything());
   });
 });
 

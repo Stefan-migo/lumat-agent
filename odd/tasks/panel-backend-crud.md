@@ -37,9 +37,14 @@ mezclarlas con pulido cosmético degradaba la review.
   de FK de Postgres (sin enumerar las 15 tablas, sin cascada silenciosa). Audit `user.delete`.
   (Owner, 2026-10-13.)
 
-## Decisiones abiertas (pendientes)
-- **Casos**: ¿archivar = ocultar de la ficha (reversible)? ¿archivados visibles en export/diálogo?
-  ¿se permiten múltiples casos abiertos?
+- **Casos archivar (opción A)**: soft-archive (columna `cases.archived_at`), restringido a casos
+  **cerrados**, oculto por defecto de la ficha, con toggle **"Ver archivados"** y acción
+  **desarchivar** (reversible). Audit `case.archived` / `case.unarchived`. (Owner, 2026-10-13.)
+
+## Fuera de alcance / ítems separados
+- **Múltiples casos abiertos por cliente**: NO forma parte de WU3 (el archive solo toca casos
+  cerrados). Queda como ítem aparte a decidir.
+- **Reabrir un caso archivado**: no se maneja en WU3 (queda archivado + abierto). Follow-up.
 
 ## Tareas (IDs estables)
 
@@ -78,7 +83,25 @@ mezclarlas con pulido cosmético degradaba la review.
   `web/src/api.test.ts`.
 
 ### Work unit 3 — Casos archivados
-- [ ] **CASE-*** — pendiente de decisión.
+- [x] **CASE-1 — Migración.** `db/migrations/051_cases_archived_at.sql`:
+  `ALTER TABLE cases ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;` (patrón de
+  `033_customer_archived_at.sql`). Rollback documentado.
+- [x] **CASE-2 — Serializer.** Exponer `archived_at` en el dict del caso (`to_case_dict`).
+- [x] **CASE-3 — Servicio.** `app/services/cases.py`: `archive_case(session, case, actor)` (rechaza
+  casos abiertos con `ValueError`) + `unarchive_case(...)`, con audit `case.archived` /
+  `case.unarchived`. `app/services/customers.py`: `customer_history(..., include_archived_cases=False)`
+  → filtra `Case.archived_at.is_(None)` por defecto.
+- [x] **CASE-4 — Routes.** `app/panel/api/routes/cases.py`: `POST /cases/{id}/archive` (**409** si el
+  caso está abierto) y `POST /cases/{id}/unarchive`, operator-only. `app/panel/api/routes/clients.py`:
+  `GET /clients/{id}?include_archived_cases=` pasa el flag a `customer_history`.
+- [x] **CASE-5 — Frontend API.** `web/src/api.ts`: `archiveCase(id)`, `unarchiveCase(id)`, y
+  `getClientFicha(id, { includeArchivedCases })`.
+- [x] **CASE-6 — UI.** `ClientFicha.tsx`: toggle **"Ver archivados"** en "Casos anteriores" (patrón de
+  `ClientesList.tsx` "Mostrar archivados"), re-fetch con el flag; casos archivados con badge
+  "Archivado" + acción "Desarchivar"; casos cerrados con acción "Archivar". Desktop + mobile.
+- [x] **CASE-7 — Tests.** `tests/functional/test_api_cases.py` (archive/unarchive: operator-only,
+  409 en abierto, audit `case.archived`/`case.unarchived`, exclusión/inclusión en la ficha),
+  `web/src/components/pages/ClientFicha.test.tsx` (toggle + archivar/desarchivar), `web/src/api.test.ts`.
 
 ## Criterios de aceptación
 - **(KB)** El delete borra el documento y sus chunks (cascade); 404 si no existe; solo admin;

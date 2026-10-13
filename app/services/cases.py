@@ -33,6 +33,27 @@ from app.services.events import publish_event
 CLOSING_CASE_STATUSES = frozenset({"closed", "cerrado", "finalizado", "cancelado"})
 
 
+def archive_case(session: Session, case: Case, actor: str = "system") -> Case:
+    if case_is_open(case):
+        raise ValueError("only closed cases can be archived")
+    if case.archived_at is None:
+        case.archived_at = datetime.now(timezone.utc)
+        record_audit(session, actor=actor, action="case.archived", entity="case",
+                     entity_id=str(case.id), before={"archived_at": None},
+                     after={"archived_at": case.archived_at.isoformat()})
+    return case
+
+
+def unarchive_case(session: Session, case: Case, actor: str = "system") -> Case:
+    if case.archived_at is not None:
+        archived_at = case.archived_at
+        case.archived_at = None
+        record_audit(session, actor=actor, action="case.unarchived", entity="case",
+                     entity_id=str(case.id), before={"archived_at": archived_at.isoformat()},
+                     after={"archived_at": None})
+    return case
+
+
 def case_is_open_expr():
     """Canonical predicate for an open case, including NULL-status cases."""
     return or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES))

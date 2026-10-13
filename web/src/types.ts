@@ -371,6 +371,7 @@ export interface Case {
   summary: string | null;
   escalated_at: string | null;
   closed_at: string | null;
+  archived_at?: string | null;
   acknowledged_at: string | null;
   ack_by: string | null;
   customer: Customer;
@@ -476,6 +477,7 @@ export interface ClientFichaResponse {
       summary: string | null;
       escalated_at: string | null;
       closed_at: string | null;
+      archived_at?: string | null;
       acknowledged_at: string | null;
       ack_by: string | null;
       is_open: boolean;
