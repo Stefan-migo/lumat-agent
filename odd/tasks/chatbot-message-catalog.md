@@ -198,7 +198,7 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Progress
 
-- [x] T0 · [x] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+- [x] T0 · [x] T1 · [x] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
 
 ### Evidence
 
@@ -210,8 +210,14 @@ Task shape may be refined after T0 — keep IDs stable.
   **40 passed**. Notes: the slot regex is **mirrored** from `prompts._SLOT_RE` because
   `prompts -> agent_registry -> tools.registry -> settings` is a real import cycle; existing
   `FakeSession` was widened to any key (verified it does not change prior assertions).
+- T2 — `71f3f0b5` `feat(panel): add admin-only message template routes`. `GET /settings` gains a
+  top-level `templates` key; new `POST /settings/message-templates` (`MessageTemplatesBody` +
+  `_parse_message_templates` mapping `ValueError` -> 400) registered **before** the
+  `/settings/{section}` catch-all. Tests cover 401/403, the strict GET key set, and the
+  validate/persist/reject round trip. Parent spot check: **64 passed**. RED was assertion-level
+  (GET payload lacked `templates`).
 
 ## Next step
 
-T1 done. Start T2 (admin-only GET/PUT for `messages.templates`).
+T2 done. Start T3 (Settings UI card "Respuestas prediseñadas") — install `node_modules` first.
 The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) — do not mix it in.
