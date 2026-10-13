@@ -283,6 +283,47 @@ desktop compact rail does **not** exist on mobile.
 - **Remaining**: the owner's browser pass at a phone viewport (the worktree's dev
   stack must be brought up first).
 
+### Visual pass — the phone was still broken, and why
+
+The owner's first pass at 390px showed a blank content area. Diagnosed with a
+real headless-browser probe (Playwright, chromium build 1234 via
+`executablePath`), not by guessing:
+
+- **Defect A (introduced by M1) — the phone kept the 3-column grid.** The
+  collapsed templates at `AssistantWorkspace.css:471` use
+  `:not(...--projects-visible):not(...--context-visible)`, i.e. **specificity
+  0,3,0**. M1's phone rule was a bare `.assistant-workspace` (0,1,0), so it lost
+  **regardless of the media query**; the computed grid stayed
+  `56px 278px 56px` and M1's `grid-column: 1` pinned the thread into the 3.5rem
+  rail column (measured thread width: 56px, messages: 16px — the "tiny green
+  dot"). The same specificity flaw already affected the **tablet** block.
+  Fixed in `39b216fd` by repeating every modifier combination in both blocks.
+- **Defect B (introduced by M5) — the phone status row wrapped onto two lines**
+  (`flex-wrap: wrap` + `margin-left: auto` on `.assistant-chat__tools-summary`),
+  so the first line was hidden behind the composer card. Fixed in `0b44a325`
+  (`flex-wrap: nowrap`, shrinkable project popover, `flex: 0 0 auto` tools).
+- Verified after the fixes at three widths: 390px → `390px` single column, phone
+  copy; 700px → single column + overlay rails, desktop copy; 1280px → unchanged
+  `320px 488px 360px`.
+- **Lesson**: the JSDOM suite cannot catch this class of defect (it does not apply
+  CSS). The phone layout needs a real-browser check; M1/M5's green tests passed
+  while the phone was unusable.
+
+### Open observations from the visual pass (not fixed)
+
+- **Empty state has no composer.** With no thread the surface shows the hero plus
+  an `Iniciar conversación` button; the composer (and the status row) appear only
+  after a thread exists. The reference's 01 shows the composer immediately. This
+  is a pre-existing flow difference, not a layout bug — needs an owner decision.
+- **Pre-existing manifest link bug (not this branch).** `web/index.html` has
+  `<link rel="manifest" href="/panel/app/manifest.webmanifest" />` and Vite
+  prepends `base` (`/panel/app/`), producing
+  `/panel/app/panel/app/manifest.webmanifest` → 404 → the browser parses HTML as
+  a manifest and logs `Syntax error`. Last touched by `65b2062d` (PWA), not by
+  this branch.
+- The two `401 GET /panel/api/me` in the console are the **pre-login** load;
+  after login there are zero HTTP >= 400.
+
 - Commits: `f0fd1ca5` `feat(assistant): mobile composer and empty state`, then
   `a8cdef47` `fix(assistant): keep the desktop empty-state copy and scope the
   reference copy to the phone`.
