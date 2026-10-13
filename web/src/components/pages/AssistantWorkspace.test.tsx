@@ -63,6 +63,24 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByText("Selección de recursos aún no disponible.")).not.toBeVisible();
   });
 
+  it("keeps phone panes closed and updates pane visibility after resizing to desktop", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ threads: [], projects: [] }), { status: 200 }));
+
+    render(<AgentChat role="admin" />);
+
+    expect(screen.getByRole("button", { name: "Expandir panel de proyectos" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Abrir panel del hilo" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Cerrar paneles" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Área del hilo" })).toBeInTheDocument();
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible());
+    expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
+  });
+
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);

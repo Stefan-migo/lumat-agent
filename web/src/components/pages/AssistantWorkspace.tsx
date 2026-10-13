@@ -32,9 +32,32 @@ export type WorkspaceTab =
   | { kind: "history"; projectSlug: string }
   | { kind: "sessions"; projectSlug: string };
 
+function useDesktopWorkspace() {
+  const [desktop, setDesktop] = useState(() => window.matchMedia?.("(min-width: 64rem)").matches ?? window.innerWidth > 1024);
+
+  useEffect(() => {
+    const query = window.matchMedia?.("(min-width: 64rem)");
+    const update = () => setDesktop(query?.matches ?? window.innerWidth > 1024);
+    update();
+    if (query) {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  return desktop;
+}
+
 export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string }) {
-  const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
-  const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
+  const desktopWorkspace = useDesktopWorkspace();
+  const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
+  const [contextVisible, setContextVisible] = useState(desktopWorkspace);
+  useEffect(() => {
+    setProjectsVisible(desktopWorkspace);
+    setContextVisible(desktopWorkspace);
+  }, [desktopWorkspace]);
   const [search, setSearch] = useState("");
   const [expandedProjectSlug, setExpandedProjectSlug] = useState<string | null>(() => new URLSearchParams(window.location.search).get("proyecto"));
   const [projectThreads, setProjectThreads] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>>({});

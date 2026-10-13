@@ -464,7 +464,7 @@
 .assistant-workspace--projects-collapsed .assistant-workspace__projects { grid-column: 1; }
 .assistant-workspace--context-collapsed .assistant-workspace__context { grid-column: 3; }
 
-@media (max-width: 64rem) {
+@media (min-width: 40rem) and (max-width: 64rem) {
   .assistant-workspace {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
@@ -507,9 +507,17 @@
 
 @media (max-width: 40rem) {
   .assistant-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
     height: 100%;
   }
+
+  .assistant-workspace__projects,
+  .assistant-workspace__context,
+  .assistant-workspace__scrim { display: none; }
+
+  .assistant-workspace__thread { grid-column: 1; min-width: 0; }
 }
 
 @media (max-width: 40rem) {
