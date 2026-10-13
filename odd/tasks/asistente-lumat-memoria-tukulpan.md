@@ -56,7 +56,7 @@ Scenario *Explicit search only*: en `assemble_context()` sin `memory.read` → n
 Runner: `uv run pytest tests/`.
 
 - [x] **T1 — Schema `Memory.handoff` + migración.**
-  `handoff: bool` (Boolean, default `False`) en `app/models.py:521-592`; migración `db/migrations/051_memory_handoff.sql` (convención `<num>_<desc>.sql`; la última era `049` al planificar, pero `main` tomó `050` con `050_kb_chunks_cascade` durante el vuelo → renumerada a `051`). No crea tabla → `EXPECTED_TABLES` (`tests/integration/test_migrations.py:39`) no cambia.
+  `handoff: bool` (Boolean, default `False`) en `app/models.py:521-592`; migración `db/migrations/052_memory_handoff.sql` (convención `<num>_<desc>.sql`; `main` tomó `050` y luego `051` durante el vuelo → renumerada dos veces desde `050`). No crea tabla → `EXPECTED_TABLES` (`tests/integration/test_migrations.py:39`) no cambia.
   Tests: `tests/unit/test_memory_model.py` (columna + default), `tests/integration/test_migrations.py` (migración aplica).
   Route: **delegated** (writer). Trigger: writer trigger (schema + migración son una unidad no trivial).
 
@@ -140,7 +140,7 @@ Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el can
 
 ## Evidence log
 
-- **T1** — commit `ff88eb1b` `feat(memory): add the Memory.handoff flag with its migration` (`app/models.py`, `db/migrations/050_memory_handoff.sql` → renumerada a `051_memory_handoff.sql` al integrar `main` (#582 tomó `050`), `tests/unit/test_memory_model.py`, `tests/integration/test_migrations.py`).
+- **T1** — commit `ff88eb1b` `feat(memory): add the Memory.handoff flag with its migration` (`app/models.py`, `db/migrations/050_memory_handoff.sql` → renumerada dos veces al integrar `main` (#582 tomó `050`, #584 tomó `051`) → `052_memory_handoff.sql`, `tests/unit/test_memory_model.py`, `tests/integration/test_migrations.py`).
   - Graph (consultado): nodos `Memory` (`app/models.py:521`), `models.py`, `tukulpan.py`, `memory.py`, `MemoryRelation`; `GRAPH_REPORT.md` (hubs `models.py`/`tukulpan.py`). `graphify path "Memory" "tukulpan.py"` sin path dirigido.
   - `uv run pytest tests/unit/test_memory_model.py -q` → **passed** (2).
   - `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_migrations.py -q` → **35 passed**. El writer la reportó `partial` por DB caída; el orquestador levantó la DB (`bash infra/test-db.sh up`) y la corrió → verde. `EXPECTED_TABLES` sin cambios.

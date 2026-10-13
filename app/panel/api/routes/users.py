@@ -241,6 +241,38 @@ def toggle_active(
     return {"user": safe_user}
 
 
+@router.delete("/users/{user_id}")
+def delete_user_route(
+    user_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    user = _get_user(session, user_id)
+    if user.id == current.id:
+        raise HTTPException(status_code=403, detail="admins cannot delete their own account")
+    if user.role == UserRole.ADMIN and user.active and users.active_admin_count(session) <= 1:
+        raise HTTPException(status_code=409, detail="cannot delete the last active admin")
+    before = to_admin_user_dict(user)
+    record_audit(
+        session,
+        actor=current.username,
+        action="user.delete",
+        entity="user",
+        entity_id=str(user.id),
+        before=before,
+    )
+    users.delete_user(session, user)
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="user is referenced by other records; deactivate instead",
+        ) from exc
+    return {"ok": True}
+
+
 @router.post("/users/{user_id}/reset-password")
 def reset_user_password(
     user_id: int,

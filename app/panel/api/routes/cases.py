@@ -113,6 +113,33 @@ def case_update(
     return {"ok": True, "case": to_case_dict(case)}
 
 
+@router.post("/cases/{case_id}/archive")
+def case_archive(
+    case_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    case = _case_or_404(session, case_id)
+    try:
+        cases_service.archive_case(session, case, actor=current.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    session.commit()
+    return {"ok": True, "case": to_case_dict(case)}
+
+
+@router.post("/cases/{case_id}/unarchive")
+def case_unarchive(
+    case_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    case = _case_or_404(session, case_id)
+    cases_service.unarchive_case(session, case, actor=current.username)
+    session.commit()
+    return {"ok": True, "case": to_case_dict(case)}
+
+
 @router.post("/cases/{case_id}/ack")
 def case_ack(
     case_id: int,

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, cancelAppointment, changeClientState, closeAppointment, deleteClientNote, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, getConversation, previewClientMerge, mergeClient } from "../../api";
+import { ApiError, apiFetch, addClientNote, archiveCase, cancelAppointment, changeClientState, closeAppointment, deleteClientNote, postJson, resolveMemoryRelation, unarchiveCase, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, getConversation, previewClientMerge, mergeClient } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, ConversationThread, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), cancelAppointment: vi.fn(), changeClientState: vi.fn(), closeAppointment: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), getConversation: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), archiveCase: vi.fn(), cancelAppointment: vi.fn(), changeClientState: vi.fn(), closeAppointment: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), unarchiveCase: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), getConversation: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
 });
 
 // The Mensajes card loads the selected conversation thread through `getConversation`.
@@ -179,6 +179,29 @@ describe("ClientFicha page grammar", () => {
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getAllByText("#1").length).toBeGreaterThan(0);
     expect(within(archive).getByText("Mostrando 1–1 de 1 casos anteriores")).toBeInTheDocument();
+  });
+
+  it("reveals archived cases and archives or restores closed cases", async () => {
+    const user = userEvent.setup();
+    const archived = { ...ficha.history.cases[1], id: 3, archived_at: "2026-07-15T12:00:00Z" };
+    vi.mocked(apiFetch).mockImplementation(async (path) => {
+      if (path.endsWith("/memories")) return { memories };
+      if (path.endsWith("/pending")) return { relations: [] };
+      return { ...ficha, history: { ...ficha.history, cases: [...ficha.history.cases, archived] } };
+    });
+    vi.mocked(archiveCase).mockResolvedValue({ ok: true, case: ficha.history.cases[1] as never });
+    vi.mocked(unarchiveCase).mockResolvedValue({ ok: true, case: ficha.history.cases[1] as never });
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+    const archive = screen.getByRole("region", { name: "Casos anteriores" });
+    await user.click(within(archive).getByRole("button", { name: "Ver archivados" }));
+    expect(await within(archive).findAllByText("Archivado")).not.toHaveLength(0);
+    expect(await within(archive).findAllByRole("button", { name: "Desarchivar" })).not.toHaveLength(0);
+    await user.click(within(archive).getAllByRole("button", { name: "Archivar" })[0]);
+    expect(archiveCase).toHaveBeenCalledWith(1);
+    await user.click(within(archive).getAllByRole("button", { name: "Desarchivar" })[0]);
+    expect(unarchiveCase).toHaveBeenCalledWith(3);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10&include_archived_cases=true"));
   });
 
   it("paginates previous cases across desktop and mobile and clamps after the case count changes", async () => {

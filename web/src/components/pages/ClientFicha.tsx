@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X, Bot, ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, getConversation, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { addClientNote, ApiError, apiFetch, archiveCase, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, getConversation, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCase, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
@@ -122,6 +122,7 @@ const priorityLabel = (priority: string | null) => priority ? priority.charAt(0)
 export function ClientFicha({ customerId, initialTab, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState(initialTab ?? "summary");
   const [archivedCasePage, setArchivedCasePage] = useState(1);
+  const [showArchivedCases, setShowArchivedCases] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [caseEditTarget, setCaseEditTarget] = useState<FichaCase | null>(null);
@@ -172,15 +173,15 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   const [visitMutation, setVisitMutation] = useState(false);
   const [visitFeedback, setVisitFeedback] = useState<Feedback | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
-  const fetchFicha = useCallback(async () => {
+  const fetchFicha = useCallback(async (includeArchived = showArchivedCases) => {
     if (fichaCustomerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
-      apiFetch<ClientFichaResponse>(`/panel/api/clients/${fichaCustomerId}?messages_limit=${MESSAGE_PREVIEW}`),
+      apiFetch<ClientFichaResponse>(`/panel/api/clients/${fichaCustomerId}?messages_limit=${MESSAGE_PREVIEW}${includeArchived ? "&include_archived_cases=true" : ""}`),
       apiFetch<MemoriesResponse>(`/panel/api/clients/${fichaCustomerId}/memories`),
       apiFetch<PendingMemoryRelationsResponse>(`/panel/api/clients/${fichaCustomerId}/memory-relations/pending`),
     ]);
     return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
-  }, [fichaCustomerId]);
+  }, [fichaCustomerId, showArchivedCases]);
   const fetched = useAsyncData(fetchFicha, (controlledData === undefined || mergedCustomerId !== null) && controlledState === undefined, mergedCustomerId ?? 0);
   const fetchEquipment = useCallback(async () => {
     if (fichaCustomerId === undefined) return [];
@@ -214,7 +215,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
 
   const { customer, history } = data;
   const activeCase = history.cases.filter((row) => row.is_open).at(-1) ?? null;
-  const archivedCases = history.cases.filter((row) => row.id !== activeCase?.id);
+  const archivedCases = history.cases.filter((row) => row.id !== activeCase?.id && (showArchivedCases || !row.archived_at));
   const currentArchivedCasePage = Math.min(archivedCasePage, Math.max(1, archivedCasePageCount));
   const visibleArchivedCases = archivedCases.slice((currentArchivedCasePage - 1) * 5, currentArchivedCasePage * 5);
   const archivedRangeStart = archivedCases.length ? (currentArchivedCasePage - 1) * 5 + 1 : 0;
@@ -239,9 +240,9 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       setRetryingCalendarId(null);
     }
   };
-  const refresh = async () => {
+  const refresh = async (includeArchived = showArchivedCases) => {
     if (fichaCustomerId === undefined) return;
-    const next = await fetchFicha();
+    const next = await fetchFicha(includeArchived);
     setRefreshed(next);
   };
   const cancelVisit = async () => {
@@ -476,6 +477,16 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
     { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin monto registrado" : CLP_FORMAT.format(row.amount) },
     { key: "summary", header: "Resumen", render: (row) => row.summary ? plainSummary(row.summary) : "—" },
   ];
+  const setCaseArchived = async (row: FichaCase) => {
+    if (customerId === undefined) return;
+    try {
+      if (row.archived_at) await unarchiveCase(row.id);
+      else await archiveCase(row.id);
+      await refresh();
+    } catch (error) {
+      setCaseFeedback({ tone: "danger", title: error instanceof ApiError && error.status === 409 ? "Solo se pueden archivar casos cerrados" : "No se pudo actualizar el archivo del caso" });
+    }
+  };
   const archivedCaseColumns: Column<FichaCase>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
     { key: "service", header: "Servicio", render: (row) => row.service },
@@ -483,6 +494,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
     { key: "status", header: "Estado", render: (row) => <Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge> },
     { key: "responsible", header: "Responsable", render: (row) => data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar" },
     { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount) },
+    { key: "archive", header: "Archivo", render: (row) => <div className="client-ficha__case-archive-actions">{row.archived_at ? <><Badge tone="warning">Archivado</Badge><Button variant="secondary" onClick={() => void setCaseArchived(row)}>Desarchivar</Button></> : !row.is_open ? <Button variant="secondary" onClick={() => void setCaseArchived(row)}>Archivar</Button> : null}</div> },
   ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
     { key: "conversation", header: "Conversación", render: (row) => <a className="table__link" href={pathForRoute({ view: "conversations", conversationId: row.conversation_id })}>#{row.conversation_id}</a> },
@@ -696,12 +708,14 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
           <section className="client-ficha__case-card client-ficha__case-card--primary"><div className="client-ficha__case-panel">{activeCaseBody}</div></section>
           {customerDataCard}
           <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores">
+            <Button variant="secondary" aria-pressed={showArchivedCases} onClick={() => { const next = !showArchivedCases; setShowArchivedCases(next); setArchivedCasePage(1); void refresh(next); }}>Ver archivados</Button>
             {archivedCases.length ? <>
               <div className="data-region table-card__desktop"><DataTable columns={archivedCaseColumns} rows={visibleArchivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
               <ul className="table-cards table-cards--mobile client-ficha__archived-cards" aria-label="Lista de casos anteriores">
                 {visibleArchivedCases.map((row) => <li className="table-card__item client-ficha__archived-card" key={row.id}>
                   <div className="client-ficha__archived-card-head"><strong>#{row.id}</strong><span>{row.service}</span>{archivedCaseMenu(row)}</div>
                   <div className="client-ficha__archived-card-badges">{row.priority ? <Badge tone="warning">{priorityLabel(row.priority)}</Badge> : null}<Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge></div>
+                  {row.archived_at ? <div className="client-ficha__case-archive-actions"><Badge tone="warning">Archivado</Badge><Button variant="secondary" onClick={() => void setCaseArchived(row)}>Desarchivar</Button></div> : !row.is_open ? <Button variant="secondary" onClick={() => void setCaseArchived(row)}>Archivar</Button> : null}
                   <div className="client-ficha__archived-card-facts"><div><small>Responsable</small><strong>{data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto CLP</small><strong>{row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount)}</strong></div></div>
                 </li>)}
               </ul>
