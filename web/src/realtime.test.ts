@@ -50,6 +50,18 @@ describe("realtime reducer", () => {
 });
 
 describe("RealtimeClient", () => {
+  it("immediately publishes the current connected status to new subscribers", () => {
+    const client = new RealtimeClient({ factory: () => new Socket() });
+    client.connect();
+    Socket.instances[0].open();
+    const listener = vi.fn();
+
+    client.subscribeStatus(listener);
+
+    expect(listener).toHaveBeenCalledWith("connected");
+    client.disconnect();
+  });
+
   it("reconnects with bounded backoff and recovers only after REST refresh", async () => {
     vi.useFakeTimers();
     const recover = vi.fn(async () => undefined);

@@ -67,6 +67,7 @@ export class RealtimeClient {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private attempts = 0;
   private stopped = true;
+  private status: ConnectionStatus = 'disconnected';
   private readonly listeners = new Set<(envelope: RealtimeEnvelope) => void>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly recoveryListeners = new Set<() => Promise<void>>();
@@ -75,11 +76,11 @@ export class RealtimeClient {
     this.options = { url: '/panel/ws', factory: (url) => new WebSocket(new URL(url, globalThis.location?.origin ?? 'http://localhost').toString().replace(/^http/, 'ws')) as unknown as FakeWebSocket, baseDelay: 250, maxDelay: 5000, ...options };
   }
   subscribe(listener: (envelope: RealtimeEnvelope) => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
-  subscribeStatus(listener: (status: ConnectionStatus) => void) { this.statusListeners.add(listener); return () => this.statusListeners.delete(listener); }
+  subscribeStatus(listener: (status: ConnectionStatus) => void) { this.statusListeners.add(listener); listener(this.status); return () => this.statusListeners.delete(listener); }
   registerRecovery(listener: () => Promise<void>) { this.recoveryListeners.add(listener); return () => this.recoveryListeners.delete(listener); }
   connect() { if (!this.stopped && this.socket) return; this.stopped = false; this.open(false); }
   disconnect() { this.stopped = true; if (this.timer) clearTimeout(this.timer); this.timer = null; this.socket?.close(); this.socket = null; this.setStatus('disconnected'); this.listeners.clear(); this.statusListeners.clear(); this.recoveryListeners.clear(); }
-  private setStatus(status: ConnectionStatus) { this.options.onStatus?.(status); this.statusListeners.forEach((listener) => listener(status)); }
+  private setStatus(status: ConnectionStatus) { this.status = status; this.options.onStatus?.(status); this.statusListeners.forEach((listener) => listener(status)); }
   private open(reconnecting: boolean) {
     if (this.stopped) return;
     this.setStatus(reconnecting ? 'reconnecting' : 'connecting');
