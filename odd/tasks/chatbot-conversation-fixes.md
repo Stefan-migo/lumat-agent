@@ -133,14 +133,16 @@ chatbot telemetry ("assistant optimizer") work, which would only measure a broke
       unchanged (follow-up). Commit `48bb0cdb`.
 - [x] **T6 (A)** — full suite green after the attribution fix (**1940 passed**). Work-unit commits
       `24eb9254` (A1/A2/A3) and `48bb0cdb` (attribution).
-- [ ] **T7 (B1)** — RED: a booked conversation's state has no appointment; GREEN:
-      `ConversationState.from_db` loads the relevant appointment.
-- [ ] **T8 (B2)** — RED: "is my visit booked?" fabricates; GREEN: `respond` receives the transcript +
-      booking status and answers from them. Prompt + `FALLBACKS` + identity test.
-- [ ] **T9 (B3)** — RED: a contextual follow-up classifies `unknown`; GREEN: `classify` receives the
-      transcript. Prompt + `FALLBACKS` + identity test.
-- [ ] **T10 (B)** — full suite green; work-unit commit(s) 3+.
-- [ ] **T11** — verification: `uv run pytest tests/` observed; write final Findings.
+- [x] **T7 (B1)** — `ConversationState.booking` carries the customer's latest BOOKED appointment;
+      RED/GREEN in `tests/integration/test_chat_state.py`. Commit `dcb61372`.
+- [x] **T8 (B2)** — `respond` receives `{{conversation}}` + `{{booking}}`; persona + `FALLBACKS` +
+      identity test. Commits `0053d582`, `97db70ac`.
+- [x] **T9 (B3)** — `classify` receives `{{conversation}}`; persona + `FALLBACKS` + identity test.
+      Commits `0053d582`, `97db70ac`.
+- [x] **T10 (B)** — full suite green (**1943 passed**). Coupled test doubles updated
+      (`_llm_classify` signature, prompt-slot assertions). Commits `35180ad5`, `f210742b`.
+- [x] **T11** — verification: `uv run pytest tests/` observed; parent spot check green (74 focused
+      tests, exit 0).
 
 ## Findings
 
@@ -166,6 +168,19 @@ and the sweep then processes them one by one (`sweep_received` → `process_mess
   itself.
 - Fix belongs in `from_db` (anchor the window to the processed message). This is the same
   "no context" family as Slice B.
+
+### F2 — B3's quality is wired, not measured
+
+The integration classifier is a keyword mock (`tests/integration/conftest.py:117-141`) that never
+reads the prompt, so the suite can assert that `<conversation>` reaches the classify call but cannot
+assert that the real classifier now resolves contextual follow-ups. The wiring is verified; the
+quality claim requires a real-provider harness and is NOT made here.
+
+### F3 — `turn` is intentionally not anchored
+
+`from_db` anchors the message window to `through_message_id` but leaves `turn` as the conversation's
+total inbound count. Consequence: the first message of a multi-message first-contact batch is
+processed with `turn > 1` and gets no greeting. Out of scope for this unit; recorded as a follow-up.
 
 ## Acceptance criteria
 
