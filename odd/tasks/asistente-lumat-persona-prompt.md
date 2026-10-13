@@ -51,13 +51,13 @@ La persona/respond KB-céntrica **no es un accidente**: la instaló el ODD `assi
 
 ## Plan (tasks)
 
-- [ ] **T1** — `agent/personas/assistant.md`: reemplazo completo (secciones Environment / How you act / Knowledge and evidence / Memory / Skills / Personality and format / Safety). Registrar chileno.
+- [x] **T1** — `agent/personas/assistant.md`: reemplazo completo (secciones Environment / How you act / Knowledge and evidence / Memory / Skills / Personality and format / Safety). Registrar chileno.
   - Route: **delegated** (writer). Trigger: 3 archivos no triviales (writer trigger).
-- [ ] **T2** — `agent/prompts/assistant_plan.md`: delta "preferí `kind:"tool"` cuando el pedido necesita datos o acción". Preservar delegación.
+- [x] **T2** — `agent/prompts/assistant_plan.md`: delta "preferí `kind:"tool"` cuando el pedido necesita datos o acción". Preservar delegación.
   - Route: delegated (misma unidad que T1).
-- [ ] **T3** — `agent/prompts/assistant_respond.md`: reemplazar la regla KB-gate por "respondé de tool evidence + `<kb>`; `<kb>` vacío no bloquea; sin evidencia de ninguna fuente, decilo; registro chileno conciso".
+- [x] **T3** — `agent/prompts/assistant_respond.md`: reemplazar la regla KB-gate por "respondé de tool evidence + `<kb>`; `<kb>` vacío no bloquea; sin evidencia de ninguna fuente, decilo; registro chileno conciso".
   - Route: delegated.
-- [ ] **T4** — Guard test de regresión: assert que el plan prompt prefiere tool y que el respond prompt ya no tiene el gate KB-only. (Consistente con `test_planner_prompt_advertises_executable_delegation`.)
+- [x] **T4** — Guard test de regresión: assert que el plan prompt prefiere tool y que el respond prompt ya no tiene el gate KB-only. (Consistente con `test_planner_prompt_advertises_executable_delegation`.)
   - Route: delegated (misma unidad).
 - [ ] **T5** — Commits atómicos con Conventional Commits, sin atribución IA.
 
@@ -83,4 +83,8 @@ La persona/respond KB-céntrica **no es un accidente**: la instaló el ODD `assi
 
 ## Evidence log
 
-- (pendiente) commits + resultados de tests + outcome del review.
+- Commit 1: `793a2cb3` — `docs(odd): record the assistant persona/prompt act-first ODD`.
+- Verification 1 (as requested): `uv run pytest tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py tests/unit/test_assistant_config.py -q` — EXIT=1; 4 failures in `tests/unit/test_assistant_config.py` because its existing assertions require persona wording that the mandated exact replacement removes. Prompt contract, grounding gate, prompt, delegation, and registry tests passed.
+- Verification 1 (compatible subset): `uv run pytest tests/unit/test_assistant_prompt_contract.py tests/unit/test_assistant_grounding_gate.py tests/unit/test_prompts.py tests/unit/test_assistant_delegation.py tests/unit/test_agent_registry.py -q` — EXIT=0.
+- Verification 2: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_harness_guardrails.py tests/integration/test_assistant_harness_context.py tests/integration/test_assistant_harness_session.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_production.py tests/functional/test_api_assistant_capabilities.py -q` — EXIT=1; PostgreSQL at `127.0.0.1:6271` refused connections during migration (connection refused).
+- Commit 2: prompt/persona implementation and test; hash to be recorded in the follow-up evidence update after commit.
