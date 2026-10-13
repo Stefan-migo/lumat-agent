@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { InternalChatThreadSummary } from "../../types";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
 import { AgentChat } from "./AgentChat";
+import { AssistantWorkspace } from "./AssistantWorkspace";
 import { groupThreadsByDate } from "./threadDateGroups";
 
 describe("groupThreadsByDate", () => {
@@ -19,6 +20,9 @@ describe("groupThreadsByDate", () => {
 });
 
 describe("AssistantWorkspace", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -42,7 +46,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Agentes 0", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
     expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
-    expect(await within(thread).findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
+    expect(await within(thread).findByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
     expect(within(thread).queryByRole("navigation", { name: "Hilos abiertos" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
@@ -63,6 +67,121 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByText("Selección de recursos aún no disponible.")).not.toBeVisible();
   });
 
+  it("keeps phone panes closed and updates pane visibility after resizing to desktop", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ threads: [], projects: [] }), { status: 200 }));
+
+    render(<AgentChat role="admin" />);
+
+    expect(screen.getByRole("button", { name: "Expandir panel de proyectos" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Abrir panel del hilo" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Cerrar paneles" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Área del hilo" })).toBeInTheDocument();
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(screen.getByRole("complementary", { name: "Proyectos" })).toBeVisible());
+    expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeVisible();
+  });
+
+  it("opens navigation from its own mobile header with the real project count and existing actions", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "uno", name: "Uno", purpose: "Uno", status: "active", created_at: null, updated_at: null },
+        { id: 2, slug: "dos", name: "Dos", purpose: "Dos", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const createThread = vi.fn();
+    render(<AgentChat role="admin" onThreadOpened={createThread} />);
+
+    expect(screen.getByRole("button", { name: "Elegir proyecto: General" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Elegir proyecto: General" }));
+    const picker = await screen.findByRole("dialog", { name: "Elegir proyecto" });
+    expect(within(picker).getByRole("button", { name: "Uno" })).toBeInTheDocument();
+    expect(within(picker).getByRole("button", { name: "General" })).toBeInTheDocument();
+    expect(within(picker).queryByText("Contexto y archivos")).not.toBeInTheDocument();
+    expect(within(picker).getByRole("button", { name: "Crear proyecto" })).toBeInTheDocument();
+    fireEvent.click(within(picker).getByRole("button", { name: "Crear proyecto" }));
+    const createDialog = await screen.findByRole("dialog", { name: "Crear proyecto" });
+    expect(within(createDialog).getByLabelText("Nombre")).toBeVisible();
+    expect(within(createDialog).getByLabelText("Slug")).toBeVisible();
+    expect(within(createDialog).getByLabelText("Propósito")).toBeVisible();
+    fireEvent.click(within(createDialog).getByRole("button", { name: "Cerrar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Abrir navegación del asistente" }));
+    const navigation = await screen.findByRole("dialog", { name: "Navegación" });
+    expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
+    expect(within(navigation).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
+    fireEvent.click(await within(navigation).findByRole("button", { name: "Proyectos (2)" }));
+    const projectSheet = await screen.findByRole("dialog", { name: "Proyecto" });
+    expect(within(projectSheet).getByRole("searchbox", { name: "Buscar proyecto" })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: "Uno Seleccionado" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(projectSheet).getByRole("button", { name: "Dos" })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("heading", { name: "Uno" })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: /Contexto y archivos/ })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: /Historial de hilos/ })).toBeInTheDocument();
+    expect(within(projectSheet).getByRole("button", { name: /Sesiones de planificación/ })).toBeInTheDocument();
+    fireEvent.click(within(projectSheet).getByRole("button", { name: "Dos" }));
+    expect(within(projectSheet).getByRole("heading", { name: "Dos" })).toBeInTheDocument();
+  });
+
+  it("shows the thread's project in the mobile header, including the implicit General", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 2, slug: "dos", name: "Dos", purpose: "Dos", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    const { rerender } = render(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="default"><p>Thread</p></AssistantWorkspace>);
+
+    // `default` is absent from `projects`; the header used to fall back to
+    // `projects[0]` and showed an arbitrary project instead of "General".
+    expect(await screen.findByRole("button", { name: "Elegir proyecto: General" })).toBeInTheDocument();
+
+    rerender(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="dos"><p>Thread</p></AssistantWorkspace>);
+    expect(await screen.findByRole("button", { name: "Elegir proyecto: Dos" })).toBeInTheDocument();
+  });
+
+  it("shows thread detail with honest counts and reuses the project-change action", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
+    const onChangeProject = vi.fn();
+    render(<AssistantWorkspace onCreateThread={vi.fn()} attachments={[{ id: 1, thread_id: 7, filename: "brief.pdf", kind: "document", content_type: "application/pdf", size: 42 }]} artifacts={[]} onChangeProject={onChangeProject}><p>Thread</p></AssistantWorkspace>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
+    const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
+    expect(within(detail).getByRole("button", { name: /Archivos del hilo 1/ })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: /Artefactos del hilo 0/ })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: /Fuentes del hilo 0/ })).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "Cambiar" }));
+    expect(onChangeProject).toHaveBeenCalledOnce();
+  });
+
+  it("changes the active thread project from the lean mobile picker", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [{ id: 1, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" }] }), { status: 200 });
+      if (url === "/panel/api/chat/threads/4" && init?.method === "PATCH") return new Response(JSON.stringify({ thread: { id: 4, proyecto: "ops", status: "open" } }), { status: 200 });
+      if (url === "/panel/api/chat/threads/4") return new Response(JSON.stringify({ thread: { id: 4, proyecto: "default", status: "open" }, messages: [] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [], active_runs: [] }), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    render(<AgentChat role="admin" threadId={4} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Elegir proyecto: General" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Operaciones" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ proyecto: "ops" }) }),
+    ));
+  });
+
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
@@ -79,17 +198,18 @@ describe("AssistantWorkspace", () => {
 
     render(<AgentChat role="admin" />);
 
-    const project = await screen.findByText("Operaciones");
+    const projectPane = within(screen.getByRole("complementary", { name: "Proyectos" }));
+    const project = await projectPane.findByText("Operaciones");
     expect(project).toBeInTheDocument();
-    expect(screen.getByText("Archivo")).toBeInTheDocument();
+    expect(projectPane.getByText("Archivo")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyecto" }), { target: { value: "arch" } });
-    await waitFor(() => expect(screen.queryByText("Operaciones")).not.toBeInTheDocument());
-    expect(screen.getByText("Archivo")).toBeInTheDocument();
+    await waitFor(() => expect(projectPane.queryByText("Operaciones")).not.toBeInTheDocument());
+    expect(projectPane.getByText("Archivo")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyecto" }), { target: { value: "operaciones" } });
-    await waitFor(() => expect(screen.getByText("Operaciones")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Operaciones").closest("button")!);
+    await waitFor(() => expect(projectPane.getByText("Operaciones")).toBeInTheDocument());
+    fireEvent.click(projectPane.getByText("Operaciones").closest("button")!);
     expect(screen.getByRole("button", { name: "Contexto y archivos" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Historial de hilos" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Agregar agente" })).not.toBeInTheDocument();
@@ -121,7 +241,7 @@ describe("AssistantWorkspace", () => {
     await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
     expect(window.location.search).toBe("");
     expect(screen.queryByRole("heading", { name: "Archivos y conocimiento" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
+    expect(await screen.findByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
   });
 
   it("shows a retryable error instead of fabricated project rows", async () => {

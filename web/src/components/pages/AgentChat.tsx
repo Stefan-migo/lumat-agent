@@ -265,7 +265,7 @@ export interface AgentChatProps {
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentChatProps) {
+export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -759,6 +759,20 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
     } finally { setProjectActionLoading(false); }
   };
 
+  const openProjectPicker = async () => {
+    setProjectActionLoading(true);
+    setProjectActionError(null);
+    try {
+      const result = await listProjects();
+      setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })));
+      setProjectPickerOpen(true);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.");
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
   const attachProjectFile = async (fileId: number) => {
     if (!thread) return;
     setProjectActionLoading(true);
@@ -830,11 +844,13 @@ export function AgentChat({ role, threadId, onThreadOpened, userName }: AgentCha
 
   return (
     <AssistantWorkspace
+      onChangeProject={() => void openProjectPicker()}
       onCreateThread={() => void newChat()}
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}
       loadThreadTabs={Boolean(onThreadOpened)}
       activeProjectSlug={thread?.proyecto ?? undefined}
+      onSelectProject={(slug) => void (thread ? changeProject(slug) : createProjectChat(slug))}
       attachments={attachments}
       artifacts={artifacts}
     >

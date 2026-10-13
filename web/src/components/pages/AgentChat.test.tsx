@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentChat as AgentChatView, COMMAND_CENTER_BREAKPOINTS, commandCenterTier, type AgentChatProps } from "./AgentChat";
 
@@ -61,6 +61,10 @@ describe("command center tier metadata", () => {
 });
 
 describe("AgentChat", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     window.history.replaceState({}, "", "/");
@@ -74,6 +78,52 @@ describe("AgentChat", () => {
     ...overrides,
   });
   const toolToggle = (name: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
+
+  it("keeps the desktop welcome greeting and original copy", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
+    render(<AgentChat userName="Ana" />);
+
+    const hour = new Date().getHours();
+    const greeting = `${hour < 12 ? "Buenos días" : hour < 20 ? "Buenas tardes" : "Buenas noches"}, Ana`;
+    expect(await screen.findByRole("heading", { name: greeting })).toBeInTheDocument();
+    expect(screen.getByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
+    expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
+  });
+
+  it("shows the desktop welcome copy on a phone without an icon", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
+    render(<AgentChat userName="Ana" />);
+
+    const hour = new Date().getHours();
+    const greeting = `${hour < 12 ? "Buenos días" : hour < 20 ? "Buenas tardes" : "Buenas noches"}, Ana`;
+    expect(await screen.findByRole("heading", { name: greeting })).toBeInTheDocument();
+    expect(screen.getByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
+    expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
+  });
+
+  it("keeps the original desktop copy for an empty thread", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+    render(<AgentChat threadId={4} />);
+
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
+  });
+
+  it("shows the desktop copy for an empty phone thread without an icon", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+    render(<AgentChat threadId={4} />);
+
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
+  });
 
   it("fetches and renders the thread tool policy", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
@@ -215,10 +265,13 @@ describe("AgentChat", () => {
       : jsonResponse({ thread: { ...makeThread(), proyecto: "default" }, messages: [] }));
     render(<AgentChat threadId={4} />);
 
-    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
     expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveAttribute("placeholder", "Escribe un mensaje al asistente…");
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
     await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary > span")).toHaveTextContent("1"));
@@ -355,7 +408,7 @@ describe("AgentChat", () => {
     render(<AgentChat role={undefined} />);
 
     expect(
-      await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ }),
+      await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ }),
     ).toBeInTheDocument();
     expect(screen.getByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
@@ -441,7 +494,7 @@ describe("AgentChat", () => {
 
     render(<AgentChat threadId={9} />);
 
-    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ });
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/9",
       expect.anything(),

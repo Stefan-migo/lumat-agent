@@ -314,6 +314,23 @@ describe("PanelShell rail contract (2C-1)", () => {
     restore();
   });
 
+  it("always opens the app drawer from the shell hamburger in the chat view", async () => {
+    const user = userEvent.setup();
+    const { restore } = mockDialogMethods();
+    const { container, unmount } = render(<PanelShell user={admin} currentView="chat"><p>Contenido</p></PanelShell>);
+    const menuButton = container.querySelector<HTMLButtonElement>(".panel-shell__menu-button")!;
+
+    expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    expect(menuButton).toHaveAttribute("aria-controls", "panel-navigation-drawer");
+    await user.click(menuButton);
+
+    expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("dialog", { name: "Navegación" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cerrar menú de navegación" }));
+    unmount();
+    restore();
+  });
+
   it("expands the sidebar and focuses the field from the compact search control at desktop width", async () => {
     const user = userEvent.setup();
     const originalWidth = window.innerWidth;

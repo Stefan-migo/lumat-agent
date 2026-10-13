@@ -32,6 +32,29 @@
 
 .assistant-workspace__scrim { display: none; }
 
+.assistant-workspace__navigation-sheet { display: grid; gap: var(--space-3); }
+.assistant-workspace__navigation-sheet > .btn { width: 100%; justify-content: center; }
+.assistant-workspace__navigation-sheet section h3 { margin: var(--space-2) 0; font-size: var(--text-sm); }
+.assistant-workspace__navigation-sheet .assistant-workspace__history-trigger { justify-content: space-between; color: var(--corp-text); }
+.assistant-workspace__project-sheet { display: grid; gap: var(--space-3); max-height: min(70vh, 42rem); overflow-y: auto; }
+.assistant-workspace__project-sheet-list { display: grid; gap: var(--space-1); }
+.assistant-workspace__project-sheet-option { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: var(--space-3); border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--corp-text); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.assistant-workspace__project-sheet-option:hover,
+.assistant-workspace__project-sheet-option:focus-visible { background: var(--brand-bg); }
+.assistant-workspace__project-sheet-option.is-selected { border-color: var(--focus-ring); background: var(--brand-bg-elevated); font-weight: 600; }
+.assistant-workspace__project-sheet-details { display: grid; gap: var(--space-1); padding-top: var(--space-2); border-top: 1px solid var(--corp-border); }
+.assistant-workspace__project-sheet-details h3 { margin: 0 0 var(--space-1); font-size: var(--text-md); }
+.assistant-workspace__project-sheet-details .assistant-workspace__history-trigger { justify-content: space-between; color: var(--corp-text); }
+.assistant-workspace__project-sheet > .btn { justify-content: center; }
+.assistant-workspace__project-picker { display: grid; gap: var(--space-2); }
+.assistant-workspace__project-picker > button:not(.btn) { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-md); color: var(--corp-text); background: var(--corp-surface); font: inherit; text-align: left; cursor: pointer; }
+.assistant-workspace__project-picker > button[aria-pressed="true"] { background: var(--brand-bg-elevated); }
+.assistant-workspace__project-picker > .btn { justify-content: center; }
+.assistant-workspace__thread-detail-sheet { display: grid; gap: var(--space-3); max-height: min(70vh, 42rem); overflow-y: auto; }
+.assistant-workspace__thread-project-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--corp-border); font-weight: 600; }
+.assistant-workspace__thread-detail-sections { display: grid; gap: var(--space-1); }
+.assistant-workspace__mobile-header { display: none; }
+
 .assistant-workspace__projects,
 .assistant-workspace__context {
   position: relative;
@@ -464,8 +487,16 @@
 .assistant-workspace--projects-collapsed .assistant-workspace__projects { grid-column: 1; }
 .assistant-workspace--context-collapsed .assistant-workspace__context { grid-column: 3; }
 
-@media (max-width: 64rem) {
-  .assistant-workspace {
+@media (min-width: 40rem) and (max-width: 64rem) {
+  /* Same specificity reason as the phone block: the collapsed templates use
+     `:not()` pairs (0,3,0), so a bare `.assistant-workspace` would lose and the
+     tablet would keep the 3-column grid instead of the single-column + overlay
+     layout. Repeat every modifier combination. */
+  .assistant-workspace,
+  .assistant-workspace:not(.assistant-workspace--projects-visible):not(.assistant-workspace--context-visible),
+  .assistant-workspace:not(.assistant-workspace--projects-visible).assistant-workspace--context-visible,
+  .assistant-workspace.assistant-workspace--projects-visible:not(.assistant-workspace--context-visible),
+  .assistant-workspace--projects-visible.assistant-workspace--context-visible {
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
     height: 100%;
@@ -506,10 +537,36 @@
 }
 
 @media (max-width: 40rem) {
-  .assistant-workspace {
+  .panel-shell__content-area--immersive { grid-template-rows: minmax(0, 1fr); }
+
+  /* Every modifier combination must be repeated here: the collapsed templates
+     below use `:not()` pairs (specificity 0,3,0) and would otherwise win over a
+     bare `.assistant-workspace` (0,1,0) regardless of this media query — which
+     left the phone in a 3-column grid with the thread squeezed into the 3.5rem
+     rail column. */
+  .assistant-workspace,
+  .assistant-workspace:not(.assistant-workspace--projects-visible):not(.assistant-workspace--context-visible),
+  .assistant-workspace:not(.assistant-workspace--projects-visible).assistant-workspace--context-visible,
+  .assistant-workspace.assistant-workspace--projects-visible:not(.assistant-workspace--context-visible),
+  .assistant-workspace--projects-visible.assistant-workspace--context-visible {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
     height: 100%;
   }
+
+  .assistant-workspace__projects,
+  .assistant-workspace__context,
+  .assistant-workspace__scrim { display: none; }
+
+  .assistant-workspace__thread { grid-column: 1; min-width: 0; }
+  .assistant-workspace__thread-tabs { display: none; }
+  .assistant-workspace { grid-template-rows: auto minmax(0, 1fr); }
+  .assistant-workspace__mobile-header { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin: var(--space-2) var(--space-2) 0; padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-lg); background: var(--corp-surface); }
+  .assistant-workspace__mobile-header > button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); padding: 0; border: 0; border-radius: var(--radius-md); color: var(--corp-text); background: transparent; font: inherit; cursor: pointer; }
+  .assistant-workspace__mobile-header > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .assistant-workspace__mobile-header > .assistant-workspace__mobile-project { flex: 1 1 auto; justify-content: center; gap: var(--space-2); min-width: 0; padding-inline: var(--space-2); }
+  .assistant-workspace__mobile-project span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 @media (max-width: 40rem) {
