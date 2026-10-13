@@ -97,7 +97,6 @@ export interface PanelShellProps {
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
   onBack?: () => void;
-  assistantMobileActions?: AssistantMobileActions;
   onLogout?: () => void | Promise<void>;
   user: User;
   /** Optional badge/chip rendered to the right of the panel header (e.g. a
@@ -108,11 +107,6 @@ export interface PanelShellProps {
   notificationState?: NotificationState;
   notifications?: PanelNotification[];
   onMarkAllNotificationsRead?: () => void | Promise<void>;
-}
-
-export interface AssistantMobileActions {
-  openNavigation: () => void;
-  openThreadDetail: () => void;
 }
 
 export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
