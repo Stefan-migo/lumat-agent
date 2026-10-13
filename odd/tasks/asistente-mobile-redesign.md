@@ -40,6 +40,14 @@ This is the mobile counterpart of the desktop work shipped in PR #573
   mobile bar**. `web/DESIGN_SYSTEM.md` is **not** changed.
 - The owner's standing preference applies: build on the existing unified design
   system, reuse primitives, no new dependencies, no hex outside `tokens.css`.
+- **D2 — the hamburger (decided 2026-10-13, option a).** On a phone, inside the
+  assistant, the hamburger opens the assistant's **Navegación** sheet (Nueva
+  conversación · Historial de conversaciones · Espacio de trabajo → Proyectos),
+  **not** the app drawer. The hamburger itself belongs to the **shell header**
+  (the mobile bar) — do not add a second assistant bar. In the other views the
+  hamburger keeps opening the app drawer. Consequence: the shell mobile bar is
+  the bar drawn in the reference, so while in the assistant it also hosts the
+  assistant's project selector and info control.
 
 ## Visual reference — target (4 surfaces)
 
@@ -117,8 +125,14 @@ desktop compact rail does **not** exist on mobile.
   mobile layout so JS state is not needed there). **Leave the `40–64rem` tablet
   behavior intact.**
 - **M2** `feat(assistant): mobile navigation sheet`
-  — `Navegación` bottom sheet (Nueva conversación · Historial de conversaciones ·
-  Espacio de trabajo → Proyectos).
+  — `Navegación` bottom sheet (`Dialog variant="sheet"`, title `Navegación`, `X`)
+  with: primary full-width **Nueva conversación** (reuse the existing
+  create-thread handler), **Historial de conversaciones ›** (reuse the existing
+  history action), and a `Espacio de trabajo` section with a **Proyectos (N) ›**
+  row (reuse the existing project list/state; N = real project count). Wire it so
+  that on a phone, in the assistant view, the **shell header hamburger** opens
+  this sheet instead of the app drawer (a minimal optional prop on `PanelShell`;
+  every other view and the `40–64rem`/`>= 64rem` behavior must be unchanged).
 - **M3** `feat(assistant): mobile project sheet`
   — `Proyecto` bottom sheet reusing the project tree, search, per-project rows
   (Contexto y archivos / Historial de hilos / Sesiones de planificación) and
