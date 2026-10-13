@@ -5,6 +5,7 @@ import type { InternalChatThreadSummary } from "../../types";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
 import { PanelShell } from "../domain/PanelShell";
 import { AgentChat } from "./AgentChat";
+import { AssistantWorkspace } from "./AssistantWorkspace";
 import { groupThreadsByDate } from "./threadDateGroups";
 
 describe("groupThreadsByDate", () => {
@@ -93,11 +94,12 @@ describe("AssistantWorkspace", () => {
     });
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const createThread = vi.fn();
-    const registration: { opener: (() => void) | null } = { opener: null };
-    render(<AgentChat role="admin" onThreadOpened={createThread} registerAssistantMenuOpener={(opener) => { registration.opener = opener; }} />);
+    const registration: { actions: { openNavigation: () => void; openThreadDetail: () => void } | null } = { actions: null };
+    render(<AgentChat role="admin" onThreadOpened={createThread} registerAssistantMobileActions={(actions) => { registration.actions = actions; }} />);
 
-    expect(registration.opener).toEqual(expect.any(Function));
-    act(() => registration.opener?.());
+    expect(registration.actions?.openNavigation).toEqual(expect.any(Function));
+    expect(registration.actions?.openThreadDetail).toEqual(expect.any(Function));
+    act(() => registration.actions?.openNavigation());
     const navigation = await screen.findByRole("dialog", { name: "Navegación" });
     expect(within(navigation).getByRole("button", { name: "Nueva conversación" })).toHaveClass("btn--primary");
     expect(within(navigation).getByRole("button", { name: "Historial de conversaciones" })).toBeInTheDocument();
@@ -115,14 +117,35 @@ describe("AssistantWorkspace", () => {
   });
 
   it("routes the phone assistant hamburger to the sheet instead of the app drawer", () => {
-    const onMobileMenuClick = vi.fn();
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-    render(<PanelShell user={{ username: "ana", role: "admin" }} currentView="chat" onMobileMenuClick={onMobileMenuClick}><p>Contenido</p></PanelShell>);
+    const openNavigation = vi.fn();
+    const openThreadDetail = vi.fn();
+    const { rerender } = render(<PanelShell user={{ username: "ana", role: "admin" }} currentView="chat" assistantMobileActions={{ openNavigation, openThreadDetail }}><p>Contenido</p></PanelShell>);
 
     fireEvent.click(document.querySelector(".panel-shell__menu-button")!);
 
-    expect(onMobileMenuClick).toHaveBeenCalledOnce();
+    expect(openNavigation).toHaveBeenCalledOnce();
     expect(screen.getByTestId("panel-drawer-backdrop")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
+    expect(openThreadDetail).toHaveBeenCalledOnce();
+    rerender(<PanelShell user={{ username: "ana", role: "admin" }} currentView="clients"><p>Contenido</p></PanelShell>);
+    expect(screen.queryByRole("button", { name: "Detalle del hilo" })).not.toBeInTheDocument();
+  });
+
+  it("shows thread detail with honest counts and reuses the project-change action", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
+    const register: { actions: { openNavigation: () => void; openThreadDetail: () => void } | null } = { actions: null };
+    const onChangeProject = vi.fn();
+    render(<AssistantWorkspace onCreateThread={vi.fn()} attachments={[{ id: 1, thread_id: 7, filename: "brief.pdf", kind: "document", content_type: "application/pdf", size: 42 }]} artifacts={[]} registerAssistantMobileActions={(actions) => { register.actions = actions; }} onChangeProject={onChangeProject}><p>Thread</p></AssistantWorkspace>);
+
+    act(() => register.actions?.openThreadDetail());
+    const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
+    expect(within(detail).getByRole("button", { name: /Archivos del hilo 1/ })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: /Artefactos del hilo 0/ })).toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: /Fuentes del hilo 0/ })).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "Cambiar" }));
+    expect(onChangeProject).toHaveBeenCalledOnce();
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {

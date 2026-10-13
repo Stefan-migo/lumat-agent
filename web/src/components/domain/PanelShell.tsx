@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  Info,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -115,7 +116,7 @@ export interface PanelShellProps {
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
   onBack?: () => void;
-  onMobileMenuClick?: () => void;
+  assistantMobileActions?: AssistantMobileActions;
   onLogout?: () => void | Promise<void>;
   user: User;
   /** Optional badge/chip rendered to the right of the panel header (e.g. a
@@ -126,6 +127,11 @@ export interface PanelShellProps {
   notificationState?: NotificationState;
   notifications?: PanelNotification[];
   onMarkAllNotificationsRead?: () => void | Promise<void>;
+}
+
+export interface AssistantMobileActions {
+  openNavigation: () => void;
+  openThreadDetail: () => void;
 }
 
 export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
@@ -355,7 +361,7 @@ export function PanelShell({
   drawerInitiallyOpen = false,
   onNavigate,
   onBack,
-  onMobileMenuClick,
+  assistantMobileActions,
   user,
   statusBadge,
   onLogout,
@@ -547,15 +553,16 @@ export function PanelShell({
           ref={menuButtonRef}
           type="button"
           className="panel-shell__menu-button"
-          aria-expanded={onMobileMenuClick && isPhone ? undefined : drawerOpen}
-          aria-controls={onMobileMenuClick && isPhone ? undefined : "panel-navigation-drawer"}
+          aria-expanded={assistantMobileActions && isPhone ? undefined : drawerOpen}
+          aria-controls={assistantMobileActions && isPhone ? undefined : "panel-navigation-drawer"}
           aria-label="Abrir menú de navegación"
           title="Abrir menú de navegación"
-          onClick={(event) => onMobileMenuClick && isPhone ? onMobileMenuClick() : openDrawer(event.currentTarget)}
+          onClick={(event) => assistantMobileActions && isPhone ? assistantMobileActions.openNavigation() : openDrawer(event.currentTarget)}
         >
           <Icon icon={Menu} />
         </button>
         <Brand mobile line />
+        {assistantMobileActions && isPhone ? <button type="button" className="panel-shell__header-action" aria-label="Detalle del hilo" title="Detalle del hilo" onClick={assistantMobileActions.openThreadDetail}><Icon icon={Info} /></button> : null}
         <div className="panel-shell__mobile-actions">
           {/* PNL-APP-10: the header exposes the bell and the avatar at every tier. The mobile popover lives inside
               the desktop header (hidden below 64rem), so the mobile bell navigates to the notification center. */}

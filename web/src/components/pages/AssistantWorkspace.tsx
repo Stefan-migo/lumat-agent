@@ -23,6 +23,7 @@ import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
 import { PlanningSessions } from "./PlanningSessions";
 import { groupThreadsByDate } from "./threadDateGroups";
+import type { AssistantMobileActions } from "../domain/PanelShell";
 import "./AssistantWorkspace.css";
 
 export type WorkspaceTab =
@@ -50,7 +51,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, registerAssistantMenuOpener }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; registerAssistantMenuOpener?: (opener: (() => void) | null) => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, registerAssistantMobileActions, onChangeProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; registerAssistantMobileActions?: (actions: AssistantMobileActions | null) => void; onChangeProject?: () => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -85,6 +86,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [projectSheetOpen, setProjectSheetOpen] = useState(false);
+  const [threadDetailOpen, setThreadDetailOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [projectPurpose, setProjectPurpose] = useState("");
@@ -126,9 +128,9 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   }, [projects, search]);
 
   useEffect(() => {
-    registerAssistantMenuOpener?.(() => setNavigationOpen(true));
-    return () => registerAssistantMenuOpener?.(null);
-  }, [registerAssistantMenuOpener]);
+    registerAssistantMobileActions?.({ openNavigation: () => setNavigationOpen(true), openThreadDetail: () => setThreadDetailOpen(true) });
+    return () => registerAssistantMobileActions?.(null);
+  }, [registerAssistantMobileActions]);
 
   useEffect(() => {
     let current = true;
@@ -360,6 +362,15 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       className={`assistant-workspace${projectsVisible ? " assistant-workspace--projects-visible" : " assistant-workspace--projects-collapsed"}${contextVisible ? " assistant-workspace--context-visible" : " assistant-workspace--context-collapsed"}`}
       data-testid="assistant-workspace"
     >
+      <Dialog open={threadDetailOpen} onClose={() => setThreadDetailOpen(false)} title="Detalle del hilo" variant="sheet">
+        {threadDetailOpen ? <div className="assistant-workspace__thread-detail-sheet">
+          <div className="assistant-workspace__thread-project-row">
+            <span>{activeProject?.name ?? (activeProjectSlug === "default" ? "General" : activeProjectSlug ?? "Sin proyecto")}</span>
+            <Button variant="tertiary" onClick={() => { setThreadDetailOpen(false); onChangeProject?.(); }}>Cambiar</Button>
+          </div>
+          <ThreadContextSections activeProject={activeProject} capabilities={capabilities} capabilitiesLoading={capabilitiesLoading} capabilitiesError={capabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
+        </div> : null}
+      </Dialog>
       <Dialog open={navigationOpen} onClose={() => setNavigationOpen(false)} title="Navegación" variant="sheet">
         <div className="assistant-workspace__navigation-sheet">
           {(role === "admin" || role === "operador") ? <Button variant="primary" onClick={() => { setNavigationOpen(false); onCreateDefaultThread?.(); }}>Nueva conversación</Button> : null}
@@ -611,24 +622,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }]}
         >
-          {() => <div className="assistant-workspace__context-content">
-            <ContextSection id="project" title="Proyecto" icon={Folder} expanded={contextSections.project ?? true} onToggle={toggleContextSection}>
-              {activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
-            </ContextSection>
-            <ContextSection id="resources" title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={toggleContextSection}><div className="assistant-workspace__context-box">Selección de recursos aún no disponible.</div></ContextSection>
-            <ContextSection id="capabilities" title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} expanded={contextSections.capabilities ?? false} onToggle={toggleContextSection}>
-              {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__context-box"><p>{capabilities.tools?.length ?? 0} herramientas disponibles</p><p>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</p></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
-            </ContextSection>
-            <ContextSection id="attachments" title="Archivos del hilo" icon={Paperclip} count={attachments.length} expanded={contextSections.attachments ?? false} onToggle={toggleContextSection}>
-              {attachments.length ? <ul className="assistant-workspace__file-list">{attachments.map((attachment) => <li key={attachment.id}><Icon icon={assistantFileIcon(attachment.filename, attachment.content_type)} size="sm" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(attachment.filename)}`} /><span className="assistant-workspace__file-copy"><strong title={attachment.filename}>{attachment.filename}</strong><small>{attachment.content_type?.split("/").at(-1)?.toLocaleUpperCase("es-CL") ?? "Archivo"} · Adjunto</small></span><a className="assistant-workspace__file-action" href={threadAttachmentContentUrl(attachment.thread_id, attachment.id)} target="_blank" rel="noreferrer" aria-label={`Abrir ${attachment.filename}`}>Abrir</a></li>)}</ul> : <div className="assistant-workspace__context-box assistant-workspace__context-box--empty"><Icon icon={Paperclip} size="sm" />Aún no hay archivos adjuntos.</div>}
-            </ContextSection>
-            <ContextSection id="artifacts" title="Artefactos del hilo" icon={FileText} count={artifacts.length} expanded={contextSections.artifacts ?? false} onToggle={toggleContextSection}>
-              {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <li key={artifact.id}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="sm" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(artifact.filename)}`} /><span className="assistant-workspace__file-copy"><strong title={artifact.filename}>{artifact.filename}</strong><small>Generado en este hilo</small></span><Button variant="tertiary" aria-label={`Descargar ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => void downloadArtifact(artifact)}><Icon icon={Download} size="sm" /></Button></li>)}</ul> : <div className="assistant-workspace__context-box">Los archivos que el asistente genere aparecerán aquí.</div>}
-              {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
-            </ContextSection>
-            <ContextSection id="sources" title="Fuentes del hilo" icon={Link} count={0} expanded={contextSections.sources ?? false} onToggle={toggleContextSection}><div className="assistant-workspace__context-box">El hilo no entrega fuentes asociadas a sus respuestas.</div></ContextSection>
-            <p className="assistant-workspace__context-note"><Icon icon={Info} size="sm" />Los adjuntos y resultados pertenecen a este hilo.</p>
-          </div>}
+          {() => <ThreadContextSections activeProject={activeProject} capabilities={capabilities} capabilitiesLoading={capabilitiesLoading} capabilitiesError={capabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
         </Tabs>
         </> : null}
       </aside>
@@ -677,6 +671,27 @@ function activityTime(thread: InternalChatThreadSummary): number {
   const value = thread.updated_at || thread.created_at;
   const time = value ? new Date(value).getTime() : Number.NEGATIVE_INFINITY;
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+}
+
+function ThreadContextSections({ activeProject, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
+  return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
+    <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
+      {activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
+    </ContextSection>
+    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><div className="assistant-workspace__context-box">Selección de recursos aún no disponible.</div></ContextSection>
+    <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
+      {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__context-box"><p>{capabilities.tools?.length ?? 0} herramientas disponibles</p><p>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</p></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
+    </ContextSection>
+    <ContextSection id={mobile ? "mobile-attachments" : "attachments"} title="Archivos del hilo" icon={Paperclip} count={attachments.length} expanded={contextSections.attachments ?? false} onToggle={() => toggleContextSection("attachments")}>
+      {attachments.length ? <ul className="assistant-workspace__file-list">{attachments.map((attachment) => <li key={attachment.id}><Icon icon={assistantFileIcon(attachment.filename, attachment.content_type)} size="sm" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(attachment.filename)}`} /><span className="assistant-workspace__file-copy"><strong title={attachment.filename}>{attachment.filename}</strong><small>{attachment.content_type?.split("/").at(-1)?.toLocaleUpperCase("es-CL") ?? "Archivo"} · Adjunto</small></span><a className="assistant-workspace__file-action" href={threadAttachmentContentUrl(attachment.thread_id, attachment.id)} target="_blank" rel="noreferrer" aria-label={`Abrir ${attachment.filename}`}>Abrir</a></li>)}</ul> : <div className="assistant-workspace__context-box assistant-workspace__context-box--empty"><Icon icon={Paperclip} size="sm" />Aún no hay archivos adjuntos.</div>}
+    </ContextSection>
+    <ContextSection id={mobile ? "mobile-artifacts" : "artifacts"} title="Artefactos del hilo" icon={FileText} count={artifacts.length} expanded={contextSections.artifacts ?? false} onToggle={() => toggleContextSection("artifacts")}>
+      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <li key={artifact.id}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="sm" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(artifact.filename)}`} /><span className="assistant-workspace__file-copy"><strong title={artifact.filename}>{artifact.filename}</strong><small>Generado en este hilo</small></span><Button variant="tertiary" aria-label={`Descargar ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => void downloadArtifact(artifact)}><Icon icon={Download} size="sm" /></Button></li>)}</ul> : <div className="assistant-workspace__context-box">Los archivos que el asistente genere aparecerán aquí.</div>}
+      {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
+    </ContextSection>
+    <ContextSection id={mobile ? "mobile-sources" : "sources"} title="Fuentes del hilo" icon={Link} count={0} expanded={contextSections.sources ?? false} onToggle={() => toggleContextSection("sources")}><div className="assistant-workspace__context-box">El hilo no entrega fuentes asociadas a sus respuestas.</div></ContextSection>
+    <p className="assistant-workspace__context-note"><Icon icon={Info} size="sm" />Los adjuntos y resultados pertenecen a este hilo.</p>
+  </div>;
 }
 
 function ContextSection({ id, title, icon, count, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {

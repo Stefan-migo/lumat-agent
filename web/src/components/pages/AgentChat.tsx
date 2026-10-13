@@ -45,6 +45,7 @@ import type {
   ProjectFile,
   Role,
 } from "../../types";
+import type { AssistantMobileActions } from "../domain/PanelShell";
 import { realtimeClient } from "../../realtime";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
@@ -263,10 +264,10 @@ export interface AgentChatProps {
   userName?: string;
   threadId?: number;
   onThreadOpened?: (id: number) => void;
-  registerAssistantMenuOpener?: (opener: (() => void) | null) => void;
+  registerAssistantMobileActions?: (actions: AssistantMobileActions | null) => void;
 }
 
-export function AgentChat({ role, threadId, onThreadOpened, userName, registerAssistantMenuOpener }: AgentChatProps) {
+export function AgentChat({ role, threadId, onThreadOpened, userName, registerAssistantMobileActions }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -760,6 +761,20 @@ export function AgentChat({ role, threadId, onThreadOpened, userName, registerAs
     } finally { setProjectActionLoading(false); }
   };
 
+  const openProjectPicker = async () => {
+    setProjectActionLoading(true);
+    setProjectActionError(null);
+    try {
+      const result = await listProjects();
+      setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })));
+      setProjectPickerOpen(true);
+    } catch (reason: unknown) {
+      setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos.");
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
   const attachProjectFile = async (fileId: number) => {
     if (!thread) return;
     setProjectActionLoading(true);
@@ -831,7 +846,8 @@ export function AgentChat({ role, threadId, onThreadOpened, userName, registerAs
 
   return (
     <AssistantWorkspace
-      registerAssistantMenuOpener={registerAssistantMenuOpener}
+      registerAssistantMobileActions={registerAssistantMobileActions}
+      onChangeProject={() => void openProjectPicker()}
       onCreateThread={() => void newChat()}
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}

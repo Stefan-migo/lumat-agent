@@ -46,6 +46,9 @@
 .assistant-workspace__project-sheet-details h3 { margin: 0 0 var(--space-1); font-size: var(--text-md); }
 .assistant-workspace__project-sheet-details .assistant-workspace__history-trigger { justify-content: space-between; color: var(--corp-text); }
 .assistant-workspace__project-sheet > .btn { justify-content: center; }
+.assistant-workspace__thread-detail-sheet { display: grid; gap: var(--space-3); max-height: min(70vh, 42rem); overflow-y: auto; }
+.assistant-workspace__thread-project-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--corp-border); font-weight: 600; }
+.assistant-workspace__thread-detail-sections { display: grid; gap: var(--space-1); }
 
 .assistant-workspace__projects,
 .assistant-workspace__context {

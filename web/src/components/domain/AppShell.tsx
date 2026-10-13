@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { listNotifications, markAllNotificationsRead } from '../../api';
 import type { NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
-import type { NotificationState, PanelView } from './PanelShell';
+import type { AssistantMobileActions, NotificationState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
 import { isDetailRoute, parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
@@ -44,7 +44,11 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
   const [notifications, setNotifications] = useState<PanelNotification[]>([]);
-  const assistantMenuOpenerRef = useRef<(() => void) | null>(null);
+  const assistantMobileActionsRef = useRef<AssistantMobileActions | null>(null);
+  const assistantMobileActions: AssistantMobileActions = {
+    openNavigation: () => assistantMobileActionsRef.current?.openNavigation(),
+    openThreadDetail: () => assistantMobileActionsRef.current?.openThreadDetail(),
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -128,7 +132,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
-              : view === 'chat' ? <AgentChat role={user.role} userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} registerAssistantMenuOpener={(opener) => { assistantMenuOpenerRef.current = opener; }} />
+               : view === 'chat' ? <AgentChat role={user.role} userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} registerAssistantMobileActions={(actions) => { assistantMobileActionsRef.current = actions; }} />
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
         : view === 'users' ? user.role !== 'admin' ? <div role="alert">No tienes permiso para ver este panel</div> : userId !== null ? <UserFicha userId={userId} /> : <UserManagement currentUser={user} onOpenUser={(id) => navigateToRoute({ view: 'users', userId: id })} />
        : view === 'profile' ? <SelfProfile />
@@ -137,7 +141,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} collapseRail={view === "chat"} breadcrumbView={view} onBack={onBack} onNavigate={navigate} onMobileMenuClick={view === "chat" ? () => assistantMenuOpenerRef.current?.() : undefined} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} collapseRail={view === "chat"} breadcrumbView={view} onBack={onBack} onNavigate={navigate} assistantMobileActions={view === "chat" ? assistantMobileActions : undefined} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
       {page}
     </PanelShell>
   );
