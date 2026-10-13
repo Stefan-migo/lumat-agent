@@ -59,7 +59,29 @@ This is the mobile counterpart of the desktop work shipped in PR #573
     `Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.`
   The `userName` prop must stay **used** (M5 left it dead).
 
-## Visual reference — target (4 surfaces)
+## Round 2 — owner corrections after the first phone pass (2026-10-13)
+
+The owner reviewed the phone and corrected four things. These **supersede** parts
+of D2/D4 above:
+
+- **R2-1 — empty state must look like desktop.** The hero text and icon must be
+  the desktop's: the greeting **with the user's name** (`Buenos días, admin`),
+  not the reference's `¿En qué trabajamos hoy?` + subtitle + sparkle. Desktop
+  currently renders the greeting with **no icon**. *(Exact hero-2 wording is
+  pending the owner's answer — see the open question at the end of this doc.)*
+- **R2-2 — the shell hamburger must keep opening the app drawer (D2 is
+  REVERTED).** In the assistant, the shell header's hamburger opening the
+  assistant's `Navegación` sheet was an error; it must keep opening the general
+  panel's side menu, in every view.
+- **R2-3 — the assistant gets its own small header.** Per the reference: a small
+  light rounded bar inside the assistant with `☰` (opens the assistant's
+  `Navegación` sheet), a **project selector** (`📁 TestProject ⌄`) and an **info**
+  control (`ⓘ`, opens `Detalle del hilo`). This is the assistant's own chrome —
+  the shell mobile bar keeps its own hamburger for the app drawer.
+- **R2-4 — centre the empty state.** The hero text **and** the composer must be
+  centred horizontally **and vertically**; today they sit too high.
+
+
 
 Shared, across all four: the shell mobile bar (hamburger · project selector
 `TestProject ⌄` · info icon) and the five bottom tabs remain visible.
@@ -309,7 +331,30 @@ real headless-browser probe (Playwright, chromium build 1234 via
   CSS). The phone layout needs a real-browser check; M1/M5's green tests passed
   while the phone was unusable.
 
-### Open observations from the visual pass (not fixed)
+### Round 2 — implemented (R2-2, R2-3, R2-4)
+
+- `f54bb283` `fix(panel-shell): restore app drawer in assistant view` — the shell
+  mobile-bar hamburger always opens the app drawer again. Verified in a browser:
+  `aria-expanded={drawerOpen}` / `aria-controls="panel-navigation-drawer"`, the
+  drawer opens and no assistant sheet is presented.
+- `204785c8` `feat(assistant): add dedicated mobile control header` — the
+  assistant's own small header (`assistant-workspace__mobile-header`, 374×50 at
+  390px): `☰` (opens the assistant `Navegación` sheet), `📁 General ⌄` (project
+  selector) and `ⓘ` (opens `Detalle del hilo`).
+- `4b8a64bb` + `cc35a8e1` — the phone empty-state group is centred: measured
+  229px top and bottom margins, group and area centres both at y=486.
+- `66947222` `refactor(panel-shell): remove obsolete assistant actions` — removed
+  `AssistantMobileActions`, the `AppShell` ref bridge and
+  `registerAssistantMobileActions`. The assistant's sheets are now opened by its
+  own header's local state. **Side effect: the `useIsPhone()` hook left
+  `PanelShell`, so R3-002 (its SSR read) no longer applies there.**
+- `40ce943a` `fix(assistant): hide thread tabs on phones`,
+  `de159e73` `fix(assistant): load projects from mobile selector`.
+- Verified: `tsc` pass · focused vitest **132 tests** (3 files) · `build` pass ·
+  real-browser probe at 390×844 (no `window` globals for the wiring).
+- **R2-1 is NOT implemented** — the hero copy/icon is pending the owner's answer.
+
+
 
 - **Empty state has no composer.** With no thread the surface shows the hero plus
   an `Iniciar conversación` button; the composer (and the status row) appear only
