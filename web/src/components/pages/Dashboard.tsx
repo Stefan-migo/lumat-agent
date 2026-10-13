@@ -25,6 +25,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { StatCard } from "../shared/StatCard";
 import { Icon } from "../primitives/Icon";
 import { Select } from "../primitives/Select";
+import { formatAgendaSlot } from "../shared/agendaTime";
 
 type IconName = "calendar" | "chevronDown" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag" | "settings";
 
@@ -173,7 +174,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           {opsCard("Agenda de hoy", "calendar", "primary", today.appointments_today.length, "Ver agenda", "agenda",
             <ul className="dashboard__list">{today.appointments_today.length ? today.appointments_today.slice(0, 3).map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("agenda")} aria-label={row.customer_name ?? row.service}>
-                <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{row.local_start}</span>
+                <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{formatAgendaSlot(row.starts_at, today.tz)}</span>
                 <strong>{row.service}</strong>
                 <small>{row.customer_name ?? "Sin nombre"}</small>
               </button></li>

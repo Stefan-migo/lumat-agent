@@ -29,7 +29,7 @@ const data = {
   today: {
     tz: "America/Santiago",
     local_date: "2026-09-09",
-    appointments_today: [{ id: 4, service: "visita", customer_name: "Ana", local_start: "10:00", starts_at: "2026-09-09T13:00:00Z", ends_at: "2026-09-09T14:00:00Z" }],
+    appointments_today: [{ id: 4, service: "visita", customer_name: "Ana", local_start: "2026-09-09T10:00:00.000000", starts_at: "2026-09-09T13:00:00Z", ends_at: "2026-09-09T14:00:00Z" }],
     unanswered_conversations: [{ id: 5, customer_name: "Pedro", last_message_at: "2026-09-09T12:00:00Z", state: "BOT" }],
     urgent_cases: [{ id: 6, customer_name: "Lucía", service: "calefont", summary: "No enciende", emergency: true, escalated_at: "2026-09-09T11:00:00Z" }],
   },
@@ -49,6 +49,12 @@ describe("Dashboard operational surface", () => {
   it("labels the agenda operations card as Agenda de hoy", () => {
     render(<Dashboard data={data} state="ready" />);
     expect(screen.getByRole("heading", { level: 3, name: "Agenda de hoy" })).toBeInTheDocument();
+  });
+
+  it("formats today's appointment time in the payload timezone", () => {
+    render(<Dashboard data={data} state="ready" />);
+    expect(screen.getByText("10:00")).toBeInTheDocument();
+    expect(screen.queryByText(data.today.appointments_today[0].local_start)).not.toBeInTheDocument();
   });
 
   it("labels the activity section as Actividad del período", () => {
