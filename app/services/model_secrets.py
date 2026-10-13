@@ -16,6 +16,10 @@ MODEL_API_KEY = "deepseek_api_key"
 CACHE_TTL_SECONDS = 45
 _cached_key: str | None = None
 _cache_expires_at = 0.0
+# Bumped on every write/invalidation. A read only publishes its result when the
+# generation is unchanged, so a concurrent set/clear is never overwritten by an
+# in-flight read that started before it.
+_cache_generation = 0
 
 
 def get_model_api_key(session: Session) -> str | None:
@@ -69,17 +73,22 @@ def clear_model_api_key(session: Session, actor: str) -> None:
 
 
 def resolve_model_api_key() -> str | None:
-    global _cached_key, _cache_expires_at
+    global _cached_key, _cache_expires_at, _cache_generation
     now = monotonic()
     if now < _cache_expires_at:
         return _cached_key
+    generation = _cache_generation
     with session_scope() as session:
         key = get_model_api_key(session)
-    _cached_key = key
-    _cache_expires_at = now + CACHE_TTL_SECONDS
+    # Publish only if no write invalidated the cache while we were reading;
+    # otherwise this read could re-cache a value a concurrent set/clear dropped.
+    if generation == _cache_generation:
+        _cached_key = key
+        _cache_expires_at = now + CACHE_TTL_SECONDS
     return key
 
 
 def invalidate_model_key_cache() -> None:
-    global _cache_expires_at
+    global _cache_expires_at, _cache_generation
     _cache_expires_at = 0.0
+    _cache_generation += 1

@@ -139,3 +139,15 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   tests de chat. Fix: `GRANT SELECT, INSERT, UPDATE, DELETE ON panel_secrets TO app;`.
 - **Gotcha encontrado y corregido**: `panel_secrets` faltaba en `EXPECTED_TABLES` (`test_migrations.py`).
 - La DB de test se reseteó (`test-db.sh down`+`up`) para reaplicar la migración con el GRANT.
+- **Verificación independiente** (RDD no disponible en este runtime): `pass-with-findings`, 2 WARNING.
+  - Corregido: race en la caché (`resolve` podía re-publicar un valor invalidado concurrentemente).
+    Fix: contador de generación (`_cache_generation`); test RED→GREEN
+    `test_resolve_does_not_publish_a_value_invalidated_mid_read`.
+  - Follow-up (AK-17): el test de integración prueba el contrato de la fábrica
+    (`openai_client`), no los consumidores reales (`chat/graph.py`, `agent_chat.py`).
+
+## Follow-ups (no bloqueantes)
+- **AK-17 — Cobertura de consumidores.** Un test que ejercite el camino real del chatbot
+  (`chat/graph.py`) y del asistente (`agent_chat.py` / `chat/assistant/nodes.py`) contra la key del
+  panel, no solo `openai_client()`. Hoy el contrato de la fábrica está cubierto y los consumidores
+  pasan por ella, pero un bypass futuro no lo detectaría.

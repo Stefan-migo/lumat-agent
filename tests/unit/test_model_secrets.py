@@ -37,6 +37,35 @@ def test_openai_client_uses_resolved_model_key_for_both_deepseek_paths(monkeypat
     assert llm.openai_client("deepseek").api_key == "sk-panel-test"
 
 
+def test_resolve_does_not_publish_a_value_invalidated_mid_read(monkeypatch):
+    """A concurrent set/clear landing during the DB read must not be re-cached."""
+    from contextlib import contextmanager
+
+    from app.services import model_secrets
+
+    @contextmanager
+    def fake_scope():
+        yield object()
+
+    calls = []
+
+    def read_then_invalidate(_session):
+        calls.append(1)
+        # Simulate a concurrent set/clear invalidating while our read is in flight.
+        model_secrets.invalidate_model_key_cache()
+        return "sk-race"
+
+    monkeypatch.setattr(model_secrets, "session_scope", fake_scope)
+    monkeypatch.setattr(model_secrets, "get_model_api_key", read_then_invalidate)
+
+    model_secrets.invalidate_model_key_cache()
+    assert model_secrets.resolve_model_api_key() == "sk-race"
+    assert model_secrets.resolve_model_api_key() == "sk-race"
+    # If the invalidated read had been published, the second call would hit the
+    # cache (len == 1). A correct resolver re-reads (len == 2).
+    assert len(calls) == 2
+
+
 def test_openai_client_keeps_environment_fallback_and_openrouter_key(monkeypatch):
     from app.config import get_settings
     from app.services import llm
