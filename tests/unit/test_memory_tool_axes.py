@@ -360,6 +360,7 @@ def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         topic_key="agent:fact",
         tipo="decision",
         visibility="global",
+        handoff=True,
     )
 
     monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug, *, owner_id: Mock(slug=slug, owner_id=owner_id))
@@ -373,3 +374,15 @@ def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
     assert captured["producer"] == tukulpan.MemoryProducer.AGENT
     assert captured["origin_thread_id"] == "42"
     assert captured["visibility"] == "global"
+    assert captured["handoff"] is True
+
+
+def test_memory_write_handoff_defaults_to_false():
+    args = registry.MemoryWriteArgs(
+        titulo="Project fact",
+        contenido="A reusable fact",
+        topic_key="agent:fact",
+        tipo="decision",
+    )
+
+    assert args.handoff is False

@@ -677,6 +677,17 @@ def test_migration_047_calendar_sync_cascades_for_app_role(tmp_path):
         ).fetchone() == (0,)
 
 
+def test_migration_052_adds_memory_handoff_column(tmp_path):
+    with _scratch_migration_db(tmp_path, 51, 52) as (conn, apply_052, _):
+        result = apply_052()
+        assert result.returncode == 0, f"052 failed:\n{result.stdout}\n{result.stderr}"
+        column = conn.execute(
+            "SELECT data_type, is_nullable, column_default FROM information_schema.columns "
+            "WHERE table_name = 'memories' AND column_name = 'handoff'"
+        ).fetchone()
+        assert column == ("boolean", "NO", "false")
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -732,6 +743,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("049_drop_automation_rule_template_event",),
         ("050_kb_chunks_cascade",),
         ("051_cases_archived_at",),
+        ("052_memory_handoff",),
     ]
 
 
