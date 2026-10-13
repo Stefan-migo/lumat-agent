@@ -131,7 +131,7 @@ fixed messages and `MessagesBody` stay as they are (low blast radius).
 Card copy (product UI is Spanish — match the existing strings' register):
 
 - Description: "Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían
-  con los datos reales ya cargados (nombre, fecha, hora)."
+  con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada)."
 - Difference note: "A diferencia de los Mensajes del asistente de arriba —que son fijos y se
   disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas
   respuestas las selecciona el bot en cada conversación."
