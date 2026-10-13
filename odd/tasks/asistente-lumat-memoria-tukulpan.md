@@ -55,7 +55,7 @@ Scenario *Explicit search only*: en `assemble_context()` sin `memory.read` → n
 
 Runner: `uv run pytest tests/`.
 
-- [ ] **T1 — Schema `Memory.handoff` + migración.**
+- [x] **T1 — Schema `Memory.handoff` + migración.**
   `handoff: bool` (Boolean, default `False`) en `app/models.py:521-592`; migración `db/migrations/050_memory_handoff.sql` (convención `<num>_<desc>.sql`; la última es `049`). No crea tabla → `EXPECTED_TABLES` (`tests/integration/test_migrations.py:39`) no cambia.
   Tests: `tests/unit/test_memory_model.py` (columna + default), `tests/integration/test_migrations.py` (migración aplica).
   Route: **delegated** (writer). Trigger: writer trigger (schema + migración son una unidad no trivial).
@@ -133,4 +133,8 @@ Runner: `uv run pytest tests/`.
 
 ## Evidence log
 
-(vacío — se completa task por task con el commit de cada work unit)
+- **T1** — commit `ff88eb1b` `feat(memory): add the Memory.handoff flag with its migration` (`app/models.py`, `db/migrations/050_memory_handoff.sql`, `tests/unit/test_memory_model.py`, `tests/integration/test_migrations.py`).
+  - Graph (consultado): nodos `Memory` (`app/models.py:521`), `models.py`, `tukulpan.py`, `memory.py`, `MemoryRelation`; `GRAPH_REPORT.md` (hubs `models.py`/`tukulpan.py`). `graphify path "Memory" "tukulpan.py"` sin path dirigido.
+  - `uv run pytest tests/unit/test_memory_model.py -q` → **passed** (2).
+  - `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_migrations.py -q` → **35 passed**. El writer la reportó `partial` por DB caída; el orquestador levantó la DB (`bash infra/test-db.sh up`) y la corrió → verde. `EXPECTED_TABLES` sin cambios.
+  - Ponytail: sin hallazgos.
