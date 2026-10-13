@@ -103,4 +103,20 @@
 .assistant-chat__image-preview { display: block; max-width: 100%; max-height: min(75vh, 60rem); margin: 0 auto; object-fit: contain; }
 @media (max-width: 40rem) {
   .assistant-chat .ai-agent-grammar__bubble { max-width: 90%; }
+  .assistant-chat__surface--empty .assistant-chat__conversation { gap: var(--space-5); padding-inline: var(--space-3); }
+  .assistant-chat__surface--empty .assistant-chat__messages { width: 100%; }
+  .assistant-chat__hero { display: grid; justify-items: center; gap: var(--space-2); text-align: center; }
+  .assistant-chat__hero-icon { width: var(--space-8); height: var(--space-8); color: var(--corp-primary); }
+  .assistant-chat__hero h2, .assistant-chat__hero p { margin: 0; }
+  .assistant-chat__composer-stack { width: 100%; padding-bottom: calc(var(--space-8) + var(--space-5)); }
+  .assistant-chat__composer-wrap { padding: var(--space-3); }
+  .assistant-chat__composer-controls { flex-wrap: wrap; gap: var(--space-2); }
+  .assistant-chat__composer-controls > .btn:disabled[title="Próximamente"] { display: none; }
+  .assistant-chat__composer-controls .assistant-chat__planning-pill { margin-left: 0; padding-inline: var(--space-2); }
+  .assistant-chat__composer-tray { right: var(--space-2); left: var(--space-2); padding-inline: var(--space-2); }
+  .assistant-chat__composer-bottom-row { gap: var(--space-2); }
+  .assistant-chat__project-popover { min-width: 0; max-width: 100%; padding-right: var(--space-2); }
+  .assistant-chat__project-popover .popover__trigger { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .assistant-chat__composer-bottom-row > .popover { padding-right: var(--space-2); }
+  .assistant-chat__tools-summary { margin-left: auto; }
 }

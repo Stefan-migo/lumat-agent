@@ -27,7 +27,7 @@ import {
   uploadAssistantAttachment,
   threadAttachmentContentUrl,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Sparkles, Square, Workflow, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -267,7 +267,7 @@ export interface AgentChatProps {
   registerAssistantMobileActions?: (actions: AssistantMobileActions | null) => void;
 }
 
-export function AgentChat({ role, threadId, onThreadOpened, userName, registerAssistantMobileActions }: AgentChatProps) {
+export function AgentChat({ role, threadId, onThreadOpened, registerAssistantMobileActions }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -907,15 +907,17 @@ export function AgentChat({ role, threadId, onThreadOpened, userName, registerAs
           <div className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
               <div className="assistant-chat__hero assistant-chat__hero--welcome">
-                <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
-                <p>¿En qué trabajamos hoy?</p>
+                <Sparkles className="assistant-chat__hero-icon" aria-hidden="true" />
+                <h2>¿En qué trabajamos hoy?</h2>
+                <p>Consulta, planifica o trabaja en tus proyectos.</p>
                 <Button onClick={() => void newChat()} disabled={loading}>Iniciar conversación</Button>
               </div>
             ) : null}
             {thread && messages.length === 0 && !loading ? (
               <div className="assistant-chat__hero">
+                <Sparkles className="assistant-chat__hero-icon" aria-hidden="true" />
                 <h2>¿En qué trabajamos hoy?</h2>
-                <p>Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.</p>
+                <p>Consulta, planifica o trabaja en tus proyectos.</p>
               </div>
             ) : null}
             <CollapsibleMessages total={messages.length} previewCount={10} expanded={messagesExpanded} onToggle={() => setMessagesExpanded((value) => !value)}>

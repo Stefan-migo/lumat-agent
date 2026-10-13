@@ -216,9 +216,12 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos.")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveAttribute("placeholder", "Escribe un mensaje al asistente…");
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
     await waitFor(() => expect(document.querySelector(".assistant-chat__tools-summary > span")).toHaveTextContent("1"));
@@ -355,7 +358,7 @@ describe("AgentChat", () => {
     render(<AgentChat role={undefined} />);
 
     expect(
-      await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ }),
+      await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" }),
     ).toBeInTheDocument();
     expect(screen.getByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
@@ -550,7 +553,7 @@ describe("AgentChat", () => {
   it("removes the redundant inline context panel", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
     render(<AgentChat />);
-    await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ });
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
     expect(screen.queryByRole("button", { name: "Contexto" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Contexto" })).not.toBeInTheDocument();
   });

@@ -44,7 +44,7 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Agentes 0", level: 3 })).toBeInTheDocument();
     const thread = screen.getByRole("region", { name: "Área del hilo" });
     expect(within(thread).queryByRole("heading", { name: "Asistente Lumat" })).not.toBeInTheDocument();
-    expect(await within(thread).findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
+    expect(await within(thread).findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
     expect(within(thread).queryByRole("navigation", { name: "Hilos abiertos" })).not.toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
@@ -206,7 +206,7 @@ describe("AssistantWorkspace", () => {
     await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
     expect(window.location.search).toBe("");
     expect(screen.queryByRole("heading", { name: "Archivos y conocimiento" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
   });
 
   it("shows a retryable error instead of fabricated project rows", async () => {
