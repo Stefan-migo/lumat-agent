@@ -121,6 +121,21 @@ regression test (this class of bug *is* testable without a browser, unlike the
 CSS defects). Verified in a browser: `General` → `Proyecto Test` → `General` all
 update correctly; **31 tests** in `AssistantWorkspace.test.tsx`.
 
+## Native review — whole slice (2026-10-13)
+
+Before delivery, the accumulated slice (9 files, 948 lines, base
+`668bcba1` after merging `main`) was assessed: `review_due: true`
+(`slice_budget_reached`, risk `medium`). The owner granted the review; one lens
+(`review-reliability`) ran and the result was **approved**; acknowledgement
+**burned** (`authority: burned`).
+
+- **Non-blocking finding R3-001** `web/src/components/pages/AssistantWorkspace.tsx:409`
+  — the **mobile project sheet** (`Proyecto`) still only sets `expandedProjectSlug`,
+  so its selection can diverge from the thread's actual project. The lean picker
+  (`Elegir proyecto`) *does* call `onSelectProject` and is covered by a test; the
+  sheet is the remaining divergence. Recorded as a follow-up; it does not reopen
+  this candidate.
+
 ## Visual reference — target (4 surfaces)
 
 Shared, across all four: the shell mobile bar (hamburger · project selector
