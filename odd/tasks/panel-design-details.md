@@ -46,8 +46,9 @@ Refresh hecho al inicio de sesión (9429 nodos). Nodos consultados: `Dashboard.t
   `realtime.ts:80`), nunca reciben `connected` → banner permanente falso. Arreglo mínimo: trackear el
   status actual y emitirlo al suscribir (corrige también el indicador de `AgentChat.tsx`).
   **Decisión pendiente del owner**: ¿arreglar y dejar el banner, o arreglar y sacarlo?
-- [x] **F3 — Clientes → card "Casos del cliente": renombrar a "Caso activo".** `ClientFicha.tsx:684`.
-  Frontend-only.
+- [x] **F3 — Clientes → card del caso activo: quitar el título externo redundante.** `ClientFicha.tsx`.
+  Iteración con el owner: primero se renombró a "Caso activo" y luego se eliminó el título externo
+  (redundante con el eyebrow "CASO ACTIVO #N"); queda solo el sub-card. Frontend-only.
 - [x] **F4 — Clientes → "Casos anteriores": paginación máx 5/página.** Reusar
   `web/src/components/primitives/Pagination.tsx` en tabla desktop y cards mobile; clamp de página al
   cambiar cliente/conteo. Frontend-only. (Archivar casos → diferido.)
@@ -76,6 +77,10 @@ El banner es un **bug de estado desactualizado**, no una caída real. Opciones:
 - [x] F3 — `5c528417`
 - [x] F4 — `d9b414de`
 - [x] F5 — `1d24885d` + `4965c623` (guard: un resumen que no arranca con un marcador conocido cae al texto completo, nunca se recorta)
+
+- Iteración visual (owner): `b678629b` fila de "Agenda de hoy" (nombre + hora en la línea de título,
+  motivo abajo); `b945d66d` quitar el título redundante del card de caso activo; `03305c73` devolver
+  el fondo `--surface` al card de caso activo.
 
 Verificación: `npm run build` ✅. Suites Dashboard / realtime / ClientFicha / ConversationsList
 / ConversationThread / AppointmentDetail / AgentChat ✅ (214 tests). `AgentChat` flakea por timeout
