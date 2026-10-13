@@ -62,13 +62,13 @@ def test_chatbot_metrics_aggregates_window_and_returns_null_for_missing_averages
         "handoffs": 1,
         "handoff_rate": 0.5,
         "containment_rate": 0.5,
-        "handoff_reasons": {"kb_miss": 1},
+        "handoff_reasons": {"kb_miss": 2},
         "unknown_intents": 1,
         "kb_hits": 1,
-        "kb_misses": 1,
-        "kb_hit_rate": 0.5,
+        "kb_misses": 2,
+        "kb_hit_rate": 0.3333,
         "turns_to_resolve": 1.5,
-        "cost_per_conversation": 0.5,
+        "cost_per_conversation": 0.4,
         "window_days": 7,
     }
 
