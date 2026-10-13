@@ -70,10 +70,38 @@ in the **allowed vocabulary** (pending below) so the bot can always fill it — 
   **unchanged**; a KB miss still escalates with `cannot_answer` (D9). Keeps D7 coexistence and
   minimizes blast radius.
 
-### Remaining T0 detail (short code map before T1)
+### Slot vocabulary (resolved, validated on save)
 
-- Exact **slot vocabulary + Spanish->state mapping** (`{{nombre}}` -> `captured["name"]`, etc.)
-  and the precise hook line in `respond.py`.
+Owner-facing Spanish slots, all render-safe (the system always supplies them, `""` when
+unknown):
+
+| Slot | Source |
+|---|---|
+| `{{nombre}}` | `captured["name"]` |
+| `{{comuna}}` | `captured["comuna"]` |
+| `{{direccion}}` | `captured["address"]` |
+| `{{equipo}}` | `captured["equipment"]` |
+| `{{problema}}` | `captured["failure"]` |
+| `{{disponibilidad}}` | `captured["availability"]` |
+| `{{visita}}` | `booking["label"]` (`""` when no booking) |
+
+- A `captured` value of `"unknown"` renders as `""`.
+- Save validation rejects any `{{slot}}` outside this vocabulary (prevents a runtime
+  `KeyError` from strict `prompts.render`).
+- At send time only the slots present in the template text are passed (strict render).
+- `booking` has **no** separate fecha/hora keys — it is `{service, label, status}` and
+  `label` is already formatted (`state.py:248-256`); hence `{{visita}}`.
+
+### Hook point (resolved)
+
+- `classify_intent` (`app/chat/nodes/classify_intent.py:156`) returns **`template_id`** (the
+  picked id, or `None`) from its existing LLM call.
+- `respond` (`app/chat/nodes/respond.py:120`) checks `state.template_id` **before** the KB
+  `retrieve` (`:136`): if set, render the template and return it as the reply, pre-empting the
+  KB path. Otherwise the existing clarification / KB / `cannot_answer` flow is untouched
+  (D7 coexistence, D9 fallback).
+- `ConversationState` gains `template_id: str | None = None` (`app/chat/state.py`, near `:184`).
+- `respond` is the only emit point for a bot answer (greeting is emitted by `receive`).
 
 ## Integration map (verified against code)
 
@@ -162,15 +190,17 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Graph nodes consulted
 
-`classify_intent()` → `_llm_classify()` → `render()` (2 hops, extracted); `Settings()` /
-`Settings.tsx`; `settings` accessors; `app/services/templates.py` (checked — unrelated to this
-catalog). Ref: `graphify-out/GRAPH_REPORT.md`.
+`classify_intent()` → `_llm_classify()` → `render()` (2 hops, extracted); `respond()`
+(`respond.py:120`, community `chat/graph.py`); `_answer_from_kb()` (`:67`); `ConversationState`
+(`state.py:137`, community `chat/graph.py`); `booking()` (`nodes/booking.py:91`); `build_graph()`
+(`graph.py:250`); `Settings()` / `Settings.tsx`; `settings` accessors; `app/services/templates.py`
+(checked — unrelated to this catalog). Ref: `graphify-out/GRAPH_REPORT.md`.
 
 ## Progress
 
-- [ ] T0 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+- [x] T0 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
 
 ## Next step
 
-Run T0 (design + code map) in this worktree, resolve D3–D6, then start T1.
+T0 done (design + code map; D3–D6 resolved, slot vocabulary and hook point fixed). Start T1.
 The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) — do not mix it in.
