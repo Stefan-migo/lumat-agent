@@ -59,9 +59,9 @@ MESSAGE_DEFAULTS: dict[str, str] = {
         "revisará tu consulta y te contactará."
     ),
     "clarification": (
-        "No entendí tu mensaje. ¿Puedes elegir una opción del menú? "
-        "(Calefont, Caldera, Calefacción, Solicitar visita, Valores, "
-        "Postventa/Garantía, Emergencia, Hablar con una persona)"
+        "Disculpá, no te entendí bien. ¿Me contás un poco más qué necesitás? "
+        "Puedo ayudarte con una consulta, coordinar una visita técnica o "
+        "revisar un trabajo ya hecho."
     ),
     "farewell": "¡Gracias por escribirnos! Que tengas buen día.",
     "out_of_hours": (

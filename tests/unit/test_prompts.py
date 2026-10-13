@@ -482,5 +482,5 @@ def test_canned_replies_still_reexported():
     from app.chat.nodes.handoff import HANDOFF_REPLY
 
     assert _rn.CANNOT_ANSWER_REPLY.startswith("Lo siento, no puedo responder")
-    assert _rn.CLARIFICATION_REPLY.startswith("No entendí tu mensaje")
+    assert _rn.CLARIFICATION_REPLY.startswith("Disculpá, no te entendí bien")
     assert HANDOFF_REPLY  # import resolves; value non-empty

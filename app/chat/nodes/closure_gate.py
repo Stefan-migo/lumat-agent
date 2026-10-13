@@ -26,6 +26,7 @@ CLOSING_TOKENS = frozenset({
     "gracias", "muchas", "mucho", "ok", "bueno", "dale", "listo", "perfecto",
     "genial", "excelente", "ya", "nada", "bien",
 })
+_CLOSING_PHRASES = ("eso fue todo",)
 _WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
 
 
@@ -48,6 +49,8 @@ def is_farewell(text: str) -> bool:
     folded = _fold(text).strip()
     if not folded or len(folded) > 40 or "?" in folded:
         return False
+    for phrase in _CLOSING_PHRASES:
+        folded = re.sub(rf"\b{re.escape(phrase)}\b", " ", folded)
     tokens = _WORD_PATTERN.findall(folded)
     return bool(tokens) and all(token in CLOSING_TOKENS for token in tokens)
 
