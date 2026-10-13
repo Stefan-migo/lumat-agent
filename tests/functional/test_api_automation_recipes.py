@@ -19,6 +19,7 @@ def test_admin_can_list_recipe_catalog(client, make_user):
         "appointment_review_request", "customer_maintenance",
         "admin_daily_summary", "admin_weekly_summary",
     ]
+    assert all(item["description"].strip() for item in payload)
     assert set(payload[0]) == {
         "recipe_id", "name", "description", "category", "trigger_kind", "event_type",
         "channel_allowed", "recipient_target", "content", "cooldown_seconds", "parameters",
