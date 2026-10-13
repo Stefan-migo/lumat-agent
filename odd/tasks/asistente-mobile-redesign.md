@@ -136,7 +136,11 @@ desktop compact rail does **not** exist on mobile.
 - **M3** `feat(assistant): mobile project sheet`
   — `Proyecto` bottom sheet reusing the project tree, search, per-project rows
   (Contexto y archivos / Historial de hilos / Sesiones de planificación) and
-  `+ Crear proyecto`.
+  `+ Crear proyecto`. Reference reading: **tapping a project selects it AND
+  reveals that project's section** (the reference shows the check on the selected
+  row plus its rows below). Also re-point the `Navegación` sheet's
+  **`Proyectos (N) ›`** row (shipped in M2) so it opens **this** sheet — the
+  reference flow is 02 → 03, not the standalone `projects` route.
 - **M4** `feat(assistant): mobile thread detail sheet`
   — `Detalle del hilo` bottom sheet reusing the context panel sections and the
   `Cambiar` project action.
@@ -211,5 +215,31 @@ desktop compact rail does **not** exist on mobile.
 - Checks: `npx tsc -b --force --noEmit` pass · `npx vitest run
   src/components/pages/AssistantWorkspace.test.tsx` **27 passed** · `npm run
   build` pass.
+- Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
+- **Not verified**: no browser visual pass yet.
+
+### M2 — mobile navigation sheet
+
+- Commit `a5e8430a` `feat(assistant): mobile navigation sheet` (amended once for
+  the wiring defects below; first version was `faa6889b`).
+- New `Navegación` bottom sheet built on `Dialog variant="sheet"`: primary
+  full-width `Nueva conversación`, `Historial de conversaciones ›`, and a
+  `Espacio de trabajo` section with `Proyectos (N) ›` (real count).
+- Trigger (D2): `AppShell` holds `assistantMenuOpenerRef` and passes
+  `registerAssistantMenuOpener` through `AgentChat` into `AssistantWorkspace`,
+  which registers its opener in an effect; `PanelShell` gained the optional
+  `onMobileMenuClick` prop. On a phone in the assistant the hamburger opens the
+  sheet; elsewhere it opens the app drawer unchanged.
+- `PanelShell` gained `useIsPhone()` (`matchMedia("(min-width: 40rem)")` with a
+  `resize` fallback + cleanup), used once.
+- **Correction applied (orchestrator readback)**: the first version wired the
+  shell to the workspace with a `window`-global event
+  (`window.dispatchEvent(new Event("assistant-navigation-open"))`) and called
+  `window.matchMedia` inline three times in `PanelShell`'s render — the exact
+  non-reactive pattern M1 removed. Both replaced (verified: no
+  `assistant-navigation-open` remains).
+- Tests: `AssistantWorkspace.test.tsx` + `PanelShell.test.tsx` → **63 passed**.
+- Checks: `npx tsc -b --force --noEmit` pass · focused vitest 63 passed ·
+  `npm run build` pass.
 - Native review assessment: risk `medium`, `review_due: false` (`under_budget`).
 - **Not verified**: no browser visual pass yet.
