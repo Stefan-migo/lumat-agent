@@ -27,7 +27,7 @@ import {
   uploadAssistantAttachment,
   threadAttachmentContentUrl,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Sparkles, Square, Workflow, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -74,26 +74,6 @@ export function commandCenterTier(width: number): CommandCenterTier {
   if (width < COMMAND_CENTER_BREAKPOINTS.compactMax) return "compact";
   if (width < COMMAND_CENTER_BREAKPOINTS.desktopMin) return "tablet";
   return "desktop";
-}
-
-function usePhoneViewport() {
-  const [phone, setPhone] = useState(() =>
-    !(window.matchMedia?.("(min-width: 40rem)").matches ?? window.innerWidth >= 640),
-  );
-
-  useEffect(() => {
-    const query = window.matchMedia?.("(min-width: 40rem)");
-    const update = () => setPhone(!(query?.matches ?? window.innerWidth >= 640));
-    query?.addEventListener("change", update);
-    window.addEventListener("resize", update);
-    update();
-    return () => {
-      query?.removeEventListener("change", update);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  return phone;
 }
 
 const stateLabels: Record<string, string> = {
@@ -286,7 +266,6 @@ export interface AgentChatProps {
 }
 
 export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentChatProps) {
-  const isPhone = usePhoneViewport();
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -871,6 +850,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       role={role}
       loadThreadTabs={Boolean(onThreadOpened)}
       activeProjectSlug={thread?.proyecto ?? undefined}
+      onSelectProject={(slug) => void (thread ? changeProject(slug) : createProjectChat(slug))}
       attachments={attachments}
       artifacts={artifacts}
     >
@@ -925,17 +905,15 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
           <div className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
               <div className="assistant-chat__hero assistant-chat__hero--welcome">
-                {isPhone ? <Sparkles className="assistant-chat__hero-icon" aria-hidden="true" /> : null}
-                <h2>{isPhone ? "¿En qué trabajamos hoy?" : `${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
-                <p>{isPhone ? "Consulta, planifica o trabaja en tus proyectos." : "¿En qué trabajamos hoy?"}</p>
+                <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
+                <p>¿En qué trabajamos hoy?</p>
                 <Button onClick={() => void newChat()} disabled={loading}>Iniciar conversación</Button>
               </div>
             ) : null}
             {thread && messages.length === 0 && !loading ? (
               <div className="assistant-chat__hero">
-                {isPhone ? <Sparkles className="assistant-chat__hero-icon" aria-hidden="true" /> : null}
                 <h2>¿En qué trabajamos hoy?</h2>
-                <p>{isPhone ? "Consulta, planifica o trabaja en tus proyectos." : "Consulta, planifica o trabaja en tus proyectos con el asistente Lumat."}</p>
+                <p>Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.</p>
               </div>
             ) : null}
             <CollapsibleMessages total={messages.length} previewCount={10} expanded={messagesExpanded} onToggle={() => setMessagesExpanded((value) => !value)}>

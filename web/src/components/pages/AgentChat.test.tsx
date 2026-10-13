@@ -92,15 +92,16 @@ describe("AgentChat", () => {
     expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
   });
 
-  it("shows the phone welcome copy in one DOM variant", async () => {
+  it("shows the desktop welcome copy on a phone without an icon", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
     render(<AgentChat userName="Ana" />);
 
-    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos.")).toBeInTheDocument();
-    expect(screen.queryByText(/Buenos días|Buenas tardes|Buenas noches/)).not.toBeInTheDocument();
-    expect(document.querySelector(".assistant-chat__hero-icon")).toHaveAttribute("aria-hidden", "true");
+    const hour = new Date().getHours();
+    const greeting = `${hour < 12 ? "Buenos días" : hour < 20 ? "Buenas tardes" : "Buenas noches"}, Ana`;
+    expect(await screen.findByRole("heading", { name: greeting })).toBeInTheDocument();
+    expect(screen.getByText("¿En qué trabajamos hoy?")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
     expect(screen.getByRole("button", { name: "Iniciar conversación" })).toBeInTheDocument();
   });
 
@@ -114,15 +115,14 @@ describe("AgentChat", () => {
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
   });
 
-  it("shows the reference copy for an empty phone thread", async () => {
+  it("shows the desktop copy for an empty phone thread without an icon", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
     render(<AgentChat threadId={4} />);
 
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos.")).toBeInTheDocument();
-    expect(screen.queryByText(/con el asistente Lumat/)).not.toBeInTheDocument();
-    expect(document.querySelector(".assistant-chat__hero-icon")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
   });
 
   it("fetches and renders the thread tool policy", async () => {
@@ -266,8 +266,8 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     expect(await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos.")).toBeInTheDocument();
-    expect(document.querySelector(".assistant-chat__hero-icon")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
@@ -603,7 +603,7 @@ describe("AgentChat", () => {
   it("removes the redundant inline context panel", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
     render(<AgentChat />);
-    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+    await screen.findByRole("heading", { name: /Buenos días|Buenas tardes|Buenas noches/ });
     expect(screen.queryByRole("button", { name: "Contexto" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Contexto" })).not.toBeInTheDocument();
   });
