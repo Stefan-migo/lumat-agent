@@ -198,7 +198,7 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Progress
 
-- [x] T0 · [x] T1 · [x] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
+- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7
 
 ### Evidence
 
@@ -216,8 +216,17 @@ Task shape may be refined after T0 — keep IDs stable.
   `/settings/{section}` catch-all. Tests cover 401/403, the strict GET key set, and the
   validate/persist/reject round trip. Parent spot check: **64 passed**. RED was assertion-level
   (GET payload lacked `templates`).
+- T3 — `c0d2a8af` `chore(web): add templates to Settings type and fixtures` + `8d6ed414`
+  `feat(panel): add preset answers card to Settings`. Adds `templates` to the `Settings` type and
+  every literal (incl. the `SETTINGS_KEYS` guard in `mockData/settings.test.ts`), plus the
+  "Respuestas prediseñadas" card (own card below "Mensajes del asistente") with add/edit/remove rows
+  and save via `POST /settings/message-templates`; server 400s surface through the existing
+  `saveErrorDetail`. Parent checks: `npm test` **1178 passed**, `npm run build` (tsc -b) green.
+  Notes: one **flaky** `AgentChat.test.tsx` case seen by the writer under full-suite load (passes in
+  isolation and in the parent run) — unrelated to this change; cosmetic 1-space indent drift on the
+  adjacent card; template rows use index-based React keys.
 
 ## Next step
 
-T2 done. Start T3 (Settings UI card "Respuestas prediseñadas") — install `node_modules` first.
+T3 done (UI card shipped). Start T4 (`classify.md` + `_llm_classify` carry the picked template id).
 The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) — do not mix it in.
