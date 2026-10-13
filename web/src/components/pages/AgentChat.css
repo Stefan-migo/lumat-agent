@@ -104,7 +104,9 @@
 @media (max-width: 40rem) {
   .assistant-chat .ai-agent-grammar__bubble { max-width: 90%; }
   .assistant-chat__surface--empty .assistant-chat__conversation { gap: var(--space-5); padding-inline: var(--space-3); }
-  .assistant-chat__surface--empty .assistant-chat__messages { width: 100%; }
+  .assistant-chat__surface--empty .assistant-chat__messages { width: 100%; padding-block: 0; }
+  .assistant-chat__surface--empty .assistant-chat__composer-stack { padding-bottom: 0; }
+  .assistant-chat__surface--empty .assistant-chat__hero { min-height: 0; padding: 0; }
   .assistant-chat__hero { display: grid; justify-items: center; gap: var(--space-2); text-align: center; }
   .assistant-chat__hero-icon { width: var(--space-8); height: var(--space-8); color: var(--corp-primary); }
   .assistant-chat__hero h2, .assistant-chat__hero p { margin: 0; }
