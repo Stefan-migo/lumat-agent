@@ -1,12 +1,12 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, createUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
+import { ApiError, createUser, deleteUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
 import { UserManagement } from "./UserManagement";
 
 vi.mock("../../api", async (importActual) => ({
   ...(await importActual<typeof import("../../api")>()),
-  createUser: vi.fn(), fetchUsers: vi.fn(), resetUserPassword: vi.fn(), toggleUserActive: vi.fn(),
+  createUser: vi.fn(), deleteUser: vi.fn(), fetchUsers: vi.fn(), resetUserPassword: vi.fn(), toggleUserActive: vi.fn(),
 }));
 
 const admin = { id: 1, username: "ana", role: "admin" as const };
@@ -20,6 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchUsers).mockResolvedValue({ users });
   vi.mocked(createUser).mockResolvedValue({ user: { id: 4, username: "new", role: "operador", active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 } });
+  vi.mocked(deleteUser).mockResolvedValue({ ok: true });
   vi.mocked(toggleUserActive).mockResolvedValue({ user: { ...users[1], active: true } });
   vi.mocked(resetUserPassword).mockResolvedValue({ user: users[1] });
 });
@@ -36,6 +37,36 @@ describe("UserManagement", () => {
     expect(within(table).getByText("Inactivo")).toBeInTheDocument();
     expect(screen.queryByText("tecnico")).not.toBeInTheDocument();
     expect(screen.queryByText(/password|failed_logins|locked_until/i)).not.toBeInTheDocument();
+  });
+
+  it("requires confirmation before deleting a user and refreshes the list", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchUsers).mockResolvedValueOnce({ users }).mockResolvedValueOnce({ users: users.filter((entry) => entry.id !== 2) });
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByRole("table");
+    const row = screen.getByRole("row", { name: /op Operador/i });
+    await user.click(within(row).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Eliminar usuario" }));
+    expect(screen.getByRole("dialog", { name: "Eliminar usuario" })).toHaveTextContent("Elimina a op de forma permanente. No se puede deshacer.");
+    expect(deleteUser).not.toHaveBeenCalled();
+    await user.click(within(screen.getByRole("dialog", { name: "Eliminar usuario" })).getByRole("button", { name: "Eliminar usuario" }));
+    await waitFor(() => expect(deleteUser).toHaveBeenCalledWith(2));
+    await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("row", { name: /op Operador/i })).not.toBeInTheDocument();
+  });
+
+  it("surfaces a delete conflict without dismissing the confirmation", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteUser).mockRejectedValue(new ApiError(409, "user is referenced by other records; deactivate instead"));
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByRole("table");
+    const row = screen.getByRole("row", { name: /op Operador/i });
+    await user.click(within(row).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Eliminar usuario" }));
+    const dialog = screen.getByRole("dialog", { name: "Eliminar usuario" });
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar usuario" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("user is referenced by other records; deactivate instead");
+    expect(screen.getByRole("dialog", { name: "Eliminar usuario" })).toBeInTheDocument();
   });
 
   it("opens a user's ficha from the list", async () => {

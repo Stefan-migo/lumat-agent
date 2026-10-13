@@ -279,6 +279,7 @@ export const getTechnicianSchedule = (technicianId: number) => apiFetch<Technici
 export const saveTechnicianSchedule = (technicianId: number, schedule: TechnicianScheduleEntry[]) => putJson<TechnicianScheduleResponse>(`/panel/api/technicians/${technicianId}/schedule`, { schedule });
 export const createUser = (body: { username: string; password: string; role: AdminUser['role'] }) => postJson<{ user: AdminUser }>('/panel/api/users', body);
 export const toggleUserActive = (id: number) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/toggle-active`);
+export const deleteUser = (id: number) => apiFetch<{ ok: true }>(`/panel/api/users/${id}`, { method: 'DELETE' });
 export const resetUserPassword = (id: number, password: string) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/reset-password`, { password });
 export const fetchMe = () => apiFetch<SelfProfile>('/panel/api/me');
 export const updateMe = (body: SelfProfileUpdate) => patchJson<SelfProfileUpdateResponse>('/panel/api/me', body);

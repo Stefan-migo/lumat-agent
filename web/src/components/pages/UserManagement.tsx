@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, Shield, ShieldCheck, SlidersHorizontal, UserPlus, UserRound, UserRoundMinus, Wrench, X } from "lucide-react";
-import { ApiError, createUser, fetchUsers, toggleUserActive } from "../../api";
+import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, Shield, ShieldCheck, SlidersHorizontal, Trash2, UserPlus, UserRound, UserRoundMinus, Wrench, X } from "lucide-react";
+import { ApiError, createUser, deleteUser, fetchUsers, toggleUserActive } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
 import { roleLabels } from "../../roleLabels";
@@ -41,6 +41,8 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   const [busyId, setBusyId] = useState<number | null>(null);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [actionTarget, setActionTarget] = useState<AdminUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
@@ -77,6 +79,22 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
     finally { setBusyId(null); }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setBusyId(deleteTarget.id);
+    setDeleteError(null);
+    try {
+      await deleteUser(deleteTarget.id);
+      setDeleteTarget(null);
+      setMutationState({ tone: "success", title: "Usuario eliminado" });
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      setDeleteError(errorMessage(error, "No pudimos eliminar el usuario"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const closeReset = () => {
     setResetTarget(null);
     setMutationState(null);
@@ -109,7 +127,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
             <SearchInput aria-label="Buscar usuarios" placeholder="Buscar por nombre de usuario…" onSearch={(value) => { setQuery(value); setPage(1); }} />
             <div className="table-toolbar__select"><Icon icon={SlidersHorizontal} /><Select label="Filtrar por rol" value={roleFilter} options={[{ value: "all", label: "Todos los roles" }, { value: "admin", label: roleLabels.admin }, { value: "operador", label: roleLabels.operador }, { value: "tecnico", label: roleLabels.tecnico }]} onChange={(event) => { setRoleFilter(event.target.value as Role | "all"); setPage(1); }} /></div>
           </section>
-          <div className="table-card__desktop"><DataTable columns={columns} rows={pageUsers} rowKey={(user) => String(user.id)} actions={(user) => user.username === currentUser.username ? <span className="table__actions-unavailable"><Icon icon={LockKeyhole} size="sm" /> Acciones no disponibles</span> : <Menu label={`Acciones para ${user.name ?? user.username}`} trigger="icon" items={[{ value: "toggle", label: user.active ? "Desactivar usuario" : "Activar usuario", icon: UserRoundMinus, disabled: busyId === user.id }, { value: "reset", label: "Restablecer contraseña", icon: KeyRound, disabled: busyId === user.id }]} onSelect={(value) => { if (value === "toggle") void toggle(user); else { setResetTarget(user); setMutationState(null); } }} />} /></div>
+           <div className="table-card__desktop"><DataTable columns={columns} rows={pageUsers} rowKey={(user) => String(user.id)} actions={(user) => user.username === currentUser.username ? <span className="table__actions-unavailable"><Icon icon={LockKeyhole} size="sm" /> Acciones no disponibles</span> : <Menu label={`Acciones para ${user.name ?? user.username}`} trigger="icon" items={[{ value: "toggle", label: user.active ? "Desactivar usuario" : "Activar usuario", icon: UserRoundMinus, disabled: busyId === user.id }, { value: "reset", label: "Restablecer contraseña", icon: KeyRound, disabled: busyId === user.id }, { value: "delete", label: "Eliminar usuario", icon: Trash2, tone: "danger", disabled: busyId === user.id }]} onSelect={(value) => { if (value === "toggle") void toggle(user); else if (value === "reset") { setResetTarget(user); setMutationState(null); } else { setDeleteTarget(user); setDeleteError(null); } }} />} /></div>
           <ul className="table-cards table-cards--mobile" aria-label="Lista de usuarios">
             {pageUsers.map((user) => <li className="table-card__item" key={user.id}>
               <Avatar name={user.name ?? user.username} />
@@ -132,9 +150,14 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
         <span className="user-mobile-actions__handle" aria-hidden="true" />
         <div className="user-mobile-actions__header"><Avatar name={actionTarget.name ?? actionTarget.username} /><div className="user-mobile-actions__identity"><strong>{actionTarget.name ?? actionTarget.username}</strong><span>{roleLabels[actionTarget.role]} · <span className={actionTarget.active ? "user-mobile-actions__dot" : "user-mobile-actions__dot user-mobile-actions__dot--off"} aria-hidden="true" /> {actionTarget.active ? "Activo" : "Inactivo"}</span></div><button type="button" className="user-mobile-actions__close" aria-label="Cerrar" onClick={() => setActionTarget(null)}><Icon icon={X} /></button></div>
         <button type="button" className="user-mobile-actions__item" onClick={() => { setResetTarget(actionTarget); setMutationState(null); setActionTarget(null); }}><Icon icon={KeyRound} /><span>Restablecer contraseña<small>Actualizar el acceso a la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
-        <button type="button" className="user-mobile-actions__item user-mobile-actions__item--danger" disabled={busyId === actionTarget.id} onClick={() => { void toggle(actionTarget); setActionTarget(null); }}><Icon icon={UserRoundMinus} /><span>{actionTarget.active ? "Desactivar usuario" : "Activar usuario"}<small>Impedir el acceso sin eliminar la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
+         <button type="button" className="user-mobile-actions__item user-mobile-actions__item--danger" disabled={busyId === actionTarget.id} onClick={() => { void toggle(actionTarget); setActionTarget(null); }}><Icon icon={UserRoundMinus} /><span>{actionTarget.active ? "Desactivar usuario" : "Activar usuario"}<small>Impedir el acceso sin eliminar la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
+         <button type="button" className="user-mobile-actions__item user-mobile-actions__item--danger" disabled={busyId === actionTarget.id} onClick={() => { setDeleteTarget(actionTarget); setDeleteError(null); setActionTarget(null); }}><Icon icon={Trash2} /><span>Eliminar usuario<small>Eliminar permanentemente la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
         <Button variant="secondary" onClick={() => setActionTarget(null)}>Cancelar</Button>
       </div> : null}
+    </Dialog>
+    <Dialog open={deleteTarget !== null} onClose={() => { if (busyId === null) { setDeleteTarget(null); setDeleteError(null); } }} title="Eliminar usuario" icon={Trash2} description={deleteTarget ? `Elimina a ${deleteTarget.name ?? deleteTarget.username} de forma permanente. No se puede deshacer.` : undefined}>
+      {deleteError ? <StateMessage tone="danger" role="alert" title={deleteError} /> : null}
+      <footer className="dialog-footer"><Button variant="secondary" disabled={busyId !== null} onClick={() => { setDeleteTarget(null); setDeleteError(null); }}>Cancelar</Button><Button variant="danger" disabled={busyId !== null} onClick={() => void confirmDelete()}><Icon icon={Trash2} />Eliminar usuario</Button></footer>
     </Dialog>
     <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setMutationState(null); }} title="Nuevo usuario" icon={UserPlus} description="Crea una cuenta y asigna su rol de acceso.">
       <form className="user-dialog-form" onSubmit={submit}>
