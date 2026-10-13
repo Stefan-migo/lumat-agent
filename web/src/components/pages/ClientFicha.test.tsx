@@ -185,7 +185,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     const archivedCases = [...ficha.history.cases, ...Array.from({ length: 7 }, (_, index) => ({ ...ficha.history.cases[1], id: index + 10, service: `Caso ${index + 1}` }))];
     const manyCases = { ...ficha, history: { ...ficha.history, cases: archivedCases } };
-    const { container, rerender } = render(<ClientFicha data={manyCases} memories={memories} />);
+    const { rerender } = render(<ClientFicha data={manyCases} memories={memories} />);
     await user.click(screen.getByRole("tab", { name: "Casos" }));
 
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
@@ -228,6 +228,24 @@ describe("ClientFicha page grammar", () => {
     await user.click(screen.getByRole('tab', { name: 'Conversaciones' }));
     expect(screen.getByRole('option', { name: '#3 · Atención humana · Coordinar visita' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /\*\*/ })).not.toBeInTheDocument();
+  });
+
+  it("segments known fields in an active case summary", () => {
+    const structured = {
+      ...ficha,
+      history: {
+        ...ficha.history,
+        cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, summary: "Cliente: Marcela. Motivo: Calefón no enciende. Datos capturados: modelo antiguo. Clasificación del caso: urgente. Siguiente paso: coordinar visita." } : row),
+      },
+    };
+    render(<ClientFicha data={structured} memories={memories} />);
+
+    const summary = document.querySelector(".client-ficha__case-summary") as HTMLElement;
+    expect(within(summary).getByText("Cliente", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("Motivo", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("Calefón no enciende")).toBeInTheDocument();
+    expect(within(summary).getByText("Clasificación", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("coordinar visita")).toBeInTheDocument();
   });
 
   it("renders a nullable CLP case amount and saves it through the existing update API", async () => {

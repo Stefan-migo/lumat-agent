@@ -23,6 +23,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { Markdown } from "../shared/Markdown";
+import { ConversationSummary } from "../shared/ConversationSummary";
 import { plainSummary } from "../shared/markdownText";
 import { ChangeCustomerStateDialog } from "../shared/ChangeCustomerStateDialog";
 import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "../shared/AppointmentClosureDialog";
@@ -493,7 +494,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   ];
   const activeCaseBody = activeCase ? <>
     <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(activeCase) : openCaseEditor(activeCase)} /></div>
-    <h2 className="client-ficha__case-title">{activeCase.service}</h2><div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div><div className="client-ficha__case-summary"><Markdown content={activeCase.summary ?? "—"} /></div>
+    <h2 className="client-ficha__case-title">{activeCase.service}</h2><div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div><div className="client-ficha__case-summary"><ConversationSummary summary={activeCase.summary ?? "—"} fallback={<Markdown content={activeCase.summary ?? "—"} />} /></div>
     <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div>
     {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}<LocalFeedback feedback={caseEditTarget || amountTarget ? null : caseFeedback} />
   </> : <EmptyState title="Sin caso activo" />;
