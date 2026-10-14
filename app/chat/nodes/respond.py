@@ -170,6 +170,12 @@ def respond(state: ConversationState) -> dict:
     if not text:
         return {}
 
+    # T5/D13: a preset message the classifier picked answers this turn, ahead of
+    # the clarification and KB paths.
+    template_reply = _render_template_reply(state)
+    if template_reply is not None:
+        return {"replies": [template_reply]}
+
     if state.intent == "unknown":
         # Deterministic path — no LLM spend (design Cost Guardrails).
         if state.turn <= 1:
@@ -179,11 +185,6 @@ def respond(state: ConversationState) -> dict:
         with session_scope() as session:
             clarification = get_message(session, "clarification", CLARIFICATION_REPLY)
         return {"replies": [clarification]}
-
-    # T5/D13: a preset message the classifier picked pre-empts the KB path.
-    template_reply = _render_template_reply(state)
-    if template_reply is not None:
-        return {"replies": [template_reply]}
 
     with session_scope() as session:
         try:

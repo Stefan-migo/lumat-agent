@@ -443,6 +443,16 @@ def test_respond_missing_template_falls_back_to_kb(monkeypatch):
     assert answered == [1]
 
 
+def test_respond_unknown_intent_renders_picked_template(monkeypatch):
+    # A picked preset answers even an unknown-intent turn (before clarification).
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(
+        _rn, "get_message_templates", lambda session: [{"id": "h", "text": "Hola {{nombre}}."}]
+    )
+    state = _respond_state(intent="unknown", template_id="h", captured={"name": "Ana"})
+    assert _rn.respond(state) == {"replies": ["Hola Ana."]}
+
+
 @pytest.fixture
 def classify_client():
     client = _FakeClient(reply_content='{"intent": "caldera", "service": "caldera", "priority": "media", "status": "abierto", "injection": false}')

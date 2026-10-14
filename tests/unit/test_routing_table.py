@@ -110,6 +110,39 @@ def test_consulta_does_not_route_to_capture():
     assert result["next_step"] != "capture"
 
 
+# --- picked preset -> respond (pre-empts the retrieval answer path, T5) ------
+# The classifier picks a preset per turn; if one was picked it must answer the
+# turn directly so a KB miss cannot hand it off. Capture/manage flows are NOT
+# pre-empted.
+
+
+@pytest.mark.parametrize("intent", ["valores", "postventa", "consulta"])
+def test_retrieval_intent_with_picked_template_answers_directly(intent):
+    assert _dispatch(intent, template_id="horarios") == {"next_step": "respond"}
+
+
+def test_retrieval_without_template_still_researches():
+    assert _dispatch("consulta", template_id=None) == {
+        "next_step": "research", "active_sub_agent": "research_triage"
+    }
+
+
+def test_capture_intent_with_template_keeps_capturing():
+    assert _dispatch("calefont", template_id="horarios") == {"next_step": "capture"}
+
+
+def test_manage_intent_with_template_keeps_managing():
+    assert _dispatch("cancelar_visita", template_id="horarios")["next_step"] == "manage"
+
+
+def test_mid_capture_retrieval_with_template_stays_in_capture_flow():
+    assert _dispatch("consulta", mid_capture=True, template_id="x") == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
 # --- unknown (no escalate) -> respond (clarification) ------------------------
 
 
