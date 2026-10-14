@@ -116,10 +116,19 @@ finder de conversaciones problemáticas **+** lector de transcript (dos tools re
 arrancar acá: que el asistente lea conversaciones reales (bounded) para diagnosticar"
 (handoff `odd/handoffs/chatbot-assistant-optimizer.md`).
 
+**L3 (evidence, 2026-10-14):** T1–T5 done in `odd/chatbot-conversation-inspection`.
+RED→GREEN observed for T1 (`ImportError: cannot import name 'chatbot_conversations'`) and T2
+(`ImportError: cannot import name 'conversation_transcript'`). Full suite `uv run pytest tests/`
+exit 0. Added tools changed the pinned planner-catalog SHA-256; verified the only delta is the two
+new tools (reduced whitelist reproduces the old hash `fcad2ba6…`), then updated the baseline.
+
 ## Progress
 
-- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5
+- [x] T1 — `36d0e1c7` feat: `chatbot_conversations` finder (+5 tests)
+- [x] T2 — `17a22c29` feat: `conversation_transcript` (+4 tests)
+- [x] T3+T4 — `0014f8ef` feat: register both tools (+ typed/whitelist tests); `4867f6b0` test: pin roles
+- [x] T5 — `2aa818f4` test: planner catalog baseline hash; full suite green (exit 0)
 
 ## Next step
 
-Implement T1–T5 in the worktree; do not start unit 3 (approval loop).
+Unit 2 complete. Do NOT start unit 3 (N1-2 approval loop) without a fresh owner conversation.
