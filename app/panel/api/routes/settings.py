@@ -236,6 +236,7 @@ def settings_model_api_key(
         session, key, actor=current.username, updated_by=current.id
     )
     session.commit()
+    model_secrets.invalidate_model_key_cache()
     return {"ok": True, "validation": validation, "model_api_key": model_secrets.model_api_key_status(session)}
 
 
@@ -246,6 +247,7 @@ def settings_model_api_key_clear(
 ) -> dict:
     model_secrets.clear_model_api_key(session, actor=current.username)
     session.commit()
+    model_secrets.invalidate_model_key_cache()
     return {"ok": True, "model_api_key": model_secrets.model_api_key_status(session)}
 
 

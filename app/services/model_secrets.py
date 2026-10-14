@@ -1,4 +1,7 @@
-"""Storage and hot resolution for model-provider credentials."""
+"""Storage and hot resolution for model-provider credentials.
+
+Cache invalidation is the caller's responsibility and must happen after commit.
+"""
 
 from time import monotonic
 
@@ -71,7 +74,6 @@ def set_model_api_key(
         entity_id=MODEL_API_KEY,
         after={"source": "panel"},
     )
-    invalidate_model_key_cache()
 
 
 def clear_model_api_key(session: Session, actor: str) -> None:
@@ -84,7 +86,6 @@ def clear_model_api_key(session: Session, actor: str) -> None:
         entity_id=MODEL_API_KEY,
         after={"source": "env" if get_settings().deepseek_api_key else "none"},
     )
-    invalidate_model_key_cache()
 
 
 def resolve_model_api_key() -> str | None:
