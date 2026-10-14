@@ -131,3 +131,11 @@ def test_technician_detail_requires_authenticated_session(client):
     response = client.get("/panel/api/technician/appointments/1")
     assert response.status_code == 401
     assert response.json() == {"detail": "unauthorized"}
+
+
+def test_technician_cannot_reach_the_operator_detail_endpoint(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000051", date(2026, 1, 8), "propia")
+    _login(client)
+
+    assert client.get(f"/panel/api/appointments/{appointment_id}").status_code == 403
