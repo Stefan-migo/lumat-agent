@@ -504,6 +504,17 @@ def to_project_file_dict(row) -> dict:
         "sha256": row.sha256,
         "status": row.status,
         "kb_document_id": row.kb_document_id,
+        "folder_id": row.folder_id,
+        "created_at": _iso(row.created_at),
+    }
+
+
+def to_project_folder_dict(row) -> dict:
+    return {
+        "id": row.id,
+        "project_id": row.project_id,
+        "parent_id": row.parent_id,
+        "name": row.name,
         "created_at": _iso(row.created_at),
     }
 
