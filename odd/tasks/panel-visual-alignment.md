@@ -89,6 +89,12 @@ border** — just the vertical dots.
 S6d — Global design decision: action feedback is a **transient toast** anchored to a screen corner
 (bottom-right) that auto-dismisses; never a permanent inline banner.
 
+S6e — Embedded Contexto tab scroll (owner feedback 2026-10-14, see L20).
+Inside the assistant workspace the project page fills its row and the active tab body scrolls
+vertically **as a whole** (one scrollbar for the tab; the page header and the tab bar stay fixed), so a
+tall Contexto tab is never clipped past the bottom of the workspace. The standalone page keeps
+scrolling with the document.
+
 ## Tasks
 
 | ID | Spec | Route | Status | Evidence |
@@ -107,6 +113,7 @@ S6d — Global design decision: action feedback is a **transient toast** anchore
 | T10 move file endpoint + drag & drop | S6b | inline | done | 196ebd23 |
 | T11 upload dialog + tree/root/toolbar revisions | S6b, S6c | inline | done | c366119d |
 | T12 toast + menu stacking + tree polish | S6b, S6c, S6d | inline | done | 6b9af9b2, 43340a03 |
+| T13 embedded tab scroll | S6e | inline | done | 243447e9 |
 
 ## Log
 
@@ -242,3 +249,21 @@ pattern (icon + title + question + preview card with `FORMAT · vN` + badge + `P
 build` green, full vitest suite green (1201 passed, +2 tests), no horizontal overflow at 1440/1100/900
 px, and the list scroll engages (clientHeight 352 / scrollHeight 1229, `overflow-y: auto`). RDD assess:
 medium, `under_budget`, no review due.
+
+L20 (owner, verbatim): "actual. [Image 1] . Se rompe el layout hacia el bottom. se alargan tanto las cards
+que desaparecen por el bottom. hay que arreglar eso. insisto que necesitamos un slider vertical para hacer
+scroll. puede ser un scroll por card individual o un slider global para toda la tab contexto. me parece
+que tiene mas sentido esta." → Captured as S6e and T13. Root cause: the embedded page lived in
+`.assistant-workspace__thread` (a full-height track) but `.assistant-workspace` has `overflow: hidden`,
+and the frame only had `align-content: start` with no scroll region, so a Contexto tab taller than the
+workspace was clipped with no scrollbar. Fix (243447e9, `ProjectsPage.css` only): the embedded frame is a
+flex column with `min-height: 0`; `.page-frame__content` fills the remaining row; the `.tabs` panel gets
+`flex: 1 1 auto; min-height: 0; overflow-y: auto` — one vertical scrollbar for the whole tab, with the
+page header and tab bar fixed. The standalone page is untouched (it scrolls with the document via
+`.panel-shell__content-area { min-height: 100dvh }`). Verified live in the embedded workspace
+(`/panel/app/chat?context=test`) at 1440x820 and 1280x640: `.tabs__panel` overflows and scrolls
+(clientHeight 498 / scrollHeight 958 and 318 / 1106, `overflow-y: auto`, `scrollTop` responsive), no
+horizontal overflow. Build green; full suite green (1200 passed + the known flaky `AgentChat > markdown
+snapshot stale`, which passes in isolation 68/68). The per-card caps from L13 (`.file-tree` and
+`.project-knowledge__list`, 22rem) are kept, so a very long card still scrolls internally as well as the
+tab; if the owner prefers a single scroll, drop those two `max-height` rules.
