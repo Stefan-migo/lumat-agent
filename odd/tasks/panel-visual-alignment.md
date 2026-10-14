@@ -60,6 +60,7 @@ proyecto`.
 | ID | Spec | Route | Status | Evidence |
 | --- | --- | --- | --- | --- |
 | T1 shared chrome | S1 | inline | done | f194eef9 |
+| T1b workspace header fixes | S1 | inline | done | ef0a9524 |
 | T2 Contexto | S2 | inline | pending | — |
 | T3 Agentes | S3 | inline | pending | — |
 | T4 Skills | S4 | inline | pending | — |
@@ -78,3 +79,11 @@ L4: T1 done (f194eef9). Added an additive `titleIcon` slot to shared `PageFrame`
 (optional, no existing page changed); project detail now renders the folder tile + status badge beside
 the title, purpose as subtitle. `npm run build` green; full vitest suite green (1182 passed; the two
 `ProjectsPage` header assertions were updated to the new structure).
+L5 (owner, verbatim): "vamos primero con el trabajo del 'workspace' - la linea vertical verde al lado
+del titulo se va. - aqui hay que quitar el boton volver al asistente ya que como se abre en un tab no
+es necesario. ya estamos en el asistente. - hay un espacio grande entre el titulo y los tabs hay que
+fixearlo". Also: the reference breadcrumb and the "Abrir asistente" button must NOT be added.
+L6: T1b done (ef0a9524). Embedded project detail (`projects-page--embedded`): removes the shared header
+lime rail, renders no action button, and adds `align-content: start` so the frame grid's auto rows stop
+stretching (the title bar was 132px tall for a 55px header). Title-to-tabs gap now ~16px. Full suite
+green (1184).
