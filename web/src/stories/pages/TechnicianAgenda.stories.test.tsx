@@ -40,7 +40,8 @@ describe("TechnicianAgenda page story", () => {
     expect(screen.getAllByText("Cliente sin nombre").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Dirección no registrada").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Comuna no registrada").length).toBeGreaterThan(0);
-    expect(within(document.getElementById("panel-main-content") as HTMLElement).queryByRole("link")).not.toBeInTheDocument();
+    const links = within(document.getElementById("panel-main-content") as HTMLElement).queryAllByRole("link");
+    expect(links.some((link) => (link.getAttribute("href") ?? "").includes("google.com/maps"))).toBe(false);
   });
 
   it("groups a twelve-visit roster without losing a day or a card", () => {

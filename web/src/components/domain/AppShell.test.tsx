@@ -7,6 +7,7 @@ import { realtimeClient } from '../../realtime';
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
+const tecnico: User = { username: 'raul', role: 'tecnico' };
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/panel/app/');
@@ -207,6 +208,26 @@ describe('AppShell (T6.4)', () => {
     expect(await screen.findByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toHaveAttribute('href', '/panel/app/clients/2');
     expect(fetchMock).toHaveBeenCalledWith('/panel/api/appointments/7', expect.anything());
+    fetchMock.mockRestore();
+  });
+
+  it('renders the technician visit detail from the appointment route without the operator affordances', async () => {
+    window.history.replaceState({}, '', '/panel/app/agenda/7');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/panel/api/technician/appointments/7') return new Response(JSON.stringify({
+        appointment: { id: 7, service: 'Reparación de calefón', customer_id: 2, case_id: 3, technician_id: 4, local_start: '2026-09-26T10:00:00', timezone: 'America/Santiago', starts_at: '2026-09-26T13:00:00Z', ends_at: '2026-09-26T14:00:00Z', duration_minutes: 60, status: 'booked' },
+        customer: { id: 2, name: 'Ana' }, case: { id: 3, conversation_id: null },
+      }), { status: 200 });
+      return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+    });
+
+    render(<AppShell user={tecnico} />);
+    expect(await screen.findByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Ver ficha del cliente/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/panel/api/technician/appointments/7', expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith('/panel/api/appointments/7', expect.anything());
     fetchMock.mockRestore();
   });
 

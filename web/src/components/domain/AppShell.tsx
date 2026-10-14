@@ -135,7 +135,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'chatbot-metrics' ? <ChatbotMetrics onOpenConversation={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
-      : view === 'agenda' ? user.role === 'tecnico' ? <TechnicianAgenda /> : appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} /> : <AgendaPage />
+      : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} role={user.role} /> : user.role === 'tecnico' ? <TechnicianAgenda /> : <AgendaPage />
       : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
