@@ -36,9 +36,9 @@ def test_planning_lifecycle_tools_are_registered_and_authorized(make_user):
         assert is_tool_allowed_for_role(name, "tecnico") is False
 
 
-def test_planning_open_tool_activates_a_session_on_the_thread(make_user):
+def test_planning_open_tool_creates_a_dedicated_thread(make_user):
     make_user("planning-open", "planning-pass", role="admin")
-    owner_id, thread_id = _owned_thread("planning-open")
+    owner_id, origin_id = _owned_thread("planning-open")
 
     with SessionLocal() as session:
         result = execute_tool(
@@ -46,18 +46,92 @@ def test_planning_open_tool_activates_a_session_on_the_thread(make_user):
             "planning.open",
             {"topic": "Presupuesto 2026"},
             role="admin",
-            trusted_thread_id=thread_id,
+            trusted_thread_id=origin_id,
             owner_id=owner_id,
             proyecto="default",
         )
         session.commit()
+        session_id = result["result"]["thread_id"]
 
     assert result["status"] == "completed"
+    assert result["result"]["origin_thread_id"] == origin_id
+    assert session_id != origin_id
     assert result["result"]["session"]["status"] == "active"
     assert result["result"]["session"]["topic"] == "Presupuesto 2026"
     with SessionLocal() as session:
-        thread = session.get(InternalChatThread, thread_id)
-        assert thread.assistant_state["cortex_session"]["status"] == "active"
+        session_thread = session.get(InternalChatThread, session_id)
+        assert session_thread.user_id == owner_id
+        assert session_thread.assistant_state["cortex_session"]["status"] == "active"
+        origin = session.get(InternalChatThread, origin_id)
+        assert (origin.assistant_state or {}).get("cortex_session") is None
+
+
+def test_execution_events_emit_a_planning_event_for_a_completed_open():
+    from app.services.agent_chat import _execution_events
+
+    result = {
+        "tool_results": [
+            {"tool": "memory.read", "status": "completed", "result": {"rows": []}},
+            {"tool": "planning.open", "status": "completed", "result": {"thread_id": 9, "session": {}}},
+        ],
+        "tool_result": {"tool": "planning.open", "status": "completed", "result": {"thread_id": 9, "session": {}}},
+        "evidence": [],
+        "status": "completed",
+        "response": "Tool planning.open completed.",
+    }
+
+    events = _execution_events(result, 4, "run-1", 2)
+    planning = [event for event in events if event["type"] == "planning"]
+
+    assert len(planning) == 1
+    assert planning[0] == {
+        "type": "planning",
+        "thread_id": 4,
+        "run_id": "run-1",
+        "sequence": 6,
+        "planning_thread_id": 9,
+    }
+
+
+def test_execution_events_omit_planning_for_other_incomplete_or_invalid_results():
+    from app.services.agent_chat import _execution_events
+
+    def event_types(entry):
+        return {event["type"] for event in _execution_events(entry, 4, "run-2", 2)}
+
+    assert "planning" not in event_types({
+        "tool_results": [{"tool": "customers.list", "status": "completed", "result": {}}],
+        "tool_result": {"tool": "customers.list", "status": "completed", "result": {}},
+    })
+    assert "planning" not in event_types({
+        "tool_results": [{"tool": "planning.open", "status": "error", "result": {"thread_id": 9}}],
+        "tool_result": {"tool": "planning.open", "status": "error", "result": {"thread_id": 9}},
+    })
+    assert "planning" not in event_types({
+        "tool_results": [{"tool": "planning.open", "status": "completed", "result": {"thread_id": 0}}],
+        "tool_result": {"tool": "planning.open", "status": "completed", "result": {"thread_id": 0}},
+    })
+    assert "planning" not in event_types({
+        "tool_results": [{"tool": "planning.open", "status": "completed", "result": {}}],
+        "tool_result": {"tool": "planning.open", "status": "completed", "result": {}},
+    })
+
+
+def test_execution_events_prefer_the_most_recent_planning_open():
+    from app.services.agent_chat import _execution_events
+
+    result = {
+        "tool_results": [
+            {"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}},
+            {"tool": "planning.open", "status": "completed", "result": {"thread_id": 11}},
+        ],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {}},
+    }
+
+    planning = [event for event in _execution_events(result, 4, "run-3", 2) if event["type"] == "planning"]
+
+    assert len(planning) == 1
+    assert planning[0]["planning_thread_id"] == 11
 
 
 def test_planning_close_tool_closes_and_writes_one_agent_report(make_user):
@@ -65,7 +139,7 @@ def test_planning_close_tool_closes_and_writes_one_agent_report(make_user):
     owner_id, thread_id = _owned_thread("planning-close")
 
     with SessionLocal() as session:
-        execute_tool(
+        opened = execute_tool(
             session,
             "planning.open",
             {"topic": "Cierre de sesión"},
@@ -75,6 +149,7 @@ def test_planning_close_tool_closes_and_writes_one_agent_report(make_user):
             proyecto="default",
         )
         session.commit()
+        session_thread_id = opened["result"]["thread_id"]
 
     with SessionLocal() as session:
         result = execute_tool(
@@ -82,7 +157,7 @@ def test_planning_close_tool_closes_and_writes_one_agent_report(make_user):
             "planning.close",
             {},
             role="admin",
-            trusted_thread_id=thread_id,
+            trusted_thread_id=session_thread_id,
             owner_id=owner_id,
             proyecto="default",
         )
@@ -91,7 +166,7 @@ def test_planning_close_tool_closes_and_writes_one_agent_report(make_user):
     assert result["status"] == "completed"
     assert result["result"]["session"]["status"] == "closed"
     with SessionLocal() as session:
-        thread = session.get(InternalChatThread, thread_id)
+        thread = session.get(InternalChatThread, session_thread_id)
         topic_key = thread.assistant_state["cortex_session"]["report_key"]
         reports = session.scalars(select(Memory).where(Memory.topic_key == topic_key)).all()
         assert len(reports) == 1
@@ -117,7 +192,7 @@ def test_planning_record_decision_appends_a_structured_decision(make_user):
     decision = {"title": "Usar proveedor X", "content": "Porque es más barato"}
 
     with SessionLocal() as session:
-        execute_tool(
+        opened = execute_tool(
             session,
             "planning.open",
             {"topic": "Presupuesto 2026"},
@@ -127,6 +202,7 @@ def test_planning_record_decision_appends_a_structured_decision(make_user):
             proyecto="default",
         )
         session.commit()
+        session_thread_id = opened["result"]["thread_id"]
 
     with SessionLocal() as session:
         result = execute_tool(
@@ -134,7 +210,7 @@ def test_planning_record_decision_appends_a_structured_decision(make_user):
             "planning.record_decision",
             decision,
             role="admin",
-            trusted_thread_id=thread_id,
+            trusted_thread_id=session_thread_id,
             owner_id=owner_id,
             proyecto="default",
         )
@@ -144,7 +220,7 @@ def test_planning_record_decision_appends_a_structured_decision(make_user):
     assert result["result"]["decision"] == decision
     assert result["result"]["decisions"] == [decision]
     with SessionLocal() as session:
-        thread = session.get(InternalChatThread, thread_id)
+        thread = session.get(InternalChatThread, session_thread_id)
         cortex = thread.assistant_state["cortex_session"]
         assert cortex["decisions"] == [decision]
         assert cortex["topic"] == "Presupuesto 2026"
@@ -157,7 +233,7 @@ def test_planning_record_note_appends_a_structured_note(make_user):
     note = {"kind": "risk", "content": "El proveedor puede fallar"}
 
     with SessionLocal() as session:
-        execute_tool(
+        opened = execute_tool(
             session,
             "planning.open",
             {"topic": "Riesgos del proyecto"},
@@ -167,6 +243,7 @@ def test_planning_record_note_appends_a_structured_note(make_user):
             proyecto="default",
         )
         session.commit()
+        session_thread_id = opened["result"]["thread_id"]
 
     with SessionLocal() as session:
         result = execute_tool(
@@ -174,7 +251,7 @@ def test_planning_record_note_appends_a_structured_note(make_user):
             "planning.record_note",
             note,
             role="admin",
-            trusted_thread_id=thread_id,
+            trusted_thread_id=session_thread_id,
             owner_id=owner_id,
             proyecto="default",
         )
@@ -184,7 +261,7 @@ def test_planning_record_note_appends_a_structured_note(make_user):
     assert result["result"]["note"] == note
     assert result["result"]["notes"] == [note]
     with SessionLocal() as session:
-        thread = session.get(InternalChatThread, thread_id)
+        thread = session.get(InternalChatThread, session_thread_id)
         assert thread.assistant_state["cortex_session"]["notes"] == [note]
 
 

@@ -718,12 +718,13 @@ def _planning_thread(session, trusted_thread_id: int | None, owner_id: int | Non
 
 
 def _planning_open(session, args: PlanningOpenArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):
-    thread = _planning_thread(session, trusted_thread_id, owner_id)
+    if type(owner_id) is not int or owner_id <= 0:
+        raise ToolValidationError("planning.open requires the authenticated owner")
     try:
-        state = planning.open_session(session, thread, args.topic)
+        thread, state = planning.open_in_new_thread(session, owner_id=owner_id, proyecto=proyecto, topic=args.topic)
     except planning.PlanningSessionError as exc:
         raise ToolValidationError(str(exc)) from exc
-    return {"session": state, "thread_id": thread.id}
+    return {"session": state, "thread_id": thread.id, "origin_thread_id": trusted_thread_id}
 
 
 def _planning_close(session, args: PlanningCloseArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):

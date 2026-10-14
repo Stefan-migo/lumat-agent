@@ -47,6 +47,24 @@ def open_session(session, thread, topic: str) -> dict:
     return dict(thread.assistant_state["cortex_session"])
 
 
+def open_in_new_thread(session, *, owner_id: int, proyecto: str, topic: str):
+    """Create a dedicated thread and open the planning session on it."""
+    topic = normalized_topic(topic)
+    from app.models import User
+
+    user = session.get(User, owner_id)
+    if user is None:
+        raise PlanningSessionError("owner not found", 404)
+    from app.services.agent_chat import create_thread
+
+    try:
+        thread = create_thread(session, user, proyecto=proyecto or "default")
+    except ValueError as exc:
+        raise PlanningSessionError(str(exc), 400) from exc
+    state = open_session(session, thread, topic)
+    return thread, state
+
+
 def build_report(cortex: dict) -> str:
     """Assemble the final report content for one session."""
     return json.dumps({"topic": cortex.get("topic", "")}, ensure_ascii=False)
