@@ -746,6 +746,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("051_cases_archived_at",),
         ("052_memory_handoff",),
         ("053_panel_secrets",),
+        ("054_project_files_kb_document",),
     ]
 
 
