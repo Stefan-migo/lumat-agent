@@ -758,7 +758,7 @@
 
 /* Mobile: the skills row keeps its tile + copy on the first line and moves the
    badges below, so the name and description are never squeezed into a sliver. */
-@media (max-width: 40rem) {
+@media (max-width: 39.99rem) {
   .project-skills__summary {
     flex-wrap: wrap;
     row-gap: var(--space-2);
