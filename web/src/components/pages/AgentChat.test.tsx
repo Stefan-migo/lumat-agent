@@ -250,6 +250,34 @@ describe("AgentChat", () => {
     expect(screen.queryByText("Cancelado")).not.toBeInTheDocument();
   });
 
+  it("loads the assistant capabilities into the context sidebar", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.includes("/assistant/capabilities")) {
+        return jsonResponse({
+          tools: [{ name: "kb.retrieve", description: "Retrieve KB", read_only: true, write: false }],
+          personas: ["assistant"],
+          prompts: ["plan"],
+          kb_available: true,
+          memory_available: true,
+        });
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ });
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/assistant/capabilities", expect.anything());
+
+    fireEvent.click(await screen.findByRole("button", { name: /Capacidades del asistente/ }));
+
+    expect(await screen.findByText("1 herramientas disponibles")).toBeInTheDocument();
+    expect(screen.getByText("Base de conocimientos: Disponible")).toBeInTheDocument();
+    expect(screen.queryByText("Sin datos")).not.toBeInTheDocument();
+  });
+
   it("does not show stop when no run is active", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({ thread: makeThread(), messages: [] }),

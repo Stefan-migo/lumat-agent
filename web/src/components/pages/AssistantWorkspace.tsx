@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, getAssistantCapabilities, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, PlanningSession, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -87,6 +87,21 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [projectSheetOpen, setProjectSheetOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [threadDetailOpen, setThreadDetailOpen] = useState(false);
+  // The capabilities section lives in the context panel; fetch it only when that
+  // panel is actually visible, and only when no parent controls it via props.
+  const contextPanelVisible = contextVisible || threadDetailOpen;
+  const controlledCapabilities = capabilities !== undefined;
+  const fetchCapabilities = useCallback(async () => {
+    const result = await getAssistantCapabilities();
+    if (!Array.isArray(result.tools) || !Array.isArray(result.personas) || !Array.isArray(result.prompts)) {
+      throw new Error("Invalid assistant capabilities response");
+    }
+    return result;
+  }, []);
+  const fetchedCapabilities = useAsyncData(fetchCapabilities, !controlledCapabilities && contextPanelVisible);
+  const effectiveCapabilities = controlledCapabilities ? capabilities : fetchedCapabilities.data;
+  const effectiveCapabilitiesLoading = controlledCapabilities ? capabilitiesLoading : fetchedCapabilities.state === "loading";
+  const effectiveCapabilitiesError = controlledCapabilities ? capabilitiesError : fetchedCapabilities.state === "error" || fetchedCapabilities.state === "denied";
   const [projectName, setProjectName] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [projectPurpose, setProjectPurpose] = useState("");
@@ -368,7 +383,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <span>{activeProject?.name ?? (activeProjectSlug === "default" ? "General" : activeProjectSlug ?? "Sin proyecto")}</span>
             <Button variant="tertiary" onClick={() => { setThreadDetailOpen(false); onChangeProject?.(); }}>Cambiar</Button>
           </div>
-          <ThreadContextSections activeProject={activeProject} capabilities={capabilities} capabilitiesLoading={capabilitiesLoading} capabilitiesError={capabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
+          <ThreadContextSections activeProject={activeProject} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
         </div> : null}
       </Dialog>
       <Dialog open={navigationOpen} onClose={() => setNavigationOpen(false)} title="Navegación" variant="sheet">
@@ -639,7 +654,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }]}
         >
-          {() => <ThreadContextSections activeProject={activeProject} capabilities={capabilities} capabilitiesLoading={capabilitiesLoading} capabilitiesError={capabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
+          {() => <ThreadContextSections activeProject={activeProject} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
         </Tabs>
         </> : null}
       </aside>
