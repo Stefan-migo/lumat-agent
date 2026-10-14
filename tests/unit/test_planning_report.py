@@ -1,6 +1,6 @@
 """The planning session report is assembled from the captured items (S8)."""
 
-from app.services.planning import build_report, minimum_met, report_gaps
+from app.services.planning import build_report, handoff_candidate, minimum_met, report_gaps
 
 
 def test_report_is_substantive_markdown_not_topic_json():
@@ -53,4 +53,23 @@ def test_report_includes_a_gaps_section():
 
     assert "## Gaps" in report
     assert "Objective" in report
+
+
+def test_handoff_is_offered_only_with_a_captured_next_step():
+    assert handoff_candidate({"topic": "T"}) is None
+    assert handoff_candidate({"topic": "T", "notes": [{"kind": "objective", "content": "O"}]}) is None
+    assert handoff_candidate({"topic": "T", "notes": [{"kind": "next_step", "content": "   "}]}) is None
+
+    proposal = handoff_candidate(
+        {
+            "topic": "T",
+            "notes": [
+                {"kind": "next_step", "content": "Draft the numbers"},
+                {"kind": "objective", "content": "O"},
+                {"kind": "next_step", "content": "Review them"},
+            ],
+        }
+    )
+
+    assert proposal == {"actions": ["Draft the numbers", "Review them"]}
 

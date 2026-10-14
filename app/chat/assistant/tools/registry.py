@@ -784,6 +784,7 @@ def _planning_close(session, args: PlanningCloseArgs, *, trusted_thread_id: int 
         "report_key": result.get("report_key"),
         "gaps": result.get("gaps", []),
         "minimum_met": result.get("minimum_met", False),
+        "handoff": result.get("handoff"),
     }
 
 

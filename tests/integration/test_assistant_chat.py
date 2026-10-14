@@ -412,6 +412,33 @@ def test_sdb_requested_is_accepted_for_admin(client):
     assert accepted.status_code == 201
 
 
+def test_admin_handoff_run_reaches_verification_with_the_handoff_gate(client, monkeypatch):
+    _user("assistant-sdb-handoff", "admin")
+    _login(client, "assistant-sdb-handoff")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+
+    provider = _scripted_client([
+        json.dumps({
+            "kind": "tool", "tool": "assistant.capabilities", "arguments": {},
+            "summary": "list capabilities", "requires_approval": False,
+        }),
+    ])
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: provider)
+
+    posted = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages",
+        json={"content": "verify this", "sdb_requested": True},
+    )
+    assert posted.status_code == 201
+    _wait_for_run(client, thread_id, posted.json()["message"]["assistant_metadata"]["run_id"])
+
+    with SessionLocal() as session:
+        verification = session.get(InternalChatThread, thread_id).assistant_state["verification"]
+
+    assert verification["required"] is True
+    assert verification["gate_reason"] == "handoff"
+
+
 def test_cross_thread_read_is_not_exposed(client):
     _user("assistant-owner", "admin")
     _user("assistant-other", "admin")

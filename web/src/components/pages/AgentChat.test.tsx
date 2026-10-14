@@ -1545,6 +1545,56 @@ describe("AgentChat", () => {
     expect(messages[1]).toHaveTextContent("new.tool");
   });
 
+  it("offers the planning handoff and sends it with sdb_requested", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({
+        thread: {
+          ...makeThread(),
+          assistant_state: {
+            events: [{ type: "handoff", run_id: "run-close", handoff: { actions: ["Crear el proyecto X"] } }],
+          },
+        },
+        messages: [],
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        message: { id: 5, author: "admin", content: "Crear el proyecto X", status: "processing", assistant_metadata: { run_id: "run-h" } },
+      }))
+      .mockResolvedValueOnce(sseResponse([]))
+      .mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByText("Llevar a ejecución")).toBeInTheDocument();
+    expect(screen.getByText("Crear el proyecto X")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /confirmar y ejecutar/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/panel/api/chat/threads/4/messages",
+        expect.objectContaining({ body: expect.stringContaining('"sdb_requested":true') }),
+      ),
+    );
+  });
+
+  it("hides the handoff control from a non-admin", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: {
+        ...makeThread(),
+        assistant_state: {
+          events: [{ type: "handoff", run_id: "run-close", handoff: { actions: ["Crear el proyecto X"] } }],
+        },
+      },
+      messages: [],
+    }));
+
+    render(<AgentChat threadId={4} role="operador" />);
+
+    await screen.findByRole("textbox", { name: "Mensaje" });
+    expect(screen.queryByText("Llevar a ejecución")).not.toBeInTheDocument();
+  });
+
   it("does not inherit earlier run artifacts when a later run has none", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
       thread: {

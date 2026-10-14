@@ -29,6 +29,7 @@ def test_active_planning_session_injects_the_facilitator_overlay():
     assert config.persona in persona
     assert "guided brainstorming" in persona
     assert "Do not offer to close" in persona
+    assert "Offer the handoff" in persona
 
 
 def test_absent_or_closed_session_has_no_overlay():

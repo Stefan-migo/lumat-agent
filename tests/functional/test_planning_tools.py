@@ -375,3 +375,131 @@ def test_planning_close_reports_gaps_but_always_succeeds(make_user):
     assert result["result"]["session"]["status"] == "closed"
     assert set(result["result"]["gaps"]) == {"objective", "decisions", "risks", "next_steps"}
     assert result["result"]["minimum_met"] is False
+
+
+def test_planning_close_offers_no_handoff_without_a_captured_next_step(make_user):
+    make_user("planning-no-handoff", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-no-handoff")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Sin handoff"},
+            role="admin",
+            trusted_thread_id=thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+
+    with SessionLocal() as session:
+        execute_tool(
+            session,
+            "planning.record_note",
+            {"kind": "objective", "content": "Decidir el presupuesto"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        result = execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+
+    assert result["status"] == "completed"
+    assert result["result"]["handoff"] is None
+
+
+def test_planning_close_offers_a_handoff_with_a_captured_next_step(make_user):
+    make_user("planning-handoff", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-handoff")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Con handoff"},
+            role="admin",
+            trusted_thread_id=thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+
+    with SessionLocal() as session:
+        execute_tool(
+            session,
+            "planning.record_note",
+            {"kind": "next_step", "content": "Crear el proyecto X"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        result = execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+
+    assert result["status"] == "completed"
+    assert result["result"]["handoff"] == {"actions": ["Crear el proyecto X"]}
+
+
+def test_execution_events_emit_a_handoff_event_for_a_completed_close_with_a_proposal():
+    from app.services.agent_chat import _execution_events
+
+    proposal = {"actions": ["Crear el proyecto X"]}
+    result = {
+        "tool_results": [
+            {"tool": "memory.read", "status": "completed", "result": {"rows": []}},
+            {"tool": "planning.close", "status": "completed", "result": {"handoff": proposal}},
+        ],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {"handoff": proposal}},
+        "evidence": [],
+        "status": "completed",
+        "response": "Tool planning.close completed.",
+    }
+
+    events = _execution_events(result, 4, "run-h1", 2)
+    handoff = [event for event in events if event["type"] == "handoff"]
+
+    assert len(handoff) == 1
+    assert handoff[0]["handoff"] == proposal
+    assert handoff[0]["thread_id"] == 4
+    assert handoff[0]["run_id"] == "run-h1"
+
+
+def test_execution_events_omit_handoff_without_a_proposal():
+    from app.services.agent_chat import _execution_events
+
+    def event_types(entry):
+        return {event["type"] for event in _execution_events(entry, 4, "run-h2", 2)}
+
+    assert "handoff" not in event_types({
+        "tool_results": [{"tool": "planning.close", "status": "completed", "result": {"handoff": None}}],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {"handoff": None}},
+    })
+    assert "handoff" not in event_types({
+        "tool_results": [{"tool": "planning.close", "status": "completed", "result": {"handoff": {"actions": []}}}],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {"handoff": {"actions": []}}},
+    })
+    assert "handoff" not in event_types({
+        "tool_results": [{"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}}],
+        "tool_result": {"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}},
+    })
