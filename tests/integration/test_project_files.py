@@ -96,6 +96,7 @@ def test_ingest_project_text_file_creates_project_scoped_internal_kb_document(fa
         assert doc.project_id == project.id
         assert doc.visibility == KbVisibility.INTERNAL
         assert doc.content == content.decode()
+        assert row.kb_document_id == doc.id
         chunks = list(session.scalars(select(KbChunk).where(KbChunk.document_id == doc.id)))
         assert chunks
         assert all(chunk.content for chunk in chunks)
@@ -111,6 +112,7 @@ def test_ingest_project_image_skips_kb_and_keeps_ready_status(tmp_path):
         row = store_project_file(session, project, owner, "photo.png", "image/png", content)
         assert ingest_project_file(session, project, row, content, owner.username) is None
         assert row.status == "ready"
+        assert row.kb_document_id is None
         assert session.scalar(select(KbDocument).where(KbDocument.project_id == project.id)) is None
         session.rollback()
     get_settings.cache_clear()
@@ -130,6 +132,7 @@ def test_ingest_corrupt_docx_marks_failed_and_keeps_stored_file(tmp_path):
         )
         assert ingest_project_file(session, project, row, content, owner.username) is None
         assert row.status == "failed"
+        assert row.kb_document_id is None
         assert Path(row.stored_path).read_bytes() == content
         assert session.get(ProjectFile, row.id) is row
         session.rollback()

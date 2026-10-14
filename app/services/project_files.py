@@ -86,7 +86,7 @@ def ingest_project_file(
             "md": DocumentFormat.MD,
         }[kind]
         with session.begin_nested():
-            return ingest_document(
+            doc = ingest_document(
                 session,
                 title=row.filename,
                 fmt=fmt,
@@ -97,6 +97,8 @@ def ingest_project_file(
                 visibility=KbVisibility.INTERNAL,
                 project_id=project.id,
             )
+        row.kb_document_id = doc.id
+        return doc
     except Exception:
         row.status = "failed"
         return None
