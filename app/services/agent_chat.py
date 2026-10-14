@@ -649,7 +649,28 @@ def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) 
         {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 2, "status": result.get("status", "completed")},
         {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 3, "content": result.get("response", "")},
         *_planning_thread_event(result, thread_id, run_id, sequence + 4),
+        *_handoff_event(result, thread_id, run_id, sequence + 5),
     ]
+
+
+def _handoff_event(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
+    """Emit a `handoff` event when this run closed a session with a concrete action."""
+    candidates = [*(result.get("tool_results") or [])]
+    if result.get("tool_result"):
+        candidates.append(result["tool_result"])
+    for entry in reversed(candidates):
+        if entry.get("tool") != "planning.close" or entry.get("status") != "completed":
+            continue
+        handoff = (entry.get("result") or {}).get("handoff")
+        if isinstance(handoff, dict) and handoff.get("actions"):
+            return [{
+                "type": "handoff",
+                "thread_id": thread_id,
+                "run_id": run_id,
+                "sequence": sequence,
+                "handoff": handoff,
+            }]
+    return []
 
 
 _TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending", "cancelled"}
