@@ -107,7 +107,7 @@ Non-goals (explicitly dropped after review):
 | T0 feature doc | — | inline | done | this commit |
 | T1 default-on 7 opt-in | S1 | inline | done | 49227b57 |
 | T2 sidebar Capacidades wired | S2 | inline | done | fd5e39e2 |
-| T3a Recursos selector + persistence | S3 | inline | pending | — |
+| T3a Recursos selector + persistence | S3 | inline | done | b1313675, b1f670c0 |
 | T3b pinned resources in context | S3 | inline | pending | — |
 | T3c planning.read_report tool | S3 | inline | pending | — |
 | T4 tray/library separation | S4 | inline | pending | — |
@@ -217,3 +217,17 @@ asked for a planning-report read tool. Design: fixing a resource marks it in
 is read on demand (`read_project_file`, new `planning.read_report`, declared skills). T3 is
 split into T3a (selector + persistence), T3b (pinned resources in context), T3c
 (`planning.read_report` tool).
+
+L17 — T3a done (backend b1313675, frontend b1f670c0). Backend:
+`app/services/thread_resources.py` (+ `ThreadResources` model) stores the selection in
+`thread.assistant_state["resources"]`; routes GET/PUT/DELETE
+`/panel/api/chat/threads/{id}/resources` mirror `tool-policy` (owner-scoped, 409 while a run
+is active) and validate every reference against the thread's project (files/skills) and
+owner (planning sessions). Frontend: `ThreadResources.tsx` selector (3 groups with a toggle
+per item, whole-selection PUT), wired into the context panel's "Recursos del proyecto"
+section; it fetches lazily when the section is expanded. Evidence: backend
+`test_api_thread_resources.py` 5/5, full backend suite 2171 collected / 0 failures;
+frontend full suite 1192/1192, `npm run build` green. Two tests encoding the old placeholder
+were updated. Note: the frontend full suite crashed once on this box (low memory) and was
+re-run with `--maxWorkers=2`. RDD assess: risk `medium`, `review_due=false`
+(`under_budget`, 788 changed lines).
