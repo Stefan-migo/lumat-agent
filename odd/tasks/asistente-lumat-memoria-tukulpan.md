@@ -131,7 +131,7 @@ Runner: `uv run pytest tests/`.
 | **S3** | T5, T6, T7 + tests | Skill `memoria-tukulpan` siempre-on + docs + persona | ~120 |
 
 - **RDD**: `gentle-ai review assess --cwd <wt> --base-ref <slice-base> --committed-only --json` tras cada commit de work-unit; el boundary avanza al git-sha revisado.
-- **Push / PR / merge**: decisión del owner (el ODD autoriza los commits de work-unit en la rama, no el push/PR).
+- **Push / PR / merge**: decisión del owner (el ODD autoriza los commits de work-unit en la rama, no el push/PR). **Slice 3: PR #590** (base `main`, label `type:feature`). `origin/main` avanzó a `d650b8f2` tras el branch (`c388fa02`): el pre-merge integration debe integrar el head actual de `main` y re-verificar.
 
 ## Review findings (advisory, non-blocking) — lineage review-8f7d2ae49bc9cb9e
 
