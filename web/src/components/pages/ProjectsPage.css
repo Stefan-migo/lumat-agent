@@ -56,6 +56,29 @@
   font-size: var(--text-sm);
 }
 
+/* Knowledge card: its note and count stack in the footer, and the document
+   list scrolls on its own like the file tree so the card keeps its grid track
+   and never grows the layout. */
+.projects-page__kb-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.project-knowledge__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.project-knowledge__list .file-tree__row + .file-tree__row {
+  border-top: 1px solid var(--corp-border);
+}
+
 .file-tree {
   display: flex;
   flex-direction: column;

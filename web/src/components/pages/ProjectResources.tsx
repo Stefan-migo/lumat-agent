@@ -12,12 +12,14 @@ import {
   Info,
   Paperclip,
   Pencil,
+  Plus,
   Trash2,
   Upload,
 } from "lucide-react";
 import {
   ApiError,
   createProjectFolder,
+  deleteKbDocument,
   deleteProjectFile,
   deleteProjectFolder,
   downloadProjectFile,
@@ -41,7 +43,6 @@ import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Select } from "../primitives/Select";
 import { useToast } from "../primitives/Toast";
-import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { StateMessage } from "../shared/StateMessage";
 import { kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
@@ -91,6 +92,10 @@ export function ProjectResources({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [uploadingKb, setUploadingKb] = useState(false);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
+  const [docQuery, setDocQuery] = useState("");
+  const [kbDeleteTarget, setKbDeleteTarget] = useState<Doc | null>(null);
+  const [kbDeleteError, setKbDeleteError] = useState<string | null>(null);
+  const [kbDeleteBusy, setKbDeleteBusy] = useState(false);
 
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const [folderName, setFolderName] = useState("");
@@ -360,6 +365,28 @@ export function ProjectResources({
     }
   };
 
+  const closeKbDelete = () => {
+    setKbDeleteTarget(null);
+    setKbDeleteError(null);
+  };
+
+  const confirmKbDelete = async () => {
+    const target = kbDeleteTarget;
+    if (!target) return;
+    setKbDeleteBusy(true);
+    setKbDeleteError(null);
+    try {
+      await deleteKbDocument(target.id);
+      toast.show("Documento eliminado de la base de conocimiento.");
+      closeKbDelete();
+      docs.retry();
+    } catch (reason: unknown) {
+      setKbDeleteError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el documento.");
+    } finally {
+      setKbDeleteBusy(false);
+    }
+  };
+
   const dropProps = (key: string, folderId: number | null) => ({
     onDragOver: (event: React.DragEvent) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; },
     onDragEnter: () => setDropTarget(key),
@@ -445,16 +472,13 @@ export function ProjectResources({
           : "ready";
   const isEmpty = loadState === "ready" && projectFiles.length === 0 && projectFolders.length === 0;
 
-  const docColumns: Column<Doc>[] = [
-    { key: "title", header: "Documento", render: (doc) => doc.title },
-    { key: "format", header: "Formato", render: (doc) => doc.format.toUpperCase() },
-    { key: "version", header: "Versión", render: (doc) => `v${doc.active_version}` },
-    { key: "status", header: "Estado", render: (doc) => { const status = doc.active ? "activo" : "deshabilitado"; return <Badge tone={kbStatusTone(status)}>{kbStatusLabel(status)}</Badge>; } },
-  ];
   // Documents already surfaced by the file card (auto-indexed uploads) are not
   // repeated here; this card owns what was added straight to the project KB.
   const indexedDocIds = new Set(projectFiles.map((file) => file.kb_document_id).filter((id): id is number => id != null));
   const directDocs = (docs.data?.docs ?? []).filter((doc) => doc.project_id === projectId && !indexedDocIds.has(doc.id));
+  const docStatus = (doc: Doc) => (doc.active ? "activo" : "deshabilitado");
+  const dq = docQuery.trim().toLowerCase();
+  const filteredDocs = dq === "" ? directDocs : directDocs.filter((doc) => `${doc.title} ${doc.format} ${doc.id}`.toLowerCase().includes(dq));
   const docsState = docs.state === "empty" || (docs.state === "ready" && directDocs.length === 0) ? "empty" : docs.state;
 
   return <div className="projects-page__resources">
@@ -503,16 +527,33 @@ export function ProjectResources({
     <Card
       icon={BookOpen}
       title="Conocimiento del proyecto"
-      headerAction={isAdmin ? <><Badge>{directDocs.length}</Badge><Button variant="secondary" disabled={uploadingKb} onClick={() => kbInputRef.current?.click()}>{uploadingKb ? "Subiendo…" : "Subir archivo a la KB"}</Button></> : null}
-      footer={<p className="projects-page__note"><Icon icon={Info} size="sm" />Los archivos del proyecto se comparten como contexto; los adjuntos de un hilo permanecen en ese hilo.</p>}
+      description="Documentos de la base de conocimiento (RAG)."
+      headerAction={isAdmin ? <Badge>{directDocs.length}</Badge> : null}
+      footer={<div className="projects-page__kb-footer">
+        <p className="projects-page__note"><Icon icon={Info} size="sm" />Consulta aquí el formato, la versión y el estado de cada documento.</p>
+        <p className="projects-page__resources-footer">{directDocs.length} {directDocs.length === 1 ? "documento" : "documentos"}</p>
+      </div>}
     >
       <input type="file" aria-label="Documento de la base de conocimientos" hidden ref={kbInputRef} onChange={(event) => void uploadToKb(event)} />
       {!isAdmin ? <StateMessage tone="info" role="status" title="Conocimiento del proyecto" detail="Solo los administradores pueden ver los documentos indexados de un proyecto." /> : <>
+        <div className="projects-page__resources-toolbar">
+          <SearchInput aria-label="Buscar documento" placeholder="Buscar documento…" onSearch={setDocQuery} />
+          <Button variant="secondary" disabled={uploadingKb} onClick={() => kbInputRef.current?.click()}><Icon icon={Plus} /> {uploadingKb ? "Subiendo…" : "Subir archivo a la KB"}</Button>
+        </div>
         {docsState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conocimiento" /> : null}
         {docsState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el conocimiento del proyecto" /><Button variant="secondary" onClick={docs.retry}>Reintentar</Button></> : null}
         {docsState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver el conocimiento del proyecto." /> : null}
         {docsState === "empty" ? <EmptyState variant="dashed" icon={FileSearch} title="Sin documentos agregados a la KB" description="Sube un documento directo a la KB del proyecto; los archivos del proyecto se indexan solos arriba." /> : null}
-        {docsState === "ready" ? <div className="projects-page__table-scroll"><DataTable columns={docColumns} rows={directDocs} rowKey={(row) => String(row.id)} /></div> : null}
+        {docsState === "ready" ? <ul className="project-knowledge__list" aria-label="Documentos de la base de conocimiento">
+          {filteredDocs.map((doc) => <li className="file-tree__row" key={doc.id}>
+            <Icon icon={FileText} size="sm" />
+            <span className="file-tree__name">{doc.title}</span>
+            <span className="file-tree__size">{doc.format.toUpperCase()} · v{doc.active_version}</span>
+            <Badge tone={kbStatusTone(docStatus(doc))}>{kbStatusLabel(docStatus(doc))}</Badge>
+            <Button variant="tertiary" className="file-tree__danger" aria-label={`Eliminar ${doc.title} de la KB`} onClick={() => { setKbDeleteError(null); setKbDeleteTarget(doc); }}><Icon icon={Trash2} /></Button>
+          </li>)}
+          {filteredDocs.length === 0 ? <li className="file-tree__empty">Sin resultados</li> : null}
+        </ul> : null}
       </>}
     </Card>
 
@@ -598,6 +639,33 @@ export function ProjectResources({
         <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(null); }}>Cancelar</Button>
         <Button variant="danger" disabled={deleteBusy} onClick={() => void confirmDelete()}>
           <Icon icon={Trash2} /> {deleteBusy ? "Eliminando…" : deleteTarget?.kind === "folder" ? "Eliminar carpeta" : "Eliminar archivo"}
+        </Button>
+      </div>
+    </Dialog>
+
+    <Dialog
+      open={kbDeleteTarget !== null}
+      onClose={closeKbDelete}
+      title="Eliminar de la KB"
+      icon={Trash2}
+    >
+      {kbDeleteTarget ? <>
+        <p className="file-tree__dialog-question">¿Quieres eliminar este documento de la KB?</p>
+        <div className="file-tree__dialog-preview">
+          <Icon icon={FileText} />
+          <div className="file-tree__dialog-preview-copy">
+            <p className="file-tree__dialog-preview-name">{kbDeleteTarget.title}</p>
+            <p className="file-tree__dialog-preview-meta">{kbDeleteTarget.format.toUpperCase()} · v{kbDeleteTarget.active_version}</p>
+          </div>
+          <Badge tone={kbStatusTone(docStatus(kbDeleteTarget))}>{kbStatusLabel(docStatus(kbDeleteTarget))}</Badge>
+        </div>
+        <p className="file-tree__dialog-project"><Icon icon={Folder} size="sm" /> Proyecto: {projectName}</p>
+        {kbDeleteError ? <StateMessage tone="danger" role="alert" title={kbDeleteError} /> : null}
+      </> : null}
+      <div className="file-tree__dialog-actions">
+        <Button variant="secondary" onClick={closeKbDelete}>Cancelar</Button>
+        <Button variant="danger" disabled={kbDeleteBusy} onClick={() => void confirmKbDelete()}>
+          <Icon icon={Trash2} /> {kbDeleteBusy ? "Eliminando…" : "Eliminar de la KB"}
         </Button>
       </div>
     </Dialog>

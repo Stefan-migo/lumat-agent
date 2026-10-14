@@ -183,4 +183,43 @@ describe("ProjectResources", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/files/1", expect.objectContaining({ method: "DELETE" })));
     expect(await screen.findByText("Archivo eliminado.")).toBeInTheDocument();
   });
+
+  it("lists project knowledge documents with format, version and status and filters by search", async () => {
+    const user = userEvent.setup();
+    const directDoc = { ...projectDoc, id: 3, title: "Politica interna", format: "csv", active_version: 2 };
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [] }))
+      .mockResolvedValueOnce(response({ folders: [] }))
+      .mockResolvedValueOnce(response({ docs: [directDoc] }));
+    renderResources("admin");
+
+    expect(await screen.findByText("Politica interna")).toBeInTheDocument();
+    expect(screen.getByText("CSV · v2")).toBeInTheDocument();
+    expect(screen.getByText("Activo")).toBeInTheDocument();
+    expect(screen.getByText("1 documento")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Buscar documento"), "sin-coincidencia");
+    expect(await screen.findByText("Sin resultados", {}, { timeout: 2000 })).toBeInTheDocument();
+  });
+
+  it("deletes a knowledge document from the KB after confirming in the dialog", async () => {
+    const user = userEvent.setup();
+    const directDoc = { ...projectDoc, id: 3, title: "Politica interna" };
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [] }))
+      .mockResolvedValueOnce(response({ folders: [] }))
+      .mockResolvedValueOnce(response({ docs: [directDoc] }))
+      .mockResolvedValueOnce(response({ ok: true }))
+      .mockResolvedValueOnce(response({ docs: [] }));
+    renderResources("admin");
+
+    await user.click(await screen.findByRole("button", { name: "Eliminar Politica interna de la KB" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Eliminar de la KB" })).toBeInTheDocument();
+    expect(within(dialog).getByText("¿Quieres eliminar este documento de la KB?")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar de la KB" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb/3", expect.objectContaining({ method: "DELETE" })));
+    expect(await screen.findByText("Documento eliminado de la base de conocimiento.")).toBeInTheDocument();
+  });
 });
