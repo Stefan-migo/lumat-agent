@@ -9,9 +9,14 @@ from app.db import SessionLocal
 from app.models import AuditLog, KbChunk, KbDocument, KbVisibility, Project, ProjectFile, User
 from app.services.project_files import (
     allowed_project_file,
+    create_project_folder,
+    delete_project_file,
+    delete_project_folder,
     get_project_file,
     ingest_project_file,
     list_project_files,
+    list_project_folders,
+    rename_project_folder,
     store_project_file,
 )
 from app.services.users import hash_password
@@ -135,5 +140,48 @@ def test_ingest_corrupt_docx_marks_failed_and_keeps_stored_file(tmp_path):
         assert row.kb_document_id is None
         assert Path(row.stored_path).read_bytes() == content
         assert session.get(ProjectFile, row.id) is row
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_project_folders_crud_and_recursive_delete(monkeypatch, tmp_path):
+    from app.config import get_settings
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    with SessionLocal() as session:
+        owner, project = _seed_project(session, "files-folders")
+        root = create_project_folder(session, project, owner, "Diseño")
+        child = create_project_folder(session, project, owner, "Operación", parent_id=root.id)
+        assert [folder.name for folder in list_project_folders(session, project.id)] == ["Diseño", "Operación"]
+
+        renamed = rename_project_folder(session, project, owner, root.id, "Diseño UI")
+        assert renamed is not None
+        assert renamed.name == "Diseño UI"
+
+        content = b"project note"
+        row = store_project_file(session, project, owner, "note.txt", "text/plain", content, child.id)
+        session.flush()
+        assert row.folder_id == child.id
+
+        assert delete_project_file(session, project, owner, row.id) is True
+        assert list_project_files(session, project.id) == []
+        # The nested folder is dropped with its parent; no files remain to delete.
+        assert delete_project_folder(session, project, owner, root.id) == 0
+        assert list_project_folders(session, project.id) == []
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_create_project_folder_rejects_duplicate_and_missing_parent(monkeypatch, tmp_path):
+    from app.config import get_settings
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    with SessionLocal() as session:
+        owner, project = _seed_project(session, "files-folder-dupe")
+        create_project_folder(session, project, owner, "Uno")
+        with pytest.raises(ValueError, match="already exists"):
+            create_project_folder(session, project, owner, "Uno")
+        with pytest.raises(ValueError, match="parent folder not found"):
+            create_project_folder(session, project, owner, "Dos", parent_id=999)
         session.rollback()
     get_settings.cache_clear()
