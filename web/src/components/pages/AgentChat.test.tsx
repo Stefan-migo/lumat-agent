@@ -1397,44 +1397,89 @@ describe("AgentChat", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
-    expect(screen.getByText(/Informe de planificación: Report/i)).toBeInTheDocument();
+    expect(screen.getByText(/Informe de planificación:/i)).toBeInTheDocument();
+    expect(screen.getByText("Report")).toBeInTheDocument();
   });
 
   it("treats exact planning commands as lifecycle controls and free text as chat", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
-      .mockResolvedValueOnce(jsonResponse(policy()))
-      .mockResolvedValueOnce(
-        jsonResponse({ session: { slug: "budget-4" }, thread_id: 4 }, 201),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({ message: { id: 2, author: "admin", content: "planning words", status: "processed" } }, 201),
-      );
+    const onThreadOpened = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({ thread: makeThread(), messages: [] });
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/planning/sessions" && init?.method === "POST") {
+        return jsonResponse({ session: { slug: "budget-9" }, thread_id: 9 }, 201);
+      }
+      if (url === "/panel/api/chat/threads/4/messages" && init?.method === "POST") {
+        return jsonResponse({ message: { id: 2, author: "admin", content: "planning words", status: "processed" } }, 201);
+      }
+      return jsonResponse({ threads: [] });
+    });
 
-    render(<AgentChat threadId={4} />);
+    render(<AgentChat threadId={4} onThreadOpened={onThreadOpened} />);
     const composer = await screen.findByRole("textbox", { name: /mensaje/i });
     fireEvent.change(composer, { target: { value: "/planning budget" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        3,
+      expect(fetchMock).toHaveBeenCalledWith(
         "/panel/api/planning/sessions",
         expect.objectContaining({
-          body: JSON.stringify({ topic: "budget", thread_id: 4 }),
+          body: JSON.stringify({ topic: "budget" }),
         }),
       ),
     );
+    expect(onThreadOpened).toHaveBeenCalledWith(9);
     fireEvent.change(composer, { target: { value: "please discuss planning" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        4,
+      expect(fetchMock).toHaveBeenCalledWith(
         "/panel/api/chat/threads/4/messages",
-        expect.anything(),
+        expect.objectContaining({ method: "POST" }),
       ),
     );
+  });
+
+  it("switches to the session thread when a settled run persisted a planning event", async () => {
+    const onThreadOpened = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) {
+        return jsonResponse({
+          thread: {
+            ...makeThread(),
+            assistant_state: {
+              events: [
+                { type: "planning", thread_id: 4, run_id: "run-plan", sequence: 6, planning_thread_id: 9 },
+              ],
+            },
+          },
+          messages: [{ id: 3, author: "agent", content: "Session opened", status: "processed", assistant_metadata: { run_id: "run-plan" } }],
+        });
+      }
+      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/messages" && init?.method === "POST") {
+        return jsonResponse({
+          message: {
+            id: 2,
+            author: "admin",
+            content: "Open the session",
+            status: "processing",
+            assistant_metadata: { run_id: "run-plan" },
+          },
+        }, 201);
+      }
+      if (url.includes("/stream")) return sseResponse([]);
+      return jsonResponse({ threads: [] });
+    });
+
+    render(<AgentChat threadId={4} onThreadOpened={onThreadOpened} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    fireEvent.change(composer, { target: { value: "Open the session" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    await waitFor(() => expect(onThreadOpened).toHaveBeenCalledWith(9));
   });
 
   it("resubmits a failed message in place and preserves an unsent draft", async () => {

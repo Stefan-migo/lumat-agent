@@ -621,6 +621,26 @@ def _events_for(result: dict, thread_id: int, run_id: str) -> list[dict]:
     return events
 
 
+def _planning_thread_event(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
+    """Emit a `planning` event when this run opened a session on a dedicated thread."""
+    candidates = [*(result.get("tool_results") or [])]
+    if result.get("tool_result"):
+        candidates.append(result["tool_result"])
+    for entry in reversed(candidates):
+        if entry.get("tool") != "planning.open" or entry.get("status") != "completed":
+            continue
+        new_thread_id = (entry.get("result") or {}).get("thread_id")
+        if type(new_thread_id) is int and new_thread_id > 0:
+            return [{
+                "type": "planning",
+                "thread_id": thread_id,
+                "run_id": run_id,
+                "sequence": sequence,
+                "planning_thread_id": new_thread_id,
+            }]
+    return []
+
+
 def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
     tool_result = result.get("tool_result") or {}
     return [
@@ -628,6 +648,7 @@ def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) 
         {"type": "evidence", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 1, "evidence": result.get("evidence", [])},
         {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 2, "status": result.get("status", "completed")},
         {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 3, "content": result.get("response", "")},
+        *_planning_thread_event(result, thread_id, run_id, sequence + 4),
     ]
 
 

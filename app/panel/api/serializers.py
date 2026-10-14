@@ -468,7 +468,13 @@ def to_cortex_session_dict(thread: InternalChatThread) -> dict:
     """Expose the persisted Cortex lifecycle without leaking ORM state."""
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}
     fields = ("slug", "topic", "status", "opened_at", "closed_at", "report_key")
-    return {**{field: cortex.get(field) for field in fields}, "thread_id": thread.id, "proyecto": thread.proyecto}
+    return {
+        **{field: cortex.get(field) for field in fields},
+        "decisions": cortex.get("decisions") or [],
+        "notes": cortex.get("notes") or [],
+        "thread_id": thread.id,
+        "proyecto": thread.proyecto,
+    }
 
 
 def to_cortex_report_dict(memory: Memory | None) -> dict | None:

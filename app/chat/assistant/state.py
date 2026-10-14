@@ -74,6 +74,24 @@ class PlannerOutput(BaseModel):
         return self
 
 
+class CortexNote(BaseModel):
+    """One structured planning note captured with explicit user confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["objective", "risk", "next_step", "general"]
+    content: str = Field(min_length=1)
+
+
+class CortexDecision(BaseModel):
+    """One structured planning decision captured with explicit user confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+
+
 class CortexSession(BaseModel):
     """Validated thread-scoped Cortex state."""
 
@@ -85,6 +103,8 @@ class CortexSession(BaseModel):
     opened_at: str = Field(min_length=1)
     closed_at: str | None
     report_key: str | None
+    decisions: list[CortexDecision] = Field(default_factory=list)
+    notes: list[CortexNote] = Field(default_factory=list)
 
 
 def validate_cortex_session(state: object) -> bool:

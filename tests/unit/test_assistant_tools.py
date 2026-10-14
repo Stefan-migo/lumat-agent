@@ -1120,7 +1120,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
 
 
 def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
-    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "planning.open", "planning.close", "planning.record_decision", "planning.record_note"})
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
     handoff_schema = MemoryWriteArgs.model_json_schema()["properties"]["handoff"]
@@ -1219,7 +1219,7 @@ def test_memory_correction_rejects_rows_outside_agent_ownership(row_kwargs):
 
 
 def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
-    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "planning.open", "planning.close", "planning.record_decision", "planning.record_note"})
     row = SimpleNamespace(id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
 
     class Savepoint:
