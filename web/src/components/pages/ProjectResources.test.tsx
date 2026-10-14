@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectResources } from "./ProjectResources";
 
-const projectFile = { id: 1, project_id: 7, filename: "manual.pdf", content_type: "application/pdf", size: 2048, sha256: "x", status: "ready", created_at: "2026-07-10T14:02:00-04:00" };
+const projectFile = { id: 1, project_id: 7, filename: "manual.pdf", content_type: "application/pdf", size: 2048, sha256: "x", status: "ready", kb_document_id: 1, created_at: "2026-07-10T14:02:00-04:00" };
 const projectDoc = { id: 1, project_id: 7, title: "Manual", format: "pdf", version: 1, active_version: 1, active: true, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: "2026-07-10T14:02:00-04:00" };
 const globalDoc = { ...projectDoc, id: 2, project_id: null, title: "Global" };
 const response = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -13,15 +13,18 @@ describe("ProjectResources", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders project files and only project-scoped knowledge for admins", async () => {
+  it("marks a file as indexed and does not repeat its KB document in the knowledge list", async () => {
+    const linkedDoc = { ...projectDoc, id: 1, title: "manual.pdf" };
+    const directDoc = { ...projectDoc, id: 3, title: "Politica interna" };
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(response({ files: [projectFile] }))
-      .mockResolvedValueOnce(response({ docs: [projectDoc, globalDoc] }));
+      .mockResolvedValueOnce(response({ docs: [linkedDoc, directDoc, globalDoc] }));
     render(<ProjectResources projectSlug="ops" projectId={7} role="admin" />);
 
     expect(await screen.findByText("manual.pdf")).toBeInTheDocument();
     expect(screen.getByText("2.0 KB")).toBeInTheDocument();
-    expect(await screen.findByText("Manual")).toBeInTheDocument();
+    expect((await screen.findAllByText("En la KB")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Politica interna")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Global")).not.toBeInTheDocument();
   });
 
