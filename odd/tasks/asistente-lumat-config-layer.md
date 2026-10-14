@@ -109,7 +109,7 @@ Non-goals (explicitly dropped after review):
 | T2 sidebar Capacidades wired | S2 | inline | done | fd5e39e2 |
 | T3a Recursos selector + persistence | S3 | inline | done | b1313675, b1f670c0 |
 | T3b pinned resources in context | S3 | inline | pending | — |
-| T3c planning.read_report tool | S3 | inline | pending | — |
+| T3c planning.read_report tool | S3 | inline | done | 51e9643f, 46d39657 |
 | T4 tray/library separation | S4 | inline | pending | — |
 | T5 multimodal tool results | S5 | inline | pending | — |
 | T6 partial reads (offset/limit) | S6 | inline | pending | — |
@@ -231,3 +231,16 @@ frontend full suite 1192/1192, `npm run build` green. Two tests encoding the old
 were updated. Note: the frontend full suite crashed once on this box (low memory) and was
 re-run with `--maxWorkers=2`. RDD assess: risk `medium`, `review_due=false`
 (`under_budget`, 788 changed lines).
+
+L18 — T3c done (`51e9643f` refactor, `46d39657` feat). New read-only tool
+`planning.read_report` (args `{slug}`, `tier="default"`, ADMIN/OPERADOR) returns a closed
+session's persisted report by slug. Extracted `find_session_thread` (slug→owner thread) and
+`report_memory` (persisted report `Memory`) from the chat route into `app/services/planning.py`
+and reused them in both the route and the tool. Registered in `agent/registry.yaml`
+(`tools_whitelist`) + `ROLE_TOOL_ALLOWLIST` + `DEFAULT_TOOLS` (`test_tool_tiers.py`,
+`test_effective_config.py`); refreshed the frozen planner-catalog hash in
+`test_assistant_delegation.py`. TDD: RED first (four functional `read_report` tests + the
+exact-set assertions), then GREEN. Evidence: focused 55/55; full backend suite green (EXIT 0);
+no frontend change. RDD assess (`--base-ref 143ced8b --committed-only`): risk `medium`,
+`review_due=false` (`under_budget`, 1047 changed lines) → boundary stays pending in the slice.
+Next: T3b (surface the pinned resources as a compact reference in the turn context).
