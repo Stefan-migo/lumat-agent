@@ -27,6 +27,8 @@ DEFAULT_TOOLS = {
     "memory.delete",
     "dashboard.summary",
     "analytics.chatbot_metrics",
+    "analytics.chatbot_conversations",
+    "conversations.transcript",
     "project.list",
     "project.find",
     "list_project_files",

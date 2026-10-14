@@ -81,6 +81,8 @@ assistant:
     - memory.delete
     - dashboard.summary
     - analytics.chatbot_metrics
+    - analytics.chatbot_conversations
+    - conversations.transcript
     - web.search
     - web.fetch
     - automation.create_rule

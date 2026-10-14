@@ -5,11 +5,11 @@ from __future__ import annotations
 from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.chat.state import set_conversation_state
-from app.models import AuditLog, Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
+from app.models import AuditLog, Conversation, ConversationEvent, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
 from app.panel.api.serializers import to_conversation_dict
 from app.services.send import deliver_message
@@ -29,6 +29,67 @@ def list_conversations(session: Session, query: str | None = None, limit: int = 
             Customer.name.ilike(f"%{query}%") | Conversation.wa_phone.contains(query)
         )
     return list(session.scalars(statement.order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc()).limit(limit)))
+
+
+def conversation_transcript(session: Session, conversation_id: int, limit: int = 20) -> dict:
+    """Bounded read-only transcript of one conversation for the assistant (S6).
+
+    Reads the last `limit` messages (returned oldest-first) plus the conversation
+    events, so the assistant can diagnose why the bot behaved as it did.
+    """
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise ValueError("conversation not found")
+
+    def _iso(value):
+        return value.isoformat() if value is not None else None
+
+    total = session.scalar(
+        select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
+    ) or 0
+    messages = list(
+        session.scalars(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(limit)
+        )
+    )
+    messages.reverse()
+    events = list(
+        session.scalars(
+            select(ConversationEvent)
+            .where(ConversationEvent.conversation_id == conversation_id)
+            .order_by(ConversationEvent.created_at.desc(), ConversationEvent.id.desc())
+            .limit(limit)
+        )
+    )
+    events.reverse()
+    return {
+        "conversation": {
+            "id": conversation.id,
+            "customer_id": conversation.customer_id,
+            "wa_phone": conversation.wa_phone,
+            "state": conversation.state.value,
+            "summary": conversation.summary,
+            "last_message_at": _iso(conversation.last_message_at),
+            "closed_at": _iso(conversation.closed_at),
+        },
+        "messages": [
+            {
+                "direction": message.direction.value,
+                "msg_type": message.msg_type.value,
+                "text": message.text,
+                "created_at": _iso(message.created_at),
+            }
+            for message in messages
+        ],
+        "messages_total": int(total),
+        "events": [
+            {"event": event.event, "cause": event.cause, "created_at": _iso(event.created_at)}
+            for event in events
+        ],
+    }
 
 
 def _audits(session: Session, conversation_id: int) -> list[AuditLog]:

@@ -97,6 +97,19 @@ class ChatbotMetricsArgs(BaseModel):
     window_days: int = Field(default=7, ge=1, le=31)
 
 
+class ChatbotConversationsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    window_days: int = Field(default=7, ge=1, le=31)
+    signal: Literal["escalation", "unknown_intent", "kb_miss", "any"] = "any"
+    limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+
+
+class ConversationTranscriptArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conversation_id: int = Field(gt=0)
+    limit: int = Field(default=MAX_ITEMS, ge=1, le=MAX_ITEMS)
+
+
 class _MemoryReadBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     topic: str | None = Field(default=None, max_length=255)
@@ -406,6 +419,18 @@ def _chatbot_metrics(session, args: ChatbotMetricsArgs):
     from app.services import analytics
 
     return analytics.chatbot_metrics(session, args.window_days)
+
+
+def _chatbot_conversations(session, args: ChatbotConversationsArgs):
+    from app.services import analytics
+
+    return analytics.chatbot_conversations(session, args.window_days, args.signal, args.limit)
+
+
+def _conversation_transcript(session, args: ConversationTranscriptArgs):
+    from app.services import conversations
+
+    return conversations.conversation_transcript(session, args.conversation_id, args.limit)
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
@@ -812,6 +837,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "memory.delete": ToolDefinition("memory.delete", MemoryDeleteArgs, False, _delete_memory, "Delete an agent-authored memory.", tier="default"),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary.", tier="default"),
     "analytics.chatbot_metrics": ToolDefinition("analytics.chatbot_metrics", ChatbotMetricsArgs, True, _chatbot_metrics, "Read chatbot performance metrics for a bounded time window.", tier="default"),
+    "analytics.chatbot_conversations": ToolDefinition("analytics.chatbot_conversations", ChatbotConversationsArgs, True, _chatbot_conversations, "List the conversations that tripped a chatbot failure signal in a bounded window.", tier="default"),
+    "conversations.transcript": ToolDefinition("conversations.transcript", ConversationTranscriptArgs, True, _conversation_transcript, "Read one conversation's bounded transcript and events.", tier="default"),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
     "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
     "automation.create_rule": ToolDefinition(
@@ -858,6 +885,8 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "memory.delete": frozenset(UserRole),
     "dashboard.summary": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "analytics.chatbot_metrics": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "analytics.chatbot_conversations": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "conversations.transcript": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "web.search": frozenset(UserRole),
     "web.fetch": frozenset(UserRole),
     "automation.create_rule": frozenset({UserRole.ADMIN}),
