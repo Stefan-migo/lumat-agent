@@ -152,3 +152,33 @@ def test_settings_update_applies_through_the_approval_loop(migrated_db):
 
         assert message is not None
         assert get_setting(session, "messages.farewell") == "Nos vemos."
+
+
+def test_settings_update_refuses_an_approval_bound_to_other_arguments(migrated_db):
+    with SessionLocal() as session:
+        approval = _approval({"key": "tone.style", "value": "formal"})
+        with pytest.raises(ToolValidationError):
+            execute_tool(
+                session,
+                "settings.update",
+                {"key": "messages.farewell", "value": "HACKED"},
+                approval=approval,
+                whitelist=_whitelist(),
+                role="admin",
+            )
+        assert get_setting(session, "messages.farewell") != "HACKED"
+
+
+def test_settings_update_refuses_an_unconsumed_approval(migrated_db):
+    with SessionLocal() as session:
+        plan = {"tool": "settings.update", "arguments": {"key": "tone.style", "value": "formal"}}
+        with pytest.raises(ToolValidationError):
+            execute_tool(
+                session,
+                "settings.update",
+                plan["arguments"],
+                approval=issue_approval(plan),
+                whitelist=_whitelist(),
+                role="admin",
+            )
+        assert get_setting(session, "tone.style") == "cercano"

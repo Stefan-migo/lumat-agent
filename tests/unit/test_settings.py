@@ -154,3 +154,25 @@ def test_validate_assistant_setting_rejects_keys_outside_the_allowlist():
         validate_assistant_setting("cost.daily_limit", 0)
     with pytest.raises(ValueError):
         validate_assistant_setting("emergency.keywords", ["gas"])
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cost.conversation_limit",
+        "meta_pricing",
+        "notify.owner_email",
+        "messages.templates",
+        "kpi.window_days",
+        "tone.style ",
+        "TONE.STYLE",
+    ],
+)
+def test_validate_assistant_setting_rejects_near_miss_and_privileged_keys(key):
+    with pytest.raises(ValueError):
+        validate_assistant_setting(key, 0)
+
+
+def test_validate_assistant_setting_rejects_an_overlong_message():
+    with pytest.raises(ValueError):
+        validate_assistant_setting("messages.greeting", "x" * 2001)

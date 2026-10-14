@@ -115,6 +115,14 @@ proven: `approve_plan` applies `messages.farewell` through the real graph. Addin
 planner-catalog SHA-256 pin (`f4bc1a5c…`); verified the only catalog delta is `settings.update`. Full
 backend suite green.
 
+**L5 (verification, 2026-10-14):** independent verifier: S1–S8 met, **no blockers**. Security
+invariants held — 10 disallowed keys each refused with a valid consumed approval, approval binds
+exact arguments (mismatch/unconsumed/reuse refused), OPERADOR/TECNICO denied even with an approval,
+non-autonomous. Advisory actioned: `messages.*` had no size bound → added a 2000-char cap
+(`ASSISTANT_MESSAGE_MAX_LENGTH`); the schedule is already bounded (≤7 entries by unique-weekday).
+Added the verifier's durable probes (near-miss/privileged keys, approval-bound-to-other-args,
+unconsumed approval). Full suite green again.
+
 ## Progress
 
 - [x] T1 — `b3affa8c` feat: `ASSISTANT_WRITABLE_SETTINGS` + `validate_assistant_setting` (+19 unit tests)

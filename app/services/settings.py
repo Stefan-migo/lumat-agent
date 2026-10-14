@@ -420,6 +420,11 @@ _ASSISTANT_MESSAGE_KEYS: frozenset[str] = frozenset(
     key for key in ASSISTANT_WRITABLE_SETTINGS if key.startswith("messages.")
 )
 
+# A runaway model string must not bloat a stored message; the schedule is already
+# bounded (each entry contributes >=1 unique weekday, and weekdays cannot repeat,
+# so at most 7 entries).
+ASSISTANT_MESSAGE_MAX_LENGTH = 2000
+
 
 def validate_assistant_setting(key: str, value: Any) -> None:
     """Validate one assistant-proposed setting; raise ValueError when unsafe.
@@ -436,6 +441,8 @@ def validate_assistant_setting(key: str, value: Any) -> None:
     elif key in _ASSISTANT_MESSAGE_KEYS:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{key} must be a non-empty string")
+        if len(value) > ASSISTANT_MESSAGE_MAX_LENGTH:
+            raise ValueError(f"{key} must be at most {ASSISTANT_MESSAGE_MAX_LENGTH} characters")
     elif key == "hours.timezone":
         if not isinstance(value, str) or not value.strip():
             raise ValueError("hours.timezone must be a non-empty IANA timezone")
