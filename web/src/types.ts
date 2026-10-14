@@ -433,6 +433,7 @@ export interface SpendSnapshot {
 }
 
 export interface Settings {
+  model_api_key: { configured: boolean; source: 'env' | 'panel' | 'none'; masked: string };
   scope_rules: Record<string, string>;
   keywords: string[];
   tone: string;

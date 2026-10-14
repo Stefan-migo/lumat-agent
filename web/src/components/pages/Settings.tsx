@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
+import { ApiError, apiFetch, deleteModelApiKey, getAssistantCapabilities, postJson, saveModelApiKey, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
 import { Button } from "../primitives/Button";
@@ -38,7 +38,7 @@ const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedV
 const SECTIONS = [
   { id: "agent", label: "Agente" }, { id: "messages", label: "Mensajes" },
   { id: "schedule", label: "Horarios y avisos" }, { id: "costs", label: "Costos" },
-  { id: "capabilities", label: "Capacidades" },
+  { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
 ];
 const MESSAGE_TEMPLATES = [
   { id: "greeting", label: "Saludo", description: "Inicio de conversación", icon: MessageCircle },
@@ -210,6 +210,38 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
   const [saveErrorDetail, setSaveErrorDetail] = useState<string | null>(null);
+  const [modelApiKeyStatus, setModelApiKeyStatus] = useState<ModelApiKeyStatus | undefined>(data?.model_api_key);
+  const [modelApiKey, setModelApiKey] = useState("");
+  const [modelApiKeyBusy, setModelApiKeyBusy] = useState(false);
+  const [modelApiKeyFeedback, setModelApiKeyFeedback] = useState("");
+
+  useEffect(() => { if (data?.model_api_key) setModelApiKeyStatus(data.model_api_key); }, [data?.model_api_key]);
+
+  const saveModelKey = async () => {
+    setModelApiKeyBusy(true); setModelApiKeyFeedback("");
+    try {
+      const result = await saveModelApiKey(modelApiKey);
+      setModelApiKeyStatus(result.model_api_key);
+      setModelApiKey("");
+      setModelApiKeyFeedback(result.validation === "valid" ? "Clave validada." : "Clave válida, pero la cuenta no tiene saldo.");
+    } catch (error) {
+      setModelApiKeyFeedback(error instanceof ApiError && error.status === 400 ? "Clave inválida." : error instanceof ApiError && error.status === 502 ? "No se pudo validar la clave." : "No se pudo guardar la clave.");
+    } finally { setModelApiKeyBusy(false); }
+  };
+
+  const deleteModelKey = async () => {
+    setModelApiKeyBusy(true); setModelApiKeyFeedback("");
+    try {
+      const result = await deleteModelApiKey();
+      setModelApiKeyStatus(result.model_api_key);
+      setModelApiKeyFeedback("Clave eliminada del panel.");
+    } catch (error) {
+      setModelApiKeyFeedback(error instanceof Error ? error.message : "No se pudo borrar la clave.");
+    } finally { setModelApiKeyBusy(false); }
+  };
+
+  const modelApiKeyOrigin = modelApiKeyStatus?.source === "env" ? "Configurada en el servidor (variable de entorno)"
+    : modelApiKeyStatus?.source === "panel" ? "Configurada desde el panel" : "No configurada";
 
   useEffect(() => {
     if (!data) return;
@@ -358,6 +390,18 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             </Card>
           </div> : null}
         {active === "capabilities" ? capabilityHost : null}
+        {active === "model-api-key" ? <Card title="API key de modelos" description="Configura la clave de DeepSeek para las llamadas al modelo.">
+          <div className="settings-model-key">
+            <p className="settings-model-key__origin">{modelApiKeyOrigin}</p>
+            {modelApiKeyStatus?.configured ? <code className="settings-model-key__masked">{modelApiKeyStatus.masked}</code> : null}
+            <Input label="API key de DeepSeek" type="password" autoComplete="new-password" value={modelApiKey} onChange={(event) => setModelApiKey(event.target.value)} />
+            <div className="settings-model-key__actions">
+              <Button disabled={modelApiKeyBusy || !modelApiKey.trim()} onClick={() => void saveModelKey()}>Guardar</Button>
+              <Button variant="danger" disabled={modelApiKeyBusy || modelApiKeyStatus?.source !== "panel"} onClick={() => void deleteModelKey()}>Borrar</Button>
+            </div>
+            {modelApiKeyFeedback ? <p className="settings-model-key__feedback" role="status">{modelApiKeyFeedback}</p> : null}
+          </div>
+        </Card> : null}
       </div>}
     </Tabs>
     </div>

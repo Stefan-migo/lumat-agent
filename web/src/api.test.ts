@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule } from './api';
+import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -68,6 +68,25 @@ describe('apiFetch', () => {
       detail: JSON.stringify({ detail }),
       structuredDetail: detail,
     });
+  });
+});
+
+describe('model API key contracts', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('gets status and posts a key with the typed validation response', async () => {
+    const status = { configured: true, source: 'panel', masked: '…1234' } as const;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ model_api_key: status }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, validation: 'no_balance', model_api_key: status }), { status: 200 }));
+    await expect(getModelApiKeyStatus()).resolves.toEqual(status);
+    await expect(saveModelApiKey('sk-test-key')).resolves.toEqual({ ok: true, validation: 'no_balance', model_api_key: status });
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/settings/model_api_key', expect.objectContaining({ method: 'POST', body: '{"api_key":"sk-test-key"}' }));
+  });
+
+  it('deletes the panel key with DELETE', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true, model_api_key: { configured: false, source: 'none', masked: '' } }), { status: 200 }));
+    await deleteModelApiKey();
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/settings/model_api_key', expect.objectContaining({ method: 'DELETE' }));
   });
 });
 

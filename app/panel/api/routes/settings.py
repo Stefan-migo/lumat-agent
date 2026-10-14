@@ -214,7 +214,7 @@ def settings_model_api_key(
     if not key:
         raise HTTPException(status_code=400, detail="api key must not be empty")
     try:
-        validate_deepseek_key(key)
+        validation = validate_deepseek_key(key)
     except InvalidApiKeyError:
         raise HTTPException(status_code=400, detail="invalid api key")
     except KeyValidationUnavailableError:
@@ -223,7 +223,7 @@ def settings_model_api_key(
         session, key, actor=current.username, updated_by=current.id
     )
     session.commit()
-    return {"ok": True, "model_api_key": model_secrets.model_api_key_status(session)}
+    return {"ok": True, "validation": validation, "model_api_key": model_secrets.model_api_key_status(session)}
 
 
 @router.delete("/settings/model_api_key")
