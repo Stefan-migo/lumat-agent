@@ -43,12 +43,16 @@ For a customer search use `{"scope":"customer","entity_id":"customer:42",
 
 ```json
 {"titulo":"Release choice","contenido":"...","topic_key":"agent:release",
- "tipo":"decision","visibility":"global"}
+ "tipo":"decision","visibility":"global","handoff":false}
 ```
 
 `memory.write` requires `titulo`, `contenido`, `topic_key` beginning with
 `agent:`, and `tipo` (`decision`, `discovery`, `pattern`, or `preference`).
 `visibility` is `global` by default or `thread` for thread-only context.
+`handoff` is optional (default `false`); set `handoff: true` when the memory
+leaves a continuation point — an open thread of work or the pending ordering of
+tasks — so later turns surface it right after pinned memory when they read own
+memory. Leave it `false` for durable facts that need no resumption.
 
 ```json
 {"id":123,"contenido":"Corrected fact"}

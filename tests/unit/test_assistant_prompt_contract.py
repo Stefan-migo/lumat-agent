@@ -31,3 +31,15 @@ def test_persona_is_act_first_and_chilean():
     assert "CALL THE TOOLS" in persona
     assert "CHILEAN SPANISH" in persona
     assert "never load or execute skills" not in persona
+
+
+def test_memory_skill_documents_the_handoff_marker():
+    skill = _read("skills/assistant/memoria-tukulpan.md")
+    assert '"handoff":false' in skill
+    assert "continuation point" in skill
+
+
+def test_persona_tells_when_to_mark_handoff():
+    persona = _read("personas/assistant.md")
+    assert "handoff" in persona
+    assert "continuation point" in persona

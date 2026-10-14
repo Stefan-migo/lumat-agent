@@ -43,6 +43,10 @@ DELEGATION_SPAN_MAX_STEPS = 2
 DELEGATION_WRITE_REFUSED = "delegation_write_refused"
 DELEGATION_TOOL_REFUSED = "delegation_tool_refused"
 DELEGATION_MEMORY_SCOPE_REFUSED = "delegation_memory_scope_refused"
+# Bodies loaded for the responder every turn, even when the planner does not
+# declare them. Scoped to the responder: the planner keeps seeing only the
+# skill index ({name, description}), never these bodies (D8).
+ALWAYS_ON_RESPONDER_SKILLS = ("memoria-tukulpan",)
 PANEL_GROUNDING_REFUSAL = (
     "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
     "Reformula la consulta o aporta más contexto."
@@ -623,8 +627,10 @@ def _skill_context(state) -> str:
     from app.services.skills import SkillError, load_skill_body
 
     definitions = {skill.name: skill for skill in _effective_skill_index(state)}
+    declared = state.get("guardrails", {}).get("skills") or []
+    names = list(dict.fromkeys([*declared, *ALWAYS_ON_RESPONDER_SKILLS]))
     bodies = []
-    for name in (state.get("guardrails", {}).get("skills") or []):
+    for name in names:
         definition = definitions.get(name)
         if definition is None:
             continue
