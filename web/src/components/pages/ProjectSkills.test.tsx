@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ProjectSkills } from "./ProjectSkills";
 
 const response = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -8,24 +9,58 @@ describe("ProjectSkills", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("shows read-only global and editable project skills and persists project updates", async () => {
+    const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(response({ skills: [{ name: "catalog", description: "Global entry", scope: "global" }] }))
+      .mockResolvedValueOnce(response({ skills: [{ name: "catalog", description: "Global entry", scope: "global", body: "## Global body" }] }))
       .mockResolvedValueOnce(response({ project: {} }));
-    render(<ProjectSkills projectSlug="ops" projectId={4} role="operador" skills={[{ name: "local", description: "Project entry", body: "Local body" }]} />);
+    render(<ProjectSkills projectSlug="ops" role="operador" skills={[{ name: "local", description: "Project entry", body: "Local body" }]} />);
 
     expect(await screen.findByText("Global entry")).toBeInTheDocument();
-    expect(screen.getByText("Local body")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect(screen.getByText("Project entry")).toBeInTheDocument();
+    expect(screen.getByText("Global")).toBeInTheDocument();
+    expect(screen.getByText("Solo lectura")).toBeInTheDocument();
+    expect(screen.getByText("Proyecto")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Acciones de local" }));
+    await user.click(screen.getByRole("menuitem", { name: "Editar" }));
     fireEvent.change(screen.getByLabelText("Descripción de habilidad"), { target: { value: "Updated" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar habilidad" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ skills: [{ name: "local", description: "Updated", body: "Local body" }] }) })));
   });
 
+  it("expands a global skill into its read-only content", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ skills: [{ name: "catalog", description: "Global entry", scope: "global", body: "## Propósito\n\nOrganizar la memoria." }] }));
+    render(<ProjectSkills projectSlug="ops" skills={[]} />);
+
+    const row = await screen.findByRole("button", { name: /catalog/ });
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(row);
+
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Contenido de la habilidad")).toBeInTheDocument();
+    expect(screen.getByText("Vista de lectura")).toBeInTheDocument();
+    expect(screen.getByText("Propósito")).toBeInTheDocument();
+  });
+
+  it("filters both lists by the search query", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ skills: [{ name: "catalog", description: "Global entry", scope: "global", body: null }] }));
+    render(<ProjectSkills projectSlug="ops" skills={[{ name: "local", description: "Project entry", body: "" }]} />);
+
+    await screen.findByText("Global entry");
+    await user.type(screen.getByLabelText("Buscar habilidad"), "sin-coincidencia");
+
+    expect((await screen.findAllByText("Sin coincidencias", {}, { timeout: 2000 })).length).toBe(2);
+  });
+
   it("shows honest empty states", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ skills: [] }));
-    render(<ProjectSkills projectSlug="ops" projectId={4} skills={[]} />);
+    render(<ProjectSkills projectSlug="ops" skills={[]} />);
+
     expect(await screen.findByText("Catálogo global vacío")).toBeInTheDocument();
-    expect(screen.getByText("Sin habilidades de proyecto")).toBeInTheDocument();
+    expect(screen.getByText("Aún no hay habilidades en este proyecto")).toBeInTheDocument();
   });
 });

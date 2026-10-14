@@ -52,7 +52,7 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
       {body ? <Tabs ariaLabel="Secciones del proyecto" tabs={[{ id: "context", label: "Contexto" }, { id: "threads", label: "Hilos" }, { id: "agents", label: "Agentes" }, { id: "skills", label: "Skills" }]}>{(active) => {
         if (active === "threads") return <Card title="Hilos del proyecto"><EmptyState title="Hilos del proyecto no disponibles" description="Esta vista todavía no puede filtrar hilos por proyecto. La API no entrega la asociación del proyecto en el listado de hilos." /></Card>;
         if (active === "agents") return <ProjectAgents projectSlug={body.project.slug} />;
-        if (active === "skills") return <ProjectSkills projectSlug={body.project.slug} projectId={body.project.id} role={role} skills={body.project.config?.skills ?? []} />;
+        if (active === "skills") return <ProjectSkills projectSlug={body.project.slug} role={role} skills={body.project.config?.skills ?? []} />;
         return <div className="projects-page__context">
           <Card icon={FileText} title="Instrucciones del proyecto" description="Define el contexto compartido por el asistente." footer={<Button disabled={savingInstructions} onClick={() => void saveInstructions()}>{savingInstructions ? "Guardando…" : "Guardar cambios"}</Button>}>
             <Input label="Nombre del proyecto" value={body.project.name} disabled onChange={() => undefined} />
