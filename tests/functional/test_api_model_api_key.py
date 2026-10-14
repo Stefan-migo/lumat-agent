@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import AuditLog, PanelSecret
+from app.services import model_secrets
 from app.services.deepseek_key import DEEPSEEK_MODELS_URL
 
 
@@ -78,6 +79,25 @@ def test_set_key_accepts_no_balance_response(client, make_user, monkeypatch):
     with SessionLocal() as session:
         secret = session.scalar(select(PanelSecret))
         assert secret is not None and b"sk-test-no-balance" not in secret.ciphertext
+
+
+def test_post_invalidates_cached_environment_key_after_commit(client, make_user, monkeypatch):
+    _encryption_key(monkeypatch)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-env-fallback")
+    get_settings.cache_clear()
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    model_secrets.invalidate_model_key_cache()
+    assert model_secrets.resolve_model_api_key() == "sk-test-env-fallback"
+
+    with respx.mock(assert_all_called=True) as router:
+        router.get(DEEPSEEK_MODELS_URL).mock(return_value=httpx.Response(200))
+        response = client.post(
+            "/panel/api/settings/model_api_key", json={"api_key": "sk-test-panel-new"}
+        )
+
+    assert response.status_code == 200, response.text
+    assert model_secrets.resolve_model_api_key() == "sk-test-panel-new"
 
 
 def test_invalid_key_is_rejected_without_persisting(client, make_user):

@@ -72,9 +72,9 @@ bypass this follow-up targets).
 
 ## Tasks
 
-- [x] **F1 — RED (AK-18).** A regression test proving the ordering bug: a resolve that runs between
-  the invalidation and the commit must not leave the stale value cached after the commit. It MUST
-  fail against the current code.
+- [x] **F1 — RED (AK-18, corrected).** A DB-read counter proves `set_model_api_key()` leaves the
+  primed cache intact before commit. The first version was invalid because it explicitly performed
+  post-commit invalidation in the test; the corrected version was verified against the original code.
 - [x] **F2 — AK-18 fix.** Remove `invalidate_model_key_cache()` from `set_model_api_key` /
   `clear_model_api_key` (document that the caller invalidates post-commit); add the post-commit
   `model_secrets.invalidate_model_key_cache()` call in both routes. F1 goes GREEN.
@@ -86,7 +86,8 @@ bypass this follow-up targets).
 
 ## Acceptance criteria
 
-- F1 reproduces the AK-18 bug against the pre-fix code and passes after F2.
+- F1 fails against pre-fix code and passes after F2. Verified by temporarily restoring only the two
+  production files from base `6d7988b2`, then restoring HEAD and rerunning both regression tests.
 - The consumer test (F3) fails if the connection key is not the panel key (e.g. if the resolver is
   bypassed) — i.e. it asserts the auth header, not merely a returned object.
 - Full backend suite green with the same exit-code discipline (the repo does not print a pytest
@@ -111,8 +112,9 @@ post-commit invalidation is therefore established in code rather than by an exis
 
 - Commit `02328eb4f8be467899006f234b68891311226d23` — `fix(panel): invalidate the model key cache after the write commits`.
 - Commit `6589ab4e005a28470c8e39b6f09c883885a63a4f` — `test(panel): cover the real model-key consumers`.
-- RED (pre-fix): `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_secrets.py::test_write_does_not_leave_a_read_during_commit_window_cached` → exit 1; failed at the post-commit assertion: `assert 'sk-env-test' == 'sk-new'`.
-- GREEN (post-fix): `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_key_cache_ordering.py` → exit 0, 1 passed.
-- Consumer/cache focused: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_secrets.py tests/integration/test_model_key_cache_ordering.py` → exit 0, 3 passed.
-- Full backend: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → exit 0, 2030 passed, 2 warnings (412.07s; output reached 100%).
+- The original cache-ordering test was invalid: it performed the production post-commit invalidation itself. It was replaced with a counting test that asserts the in-window read does not hit the DB.
+- Pre-fix command (only `model_secrets.py` and `routes/settings.py` checked out from `6d7988b2`): `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_key_cache_ordering.py::test_write_does_not_invalidate_the_cache_before_commit tests/functional/test_api_model_api_key.py::test_post_invalidates_cached_environment_key_after_commit` → exit 1. Raw assertion evidence: `E           AssertionError: the write invalidated the cache before commit`; `E           assert 2 == 1`; `1 failed, 1 passed in 1.53s`.
+- Post-fix command (restored source files from HEAD): same command → exit 0; `.. [100%]`; `2 passed in 1.32s`.
+- The functional route guard was added. It primes the environment fallback, POSTs the panel key, then resolves and expects the new key. Its pre-fix pass is expected because the old service invalidated early; with the fixed service, removing the route invalidation leaves the test failing.
+- Full backend: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → exit 0, 2031 passed, 2 warnings (340.23s; output reached 100%).
 - `git diff --check` → clean.
