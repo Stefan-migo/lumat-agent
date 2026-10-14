@@ -278,6 +278,51 @@ describe("AgentChat", () => {
     expect(screen.queryByText("Sin datos")).not.toBeInTheDocument();
   });
 
+  it("pins project resources from the context sidebar", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
+    const available = {
+      project_files: [{ id: 12, filename: "manual.pdf", content_type: "application/pdf", size: 100 }],
+      planning_sessions: [{ slug: "plan-1", topic: "Plan de invierno", status: "closed" }],
+      skills: [{ name: "local-skill", description: "Local" }],
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.includes("/assistant/capabilities")) {
+        return jsonResponse({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: true });
+      }
+      if (url.endsWith("/resources")) {
+        if (init?.method === "PUT") {
+          const body = JSON.parse(String(init.body));
+          return jsonResponse({ resources: body, available, inherited: false });
+        }
+        return jsonResponse({ resources: { project_files: [], planning_sessions: [], skills: [] }, available, inherited: true });
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Recursos del proyecto/ }));
+
+    const fileToggle = await screen.findByRole("checkbox", { name: "manual.pdf" });
+    expect(screen.getByRole("checkbox", { name: "Plan de invierno" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "local-skill" })).toBeInTheDocument();
+    expect(fileToggle).not.toBeChecked();
+
+    fireEvent.click(fileToggle);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/resources",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ project_files: [12], planning_sessions: [], skills: [] }),
+      }),
+    ));
+  });
+
   it("does not show stop when no run is active", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({ thread: makeThread(), messages: [] }),

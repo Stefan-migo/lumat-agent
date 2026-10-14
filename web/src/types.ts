@@ -30,6 +30,12 @@ export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' 
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface ProjectToolPolicy { opt_in_enabled: string[]; }
 export interface ThreadToolPolicy { available: string[]; opt_in_enabled: string[]; inherited: boolean; }
+export interface ThreadResourcesSelection { project_files: number[]; planning_sessions: string[]; skills: string[]; }
+export interface ThreadResourceFile { id: number; filename: string; content_type: string; size: number; }
+export interface ThreadResourceSession { slug: string; topic: string | null; status: string | null; }
+export interface ThreadResourceSkill { name: string; description: string; }
+export interface ThreadResourcesAvailable { project_files: ThreadResourceFile[]; planning_sessions: ThreadResourceSession[]; skills: ThreadResourceSkill[]; }
+export interface ThreadResources { resources: ThreadResourcesSelection; available: ThreadResourcesAvailable; inherited: boolean; }
 export interface StopThreadRunResponse { status: 'stopping' | 'cancelled'; run_id: string; }
 export interface ProjectSkill { name: string; description: string; body: string; }
 export interface GlobalSkill { name: string; description: string; scope: "global"; }

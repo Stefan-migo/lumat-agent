@@ -22,6 +22,7 @@ import { pathForRoute } from "../domain/panelRoutes";
 import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
 import { PlanningSessions } from "./PlanningSessions";
+import { ThreadProjectResources } from "./ThreadResources";
 import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
@@ -383,7 +384,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <span>{activeProject?.name ?? (activeProjectSlug === "default" ? "General" : activeProjectSlug ?? "Sin proyecto")}</span>
             <Button variant="tertiary" onClick={() => { setThreadDetailOpen(false); onChangeProject?.(); }}>Cambiar</Button>
           </div>
-          <ThreadContextSections activeProject={activeProject} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
+          <ThreadContextSections activeProject={activeProject} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
         </div> : null}
       </Dialog>
       <Dialog open={navigationOpen} onClose={() => setNavigationOpen(false)} title="Navegación" variant="sheet">
@@ -654,7 +655,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }]}
         >
-          {() => <ThreadContextSections activeProject={activeProject} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
+          {() => <ThreadContextSections activeProject={activeProject} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
         </Tabs>
         </> : null}
       </aside>
@@ -705,12 +706,12 @@ function activityTime(thread: InternalChatThreadSummary): number {
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
-function ThreadContextSections({ activeProject, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
+function ThreadContextSections({ activeProject, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
   return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
     <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
       {activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
     </ContextSection>
-    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><div className="assistant-workspace__context-box">Selección de recursos aún no disponible.</div></ContextSection>
+    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ThreadProjectResources threadId={threadId} expanded={contextSections.resources ?? false} /></ContextSection>
     <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
       {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__context-box"><p>{capabilities.tools?.length ?? 0} herramientas disponibles</p><p>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</p></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
     </ContextSection>
