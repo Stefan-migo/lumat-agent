@@ -459,3 +459,47 @@ def test_planning_close_offers_a_handoff_with_a_captured_next_step(make_user):
 
     assert result["status"] == "completed"
     assert result["result"]["handoff"] == {"actions": ["Crear el proyecto X"]}
+
+
+def test_execution_events_emit_a_handoff_event_for_a_completed_close_with_a_proposal():
+    from app.services.agent_chat import _execution_events
+
+    proposal = {"actions": ["Crear el proyecto X"]}
+    result = {
+        "tool_results": [
+            {"tool": "memory.read", "status": "completed", "result": {"rows": []}},
+            {"tool": "planning.close", "status": "completed", "result": {"handoff": proposal}},
+        ],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {"handoff": proposal}},
+        "evidence": [],
+        "status": "completed",
+        "response": "Tool planning.close completed.",
+    }
+
+    events = _execution_events(result, 4, "run-h1", 2)
+    handoff = [event for event in events if event["type"] == "handoff"]
+
+    assert len(handoff) == 1
+    assert handoff[0]["handoff"] == proposal
+    assert handoff[0]["thread_id"] == 4
+    assert handoff[0]["run_id"] == "run-h1"
+
+
+def test_execution_events_omit_handoff_without_a_proposal():
+    from app.services.agent_chat import _execution_events
+
+    def event_types(entry):
+        return {event["type"] for event in _execution_events(entry, 4, "run-h2", 2)}
+
+    assert "handoff" not in event_types({
+        "tool_results": [{"tool": "planning.close", "status": "completed", "result": {"handoff": None}}],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {"handoff": None}},
+    })
+    assert "handoff" not in event_types({
+        "tool_results": [{"tool": "planning.close", "status": "completed", "result": {"handoff": {"actions": []}}}],
+        "tool_result": {"tool": "planning.close", "status": "completed", "result": {"handoff": {"actions": []}}},
+    })
+    assert "handoff" not in event_types({
+        "tool_results": [{"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}}],
+        "tool_result": {"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}},
+    })
