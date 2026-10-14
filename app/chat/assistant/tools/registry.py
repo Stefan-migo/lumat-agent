@@ -32,7 +32,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.merge",
     "skill.propose",
 })
-AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "planning.open", "planning.close"})
+AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "planning.open", "planning.close", "planning.record_decision", "planning.record_note"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 # Own reads are a compact recall digest, so legacy rows cannot expose unbounded
 # content; 500 characters keeps enough context for the assistant without adding a config knob.
@@ -281,6 +281,18 @@ class PlanningOpenArgs(BaseModel):
 
 class PlanningCloseArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class PlanningRecordDecisionArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class PlanningRecordNoteArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["objective", "risk", "next_step", "general"]
+    content: str = Field(min_length=1, max_length=2000)
 
 
 def _plain(value: Any) -> Any:
@@ -724,6 +736,26 @@ def _planning_close(session, args: PlanningCloseArgs, *, trusted_thread_id: int 
     return {"session": state, "thread_id": thread.id, "report_key": result.get("report_key")}
 
 
+def _planning_record_decision(session, args: PlanningRecordDecisionArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):
+    thread = _planning_thread(session, trusted_thread_id, owner_id)
+    try:
+        result = planning.record_decision(session, thread, title=args.title, content=args.content)
+    except planning.PlanningSessionError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    state = dict((thread.assistant_state or {}).get("cortex_session") or {})
+    return {"session": state, "thread_id": thread.id, **result}
+
+
+def _planning_record_note(session, args: PlanningRecordNoteArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):
+    thread = _planning_thread(session, trusted_thread_id, owner_id)
+    try:
+        result = planning.record_note(session, thread, kind=args.kind, content=args.content)
+    except planning.PlanningSessionError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    state = dict((thread.assistant_state or {}).get("cortex_session") or {})
+    return {"session": state, "thread_id": thread.id, **result}
+
+
 def _assistant_capabilities(_session, _args: CapabilitiesArgs):
     from app.services.prompts import load_assistant_config
 
@@ -795,6 +827,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "skill.propose": ToolDefinition("skill.propose", SkillProposeArgs, False, _propose_project_skill, "Propose a project skill for owner approval.", tier="default"),
     "planning.open": ToolDefinition("planning.open", PlanningOpenArgs, False, _planning_open, "Open a planning session on the current chat thread for an explicit user-requested topic.", tier="default"),
     "planning.close": ToolDefinition("planning.close", PlanningCloseArgs, False, _planning_close, "Close the active planning session and write its final report.", tier="default"),
+    "planning.record_decision": ToolDefinition("planning.record_decision", PlanningRecordDecisionArgs, False, _planning_record_decision, "Record a structured decision on the active planning session after the user confirms it.", tier="default"),
+    "planning.record_note": ToolDefinition("planning.record_note", PlanningRecordNoteArgs, False, _planning_record_note, "Record a structured note on the active planning session after the user confirms it.", tier="default"),
 }
 
 ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
@@ -829,6 +863,8 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "skill.propose": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "planning.open": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "planning.close": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "planning.record_decision": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "planning.record_note": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
 }
 
 # Roles that may read business-shared memory (agent-role-access D2/D3/D5).

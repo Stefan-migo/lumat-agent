@@ -92,6 +92,8 @@ assistant:
     - artifact.save
     - planning.open
     - planning.close
+    - planning.record_decision
+    - planning.record_note
     - project.create
     - project.rename
     - project.archive

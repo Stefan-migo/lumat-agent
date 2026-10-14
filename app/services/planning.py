@@ -52,11 +52,50 @@ def build_report(cortex: dict) -> str:
     return json.dumps({"topic": cortex.get("topic", "")}, ensure_ascii=False)
 
 
-def close_session(session, thread) -> dict:
-    """Close the active planning session and persist its report."""
+NOTE_KINDS = frozenset({"objective", "risk", "next_step", "general"})
+
+
+def _active_cortex(thread) -> dict:
     cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
     if cortex.get("status") != "active":
         raise PlanningSessionError("planning session is not active", 409)
+    return cortex
+
+
+def _require_text(value: str, field: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        raise PlanningSessionError(f"{field} must not be blank", 400)
+    return text
+
+
+def _append_capture(session, thread, field: str, entry: dict) -> list:
+    cortex = _active_cortex(thread)
+    entries = [*cortex.get(field, []), entry]
+    cortex[field] = entries
+    thread.assistant_state = {**(thread.assistant_state or {}), "cortex_session": cortex}
+    session.flush()
+    return entries
+
+
+def record_decision(session, thread, *, title: str, content: str) -> dict:
+    """Append a structured decision to the active session; reject a blank one."""
+    entry = {"title": _require_text(title, "title"), "content": _require_text(content, "content")}
+    return {"decision": entry, "decisions": _append_capture(session, thread, "decisions", entry)}
+
+
+def record_note(session, thread, *, kind: str, content: str) -> dict:
+    """Append a structured note to the active session; reject a bad kind or blank content."""
+    if kind not in NOTE_KINDS:
+        raise PlanningSessionError(f"kind must be one of {sorted(NOTE_KINDS)}", 400)
+    entry = {"kind": kind, "content": _require_text(content, "content")}
+    return {"note": entry, "notes": _append_capture(session, thread, "notes", entry)}
+
+
+def close_session(session, thread) -> dict:
+    """Close the active planning session and persist its report."""
+    _active_cortex(thread)
+    cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
     from app.services.agent_chat import close_cortex_session
 
     return close_cortex_session(session, thread, report=build_report(cortex))
