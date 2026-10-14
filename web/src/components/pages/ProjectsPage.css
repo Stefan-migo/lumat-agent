@@ -8,6 +8,18 @@
   min-width: 0;
 }
 
+/* Embedded in the assistant workspace (project tab): the workspace sidebar already
+   marks the active project, so the shared header lime rail is redundant here; the
+   workspace also drops its local actions and tightens the title-to-tabs gap. */
+.projects-page--embedded .page-header__copy::before { display: none; }
+.projects-page--embedded .page-header { margin-bottom: 0; }
+.projects-page--embedded .page-frame__titlebar { padding-bottom: 0; }
+.projects-page--embedded { gap: var(--space-4); }
+/* The workspace center gives the frame a full-height grid track; without this the
+   auto rows stretch and the title bar grows far past the header, leaving a huge gap
+   between the title and the tabs. */
+.projects-page--embedded { align-content: start; }
+
 @media (max-width: 800px) {
   .projects-page__context {
     grid-template-columns: minmax(0, 1fr);
