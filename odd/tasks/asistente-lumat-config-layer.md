@@ -96,7 +96,7 @@ Non-goals (explicitly dropped after review):
 | ID | Spec | Route | Status | Evidence |
 | --- | --- | --- | --- | --- |
 | T0 feature doc | — | inline | done | this commit |
-| T1 default-on 7 opt-in | S1 | inline | pending | — |
+| T1 default-on 7 opt-in | S1 | inline | done | 49227b57 |
 | T2 sidebar Capacidades wired | S2 | inline | pending | — |
 | T3 Recursos selector (B) | S3 | inline | pending | — |
 | T4 tray/library separation | S4 | inline | pending | — |
@@ -171,3 +171,16 @@ L13 — Worktree created with explicit owner consent:
 `rapso worktree create asistente-lumat-config-layer --yes` →
 `/home/stefan/repos/lumat-agent-odd-asistente-lumat-config-layer`, branch
 `odd/asistente-lumat-config-layer`, base `143ced8b`. Feature doc written here (T0).
+
+L14 — T1 done (49227b57). Option A chosen by the owner ("a"): `ToolPolicy.opt_in_enabled`
+now uses `Field(default_factory=_default_opt_in_tools)`, deriving the default from every
+`tier == "opt_in"` entry in `TOOL_REGISTRY` (future-proof: a new opt-in tool is default-on
+automatically). Explicit project/thread policies still win, so the security invariant holds.
+TDD: RED first (3 failing tests asserting the new default), then GREEN. Updated four tests
+that encoded the old `[]` default: `test_project_config.py` (default set), `test_effective_config.py`
+(global + empty-project now expect `DEFAULT_TOOLS | OPT_IN_TOOLS`; the skill-body test now
+uses `OPERADOR` + `automation.create_rule` to keep proving a skill body cannot grant a
+role-denied tool), and `test_assistant_effective_config.py` (thread override now disables
+with `[]` instead of enabling `web.search`). Evidence: focused unit + integration green;
+full backend suite green (2166 collected, 0 failures). Env: worktree `.venv` synced and the
+isolated test DB raised with `infra/test-db.sh up` (port 6376).
