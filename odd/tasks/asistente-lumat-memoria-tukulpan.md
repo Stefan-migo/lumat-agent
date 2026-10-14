@@ -1,9 +1,9 @@
 # ODD: asistente-lumat-memoria-tukulpan
 
-**Branch**: `odd/asistente-lumat-memoria-tukulpan`
-**Worktree**: `../lumat-agent-odd-asistente-lumat-memoria-tukulpan`
-**Base**: `3475bba7` (= `origin/main` at branch time; el handoff citaba `8a946821`, `origin/main` avanzó con el PR #580 de panel-design-details durante el recon)
-**Status**: slice 1 **completo** (T1, T2, T8a, + fix R4-001) y **MERGED** en `main` (PR #586, `main` = `0299d8e1`); review RDD `approved + acknowledged` (`authority: burned`). Slice 2 **completo** (T3, T4, T8b) en `odd/asistente-lumat-memoria-tukulpan-s2`: 3 commits (`88f914c9`, `7d089c1d`, `24a1dc0f`), 8 paths / 217 líneas, `uv run pytest tests/` → **1974 passed**. RDD assess post-slice: `medium`, `review_due=false` (`under_budget`) → sin review. Siguiente: slice 3 (T5, T6, T7).
+**Branch**: `odd/asistente-lumat-memoria-tukulpan-s3` (slice 3; slices 1 y 2 merged en `main`)
+**Worktree**: `../lumat-agent-odd-asistente-lumat-memoria-tukulpan-s3`
+**Base**: `c388fa02` (= `main` al arrancar slice 3)
+**Status**: slice 1 **completo** (T1, T2, T8a, + fix R4-001) y **MERGED** en `main` (PR #586, `main` = `0299d8e1`); review RDD `approved + acknowledged` (`authority: burned`). Slice 2 **completo** (T3, T4, T8b) en `odd/asistente-lumat-memoria-tukulpan-s2`: 3 commits (`88f914c9`, `7d089c1d`, `24a1dc0f`), 8 paths / 217 líneas, `uv run pytest tests/` → **1974 passed**. RDD assess post-slice: `medium`, `review_due=false` (`under_budget`) → sin review. Slice 3 **completo** (T5, T6, T7) en `odd/asistente-lumat-memoria-tukulpan-s3` (base `c388fa02`): 2 commits (`ebb08b30`, `d00e8eed`), 5 paths / 101 líneas; suite completa verde (ver Evidence log slice 3). RDD assess acumulado: `medium`, `review_due=false` (`under_budget`) → sin review.
 **Source**: `odd/handoffs/asistente-lumat-memoria-tukulpan.md` (Engram obs 6428) + `.rapsodia-code/sessions/ready-for-odd/2026-10-13-asistente-lumat-memoria-tukulpan/{report.md,session.md}` (Engram obs 6412/6414/6417/6419/6420) + hallazgos verificados 2026-10-13 (Engram obs 6457).
 
 ## Objective
@@ -75,18 +75,20 @@ Runner: `uv run pytest tests/`.
   Tests: `tests/unit/test_assistant_tool_loop.py`, `tests/unit/test_assistant_harness.py`.
   Route: delegated. **Unidad más riesgosa** — es el corazón del feature.
 
-- [ ] **T5 — Forzar `memoria-tukulpan` siempre-on (responder).**
-  Inyectar la skill incondicionalmente en `_skill_context`/`_responder_system_prompt` (`nodes.py:600-621`). Solo responder.
-  Tests: `tests/unit/test_assistant_prompt_contract.py`.
-  Route: delegated.
+- [x] **T5 — Forzar `memoria-tukulpan` siempre-on (responder).**
+  Inyectar la skill incondicionalmente en `_skill_context` (`nodes.py:627-643`; solo lo usa `_responder_system_prompt`, `:645`). Constante `ALWAYS_ON_RESPONDER_SKILLS = ("memoria-tukulpan",)`; los nombres declarados se preservan y el always-on se agrega al final, deduplicado. Solo responder; el planner sigue viendo solo `{name, description}` (D8).
+  Tests: `tests/unit/test_assistant_planner.py` (4 nuevos, incluye guard D8). El handoff citaba `test_assistant_prompt_contract.py`; ese archivo es de contrato de texto de prompts, el comportamiento vive en `test_assistant_planner.py`.
+  Route: **inline** (cambio único entendido: una función + tests; sin unidad paralela ni backstop de contexto → writer trigger no dispara. El plan lo marcaba delegated sin trigger nombrado).
 
-- [ ] **T6 — Documentar `handoff` en la skill.**
-  `agent/skills/assistant/memoria-tukulpan.md`: agregar `handoff` al shape JSON de `memory.write` + el **cuándo** marcarlo (punto de continuación / orden de tareas e hilos).
-  Route: **inline** (un archivo Markdown, ya entendido).
+- [x] **T6 — Documentar `handoff` en la skill.**
+  `agent/skills/assistant/memoria-tukulpan.md`: `handoff` agregado al shape JSON de `memory.write` + párrafo del **cuándo** (continuation point / orden de tareas e hilos), consistente con el `description` del arg en `registry.py`.
+  Tests: `tests/unit/test_assistant_prompt_contract.py::test_memory_skill_documents_the_handoff_marker`.
+  Route: **inline**.
 
-- [ ] **T7 — Persona: cuándo marcar handoff.**
-  `agent/personas/assistant.md` sección Memory (`:19-21`): una línea sobre marcar handoff. **Preservar** los contratos fijados por tests.
-  Route: inline (una línea, ya entendida).
+- [x] **T7 — Persona: cuándo marcar handoff.**
+  `agent/personas/assistant.md` sección Memory: una línea sobre marcar `handoff` en un write que deja un continuation point. Contratos de persona preservados (identidad, línea de aprobación, cita `web.fetch`).
+  Tests: `tests/unit/test_assistant_prompt_contract.py::test_persona_tells_when_to_mark_handoff`.
+  Route: **inline**.
 
 - [x] **T8a — Spec MEM-12 (`handoff`).**
   `openspec/specs/memory/spec.md`: **requirement nuevo MEM-12** para el flag `handoff` (escribe, se lee, prioriza) con escenarios Given/When/Then.
@@ -98,7 +100,7 @@ Runner: `uv run pytest tests/`.
   Tests: `tests/spec/test_memory_spec.py`.
   Route: inline. Va con **slice 2**.
 
-- [ ] **T9 — Commits atómicos** (Conventional Commits, sin atribución IA).
+- [x] **T9 — Commits atómicos** (Conventional Commits, sin atribución IA). Slice 3: `ebb08b30` (T5), `d00e8eed` (T6+T7).
 
 ## Verification
 
@@ -180,3 +182,20 @@ Review RDD aprobada (`approved` + `acknowledged`, authority burned) sobre el can
 - **Slice 2 — verificación de registro** — `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -p no:cacheprovider` → **1974 passed**, 2 warnings, EXIT=0.
   - Gotcha: la DB de test (tmpfs) arranca virgen; el rol `app` lo crea `db/migrate.sh` vía el fixture `migrated_db`. La primera corrida falló con `password authentication failed for user "app"` por una carrera de arranque del contenedor, no por el cambio.
 - **Slice 2 — RDD** — `gentle-ai review assess --base-ref 0299d8e1 --committed-only` → `risk: medium`, `changed_paths: 8`, `changed_lines: 217`, `review_due: false` (`under_budget`). Sin review.
+
+## Evidence log — slice 3 (`odd/asistente-lumat-memoria-tukulpan-s3`, base `c388fa02`)
+
+- **T5** — commit `ebb08b30` `feat(assistant): always load the memoria-tukulpan skill for the responder` (`app/chat/assistant/nodes.py`, `tests/unit/test_assistant_planner.py`).
+  - Graph (consultado): `guardrails()`, `_skill_context`/`_responder_system_prompt`, `global_skill_index`, `load_skill_body`, `plan_llm`; comunidades `guardrails`/`nodes.py`.
+  - RED observado: `test_skill_context_injects_always_on_memory_skill_without_declared_skills` y `..._alongside_declared` fallan (2) con el código previo. GREEN: `tests/unit/test_assistant_planner.py` verde.
+  - El test `test_skill_context_is_empty_without_validated_skills` cambió de contrato (ya no es vacío sin declaradas: ahora inyecta el always-on); reemplazado por 4 tests que preservan/refuerzan la intención, incluido el guard D8 (el planner nunca recibe el body).
+  - `ALWAYS_ON_RESPONDER_SKILLS` se agrega a los declarados, deduplicado; si la skill no está en el index efectivo se omite (respeta override/borrado).
+
+- **T6 + T7** — commit `d00e8eed` `docs(assistant): document the handoff marker in the memory skill and persona` (`agent/skills/assistant/memoria-tukulpan.md`, `agent/personas/assistant.md`, `tests/unit/test_assistant_prompt_contract.py`).
+  - RED observado en ambos tests de contrato antes de documentar; GREEN tras editar skill y persona. Contratos de persona intactos (tests existentes verdes).
+
+- **Slice 3 — suite completa** — `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → **1978 passed**, 1 failed.
+  - El único fallo: `tests/integration/test_time_triggers.py::test_worker_processes_daily_summary_for_admin` (`assert run_cycle() == 1` → `0`). **No-causal**: el archivo del test y `app/ops/` están byte-idénticos al baseline `c388fa02`; el diff de slice 3 solo toca `nodes.py` + tests. Reproducción: pasa 4/4 en aislamiento y `tests/integration` completo (780 passed) → flake de **borde de minuto** (`run_cycle()` usa su propio `datetime.now()`; si el minuto cambia entre el `now` del test y el del worker, el trigger no queda `due`). Advisory pre-existente, no blocker de slice 3.
+  - Gotcha heredado confirmado: los tests de `tests/unit` que tocan DB fallan si se corre `tests/unit` solo (el rol `app` lo crea `migrated_db` al correr integration primero); correr la suite completa en un proceso.
+
+- **Slice 3 — RDD** — `gentle-ai review assess --base-ref c388fa02 --committed-only` (acumulado, 2 commits) → `risk: medium`, `changed_paths: 5`, `changed_lines: 101`, `review_due: false` (`under_budget`). Sin review.
