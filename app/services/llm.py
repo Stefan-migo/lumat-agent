@@ -14,6 +14,7 @@ import httpx
 from openai import OpenAI
 
 from app.config import get_settings
+from app.services.model_secrets import resolve_model_api_key
 
 LLM_TIMEOUT_SECONDS = 60.0
 
@@ -29,7 +30,7 @@ CHAT_MODEL = get_settings().chat_model
 
 
 def openai_client(provider: str | None = None) -> OpenAI:
-    """Return a chat-completions client for the ACTIVE provider (env, SH-2).
+    """Return a chat-completions client for the active provider.
 
     Raises a clear error when the active provider's key is missing (fail-fast:
     Settings keeps both keys optional, the key is only required once a chat
@@ -42,7 +43,7 @@ def openai_client(provider: str | None = None) -> OpenAI:
             f"unsupported chat provider {provider!r} "
             "(expected 'deepseek' or 'openrouter')"
         )
-    key = settings.deepseek_api_key if provider == "deepseek" else settings.openrouter_api_key
+    key = resolve_model_api_key() if provider == "deepseek" else settings.openrouter_api_key
     if not key:
         raise RuntimeError(
             f"{provider.upper()}_API_KEY is required when using the assistant provider"
