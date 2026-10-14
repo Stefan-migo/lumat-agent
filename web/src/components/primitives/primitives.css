@@ -1159,6 +1159,9 @@
   background: var(--corp-bg);
   color: var(--corp-fg);
   box-shadow: var(--shadow-3);
+  /* Above sticky row headers and in-page overlays (the portal otherwise loses
+     to any positioned sibling with a z-index). */
+  z-index: var(--z-modal);
 }
 .menu__item {
   display: flex;
@@ -3313,3 +3316,46 @@
   .agenda-create-form__row--schedule > :first-child { grid-column: 1 / -1; }
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* ---- Toast (transient notifications, bottom-right, auto-dismiss) ---- */
+.toast-region {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-toast);
+  display: grid;
+  gap: var(--space-2);
+  width: min(24rem, calc(100vw - var(--space-8)));
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--corp-border);
+  border-left: 4px solid var(--corp-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--corp-text);
+  box-shadow: var(--shadow-3);
+  pointer-events: auto;
+}
+.toast--success { border-left-color: var(--success); }
+.toast--danger { border-left-color: var(--danger); }
+.toast--info { border-left-color: var(--teal-500); }
+.toast--danger > .icon { color: var(--danger); }
+.toast--success > .icon { color: var(--success); }
+.toast--info > .icon { color: var(--teal-500); }
+.toast__message { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--text-sm); }
+.toast__close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--corp-fg-muted);
+  cursor: pointer;
+}

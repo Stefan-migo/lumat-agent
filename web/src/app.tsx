@@ -3,6 +3,7 @@ import { apiFetch, ApiError, fetchMe, postJson } from './api';
 import type { LoginResponse, User } from './types';
 import { AppShell } from './components/domain/AppShell';
 import { LoginAuth } from './components/pages/LoginAuth';
+import { ToastProvider } from './components/primitives/Toast';
 
 /** Auth gate for the panel SPA (B6/T6.4; PDW-AUTH-1/2, D4).
  *
@@ -21,6 +22,14 @@ type GateState =
   | { kind: 'error'; detail: string };
 
 export default function App() {
+  return (
+    <ToastProvider>
+      <AppGate />
+    </ToastProvider>
+  );
+}
+
+function AppGate() {
   const [state, setState] = useState<GateState>({ kind: 'loading' });
 
   const probe = useCallback(async () => {
