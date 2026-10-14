@@ -159,6 +159,21 @@ def rename_project_folder(session: Session, project: Project, owner: User, folde
     return row
 
 
+def move_project_file(session: Session, project: Project, owner: User, file_id: int, folder_id: int | None) -> ProjectFile | None:
+    """Reparent a project file; a null folder moves it back to the project root."""
+    row = get_project_file(session, project.id, file_id)
+    if row is None:
+        return None
+    if folder_id is not None and get_project_folder(session, project.id, folder_id) is None:
+        raise ValueError("folder not found")
+    previous = row.folder_id
+    row.folder_id = folder_id
+    record_audit(session, actor=owner.username, action="project_file.moved", entity="project_file",
+                 entity_id=str(file_id), after={"project_id": project.id, "folder_id": previous, "to_folder_id": folder_id})
+    session.flush()
+    return row
+
+
 def delete_project_file(session: Session, project: Project, owner: User, file_id: int) -> bool:
     """Remove a project file, its stored bytes and the KB document it produced."""
     row = get_project_file(session, project.id, file_id)

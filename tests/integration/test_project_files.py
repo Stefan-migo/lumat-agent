@@ -16,6 +16,7 @@ from app.services.project_files import (
     ingest_project_file,
     list_project_files,
     list_project_folders,
+    move_project_file,
     rename_project_folder,
     store_project_file,
 )
@@ -168,6 +169,32 @@ def test_project_folders_crud_and_recursive_delete(monkeypatch, tmp_path):
         # The nested folder is dropped with its parent; no files remain to delete.
         assert delete_project_folder(session, project, owner, root.id) == 0
         assert list_project_folders(session, project.id) == []
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_move_project_file_reparents_and_can_return_to_root(monkeypatch, tmp_path):
+    from app.config import get_settings
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    with SessionLocal() as session:
+        owner, project = _seed_project(session, "files-move")
+        folder = create_project_folder(session, project, owner, "Diseño")
+        row = store_project_file(session, project, owner, "note.txt", "text/plain", b"note")
+        session.flush()
+        assert row.folder_id is None
+
+        moved = move_project_file(session, project, owner, row.id, folder.id)
+        assert moved is not None
+        assert moved.folder_id == folder.id
+
+        back = move_project_file(session, project, owner, row.id, None)
+        assert back is not None
+        assert back.folder_id is None
+
+        with pytest.raises(ValueError, match="folder not found"):
+            move_project_file(session, project, owner, row.id, 999)
+        assert move_project_file(session, project, owner, 999, folder.id) is None
         session.rollback()
     get_settings.cache_clear()
 

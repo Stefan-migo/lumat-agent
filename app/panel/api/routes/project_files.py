@@ -20,6 +20,7 @@ from app.services.project_files import (
     ingest_project_file,
     list_project_files,
     list_project_folders,
+    move_project_file,
     rename_project_folder,
     store_project_file,
 )
@@ -34,6 +35,10 @@ class FolderCreateBody(BaseModel):
 
 class FolderRenameBody(BaseModel):
     name: str
+
+
+class FileMoveBody(BaseModel):
+    folder_id: int | None = None
 
 
 def _owned_project(session: Session, slug: str, owner_id: int) -> Project:
@@ -86,6 +91,25 @@ def remove_project_file(
     if not delete_project_file(session, project, current, file_id):
         raise HTTPException(status_code=404, detail="file not found")
     session.commit()
+
+
+@router.patch("/projects/{slug}/files/{file_id}")
+def update_project_file(
+    slug: str,
+    file_id: int,
+    body: FileMoveBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    project = _owned_project(session, slug, current.id)
+    try:
+        row = move_project_file(session, project, current, file_id, body.folder_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="file not found")
+    session.commit()
+    return {"file": to_project_file_dict(row)}
 
 
 @router.get("/projects/{slug}/files/{file_id}/download")
