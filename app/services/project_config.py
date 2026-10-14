@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.chat.assistant.tools.registry import TOOL_REGISTRY, is_tool_allowed_for_role
@@ -12,8 +12,13 @@ from app.services.prompts import load_assistant_config
 from app.services.skills import SkillDefinition, global_skill_index
 
 
+def _default_opt_in_tools() -> list[str]:
+    """Every opt-in tool starts enabled by default (owner decision D1)."""
+    return [name for name, tool in TOOL_REGISTRY.items() if tool.tier == "opt_in"]
+
+
 class ToolPolicy(BaseModel):
-    opt_in_enabled: list[str] = []
+    opt_in_enabled: list[str] = Field(default_factory=_default_opt_in_tools)
 
     @field_validator("opt_in_enabled")
     @classmethod
