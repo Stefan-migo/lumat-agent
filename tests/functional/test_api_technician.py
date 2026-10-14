@@ -1,7 +1,9 @@
 from datetime import date, time
 
+import pytest
+
 from app.db import SessionLocal
-from app.models import Appointment, Case, Conversation, Customer
+from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, Case, Conversation, Customer
 from app.services import scheduling
 
 
@@ -139,3 +141,76 @@ def test_technician_cannot_reach_the_operator_detail_endpoint(client, make_user)
     _login(client)
 
     assert client.get(f"/panel/api/appointments/{appointment_id}").status_code == 403
+
+
+@pytest.mark.parametrize("outcome", ["completed", "no_show"])
+def test_technician_closes_own_appointment_and_it_is_audited(client, make_user, outcome):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000061", date(2026, 1, 9), "cierre propio")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/technician/appointments/{appointment_id}/close",
+        json={"outcome": outcome, "reason": "terminada"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Appointment, appointment_id).status.value == outcome
+        history = session.query(AppointmentHistory).filter_by(appointment_id=appointment_id).order_by(AppointmentHistory.id).all()
+        assert [entry.action for entry in history] == ["booked", outcome]
+        assert session.query(AuditLog).filter_by(action=f"appointment.{outcome}", entity_id=str(appointment_id)).count() == 1
+
+
+def test_technician_close_hides_foreign_and_unknown_appointments_as_not_found(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    other = make_user("other-tech", "other-pass", role="tecnico")
+    foreign_id = _appointment(other, "+56900000071", date(2026, 1, 10), "ajena")
+    _login(client)
+
+    foreign = client.post(f"/panel/api/technician/appointments/{foreign_id}/close", json={"outcome": "completed"})
+    unknown = client.post("/panel/api/technician/appointments/999999/close", json={"outcome": "completed"})
+
+    assert foreign.status_code == 404
+    assert unknown.status_code == 404
+    assert foreign.text == unknown.text == '{"detail":"appointment not found"}'
+    with SessionLocal() as session:
+        assert session.get(Appointment, foreign_id).status is AppointmentStatus.BOOKED
+
+
+def test_technician_close_rejects_non_technician_role(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000081", date(2026, 1, 11), "solo tecnico")
+    _login(client, "oper", "oper-pass")
+
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/close", json={"outcome": "completed"}).status_code == 403
+
+
+def test_technician_close_requires_authenticated_session(client):
+    response = client.post("/panel/api/technician/appointments/1/close", json={"outcome": "completed"})
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}
+
+
+def test_technician_close_rejects_unknown_outcome(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000091", date(2026, 1, 12), "propia")
+    _login(client)
+
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/close", json={"outcome": "unknown"}).status_code == 422
+
+
+def test_technician_close_rejects_non_booked_appointment(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000101", date(2026, 1, 13), "propia")
+    with SessionLocal() as session:
+        session.query(Appointment).filter_by(id=appointment_id).update({"status": AppointmentStatus.CANCELLED})
+        session.commit()
+    _login(client)
+
+    refused = client.post(f"/panel/api/technician/appointments/{appointment_id}/close", json={"outcome": "no_show"})
+
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == {"code": "invalid_lifecycle", "message": "only booked appointments can be closed"}
