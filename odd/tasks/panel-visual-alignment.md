@@ -86,6 +86,9 @@ S6b — File manager completeness (ref: owner feedback 2026-10-14, see L13). Own
 S6c — Global design decision: every vertical `⋯` (icon) menu trigger has **no background and no
 border** — just the vertical dots.
 
+S6d — Global design decision: action feedback is a **transient toast** anchored to a screen corner
+(bottom-right) that auto-dismisses; never a permanent inline banner.
+
 ## Tasks
 
 | ID | Spec | Route | Status | Evidence |
@@ -103,6 +106,7 @@ border** — just the vertical dots.
 | T9 knowledge card layout | S6 | inline | pending | — |
 | T10 move file endpoint + drag & drop | S6b | inline | done | 196ebd23 |
 | T11 upload dialog + tree/root/toolbar revisions | S6b, S6c | inline | done | c366119d |
+| T12 toast + menu stacking + tree polish | S6b, S6c, S6d | inline | done | 6b9af9b2, 43340a03 |
 
 ## Log
 
@@ -196,3 +200,21 @@ wide table scrolls instead of overflowing. Verified: `npm run build` green, full
 screenshots at 1440 and 1024 px match the requested layout. RDD assess: medium, `under_budget`, no review
 due. Note: the visible `+ Subir archivo` button is kept alongside the `⋯` menu (which also lists `Subir
 archivo`); flag to the owner whether to drop the duplicate.
+
+L15 (owner, verbatim): "ok mejor. pero aun un par de cosas: - [Image 1] actual. ese destacador. hay que
+sacarlo o bien hay que cambiar el color pero se ve muy mal. - actual abriendo el boton mas[Image 2] , el
+boton subir archivo esta fuera deberia estar dentro. ademas el "testproyect" tapa el dialog abierto. -
+actual con toast [Image 3] . aqui el toast queda para siempre. no se va nunca. importante seria quizas
+tambien cambio global. redise;ar el toast. que aparezca en una equina superior o inferior derecha. y que
+se autooculte."
+
+L16: T12 done (6b9af9b2 + 43340a03). (1) Removed the folder selection highlight and the selection concept
+entirely (the upload dialog owns the destination). (2) `Subir archivo` moved inside the toolbar `⋯` menu;
+fixed a real stacking bug — the portal `.menu__content` had no z-index and lost to the sticky root row
+(`z-index: 1`), which hid the first menu item and let the root row paint over the menu; added
+`z-index: var(--z-modal)`. (3) New global `ToastProvider`/`useToast` primitive: transient notifications
+anchored bottom-right, auto-dismissing (5 s), stacking, closable; mounted around the app; the tree and
+knowledge action feedback now use it instead of a permanent inline banner. Added `--z-toast`. Verified:
+`npm run build` green, full vitest suite green (1199 passed), live checks (menu items both present, toast
+appears and is gone after 5.2 s), screenshots in `/tmp/opencode/tree-shots3/`. RDD assess: medium,
+`under_budget`, no review due.
