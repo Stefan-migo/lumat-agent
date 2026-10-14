@@ -1,6 +1,6 @@
 # panel-tecnico — technician gets a restricted view of the general panel + WhatsApp field quick-actions
 
-Branch: `odd/panel-tecnico` (worktree `../lumat-agent-odd-panel-tecnico`), base `main`.
+Branch: chained slices off `main`; current slice `odd/panel-tecnico-wu3` (worktree `../lumat-agent-odd-panel-tecnico-wu3`), base `main`.
 Delivery: chained PRs (feature exceeds the ~400-authored-line heuristic).
 Test runners: backend `pytest`; frontend `vitest` (+ `tsc -b` only via `npm run build`).
 
@@ -39,7 +39,7 @@ The office can see the visit's technician-state. Location is an open question (a
 |----|------|-------|-------|--------|--------|
 | WU1 | Frontend unification: explicit role→view map; route the technician through `PanelShell`; role-gate nav and routes; remove `TechnicianShell` | S1 | inline | done | `92735a0a`, `3fa1de8e`, `fa5b0688`, `1a1f6921` |
 | WU2 | Privacy: remove `phone` from the technician serializer; amend `TECH-PRIVACY-1` + `SS-TECH-2`; update failing tests | S3 | inline | done | `a7b512b0`, `7274f8e0` |
-| WU3 | Technician visit-detail read: allow-listed payload enabling `AppointmentDetail` reuse | S2 | inline | pending | — |
+| WU3 | Technician visit-detail read: allow-listed payload enabling `AppointmentDetail` reuse | S2 | inline | done | `f58a6720`, `649a5d33`, `9c4593b4` |
 | WU4 | Technician close route (own appointment, `completed`/`no_show`) + audit | S4 | inline | pending | — |
 | WU5 | Visit-state axis: migration `054` (`technician_state`, `technician_state_at`) + `en_route`/`arrived` transitions with window guards + audit | S5, S6 | inline | pending | — |
 | WU6 | WhatsApp send + cooldown: template send per state, cooldown guard, technician-only routes | S7, S8 | inline | pending | — |
@@ -86,3 +86,11 @@ L6 (WU1 done, S1) — Evidence: new `web/src/components/domain/panelAccess.ts` (
 L7 (WU1 fix, S1) — **Semantic merge caught before merge.** `origin/odd/chatbot-metrics-panel` (#601) also edits `AppShell.tsx`, `PanelShell.tsx`, `AppShell.test.tsx` and `types.ts`, and adds a `chatbot-metrics` view marked `adminOnly`. The first `panelAccess` version kept a hardcoded ALL_VIEWS / ADMIN_ONLY list, so `canOpen('admin','chatbot-metrics')` was false and `canOpen('operador','chatbot-metrics')` was true — the peer's view would have been hidden from admin and leaked to operador. Fix: `panelAccess` owns ONLY the technician restriction; the admin-only set is read from the navigation's own flag via a new `isAdminOnlyView` export, so default-allow applies to admin/operador and a peer's new view cannot be silently hidden. Commit `1a1f6921`.
 - Merge-tree integration (repo pre-merge discipline): merged #601 into the branch locally (`--no-commit`, resolved the textual `AppShell.tsx` arm conflict), then ran frontend `vitest run` (**106 files / 1189 tests pass**), `npm run build` (exit 0) and backend `pytest` (exit 0). Merge aborted afterwards; the branch is not polluted by #601.
 - ⚠️ Textual conflict expected when #601 lands after this: both add a `page` arm in `AppShell.tsx`. Keep both arms (chatbot-metrics + the technician agenda guard).
+
+L8 (2026-10-14, WU3 done, S2) — Evidence: RED observed (backend 3 new tests failing because the route did not exist; frontend 2 failing because `role` was ignored), then GREEN.
+- Backend: new `GET /panel/api/technician/appointments/{id}` (`app/panel/api/routes/technician.py`) behind `require_tecnico`, own appointment only. A missing id and another technician's visit are both **404**, so the route cannot enumerate ids. New `to_technician_appointment_detail_dict` (`app/panel/api/serializers.py`) returns the allow-list `{appointment, customer, case}` with **no** `history`, no `conversation_summary`, no phone, no email, no consent.
+- Frontend: `AppointmentDetail` takes a `role` prop; a technician fetches through `getTechnicianAppointment` (normalized to the shared type with `history: []`) and loses the "Ver ficha del cliente" link, the conversation summary, the history, and the operator actions (Reprogramar/Cerrar belong to WU4). `AppShell` renders the role-gated detail for any role when an appointment id is present; `TechnicianAgenda` links each service to `/panel/app/agenda/<id>`.
+- Suites: backend `pytest` 2170 collected, exit 0; frontend `vitest run` 106 files / 1194 tests pass; `npm run build` (`tsc -b` + vite) exit 0.
+- Flaky (pre-existing, load-related): a full-suite run flaked `AssistantWorkspace.test.tsx` and `ClientesList.test.tsx` (both pass in isolation), on top of the recorded `AgentChat.test.tsx` one. Not caused by this diff (verified in isolation).
+- Commits: `f58a6720` (backend), `649a5d33` (role-gated detail), `9c4593b4` (route wiring + agenda link).
+- Route: inline (per plan); **Risk item 2** (authorization/ownership + PII allow-list on a new role-scoped read route) → independent verification.
