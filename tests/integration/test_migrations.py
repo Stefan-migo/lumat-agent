@@ -73,6 +73,7 @@ EXPECTED_TABLES = {
     "project_aliases",
     "project_audit",
     "project_files",  # 042_project_files.sql (durable project-scoped file store)
+    "project_folders",  # 055_project_folders.sql (folders that group project files)
     "assistant_artifacts",  # 044_assistant_artifacts.sql (assistant-produced files)
     "panel_secrets",  # 053_panel_secrets.sql (encrypted panel-managed credentials)
     "schema_migrations",
@@ -747,6 +748,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("052_memory_handoff",),
         ("053_panel_secrets",),
         ("054_project_files_kb_document",),
+        ("055_project_folders",),
     ]
 
 
