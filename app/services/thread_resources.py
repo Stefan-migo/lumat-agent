@@ -80,6 +80,54 @@ def read_thread_resources(session, thread) -> dict:
     }
 
 
+def _pinned_selection(session, thread) -> dict:
+    stored = (thread.assistant_state or {}).get("resources")
+    if not stored:
+        return {"project_files": [], "planning_sessions": [], "skills": []}
+    resources = ThreadResources.model_validate(stored)
+    available = available_resources(session, thread)
+    files = {row["id"]: row for row in available["project_files"]}
+    sessions = {row["slug"]: row for row in available["planning_sessions"]}
+    skills = {row["name"]: row for row in available["skills"]}
+    return {
+        "project_files": [
+            {"id": value, "filename": files[value]["filename"]}
+            for value in resources.project_files
+            if value in files
+        ],
+        "planning_sessions": [
+            {"slug": value, "topic": sessions[value].get("topic")}
+            for value in resources.planning_sessions
+            if value in sessions
+        ],
+        "skills": [
+            {"name": value, "description": skills[value].get("description")}
+            for value in resources.skills
+            if value in skills
+        ],
+    }
+
+
+def pinned_context(session, thread) -> tuple[str, list[str]]:
+    """The compact ``<pinned_resources>`` reference and the pinned skill names.
+
+    The reference carries only names/ids/slugs for the planner; the content stays
+    read-on-demand (read_project_file / planning.read_report / declared skills).
+    Returns ``("", [])`` when nothing is pinned.
+    """
+    selection = _pinned_selection(session, thread)
+    lines: list[str] = []
+    for row in selection["project_files"]:
+        lines.append(f'- project file #{row["id"]} "{row["filename"]}" — read it with read_project_file')
+    for row in selection["planning_sessions"]:
+        topic = f' ({row["topic"]})' if row["topic"] else ""
+        lines.append(f'- planning session "{row["slug"]}"{topic} — read it with planning.read_report')
+    for row in selection["skills"]:
+        lines.append(f'- skill "{row["name"]}" — active for this turn')
+    reference = "<pinned_resources>\n" + "\n".join(lines) + "\n</pinned_resources>" if lines else ""
+    return reference, [row["name"] for row in selection["skills"]]
+
+
 def set_thread_resources(session, thread, resources: ThreadResources) -> None:
     available = available_resources(session, thread)
     file_ids = {row["id"] for row in available["project_files"]}

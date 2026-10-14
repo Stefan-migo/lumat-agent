@@ -545,6 +545,14 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
             ],
         }
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
+    if thread is not None:
+        from app.services.thread_resources import pinned_context
+
+        reference, pinned_skills = pinned_context(state["session"], thread)
+        if reference:
+            context["items"].append({"source": "pinned_resources", "content": reference})
+        if effective is not None:
+            effective["pinned_skills"] = pinned_skills
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
 
 
@@ -609,9 +617,10 @@ def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
 
 def _validated_skills(state) -> list[str]:
     declared = (state.get("plan") or {}).get("skills") or []
+    pinned = (state.get("effective") or {}).get("pinned_skills") or []
     allowed = {skill.name for skill in _effective_skill_index(state)}
     valid = []
-    for name in declared:
+    for name in [*declared, *pinned]:
         if isinstance(name, str) and name in allowed and name not in valid:
             valid.append(name)
     return valid
