@@ -207,6 +207,13 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   the pre-merge integration check. The legacy `POST /planning/sessions` `thread_id` reuse still exists
   for API compatibility; the guided flows (tool + UI) always open a dedicated thread.
 - Engram mirror **saved** (`obs-4a78e87d2755f7b1`, topic `odd/asistente-lumat-planning-guiado/tasks`).
+- **Independent verification** — `gentle-ai-verify` over `6d7988b2..HEAD`: **pass-with-findings, no
+  blockers**; S1/S2/S3/S4/S5/S6/S7/S8/S10 verified. Advisories: (1) two pre-existing frontend tests
+  flake under full parallel load (pass in isolation, present at the baseline); (2) `graphify-out` is
+  stale (built `ac86159e`) — refresh at session close; (3) `POST /planning/sessions` still admits
+  `tecnico` (baseline, unchanged; the tools deny it). The probes were kept as regression tests in
+  `tests/functional/test_planning_security_probes.py` (commit `d08cb7a6`) and the persona wording was
+  corrected. Full backend suite re-run after: exit 0.
 
 ## Log
 
