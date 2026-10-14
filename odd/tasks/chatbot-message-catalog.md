@@ -148,7 +148,7 @@ the new card renders the backend list.
 | T2 | RED+GREEN: admin-only GET/PUT for the list (D6) | delegated (writer) |
 | T3 | RED+GREEN: Settings → tab "Mensajes" → **new dedicated card** to manage the list, with copy explaining the difference vs the 5 fixed messages | delegated (writer) |
 | T4 | RED+GREEN: `classify.md` + `_llm_classify` carry the picked template key (D3); update `FALLBACKS` + byte-coupling test | inline (no writer trigger: single understood unit, no parallelism, no context backstop) |
-| T5 | RED+GREEN: bot renders the picked template via `prompts.render` with slots from `captured`/`booking`; no match → `cannot_answer` + escalation (D13/D9) | delegated (writer) |
+| T5 | RED+GREEN: bot renders the picked template via `prompts.render_text` with slots from `captured`/`booking`; no match → existing clarify/KB/`cannot_answer` untouched (D13/D9) | inline (no writer trigger: single understood unit) |
 | T6 | Anti-injection delimiting for template text injected into the prompt (D5) — **absorbed into T4**: the `<templates>` DATA block *is* the injection mechanism | in T4 |
 | T7 | Full checks (`uv run pytest tests/ -q` + targeted panel), close with verification evidence | inline |
 
@@ -198,7 +198,7 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Progress
 
-- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [x] T4 (absorbs T6) · [ ] T5 · [ ] T7
+- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [x] T4 (absorbs T6) · [x] T5 · [ ] T7
 
 ### Evidence
 
@@ -241,10 +241,23 @@ Task shape may be refined after T0 — keep IDs stable.
   + `tests/integration/test_chat_intent.py` + `tests/injection/` → **69 passed**; full backend
   `uv run pytest tests/ -q` → **green**. Behaviour for an empty catalog is unchanged
   (`template_id=None`); T5 owns the render/send path.
+- T5 — `5a948b02` `feat(chat): render the preset message the classifier picked`.
+  `respond` renders `state.template_id` **after** the unknown/clarification branch and
+  **before** `kb.retrieve`, so a picked preset message pre-empts only the KB path (D13) while
+  the clarification / KB / `cannot_answer` flow stays intact when nothing was picked (D9).
+  `respond._slot_values` maps `{{nombre}}`, `{{comuna}}`, `{{direccion}}`, `{{equipo}}`,
+  `{{problema}}`, `{{disponibilidad}}` to `captured[...]` and `{{visita}}` to
+  `booking["label"]`, rendering `"unknown"`/missing as `""`.
+  A stale id (catalog changed) falls through to the normal path instead of crashing.
+  Because owner text lives in settings, not under `agent/`, `prompts` gained
+  `render_text(content, **vars)` + `placeholders(content)` (same strict `{{}}` rules) and
+  `render(key, **vars)` now delegates to `render_text` — single source of truth.
+  RED first, then GREEN. Routed **inline**. Parent checks: `tests/unit/test_prompts.py` 42
+  passed; full backend `uv run pytest tests/ -q` → **1985 passed** (0 failures).
 
 ## Next step
 
-T4 done (classifier carries the picked template id; T6 absorbed). Start T5
-(`respond` renders the picked template via `prompts.render` before the KB path;
-no match → `cannot_answer` + escalation). The greeting bug is a **separate** unit
-(`chatbot-first-turn-greeting`) — do not mix it in.
+T5 done (the picked preset message is rendered and pre-empts the KB path). Start
+**T7**: full checks (`uv run pytest tests/ -q` + panel) and close with verification
+evidence. The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) —
+do not mix it in.
