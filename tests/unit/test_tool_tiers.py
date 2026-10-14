@@ -26,6 +26,8 @@ DEFAULT_TOOLS = {
     "skill.propose",
     "planning.open",
     "planning.close",
+    "planning.record_decision",
+    "planning.record_note",
 }
 
 OPT_IN_TOOLS = {
