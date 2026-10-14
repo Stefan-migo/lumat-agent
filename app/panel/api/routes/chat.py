@@ -38,6 +38,12 @@ from app.services.project_config import (
     set_thread_tool_policy,
     thread_tool_policy,
 )
+from app.services.thread_resources import (
+    ThreadResources,
+    read_thread_resources,
+    reset_thread_resources,
+    set_thread_resources,
+)
 
 router = APIRouter(tags=["panel-api-chat"])
 
@@ -81,6 +87,12 @@ class ChatThreadBody(BaseModel):
 
 class ChatThreadToolPolicyBody(BaseModel):
     opt_in_enabled: list[str]
+
+
+class ChatThreadResourcesBody(BaseModel):
+    project_files: list[int] = []
+    planning_sessions: list[str] = []
+    skills: list[str] = []
 
 
 def _tool_policy_thread(session: Session, thread_id: int, current: User) -> InternalChatThread:
@@ -140,6 +152,46 @@ def delete_thread_tool_policy(
     reset_thread_tool_policy(thread)
     session.flush()
     return _thread_tool_policy_response(session, thread, current)
+
+
+@router.get("/chat/threads/{thread_id}/resources")
+def read_thread_resources_route(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    return read_thread_resources(session, thread)
+
+
+@router.put("/chat/threads/{thread_id}/resources")
+def update_thread_resources_route(
+    thread_id: int,
+    body: ChatThreadResourcesBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
+    try:
+        set_thread_resources(session, thread, ThreadResources(**body.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    session.flush()
+    return read_thread_resources(session, thread)
+
+
+@router.delete("/chat/threads/{thread_id}/resources")
+def delete_thread_resources_route(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
+    reset_thread_resources(thread)
+    session.flush()
+    return read_thread_resources(session, thread)
 
 
 def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:
