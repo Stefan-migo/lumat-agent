@@ -102,8 +102,8 @@ S6d — Global design decision: action feedback is a **transient toast** anchore
 | T5 Hilos wire | S5 | inline | pending | — |
 | T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
 | T7 files tree UI | S6 | inline | done | bb6b6a64, c0268a94 |
-| T8 delete + confirm dialogs | S6 | inline | pending | — |
-| T9 knowledge card layout | S6 | inline | pending | — |
+| T8 delete + confirm dialogs | S6 | inline | done | c32accd5 |
+| T9 knowledge card layout | S6 | inline | done | c32accd5 |
 | T10 move file endpoint + drag & drop | S6b | inline | done | 196ebd23 |
 | T11 upload dialog + tree/root/toolbar revisions | S6b, S6c | inline | done | c366119d |
 | T12 toast + menu stacking + tree polish | S6b, S6c, S6d | inline | done | 6b9af9b2, 43340a03 |
@@ -228,3 +228,17 @@ L18: T12 follow-up done (569921f1). The toast inherited the browser default font
 suite green (1199). Session closed. Next: T9 (knowledge card, ref image 1) then T8 (KB document delete
 dialog, ref image 2 right). Handoff written to `odd/handoffs/panel-visual-alignment-t9.md` in the primary
 worktree.
+
+L19 (owner): "podemos hacer t9 y t8 en un solo workunit? ... asegurate agregar tambien los sliders
+verticales para scroll de cada card y no romper el layout" — T8 and T9 shipped as **one work unit**
+(`c32accd5`, "feat(panel): redesign the project knowledge card and add KB document delete"), as asked.
+T9: the knowledge card drops the generic `DataTable` (the overflow source) for a row list matching the
+reference — subtitle `Documentos de la base de conocimiento (RAG).`, a `Buscar documento…` toolbar with
+the `Subir archivo a la KB` action, rows of icon + title + `FORMAT · vN` + `Activo` badge + trash, and a
+footer note plus the `N documentos` count. T8: the `Eliminar de la KB` dialog reuses the file-delete
+pattern (icon + title + question + preview card with `FORMAT · vN` + badge + `Proyecto: <name>` +
+`Cancelar`/red confirm) and calls the existing `deleteKbDocument`. Scroll: the document list caps at
+22rem and scrolls on its own, like the file tree, so each card keeps its grid track. Verified: `npm run
+build` green, full vitest suite green (1201 passed, +2 tests), no horizontal overflow at 1440/1100/900
+px, and the list scroll engages (clientHeight 352 / scrollHeight 1229, `overflow-y: auto`). RDD assess:
+medium, `under_budget`, no review due.
