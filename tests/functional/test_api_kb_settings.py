@@ -833,6 +833,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     assert body["templates"] == []
     assert set(body["messages"]) == {
         "greeting",
+        "greeting_short",
         "cannot_answer",
         "clarification",
         "farewell",

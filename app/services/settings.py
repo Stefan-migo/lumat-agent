@@ -69,6 +69,9 @@ MESSAGE_DEFAULTS: dict[str, str] = {
     "greeting": (
         "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"
     ),
+    # First turn where the customer already stated their need: identifies itself
+    # (CM-1) without re-asking "¿En qué te puedo ayudar?".
+    "greeting_short": "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?",
     "cannot_answer": (
         "Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat "
         "revisará tu consulta y te contactará."
@@ -176,6 +179,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     # SS-5: tone style used by the chat nodes.
     "tone.style": DEFAULT_TONE_STYLE,
     "messages.greeting": MESSAGE_DEFAULTS["greeting"],
+    "messages.greeting_short": MESSAGE_DEFAULTS["greeting_short"],
     "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
     "messages.clarification": MESSAGE_DEFAULTS["clarification"],
     "messages.farewell": MESSAGE_DEFAULTS["farewell"],

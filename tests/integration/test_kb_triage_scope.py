@@ -189,7 +189,8 @@ def test_customer_paths_exclude_project_documents(mock_openai_chat):
     conv_id = _start_conversation()
 
     triage_replies = _turn(conv_id, VALORES_QUERY, "wamid.project-only.triage")
-    assert HANDOFF_REPLY in triage_replies
+    # First turn: the handoff reply travels fused with the CM-1 greeting.
+    assert any(HANDOFF_REPLY in reply for reply in triage_replies)
     assert not any(GROUNDED_MARKER in reply for reply in triage_replies)
 
     with SessionLocal() as session:

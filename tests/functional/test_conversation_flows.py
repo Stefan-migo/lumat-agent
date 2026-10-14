@@ -109,9 +109,10 @@ def test_first_greeting_with_service_content_still_classifies_and_routes(
         customer = session.scalars(select(Customer)).one()
         conversation = _conversation(session, customer)
 
-    assert len(replies) == 2
-    assert replies[0] == MESSAGE_DEFAULTS["greeting"]
-    assert "¿Cuál es tu nombre?" in replies[1]
+    assert len(replies) == 1  # CM-1: greeting + answer fused into ONE message
+    assert replies[0].startswith(MESSAGE_DEFAULTS["greeting_short"] + "\n\n")
+    assert "¿En qué te puedo ayudar?" not in replies[0]  # the need is already stated
+    assert "¿Cuál es tu nombre?" in replies[0]
     assert mock_openai_chat
     assert conversation.captured_data["_pending"] == ["name", "email", "comuna"]
 

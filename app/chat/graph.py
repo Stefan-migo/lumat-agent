@@ -45,8 +45,6 @@ the greeting into the safety protocol (EM-2 full flow interrupt).
 from __future__ import annotations
 
 import logging
-import re
-import unicodedata
 from collections.abc import Callable
 from dataclasses import replace
 
@@ -65,7 +63,7 @@ from app.chat.nodes.handoff import handoff
 from app.chat.nodes.handoff_gate import handoff_gate
 from app.chat.nodes.manage import manage
 from app.chat.nodes.orchestrate import orchestrate
-from app.chat.nodes.receive import receive
+from app.chat.nodes.receive import is_greeting_only, receive
 from app.chat.nodes.respond import respond
 from app.chat.nodes.summary import summary
 from app.chat.state import ConversationState
@@ -135,26 +133,9 @@ def run_internal_conversation(
 
 def _flow_start(state: ConversationState) -> str:
     """Skip classification for a greeting-only first turn; otherwise classify."""
-    if state.turn <= 1 and _greeting_only(state):
+    if state.turn <= 1 and is_greeting_only(state):
         return END
     return "classify_intent"
-
-
-def _greeting_only(state: ConversationState) -> bool:
-    """Match a bare first-turn greeting without consuming an unknown attempt."""
-    inbound = next(
-        (message for message in reversed(state.window) if message.get("direction") == "inbound"),
-        None,
-    )
-    if inbound is None:
-        return False
-    text = unicodedata.normalize("NFD", (inbound.get("text") or "").casefold())
-    text = "".join(char for char in text if unicodedata.category(char) != "Mn")
-    normalized = re.sub(r"[^a-z0-9]+", " ", text).strip()
-    return normalized in {
-        "hola", "buenas", "hola buenas", "buenos dias", "buenas tardes",
-        "buenas noches", "hey",
-    }
 
 
 def _after_emergency_gate(state: ConversationState) -> str:
@@ -228,8 +209,10 @@ def _triage_node(subgraph):
     `research_triage` is compiled over the same `ConversationState` as this graph
     (`app/chat/subgraphs/research_triage.py`), and `replies` carries an `add` reducer
     (`app/chat/state.py`). Added as a plain node, LangGraph hands the sub-graph the
-    parent's `replies` — already holding the CM-1 greeting — and merging the sub-graph's
-    final state back re-adds them, so the customer receives the greeting twice.
+    parent's `replies` — whatever earlier nodes accumulated that turn — and merging the
+    sub-graph's final state back re-adds them, so the customer receives those replies
+    twice. (The CM-1 greeting is no longer part of that accumulator: `receive` stores it
+    in `first_turn_greeting` and `run_conversation` fuses it with the answer.)
 
     Clearing the accumulator on the way in leaves the merge with exactly the sub-graph's
     own reply. A partial `input_schema` would also fix the duplication, and is rejected:
@@ -349,13 +332,19 @@ def run_conversation(session: Session, message: Message) -> list[str]:
     """Run the graph for one persisted inbound message; returns bot replies.
 
     Rebuilds the state from the DB (D2), runs the graph, persists the replies
-    as outbound messages, and returns them for sending (T3.6).
+    as outbound messages, and returns them for sending (T3.6). On the first turn
+    the greeting chosen by `receive` is fused with the turn's answer into a
+    single message (CM-1), so the customer never receives a greeting and an
+    answer as two separate messages.
     """
     state = ConversationState.from_db(
         session, message.conversation_id, through_message_id=message.id
     )
     result = build_graph().invoke(state)
     replies = result.get("replies") or []
+    greeting = result.get("first_turn_greeting") or ""
+    if greeting:
+        replies = [f"{greeting}\n\n{replies[0]}", *replies[1:]] if replies else [greeting]
     persist_replies(session, state, replies)
     # CM-8: flush any memory written during the turn before END so the next
     # turn's from_db sees it (per-turn session memory).

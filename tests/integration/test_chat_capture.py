@@ -491,7 +491,8 @@ def test_triage_kb_miss_hands_off_without_the_cm4_refusal(mock_openai_chat, fake
     # (it does NOT reach respond's canned CANNOT_ANSWER_REPLY); the last reply
     # is the handoff message announcing human takeover.
     assert CANNOT_ANSWER_REPLY not in replies
-    assert replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
+    # First turn: the handoff reply travels fused with the CM-1 greeting.
+    assert replies[-1].endswith("Un asesor revisará tu caso y te contactará a la brevedad.")
 
     # CM-6: question + context + timestamp logged (payload flag, no view); the
     # research sub-graph preserves the unresolved log before handing off.
@@ -604,7 +605,8 @@ def test_customer_chat_cannot_ground_on_internal_kb_document(
     assert retrieve_calls
     assert all(call["audience"] is KbVisibility.CUSTOMER for call in retrieve_calls)
     assert all("<kb>" not in request["messages"][-1]["content"] for request in mock_openai_chat)
-    assert replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
+    # First turn: the handoff reply travels fused with the CM-1 greeting.
+    assert replies[-1].endswith("Un asesor revisará tu caso y te contactará a la brevedad.")
 
 
 def test_lumat_assistant_can_retrieve_internal_kb_document(fake_embedder):

@@ -5,9 +5,13 @@ Why this file exists
 `build_graph` adds the compiled `research_triage` sub-graph as a node with no explicit
 input schema (`app/chat/graph.py:192`), and the sub-graph is compiled over the **same**
 `ConversationState` (`app/chat/subgraphs/research_triage.py:152`). `replies` carries an
-`add` reducer (`app/chat/state.py:175`), so LangGraph hands the sub-graph the parent's
-`replies` — already holding the greeting — and merging the sub-graph's final state back
-re-adds them.
+`add` reducer (`app/chat/state.py:179`), so LangGraph hands the sub-graph the parent's
+`replies` — whatever earlier nodes accumulated that turn — and merging the sub-graph's
+final state back re-adds them.
+
+The CM-1 greeting is no longer part of that accumulator: `receive` stores it in
+`first_turn_greeting` and `run_conversation` fuses it with the answer, so on the first turn
+the guard below checks the fused message instead.
 
 Measured on the real path: 7 of 52 turns returned `[greeting, greeting, reply]`, 5 of them
 answers. `receive` was instrumented and runs once, so this is the state merge and not node
@@ -20,7 +24,7 @@ import pytest
 from sqlalchemy import select
 
 from app.chat.graph import run_conversation  # noqa: E402
-from app.chat.state import get_or_create_conversation, greeting  # noqa: E402
+from app.chat.state import get_or_create_conversation  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     DocumentFormat,
@@ -32,10 +36,12 @@ from app.models import (  # noqa: E402
 )
 from app.services import kb as kb_service  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
-GREETING = greeting()
+# A turn that states a need gets the short greeting, fused with the answer (CM-1).
+GREETING = MESSAGE_DEFAULTS["greeting_short"]
 GROUNDED_MARKER = "Segun el manual de Lumat"
 
 # Phrases the mocked classifier maps to intents (`tests/integration/conftest.py:120-141`).
@@ -106,29 +112,30 @@ def _turn(conv_id: int, text: str, wamid: str) -> list[str]:
 def test_valores_turn_greets_once_and_still_answers(mock_openai_chat):
     """The regression: the sub-graph path must not duplicate the parent's replies.
 
-    Before the fix this turn returned `[greeting, greeting, answer]`. The answer assertion
-    is what keeps the test honest — a "fix" that dropped the sub-graph's reply entirely
-    would also produce a single greeting.
+    Before the fix this turn returned `[greeting, greeting, answer]`. Under the
+    first-turn contract (CM-1) the greeting and the answer travel as ONE message,
+    so the guard is that neither is duplicated inside it — a "fix" that dropped
+    the answer would fail the marker assertion too.
     """
     _seed_kb_doc(VALORES_DOC)
     conv_id = _start_conversation()
     replies = _turn(conv_id, VALORES_QUERY, "wamid.dup.1")
 
-    assert replies.count(GREETING) == 1, f"greeting duplicated: {replies!r}"
-    assert any(GROUNDED_MARKER in reply for reply in replies), (
-        f"the answer was lost: {replies!r}"
-    )
-    assert len(replies) == 2, f"expected greeting + answer: {replies!r}"
+    assert len(replies) == 1, f"expected one fused message: {replies!r}"
+    assert replies[0].count(GREETING) == 1, f"greeting duplicated: {replies!r}"
+    assert replies[0].count(GROUNDED_MARKER) == 1, f"answer duplicated: {replies!r}"
+    assert replies[0].startswith(GREETING + "\n\n"), f"greeting not fused: {replies!r}"
 
 
 def test_non_subgraph_turn_is_unchanged(mock_openai_chat):
-    """Control: a turn that never enters the sub-graph already greets exactly once.
+    """Control: a turn that never enters the sub-graph returns one fused message.
 
-    It passes before and after the fix. Its job is to fail if the fix flattens every path
-    instead of correcting the boundary — a greeting count of 1 proves nothing on its own.
+    Its job is to fail if the fix flattens every path instead of correcting the
+    boundary — the capture prompt proves the answer survived the fusion.
     """
     conv_id = _start_conversation()
     replies = _turn(conv_id, CALEFONT_QUERY, "wamid.dup.2")
 
-    assert replies.count(GREETING) == 1, f"greeting duplicated: {replies!r}"
-    assert len(replies) >= 2, f"the capture prompt was lost: {replies!r}"
+    assert len(replies) == 1, f"expected one fused message: {replies!r}"
+    assert replies[0].count(GREETING) == 1, f"greeting duplicated: {replies!r}"
+    assert "¿Cuál es tu nombre?" in replies[0], f"the capture prompt was lost: {replies!r}"

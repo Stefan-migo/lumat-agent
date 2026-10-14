@@ -123,7 +123,7 @@ def test_greeting_and_clarification_overrides_keep_path_shape():
         turn=1,
         window=[{"id": 1, "text": "hola"}],
     )
-    greeting = receive(state)["replies"][0]
+    greeting = receive(state)["first_turn_greeting"]
     assert greeting.startswith("Hola editado:\n")
     assert "8. Hablar con una persona" not in greeting  # menu removed (CI-1 open greeting)
 
