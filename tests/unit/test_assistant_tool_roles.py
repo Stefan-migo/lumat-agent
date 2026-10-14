@@ -11,7 +11,7 @@ from app.models import UserRole
 
 ROLE_TOOL_EXPECTATIONS = {
     UserRole.ADMIN: set(registry.TOOL_REGISTRY),
-    UserRole.OPERADOR: set(registry.TOOL_REGISTRY) - {"automation.create_rule"},
+    UserRole.OPERADOR: set(registry.TOOL_REGISTRY) - {"automation.create_rule", "settings.update"},
     UserRole.TECNICO: {
         "assistant.capabilities", "memory.read", "memory.search", "memory.write",
         "memory.update", "memory.delete", "project.list", "project.find",
