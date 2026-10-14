@@ -136,8 +136,6 @@ def chatbot_conversations(session, window_days: int, signal: str = "any", limit:
         select(ConversationEvent.conversation_id, ConversationEvent.event, ConversationEvent.cause)
         .where(ConversationEvent.conversation_id.in_(ids), ConversationEvent.created_at >= start)
     ).all():
-        if conversation_id not in counts:
-            continue
         if event == "escalation":
             counts[conversation_id]["escalation"] += 1
             if cause == "handoff:kb_miss":
