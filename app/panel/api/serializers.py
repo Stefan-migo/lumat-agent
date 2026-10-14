@@ -423,6 +423,23 @@ def to_internal_chat_thread_dict(thread: InternalChatThread) -> dict:
     }
 
 
+_THREAD_PREVIEW_LIMIT = 140
+
+
+def _thread_preview(message: InternalChatMessage | None) -> str | None:
+    """Bounded single-line snippet of the latest message; blank content yields None."""
+    if message is None:
+        return None
+    # Collapse whitespace and drop the emphasis/code markers that read as noise in a
+    # one-line snippet (single underscores stay: they belong to identifiers).
+    content = " ".join((message.content or "").split()).replace("**", "").replace("`", "")
+    if not content:
+        return None
+    if len(content) <= _THREAD_PREVIEW_LIMIT:
+        return content
+    return content[: _THREAD_PREVIEW_LIMIT - 1].rstrip() + "…"
+
+
 def to_internal_chat_thread_summary_dict(
     thread: InternalChatThread, latest_message: InternalChatMessage | None = None
 ) -> dict:
@@ -437,6 +454,7 @@ def to_internal_chat_thread_summary_dict(
         "updated_at": _iso(thread.updated_at),
         "run_status": state.get("execution_status"),
         "approval_status": approval.get("status"),
+        "preview": _thread_preview(latest_message),
     }
 
 
