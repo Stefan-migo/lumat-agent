@@ -187,6 +187,11 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   La key se sigue guardando en ambos casos. PR3 deja de ser solo-frontend y pasa a full-stack.
 - Feedback final en la UI: `valid` → "Clave validada."; `no_balance` → "Clave válida, pero la cuenta no tiene
   saldo."; 400 → "Clave inválida."; 502 → "No se pudo validar la clave."; DELETE → "Clave eliminada del panel.".
-- **Pendiente antes del PR**: `origin/main` avanzó a `3139dfac` (PR #590) después de crear el worktree;
-  hay que integrar `origin/main` en la rama y volver a correr la integración local (suite frontend,
-  `npm run build`, suite backend) sobre el árbol mergeado (disciplina pre-merge del repo).
+- **Integración pre-merge (hecha)**: `origin/main` había avanzado a `3139dfac` (PR #590) y luego a
+  `ac86159e` (PR #591) después de crear el worktree. Se mergeó `origin/main` en la rama
+  (`d187df51`, textualmente limpio) y se re-corrió la integración sobre el árbol mergeado:
+  backend **2028 passed** (exit 0), frontend **105 files / 1184 passed**, `npm run build` verde.
+  PR #591 solapaba 7 de nuestros 10 archivos (`settings.py`, `Settings.tsx`, `Settings.css`,
+  `Settings.test.tsx`, `types.ts`, `mockData/settings.ts`, `mockData/settings.test.ts`); el merge quedó
+  semánticamente coherente (`templates` de #591 y `model_api_key` conviven, sin claves duplicadas en la
+  respuesta del GET).
