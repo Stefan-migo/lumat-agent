@@ -71,9 +71,9 @@ describe("projects panel", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
-    expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
-    expect(screen.getByText("Run ops · Activo").closest("p")).toBeInTheDocument();
-    expect(screen.getByText("Run ops · Activo").closest("p")?.querySelector(".badge")).toBeNull();
+    const header = (await screen.findByRole("heading", { level: 1, name: "Operations" })).closest(".page-header");
+    expect(header).toHaveTextContent("Run ops");
+    expect(header?.querySelector(".badge")).toHaveTextContent("Activo");
     fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
     expect(back).toHaveBeenCalled();
   });
@@ -92,7 +92,8 @@ describe("projects panel", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
 
-    expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
+    const header = (await screen.findByRole("heading", { level: 1, name: "Operations" })).closest(".page-header");
+    expect(header).toHaveTextContent("Run ops");
     expect(screen.getByRole("tab", { name: "Contexto" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("Nombre del proyecto")).toHaveValue("Operations");
     expect(screen.getByLabelText("Nombre del proyecto")).toBeDisabled();
