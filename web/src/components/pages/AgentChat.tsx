@@ -291,6 +291,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
   const [recoverable, setRecoverable] = useState(false);
   const [plan, setPlan] = useState<AssistantPlan | null>(null);
   const [approval, setApproval] = useState<AssistantApproval | null>(null);
+  const [handoff, setHandoff] = useState<{ actions: string[] } | null>(null);
   const [evidence, setEvidence] = useState<AssistantEvidence[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<string | null>(null);
@@ -353,6 +354,8 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     setAttachments(result.attachments ?? []);
     setArtifacts(result.artifacts ?? []);
     setCortex(state?.cortex_session ?? null);
+    const persistedHandoff = [...(state?.events ?? [])].reverse().find((event) => event.type === "handoff" && event.handoff);
+    setHandoff(persistedHandoff?.handoff ?? null);
   };
 
   const removeAttachment = async (attachment: AssistantAttachment) => {
@@ -509,6 +512,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       setLifecycle(event.status ?? null);
     }
     if (event.type === "evidence") setEvidence(event.evidence ?? []);
+    if (event.type === "handoff") setHandoff(event.handoff ?? null);
     if (event.type === "response") setStream(event.content ?? "");
     if (event.type === "error") setError(event.error ?? "El stream del asistente falló");
   };
@@ -642,7 +646,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     }
   };
 
-  const send = async (value = content, preserveDraft = false) => {
+  const send = async (value = content, preserveDraft = false, sdbRequested = false) => {
     if (!thread || !value.trim() || processing) return;
     const submitted = value.trim();
     if (!preserveDraft) setContent("");
@@ -689,6 +693,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
         thread.id,
         submitted,
         attachments.map((item) => item.id),
+        sdbRequested,
       );
       setMessages((current) => [
         ...current.filter((item) => item.id !== optimisticId),
@@ -823,6 +828,13 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     } catch (reason: unknown) {
       setTopicError(reason instanceof ApiError ? reason.detail : "No pudimos iniciar la planificación");
     }
+  };
+
+  const confirmHandoff = () => {
+    if (!handoff || processing) return;
+    const actions = handoff.actions.join("\n");
+    setHandoff(null);
+    void send(actions, true, true);
   };
 
   const approve = async (reject: boolean) => {
@@ -1068,6 +1080,19 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
               );
             })}
             </CollapsibleMessages>
+            {handoff && role === "admin" && !processing ? (
+              <Card title="Llevar a ejecución" className="assistant-chat__handoff-card">
+                <p>El cierre propuso una acción concreta. Confirmala para ejecutarla con verificación.</p>
+                <ul>
+                  {handoff.actions.map((action) => (
+                    <li key={action}>{action}</li>
+                  ))}
+                </ul>
+                <div className="assistant-chat__plan-actions">
+                  <Button onClick={confirmHandoff}>Confirmar y ejecutar</Button>
+                </div>
+              </Card>
+            ) : null}
             {processing || stream ? (
               <article
                 className="ai-agent-grammar__bubble-row"

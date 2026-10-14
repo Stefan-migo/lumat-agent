@@ -162,7 +162,7 @@ export const renameChatThread = (id: number, title: string) => apiFetch<{ thread
 export const setChatThreadProject = (id: number, proyecto: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ proyecto }) });
 export const deleteChatThread = (id: number) => apiFetch<{ ok: true }>(`/panel/api/chat/threads/${id}`, { method: 'DELETE' });
 export const deleteThreadAttachment = (threadId: number, attachmentId: number): Promise<void> => apiFetch<void>(`/panel/api/chat/threads/${threadId}/attachments/${attachmentId}`, { method: 'DELETE' });
-export const sendChatMessage = (id: number, content: string, attachment_ids: number[] = []) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content, attachment_ids });
+export const sendChatMessage = (id: number, content: string, attachment_ids: number[] = [], sdb_requested?: boolean) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content, attachment_ids, ...(sdb_requested ? { sdb_requested } : {}) });
 export const uploadAssistantAttachment = (id: number, file: File) => { const body = new FormData(); body.append('file', file); return apiFetch<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${id}/attachments`, { method: 'POST', body }); };
 export const attachProjectFileToThread = (threadId: number, projectFileId: number) => postJson<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${threadId}/attachments/from-project`, { project_file_id: projectFileId });
 export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);
