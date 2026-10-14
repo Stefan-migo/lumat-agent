@@ -58,10 +58,17 @@ failing the catalog).
 
 S5 — Hilos tab, wired (ref 9).
 Replace the hardcoded placeholder. List the project's chat threads via `GET
-/panel/api/chat/threads?proyecto=<slug>`. When empty, show the reference empty-state visual (icon,
-title, supporting copy, `Abrir historial` CTA, footer note). Assumption to confirm with the owner: the
-empty-state copy reflects a real empty project (not "unavailable"), e.g. `Aún no hay hilos en este
-proyecto`.
+/panel/api/chat/threads?proyecto=<slug>`. Populated state (ref 9 image 1): card
+`Hilos del proyecto (N)` with subtitle `Conversaciones asociadas a <name>.`, a `Nuevo
+hilo` header action, a `Buscar hilo…` search, a `Más recientes` sort, a flat
+`Hilo / Última actividad / Acciones` table (icon tile + title + one-line preview +
+`Hoy · HH:MM` + `Abrir hilo` + a `...` rename/delete menu) and a `N hilos` / `1 de 1`
+footer. Empty state uses the reference visual with the real-empty copy the owner
+confirmed in L24: icon, title `Aún no hay hilos en este proyecto`, the reference copy
+and CTA `Abrir historial` plus the closing note. The reference's `No
+disponible` copy is kept only for the denied/error state. Backend addition
+(owner-authorized in L24): the thread summary now carries `preview`, a bounded
+one-line snippet of the latest message.
 
 S6 — Project file folders + delete (backend feature; refs images 2-3). Owner-authorized.
 - Data: a project-scoped `project_folders` table (`parent_id` for nesting) and `project_files.folder_id`.
@@ -111,7 +118,7 @@ scrolling with the document.
 | T2c KB link + unified files list | S2 | inline | done | 5c9d6606, de995673 |
 | T3 Agentes | S3 | inline | done | b49d066e |
 | T4 Skills | S4 | inline | done | 310d1f8a, 9435dcee |
-| T5 Hilos wire | S5 | inline | pending | — |
+| T5 Hilos wire | S5 | inline | done | 849aa8e2, 807c8a45 |
 | T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
 | T7 files tree UI | S6 | inline | done | bb6b6a64, c0268a94 |
 | T8 delete + confirm dialogs | S6 | inline | done | c32accd5 |
@@ -322,3 +329,26 @@ same dialog (`Editar habilidad`). Actions are `Cancelar` + `Guardar habilidad`. 
 `npm run build` green, full suite green (1205); live capture confirms one header button, no bottom
 disclosure, and the dialog with title `Agregar habilidad`, the three fields and both actions. RDD
 assess: medium, `under_budget`, no review due.
+
+L24 (owner, verbatim, 2026-10-14): "ambas versiones empty y poblada de la referencia 9" → provided
+ref 9 (populated + empty). Two decisions were confirmed before code: (1) the empty-state copy is
+adapted to a real empty project — title `Aún no hay hilos en este proyecto` with the reference
+copy/CTA/note, and the reference `No disponible` copy is kept only for the denied/error state;
+(2) the per-row subtitle needs a bounded backend addition — a `preview` snippet of the latest
+message. T5 done (849aa8e2 backend + 807c8a45 frontend). Backend:
+`to_internal_chat_thread_summary_dict` now emits `preview` (whitespace-collapsed, with the
+`**`/backtick emphasis markers stripped, capped at 140 chars with an ellipsis); verified by the
+preview tests in `tests/integration/test_assistant_chat.py` (2 new). Frontend: new
+`ProjectThreads.tsx` replaces the placeholder — populated table (search + `Más recientes` sort by
+activity/title, client pagination, `Nuevo hilo` via `createChatThread` then open, per-row
+`Abrir hilo` and a `...` rename/delete menu) plus the reference empty/unavailable states. The card
+reacts to its own width through a container query, so the embedded assistant column stacks the row
+(activity + actions below the title) instead of breaking it. `InternalChatThreadSummary` gained
+`preview`; `formatThreadActivity` was added to `threadDateGroups.ts`; `ProjectsPage` gained
+`onOpenThread`/`onOpenHistory`, wired from `AppShell`, `TechnicianShell` and the embedded
+`AssistantWorkspace`. Verified: focused frontend 20/20, backend preview tests green, `npm run build`
+green, full vitest suite 1211 passed (the 2 known load-flaky tests pass in isolation 110/110); live
+standalone (1280) and embedded (1280, ~456px column) captures match reference image 1, no horizontal
+overflow, and the embedded `.tabs__panel` stays `overflow-y: auto`. RDD assess: medium, `under_budget`,
+no review due. Open item flagged to the owner: the real-empty state has no `Nuevo hilo` button (it
+matches ref 9's empty layout); threads are created from the assistant workspace.
