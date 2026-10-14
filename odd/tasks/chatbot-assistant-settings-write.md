@@ -109,10 +109,19 @@ allowlist de la unidad 3: tono + mensajes **+** `hours.schedule` / `hours.timezo
 → `set_setting` en vivo, auditado, reversible, sin deploy. Escritura = aprobar-y-aplicar (el
 contrato de tools ya tiene `requires_approval`). Un subagente NO muta settings solo.
 
+**L4 (evidence, 2026-10-14):** T1–T5 done in `odd/chatbot-assistant-settings-write`. RED→GREEN observed
+for T1 (`ImportError: cannot import name 'ASSISTANT_WRITABLE_SETTINGS'`). End-to-end approval loop
+proven: `approve_plan` applies `messages.farewell` through the real graph. Adding the tool moved the
+planner-catalog SHA-256 pin (`f4bc1a5c…`); verified the only catalog delta is `settings.update`. Full
+backend suite green.
+
 ## Progress
 
-- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5
+- [x] T1 — `b3affa8c` feat: `ASSISTANT_WRITABLE_SETTINGS` + `validate_assistant_setting` (+19 unit tests)
+- [x] T2+T3 — `76ece3cd` feat: register `settings.update` (args, handler, `TOOL_REGISTRY`, `ROLE_TOOL_ALLOWLIST` ADMIN-only, `APPROVED_WRITE_ALLOWLIST`) + pinned contracts
+- [x] T4 — `ebaf58f2` test: typed/registration/roles unit test + approval-loop integration coverage
+- [x] T5 — full suite `uv run pytest tests/` exit 0
 
 ## Next step
 
-Implement T1–T5; do not start unit 4 (prompt PRs — owner standby).
+Unit 3 complete pending PR + review. Do NOT start unit 4 (prompt PRs — owner standby).
