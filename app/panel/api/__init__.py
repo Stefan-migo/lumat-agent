@@ -18,6 +18,7 @@ from app.panel.api.routes import (
     clients,
     conversations,
     dashboard,
+    analytics,
     kb,
     settings,
     chat,
@@ -45,6 +46,7 @@ api_router.include_router(conversations.router)
 api_router.include_router(cases.router)
 api_router.include_router(kb.router)
 api_router.include_router(settings.router)
+api_router.include_router(analytics.router)
 api_router.include_router(chat.router)
 api_router.include_router(advanced_dashboard.router)
 api_router.include_router(automation_rules.router)

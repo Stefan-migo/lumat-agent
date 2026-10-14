@@ -21,6 +21,7 @@ import { AgentChat } from '../pages/AgentChat';
 import { AgendaPage } from '../pages/AgendaPage';
 import { AutomationRecipesPage } from '../pages/AutomationRecipesPage';
 import { AdvancedDashboard } from '../pages/AdvancedDashboard';
+import { ChatbotMetrics } from '../pages/ChatbotMetrics';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { PlanningSessions } from '../pages/PlanningSessions';
@@ -121,6 +122,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
 
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
+      : view === 'chatbot-metrics' ? <ChatbotMetrics onOpenConversation={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
       : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} /> : <AgendaPage />
       : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />

@@ -31,11 +31,12 @@ describe('panel routes', () => {
       kb: '/panel/app/kb',
       'automation-rules': '/panel/app/automation-rules',
        settings: '/panel/app/settings',
+        'chatbot-metrics': '/panel/app/chatbot-metrics',
         users: '/panel/app/users',
         projects: '/panel/app/projects',
     });
     expect(Object.keys(PANEL_ROUTES)).toEqual([
-        'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users', 'profile', 'projects', 'planning-sessions',
+        'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'chatbot-metrics', 'users', 'profile', 'projects', 'planning-sessions',
     ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');

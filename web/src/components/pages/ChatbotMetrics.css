@@ -1,0 +1,74 @@
+.chatbot-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chatbot-metrics__toolbar {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.chatbot-metrics__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.chatbot-metrics__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.chatbot-metrics__kpi figcaption {
+  color: var(--corp-fg-muted);
+  font-size: var(--text-sm);
+}
+
+.chatbot-metrics__kpi strong {
+  color: var(--corp-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.chatbot-metrics__kpi span {
+  color: var(--corp-fg-muted);
+  font-size: var(--text-xs);
+}
+
+.chatbot-metrics__signals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chatbot-metrics__signal-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chatbot-metrics__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.chatbot-metrics__table th,
+.chatbot-metrics__table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.chatbot-metrics__caption {
+  padding: var(--space-2) 0;
+  color: var(--corp-fg-muted);
+  text-align: left;
+}

@@ -261,6 +261,42 @@ export interface AdvancedDashboardData {
   drilldown?: DashboardDrilldownRow[];
 }
 
+export interface ChatbotMetrics {
+  conversations: number;
+  handoffs: number;
+  handoff_rate: number;
+  containment_rate: number;
+  handoff_reasons: Record<string, number>;
+  unknown_intents: number;
+  kb_hits: number;
+  kb_misses: number;
+  kb_hit_rate: number | null;
+  turns_to_resolve: number | null;
+  cost_per_conversation: number | null;
+  window_days: number;
+}
+
+export interface ChatbotSignalCounts {
+  escalation: number;
+  unknown_intent: number;
+  kb_miss: number;
+}
+
+export interface ChatbotSignalConversation {
+  conversation_id: number;
+  customer_id: number;
+  wa_phone: string | null;
+  state: string;
+  last_message_at: string | null;
+  signals: ChatbotSignalCounts;
+}
+
+export interface ChatbotSignalConversations {
+  window_days: number;
+  signal: string;
+  conversations: ChatbotSignalConversation[];
+}
+
 export interface Conversation {
   id: number;
   customer_id: number;
