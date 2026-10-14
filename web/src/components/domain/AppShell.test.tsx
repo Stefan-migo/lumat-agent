@@ -237,11 +237,14 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('blocks a non-admin from a direct user ficha URL without requesting user data', async () => {
+  it('redirects a non-admin away from a direct user ficha URL without requesting user data', async () => {
     window.history.replaceState({}, '', '/panel/app/users/8');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
     render(<AppShell user={operador} />);
-    expect(await screen.findByText('No tienes permiso para ver este panel')).toBeInTheDocument();
+
+    // `users` is not on the operator surface (S1): the router canonicalizes the
+    // URL to the role's landing view and never requests the user's data.
+    await waitFor(() => expect(window.location.pathname).toBe('/panel/app/'));
     expect(fetchMock).not.toHaveBeenCalledWith('/panel/api/users/8', expect.anything());
     vi.restoreAllMocks();
   });

@@ -7,6 +7,7 @@ import App from './app';
 // All three SPA auth states are exercised by stubbing global fetch (PDW-AUTH-1/2).
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState({}, '', '/');
 });
 
 function stubMeOk() {
@@ -57,31 +58,39 @@ describe('App /me auth gate (T6.4)', () => {
     expect(sidebar(container).getByText('ana')).toBeInTheDocument();
   });
 
-  it('routes tecnico users to the private technician shell and agenda', async () => {
+  it('lands a tecnico on the agenda inside the shared panel shell, with a role-scoped navigation', async () => {
+    window.history.replaceState({}, '', '/panel/app/');
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = new URL(String(input), 'http://localhost').pathname;
       if (path.endsWith('/panel/api/me')) {
         return new Response(JSON.stringify({ username: 'tech', role: 'tecnico' }), { status: 200 });
       }
       if (path.endsWith('/panel/api/technician/agenda')) {
-        return new Response(JSON.stringify({ appointments: [{ id: 1, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00Z', ends_at: '2026-01-02T14:00:00Z', timezone: 'America/Santiago', customer: { name: 'Técnico Cliente', address: 'Calle 1', comuna: 'Ñuñoa', phone: '+56911111111' }, case_summary: 'Revisar equipo' }] }), { status: 200 });
+        return new Response(JSON.stringify({ appointments: [{ id: 1, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00Z', ends_at: '2026-01-02T14:00:00Z', timezone: 'America/Santiago', customer: { name: 'Técnico Cliente', address: 'Calle 1', comuna: 'Ñuñoa' }, case_summary: 'Revisar equipo' }] }), { status: 200 });
       }
+      if (path.endsWith('/panel/api/notifications')) return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
       if (path.endsWith('/panel/api/logout')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
     });
     vi.stubGlobal('fetch', fetchMock);
-    const user = userEvent.setup();
     const { container } = render(<App />);
 
-    expect(await screen.findAllByText('Agenda técnica')).toHaveLength(1);
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(container.querySelector('.technician-shell')).toBeInTheDocument();
+    // The technician's landing is the agenda, not the operator dashboard, and it
+    // renders inside the shared shell — the private technician shell is gone.
     expect(await screen.findByText('Técnico Cliente')).toBeInTheDocument();
-    expect(screen.queryByText('Clientes')).not.toBeInTheDocument();
-    expect(screen.queryByText('Casos')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
-    expect(await screen.findByLabelText(/usuario/i)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/logout', expect.objectContaining({ method: 'POST' }));
+    expect(window.location.pathname).toBe('/panel/app/agenda');
+    expect(container.querySelector('.panel-shell')).toBeInTheDocument();
+    expect(container.querySelector('.technician-shell')).not.toBeInTheDocument();
+
+    // The navigation is scoped to the technician surface (D1): no CRM, no admin.
+    const rail = within(container.querySelector('.panel-shell__sidebar') as HTMLElement);
+    expect(rail.getByRole('button', { name: 'Agenda' })).toBeInTheDocument();
+    expect(rail.getByRole('button', { name: 'Asistente Lumat' })).toBeInTheDocument();
+    for (const denied of ['Clientes', 'Conversaciones', 'Panel unificado', 'Base de Conocimientos']) {
+      expect(rail.queryByRole('button', { name: denied }), denied).not.toBeInTheDocument();
+    }
+    const tabs = within(container.querySelector('.panel-shell__footer-nav') as HTMLElement);
+    expect(tabs.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['Agenda', 'Asistente', 'Avisos', 'Perfil']);
   });
 
   it('renders the sign-in placeholder after a 401 /me (PDW-AUTH-1)', async () => {
