@@ -37,7 +37,7 @@ The office can see the visit's technician-state. Location is an open question (a
 
 | ID | Task | Specs | Route | Status | Commit |
 |----|------|-------|-------|--------|--------|
-| WU1 | Frontend unification: explicit role→view map; route the technician through `PanelShell`; role-gate nav and routes; remove `TechnicianShell` | S1, S2 | inline | pending | — |
+| WU1 | Frontend unification: explicit role→view map; route the technician through `PanelShell`; role-gate nav and routes; remove `TechnicianShell` | S1 | inline | done | `92735a0a`, `3fa1de8e`, `fa5b0688` |
 | WU2 | Privacy: remove `phone` from the technician serializer; amend `TECH-PRIVACY-1` + `SS-TECH-2`; update failing tests | S3 | inline | done | `a7b512b0`, `7274f8e0` |
 | WU3 | Technician visit-detail read: allow-listed payload enabling `AppointmentDetail` reuse | S2 | inline | pending | — |
 | WU4 | Technician close route (own appointment, `completed`/`no_show`) + audit | S4 | inline | pending | — |
@@ -78,3 +78,7 @@ L4 — Start: worktree `../lumat-agent-odd-panel-tecnico` created from `main` (r
 
 L5 (WU2 done, S3) — Evidence: RED observed (`assert {'address','comuna','name','phone'} == {'address','comuna','name'}` → `Extra items: 'phone'`), then GREEN. Removed `phone` from `to_technician_appointment_dict` (`app/panel/api/serializers.py`), from the `TechnicianCustomer` type, and the `tel:` render in `TechnicianAgenda.tsx`; amended `TECH-PRIVACY-1` + `SS-TECH-2`. Suites: backend `uv run pytest -q` 100% pass; frontend `vitest run` 105 files / 1186 tests pass; `npm run build` (`tsc -b`) exit 0. Commits `a7b512b0` (frontend), `7274f8e0` (backend + specs).
 - Environment note: this worktree needs `cp ../lumat-agent/infra/.env infra/.env`, `infra/test-db.sh up` (port 6030), `eval "$(infra/test-db.sh env)"` before `pytest`, and `npm install` under `web/` before `vitest`/`build`.
+
+L6 (WU1 done, S1) — Evidence: new `web/src/components/domain/panelAccess.ts` (role→view map) + tests; `PanelShell` sidebar and mobile tabs now filter by `canOpen`; `AppShell` routes every role through the one shell and canonicalizes disallowed views to the role's landing view; `app.tsx` no longer branches to a technician shell; `TechnicianShell.tsx` + its test deleted. Net −144 lines.
+- Behaviour changes accepted: the technician lands on `/panel/app/agenda` (not the dashboard); the mobile tabs for a technician are Agenda/Asistente/Avisos/Perfil; a non-admin opening a direct `users/<id>` URL is now canonicalized to their landing view (the data is still never requested) instead of rendering an in-page permission alert.
+- Suites: frontend `vitest run` 104/105 files pass — the one failure is `AgentChat.test.tsx` "renders new stream content while a previous markdown snapshot is stale", which passes in isolation and touches nothing in this diff (load-related flakiness, pre-existing); `npm run build` (`tsc -b`) exit 0. Commits `92735a0a` (access map), `3fa1de8e` (shell + router), `fa5b0688` (delete the private shell).
