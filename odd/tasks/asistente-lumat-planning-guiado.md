@@ -5,7 +5,7 @@
 **Base**: `6d7988b2` (= `main` = `origin/main`, merge of PR #592)
 **Delivery strategy**: `exception-ok` (repo convention: one PR per `odd/<slug>` branch, `size:exception` when > 400 authored lines)
 **Test runner**: `uv run --no-sync pytest tests/` (strict TDD ON); frontend `npm test` + `npm run build`
-**Status**: In progress. T1 done. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
+**Status**: In progress. T1 + T2 done. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
 
 ## Objective
 
@@ -127,9 +127,14 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   carve-out in `_effective_tools`. Route: inline. Evidence: `tests/functional/test_planning_tools.py`
   RED→GREEN; full `pytest tests/` green; commits `186597c7` (refactor) + `4bcea4b6` (feat);
   `review_due: false (under_budget)`.
-- [ ] **T2 — Capture tools + structured session state** (S4). `planning.record_decision(title,
-  content)` and `planning.record_note(kind, content)` with `kind ∈ {objective, risk, next_step,
-  general}`; extend `CortexSession` + `validate_cortex_session` with the capture fields. Route: inline.
+- [x] **T2 — Capture tools + structured session state** (S4). Done (delegated writer). `CortexNote` /
+  `CortexDecision` added to `state.py` and `decisions`/`notes` (defaulted) on `CortexSession`, so
+  existing 6-field sessions still validate. `planning.record_decision` / `planning.record_note`
+  append structured entries to the active session (409 when inactive, 400 when blank/bad kind),
+  registered (admin/operador, autonomous, whitelist) and dispatched via the `planning.*` branch.
+  The persona names both tools as confirmation-only. `to_cortex_session_dict` now exposes
+  `decisions`/`notes`. Commits `cbcaa049` (feat) + `79e6882e` (test); full `pytest tests/` exit 0;
+  `review_due: false (under_budget)`.
 - [ ] **T3 — Own thread per session + UI switch** (S1). Open route/tool creates the thread; new SSE
   event carries the new `thread_id`; frontend switches via `onThreadOpened`; `/planning` command and
   button no longer reuse the current thread. Route: inline.
@@ -176,6 +181,10 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   persona now names both tools as explicit-order writes. Touched exact-set/golden tests updated
   (`test_assistant_tools.py`, `test_tool_tiers.py`, `test_effective_config.py`, `test_assistant_delegation.py`).
   Commits `186597c7`, `4bcea4b6`.
+- **T2 done** — capture tools. `CortexNote`/`CortexDecision` + `decisions`/`notes` on `CortexSession`;
+  `planning.record_decision`/`planning.record_note` in the planning service, registered + whitelisted +
+  persona. Exact-set/golden contracts refreshed. Commits `cbcaa049`, `79e6882e` (delegated to
+  `gentle-ai-worker`; parent spot-check re-ran the full suite: exit 0).
 - Engram mirror **pending** (the `mem_save` failed: multiple active runtime sessions for `lumat-agent`;
   no authoritative `session_id` available — not invented).
 
