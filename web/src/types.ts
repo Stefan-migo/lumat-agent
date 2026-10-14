@@ -642,3 +642,12 @@ export interface TechnicianAppointment {
 export interface TechnicianAgendaResponse {
   appointments: TechnicianAppointment[];
 }
+
+/** Allow-listed visit detail the technician reads (S2/S3): narrower than the
+ *  operator `AppointmentDetail` — no change history, no conversation summary,
+ *  no customer phone/email/consent. */
+export interface TechnicianAppointmentDetail {
+  appointment: Omit<Appointment, 'history'>;
+  customer: { id: number; name: string | null; address: string | null; comuna: string | null };
+  case: { id: number; conversation_id: number | null };
+}

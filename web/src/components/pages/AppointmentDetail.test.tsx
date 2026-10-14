@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
-import { closeAppointment, fetchTechnicians, fetchUsers, rescheduleAppointment } from '../../api';
+import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment } from '../../api';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchTechnicians: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
+vi.mock('../../api', () => ({ getAppointment: vi.fn(), getTechnicianAppointment: vi.fn(), closeAppointment: vi.fn(), fetchTechnicians: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
 const detail: AppointmentDetailData = {
   appointment: {
@@ -255,5 +255,46 @@ describe('AppointmentDetail', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('No pudimos cargar la visita');
     screen.getByRole('button', { name: 'Reintentar' }).click();
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AppointmentDetail (technician)', () => {
+  const technicianDetail: AppointmentDetailData = {
+    ...detail,
+    appointment: { ...detail.appointment, history: [] },
+    conversation_summary: null,
+  };
+
+  /** S2: the same page, with the operator-only affordances gated by role. */
+  it('reads the visit without the operator-only affordances', () => {
+    render(<AppointmentDetail data={{ ...technicianDetail, conversation_summary: 'El cliente pide una reparación.' }} role="tecnico" />);
+
+    expect(screen.getByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cliente' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Ver ficha del cliente/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Resumen de la conversación')).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Historial de la visita' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Volver a agenda' })).toBeInTheDocument();
+  });
+
+  it('loads the technician visit from the technician endpoint', async () => {
+    vi.mocked(getTechnicianAppointment).mockResolvedValue(technicianDetail);
+
+    render(<AppointmentDetail appointmentId={7} role="tecnico" />);
+
+    expect(await screen.findByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
+    expect(getTechnicianAppointment).toHaveBeenCalledWith(7);
+    expect(getAppointment).not.toHaveBeenCalled();
+    expect(fetchTechnicians).not.toHaveBeenCalled();
+  });
+
+  it('keeps the operator affordances for an operator role', () => {
+    render(<AppointmentDetail data={detail} role="operador" />);
+
+    expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cerrar visita' })).toBeInTheDocument();
   });
 });
