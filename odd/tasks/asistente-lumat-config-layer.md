@@ -33,6 +33,15 @@ Exact current placeholder string: `Selección de recursos aún no disponible.`
 "B definitivamente. pero solo me parece interesante los archivos del proyecto y las
 sesiones de planning quizas las skills tambien estarian bien en recursos." → the selector
 covers **project files**, **planning sessions**, and **project skills**.
+Semantics (owner decision, verbatim: "b marca +lectura por tool"): fixing a resource
+**marks** it for the thread (persisted in `thread.assistant_state["resources"] =
+{project_files: [ids], planning_sessions: [slugs], skills: [names]}`) and surfaces a
+**compact reference** (names/ids/slugs) in the turn context. Content is read **on demand
+with tools**, never injected in full every turn:
+- project files → existing `read_project_file` (S6 adds `offset`/`limit`),
+- planning reports → a new `planning.read_report` tool (owner request, verbatim: "deberia
+  exsitir una tool que permita leer un reporte. lo podriamos agregar aca?"),
+- skills → the existing declared-skill mechanism (bodies via `_skill_context`).
 
 S4 — Tray vs library separation.
 Owner, verbatim: "los archivos del hilo no deberian mostrarse en el tray del chatbox. solo
@@ -98,7 +107,9 @@ Non-goals (explicitly dropped after review):
 | T0 feature doc | — | inline | done | this commit |
 | T1 default-on 7 opt-in | S1 | inline | done | 49227b57 |
 | T2 sidebar Capacidades wired | S2 | inline | done | fd5e39e2 |
-| T3 Recursos selector (B) | S3 | inline | pending | — |
+| T3a Recursos selector + persistence | S3 | inline | pending | — |
+| T3b pinned resources in context | S3 | inline | pending | — |
+| T3c planning.read_report tool | S3 | inline | pending | — |
 | T4 tray/library separation | S4 | inline | pending | — |
 | T5 multimodal tool results | S5 | inline | pending | — |
 | T6 partial reads (offset/limit) | S6 | inline | pending | — |
@@ -199,3 +210,10 @@ frontend suite 1190/1191 (the one failure is the pre-existing load-flaky
 `ClientesList > distinguishes a filtered-empty result…`, green in isolation 42/42), `npm run
 build` green. Env: `npm install` in `web/` (the worktree had no `node_modules`).
 RDD assess: risk `medium`, `review_due=false` (`under_budget`).
+
+L16 — T3 design closed. Owner chose (b) "marca +lectura por tool" for project files, and
+asked for a planning-report read tool. Design: fixing a resource marks it in
+`thread.assistant_state["resources"]` and surfaces a compact reference in context; content
+is read on demand (`read_project_file`, new `planning.read_report`, declared skills). T3 is
+split into T3a (selector + persistence), T3b (pinned resources in context), T3c
+(`planning.read_report` tool).
