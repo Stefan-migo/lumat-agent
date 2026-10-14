@@ -218,3 +218,13 @@ knowledge action feedback now use it instead of a permanent inline banner. Added
 `npm run build` green, full vitest suite green (1199 passed), live checks (menu items both present, toast
 appears and is gone after 5.2 s), screenshots in `/tmp/opencode/tree-shots3/`. RDD assess: medium,
 `under_budget`, no review due.
+
+L17 (owner, verbatim): "si ahora se ve correcto. el toast abajo esta correcto igual [Image 1] . pero la
+fuente no es la correcta. debe ser la fuente que utilizamos en el dise;o lumat. cerramos con esa
+correccion. guarda la memoria. dame el handoff para continuar con T9 en un nuevo chat"
+
+L18: T12 follow-up done (569921f1). The toast inherited the browser default font; set
+`font-family: var(--font-ui)` (Inter) on `.toast`, matching the rest of the panel. Build green, full
+suite green (1199). Session closed. Next: T9 (knowledge card, ref image 1) then T8 (KB document delete
+dialog, ref image 2 right). Handoff written to `odd/handoffs/panel-visual-alignment-t9.md` in the primary
+worktree.
