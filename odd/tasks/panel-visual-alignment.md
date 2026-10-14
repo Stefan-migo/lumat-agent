@@ -61,7 +61,7 @@ proyecto`.
 | --- | --- | --- | --- | --- |
 | T1 shared chrome | S1 | inline | done | f194eef9 |
 | T1b workspace header fixes | S1 | inline | done | ef0a9524 |
-| T2 Contexto | S2 | inline | pending | — |
+| T2 Contexto | S2 | inline | done | 641c1606 |
 | T3 Agentes | S3 | inline | pending | — |
 | T4 Skills | S4 | inline | pending | — |
 | T5 Hilos wire | S5 | inline | pending | — |
@@ -87,3 +87,10 @@ L6: T1b done (ef0a9524). Embedded project detail (`projects-page--embedded`): re
 lime rail, renders no action button, and adds `align-content: start` so the frame grid's auto rows stop
 stretching (the title bar was 132px tall for a 55px header). Title-to-tabs gap now ~16px. Full suite
 green (1184).
+L7: T2 done (31f11237 primitives + 641c1606 page). Contexto tab: left "Instrucciones del proyecto" card
+(icon + subtitle + helper + save footer), right column split into "Archivos del proyecto" and
+"Conocimiento del proyecto" cards with count badges, dashed empty states and a closing note. Additive
+primitives: `Card.footer`, `EmptyState` icon/action/dashed variant. Verified by headless screenshot in
+the workspace. `Abrir asistente`/breadcrumb intentionally omitted. Open item: the reference shows a
+"Subir archivo a la KB" button on the knowledge card; no distinct backend action exists (project files
+index automatically), so it was omitted pending the owner's call.
