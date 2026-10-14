@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { formatNotificationTime, PanelShell } from "./PanelShell";
+import { formatNotificationTime, isAdminOnlyView, PanelShell } from "./PanelShell";
 import { parsePanelPath } from "./panelRoutes";
 import type { User } from "../../types";
 
@@ -87,6 +87,13 @@ describe("PanelShell rail contract (2C-1)", () => {
       // name in NAVIGATION, which is what the sidebar, the drawer and the breadcrumb render.
       "Panel", "Chats", "Asistente", "Agenda", "Clientes",
     ]);
+  });
+
+  it("declares the admin-only destinations once, with the navigation", () => {
+    expect(isAdminOnlyView("users")).toBe(true);
+    expect(isAdminOnlyView("kb")).toBe(true);
+    expect(isAdminOnlyView("agenda")).toBe(false);
+    expect(isAdminOnlyView("cases")).toBe(false);
   });
 
   it("keeps the collapse toggle anchored inside the sidebar (DS-SHELL-1)", () => {

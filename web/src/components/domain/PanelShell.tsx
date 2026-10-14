@@ -90,6 +90,13 @@ const FOOTER_ITEMS: Partial<Record<PanelView, { label: string; icon: LucideIcon 
   profile: { label: "Perfil", icon: UserRound },
 };
 
+/** Whether a destination is administrative (admin-only). Single source: the
+ *  navigation itself, so the router and the sidebar cannot disagree about which
+ *  destinations an operator may see. */
+export function isAdminOnlyView(view: PanelView): boolean {
+  return Boolean(NAVIGATION[view as keyof typeof NAVIGATION]?.adminOnly);
+}
+
 const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
   dashboard: "Dashboard",
   notifications: "Notificaciones",
@@ -304,7 +311,8 @@ function Navigation({
   search = "",
 }: Pick<PanelShellProps, "currentView" | "onNavigate" | "user"> & { collapsed?: boolean; search?: string }) {
   const items = (Object.keys(NAVIGATION) as Array<keyof typeof NAVIGATION>).filter(
-    (view) => canOpen(user.role, view)
+    (view) => (!NAVIGATION[view].adminOnly || user.role === "admin")
+      && canOpen(user.role, view)
       && NAVIGATION[view].label.toLocaleLowerCase("es-CL").includes(search.toLocaleLowerCase("es-CL")),
   );
   const groups: Array<[string, typeof items]> = [

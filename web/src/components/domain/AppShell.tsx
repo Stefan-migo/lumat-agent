@@ -4,7 +4,7 @@ import { listNotifications, markAllNotificationsRead } from '../../api';
 import type { NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
 import type { NotificationState, PanelView } from './PanelShell';
-import { PanelShell } from './PanelShell';
+import { PanelShell, isAdminOnlyView } from './PanelShell';
 import { isDetailRoute, parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { canOpen, defaultViewForRole } from './panelAccess';
 import { Dashboard } from '../pages/Dashboard';
@@ -38,7 +38,8 @@ export type View = PanelView;
  *  else — a hand-edited URL, a stale bookmark — falls back to the role's
  *  landing view, so no role ever renders a page it cannot use. */
 function routeForRole(route: PanelRoute, role: User['role']): PanelRoute {
-  return canOpen(role, route.view) ? route : { view: defaultViewForRole(role) };
+  const allowed = canOpen(role, route.view) && (role === 'admin' || !isAdminOnlyView(route.view));
+  return allowed ? route : { view: defaultViewForRole(role) };
 }
 
 export interface AppShellProps {

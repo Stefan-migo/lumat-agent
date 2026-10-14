@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canOpen, defaultViewForRole, footerViewsForRole, viewsForRole } from './panelAccess';
+import { canOpen, defaultViewForRole, footerViewsForRole } from './panelAccess';
 import type { PanelView } from './PanelShell';
 
 /** D1: the technician's unit of work is the visit, not the CRM. */
@@ -25,19 +25,13 @@ describe('panelAccess — technician surface', () => {
   });
 });
 
-describe('panelAccess — operator and admin keep their surface', () => {
-  it('keeps the operator surface to everything except the admin-only destinations', () => {
-    for (const view of ['dashboard', 'clients', 'conversations', 'agenda', 'chat', 'advanced-dashboard'] as PanelView[]) {
-      expect(canOpen('operador', view), view).toBe(true);
-    }
-    for (const view of ['kb', 'settings', 'users', 'automation-rules'] as PanelView[]) {
-      expect(canOpen('operador', view), view).toBe(false);
-    }
-  });
-
-  it('gives admin every destination', () => {
-    for (const view of ['dashboard', 'kb', 'settings', 'users', 'automation-rules', 'agenda', 'chat'] as PanelView[]) {
+/** Only the technician is restricted here. The administrative destinations are
+ *  declared once, with the navigation (`isAdminOnlyView`), not duplicated. */
+describe('panelAccess — admin and operator', () => {
+  it('leaves admin and operador unrestricted at this level', () => {
+    for (const view of ['dashboard', 'kb', 'settings', 'users', 'agenda', 'chat'] as PanelView[]) {
       expect(canOpen('admin', view), view).toBe(true);
+      expect(canOpen('operador', view), view).toBe(true);
     }
   });
 
@@ -46,10 +40,12 @@ describe('panelAccess — operator and admin keep their surface', () => {
     expect(footerViewsForRole('operador')).toEqual(['dashboard', 'conversations', 'chat', 'agenda', 'clients']);
   });
 
-  it('never grants a technician a view the operator also lacks by accident', () => {
-    const technician = viewsForRole('tecnico');
-    for (const view of technician) {
-      expect(canOpen('tecnico', view), view).toBe(true);
-    }
+  /** A destination another branch adds to `PanelView` defaults to the safe side
+   *  without editing this file: admin and operador allow it, the technician does not. */
+  it('defaults an unseen destination to allowed for admin/operador and denied for the technician', () => {
+    const unseen = 'a-view-from-another-branch' as unknown as PanelView;
+    expect(canOpen('admin', unseen)).toBe(true);
+    expect(canOpen('operador', unseen)).toBe(true);
+    expect(canOpen('tecnico', unseen)).toBe(false);
   });
 });
