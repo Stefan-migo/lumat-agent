@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { BookOpen, Download, FileSearch, FileText, Info, Paperclip, Upload } from "lucide-react";
 import { ApiError, downloadProjectFile, listProjectFiles, refreshKbDocuments, uploadProjectFile } from "../../api";
 import type { Doc, ProjectFile, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -76,27 +76,33 @@ export function ProjectResources({ projectSlug, projectId, role }: { projectSlug
   const projectDocs = (docs.data?.docs ?? []).filter((doc) => doc.project_id === projectId);
   const docsState = docs.state === "empty" || (docs.state === "ready" && projectDocs.length === 0) ? "empty" : docs.state;
 
-  return <Card title="Archivos y conocimiento">
-    <section>
-      <h3>Archivos del proyecto</h3>
-      <Button variant="secondary" disabled={uploading} onClick={() => inputRef.current?.click()}>{uploading ? "Subiendo…" : "Subir archivo"}</Button>
+  return <div className="projects-page__resources">
+    <Card
+      icon={Paperclip}
+      title="Archivos del proyecto"
+      headerAction={<><Badge>{files.data?.files?.length ?? 0}</Badge><Button variant="secondary" disabled={uploading} onClick={() => inputRef.current?.click()}>{uploading ? "Subiendo…" : "Subir archivo"}</Button></>}
+    >
       <input type="file" aria-label="Archivo del proyecto" hidden ref={inputRef} onChange={(event) => void upload(event)} />
       {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.text} /> : null}
       {filesState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando archivos" /> : null}
       {filesState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar los archivos" /><Button variant="secondary" onClick={files.retry}>Reintentar</Button></> : null}
       {filesState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver los archivos de este proyecto." /> : null}
-      {filesState === "empty" ? <EmptyState title="Sin archivos" description="Sube el primer archivo de este proyecto." /> : null}
+      {filesState === "empty" ? <EmptyState variant="dashed" icon={Upload} title="Aún no hay archivos" description="Sube el primer documento de este proyecto." /> : null}
       {filesState === "ready" ? <DataTable columns={fileColumns} rows={files.data?.files ?? []} rowKey={(row) => String(row.id)} /> : null}
-    </section>
-    <section>
-      <h3>Conocimiento del proyecto</h3>
+    </Card>
+    <Card
+      icon={BookOpen}
+      title="Conocimiento del proyecto"
+      headerAction={isAdmin ? <Badge>{projectDocs.length}</Badge> : null}
+      footer={<p className="projects-page__note"><Icon icon={Info} size="sm" />Los archivos del proyecto se comparten como contexto; los adjuntos de un hilo permanecen en ese hilo.</p>}
+    >
       {!isAdmin ? <StateMessage tone="info" role="status" title="Conocimiento del proyecto" detail="Solo los administradores pueden ver los documentos indexados de un proyecto." /> : <>
         {docsState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conocimiento" /> : null}
         {docsState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el conocimiento del proyecto" /><Button variant="secondary" onClick={docs.retry}>Reintentar</Button></> : null}
         {docsState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver el conocimiento del proyecto." /> : null}
-        {docsState === "empty" ? <EmptyState title="Sin documentos indexados" description="Los archivos compatibles que subas se indexan aquí automáticamente." /> : null}
+        {docsState === "empty" ? <EmptyState variant="dashed" icon={FileSearch} title="Sin documentos indexados" description="Los archivos compatibles se indexan automáticamente." /> : null}
         {docsState === "ready" ? <DataTable columns={docColumns} rows={projectDocs} rowKey={(row) => String(row.id)} /> : null}
       </>}
-    </section>
-  </Card>;
+    </Card>
+  </div>;
 }

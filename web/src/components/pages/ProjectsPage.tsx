@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Folder } from "lucide-react";
+import { FileText, Folder } from "lucide-react";
 import { ApiError, createProject, getProject, listProjects, updateProjectConfig } from "../../api";
 import type { Project, ProjectCandidate, ProjectDetailResponse, ProjectsResponse, Role } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -54,12 +54,11 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
         if (active === "agents") return <ProjectAgents projectSlug={body.project.slug} />;
         if (active === "skills") return <ProjectSkills projectSlug={body.project.slug} projectId={body.project.id} role={role} skills={body.project.config?.skills ?? []} />;
         return <div className="projects-page__context">
-          <Card title="Instrucciones del proyecto">
-            <Badge tone={projectStatusTone(body.project.status)}>{projectStatusLabel(body.project.status)}</Badge>
+          <Card icon={FileText} title="Instrucciones del proyecto" description="Define el contexto compartido por el asistente." footer={<Button disabled={savingInstructions} onClick={() => void saveInstructions()}>{savingInstructions ? "Guardando…" : "Guardar cambios"}</Button>}>
             <Input label="Nombre del proyecto" value={body.project.name} disabled onChange={() => undefined} />
             <Textarea label="Propósito" value={body.project.purpose} disabled onChange={() => undefined} />
-            <Textarea label="Instrucciones del proyecto" value={instructions} onChange={(event) => setInstructions(event.target.value)} />
-            <Button disabled={savingInstructions} onClick={() => void saveInstructions()}>{savingInstructions ? "Guardando…" : "Guardar cambios"}</Button>
+            <Textarea label="Instrucciones del proyecto" placeholder="Describe cómo debe trabajar el asistente en este proyecto…" value={instructions} onChange={(event) => setInstructions(event.target.value)} />
+            <p className="projects-page__hint">Estas instrucciones forman parte del contexto del proyecto.</p>
             {instructionsError ? <p role="alert">No se guardaron los cambios: {instructionsError}</p> : null}
           </Card>
           <ProjectResources projectSlug={body.project.slug} projectId={body.project.id} role={role} />

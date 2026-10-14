@@ -55,7 +55,7 @@ describe("ProjectResources", () => {
   it("shows the honest empty state when no project files exist", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(response({ files: [] }));
     render(<ProjectResources projectSlug="ops" projectId={7} role="operador" />);
-    expect(await screen.findByText("Sin archivos")).toBeInTheDocument();
+    expect(await screen.findByText("Aún no hay archivos")).toBeInTheDocument();
   });
 
   it("uploads a project file and refreshes the list", async () => {
