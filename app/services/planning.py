@@ -143,6 +143,16 @@ def minimum_met(cortex: dict) -> bool:
     return all(coverage[item] for item in MINIMUM)
 
 
+def handoff_candidate(cortex: dict) -> dict | None:
+    """The handoff is offered only when a concrete action was captured as a next_step (S1)."""
+    actions = [
+        (note.get("content") or "").strip()
+        for note in (cortex.get("notes") or [])
+        if note.get("kind") == "next_step" and (note.get("content") or "").strip()
+    ]
+    return {"actions": actions} if actions else None
+
+
 def _active_cortex(thread) -> dict:
     cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
     if cortex.get("status") != "active":
@@ -186,4 +196,9 @@ def close_session(session, thread) -> dict:
     from app.services.agent_chat import close_cortex_session
 
     result = close_cortex_session(session, thread, report=build_report(cortex))
-    return {**result, "gaps": report_gaps(cortex), "minimum_met": minimum_met(cortex)}
+    return {
+        **result,
+        "gaps": report_gaps(cortex),
+        "minimum_met": minimum_met(cortex),
+        "handoff": handoff_candidate(cortex),
+    }
