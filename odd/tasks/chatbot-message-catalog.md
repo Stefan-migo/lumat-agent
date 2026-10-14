@@ -202,7 +202,7 @@ Task shape may be refined after T0 — keep IDs stable.
 
 ## Progress
 
-- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [x] T4 (absorbs T6) · [x] T5 · [ ] T7
+- [x] T0 · [x] T1 · [x] T2 · [x] T3 · [x] T4 (absorbs T6) · [x] T5 · [x] T7
 
 ### Evidence
 
@@ -267,13 +267,19 @@ Task shape may be refined after T0 — keep IDs stable.
   preset ahead of the clarification branch too. Tests: routing table (+7), `respond` unknown
   (+1), e2e `test_preset_answer_preempts_the_kb_miss_path` over `run_conversation` (+1). Full
   backend → **1994 passed**.
+- T7 — full checks over the branch (HEAD `970218be`). Backend: `uv run pytest tests/ -q`
+  → **1994 passed** (0 failures). Panel: `npm test` → **1178 passed** (105 files);
+  `npm run build` (`tsc -b` + vite) → green. AC coverage: AC-1 (T1/T2/T3), AC-2 (T5 + e2e
+  `test_preset_answer_preempts_the_kb_miss_path`), AC-3 (D9 path preserved — the preset hook
+  only fires when one was picked), AC-4 (T4/T6 `<templates>` DATA block), AC-5 (T2 admin-only),
+  AC-6 (backend green).
 
 ## Next step
 
-T5 done (the picked preset message is rendered and pre-empts the answer path). Start
-**T7**: full checks (`uv run pytest tests/ -q` + panel) and close with verification
-evidence. The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) —
-do not mix it in.
+T7 done: all tasks closed with verification evidence. Remaining is **delivery (owner's
+decision)**: bring the current `origin/main` into the branch, then open the PR (`test` +
+`panel` checks; auto-merge is NOT enabled). The greeting bug stays a **separate** unit
+(`chatbot-first-turn-greeting`) — do not mix it in.
 
 ## Log
 
