@@ -46,8 +46,9 @@ Search field `Buscar habilidad por nombre o descripción…`. `Catálogo global`
 subtitle `Habilidades globales de solo lectura.` and rows: icon tile, name, description, chips `Global` /
 `Solo lectura`. `Habilidades del proyecto` card with count + subtitle `Se guardan en la configuración de
 este proyecto.` + `Agregar habilidad` action, dashed empty state `Aún no hay habilidades en este
-proyecto` / `Agrega una habilidad para definir instrucciones específicas.`, and a collapsible `Agregar
-habilidad` disclosure. Every row expands into a read-only `Contenido de la habilidad` / `Vista de
+proyecto` / `Agrega una habilidad para definir instrucciones específicas.`, and the `Agregar habilidad`
+card action opens a dialog with the name, description and content form (editing reuses the same dialog).
+Every row expands into a read-only `Contenido de la habilidad` / `Vista de
 lectura` panel that renders the skill body as markdown; a project row also carries an `...` menu
 (`Editar` / `Eliminar`). Footer note `Las habilidades globales se consultan; las del proyecto se
 gestionan aquí.` Existing add/edit/delete behavior preserved (whole-array PATCH via
@@ -311,3 +312,13 @@ empty-project state matching reference image 2 and the expanded global skill mat
 rendered from `agent/skills/assistant/memoria-tukulpan.md`, headings `Tukulpan memory` / `Axes and
 ownership` / `Tool arguments` / `Gotchas`, content scroll clientHeight 288 / scrollHeight 1242), no
 horizontal overflow. RDD assess: medium, `under_budget`, no review due.
+
+L23 (owner, verbatim): "el boton agregar habilidad y el dropdown agregar habilidad. llevan donde mismo.
+simplemente sacar el dropdown de la parte de abajo y dejar solo el boton agregar habilidad en el header
+del card. luego crear un modal/dialog para agregar el nuevo skill" — done (7fd3e20b). Removed the
+collapsible bottom `Agregar habilidad` disclosure (and its CSS) so the card has a single action, and
+moved the add/edit form into a `Dialog` opened by the header button; the row `...` → `Editar` reuses the
+same dialog (`Editar habilidad`). Actions are `Cancelar` + `Guardar habilidad`. Verified: focused 5/5,
+`npm run build` green, full suite green (1205); live capture confirms one header button, no bottom
+disclosure, and the dialog with title `Agregar habilidad`, the three fields and both actions. RDD
+assess: medium, `under_budget`, no review due.
