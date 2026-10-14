@@ -63,6 +63,43 @@ def test_chatbot_metrics_is_in_assistant_whitelist():
     assert "analytics.chatbot_metrics" in load_assistant_config().tools_whitelist
 
 
+def test_chatbot_conversations_is_a_typed_bounded_read_only_tool():
+    schemas = tool_schemas()
+    assert "analytics.chatbot_conversations" in schemas
+    tool = get_tool("analytics.chatbot_conversations")
+    assert tool.read_only is True
+    assert tool.tier == "default"
+    parsed = tool.args_model.model_validate({})
+    assert (parsed.window_days, parsed.signal, parsed.limit) == (7, "any", 10)
+
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"signal": "nope"})
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"window_days": 32})
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"extra": True})
+
+
+def test_conversation_transcript_is_a_typed_bounded_read_only_tool():
+    schemas = tool_schemas()
+    assert "conversations.transcript" in schemas
+    tool = get_tool("conversations.transcript")
+    assert tool.read_only is True
+    assert tool.tier == "default"
+
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({})
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"conversation_id": 0})
+    assert tool.args_model.model_validate({"conversation_id": 5}).limit == 20
+
+
+def test_conversation_inspection_tools_are_in_assistant_whitelist():
+    whitelist = load_assistant_config().tools_whitelist
+    assert "analytics.chatbot_conversations" in whitelist
+    assert "conversations.transcript" in whitelist
+
+
 def test_skill_propose_is_owner_scoped_approval_write_and_upserts_project_skill(monkeypatch):
     from app.chat.assistant.approval import consume_approval
 
