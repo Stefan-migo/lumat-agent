@@ -214,3 +214,38 @@ def test_technician_close_rejects_non_booked_appointment(client, make_user):
 
     assert refused.status_code == 409
     assert refused.json()["detail"] == {"code": "invalid_lifecycle", "message": "only booked appointments can be closed"}
+
+
+def test_technician_close_cannot_be_applied_twice(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000111", date(2026, 1, 14), "propia")
+    _login(client)
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/close", json={"outcome": "no_show"}).status_code == 200
+    with SessionLocal() as session:
+        history_before = session.query(AppointmentHistory).filter_by(appointment_id=appointment_id).count()
+        audit_before = session.query(AuditLog).filter_by(entity_id=str(appointment_id)).count()
+
+    second = client.post(f"/panel/api/technician/appointments/{appointment_id}/close", json={"outcome": "completed"})
+
+    assert second.status_code == 409
+    assert second.json()["detail"]["code"] == "invalid_lifecycle"
+    with SessionLocal() as session:
+        assert session.get(Appointment, appointment_id).status is AppointmentStatus.NO_SHOW
+        assert session.query(AppointmentHistory).filter_by(appointment_id=appointment_id).count() == history_before
+        assert session.query(AuditLog).filter_by(entity_id=str(appointment_id)).count() == audit_before
+
+
+def test_technician_close_cannot_forge_ownership_with_a_body_field(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    other = make_user("other-tech", "other-pass", role="tecnico")
+    foreign_id = _appointment(other, "+56900000121", date(2026, 1, 15), "ajena")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/technician/appointments/{foreign_id}/close",
+        json={"outcome": "completed", "technician_id": technician},
+    )
+
+    assert response.status_code == 404
+    with SessionLocal() as session:
+        assert session.get(Appointment, foreign_id).status is AppointmentStatus.BOOKED
