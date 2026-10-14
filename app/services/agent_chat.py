@@ -471,6 +471,7 @@ def _run_agent_turn_session(
             "cap_reached": result.get("cap_reached", False),
             "compaction": compaction,
             **({"cortex_session": result["cortex_session"]} if result.get("cortex_session") else {}),
+            **({"verification": result["verification"]} if result.get("verification") else {}),
         })
         # The planner snapshot belongs to this turn. Merging it kept an earlier turn's failure
         # diagnostic and arguments alive in a later successful turn, because `plan_llm` omits
