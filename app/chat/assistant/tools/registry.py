@@ -734,7 +734,13 @@ def _planning_close(session, args: PlanningCloseArgs, *, trusted_thread_id: int 
     except planning.PlanningSessionError as exc:
         raise ToolValidationError(str(exc)) from exc
     state = dict((thread.assistant_state or {}).get("cortex_session") or {})
-    return {"session": state, "thread_id": thread.id, "report_key": result.get("report_key")}
+    return {
+        "session": state,
+        "thread_id": thread.id,
+        "report_key": result.get("report_key"),
+        "gaps": result.get("gaps", []),
+        "minimum_met": result.get("minimum_met", False),
+    }
 
 
 def _planning_record_decision(session, args: PlanningRecordDecisionArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):

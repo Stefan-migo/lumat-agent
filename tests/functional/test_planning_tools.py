@@ -340,3 +340,38 @@ def test_planning_close_writes_a_substantive_report(make_user):
         assert "Decidir el presupuesto" in report.contenido
         assert "**Stack** — Usar Postgres" in report.contenido
         assert '{"topic"' not in report.contenido
+
+
+def test_planning_close_reports_gaps_but_always_succeeds(make_user):
+    make_user("planning-gaps", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-gaps")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Sin checklist"},
+            role="admin",
+            trusted_thread_id=thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+
+    with SessionLocal() as session:
+        result = execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+
+    assert result["status"] == "completed"
+    assert result["result"]["session"]["status"] == "closed"
+    assert set(result["result"]["gaps"]) == {"objective", "decisions", "risks", "next_steps"}
+    assert result["result"]["minimum_met"] is False

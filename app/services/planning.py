@@ -98,12 +98,49 @@ def build_report(cortex: dict) -> str:
         "",
         "## Notes",
         bullets(by_kind.get("general", [])),
+        "",
+        "## Gaps",
+        "\n".join(f"- {CHECKLIST_LABELS[item]}" for item in report_gaps(cortex)) or "_None._",
     ]
     return "\n".join(sections).strip() + "\n"
 
 
 NOTE_KINDS = frozenset({"objective", "risk", "next_step", "general"})
 NOT_CAPTURED = "_Not captured._"
+CHECKLIST = ("objective", "decisions", "risks", "next_steps")
+MINIMUM = ("objective", "decisions")
+CHECKLIST_LABELS = {
+    "objective": "Objective",
+    "decisions": "Decisions",
+    "risks": "Risks",
+    "next_steps": "Next steps",
+}
+
+
+def _coverage(cortex: dict) -> dict[str, bool]:
+    kinds = {
+        note.get("kind")
+        for note in (cortex.get("notes") or [])
+        if (note.get("content") or "").strip()
+    }
+    return {
+        "objective": "objective" in kinds,
+        "decisions": bool(cortex.get("decisions")),
+        "risks": "risk" in kinds,
+        "next_steps": "next_step" in kinds,
+    }
+
+
+def report_gaps(cortex: dict) -> list[str]:
+    """The checklist items the session did not cover (S6)."""
+    coverage = _coverage(cortex)
+    return [item for item in CHECKLIST if not coverage[item]]
+
+
+def minimum_met(cortex: dict) -> bool:
+    """Whether the objective and at least one decision were captured (S6)."""
+    coverage = _coverage(cortex)
+    return all(coverage[item] for item in MINIMUM)
 
 
 def _active_cortex(thread) -> dict:
@@ -144,9 +181,9 @@ def record_note(session, thread, *, kind: str, content: str) -> dict:
 
 
 def close_session(session, thread) -> dict:
-    """Close the active planning session and persist its report."""
-    _active_cortex(thread)
-    cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
+    """Close the active planning session and persist its report (never blocked by the checklist)."""
+    cortex = _active_cortex(thread)
     from app.services.agent_chat import close_cortex_session
 
-    return close_cortex_session(session, thread, report=build_report(cortex))
+    result = close_cortex_session(session, thread, report=build_report(cortex))
+    return {**result, "gaps": report_gaps(cortex), "minimum_met": minimum_met(cortex)}
