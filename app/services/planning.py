@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 
@@ -66,11 +65,45 @@ def open_in_new_thread(session, *, owner_id: int, proyecto: str, topic: str):
 
 
 def build_report(cortex: dict) -> str:
-    """Assemble the final report content for one session."""
-    return json.dumps({"topic": cortex.get("topic", "")}, ensure_ascii=False)
+    """Assemble the substantive markdown report from the captured session items (S8)."""
+    notes = cortex.get("notes") or []
+    by_kind: dict[str, list[str]] = {kind: [] for kind in NOTE_KINDS}
+    for note in notes:
+        content = (note.get("content") or "").strip()
+        if content:
+            by_kind.setdefault(note.get("kind"), []).append(content)
+
+    def bullets(lines: list[str]) -> str:
+        return "\n".join(f"- {line}" for line in lines) if lines else NOT_CAPTURED
+
+    decisions = [
+        f"**{decision.get('title', '')}** — {decision.get('content', '')}"
+        for decision in (cortex.get("decisions") or [])
+        if decision.get("title") or decision.get("content")
+    ]
+    sections = [
+        f"# Planning session report: {cortex.get('topic', '')}".rstrip(),
+        "",
+        "## Objective",
+        bullets(by_kind.get("objective", [])),
+        "",
+        "## Decisions",
+        bullets(decisions),
+        "",
+        "## Risks",
+        bullets(by_kind.get("risk", [])),
+        "",
+        "## Next steps",
+        bullets(by_kind.get("next_step", [])),
+        "",
+        "## Notes",
+        bullets(by_kind.get("general", [])),
+    ]
+    return "\n".join(sections).strip() + "\n"
 
 
 NOTE_KINDS = frozenset({"objective", "risk", "next_step", "general"})
+NOT_CAPTURED = "_Not captured._"
 
 
 def _active_cortex(thread) -> dict:

@@ -284,3 +284,59 @@ def test_planning_capture_tools_reject_without_an_active_session(make_user):
                     owner_id=owner_id,
                     proyecto="default",
                 )
+
+
+def test_planning_close_writes_a_substantive_report(make_user):
+    make_user("planning-report", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-report")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Reporte sustantivo"},
+            role="admin",
+            trusted_thread_id=thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+
+    with SessionLocal() as session:
+        execute_tool(
+            session,
+            "planning.record_note",
+            {"kind": "objective", "content": "Decidir el presupuesto"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        execute_tool(
+            session,
+            "planning.record_decision",
+            {"title": "Stack", "content": "Usar Postgres"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, session_thread_id)
+        topic_key = thread.assistant_state["cortex_session"]["report_key"]
+        report = session.scalars(select(Memory).where(Memory.topic_key == topic_key)).one()
+        assert "Decidir el presupuesto" in report.contenido
+        assert "**Stack** — Usar Postgres" in report.contenido
+        assert '{"topic"' not in report.contenido
