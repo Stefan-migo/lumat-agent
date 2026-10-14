@@ -12,28 +12,28 @@ export const agendaData: TechnicianAppointment[] = [
     id: 5, service: "Reparación de cañería en cocina", local_start: "2026-09-15T11:00:00",
     starts_at: "2026-09-15T14:00:00+00:00", ends_at: "2026-09-15T15:00:00+00:00", timezone: "America/Santiago",
     status: "completed", emergency: false, priority: null,
-    customer: { name: "Cliente Demo H3", address: "Av. Siempre Viva 123", comuna: "Providencia", phone: "+56910001000" },
+    customer: { name: "Cliente Demo H3", address: "Av. Siempre Viva 123", comuna: "Providencia" },
     case_summary: "Revisar fuga del calefont",
   },
   {
     id: 6, service: "Revisión de calefont", local_start: "2026-09-19T15:00:00",
     starts_at: "2026-09-19T18:00:00+00:00", ends_at: "2026-09-19T19:00:00+00:00", timezone: "America/Santiago",
     status: "booked", emergency: true, priority: null,
-    customer: { name: "María Silva", address: "Los Alerces 42", comuna: "Ñuñoa", phone: "+56912345678" },
+    customer: { name: "María Silva", address: "Los Alerces 42", comuna: "Ñuñoa" },
     case_summary: "El cliente reporta que la instalación provisoria de agua caliente no tiene presión suficiente en el segundo piso y solicita una evaluación técnica completa antes de la entrega de la obra.",
   },
   {
     id: 7, service: "Cambio de termo", local_start: "2026-09-20T09:00:00",
     starts_at: "2026-09-20T12:00:00+00:00", ends_at: "2026-09-20T13:00:00+00:00", timezone: "America/Santiago",
     status: "no_show", emergency: false, priority: "alta",
-    customer: { name: null, address: null, comuna: null, phone: null },
+    customer: { name: null, address: null, comuna: null },
     case_summary: null,
   },
   {
     id: 8, service: "Instalación de llave", local_start: "2026-09-26T09:00:00",
     starts_at: "2026-09-26T12:00:00+00:00", ends_at: "2026-09-26T13:00:00+00:00", timezone: "America/Santiago",
     status: "cancelled", emergency: false, priority: null,
-    customer: { name: "Constructora Los Andes SpA", address: "Camino Rural Km 14, sector El Maitén, parcela 7", comuna: "San Bernardo", phone: "+56987654321" },
+    customer: { name: "Constructora Los Andes SpA", address: "Camino Rural Km 14, sector El Maitén, parcela 7", comuna: "San Bernardo" },
     case_summary: null,
   },
 ];
@@ -41,7 +41,7 @@ export const agendaData: TechnicianAppointment[] = [
 /** The same roster with no customer data at all, to review every fallback string. */
 export const agendaWithoutCustomer: TechnicianAppointment[] = agendaData.map((row) => ({
   ...row,
-  customer: { name: null, address: null, comuna: null, phone: null },
+  customer: { name: null, address: null, comuna: null },
   case_summary: null,
 }));
 
@@ -54,6 +54,6 @@ export const agendaLong: TechnicianAppointment[] = Array.from({ length: 12 }, (_
   ends_at: new Date(Date.UTC(2026, 8, 19 + index, 13, 0)).toISOString(),
   timezone: "America/Santiago",
   status: index % 4 === 3 ? "cancelled" : "booked", emergency: index % 5 === 0, priority: index % 5 === 2 ? "alta" : null,
-  customer: { name: `Cliente ${index + 1}`, address: `Calle Falsa ${100 + index}`, comuna: "Ñuñoa", phone: "+56900000000" },
+  customer: { name: `Cliente ${index + 1}`, address: `Calle Falsa ${100 + index}`, comuna: "Ñuñoa" },
   case_summary: index % 3 === 0 ? "Sin acceso al domicilio en el intento anterior." : null,
 }));

@@ -32,17 +32,15 @@ describe("TechnicianAgenda page story", () => {
     const card = screen.getByText("Revisión de calefont").closest("article");
     expect(card?.firstElementChild).toHaveClass("technician-agenda__slot");
     expect(within(card as HTMLElement).getByText("15:00")).toBeInTheDocument();
-    expect(within(card as HTMLElement).getByRole("link", { name: "+56912345678" })).toHaveClass("technician-agenda__field-control");
     expect(within(card as HTMLElement).getByRole("link", { name: "Los Alerces 42" })).toHaveClass("technician-agenda__field-control");
   });
 
   it("keeps every fallback string on the card when the customer data is absent", () => {
-    render(<TechnicianSurfaceView data={agendaData.map((row) => ({ ...row, customer: { name: null, address: null, comuna: null, phone: null }, case_summary: null }))} />);
+    render(<TechnicianSurfaceView data={agendaData.map((row) => ({ ...row, customer: { name: null, address: null, comuna: null }, case_summary: null }))} />);
 
     expect(screen.getAllByText("Cliente sin nombre").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Dirección no registrada").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Comuna no registrada").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Teléfono no registrado").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 

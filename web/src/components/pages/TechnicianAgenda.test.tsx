@@ -7,7 +7,7 @@ import type { TechnicianAppointment, User } from '../../types';
 
 const appointment: TechnicianAppointment = {
   id: 7, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00+00:00', ends_at: '2026-01-02T14:00:00+00:00', timezone: 'America/Santiago', status: 'booked', emergency: false, priority: null,
-  customer: { name: 'María Silva', address: 'Los Alerces 42', comuna: 'Ñuñoa', phone: '+56912345678' }, case_summary: 'Revisar fuga del calefont',
+  customer: { name: 'María Silva', address: 'Los Alerces 42', comuna: 'Ñuñoa' }, case_summary: 'Revisar fuga del calefont',
 };
 
 const tecnico: User = { id: 4, username: 'tec-agenda', role: 'tecnico' };
@@ -35,7 +35,7 @@ describe('TechnicianAgenda', () => {
     expect(screen.getByText('María Silva')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Los Alerces 42' })).toBeInTheDocument();
     expect(screen.getByText('Ñuñoa')).toBeInTheDocument();
-    expect(screen.getByText('+56912345678')).toBeInTheDocument();
+    expect(screen.queryByText('+56912345678')).not.toBeInTheDocument();
     expect(screen.getByText('Revisar fuga del calefont')).toBeInTheDocument();
     expect(screen.queryByText('private@example.test')).not.toBeInTheDocument();
     expect(screen.queryByText(/consent|history|sync|notes|status/i)).not.toBeInTheDocument();
@@ -78,20 +78,15 @@ describe('technician surface — reaching the customer', () => {
     return render(<TechnicianAgenda />);
   };
 
-  it('never renders an empty tel: link when the customer has no phone', async () => {
-    renderWith([{ ...appointment, id: 8, customer: { ...appointment.customer, phone: null } }]);
-
-    expect(await screen.findByText('Calefont')).toBeInTheDocument();
-    expect(screen.getByText('Teléfono no registrado')).toBeInTheDocument();
-    expect(screen.getAllByRole('link').some((link) => link.getAttribute('href')?.startsWith('tel:'))).toBe(false);
-  });
-
-  it('makes the phone reachable through the shared Button primitive when it exists', async () => {
+  /** The customer phone is never handed to the technician (S3): no field, no
+   *  tel: link. Contact happens through the field quick actions instead. */
+  it('never renders the customer phone nor a tel: link', async () => {
     renderWith([appointment]);
 
-    const call = await screen.findByRole('link', { name: '+56912345678' });
-    expect(call).toHaveAttribute('href', 'tel:+56912345678');
-    expect(call).toHaveClass('btn', 'technician-agenda__field-control');
+    expect(await screen.findByText('Calefont')).toBeInTheDocument();
+    expect(screen.queryByText('+56912345678')).not.toBeInTheDocument();
+    expect(screen.queryByText('Teléfono no registrado')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link').some((link) => link.getAttribute('href')?.startsWith('tel:'))).toBe(false);
   });
 });
 
@@ -106,7 +101,7 @@ describe('technician surface — reading the agenda as a schedule', () => {
   const visit = (id: number, offsetDays: number, hour: number, service: string): TechnicianAppointment => ({
     id, service, local_start: at(offsetDays, hour).toISOString().slice(0, 19),
     starts_at: at(offsetDays, hour).toISOString(), ends_at: at(offsetDays, hour + 1).toISOString(),
-    timezone: 'UTC', status: 'booked', emergency: false, priority: null, customer: { name: `Cliente ${id}`, address: `Calle ${id}`, comuna: 'Ñuñoa', phone: '+56900000000' },
+    timezone: 'UTC', status: 'booked', emergency: false, priority: null, customer: { name: `Cliente ${id}`, address: `Calle ${id}`, comuna: 'Ñuñoa' },
     case_summary: null,
   });
   const mock = (rows: TechnicianAppointment[]) => {
@@ -246,7 +241,7 @@ describe('technician surface — visit safety and location', () => {
 
   it('does not link a comuna when the street address is missing', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ appointments: [{ ...appointment, customer: { ...appointment.customer, address: null, comuna: 'Ñuñoa', phone: null } }] }), { status: 200 }),
+      new Response(JSON.stringify({ appointments: [{ ...appointment, customer: { ...appointment.customer, address: null, comuna: 'Ñuñoa' } }] }), { status: 200 }),
     );
     render(<TechnicianAgenda />);
 

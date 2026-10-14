@@ -620,7 +620,6 @@ export interface TechnicianCustomer {
   name: string | null;
   address: string | null;
   comuna: string | null;
-  phone: string | null;
 }
 
 export interface TechnicianAppointment {

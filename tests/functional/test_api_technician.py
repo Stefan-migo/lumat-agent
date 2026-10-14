@@ -44,11 +44,11 @@ def test_technician_cannot_forge_ownership_or_receive_sensitive_fields(client, m
     row = response.json()["appointments"][0]
     assert [row["case_summary"]] == ["allowed"]
     assert set(row) == {"id", "service", "local_start", "starts_at", "ends_at", "timezone", "status", "emergency", "priority", "customer", "case_summary"}
-    assert set(row["customer"]) == {"name", "address", "comuna", "phone"}
+    assert set(row["customer"]) == {"name", "address", "comuna"}
     assert row["status"] in {"booked", "cancelled", "completed", "no_show"}
     assert row["emergency"] is False
     assert row["priority"] is None
-    assert all(value not in response.text for value in ("private@example.test", "consent_status", "history", "sync", "notes"))
+    assert all(value not in response.text for value in ("private@example.test", "consent_status", "history", "sync", "notes", "+56900000012"))
 
 
 def test_technician_receives_visit_safety_fields(client, make_user):
