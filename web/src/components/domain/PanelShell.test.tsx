@@ -126,7 +126,7 @@ describe("PanelShell rail contract (2C-1)", () => {
     // names). This guards the tempting shortcut of deleting the label to stop it wrapping.
     const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
     const rail = container.querySelectorAll(".panel-shell__sidebar .panel-shell__navigation-button");
-    expect(rail).toHaveLength(9);
+    expect(rail).toHaveLength(10);
     for (const button of rail) {
       expect((button.getAttribute("aria-label") ?? button.textContent ?? "").trim()).not.toBe("");
     }
@@ -136,7 +136,7 @@ describe("PanelShell rail contract (2C-1)", () => {
     const user = userEvent.setup();
     const { restore } = mockDialogMethods();
     const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
-    const restricted = ["Base de Conocimientos", "Automatizaciones", "Configuración", "Usuarios"];
+    const restricted = ["Base de Conocimientos", "Automatizaciones", "Configuración", "Usuarios", "Métricas del bot"];
     const tabs = within(container.querySelector(".panel-shell__footer-nav") as HTMLElement);
     for (const label of restricted) expect(tabs.queryByRole("button", { name: label })).not.toBeInTheDocument();
     const menu = container.querySelector(".panel-shell__menu-button") as HTMLButtonElement;
