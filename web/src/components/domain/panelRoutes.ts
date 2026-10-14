@@ -39,6 +39,7 @@ export const PANEL_ROUTES = {
   kb: '/panel/app/kb',
   'automation-rules': '/panel/app/automation-rules',
   settings: '/panel/app/settings',
+  'chatbot-metrics': '/panel/app/chatbot-metrics',
   users: '/panel/app/users',
   profile: '/panel/app/profile',
   projects: '/panel/app/projects',

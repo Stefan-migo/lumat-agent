@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import {
+  Activity,
   ArrowLeft,
   Bell,
   BookOpen,
@@ -54,7 +55,7 @@ const NOTIFICATION_SOURCE_ICONS: Record<string, { icon: LucideIcon; tone: string
   customer: { icon: Users, tone: "customer" },
 };
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions" | "profile";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "chatbot-metrics" | "users" | "projects" | "planning-sessions" | "profile";
 
 interface NavigationItem {
   label: string;
@@ -75,6 +76,7 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   kb: { label: "Base de Conocimientos", icon: BookOpen, adminOnly: true },
   'automation-rules': { label: "Automatizaciones", icon: Zap, adminOnly: true },
   settings: { label: "Configuración", icon: Settings, adminOnly: true },
+  'chatbot-metrics': { label: "Métricas del bot", icon: Activity, adminOnly: true },
   users: { label: "Usuarios", icon: UserRound, adminOnly: true },
 };
 

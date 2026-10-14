@@ -51,6 +51,7 @@ describe('AppShell (T6.4)', () => {
     expect(within(adminDrawer).getByRole('button', { name: /base de conocimientos/i })).toBeInTheDocument();
      expect(within(adminDrawer).getByRole('button', { name: /configuraci[oó]n/i })).toBeInTheDocument();
      expect(within(adminDrawer).getByRole('button', { name: 'Usuarios' })).toBeInTheDocument();
+     expect(within(adminDrawer).getByRole('button', { name: 'Métricas del bot' })).toBeInTheDocument();
     unmount();
 
     const { container: operadorContainer } = render(<AppShell user={operador} />);
@@ -62,6 +63,7 @@ describe('AppShell (T6.4)', () => {
     expect(within(operadorDrawer).queryByRole('button', { name: /configuraci[oó]n/i })).not.toBeInTheDocument();
     expect(within(operadorDrawer).getByRole('button', { name: 'Asistente Lumat' })).toBeInTheDocument();
     expect(within(operadorDrawer).queryByRole('button', { name: 'Automatizaciones' })).not.toBeInTheDocument();
+    expect(within(operadorDrawer).queryByRole('button', { name: 'Métricas del bot' })).not.toBeInTheDocument();
   });
 
    it('exposes approved destinations and keeps legacy routes out of navigation', async () => {
@@ -69,10 +71,10 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={admin} />);
     await user.click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
-       expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(9);
+       expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(10);
     for (const label of [
       'Panel unificado', 'Asistente Lumat', 'Conversaciones', 'Clientes',
-        'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración', 'Usuarios',
+        'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración', 'Métricas del bot', 'Usuarios',
      ]) {
        expect(within(drawer).getByRole('button', { name: label })).toBeInTheDocument();
      }
