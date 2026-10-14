@@ -323,6 +323,7 @@ def test_respond_model_call_receives_conversation_and_booking(respond_client):
         turn=3,
         cost_mode="normal",
         memory_context="",
+        template_id=None,
     )
     with mock.patch.object(_rn.kb, "retrieve", return_value=[{"content": "chunk"}]):
         _rn.respond(state)
@@ -357,6 +358,89 @@ def test_respond_answer_from_kb_memory_block_injected(respond_client):
     call = respond_client.captured[-1]
     assert "<memory>" in call["messages"][1]["content"]
     assert "reparaciones" in call["messages"][1]["content"]
+
+
+# --- T5: respond renders the preset message the classifier picked (D13/D9) ---
+
+
+def _respond_state(**overrides):
+    base = dict(
+        intent="consulta",
+        window=[{"id": 1, "text": "a qué hora abren"}],
+        template_id=None,
+        captured={},
+        booking=None,
+        turn=3,
+        cost_mode="normal",
+        memory_context="",
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_placeholders_returns_slot_names():
+    assert prompts.placeholders("Hola {{nombre}}, visita {{visita}}") == {"nombre", "visita"}
+
+
+def test_render_text_substitutes_and_is_strict():
+    assert prompts.render_text("Hola {{nombre}}", nombre="Ana") == "Hola Ana"
+    with pytest.raises(KeyError):
+        prompts.render_text("Hola {{nombre}}")
+    with pytest.raises(KeyError):
+        prompts.render_text("Hola {{nombre}}", nombre="Ana", extra="x")
+
+
+def test_respond_renders_picked_template_with_real_slots(monkeypatch):
+    # The owner's text is the answer; the SYSTEM fills the slots from state (D8).
+    catalog = [{"id": "horarios", "text": "Hola {{nombre}}, atendemos de {{disponibilidad}}."}]
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_rn, "get_message_templates", lambda session: catalog)
+    state = _respond_state(
+        template_id="horarios",
+        captured={"name": "Ana", "availability": "lunes a viernes"},
+    )
+    assert _rn.respond(state) == {"replies": ["Hola Ana, atendemos de lunes a viernes."]}
+
+
+def test_respond_template_preempts_the_kb_path(monkeypatch):
+    called = []
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(
+        _rn, "get_message_templates", lambda session: [{"id": "x", "text": "Ok {{nombre}}."}]
+    )
+    monkeypatch.setattr(_rn.kb, "retrieve", lambda *a, **k: called.append(1) or [{"content": "c"}])
+    state = _respond_state(template_id="x", captured={"name": "Ana"})
+    assert _rn.respond(state) == {"replies": ["Ok Ana."]}
+    assert called == []
+
+
+def test_respond_template_slot_unknown_is_empty_and_visita_uses_booking_label(monkeypatch):
+    catalog = [{"id": "v", "text": "{{nombre}}/{{comuna}}/{{visita}}"}]
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_rn, "get_message_templates", lambda session: catalog)
+    # captured "unknown" -> ""; no booking -> "" for {{visita}}
+    assert _rn.respond(
+        _respond_state(template_id="v", captured={"name": "unknown", "comuna": "Santiago"})
+    ) == {"replies": ["/Santiago/"]}
+    assert _rn.respond(
+        _respond_state(
+            template_id="v",
+            captured={"name": "Ana", "comuna": "unknown"},
+            booking={"service": "Visita", "label": "06/05 a las 15:30", "status": "booked"},
+        )
+    ) == {"replies": ["Ana//06/05 a las 15:30"]}
+
+
+def test_respond_missing_template_falls_back_to_kb(monkeypatch):
+    # A stale id (catalog changed) must not crash: fall through to the normal path.
+    answered = []
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_rn, "get_message_templates", lambda session: [])
+    monkeypatch.setattr(_rn.kb, "retrieve", lambda *a, **k: [{"content": "chunk"}])
+    monkeypatch.setattr(_rn, "_answer_from_kb", lambda *a, **k: answered.append(1) or "kb answer")
+    state = _respond_state(template_id="gone")
+    assert _rn.respond(state) == {"replies": ["kb answer"]}
+    assert answered == [1]
 
 
 @pytest.fixture

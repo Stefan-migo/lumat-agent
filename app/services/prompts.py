@@ -148,17 +148,30 @@ def render(key: str, **vars) -> str:
     a provided variable is never used (AC-5). Files with no `{{}}` are returned
     verbatim (static personas).
     """
-    content = load(key)
+    return render_text(load(key), **vars)
+
+
+def render_text(content: str, **vars) -> str:
+    """Strictly substitute {{name}} placeholders in a raw string (AC-5).
+
+    Same rules as ``render`` for content that does not live under `agent/`,
+    such as the owner-authored preset messages stored in settings.
+    """
     slots = set(_SLOT_RE.findall(content))
     missing = slots - set(vars)
     if missing:
-        raise KeyError(f"render({key}): missing variables: {sorted(missing)}")
+        raise KeyError(f"render_text: missing variables: {sorted(missing)}")
     unknown = set(vars) - slots
     if unknown:
-        raise KeyError(f"render({key}): unknown variables: {sorted(unknown)}")
+        raise KeyError(f"render_text: unknown variables: {sorted(unknown)}")
     if not slots:
         return content
     return _SLOT_RE.sub(lambda m: str(vars[m.group(1)]), content)
+
+
+def placeholders(content: str) -> set[str]:
+    """Return the {{name}} placeholder names declared in a raw string."""
+    return set(_SLOT_RE.findall(content))
 
 
 @lru_cache(maxsize=8)

@@ -24,7 +24,12 @@ from app.models import KbVisibility, Message
 from app.services import kb, prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
-from app.services.settings import MESSAGE_DEFAULTS, get_message, get_tone_directive
+from app.services.settings import (
+    MESSAGE_DEFAULTS,
+    get_message,
+    get_message_templates,
+    get_tone_directive,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,48 @@ KB_UNAVAILABLE_REPLY = (
     "Un asesor de Lumat revisará tu consulta y te contactará."
 )
 CLARIFICATION_REPLY = MESSAGE_DEFAULTS["clarification"]
+
+# T5/D8: preset-message slot vocabulary -> ConversationState sources. The system
+# always fills them; a missing/"unknown" value renders as an empty string.
+_SLOT_SOURCES = {
+    "nombre": "name",
+    "comuna": "comuna",
+    "direccion": "address",
+    "equipo": "equipment",
+    "problema": "failure",
+    "disponibilidad": "availability",
+}
+
+
+def _slot_values(state: ConversationState, slots: set[str]) -> dict[str, str]:
+    """Fill the template's declared slots from captured/booking (D8/D13)."""
+    captured = state.captured or {}
+    booking = state.booking or {}
+    values: dict[str, str] = {}
+    for slot in slots:
+        if slot == "visita":
+            values[slot] = booking.get("label") or ""
+            continue
+        source = _SLOT_SOURCES.get(slot)
+        raw = captured.get(source) if source else None
+        values[slot] = "" if raw in (None, "unknown") else str(raw)
+    return values
+
+
+def _render_template_reply(state: ConversationState) -> str | None:
+    """Render the preset message the classifier picked; None if it is not stored."""
+    if not state.template_id:
+        return None
+    with session_scope() as session:
+        templates = get_message_templates(session)
+    template = next(
+        (t for t in templates if isinstance(t, dict) and t.get("id") == state.template_id),
+        None,
+    )
+    if template is None:
+        return None
+    text = template.get("text") or ""
+    return prompts.render_text(text, **_slot_values(state, prompts.placeholders(text)))
 
 
 def _current_text(state: ConversationState) -> str:
@@ -132,6 +179,11 @@ def respond(state: ConversationState) -> dict:
         with session_scope() as session:
             clarification = get_message(session, "clarification", CLARIFICATION_REPLY)
         return {"replies": [clarification]}
+
+    # T5/D13: a preset message the classifier picked pre-empts the KB path.
+    template_reply = _render_template_reply(state)
+    if template_reply is not None:
+        return {"replies": [template_reply]}
 
     with session_scope() as session:
         try:
