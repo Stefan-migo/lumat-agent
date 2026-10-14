@@ -5,9 +5,13 @@ Why this file exists
 `build_graph` adds the compiled `research_triage` sub-graph as a node with no explicit
 input schema (`app/chat/graph.py:192`), and the sub-graph is compiled over the **same**
 `ConversationState` (`app/chat/subgraphs/research_triage.py:152`). `replies` carries an
-`add` reducer (`app/chat/state.py:175`), so LangGraph hands the sub-graph the parent's
-`replies` — already holding the greeting — and merging the sub-graph's final state back
-re-adds them.
+`add` reducer (`app/chat/state.py:179`), so LangGraph hands the sub-graph the parent's
+`replies` — whatever earlier nodes accumulated that turn — and merging the sub-graph's
+final state back re-adds them.
+
+The CM-1 greeting is no longer part of that accumulator: `receive` stores it in
+`first_turn_greeting` and `run_conversation` fuses it with the answer, so on the first turn
+the guard below checks the fused message instead.
 
 Measured on the real path: 7 of 52 turns returned `[greeting, greeting, reply]`, 5 of them
 answers. `receive` was instrumented and runs once, so this is the state merge and not node
