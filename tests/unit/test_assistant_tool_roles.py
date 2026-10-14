@@ -63,6 +63,11 @@ def test_conversation_inspection_tools_are_allowed_to_admin_and_operator_only():
         })
 
 
+def test_conversation_inspection_tools_deny_tecnico():
+    for name in ("analytics.chatbot_conversations", "conversations.transcript"):
+        assert registry.is_tool_allowed_for_role(name, UserRole.TECNICO.value) is False
+
+
 def test_role_tool_map_is_complete_and_covers_every_role():
     assert set(registry.ROLE_TOOL_ALLOWLIST) == set(registry.TOOL_REGISTRY)
     assert set(ROLE_TOOL_EXPECTATIONS) == set(UserRole)

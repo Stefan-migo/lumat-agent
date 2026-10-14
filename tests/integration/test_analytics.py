@@ -186,3 +186,44 @@ def test_chatbot_conversations_empty_window_returns_empty_list(seed_customer):
         result = chatbot_conversations(session, 7, "any", 10)
 
     assert result == {"window_days": 7, "signal": "any", "conversations": []}
+
+
+def test_chatbot_conversations_ties_break_by_conversation_id_desc(seed_customer):
+    now = datetime.now(timezone.utc)
+    customer_id = seed_customer("+56911110008")
+
+    with SessionLocal() as session:
+        low = Conversation(customer_id=customer_id, wa_phone="+56911110008", state=ConversationState.BOT)
+        high = Conversation(customer_id=customer_id, wa_phone="+56911110008", state=ConversationState.BOT)
+        session.add_all([low, high])
+        session.flush()
+        tie = now - timedelta(days=2)
+        session.add_all([
+            ConversationEvent(conversation_id=low.id, event="escalation", cause="a", created_at=tie),
+            ConversationEvent(conversation_id=high.id, event="escalation", cause="b", created_at=tie),
+        ])
+        session.flush()
+        result = chatbot_conversations(session, 7, "escalation", 10)
+
+    assert [row["conversation_id"] for row in result["conversations"]] == [high.id, low.id]
+
+
+def test_chatbot_conversations_signal_counts_are_window_bounded(seed_customer):
+    now = datetime.now(timezone.utc)
+    customer_id = seed_customer("+56911110009")
+
+    with SessionLocal() as session:
+        conversation = Conversation(customer_id=customer_id, wa_phone="+56911110009", state=ConversationState.BOT)
+        session.add(conversation)
+        session.flush()
+        session.add_all([
+            ConversationEvent(conversation_id=conversation.id, event="unknown_intent",
+                              created_at=now - timedelta(days=1)),
+            ConversationEvent(conversation_id=conversation.id, event="escalation",
+                              cause="handoff:kb_miss", created_at=now - timedelta(days=30)),
+        ])
+        session.flush()
+        result = chatbot_conversations(session, 7, "any", 10)
+
+    row = next(r for r in result["conversations"] if r["conversation_id"] == conversation.id)
+    assert row["signals"] == {"escalation": 0, "unknown_intent": 1, "kb_miss": 0}

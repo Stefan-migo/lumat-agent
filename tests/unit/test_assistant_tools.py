@@ -91,6 +91,8 @@ def test_conversation_transcript_is_a_typed_bounded_read_only_tool():
         tool.args_model.model_validate({})
     with pytest.raises(ValueError):
         tool.args_model.model_validate({"conversation_id": 0})
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"conversation_id": 5, "extra": True})
     assert tool.args_model.model_validate({"conversation_id": 5}).limit == 20
 
 
