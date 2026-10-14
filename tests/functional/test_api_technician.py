@@ -82,3 +82,52 @@ def test_technician_agenda_requires_authenticated_session(client):
     response = client.get("/panel/api/technician/agenda")
     assert response.status_code == 401
     assert response.json() == {"detail": "unauthorized"}
+
+
+def test_technician_reads_owned_appointment_detail_allow_list(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000021", date(2026, 1, 5), "detalle propio")
+    _login(client)
+
+    response = client.get(f"/panel/api/technician/appointments/{appointment_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"appointment", "customer", "case"}
+    assert set(body["appointment"]) == {
+        "id", "service", "customer_id", "case_id", "technician_id", "local_start",
+        "timezone", "starts_at", "ends_at", "duration_minutes", "status",
+    }
+    assert set(body["customer"]) == {"id", "name", "address", "comuna"}
+    assert set(body["case"]) == {"id", "conversation_id"}
+    assert body["appointment"]["id"] == appointment_id
+    assert body["appointment"]["service"] == "calefont"
+    assert all(
+        value not in response.text
+        for value in ("private@example.test", "consent_status", "history", "sync", "notes", "phone", "conversation_summary", "+56900000021")
+    )
+
+
+def test_technician_detail_hides_foreign_and_unknown_appointments_as_not_found(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    other = make_user("other-tech", "other-pass", role="tecnico")
+    foreign_id = _appointment(other, "+56900000031", date(2026, 1, 6), "ajena")
+    _login(client)
+
+    assert client.get(f"/panel/api/technician/appointments/{foreign_id}").status_code == 404
+    assert client.get("/panel/api/technician/appointments/999999").status_code == 404
+
+
+def test_technician_detail_rejects_non_technician_role(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000041", date(2026, 1, 7), "solo tecnico")
+    _login(client, "oper", "oper-pass")
+
+    assert client.get(f"/panel/api/technician/appointments/{appointment_id}").status_code == 403
+
+
+def test_technician_detail_requires_authenticated_session(client):
+    response = client.get("/panel/api/technician/appointments/1")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}

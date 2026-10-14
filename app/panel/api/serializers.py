@@ -270,6 +270,33 @@ def to_technician_appointment_dict(
     }
 
 
+def to_technician_appointment_detail_dict(
+    appointment: Appointment, *, customer: Customer, case: Case
+) -> dict:
+    """Allow-listed visit detail for the technician's own appointment (S2/S3).
+
+    Same page as the operator detail, narrower payload: the technician never
+    receives the customer phone, the change history, the conversation summary,
+    the customer email or the consent status."""
+    return {
+        "appointment": {
+            "id": appointment.id,
+            "service": appointment.service,
+            "customer_id": appointment.customer_id,
+            "case_id": appointment.case_id,
+            "technician_id": appointment.technician_id,
+            "local_start": appointment.local_start.isoformat(),
+            "timezone": appointment.timezone,
+            "starts_at": _iso(appointment.starts_at),
+            "ends_at": _iso(appointment.ends_at),
+            "duration_minutes": appointment.duration_minutes,
+            "status": appointment.status.value,
+        },
+        "customer": {"id": customer.id, "name": customer.name, "address": customer.address, "comuna": customer.comuna},
+        "case": {"id": case.id, "conversation_id": case.conversation_id},
+    }
+
+
 def to_today_appointment_dict(appointment: Appointment, customer_name: str | None) -> dict:
     return {
         "id": appointment.id,
