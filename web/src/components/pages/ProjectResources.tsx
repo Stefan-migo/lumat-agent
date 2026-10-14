@@ -1,12 +1,44 @@
-import { useCallback, useRef, useState } from "react";
-import { BookOpen, Download, FileSearch, FileText, Info, Paperclip, Upload } from "lucide-react";
-import { ApiError, downloadProjectFile, listProjectFiles, refreshKbDocuments, uploadKbDocument, uploadProjectFile } from "../../api";
-import type { Doc, ProjectFile, Role } from "../../types";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileImage,
+  FileSearch,
+  FileText,
+  Folder,
+  FolderPlus,
+  Info,
+  Paperclip,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import {
+  ApiError,
+  createProjectFolder,
+  deleteProjectFile,
+  deleteProjectFolder,
+  downloadProjectFile,
+  listProjectFiles,
+  listProjectFolders,
+  refreshKbDocuments,
+  renameProjectFolder,
+  uploadKbDocument,
+  uploadProjectFile,
+} from "../../api";
+import type { Doc, ProjectFile, ProjectFolder, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
+import { Dialog } from "../primitives/Dialog";
 import { Icon } from "../primitives/Icon";
+import { Input } from "../primitives/Input";
+import { Menu } from "../primitives/Menu";
+import { SearchInput } from "../primitives/SearchInput";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { StateMessage } from "../shared/StateMessage";
@@ -18,19 +50,106 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ProjectResources({ projectSlug, projectId, role }: { projectSlug: string; projectId: number; role?: Role }) {
+function fileIcon(file: ProjectFile) {
+  return file.content_type.startsWith("image/") ? FileImage : FileText;
+}
+
+type FolderDialogState =
+  | { mode: "create"; parentId: number | null }
+  | { mode: "rename"; folder: ProjectFolder };
+
+type DeleteTarget = { kind: "file"; file: ProjectFile } | { kind: "folder"; folder: ProjectFolder };
+
+export function ProjectResources({
+  projectSlug,
+  projectId,
+  projectName,
+  role,
+}: {
+  projectSlug: string;
+  projectId: number;
+  projectName: string;
+  role?: Role;
+}) {
+  const isAdmin = role === "admin";
   const loadFiles = useCallback(() => listProjectFiles(projectSlug), [projectSlug]);
   const files = useAsyncData(loadFiles, true);
-  const isAdmin = role === "admin";
+  const loadFolders = useCallback(() => listProjectFolders(projectSlug), [projectSlug]);
+  const folders = useAsyncData(loadFolders, true);
   const loadDocs = useCallback(() => refreshKbDocuments(), []);
   const docs = useAsyncData(loadDocs, isAdmin);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const kbInputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [rootCollapsed, setRootCollapsed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingKb, setUploadingKb] = useState(false);
   const [kbFeedback, setKbFeedback] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
+
+  const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [folderBusy, setFolderBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const projectFiles = files.data?.files ?? [];
+  const projectFolders = folders.data?.folders ?? [];
+
+  const childFolders = useMemo(() => {
+    const map = new Map<number | null, ProjectFolder[]>();
+    for (const folder of projectFolders) {
+      const list = map.get(folder.parent_id) ?? [];
+      list.push(folder);
+      map.set(folder.parent_id, list);
+    }
+    return map;
+  }, [projectFolders]);
+
+  const filesByFolder = useMemo(() => {
+    const map = new Map<number | null, ProjectFile[]>();
+    for (const file of projectFiles) {
+      const list = map.get(file.folder_id) ?? [];
+      list.push(file);
+      map.set(file.folder_id, list);
+    }
+    return map;
+  }, [projectFiles]);
+
+  // Total files inside each folder subtree (a collapsed folder still counts its contents).
+  const fileCount = useMemo(() => {
+    const counts = new Map<number, number>();
+    const count = (folderId: number): number => {
+      const cached = counts.get(folderId);
+      if (cached !== undefined) return cached;
+      let total = (filesByFolder.get(folderId) ?? []).length;
+      for (const child of childFolders.get(folderId) ?? []) total += count(child.id);
+      counts.set(folderId, total);
+      return total;
+    };
+    for (const folder of projectFolders) count(folder.id);
+    return counts;
+  }, [projectFolders, childFolders, filesByFolder]);
+
+  const q = query.trim().toLowerCase();
+  const matches = (text: string) => text.toLowerCase().includes(q);
+  const fileMatches = (file: ProjectFile) => q === "" || matches(file.filename);
+  const subtreeMatches = (folderId: number): boolean => {
+    if ((filesByFolder.get(folderId) ?? []).some((file) => matches(file.filename))) return true;
+    return (childFolders.get(folderId) ?? []).some((child) => matches(child.name) || subtreeMatches(child.id));
+  };
+  const folderMatches = (folder: ProjectFolder) => q === "" || matches(folder.name) || subtreeMatches(folder.id);
+
+  const kbState = (row: ProjectFile): { label: string; tone: "success" | "danger" | "neutral" } =>
+    row.kb_document_id != null ? { label: "En la KB", tone: "success" }
+      : row.status === "failed" ? { label: "Falló", tone: "danger" }
+        : { label: "No indexado", tone: "neutral" };
 
   const upload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -39,7 +158,7 @@ export function ProjectResources({ projectSlug, projectId, role }: { projectSlug
     setUploading(true);
     setFeedback(null);
     try {
-      await uploadProjectFile(projectSlug, file);
+      await uploadProjectFile(projectSlug, file, selectedFolderId);
       setFeedback({ tone: "success", text: "Archivo subido correctamente." });
       files.retry();
       if (isAdmin) docs.retry();
@@ -82,25 +201,167 @@ export function ProjectResources({ projectSlug, projectId, role }: { projectSlug
     }
   };
 
-  const kbState = (row: ProjectFile): { label: string; tone: "success" | "danger" | "neutral" } =>
-    row.kb_document_id != null ? { label: "En la KB", tone: "success" }
-      : row.status === "failed" ? { label: "Falló", tone: "danger" }
-        : { label: "No indexado", tone: "neutral" };
-  const fileColumns: Column<ProjectFile>[] = [
-    { key: "filename", header: "Archivo", render: (row) => <span><Icon icon={FileText} /> {row.filename}</span> },
-    { key: "size", header: "Tamaño", render: (row) => formatBytes(row.size) },
-    { key: "kb", header: "En la KB", render: (row) => { const state = kbState(row); return <Badge tone={state.tone}>{state.label}</Badge>; } },
-    { key: "created_at", header: "Subido", render: (row) => row.created_at ? new Date(row.created_at).toLocaleDateString("es-CL") : "—" },
-    { key: "download", header: "Descargar", render: (row) => <Button variant="tertiary" aria-label={`Descargar ${row.filename}`} disabled={busyFileId === row.id} onClick={() => void download(row)}><Icon icon={Download} /></Button> },
-  ];
+  const toggleFolder = (folderId: number) => {
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const expandFolder = (folderId: number) => {
+    setCollapsed((previous) => {
+      if (!previous.has(folderId)) return previous;
+      const next = new Set(previous);
+      next.delete(folderId);
+      return next;
+    });
+  };
+
+  const openCreate = (parentId: number | null) => {
+    if (parentId != null) expandFolder(parentId);
+    setFolderName("");
+    setFolderError(null);
+    setFolderDialog({ mode: "create", parentId });
+  };
+
+  const openRename = (folder: ProjectFolder) => {
+    setFolderName(folder.name);
+    setFolderError(null);
+    setFolderDialog({ mode: "rename", folder });
+  };
+
+  const closeFolderDialog = () => {
+    setFolderDialog(null);
+    setFolderName("");
+    setFolderError(null);
+  };
+
+  const onFolderAction = (folder: ProjectFolder, value: string) => {
+    if (value === "new") openCreate(folder.id);
+    else if (value === "rename") openRename(folder);
+    else if (value === "delete") { setDeleteError(null); setDeleteTarget({ kind: "folder", folder }); }
+  };
+
+  const submitFolder = async () => {
+    const dialog = folderDialog;
+    if (!dialog) return;
+    const name = folderName.trim();
+    if (!name) return;
+    setFolderBusy(true);
+    setFolderError(null);
+    try {
+      if (dialog.mode === "rename") {
+        await renameProjectFolder(projectSlug, dialog.folder.id, name);
+      } else {
+        await createProjectFolder(projectSlug, { name, parent_id: dialog.parentId });
+      }
+      closeFolderDialog();
+      folders.retry();
+    } catch (reason: unknown) {
+      setFolderError(reason instanceof ApiError ? reason.detail : "No pudimos guardar la carpeta.");
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    const target = deleteTarget;
+    if (!target) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      if (target.kind === "file") {
+        await deleteProjectFile(projectSlug, target.file.id);
+        setFeedback({ tone: "success", text: "Archivo eliminado." });
+      } else {
+        await deleteProjectFolder(projectSlug, target.folder.id);
+        setFeedback({ tone: "success", text: "Carpeta eliminada." });
+        if (selectedFolderId === target.folder.id) setSelectedFolderId(null);
+      }
+      setDeleteTarget(null);
+      files.retry();
+      folders.retry();
+      if (isAdmin) docs.retry();
+    } catch (reason: unknown) {
+      setDeleteError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el elemento.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const renderFile = (file: ProjectFile) => {
+    if (!fileMatches(file)) return null;
+    const state = kbState(file);
+    return (
+      <li key={`file-${file.id}`} className="file-tree__row file-tree__row--file">
+        <span className="file-tree__spacer" aria-hidden="true" />
+        <Icon icon={fileIcon(file)} size="sm" />
+        <span className="file-tree__name">{file.filename}</span>
+        <span className="file-tree__size">{formatBytes(file.size)}</span>
+        <Badge tone={state.tone}>{state.label}</Badge>
+        <Button variant="tertiary" aria-label={`Descargar ${file.filename}`} disabled={busyFileId === file.id} onClick={() => void download(file)}><Icon icon={Download} /></Button>
+        <Button variant="tertiary" className="file-tree__danger" aria-label={`Eliminar ${file.filename}`} onClick={() => { setDeleteError(null); setDeleteTarget({ kind: "file", file }); }}><Icon icon={Trash2} /></Button>
+      </li>
+    );
+  };
+
+  const renderFolder = (folder: ProjectFolder) => {
+    if (!folderMatches(folder)) return null;
+    const isCollapsed = collapsed.has(folder.id) && q === "";
+    const kids = (childFolders.get(folder.id) ?? []).filter(folderMatches);
+    const ownFiles = (filesByFolder.get(folder.id) ?? []).filter(fileMatches);
+    const count = fileCount.get(folder.id) ?? 0;
+    return (
+      <li key={`folder-${folder.id}`} className="file-tree__node">
+        <div className={`file-tree__row file-tree__row--folder${selectedFolderId === folder.id ? " is-selected" : ""}`}>
+          <button type="button" className="file-tree__twisty" aria-label={`${isCollapsed ? "Expandir" : "Contraer"} ${folder.name}`} aria-expanded={!isCollapsed} onClick={() => toggleFolder(folder.id)}>
+            <Icon icon={isCollapsed ? ChevronRight : ChevronDown} size="sm" />
+          </button>
+          <Icon icon={Folder} size="sm" />
+          <button type="button" className="file-tree__name file-tree__name--button" onClick={() => setSelectedFolderId(folder.id)}>{folder.name}</button>
+          {count > 0 ? <span className="file-tree__count">({count})</span> : null}
+          <span className="file-tree__grow" aria-hidden="true" />
+          <Menu
+            trigger="icon"
+            label={`Acciones de ${folder.name}`}
+            align="end"
+            items={[
+              { value: "new", label: "Nueva subcarpeta", icon: FolderPlus },
+              { value: "rename", label: "Renombrar", icon: Pencil },
+              { value: "delete", label: "Eliminar", icon: Trash2, tone: "danger" },
+            ]}
+            onSelect={(value) => onFolderAction(folder, value)}
+          />
+        </div>
+        {!isCollapsed ? (
+          <ul className="file-tree__children">
+            {kids.map(renderFolder)}
+            {ownFiles.map(renderFile)}
+            {kids.length === 0 && ownFiles.length === 0 ? <li className="file-tree__empty">Carpeta vacía</li> : null}
+          </ul>
+        ) : null}
+      </li>
+    );
+  };
+
+  const rootFolders = (childFolders.get(null) ?? []).filter(folderMatches);
+  const rootFiles = (filesByFolder.get(null) ?? []).filter(fileMatches);
+
+  const loadState =
+    files.state === "error" || folders.state === "error" ? "error"
+      : files.state === "denied" || folders.state === "denied" ? "denied"
+        : files.state === "loading" || folders.state === "loading" ? "loading"
+          : "ready";
+  const isEmpty = loadState === "ready" && projectFiles.length === 0 && projectFolders.length === 0;
+
   const docColumns: Column<Doc>[] = [
     { key: "title", header: "Documento", render: (doc) => doc.title },
     { key: "format", header: "Formato", render: (doc) => doc.format.toUpperCase() },
     { key: "version", header: "Versión", render: (doc) => `v${doc.active_version}` },
     { key: "status", header: "Estado", render: (doc) => { const status = doc.active ? "activo" : "deshabilitado"; return <Badge tone={kbStatusTone(status)}>{kbStatusLabel(status)}</Badge>; } },
   ];
-  const projectFiles = files.data?.files ?? [];
-  const filesState = files.state === "empty" || (files.state === "ready" && projectFiles.length === 0) ? "empty" : files.state;
   // Documents already surfaced by the file card (auto-indexed uploads) are not
   // repeated here; this card owns what was added straight to the project KB.
   const indexedDocIds = new Set(projectFiles.map((file) => file.kb_document_id).filter((id): id is number => id != null));
@@ -111,15 +372,45 @@ export function ProjectResources({ projectSlug, projectId, role }: { projectSlug
     <Card
       icon={Paperclip}
       title="Archivos del proyecto"
-      headerAction={<><Badge>{files.data?.files?.length ?? 0}</Badge><Button variant="secondary" disabled={uploading} onClick={() => inputRef.current?.click()}>{uploading ? "Subiendo…" : "Subir archivo"}</Button></>}
+      headerAction={<Badge>{projectFiles.length}</Badge>}
+      footer={<p className="projects-page__resources-footer">{projectFiles.length} archivos · {projectFolders.length} carpetas</p>}
     >
+      <div className="projects-page__resources-toolbar">
+        <SearchInput aria-label="Buscar archivo o carpeta" placeholder="Buscar archivo o carpeta…" onSearch={setQuery} />
+        <Button variant="secondary" disabled={uploading} onClick={() => inputRef.current?.click()}><Icon icon={Plus} /> {uploading ? "Subiendo…" : "Subir archivo"}</Button>
+      </div>
       <input type="file" aria-label="Archivo del proyecto" hidden ref={inputRef} onChange={(event) => void upload(event)} />
       {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.text} /> : null}
-      {filesState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando archivos" /> : null}
-      {filesState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar los archivos" /><Button variant="secondary" onClick={files.retry}>Reintentar</Button></> : null}
-      {filesState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver los archivos de este proyecto." /> : null}
-      {filesState === "empty" ? <EmptyState variant="dashed" icon={Upload} title="Aún no hay archivos" description="Sube el primer documento de este proyecto." /> : null}
-      {filesState === "ready" ? <DataTable columns={fileColumns} rows={files.data?.files ?? []} rowKey={(row) => String(row.id)} /> : null}
+      {loadState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando archivos" /> : null}
+      {loadState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar los archivos" /><Button variant="secondary" onClick={() => { files.retry(); folders.retry(); }}>Reintentar</Button></> : null}
+      {loadState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver los archivos de este proyecto." /> : null}
+      {isEmpty ? <EmptyState variant="dashed" icon={Upload} title="Aún no hay archivos" description="Sube el primer documento de este proyecto." /> : null}
+      {loadState === "ready" && !isEmpty ? (
+        <div className="file-tree">
+          <div className={`file-tree__row file-tree__row--root${selectedFolderId === null ? " is-selected" : ""}`}>
+            <button type="button" className="file-tree__twisty" aria-label={`${rootCollapsed ? "Expandir" : "Contraer"} ${projectName}`} aria-expanded={!rootCollapsed} onClick={() => setRootCollapsed((value) => !value)}>
+              <Icon icon={rootCollapsed ? ChevronRight : ChevronDown} size="sm" />
+            </button>
+            <Icon icon={Folder} size="sm" />
+            <button type="button" className="file-tree__name file-tree__name--button" onClick={() => setSelectedFolderId(null)}>{projectName}</button>
+            <span className="file-tree__grow" aria-hidden="true" />
+            <Menu
+              trigger="icon"
+              label="Acciones del proyecto"
+              align="end"
+              items={[{ value: "create", label: "Nueva carpeta", icon: FolderPlus }]}
+              onSelect={() => openCreate(null)}
+            />
+          </div>
+          {!rootCollapsed ? (
+            <ul className="file-tree__children file-tree__children--root">
+              {rootFolders.map(renderFolder)}
+              {rootFiles.map(renderFile)}
+              {rootFolders.length === 0 && rootFiles.length === 0 ? <li className="file-tree__empty">Sin resultados</li> : null}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </Card>
     <Card
       icon={BookOpen}
@@ -137,5 +428,61 @@ export function ProjectResources({ projectSlug, projectId, role }: { projectSlug
         {docsState === "ready" ? <DataTable columns={docColumns} rows={directDocs} rowKey={(row) => String(row.id)} /> : null}
       </>}
     </Card>
+
+    <Dialog
+      open={folderDialog !== null}
+      onClose={closeFolderDialog}
+      title={folderDialog?.mode === "rename" ? "Renombrar carpeta" : "Nueva carpeta"}
+      icon={folderDialog?.mode === "rename" ? Pencil : FolderPlus}
+    >
+      <div className="file-tree__dialog-body">
+        <Input
+          label="Nombre de la carpeta"
+          value={folderName}
+          placeholder="Ej. Reportes"
+          autoFocus
+          error={folderError ?? undefined}
+          onChange={(event) => setFolderName(event.target.value)}
+        />
+      </div>
+      <div className="file-tree__dialog-actions">
+        <Button variant="secondary" onClick={closeFolderDialog}>Cancelar</Button>
+        <Button disabled={folderBusy || folderName.trim() === ""} onClick={() => void submitFolder()}>
+          {folderBusy ? "Guardando…" : folderDialog?.mode === "rename" ? "Guardar" : "Crear carpeta"}
+        </Button>
+      </div>
+    </Dialog>
+
+    <Dialog
+      open={deleteTarget !== null}
+      onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+      title={deleteTarget?.kind === "folder" ? "Eliminar carpeta" : "Eliminar archivo"}
+      icon={Trash2}
+    >
+      {deleteTarget ? <>
+        <p className="file-tree__dialog-question">
+          {deleteTarget.kind === "file" ? "¿Quieres eliminar este archivo del proyecto?" : "¿Quieres eliminar esta carpeta del proyecto?"}
+        </p>
+        <div className="file-tree__dialog-preview">
+          <Icon icon={deleteTarget.kind === "file" ? fileIcon(deleteTarget.file) : Folder} />
+          <div className="file-tree__dialog-preview-copy">
+            <p className="file-tree__dialog-preview-name">{deleteTarget.kind === "file" ? deleteTarget.file.filename : deleteTarget.folder.name}</p>
+            <p className="file-tree__dialog-preview-meta">
+              {deleteTarget.kind === "file"
+                ? `${formatBytes(deleteTarget.file.size)} · ${kbState(deleteTarget.file).label}`
+                : `${fileCount.get(deleteTarget.folder.id) ?? 0} archivos`}
+            </p>
+          </div>
+        </div>
+        <p className="file-tree__dialog-project"><Icon icon={Folder} size="sm" /> Proyecto: {projectName}</p>
+        {deleteError ? <StateMessage tone="danger" role="alert" title={deleteError} /> : null}
+      </> : null}
+      <div className="file-tree__dialog-actions">
+        <Button variant="secondary" onClick={() => { setDeleteTarget(null); setDeleteError(null); }}>Cancelar</Button>
+        <Button variant="danger" disabled={deleteBusy} onClick={() => void confirmDelete()}>
+          <Icon icon={Trash2} /> {deleteBusy ? "Eliminando…" : deleteTarget?.kind === "folder" ? "Eliminar carpeta" : "Eliminar archivo"}
+        </Button>
+      </div>
+    </Dialog>
   </div>;
 }

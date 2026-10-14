@@ -15,10 +15,198 @@
   min-width: 0;
 }
 
+.projects-page__resources > .card {
+  min-width: 0;
+}
+
 .projects-page__hint {
   margin: 0;
   color: var(--corp-fg-muted);
   font-size: var(--text-sm);
+}
+
+/* Files card: search + upload toolbar, then the scrollable folder tree. */
+.projects-page__resources-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.projects-page__resources-toolbar .search-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.projects-page__resources-footer {
+  margin: 0 auto 0 0;
+  color: var(--corp-fg-muted);
+  font-size: var(--text-sm);
+}
+
+.file-tree {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-md);
+}
+
+.file-tree__children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-tree__children--root {
+  padding-left: var(--space-5);
+}
+
+.file-tree__node > .file-tree__children {
+  padding-left: var(--space-5);
+}
+
+.file-tree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 2rem;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.file-tree__row--root {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--corp-surface);
+  font-weight: var(--weight-medium);
+}
+
+.file-tree__row:hover,
+.file-tree__row.is-selected {
+  background: var(--primary-50);
+}
+
+.file-tree__twisty,
+.file-tree__spacer {
+  flex: 0 0 auto;
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.file-tree__twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--corp-fg-muted);
+  cursor: pointer;
+}
+
+.file-tree__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree__row--folder .file-tree__name,
+.file-tree__row--root .file-tree__name {
+  flex: 0 1 auto;
+}
+
+.file-tree__grow {
+  flex: 1 1 auto;
+}
+
+.file-tree__row .badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.file-tree__name--button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-tree__count,
+.file-tree__size {
+  flex: 0 0 auto;
+  color: var(--corp-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.file-tree__danger {
+  color: var(--danger);
+}
+
+.file-tree__empty {
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
+  color: var(--corp-fg-muted);
+  font-size: var(--text-sm);
+}
+
+.file-tree__dialog-body {
+  margin-bottom: var(--space-4);
+}
+
+.file-tree__dialog-question {
+  margin: 0 0 var(--space-3);
+}
+
+.file-tree__dialog-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-md);
+}
+
+.file-tree__dialog-preview-copy {
+  min-width: 0;
+}
+
+.file-tree__dialog-preview-name {
+  margin: 0;
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+}
+
+.file-tree__dialog-preview-meta {
+  margin: 0;
+  color: var(--corp-fg-muted);
+  font-size: var(--text-sm);
+}
+
+.file-tree__dialog-project {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  color: var(--corp-fg-muted);
+}
+
+.file-tree__dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 
 .projects-page__note {
