@@ -2,6 +2,7 @@
 
 Status: closed. Branch `odd/panel-api-key-followups`, base `main 6d7988b2`.
 Worktree `/home/stefan/repos/lumat-agent-odd-panel-api-key-followups`.
+PR **#594** — https://github.com/Stefan-migo/lumat-agent/pull/594 (open; merge is the owner's decision).
 Origin: `odd/tasks/panel-api-key-modelos.md` follow-ups **AK-17** and **AK-18 (R3-001)**.
 
 ## Objective
@@ -119,3 +120,11 @@ post-commit invalidation is therefore established in code rather than by an exis
 - The functional route guard was added. It primes the environment fallback, POSTs the panel key, then resolves and expects the new key. Its pre-fix pass is expected because the old service invalidated early; with the fixed service, removing the route invalidation leaves the test failing.
 - Full backend: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → exit 0, 2031 passed, 2 warnings (340.23s; output reached 100%).
 - `git diff --check` → clean.
+
+### Pre-merge integration + PR
+- `origin/main` moved after this branch was created: PR #593 (`chatbot-first-turn-greeting`) merged as `36c57d29`.
+  It modified `app/chat/graph.py` — a consumer our AK-17 test exercises — so `origin/main` was merged in
+  (textually clean, no file overlap) and the suite re-run over the merged tree.
+- Merged tree: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → exit 0, **2047 passed**, 2 warnings.
+- PR **#594** opened (label `type:bug`, base `main`). GitGuardian pass; `panel` and `test` checks pending.
+  Merge is the owner's decision.
