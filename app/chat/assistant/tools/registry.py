@@ -14,12 +14,12 @@ import logging
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
-from app.models import UserRole
+from app.models import InternalChatThread, UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import assistant_artifacts, automation_installations, cases, customers, kb, project_files, projects, recipes, relations, scheduling, tukulpan as memory
+from app.services import assistant_artifacts, automation_installations, cases, customers, kb, planning, project_files, projects, recipes, relations, scheduling, tukulpan as memory
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.merge",
     "skill.propose",
 })
-AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
+AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "planning.open", "planning.close"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 # Own reads are a compact recall digest, so legacy rows cannot expose unbounded
 # content; 500 characters keeps enough context for the assistant without adding a config knob.
@@ -272,6 +272,15 @@ class ArtifactSaveArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1, max_length=assistant_artifacts.MAX_ARTIFACT_CONTENT_CHARS)
+
+
+class PlanningOpenArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    topic: str = Field(min_length=1, max_length=200)
+
+
+class PlanningCloseArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 def _plain(value: Any) -> Any:
@@ -687,6 +696,34 @@ def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = No
     }
 
 
+def _planning_thread(session, trusted_thread_id: int | None, owner_id: int | None):
+    if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
+        raise ToolValidationError("planning tools require an authenticated chat thread")
+    thread = session.get(InternalChatThread, trusted_thread_id)
+    if thread is None or (owner_id is not None and thread.user_id != owner_id):
+        raise ToolValidationError("chat thread not found")
+    return thread
+
+
+def _planning_open(session, args: PlanningOpenArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):
+    thread = _planning_thread(session, trusted_thread_id, owner_id)
+    try:
+        state = planning.open_session(session, thread, args.topic)
+    except planning.PlanningSessionError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    return {"session": state, "thread_id": thread.id}
+
+
+def _planning_close(session, args: PlanningCloseArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):
+    thread = _planning_thread(session, trusted_thread_id, owner_id)
+    try:
+        result = planning.close_session(session, thread)
+    except planning.PlanningSessionError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    state = dict((thread.assistant_state or {}).get("cortex_session") or {})
+    return {"session": state, "thread_id": thread.id, "report_key": result.get("report_key")}
+
+
 def _assistant_capabilities(_session, _args: CapabilitiesArgs):
     from app.services.prompts import load_assistant_config
 
@@ -756,6 +793,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval.", tier="opt_in"),
     "project.merge": ToolDefinition("project.merge", ProjectMergeArgs, False, _project_merge, "Merge projects after approval.", tier="opt_in"),
     "skill.propose": ToolDefinition("skill.propose", SkillProposeArgs, False, _propose_project_skill, "Propose a project skill for owner approval.", tier="default"),
+    "planning.open": ToolDefinition("planning.open", PlanningOpenArgs, False, _planning_open, "Open a planning session on the current chat thread for an explicit user-requested topic.", tier="default"),
+    "planning.close": ToolDefinition("planning.close", PlanningCloseArgs, False, _planning_close, "Close the active planning session and write its final report.", tier="default"),
 }
 
 ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
@@ -788,6 +827,8 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "project.archive": frozenset(UserRole),
     "project.merge": frozenset(UserRole),
     "skill.propose": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "planning.open": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "planning.close": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
 }
 
 # Roles that may read business-shared memory (agent-role-access D2/D3/D5).
@@ -846,7 +887,7 @@ def execute_tool(
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "artifact.save", "skill.propose"} or (
+    owner_scoped = name.startswith("project.") or name.startswith("planning.") or name in {"list_project_files", "read_project_file", "artifact.save", "skill.propose"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
@@ -923,6 +964,12 @@ def execute_tool(
             result = _plain(definition.handler(session, parsed, project_id=project_id))
         elif name == "appointments.upcoming":
             result = _plain(definition.handler(session, parsed, role=role, owner_id=owner_id))
+        elif name.startswith("planning."):
+            result = _plain(
+                definition.handler(
+                    session, parsed, trusted_thread_id=trusted_thread_id, owner_id=owner_id, proyecto=proyecto
+                )
+            )
         else:
             result = _plain(definition.handler(session, parsed))
     except SearchFailure as exc:

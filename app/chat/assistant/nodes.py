@@ -585,7 +585,7 @@ def _effective_tools(state) -> tuple[str, ...]:
 
     allowed = []
     for name in tools:
-        if name == "memory.write":
+        if name == "memory.write" or name.startswith("planning."):
             allowed.append(name)
             continue
         try:

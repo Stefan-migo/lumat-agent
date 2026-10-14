@@ -24,6 +24,8 @@ DEFAULT_TOOLS = {
     "read_project_file",
     "artifact.save",
     "skill.propose",
+    "planning.open",
+    "planning.close",
 }
 
 OPT_IN_TOOLS = {

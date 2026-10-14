@@ -90,6 +90,8 @@ assistant:
     - read_project_file
     - skill.propose
     - artifact.save
+    - planning.open
+    - planning.close
     - project.create
     - project.rename
     - project.archive
