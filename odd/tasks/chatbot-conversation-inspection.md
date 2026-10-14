@@ -1,7 +1,7 @@
 # ODD — chatbot-conversation-inspection
 
 Feature: `chatbot-conversation-inspection` (Frente 2, unit 2)
-Branch: `odd/chatbot-conversation-inspection` · Base: `main` = `36c57d29`
+Branch: `odd/chatbot-conversation-inspection` · Cut from `origin/main` = `bf0774f2`, integrated with `origin/main` = `82210e1a` before the PR
 Delivery: single PR · Test runner: `uv run pytest tests/`
 
 ## Objective
@@ -127,6 +127,15 @@ was actioned: transcript `events` were the *earliest* `limit`, so a long thread 
 that flagged it — changed to the *latest* `limit` (chronological) and pinned with a regression test.
 Added the verifier's regression probes (tie-break by id desc, window-bounded signal counts,
 tool-level error surfacing, `extra=forbid`, TECNICO denial). Full suite green again.
+
+**L5 (integration, 2026-10-14):** before the PR, `origin/main` had advanced 19 commits (incl. PR #595
+`planning-guiado`), which touches the SAME files (`registry.py`, `test_assistant_tools.py`,
+`test_effective_config.py`, `test_tool_tiers.py`). Merged `origin/main` (`82210e1a`) into the branch.
+One conflict, in the planner-catalog SHA-256 pin (both sides changed it) — resolved with the hash of
+the MERGED catalog (`079d3da1…`). Verified the merge is semantically sound: whitelist keeps both
+unit-2 tools plus #595's `planning.*`; `TOOL_REGISTRY` == `ROLE_TOOL_ALLOWLIST` keys; whitelist ⊆
+registry. Full backend suite green on the merged tree; diff vs `origin/main` is only this unit's 12
+files (no frontend delta, so no frontend rebuild needed).
 
 ## Progress
 
