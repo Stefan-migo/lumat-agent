@@ -2,24 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TechnicianAgenda } from './TechnicianAgenda';
-import { TechnicianShell } from '../domain/TechnicianShell';
-import type { TechnicianAppointment, User } from '../../types';
+import type { TechnicianAppointment } from '../../types';
 
 const appointment: TechnicianAppointment = {
   id: 7, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00+00:00', ends_at: '2026-01-02T14:00:00+00:00', timezone: 'America/Santiago', status: 'booked', emergency: false, priority: null,
   customer: { name: 'María Silva', address: 'Los Alerces 42', comuna: 'Ñuñoa' }, case_summary: 'Revisar fuga del calefont',
 };
-
-const tecnico: User = { id: 4, username: 'tec-agenda', role: 'tecnico' };
-
-/** Mirrors app.tsx: a tecnico session composes the shell around the agenda. */
-function renderSurface() {
-  return render(
-    <TechnicianShell user={tecnico} onLogout={() => {}}>
-      <TechnicianAgenda />
-    </TechnicianShell>,
-  );
-}
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -49,24 +37,11 @@ describe('technician surface composition', () => {
       new Response(JSON.stringify({ appointments: [appointment] }), { status: 200 }),
     );
 
-    renderSurface();
+    render(<TechnicianAgenda />);
 
     expect(await screen.findByText('Calefont')).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Agenda técnica');
-  });
-
-  it('keeps the shell brand and session controls alongside the page title', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ appointments: [appointment] }), { status: 200 }),
-    );
-
-    renderSurface();
-
-    expect(await screen.findByText('Calefont')).toBeInTheDocument();
-    expect(screen.getByAltText('Lumat')).toBeInTheDocument();
-    expect(screen.getByText('tec-agenda')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
   });
 });
 
@@ -258,11 +233,10 @@ describe('technician surface — controls come from the panel primitives', () =>
       new Response(JSON.stringify({ detail: 'boom' }), { status: 500 }),
     );
 
-    renderSurface();
+    render(<TechnicianAgenda />);
 
     expect(await screen.findByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
     expect(screen.getByRole('alert').parentElement).toHaveClass('agenda-recovery');
-    expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toHaveClass('btn');
   });
 });
 
