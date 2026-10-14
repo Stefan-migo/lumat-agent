@@ -265,7 +265,6 @@ def to_technician_appointment_dict(
             "name": customer.name,
             "address": customer.address,
             "comuna": customer.comuna,
-            "phone": customer.phone_e164,
         },
         "case_summary": case.summary,
     }

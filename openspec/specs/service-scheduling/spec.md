@@ -58,7 +58,7 @@ The scheduling API MUST provide an authenticated technician agenda read covering
 - THEN that appointment is absent regardless of request parameters
 ### Requirement: SS-TECH-2 — Read-Only Privacy Contract
 
-Technician agenda reads MUST be read-only and MUST expose only customer name, address, comuna, phone, appointment service, the appointment's own status, `emergency`, `priority`, and brief `Case.summary`. `emergency` and `priority` are properties of the visit the technician is walking into, not panel workflow state. Operational fields are the panel's workflow state: `responsible_id`, `reminder_count`, `ack_by`, `notified_at`, `bundle`, and `history`. The agenda MUST NOT expose those operational fields, email, consent, conversation/message history, internal notes, or calendar sync.
+Technician agenda reads MUST be read-only and MUST expose only customer name, address, comuna, appointment service, the appointment's own status, `emergency`, `priority`, and brief `Case.summary`. `emergency` and `priority` are properties of the visit the technician is walking into, not panel workflow state. Operational fields are the panel's workflow state: `responsible_id`, `reminder_count`, `ack_by`, `notified_at`, `bundle`, and `history`. The agenda MUST NOT expose those operational fields, email, consent, conversation/message history, internal notes, or calendar sync.
 
 #### Scenario: Allow-list response (pytest)
 - GIVEN an appointment and case with all fields populated
