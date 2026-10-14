@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ProjectSkills } from "./ProjectSkills";
 
@@ -23,10 +23,29 @@ describe("ProjectSkills", () => {
 
     await user.click(screen.getByRole("button", { name: "Acciones de local" }));
     await user.click(screen.getByRole("menuitem", { name: "Editar" }));
-    fireEvent.change(screen.getByLabelText("Descripción de habilidad"), { target: { value: "Updated" } });
-    fireEvent.click(screen.getByRole("button", { name: "Guardar habilidad" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Descripción de habilidad"), { target: { value: "Updated" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar habilidad" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ skills: [{ name: "local", description: "Updated", body: "Local body" }] }) })));
+  });
+
+  it("adds a project skill from the card header through the dialog", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ skills: [] }))
+      .mockResolvedValueOnce(response({ project: {} }));
+    render(<ProjectSkills projectSlug="ops" skills={[]} />);
+    expect(await screen.findByText("Aún no hay habilidades en este proyecto")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Agregar habilidad" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Nombre de habilidad"), { target: { value: "resumen-operativo" } });
+    fireEvent.change(within(dialog).getByLabelText("Descripción de habilidad"), { target: { value: "Resume" } });
+    fireEvent.change(within(dialog).getByLabelText("Contenido de habilidad"), { target: { value: "Body" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar habilidad" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ skills: [{ name: "resumen-operativo", description: "Resume", body: "Body" }] }) })));
   });
 
   it("expands a global skill into its read-only content", async () => {

@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
-import { ChevronDown, ChevronUp, FileText, Folder, Globe, Info, Lock, Pencil, Plus, PlusCircle, Puzzle, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, FileText, Folder, Globe, Info, Lock, Pencil, Plus, Puzzle, Trash2 } from "lucide-react";
 import { ApiError, listGlobalSkills, updateProjectConfig } from "../../api";
 import type { GlobalSkill, ProjectSkill, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
+import { Dialog } from "../primitives/Dialog";
 import { Icon } from "../primitives/Icon";
 import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
@@ -34,10 +35,10 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
   const [items, setItems] = useState(skills);
   const [draft, setDraft] = useState<ProjectSkill>({ name: "", description: "", body: "" });
   const [editing, setEditing] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const [formOpen, setFormOpen] = useState(false);
   const query = filter.trim().toLocaleLowerCase("es-CL");
   const matches = (name: string, description: string) => !query || `${name} ${description}`.toLocaleLowerCase("es-CL").includes(query);
   const persist = async (next: ProjectSkill[]) => {
@@ -46,9 +47,7 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
     try {
       await updateProjectConfig(projectSlug, { skills: next });
       setItems(next);
-      setDraft({ name: "", description: "", body: "" });
-      setEditing(null);
-      setFormOpen(false);
+      closeDialog();
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.detail : "No pudimos guardar las habilidades del proyecto.");
     } finally {
@@ -61,9 +60,9 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
     else next.add(key);
     return next;
   });
-  const openCreate = () => { setEditing(null); setDraft({ name: "", description: "", body: "" }); setError(null); setFormOpen(true); };
-  const startEdit = (item: ProjectSkill) => { setDraft({ ...item }); setEditing(item.name); setError(null); setFormOpen(true); };
-  const cancelForm = () => { setEditing(null); setDraft({ name: "", description: "", body: "" }); setFormOpen(false); };
+  const openCreate = () => { setEditing(null); setDraft({ name: "", description: "", body: "" }); setError(null); setDialogOpen(true); };
+  const startEdit = (item: ProjectSkill) => { setDraft({ ...item }); setEditing(item.name); setError(null); setDialogOpen(true); };
+  const closeDialog = () => { setEditing(null); setDraft({ name: "", description: "", body: "" }); setError(null); setDialogOpen(false); };
   const save = () => {
     if (!draft.name.trim()) return;
     const next = editing === null ? [...items, draft] : items.map((item) => item.name === editing ? draft : item);
@@ -140,25 +139,21 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
       {visibleProject.length === 0
         ? <EmptyState variant="dashed" icon={Puzzle} title={items.length ? "Sin coincidencias" : "Aún no hay habilidades en este proyecto"} description={items.length ? "No hay habilidades que coincidan con la búsqueda." : "Agrega una habilidad para definir instrucciones específicas."} />
         : <ul className="project-skills__list">{visibleProject.map(renderProject)}</ul>}
-      <div className="project-skills__adder">
-        <button type="button" className="project-skills__adder-toggle" aria-expanded={formOpen} onClick={() => (formOpen ? cancelForm() : openCreate())}>
-          <Icon icon={PlusCircle} />
-          <span>{editing === null ? "Agregar habilidad" : `Editar habilidad: ${editing}`}</span>
-          <Icon icon={formOpen ? ChevronUp : ChevronDown} size="sm" />
-        </button>
-        {formOpen ? <div className="project-skills__form">
-          <Input label="Nombre de habilidad" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-          <Input label="Descripción de habilidad" value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
-          <Textarea label="Contenido de habilidad" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
-          <div className="project-skills__form-actions">
-            <Button disabled={saving || !draft.name.trim()} onClick={save}>{saving ? "Guardando…" : "Guardar habilidad"}</Button>
-            <Button variant="secondary" onClick={cancelForm}>Cancelar</Button>
-          </div>
-          {error ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={error} /> : null}
-        </div> : null}
-      </div>
     </Card>
 
     <p className="projects-page__note"><Icon icon={Info} size="sm" />Las habilidades globales se consultan; las del proyecto se gestionan aquí.</p>
+
+    <Dialog open={dialogOpen} onClose={closeDialog} title={editing === null ? "Agregar habilidad" : "Editar habilidad"} icon={Puzzle}>
+      <div className="project-skills__dialog-body">
+        <Input label="Nombre de habilidad" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+        <Input label="Descripción de habilidad" value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+        <Textarea label="Contenido de habilidad" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
+        {error ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={error} /> : null}
+      </div>
+      <div className="project-skills__dialog-actions">
+        <Button variant="secondary" onClick={closeDialog}>Cancelar</Button>
+        <Button disabled={saving || !draft.name.trim()} onClick={save}>{saving ? "Guardando…" : "Guardar habilidad"}</Button>
+      </div>
+    </Dialog>
   </div>;
 }
