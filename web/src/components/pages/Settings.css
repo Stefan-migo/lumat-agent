@@ -28,6 +28,9 @@
 .settings-messages__preview { display: grid; align-content: start; gap: var(--space-3); }
 .settings-messages__info { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .settings-messages__info svg { width: var(--space-4); height: var(--space-4); flex: none; }
+.settings-messages__helper { margin: var(--space-3) 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.settings-messages__templates { display: grid; gap: var(--space-3); }
+.settings-messages__template { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(0, 2fr) auto; align-items: end; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .settings-messages__mobile-selector { display: none; }
 .settings-messages__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .settings-messages__preview .message-preview { min-height: var(--space-8); }

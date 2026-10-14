@@ -87,6 +87,36 @@ def test_unknown_classification_also_persists_classified_activity(migrated_db, m
         assert [event.event for event in events] == ["classified"]
 
 
+def test_classification_propagates_selected_template_id(migrated_db, monkeypatch):
+    # T4: the id the classifier picked flows into the state updates so the
+    # send path can render it (D3).
+    with SessionLocal() as session:
+        customer, conversation = _conversation(session)
+        session.commit()
+        monkeypatch.setattr(
+            "app.chat.nodes.classify_intent._llm_classify",
+            lambda text, message_id, conversation="": {
+                "intent": "consulta",
+                "service": "consulta",
+                "priority": "baja",
+                "status": "abierto",
+                "injection": False,
+                "template_id": "horarios",
+            },
+        )
+        state = ConversationState(
+            customer_id=customer.id,
+            conversation_id=conversation.id,
+            phone=customer.phone_e164,
+            window=[{"id": 1, "text": "a qué hora abren"}],
+        )
+
+        result = classify_intent(state)
+
+    assert result["intent"] == "consulta"
+    assert result["template_id"] == "horarios"
+
+
 def test_kb_hit_persists_kb_retrieved_activity(migrated_db, monkeypatch):
     with SessionLocal() as session:
         customer, conversation = _conversation(session)
