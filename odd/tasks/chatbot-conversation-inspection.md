@@ -50,7 +50,7 @@ Ordered by most recent matching event desc, then `conversation_id` desc; bounded
                   "last_message_at", "closed_at"},
  "messages": [{"direction", "msg_type", "text", "created_at"}],   # last `limit`, chronological
  "messages_total": int,
- "events": [{"event", "cause", "created_at"}]}                    # oldest first, bounded
+ "events": [{"event", "cause", "created_at"}]}                    # last `limit`, oldest first
 ```
 `direction`/`msg_type`/`state` are their `.value` strings. Unknown `conversation_id` raises a
 runtime error surfaced as `status:"error"` (never a fabricated empty conversation).
@@ -121,6 +121,12 @@ RED→GREEN observed for T1 (`ImportError: cannot import name 'chatbot_conversat
 (`ImportError: cannot import name 'conversation_transcript'`). Full suite `uv run pytest tests/`
 exit 0. Added tools changed the pinned planner-catalog SHA-256; verified the only delta is the two
 new tools (reduced whitelist reproduces the old hash `fcad2ba6…`), then updated the baseline.
+
+**L4 (verification, 2026-10-14):** independent verifier returned no blockers; S1–S8 met. One advisory
+was actioned: transcript `events` were the *earliest* `limit`, so a long thread could hide the event
+that flagged it — changed to the *latest* `limit` (chronological) and pinned with a regression test.
+Added the verifier's regression probes (tie-break by id desc, window-bounded signal counts,
+tool-level error surfacing, `extra=forbid`, TECNICO denial). Full suite green again.
 
 ## Progress
 

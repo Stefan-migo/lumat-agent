@@ -97,3 +97,42 @@ def test_transcript_unknown_conversation_raises(seed_customer):
     with SessionLocal() as session:
         with pytest.raises(ValueError, match="conversation not found"):
             conversation_transcript(session, 999999, limit=20)
+
+
+def test_transcript_events_are_bounded_to_the_latest(seed_customer):
+    now = datetime.now(timezone.utc)
+    customer_id = seed_customer("+56922220006")
+
+    with SessionLocal() as session:
+        conversation = Conversation(customer_id=customer_id, wa_phone="+56922220006")
+        session.add(conversation)
+        session.flush()
+        session.add_all([
+            ConversationEvent(conversation_id=conversation.id, event="unknown_intent",
+                              created_at=now - timedelta(minutes=30)),
+            ConversationEvent(conversation_id=conversation.id, event="kb_retrieved",
+                              cause="chunks:1", created_at=now - timedelta(minutes=20)),
+            ConversationEvent(conversation_id=conversation.id, event="escalation",
+                              cause="handoff:kb_miss", created_at=now - timedelta(minutes=10)),
+        ])
+        session.flush()
+        result = conversation_transcript(session, conversation.id, limit=2)
+
+    assert [event["event"] for event in result["events"]] == ["kb_retrieved", "escalation"]
+
+
+def test_transcript_unknown_id_surfaces_as_tool_error(seed_customer):
+    from app.chat.assistant.tools.registry import execute_tool
+    from app.services.prompts import load_assistant_config
+
+    seed_customer("+56922220005")
+    with SessionLocal() as session:
+        result = execute_tool(
+            session,
+            "conversations.transcript",
+            {"conversation_id": 999999},
+            whitelist=set(load_assistant_config().tools_whitelist),
+            role="admin",
+        )
+
+    assert result["status"] == "error" and result["read_only"] is True

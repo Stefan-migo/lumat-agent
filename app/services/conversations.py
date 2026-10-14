@@ -60,10 +60,11 @@ def conversation_transcript(session: Session, conversation_id: int, limit: int =
         session.scalars(
             select(ConversationEvent)
             .where(ConversationEvent.conversation_id == conversation_id)
-            .order_by(ConversationEvent.created_at, ConversationEvent.id)
+            .order_by(ConversationEvent.created_at.desc(), ConversationEvent.id.desc())
             .limit(limit)
         )
     )
+    events.reverse()
     return {
         "conversation": {
             "id": conversation.id,
