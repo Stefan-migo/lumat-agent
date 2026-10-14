@@ -530,7 +530,17 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       });
       if (gaveUp) await watchRunToSettle(id, run);
       const persisted = await getChatThread(id);
-       loadThread(persisted, true);
+      loadThread(persisted, true);
+      const planningEvent = (persisted.thread.assistant_state?.events ?? []).find(
+        (event) =>
+          event.type === "planning" &&
+          event.run_id === run &&
+          typeof event.planning_thread_id === "number" &&
+          event.planning_thread_id !== id,
+      );
+      if (typeof planningEvent?.planning_thread_id === "number") {
+        onThreadOpened?.(planningEvent.planning_thread_id);
+      }
       setStream("");
       setRecoverable(false);
     } catch (reason: unknown) {
@@ -632,8 +642,9 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     if (command) {
       try {
         if (command.action === "open" && command.topic) {
-          const result = await openPlanningSession(command.topic, thread.id);
+          const result = await openPlanningSession(command.topic);
           setCortex(result.session);
+          onThreadOpened?.(result.thread_id);
         } else if (command.action === "close") {
           await closeSession();
         }
@@ -793,8 +804,9 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     }
     if (!thread) return;
     try {
-      const result = await openPlanningSession(trimmed, thread.id);
+      const result = await openPlanningSession(trimmed);
       setCortex(result.session);
+      onThreadOpened?.(result.thread_id);
       setPlanningOpen(false);
       setTopic("");
       setTopicError("");
