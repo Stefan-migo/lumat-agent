@@ -890,6 +890,10 @@
 }
 .tabs [role="tablist"] {
   display: flex;
+  /* `.tabs` is a column flexbox; the tab bar must keep its own height instead of
+     shrinking under a tall panel (mobile gives it overflow, which drops its
+     automatic minimum size to 0). */
+  flex-shrink: 0;
   gap: var(--space-1);
   border-bottom: 1px solid var(--corp-border);
 }
