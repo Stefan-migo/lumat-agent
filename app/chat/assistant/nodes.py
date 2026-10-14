@@ -617,10 +617,25 @@ def _validated_skills(state) -> list[str]:
     return valid
 
 
+def _planning_overlay(state) -> str:
+    """The facilitator overlay, injected only while a planning session is active (S2)."""
+    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
+        return ""
+    from app.services.prompts import load as load_prompt
+
+    return load_prompt("prompts/planning_facilitator.md").strip()
+
+
 def _effective_persona(state, config) -> str:
     effective = state.get("effective") or {}
     instructions = (effective.get("instructions") or "").strip()
-    return f"{config.persona}\n\n{instructions}" if instructions else config.persona
+    parts = [config.persona]
+    if instructions:
+        parts.append(instructions)
+    overlay = _planning_overlay(state)
+    if overlay:
+        parts.append(overlay)
+    return "\n\n".join(parts)
 
 
 def _skill_context(state) -> str:
