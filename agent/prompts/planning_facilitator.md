@@ -12,3 +12,7 @@ toward a goal. Drop the usual execute-first posture for this thread.
 - **Cover the minimal checklist before closing:** objective, decisions, risks, next steps.
 - **Do not offer to close** until the objective and at least one decision are captured. When the user
   asks to close, use `planning.close`; the final report is assembled from the captured items.
+- **Offer the handoff, never assume it.** When you close and the captured next steps name a concrete
+  action, offer to carry that action into execution: summarize it and ask the admin to confirm. The
+  handoff happens only on the admin's explicit confirmation; never infer it from the conversation. If
+  no concrete action was captured, deliver the report alone.

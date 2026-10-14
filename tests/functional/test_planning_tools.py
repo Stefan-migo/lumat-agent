@@ -375,3 +375,87 @@ def test_planning_close_reports_gaps_but_always_succeeds(make_user):
     assert result["result"]["session"]["status"] == "closed"
     assert set(result["result"]["gaps"]) == {"objective", "decisions", "risks", "next_steps"}
     assert result["result"]["minimum_met"] is False
+
+
+def test_planning_close_offers_no_handoff_without_a_captured_next_step(make_user):
+    make_user("planning-no-handoff", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-no-handoff")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Sin handoff"},
+            role="admin",
+            trusted_thread_id=thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+
+    with SessionLocal() as session:
+        execute_tool(
+            session,
+            "planning.record_note",
+            {"kind": "objective", "content": "Decidir el presupuesto"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        result = execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+
+    assert result["status"] == "completed"
+    assert result["result"]["handoff"] is None
+
+
+def test_planning_close_offers_a_handoff_with_a_captured_next_step(make_user):
+    make_user("planning-handoff", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-handoff")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Con handoff"},
+            role="admin",
+            trusted_thread_id=thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+
+    with SessionLocal() as session:
+        execute_tool(
+            session,
+            "planning.record_note",
+            {"kind": "next_step", "content": "Crear el proyecto X"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        result = execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+
+    assert result["status"] == "completed"
+    assert result["result"]["handoff"] == {"actions": ["Crear el proyecto X"]}
