@@ -5,6 +5,7 @@ import type { Settings as SettingsData } from "../../types";
 import { Settings } from "./Settings";
 
 const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
+  model_api_key: { configured: false, source: "none", masked: "" },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
   messages: { greeting: "Hola", cannot_answer: "No sé", clarification: "¿Cuál?", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
@@ -18,11 +19,62 @@ const capabilities = { tools: [], personas: [], prompts: [], kb_available: true,
 describe("Settings", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders five sections and selects Agente by default", () => {
+  it("renders six sections and selects Agente by default", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Costos", "Capacidades"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Costos", "Capacidades", "API key de modelos"]);
     expect(screen.getByRole("tab", { name: "Agente" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
+  });
+
+  it("saves a DeepSeek key and reports a valid key without balance", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, validation: "no_balance", model_api_key: { configured: true, source: "panel", masked: "…1234" } }), { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    expect(screen.getByText("No configurada")).toBeInTheDocument();
+    const keyInput = screen.getByLabelText("API key de DeepSeek");
+    expect(keyInput).toHaveAttribute("type", "password");
+    await user.type(keyInput, "sk-test-key");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("Clave válida, pero la cuenta no tiene saldo.")).toBeInTheDocument();
+    expect(screen.getByText("Configurada desde el panel")).toBeInTheDocument();
+    expect(screen.getByText("…1234")).toBeInTheDocument();
+    expect(keyInput).toHaveValue("");
+  });
+
+  it("reports a successfully validated key", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, validation: "valid", model_api_key: { configured: true, source: "panel", masked: "…1234" } }), { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    await user.type(screen.getByLabelText("API key de DeepSeek"), "sk-test-key");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("Clave validada.")).toBeInTheDocument();
+  });
+
+  it("maps invalid-key and unavailable validation errors to honest feedback", async () => {
+    const user = userEvent.setup();
+    const fetch = vi.spyOn(globalThis, "fetch");
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "invalid api key" }), { status: 400 }));
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "could not validate the api key" }), { status: 502 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    await user.type(screen.getByLabelText("API key de DeepSeek"), "sk-test-key");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("Clave inválida.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByText("No se pudo validar la clave.")).toBeInTheDocument();
+  });
+
+  it("deletes a panel-managed key and refreshes its displayed status", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, model_api_key: { configured: false, source: "none", masked: "" } }), { status: 200 }));
+    render(<Settings data={settings({ model_api_key: { configured: true, source: "panel", masked: "…1234" } })} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    expect(screen.getByText("Configurada desde el panel")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Borrar" }));
+    expect(await screen.findByText("Clave eliminada del panel.")).toBeInTheDocument();
+    expect(screen.getByText("No configurada")).toBeInTheDocument();
   });
 
   it("renders the Agente cards, help panels, and editable advanced rules", () => {

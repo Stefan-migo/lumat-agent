@@ -7,6 +7,7 @@ import type { Settings } from "../../../../types";
  *  fields are null and mode reflects only the daily scope. Values align with
  *  the settings Jinja template (SS-1..SS-5). */
 export const settings: Settings = {
+  model_api_key: { configured: false, source: "none", masked: "" },
   scope_rules: {
     atencion_masive: "bot_resolve",
     cobros: "always_escalate",

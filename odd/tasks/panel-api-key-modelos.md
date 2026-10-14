@@ -3,6 +3,8 @@
 Estado: en curso. Rama `odd/panel-api-key-modelos`, base `origin/main 0299d8e1`
 (main avanzó con el merge del PR #586 `asistente-lumat-memoria-tukulpan`; el branch se creó desde ahí).
 Worktree: `/home/stefan/repos/lumat-agent-odd-panel-api-key-modelos`.
+Slice PR3 (WU4): worktree `/home/stefan/repos/lumat-agent-odd-panel-api-key-modelos-pr3`,
+rama `odd/panel-api-key-modelos-pr3`, base `origin/main c253c125` (PR #588 y #589 ya mergeados).
 Origen: handoff `odd/handoffs/panel-model-api-key-config.md` + memoria `architecture/panel-model-api-key-config`.
 
 ## Objetivo
@@ -105,12 +107,12 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   la key, admin-only (operador → 403).
 
 ### Work unit 4 — Frontend
-- [ ] **AK-14 — Cliente API.** `web/src/api.ts`: tipos + get status / post key / delete key.
-- [ ] **AK-15 — Sección en Settings.** `web/src/components/pages/Settings.tsx`: sección "API key de modelos"
+- [x] **AK-14 — Cliente API.** `web/src/api.ts`: tipos + get status / post key / delete key.
+- [x] **AK-15 — Sección en Settings.** `web/src/components/pages/Settings.tsx`: sección "API key de modelos"
   en `SECTIONS`: input password + Guardar (POST) + Borrar (DELETE) + leyenda de origen
   ("Configurada en el servidor (variable de entorno)" / "Configurada desde el panel" / "No configurada") +
   enmascarado + feedback del ping (válida / sin saldo / inválida).
-- [ ] **AK-16 — Tests frontend.**
+- [x] **AK-16 — Tests frontend.**
 
 ## Verificación
 - Backend: `uv run pytest tests/` (verde). Incluye migraciones, crypto, resolver, rutas.
@@ -171,3 +173,25 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   **antes** del catch-all; el GET suma el bloque `model_api_key`.
 - RDD assess: `risk medium`, `review_due false` (`under_budget`) → sin review nativa para este slice.
 - Spot check del parent: `test_api_model_api_key.py` + `test_api_kb_settings.py` verdes.
+
+## Evidencia (PR3 — WU4)
+- Commit: `7cbc00e2` — `feat(panel): configure model API key from settings` (10 archivos, 141+/8-).
+- `uv run pytest tests/` → **1991 passed**, exit 0.
+- `npm --prefix web test` → **105 files / 1180 tests passed** (baseline 1174; +6 nuevos).
+- `npm --prefix web run build` → verde, incluye `tsc -b`.
+- RDD assess (`--base-ref c253c125 --committed-only`): `risk medium`, `review_due false` (`under_budget`) → sin review nativa.
+- **Cambio de alcance autorizado por el dueño**: el POST descartaba el retorno de `validate_deepseek_key()`
+  (`app/panel/api/routes/settings.py`), así que "válida" y "válida sin saldo" devolvían un `200 {"ok": true}`
+  idéntico y el frontend no podía distinguirlos. Se decidió extender el alcance al backend en vez de recortar
+  la UI: el POST ahora responde `{"ok": true, "validation": "valid"|"no_balance", "model_api_key": {...}}`.
+  La key se sigue guardando en ambos casos. PR3 deja de ser solo-frontend y pasa a full-stack.
+- Feedback final en la UI: `valid` → "Clave validada."; `no_balance` → "Clave válida, pero la cuenta no tiene
+  saldo."; 400 → "Clave inválida."; 502 → "No se pudo validar la clave."; DELETE → "Clave eliminada del panel.".
+- **Integración pre-merge (hecha)**: `origin/main` había avanzado a `3139dfac` (PR #590) y luego a
+  `ac86159e` (PR #591) después de crear el worktree. Se mergeó `origin/main` en la rama
+  (`d187df51`, textualmente limpio) y se re-corrió la integración sobre el árbol mergeado:
+  backend **2028 passed** (exit 0), frontend **105 files / 1184 passed**, `npm run build` verde.
+  PR #591 solapaba 7 de nuestros 10 archivos (`settings.py`, `Settings.tsx`, `Settings.css`,
+  `Settings.test.tsx`, `types.ts`, `mockData/settings.ts`, `mockData/settings.test.ts`); el merge quedó
+  semánticamente coherente (`templates` de #591 y `model_api_key` conviven, sin claves duplicadas en la
+  respuesta del GET).

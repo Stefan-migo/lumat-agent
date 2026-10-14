@@ -88,6 +88,12 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+export interface ModelApiKeyStatus { configured: boolean; source: 'env' | 'panel' | 'none'; masked: string; }
+export interface ModelApiKeyResponse { ok: true; model_api_key: ModelApiKeyStatus; }
+export interface SaveModelApiKeyResponse extends ModelApiKeyResponse { validation: 'valid' | 'no_balance'; }
+export const getModelApiKeyStatus = () => apiFetch<{ model_api_key: ModelApiKeyStatus }>('/panel/api/settings').then(({ model_api_key }) => model_api_key);
+export const saveModelApiKey = (api_key: string) => postJson<SaveModelApiKeyResponse>('/panel/api/settings/model_api_key', { api_key });
+export const deleteModelApiKey = () => apiFetch<ModelApiKeyResponse>('/panel/api/settings/model_api_key', { method: 'DELETE' });
 export const fetchPushConfig = () => apiFetch<{ public_key: string | null }>('/panel/api/push-config');
 export const savePushSubscription = (subscription: { endpoint: string; p256dh: string; auth: string; user_agent?: string }) =>
   postJson('/panel/api/push-subscription', subscription);

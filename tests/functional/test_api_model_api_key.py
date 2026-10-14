@@ -46,6 +46,7 @@ def test_set_key_validates_stores_and_never_exposes_key(client, make_user, monke
     assert response.status_code == 200, response.text
     assert response.json() == {
         "ok": True,
+        "validation": "valid",
         "model_api_key": {"configured": True, "source": "panel", "masked": "…1234"},
     }
     assert key not in response.text
@@ -72,7 +73,11 @@ def test_set_key_accepts_no_balance_response(client, make_user, monkeypatch):
             "/panel/api/settings/model_api_key", json={"api_key": "sk-test-no-balance"}
         )
     assert response.status_code == 200, response.text
+    assert response.json()["validation"] == "no_balance"
     assert response.json()["model_api_key"]["source"] == "panel"
+    with SessionLocal() as session:
+        secret = session.scalar(select(PanelSecret))
+        assert secret is not None and b"sk-test-no-balance" not in secret.ciphertext
 
 
 def test_invalid_key_is_rejected_without_persisting(client, make_user):
