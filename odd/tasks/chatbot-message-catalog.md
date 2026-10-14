@@ -96,10 +96,14 @@ unknown):
 
 - `classify_intent` (`app/chat/nodes/classify_intent.py:156`) returns **`template_id`** (the
   picked id, or `None`) from its existing LLM call.
-- `respond` (`app/chat/nodes/respond.py:120`) checks `state.template_id` **before** the KB
-  `retrieve` (`:136`): if set, render the template and return it as the reply, pre-empting the
-  KB path. Otherwise the existing clarification / KB / `cannot_answer` flow is untouched
-  (D7 coexistence, D9 fallback).
+- `orchestrate._dispatch` routes a **retrieval intent** (`consulta`/`valores`/`postventa`) with
+  a picked `template_id` straight to `respond`, so a KB miss cannot hand it off; capture/manage
+  flows are untouched. **T5 scope refinement** (owner decision 2026-10-13 — see Log): without
+  this, the preset only ever surfaced when the KB already had the answer, making the feature
+  inert.
+- `respond` checks `state.template_id` **first** (ahead of the clarification and KB paths): if
+  set and stored, render the template and return it as the reply. Otherwise the existing
+  clarification / KB / `cannot_answer` flow is untouched (D7 coexistence, D9 fallback).
 - `ConversationState` gains `template_id: str | None = None` (`app/chat/state.py`, near `:184`).
 - `respond` is the only emit point for a bot answer (greeting is emitted by `receive`).
 
@@ -242,9 +246,9 @@ Task shape may be refined after T0 — keep IDs stable.
   `uv run pytest tests/ -q` → **green**. Behaviour for an empty catalog is unchanged
   (`template_id=None`); T5 owns the render/send path.
 - T5 — `5a948b02` `feat(chat): render the preset message the classifier picked`.
-  `respond` renders `state.template_id` **after** the unknown/clarification branch and
-  **before** `kb.retrieve`, so a picked preset message pre-empts only the KB path (D13) while
-  the clarification / KB / `cannot_answer` flow stays intact when nothing was picked (D9).
+  `respond` renders `state.template_id` with the system-filled slots (D13); the final routing
+  placement is in the refinement bullet below. The clarification / KB / `cannot_answer` flow
+  stays intact when nothing was picked (D9).
   `respond._slot_values` maps `{{nombre}}`, `{{comuna}}`, `{{direccion}}`, `{{equipo}}`,
   `{{problema}}`, `{{disponibilidad}}` to `captured[...]` and `{{visita}}` to
   `booking["label"]`, rendering `"unknown"`/missing as `""`.
@@ -254,10 +258,26 @@ Task shape may be refined after T0 — keep IDs stable.
   `render(key, **vars)` now delegates to `render_text` — single source of truth.
   RED first, then GREEN. Routed **inline**. Parent checks: `tests/unit/test_prompts.py` 42
   passed; full backend `uv run pytest tests/ -q` → **1985 passed** (0 failures).
+- T5 refinement — `08166f0f` `fix(chat): let a picked preset pre-empt the retrieval answer path`.
+  While proving the seam end-to-end I found the T0 hook point was effectively inert: retrieval
+  intents went to `research_triage`, and a KB **miss** handed off before `respond` ran, so a
+  preset only surfaced on a KB **hit**. Owner chose to **pre-empt the whole answer path**
+  (retrieval hit/miss + unknown), keeping capture/manage intact. Fix: `orchestrate._dispatch`
+  routes a retrieval intent with `template_id` straight to `respond`; `respond` checks the
+  preset ahead of the clarification branch too. Tests: routing table (+7), `respond` unknown
+  (+1), e2e `test_preset_answer_preempts_the_kb_miss_path` over `run_conversation` (+1). Full
+  backend → **1994 passed**.
 
 ## Next step
 
-T5 done (the picked preset message is rendered and pre-empts the KB path). Start
+T5 done (the picked preset message is rendered and pre-empts the answer path). Start
 **T7**: full checks (`uv run pytest tests/ -q` + panel) and close with verification
 evidence. The greeting bug is a **separate** unit (`chatbot-first-turn-greeting`) —
 do not mix it in.
+
+## Log
+
+- L1 (2026-10-13, owner, at the T5 review, verbatim): "Pre-empta el camino de respuesta
+  (Recomendado)" — a picked preset must pre-empt the whole answer path (retrieval KB hit **or**
+  miss, and `unknown`), not only the KB-hit path; capture/manage flows stay intact. This
+  refines the T0 hook point (which the T5 spike showed was inert).
