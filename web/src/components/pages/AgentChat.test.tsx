@@ -1397,7 +1397,8 @@ describe("AgentChat", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
-    expect(screen.getByText(/Informe de planificación: Report/i)).toBeInTheDocument();
+    expect(screen.getByText(/Informe de planificación:/i)).toBeInTheDocument();
+    expect(screen.getByText("Report")).toBeInTheDocument();
   });
 
   it("treats exact planning commands as lifecycle controls and free text as chat", async () => {

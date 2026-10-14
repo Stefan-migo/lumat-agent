@@ -3,6 +3,7 @@ import { ApiError, getPlanningSession, getProject, listPlanningSessions, reopenP
 import type { PlanningSessionDetailResponse, PlanningSessionsResponse } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
+import { Markdown } from "../shared/Markdown";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { EmptyState } from "../shared/EmptyState";
@@ -56,7 +57,7 @@ export function PlanningSessions({ sessionSlug, projectSlug, onOpenSession, onOp
     const closed = formatTimestamp(session?.closed_at ?? null);
     return <PageFrame title={session?.topic ?? "Sesión de planificación"} meta={session ? `Hilo ${session.thread_id} · ${sessionStatusLabel(session.status)}${opened ? ` · Apertura: ${opened}` : ""}${closed ? ` · Cierre: ${closed}` : ""}` : "Detalle de la sesión"} actions={<><Button variant="secondary" onClick={() => onBack ? onBack(session?.proyecto) : window.history.back()}>Volver a las sesiones de planificación</Button>{session?.status === "closed" ? <Button disabled={reopening} onClick={() => void reopen()}>Reabrir sesión</Button> : null}</>} state={<><ReadState state={detail.state} detail />{reopenError ? <StateMessage tone="danger" role="alert" title="No pudimos reabrir la sesión de planificación" detail={reopenError} /> : null}</>}>
       {body ? <>
-         <Card title="Informe de cierre"><p>{body.report ? <><Badge tone={memoryStatusTone(body.report.status)}>{memoryStatusLabel(body.report.status)}</Badge> {body.report.contenido}</> : "No hay un informe de cierre disponible."}</p></Card>
+         <Card title="Informe de cierre">{body.report ? <><Badge tone={memoryStatusTone(body.report.status)}>{memoryStatusLabel(body.report.status)}</Badge> <Markdown content={body.report.contenido} /></> : "No hay un informe de cierre disponible."}</Card>
       </> : null}
     </PageFrame>;
   }

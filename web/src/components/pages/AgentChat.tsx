@@ -109,6 +109,16 @@ const runStillProcessing = (result: InternalChatResponse, run: string) =>
       message.status === "processing",
   );
 
+function planningChecklist(cortex: { decisions?: { title: string; content: string }[]; notes?: { kind: string; content: string }[] }): string {
+  const kinds = new Set((cortex.notes ?? []).map((note) => note.kind));
+  return [
+    `Objetivo ${kinds.has("objective") ? "✓" : "—"}`,
+    `${cortex.decisions?.length ?? 0} decisiones`,
+    `Riesgos ${kinds.has("risk") ? "✓" : "—"}`,
+    `Próximos pasos ${kinds.has("next_step") ? "✓" : "—"}`,
+  ].join(" · ");
+}
+
 function planningCommand(value: string) {
   const match = value.match(/^\/planning(?:\s+(.+))?$/);
   if (!match) return null;
@@ -1200,14 +1210,17 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       </Dialog>
       {cortex?.status === "active" ? (
         <p role="status">
-          Planificación activa: {cortex.topic}{" "}
+          Planificación activa: {cortex.topic} · {planningChecklist(cortex)}{" "}
           <Button variant="secondary" onClick={() => void closeSession()}>
             Cerrar planificación
           </Button>
         </p>
       ) : null}
       {report ? (
-        <p role="status">Informe de planificación: {report.contenido}</p>
+        <div role="status" className="assistant-chat__planning-report">
+          <span>Informe de planificación:</span>
+          <Markdown content={report.contenido} />
+        </div>
       ) : null}
     </PageFrame>
     </AssistantWorkspace>
