@@ -4,8 +4,9 @@ Objective: redesign the project-detail tabs (Contexto, Agentes, Skills, Hilos) t
 reference images. Frontend only. Branch `odd/panel-visual-alignment`.
 Delivery: ask-on-risk. Runner: `npm test` (vitest) + `npm run build` (tsc -b + vite build).
 
-Scope lock: agents stay fixed system roles; no backend/contract changes. Hilos is wired to the
-existing endpoint. No palette/token changes.
+Scope lock: agents stay fixed system roles. Hilos is wired to the existing endpoint. No palette/token
+changes. One bounded backend addition was authorized later: `project_files.kb_document_id` (migration
+054) to remove the files/knowledge duplication (see L8).
 
 ## Specs
 
@@ -62,6 +63,7 @@ proyecto`.
 | T1 shared chrome | S1 | inline | done | f194eef9 |
 | T1b workspace header fixes | S1 | inline | done | ef0a9524 |
 | T2 Contexto | S2 | inline | done | 641c1606 |
+| T2c KB link + unified files list | S2 | inline | done | 5c9d6606, de995673 |
 | T3 Agentes | S3 | inline | pending | — |
 | T4 Skills | S4 | inline | pending | — |
 | T5 Hilos wire | S5 | inline | pending | — |
@@ -94,3 +96,10 @@ primitives: `Card.footer`, `EmptyState` icon/action/dashed variant. Verified by 
 the workspace. `Abrir asistente`/breadcrumb intentionally omitted. Open item: the reference shows a
 "Subir archivo a la KB" button on the knowledge card; no distinct backend action exists (project files
 index automatically), so it was omitted pending the owner's call.
+L8 (owner decision): after review, the owner chose option **B** — a unified project-file list with a KB
+state, plus a bounded backend change. Findings that drove it: `POST /kb` already accepts `project_id`
+(not exposed in the UI), and `ingest_project_file` auto-indexes a supported upload, so the same
+document was listed twice. `to_doc_dict` did not expose the file link. Implemented in T2c: migration
+054 adds `project_files.kb_document_id` (backfilled from chunk provenance), the serializer exposes it,
+and the Contexto tab now shows one files table with an "En la KB" column while the knowledge card keeps
+only documents added straight to the project KB (with its own `POST /kb` upload action).
