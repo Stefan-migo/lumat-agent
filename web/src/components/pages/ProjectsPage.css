@@ -98,8 +98,7 @@
   font-weight: var(--weight-medium);
 }
 
-.file-tree__row:hover,
-.file-tree__row.is-selected {
+.file-tree__row:hover {
   background: var(--primary-50);
 }
 
@@ -147,16 +146,6 @@
 .file-tree__row .badge {
   flex: 0 0 auto;
   white-space: nowrap;
-}
-
-.file-tree__name--button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 
 .file-tree__count,

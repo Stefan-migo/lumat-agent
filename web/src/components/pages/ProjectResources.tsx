@@ -12,7 +12,6 @@ import {
   Info,
   Paperclip,
   Pencil,
-  Plus,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -41,6 +40,7 @@ import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Select } from "../primitives/Select";
+import { useToast } from "../primitives/Toast";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { StateMessage } from "../shared/StateMessage";
@@ -85,14 +85,12 @@ export function ProjectResources({
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const kbInputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
   const [query, setQuery] = useState("");
-  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [uploadingKb, setUploadingKb] = useState(false);
-  const [kbFeedback, setKbFeedback] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
 
   const [folderDialog, setFolderDialog] = useState<FolderDialogState | null>(null);
   const [folderName, setFolderName] = useState("");
@@ -184,23 +182,21 @@ export function ProjectResources({
 
   const download = async (row: ProjectFile) => {
     setBusyFileId(row.id);
-    setFeedback(null);
     try {
       await downloadProjectFile(projectSlug, row.id, row.filename);
     } catch (reason: unknown) {
-      setFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos descargar el archivo." });
+      toast.show(reason instanceof ApiError ? reason.detail : "No pudimos descargar el archivo.", "danger");
     } finally {
       setBusyFileId(null);
     }
   };
 
   const moveFile = async (fileId: number, folderId: number | null) => {
-    setFeedback(null);
     try {
       await moveProjectFile(projectSlug, fileId, folderId);
       files.retry();
     } catch (reason: unknown) {
-      setFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos mover el archivo." });
+      toast.show(reason instanceof ApiError ? reason.detail : "No pudimos mover el archivo.", "danger");
     }
   };
 
@@ -212,19 +208,18 @@ export function ProjectResources({
     event.target.value = "";
     if (!file) return;
     setUploadingKb(true);
-    setKbFeedback(null);
     try {
       await uploadKbDocument(file.name.replace(/\.[^.]+$/, ""), file, "internal", projectId);
-      setKbFeedback({ tone: "success", text: "Documento agregado a la base de conocimientos." });
+      toast.show("Documento agregado a la base de conocimientos.");
       if (isAdmin) docs.retry();
     } catch (reason: unknown) {
-      setKbFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos agregar el documento a la base de conocimientos." });
+      toast.show(reason instanceof ApiError ? reason.detail : "No pudimos agregar el documento a la base de conocimientos.", "danger");
     } finally {
       setUploadingKb(false);
     }
   };
 
-  const openUpload = (folderId: number | null = selectedFolderId) => {
+  const openUpload = (folderId: number | null = null) => {
     setUploadFile(null);
     setUploadFolderId(folderId);
     setUploadError(null);
@@ -248,7 +243,7 @@ export function ProjectResources({
     try {
       await uploadProjectFile(projectSlug, uploadFile, uploadFolderId);
       closeUpload();
-      setFeedback({ tone: "success", text: "Archivo subido correctamente." });
+      toast.show("Archivo subido correctamente.");
       files.retry();
       if (isAdmin) docs.retry();
     } catch (reason: unknown) {
@@ -349,11 +344,10 @@ export function ProjectResources({
     try {
       if (target.kind === "file") {
         await deleteProjectFile(projectSlug, target.file.id);
-        setFeedback({ tone: "success", text: "Archivo eliminado." });
+        toast.show("Archivo eliminado.");
       } else {
         await deleteProjectFolder(projectSlug, target.folder.id);
-        setFeedback({ tone: "success", text: "Carpeta eliminada." });
-        if (selectedFolderId === target.folder.id) setSelectedFolderId(null);
+        toast.show("Carpeta eliminada.");
       }
       setDeleteTarget(null);
       files.retry();
@@ -408,14 +402,14 @@ export function ProjectResources({
     return (
       <li key={`folder-${folder.id}`} className="file-tree__node">
         <div
-          className={`file-tree__row file-tree__row--folder${selectedFolderId === folder.id ? " is-selected" : ""}${dropTarget === String(folder.id) ? " is-drop-target" : ""}`}
+          className={`file-tree__row file-tree__row--folder${dropTarget === String(folder.id) ? " is-drop-target" : ""}`}
           {...dropProps(String(folder.id), folder.id)}
         >
           <button type="button" className="file-tree__twisty" aria-label={`${isCollapsed ? "Expandir" : "Contraer"} ${folder.name}`} aria-expanded={!isCollapsed} onClick={() => toggleFolder(folder.id)}>
             <Icon icon={isCollapsed ? ChevronRight : ChevronDown} size="sm" />
           </button>
           <Icon icon={Folder} size="sm" />
-          <button type="button" className="file-tree__name file-tree__name--button" onClick={() => setSelectedFolderId(folder.id)}>{folder.name}</button>
+          <span className="file-tree__name">{folder.name}</span>
           {count > 0 ? <span className="file-tree__count">({count})</span> : null}
           <span className="file-tree__grow" aria-hidden="true" />
           <Menu
@@ -472,7 +466,6 @@ export function ProjectResources({
     >
       <div className="projects-page__resources-toolbar">
         <SearchInput aria-label="Buscar archivo o carpeta" placeholder="Buscar archivo o carpeta…" onSearch={setQuery} />
-        <Button variant="secondary" onClick={() => openUpload()}><Icon icon={Plus} /> Subir archivo</Button>
         <Menu
           trigger="icon"
           label="Acciones de archivos"
@@ -484,7 +477,6 @@ export function ProjectResources({
           onSelect={(value) => (value === "upload" ? openUpload() : openCreate(null))}
         />
       </div>
-      {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.text} /> : null}
       {loadState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando archivos" /> : null}
       {loadState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar los archivos" /><Button variant="secondary" onClick={() => { files.retry(); folders.retry(); }}>Reintentar</Button></> : null}
       {loadState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver los archivos de este proyecto." /> : null}
@@ -492,12 +484,12 @@ export function ProjectResources({
       {loadState === "ready" && !isEmpty ? (
         <div className="file-tree">
           <div
-            className={`file-tree__row file-tree__row--root${selectedFolderId === null ? " is-selected" : ""}${dropTarget === ROOT_DROP_KEY ? " is-drop-target" : ""}`}
+            className={`file-tree__row file-tree__row--root${dropTarget === ROOT_DROP_KEY ? " is-drop-target" : ""}`}
             {...dropProps(ROOT_DROP_KEY, null)}
           >
             <span className="file-tree__spacer" aria-hidden="true" />
             <Icon icon={Folder} size="sm" />
-            <button type="button" className="file-tree__name file-tree__name--button" onClick={() => setSelectedFolderId(null)}>{projectName}</button>
+            <span className="file-tree__name">{projectName}</span>
             <span className="file-tree__grow" aria-hidden="true" />
           </div>
           <ul className="file-tree__children file-tree__children--root">
@@ -515,7 +507,6 @@ export function ProjectResources({
       footer={<p className="projects-page__note"><Icon icon={Info} size="sm" />Los archivos del proyecto se comparten como contexto; los adjuntos de un hilo permanecen en ese hilo.</p>}
     >
       <input type="file" aria-label="Documento de la base de conocimientos" hidden ref={kbInputRef} onChange={(event) => void uploadToKb(event)} />
-      {kbFeedback ? <StateMessage tone={kbFeedback.tone} role={kbFeedback.tone === "danger" ? "alert" : "status"} title={kbFeedback.text} /> : null}
       {!isAdmin ? <StateMessage tone="info" role="status" title="Conocimiento del proyecto" detail="Solo los administradores pueden ver los documentos indexados de un proyecto." /> : <>
         {docsState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conocimiento" /> : null}
         {docsState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el conocimiento del proyecto" /><Button variant="secondary" onClick={docs.retry}>Reintentar</Button></> : null}
