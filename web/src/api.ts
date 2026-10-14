@@ -311,6 +311,8 @@ export const uploadProjectFile = (slug: string, file: File, folderId?: number | 
 };
 export const deleteProjectFile = (slug: string, fileId: number): Promise<void> =>
   apiFetch<void>(`/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}`, { method: 'DELETE' });
+export const moveProjectFile = (slug: string, fileId: number, folderId: number | null) =>
+  patchJson<{ file: ProjectFile }>(`/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}`, { folder_id: folderId });
 export const listProjectFolders = (slug: string) => apiFetch<ProjectFoldersResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/folders`);
 export const createProjectFolder = (slug: string, body: { name: string; parent_id?: number | null }) => postJson<{ folder: ProjectFolder }>(`/panel/api/projects/${encodeURIComponent(slug)}/folders`, body);
 export const renameProjectFolder = (slug: string, folderId: number, name: string) => patchJson<{ folder: ProjectFolder }>(`/panel/api/projects/${encodeURIComponent(slug)}/folders/${folderId}`, { name });
