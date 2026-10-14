@@ -62,6 +62,7 @@ def test_prompt_respond_template(repo_root):
 def test_prompt_classify_template(repo_root):
     assert _read(repo_root, "prompts/classify.md") == (
         "<conversation>{{conversation}}</conversation>\n\n"
+        "<templates>{{templates}}</templates>\n\n"
         "<user_input>{{user_input}}</user_input>\n"
     )
 
@@ -322,6 +323,7 @@ def test_respond_model_call_receives_conversation_and_booking(respond_client):
         turn=3,
         cost_mode="normal",
         memory_context="",
+        template_id=None,
     )
     with mock.patch.object(_rn.kb, "retrieve", return_value=[{"content": "chunk"}]):
         _rn.respond(state)
@@ -358,6 +360,99 @@ def test_respond_answer_from_kb_memory_block_injected(respond_client):
     assert "reparaciones" in call["messages"][1]["content"]
 
 
+# --- T5: respond renders the preset message the classifier picked (D13/D9) ---
+
+
+def _respond_state(**overrides):
+    base = dict(
+        intent="consulta",
+        window=[{"id": 1, "text": "a qué hora abren"}],
+        template_id=None,
+        captured={},
+        booking=None,
+        turn=3,
+        cost_mode="normal",
+        memory_context="",
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_placeholders_returns_slot_names():
+    assert prompts.placeholders("Hola {{nombre}}, visita {{visita}}") == {"nombre", "visita"}
+
+
+def test_render_text_substitutes_and_is_strict():
+    assert prompts.render_text("Hola {{nombre}}", nombre="Ana") == "Hola Ana"
+    with pytest.raises(KeyError):
+        prompts.render_text("Hola {{nombre}}")
+    with pytest.raises(KeyError):
+        prompts.render_text("Hola {{nombre}}", nombre="Ana", extra="x")
+
+
+def test_respond_renders_picked_template_with_real_slots(monkeypatch):
+    # The owner's text is the answer; the SYSTEM fills the slots from state (D8).
+    catalog = [{"id": "horarios", "text": "Hola {{nombre}}, atendemos de {{disponibilidad}}."}]
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_rn, "get_message_templates", lambda session: catalog)
+    state = _respond_state(
+        template_id="horarios",
+        captured={"name": "Ana", "availability": "lunes a viernes"},
+    )
+    assert _rn.respond(state) == {"replies": ["Hola Ana, atendemos de lunes a viernes."]}
+
+
+def test_respond_template_preempts_the_kb_path(monkeypatch):
+    called = []
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(
+        _rn, "get_message_templates", lambda session: [{"id": "x", "text": "Ok {{nombre}}."}]
+    )
+    monkeypatch.setattr(_rn.kb, "retrieve", lambda *a, **k: called.append(1) or [{"content": "c"}])
+    state = _respond_state(template_id="x", captured={"name": "Ana"})
+    assert _rn.respond(state) == {"replies": ["Ok Ana."]}
+    assert called == []
+
+
+def test_respond_template_slot_unknown_is_empty_and_visita_uses_booking_label(monkeypatch):
+    catalog = [{"id": "v", "text": "{{nombre}}/{{comuna}}/{{visita}}"}]
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_rn, "get_message_templates", lambda session: catalog)
+    # captured "unknown" -> ""; no booking -> "" for {{visita}}
+    assert _rn.respond(
+        _respond_state(template_id="v", captured={"name": "unknown", "comuna": "Santiago"})
+    ) == {"replies": ["/Santiago/"]}
+    assert _rn.respond(
+        _respond_state(
+            template_id="v",
+            captured={"name": "Ana", "comuna": "unknown"},
+            booking={"service": "Visita", "label": "06/05 a las 15:30", "status": "booked"},
+        )
+    ) == {"replies": ["Ana//06/05 a las 15:30"]}
+
+
+def test_respond_missing_template_falls_back_to_kb(monkeypatch):
+    # A stale id (catalog changed) must not crash: fall through to the normal path.
+    answered = []
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_rn, "get_message_templates", lambda session: [])
+    monkeypatch.setattr(_rn.kb, "retrieve", lambda *a, **k: [{"content": "chunk"}])
+    monkeypatch.setattr(_rn, "_answer_from_kb", lambda *a, **k: answered.append(1) or "kb answer")
+    state = _respond_state(template_id="gone")
+    assert _rn.respond(state) == {"replies": ["kb answer"]}
+    assert answered == [1]
+
+
+def test_respond_unknown_intent_renders_picked_template(monkeypatch):
+    # A picked preset answers even an unknown-intent turn (before clarification).
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(
+        _rn, "get_message_templates", lambda session: [{"id": "h", "text": "Hola {{nombre}}."}]
+    )
+    state = _respond_state(intent="unknown", template_id="h", captured={"name": "Ana"})
+    assert _rn.respond(state) == {"replies": ["Hola Ana."]}
+
+
 @pytest.fixture
 def classify_client():
     client = _FakeClient(reply_content='{"intent": "caldera", "service": "caldera", "priority": "media", "status": "abierto", "injection": false}')
@@ -369,9 +464,12 @@ def classify_client():
         yield client
 
 
-def test_classify_llm_classify_persona_and_template(classify_client):
+def test_classify_llm_classify_persona_and_template(classify_client, monkeypatch):
     # AC-3 static slot unchanged + template identical: persona via loader,
-    # user text inside the <user_input> slot (SH-4 input-as-data).
+    # user text inside the <user_input> slot (SH-4 input-as-data). The catalog
+    # is injected into the USER message as an inert <templates> DATA block.
+    catalog = [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}]
+    monkeypatch.setattr(_ci, "get_message_templates", lambda session: catalog)
     result = _ci._llm_classify(
         "necesito una caldera", message_id=5, conversation="Cliente: Quiero agendar una visita"
     )
@@ -379,10 +477,53 @@ def test_classify_llm_classify_persona_and_template(classify_client):
     assert call["messages"][0]["content"] == prompts.load("personas/classify.md")
     assert call["messages"][1]["content"] == prompts.render(
         "prompts/classify.md", conversation="Cliente: Quiero agendar una visita",
-        user_input="necesito una caldera"
+        templates="- id=horarios: Atendemos de {{disponibilidad}}.",
+        user_input="necesito una caldera",
     )
     assert result["intent"] == "caldera"
     assert result["injection"] is False
+
+
+def _classify_result_client(monkeypatch, reply_content: str, catalog: list[dict]):
+    """Spy the classifier's LLM boundaries with a catalog; returns the fake client."""
+    client = _FakeClient(reply_content=reply_content)
+    monkeypatch.setattr(_ci, "openai_client", lambda: client)
+    monkeypatch.setattr(_ci, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_ci, "record_llm_cost", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(_ci, "get_message_templates", lambda session: catalog)
+    return client
+
+
+def test_classify_llm_returns_selected_template_id(monkeypatch):
+    # T4: the same classifier call returns the id it picked from the catalog.
+    _classify_result_client(
+        monkeypatch,
+        '{"intent": "consulta", "template_id": "horarios", "injection": false}',
+        [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}],
+    )
+    result = _ci._llm_classify("a qué hora abren", message_id=1)
+    assert result["template_id"] == "horarios"
+
+
+def test_classify_llm_drops_template_id_outside_the_catalog(monkeypatch):
+    # The LLM is untrusted: an id that was never offered must not survive.
+    _classify_result_client(
+        monkeypatch,
+        '{"intent": "consulta", "template_id": "no-existe", "injection": false}',
+        [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}],
+    )
+    result = _ci._llm_classify("a qué hora abren", message_id=1)
+    assert result["template_id"] is None
+
+
+def test_classify_llm_empty_catalog_neutralizes_templates(monkeypatch):
+    # No catalog -> no behaviour change: neutral block, no id picked.
+    client = _classify_result_client(
+        monkeypatch, '{"intent": "consulta", "injection": false}', []
+    )
+    result = _ci._llm_classify("a qué hora abren", message_id=1)
+    assert result["template_id"] is None
+    assert "(sin respuestas prediseñadas)" in client.captured[-1]["messages"][1]["content"]
 
 
 def _dummy_state(**overrides):

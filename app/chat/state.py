@@ -182,6 +182,8 @@ class ConversationState:
     # this message (empty string on first contact -> reply never blocked).
     memory_context: str = ""
     booking: dict | None = None
+    # T4/D3: the preset-message id the classifier picked this turn (None = none).
+    template_id: str | None = None
 
     @classmethod
     def from_db(

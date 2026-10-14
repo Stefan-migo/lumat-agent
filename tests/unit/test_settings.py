@@ -1,4 +1,11 @@
-from app.services.settings import MESSAGE_DEFAULTS, get_service_duration
+import pytest
+
+from app.services.settings import (
+    MESSAGE_DEFAULTS,
+    get_message_templates,
+    get_service_duration,
+    validate_message_templates,
+)
 
 
 class FakeSession:
@@ -6,7 +13,7 @@ class FakeSession:
         self.value = value
 
     def get(self, model, key):
-        if key == "booking.service_durations" and self.value is not None:
+        if self.value is not None:
             return type("Setting", (), {"value": self.value})()
         return None
 
@@ -40,3 +47,40 @@ def test_clarification_default_does_not_invent_a_menu():
 
     assert "menú" not in clarification
     assert "elige una opción" not in clarification
+
+
+def test_get_message_templates_returns_empty_for_unset_or_non_list():
+    assert get_message_templates(FakeSession()) == []
+    assert get_message_templates(FakeSession({"invalid": "stored value"})) == []
+
+
+@pytest.mark.parametrize(
+    "templates",
+    [
+        [],
+        [{"id": "visit-confirmation", "text": "Hola {{nombre}}, visita {{visita}}"}],
+    ],
+)
+def test_validate_message_templates_accepts_valid_lists(templates):
+    assert validate_message_templates(templates) is templates
+
+
+@pytest.mark.parametrize(
+    "templates",
+    [
+        None,
+        ["not a template"],
+        [{"text": "Hola"}],
+        [{"id": "  ", "text": "Hola"}],
+        [{"id": "greeting"}],
+        [{"id": "greeting", "text": "  "}],
+        [
+            {"id": "greeting", "text": "Hola"},
+            {"id": "greeting", "text": "Hola de nuevo"},
+        ],
+        [{"id": "greeting", "text": "Hola {{unknown_slot}}"}],
+    ],
+)
+def test_validate_message_templates_rejects_invalid_lists(templates):
+    with pytest.raises(ValueError):
+        validate_message_templates(templates)

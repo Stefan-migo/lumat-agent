@@ -444,6 +444,7 @@ export interface Settings {
     farewell: string;
     out_of_hours: string;
   };
+  templates: Array<{ id: string; text: string }>;
   hours: {
     timezone: string;
     schedule: Array<{ days: number[]; open: string; close: string }>;

@@ -15,6 +15,7 @@ const SETTINGS_KEYS = [
   "scope_rules",
   "snapshot",
   "tone",
+  "templates",
 ].sort();
 
 /** SpendSnapshot keys from spend_snapshot() in app/services/costs.py (SS-4). */

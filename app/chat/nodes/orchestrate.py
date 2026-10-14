@@ -50,6 +50,7 @@ def _dispatch(
     emergency: bool = False,
     escalate_reason: str | None = None,
     mid_capture: bool = False,
+    template_id: str | None = None,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
@@ -99,6 +100,10 @@ def _dispatch(
     if intent in CAPTURE_INTENTS:
         return {"next_step": "capture"}
     if intent in RETRIEVAL_INTENTS:
+        # T5: a preset the classifier picked answers the turn directly, so a KB
+        # miss cannot hand it off. Capture/manage flows are not pre-empted.
+        if template_id:
+            return {"next_step": "respond"}
         # H2: KB intents dispatch to the research_triage sub-graph (was
         # route.py:43-44 kb_retrieve -> respond).
         return {"next_step": "research", "active_sub_agent": RESEARCH_TRIAGE}
@@ -125,6 +130,7 @@ def orchestrate(state: ConversationState) -> dict:
         emergency=state.emergency,
         escalate_reason=state.escalate_reason,
         mid_capture="_pending" in (state.captured or {}),
+        template_id=getattr(state, "template_id", None),
     )
     if decision.get("active_sub_agent"):
         logger.info(

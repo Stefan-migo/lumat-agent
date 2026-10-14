@@ -23,6 +23,7 @@ export const settings: Settings = {
     farewell: "Gracias por comunicarte con Lumat.",
     out_of_hours: "En este momento estamos fuera de horario.",
   },
+  templates: [],
   hours: {
     timezone: "America/Santiago",
     schedule: [{ days: [1, 2, 3, 4, 5], open: "09:00", close: "18:00" }],

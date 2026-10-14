@@ -319,3 +319,31 @@ def test_customer_selects_numbered_appointment_before_confirmation(mock_openai_c
     with SessionLocal() as session:
         assert session.get(Appointment, first_id).status is AppointmentStatus.BOOKED
         assert session.get(Appointment, second_id).status is AppointmentStatus.CANCELLED
+
+
+def test_preset_answer_preempts_the_kb_miss_path(mock_openai_chat, monkeypatch):
+    # T5/D13: a preset the classifier picked answers a retrieval turn with the
+    # real slots filled, even when the KB would miss — no handoff.
+    from app.chat.nodes import classify_intent
+    from app.services.settings import MESSAGE_TEMPLATES_KEY, set_setting
+
+    monkeypatch.setattr(
+        classify_intent, "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "consulta", "service": None, "priority": None, "status": None,
+            "injection": False, "template_id": "horarios",
+        },
+    )
+    monkeypatch.setattr("app.services.kb.retrieve", lambda *a, **k: [])
+    conv_id, _, _ = _seed_conversation()
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        conversation.captured_data = {"availability": "lunes a viernes"}
+        set_setting(
+            session,
+            MESSAGE_TEMPLATES_KEY,
+            [{"id": "horarios", "text": "Atendemos de {{disponibilidad}}."}],
+        )
+        session.commit()
+    replies = _invoke(conv_id, _add_message(conv_id, "a qué hora abren", "wamid.t5.preset"))
+    assert replies == ["Atendemos de lunes a viernes."]

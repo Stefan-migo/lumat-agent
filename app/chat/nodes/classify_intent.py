@@ -33,7 +33,7 @@ from app.services.audit import record_audit
 from app.services.cases import set_case_status, get_or_create_case
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
-from app.services.settings import get_scope_mode
+from app.services.settings import get_message_templates, get_scope_mode
 from app.services.realtime import record_activity
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,20 @@ def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
 
 
+def _template_block(templates: list) -> str:
+    """Render the preset-message catalog as an inert DATA block (D5/T6).
+
+    Owner-authored text (untrusted) goes into the USER message wrapped in
+    `<templates>...</templates>`, never the static system prompt (SH-4).
+    """
+    lines = [
+        f"- id={template.get('id')}: {template.get('text')}"
+        for template in templates
+        if isinstance(template, dict) and template.get("id")
+    ]
+    return "\n".join(lines) if lines else "(sin respuestas prediseñadas)"
+
+
 def _llm_classify(
     text: str, message_id: int, conversation: str = "(sin mensajes previos)"
 ) -> dict:
@@ -74,6 +88,8 @@ def _llm_classify(
     Records the token cost on the current message (D6 via costs.py).
     """
     client = openai_client()
+    with session_scope() as session:
+        catalog = get_message_templates(session)
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
@@ -81,7 +97,10 @@ def _llm_classify(
             {
                 "role": "user",
                 "content": prompts.render(
-                    "prompts/classify.md", conversation=conversation, user_input=text
+                    "prompts/classify.md",
+                    conversation=conversation,
+                    templates=_template_block(catalog),
+                    user_input=text,
                 ),
             },
         ],
@@ -97,6 +116,9 @@ def _llm_classify(
         )
     content = response.choices[0].message.content or "{}"
     parsed = json.loads(content)
+    # The model was handed the catalog; only an offered id may survive (D13).
+    offered = {t.get("id") for t in catalog if isinstance(t, dict)}
+    picked = parsed.get("template_id")
     return {
         "intent": parsed.get("intent") or "unknown",
         "service": parsed.get("service"),
@@ -105,6 +127,8 @@ def _llm_classify(
         "injection": bool(parsed.get("injection")),
         # CI-3b: same call also extracts any capture fields present in the text.
         "fields": parsed.get("fields") or {},
+        # T4/D3: the preset-message id this turn selected (None when none fits).
+        "template_id": picked if isinstance(picked, str) and picked in offered else None,
     }
 
 
@@ -208,7 +232,11 @@ def classify_intent(state: ConversationState) -> dict:
     if result["intent"] == "unknown":
         if mid_capture:
             # CM-2 field answers are not comprehension failures (HH-3).
-            return {"intent": "unknown", "extracted": _extracted(result)}
+            return {
+                "intent": "unknown",
+                "extracted": _extracted(result),
+                "template_id": result.get("template_id"),
+            }
         with session_scope() as session:
             unknown_count = _record_unknown_intent(session, state, text)
             record_activity(
@@ -224,6 +252,7 @@ def classify_intent(state: ConversationState) -> dict:
             "escalate": unknown_count >= 2,
             "escalate_reason": "unknown_intent_twice" if unknown_count >= 2 else None,
             "extracted": _extracted(result),
+            "template_id": result.get("template_id"),
         }
 
     with session_scope() as session:
@@ -244,6 +273,12 @@ def classify_intent(state: ConversationState) -> dict:
                 "escalate": True,
                 "escalate_reason": "scope_always_escalate",
                 "extracted": _extracted(result),
+                "template_id": result.get("template_id"),
                 **case_update,
             }
-    return {"intent": result["intent"], "extracted": _extracted(result), **case_update}
+    return {
+        "intent": result["intent"],
+        "extracted": _extracted(result),
+        "template_id": result.get("template_id"),
+        **case_update,
+    }
