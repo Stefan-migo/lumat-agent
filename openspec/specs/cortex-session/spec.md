@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide an explicit, durable planning session attached to one authenticated panel thread, with an honest approved-plan handoff to SDB.
+Provide an explicit, durable planning session attached to one authenticated panel thread, with a conditional, admin-confirmed handoff of a captured action to a verified assistant turn.
 
 ## Requirements
 
@@ -48,19 +48,29 @@ Each decision MUST persist to Tukulpan as `cortex-session/{slug}:decision:{n}`, 
 - WHEN Cortex state is persisted
 - THEN unrelated keys remain unchanged
 
-### Requirement: CS-4 — SDB handoff approval boundary
+### Requirement: CS-4 — Conditional SDB handoff offer
 
-On close, the agent MUST propose the session as an SDB `SPEC`; an administrator MUST approve it before SDB proceeds to `APPROVE`. Delivery MUST be labeled as an approved plan and MUST NOT claim execution.
+On close, when the session captured a concrete action (a `next_step` note), the agent MUST offer to hand that action off to execution and MUST NOT infer the handoff from conversation text. The handoff MUST be triggered only by the authenticated administrator's explicit confirmation, reusing the admin-only `sdb_requested` flag; a non-admin MUST NOT trigger it. The planning session MUST stay read-only for the business: execution runs as a normal assistant turn (the normal loop plus verification) after confirmation, in the same thread.
 
-#### Scenario: Approved handoff
-- GIVEN a closed session and its report
-- WHEN the administrator approves the proposed SDB handoff
-- THEN SDB delivers an approved plan
+#### Scenario: Offer with a concrete action
+- GIVEN a closed session that captured a next step
+- WHEN the report is produced
+- THEN the agent offers the handoff and waits for the administrator's explicit confirmation
 
-#### Scenario: No approval
-- GIVEN a proposed handoff that has not been approved
-- WHEN execution is requested
-- THEN no execution is claimed or performed
+#### Scenario: No concrete action
+- GIVEN a closed session without a captured next step
+- WHEN the report is produced
+- THEN no handoff is offered and only the report stands
+
+#### Scenario: Explicit administrator confirmation
+- GIVEN an offered handoff
+- WHEN the administrator confirms it
+- THEN a normal assistant turn runs in the same thread carrying the admin-only handoff flag, and verification applies
+
+#### Scenario: Non-admin or free text
+- GIVEN a non-admin user, or conversation text that suggests a handoff without an explicit confirmation
+- WHEN a handoff would be triggered
+- THEN it is refused and no handoff runs
 
 ### Requirement: CS-5 — Authenticated browse and reopen
 

@@ -172,6 +172,27 @@ def test_verify_effects_runs_for_memory_update_and_binds_read_only_executor(monk
     assert captured["steps"] == state["tool_results"]
 
 
+def test_verify_effects_runs_for_the_admin_handoff_signal(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.run_verification",
+        lambda **_kwargs: SimpleNamespace(status="unverifiable", reason="no-observable-criterion"),
+    )
+    state = _tool_state(
+        sdb_requested=True,
+        tool_results=[{"tool": "assistant.capabilities", "arguments": {}, "result": {"tool_count": 1}}],
+        evidence=[],
+    )
+
+    result = verify_effects(state)
+
+    assert result["verification"] == {
+        "required": True,
+        "gate_reason": "handoff",
+        "status": "unverifiable",
+        "detail": "no-observable-criterion",
+    }
+
+
 @pytest.mark.parametrize("status", ["failed", "unverifiable"])
 def test_failed_verification_qualification_is_deterministic_and_streamed(monkeypatch, status):
     calls = []
