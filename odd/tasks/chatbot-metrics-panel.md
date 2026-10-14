@@ -115,7 +115,7 @@ Single writer (parent, inline per logbook); each task closes with one work-unit 
 ## Checks
 
 - `cd web && npm test && npm run build`
-- `uv run pytest tests/integration/test_panel_analytics.py tests/unit/test_tool_tiers.py tests/unit/test_effective_config.py tests/unit/test_assistant_delegation.py tests/unit/test_assistant_tool_roles.py -q` (new test file name per T1)
+- `uv run pytest tests/functional/test_api_chatbot_analytics.py tests/unit/test_tool_tiers.py tests/unit/test_effective_config.py tests/unit/test_assistant_delegation.py tests/unit/test_assistant_tool_roles.py -q`
 - `uv run pytest tests/ -q`
 
 ## Graph nodes consulted
@@ -149,14 +149,22 @@ U1/U2 (`app/chat/assistant/tools/registry.py:426,432`).
 **L5 (design ref, `odd/handoffs/chatbot-assistant-optimizer-unit5-ui.md`):** U5 = new sections in
 Settings + metrics/conversations view; "la parte de mensajes quedó resuelta por el catálogo (D7)".
 
+**L6 (evidence, 2026-10-14):** T1 done. RED observed — all 6 new functional tests failed `404`
+(routes absent). GREEN after `app/panel/api/routes/analytics.py` + registration in
+`app/panel/api/__init__.py`: 6/6 pass. Targeted regression set green (pinned tool tests + panel
+delivery + kb/settings panel API + analytics service, 241 tests). Full backend suite
+`uv run pytest tests/` green (only pre-existing warnings). No `app/chat/assistant/**` file touched —
+S10 held.
+
 ## Progress
 
-- [ ] T1 — backend router + endpoints + tests
+- [x] T1 — `97ac3b89` feat: admin-only `/panel/api/analytics/chatbot` + `/analytics/chatbot/conversations` (+6 functional tests)
 - [ ] T2 — nav/route wiring + test
 - [ ] T3 — page + clients + types + tests
 - [ ] T4 — checks green
 
 ## Next step
 
-T1 (backend): Graph Check on `app/panel/api/**` + `app/services/analytics.py`, then RED test →
-router/endpoints → GREEN.
+T2 (frontend nav/route): Graph Check on `web/src/components/domain/**`, then RED test (admin sees
+the item, operador does not) → `PanelView` + `NAVIGATION adminOnly` + `panelRoutes.ts` +
+`AppShell.tsx` → GREEN.
