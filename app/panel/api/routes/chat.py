@@ -16,7 +16,7 @@ from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
-from app.services.agent_chat import BUSINESS_MEMORY_ROLES, approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
+from app.services.agent_chat import BUSINESS_MEMORY_ROLES, approve_plan, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
 from app.chat.assistant.state import merge_assistant_state
 from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
@@ -31,7 +31,7 @@ from app.panel.api.serializers import (
 )
 from app.services.audit import record_audit
 from sqlalchemy import func, select
-from app.services import projects, tukulpan
+from app.services import planning, projects, tukulpan
 from app.services import assistant_artifacts
 from app.services.project_config import (
     reset_thread_tool_policy,
@@ -289,9 +289,11 @@ def open_planning_session(
     session: Session = Depends(get_db),
     current: User = Depends(require_agent_surface_json),
 ) -> dict:
-    topic = body.topic.strip()
-    if not topic:
-        raise HTTPException(status_code=400, detail="topic must not be blank")
+    topic = body.topic
+    try:
+        topic = planning.normalized_topic(topic)
+    except planning.PlanningSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     thread = session.get(InternalChatThread, body.thread_id) if body.thread_id is not None else None
     if body.thread_id is not None and (thread is None or thread.user_id != current.id):
         raise HTTPException(status_code=404, detail="chat thread not found")
@@ -300,19 +302,10 @@ def open_planning_session(
             thread = create_thread(session, current, proyecto=body.proyecto or "default")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
-    if cortex.get("status") == "active":
-        raise HTTPException(status_code=409, detail="planning session is already active")
-    slug = f"{topic.lower().replace(' ', '-')}-{thread.id}"
-    thread.assistant_state = {
-        **(thread.assistant_state or {}),
-        "cortex_session": {
-            "slug": slug, "topic": topic, "status": "active",
-            "opened_at": datetime.now(timezone.utc).isoformat(), "closed_at": None,
-            "report_key": None,
-        },
-    }
-    session.flush()
+    try:
+        planning.open_session(session, thread, topic)
+    except planning.PlanningSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return {"session": to_cortex_session_dict(thread), "thread_id": thread.id}
 
 
@@ -343,11 +336,10 @@ def close_planning_session(slug: str, session: Session = Depends(get_db), curren
     thread = _planning_thread(session, slug, current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
-    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
-    if cortex.get("status") != "active":
-        raise HTTPException(status_code=409, detail="planning session is not active")
-    report = json.dumps({"topic": cortex.get("topic", "")}, ensure_ascii=False)
-    close_cortex_session(session, thread, report=report)
+    try:
+        planning.close_session(session, thread)
+    except planning.PlanningSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     session.flush()
     return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(_planning_report(session, thread))}
 

@@ -49,7 +49,9 @@ export interface ProjectCreateRequest { slug: string; name: string; purpose: str
 export interface ProjectCreateResponse { project: Project; }
 
 export type CortexStatus = 'active' | 'closed';
-export interface PlanningSession { slug: string; proyecto: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; }
+export interface PlanningNote { kind: 'objective' | 'risk' | 'next_step' | 'general'; content: string; }
+export interface PlanningDecision { title: string; content: string; }
+export interface PlanningSession { slug: string; proyecto: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; decisions?: PlanningDecision[]; notes?: PlanningNote[]; }
 export interface CortexArtifact { id: number; scope: string; entity_id: string; tipo: MemoryType; titulo: string; contenido: string; topic_key: string; status: MemoryStatus; created_at: string | null; updated_at: string | null; }
 export interface PlanningSessionsResponse { sessions: PlanningSession[]; }
 export interface PlanningSessionOpenResponse { session: PlanningSession; thread_id: number; }
@@ -194,8 +196,8 @@ export interface AssistantApproval {
   consumed_at?: string | null;
 }
 export interface AssistantEvidence { tool?: string | null; status: string; detail?: string; }
-export type AssistantEventType = 'plan' | 'approval' | 'tool' | 'evidence' | 'status' | 'response' | 'error' | 'timeout';
-export interface AssistantEvent { type: AssistantEventType; thread_id: number; run_id: string; sequence: number; plan?: AssistantPlan; approval?: AssistantApproval | null; status?: string; tool?: string | null; evidence?: AssistantEvidence[]; content?: string; error?: string; }
+export type AssistantEventType = 'plan' | 'approval' | 'tool' | 'evidence' | 'status' | 'response' | 'error' | 'timeout' | 'planning';
+export interface AssistantEvent { type: AssistantEventType; thread_id: number; run_id: string; sequence: number; plan?: AssistantPlan; approval?: AssistantApproval | null; status?: string; tool?: string | null; evidence?: AssistantEvidence[]; content?: string; error?: string; planning_thread_id?: number; }
 export interface AssistantState { stage?: string; recoverable?: boolean; execution_status?: string; approval?: AssistantApproval | null; events?: AssistantEvent[]; cortex_session?: PlanningSession; }
 export interface InternalChatThread { id: number; user_id?: number; proyecto?: string | null; status: string; assistant_state?: AssistantState; current_plan?: AssistantPlan | null; active_run_id?: string | null; created_at?: string | null; updated_at?: string | null; }
 export interface InternalChatMessage { id: number; thread_id?: number; author: Role | 'agent'; content: string; status: InternalChatStatus; error?: string | null; assistant_metadata?: { run_id?: string; approval?: AssistantApproval | null }; created_at?: string | null; completed_at?: string | null; }
