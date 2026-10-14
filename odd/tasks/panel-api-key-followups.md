@@ -110,7 +110,7 @@ post-commit invalidation is therefore established in code rather than by an exis
 ## Evidence
 
 - Commit `02328eb4f8be467899006f234b68891311226d23` — `fix(panel): invalidate the model key cache after the write commits`.
-- Commit `COMMIT_2_SHA` — `test(panel): cover the real model-key consumers`.
+- Commit `6589ab4e005a28470c8e39b6f09c883885a63a4f` — `test(panel): cover the real model-key consumers`.
 - RED (pre-fix): `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_secrets.py::test_write_does_not_leave_a_read_during_commit_window_cached` → exit 1; failed at the post-commit assertion: `assert 'sk-env-test' == 'sk-new'`.
 - GREEN (post-fix): `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_key_cache_ordering.py` → exit 0, 1 passed.
 - Consumer/cache focused: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_secrets.py tests/integration/test_model_key_cache_ordering.py` → exit 0, 3 passed.
