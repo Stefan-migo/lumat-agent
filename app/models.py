@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     SmallInteger,
@@ -568,6 +569,7 @@ class Memory(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     pin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    handoff: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     review_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[MemoryStatus] = mapped_column(
         pg_enum(MemoryStatus, "memory_status"),
@@ -636,6 +638,18 @@ class Settings(Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PanelSecret(Base):
+    __tablename__ = "panel_secrets"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

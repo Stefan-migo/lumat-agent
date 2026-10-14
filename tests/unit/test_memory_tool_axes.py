@@ -260,6 +260,40 @@ def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
     ]
 
 
+def test_own_memory_read_orders_each_axis_by_pin_handoff_then_recency(monkeypatch):
+    def row(scope, entity_id, topic_key, *, pin=False, handoff=False, updated_at):
+        return Mock(
+            id=topic_key, scope=scope, entity_id=entity_id, topic_key=topic_key,
+            titulo="", tipo="decision", contenido="", created_at=None,
+            updated_at=updated_at, pin=pin, handoff=handoff,
+        )
+
+    thread_rows = [
+        row("panel", "thread:42", "thread-recent", updated_at=3),
+        row("panel", "thread:42", "thread-handoff", handoff=True, updated_at=1),
+        row("panel", "thread:42", "thread-pin", pin=True, updated_at=0),
+    ]
+    agent_rows = [
+        row("agent", "agent:acme", "agent-recent", updated_at=3),
+        row("agent", "agent:acme", "agent-handoff", handoff=True, updated_at=1),
+        row("agent", "agent:acme", "agent-pin", pin=True, updated_at=0),
+    ]
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id, proyecto, owner_id: thread_rows if scope == "panel" else agent_rows,
+    )
+    monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug, *, owner_id: SimpleNamespace(owner_id=owner_id))
+
+    result = registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
+    )
+
+    assert [item["topic_key"] for item in result] == [
+        "thread-pin", "agent-pin", "thread-handoff", "agent-handoff", "thread-recent", "agent-recent"
+    ]
+
+
 def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
     assert registry.MEMORY_READ_DIGEST_CONTENT_LIMIT == 500
     row = SimpleNamespace(
@@ -270,6 +304,7 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
         titulo="Thread note",
         tipo="decision",
         contenido="x" * 501,
+        handoff=True,
         last_seen_at=None,
         review_after=None,
         created_at=None,
@@ -295,6 +330,7 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
             "titulo": "Thread note",
             "tipo": "decision",
             "contenido": "x" * 500,
+            "handoff": True,
             "last_seen_at": None,
             "review_after": None,
             "created_at": None,
@@ -360,6 +396,7 @@ def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         topic_key="agent:fact",
         tipo="decision",
         visibility="global",
+        handoff=True,
     )
 
     monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug, *, owner_id: Mock(slug=slug, owner_id=owner_id))
@@ -373,3 +410,15 @@ def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
     assert captured["producer"] == tukulpan.MemoryProducer.AGENT
     assert captured["origin_thread_id"] == "42"
     assert captured["visibility"] == "global"
+    assert captured["handoff"] is True
+
+
+def test_memory_write_handoff_defaults_to_false():
+    args = registry.MemoryWriteArgs(
+        titulo="Project fact",
+        contenido="A reusable fact",
+        topic_key="agent:fact",
+        tipo="decision",
+    )
+
+    assert args.handoff is False

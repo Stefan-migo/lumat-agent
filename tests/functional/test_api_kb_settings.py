@@ -824,6 +824,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
+        "model_api_key",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
@@ -842,6 +843,11 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     assert body["conversation_limit"] == 1.50
     assert body["daily_limit"] == 5.00
     assert body["meta_cost"] == 0.01
+    assert body["model_api_key"] == {
+        "configured": True,
+        "source": "env",
+        "masked": "…test",
+    }
     # spend snapshot present (SS-4)
     snap = body["snapshot"]
     assert "date" in snap and "daily_limit" in snap and "daily_spend" in snap

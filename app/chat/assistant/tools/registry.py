@@ -168,6 +168,10 @@ class MemoryWriteArgs(BaseModel):
     topic_key: str = Field(min_length=1, max_length=200, pattern=r"^agent:")
     tipo: Literal["decision", "discovery", "pattern", "preference"]
     visibility: Literal["thread", "global"] = "global"
+    handoff: bool = Field(
+        default=False,
+        description="True when this memory leaves a continuation point—an open thread of work or the ordering of pending tasks—so later turns prioritize it.",
+    )
 
 
 class MemoryUpdateArgs(BaseModel):
@@ -399,6 +403,13 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
         if parsed.topic:
             thread_rows = [row for row in thread_rows if row.topic_key == parsed.topic]
             agent_rows = [row for row in agent_rows if row.topic_key == parsed.topic]
+        sort_key = lambda row: (
+            bool(getattr(row, "pin", False)),
+            bool(getattr(row, "handoff", False)),
+            row.updated_at or datetime.min.replace(tzinfo=timezone.utc),
+        )
+        thread_rows.sort(key=sort_key, reverse=True)
+        agent_rows.sort(key=sort_key, reverse=True)
         # Interleave both axes before truncating: a thread holding `limit` rows must not hide the
         # project axis (R3-own-read-limit).
         rows = [
@@ -413,6 +424,7 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
                 "titulo": row.titulo,
                 "tipo": row.tipo,
                 "contenido": row.contenido[:MEMORY_READ_DIGEST_CONTENT_LIMIT],
+                "handoff": bool(getattr(row, "handoff", False)),
                 "last_seen_at": row.last_seen_at,
                 "review_after": row.review_after,
                 "created_at": row.created_at,
@@ -490,6 +502,7 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, pro
                 producer=memory.MemoryProducer.AGENT,
                 origin_thread_id=str(trusted_thread_id),
                 visibility=args.visibility,
+                handoff=args.handoff,
                 authorization=authorization,
             )
             relations.judge_memory_relations(session, row)

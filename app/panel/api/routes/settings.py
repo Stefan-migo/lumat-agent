@@ -36,7 +36,12 @@ from sqlalchemy.orm import Session
 from app.models import User
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services import costs, settings as settings_service
+from app.services import costs, model_secrets, settings as settings_service
+from app.services.deepseek_key import (
+    InvalidApiKeyError,
+    KeyValidationUnavailableError,
+    validate_deepseek_key,
+)
 
 router = APIRouter(tags=["panel-api-settings"])
 
@@ -88,6 +93,10 @@ class LimitsBody(BaseModel):
 
 class MetaBody(BaseModel):
     service_message_cost: float
+
+
+class ModelApiKeyBody(BaseModel):
+    api_key: str
 
 
 def _save(session: Session, key: str, value, current: User) -> None:
@@ -204,7 +213,40 @@ def settings_get(
         ),
         "meta_cost": (meta or {}).get("service_message_cost", 0.01),
         "snapshot": costs.spend_snapshot(session),
+        "model_api_key": model_secrets.model_api_key_status(session),
     }
+
+
+@router.post("/settings/model_api_key")
+def settings_model_api_key(
+    body: ModelApiKeyBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    key = body.api_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="api key must not be empty")
+    try:
+        validate_deepseek_key(key)
+    except InvalidApiKeyError:
+        raise HTTPException(status_code=400, detail="invalid api key")
+    except KeyValidationUnavailableError:
+        raise HTTPException(status_code=502, detail="could not validate the api key")
+    model_secrets.set_model_api_key(
+        session, key, actor=current.username, updated_by=current.id
+    )
+    session.commit()
+    return {"ok": True, "model_api_key": model_secrets.model_api_key_status(session)}
+
+
+@router.delete("/settings/model_api_key")
+def settings_model_api_key_clear(
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    model_secrets.clear_model_api_key(session, actor=current.username)
+    session.commit()
+    return {"ok": True, "model_api_key": model_secrets.model_api_key_status(session)}
 
 
 @router.post("/settings/scope")

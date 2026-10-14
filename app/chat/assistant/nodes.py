@@ -544,6 +544,28 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
 
 
+def memory_bootstrap(state: AssistantState) -> AssistantState:
+    """Add bounded own-memory rows as code-initiated prior tool evidence."""
+    if state.get("session") is None or type(state.get("thread_id")) is not int or state["thread_id"] <= 0:
+        return {}
+    try:
+        result = execute_tool(
+            state["session"], "memory.read", {"scope": "own", "limit": 3},
+            whitelist=set(_effective_tools(state)),
+            cost_allowed=(state.get("guardrails") or {}).get("cost_allowed", True),
+            role=state.get("actor_role"), trusted_thread_id=state.get("thread_id"),
+            owner_id=state.get("user_id"), proyecto=_project_slug(state),
+            project_id=(state.get("effective") or {}).get("project_id"),
+        )
+    except (ToolValidationError, ToolExecutionError):
+        return {}
+    rows = result.get("result") if isinstance(result, dict) else None
+    if not rows:
+        return {}
+    entry = {**result, "arguments": {"scope": "own", "limit": 3}, "code_initiated": True}
+    return {"tool_results": [*(state.get("tool_results") or []), entry]}
+
+
 def _effective_tools(state) -> tuple[str, ...]:
     effective = state.get("effective")
     if effective:

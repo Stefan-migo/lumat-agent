@@ -49,12 +49,27 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. The own read MUST preserve that axis interleave before applying its limit and MUST return a bounded digest with `contenido` limited to 500 characters plus identifying metadata. Entity-scoped reads MUST retain their existing full projection. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. The own read MUST preserve that axis interleave before applying its limit and MUST return a bounded digest with `contenido` limited to 500 characters plus identifying metadata. Within each axis the own read MUST order rows by pin first, then handoff, then most-recently-updated, before the axes are interleaved. Entity-scoped reads MUST retain their existing full projection. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. A `memory.read` initiated by the runtime at the start of a turn, delivered as a tool result and never injected into the assembled context, satisfies the explicit-read requirement. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
 - WHEN context is assembled without a `memory.read` tool call
 - THEN no hybrid search runs and no memory row is added to the panel context
+
+#### Scenario: Code-initiated startup read
+- GIVEN a panel turn starts while the thread or its project holds memory
+- WHEN the runtime emits a `memory.read` for the own scope before planning and it returns rows
+- THEN the bounded digest is delivered as a tool result and no memory row is loaded into the assembled panel context
+
+#### Scenario: No memory, no startup read
+- GIVEN a panel turn starts while the thread and its project hold no memory
+- WHEN the runtime performs the startup own read
+- THEN the read returns no rows and no tool result is added
+
+#### Scenario: Own read order and bounded digest
+- GIVEN an own-scope read where a pinned row, a handoff row, and a more recently updated row exist on both the thread axis and the agent axis
+- WHEN the own read returns
+- THEN each axis is ordered pin first, then handoff, then most-recently-updated, the axes are interleaved before the limit, and every `contenido` is limited to 500 characters
 
 #### Scenario: Threshold recall
 - GIVEN memories where one is semantically close to the query
@@ -271,6 +286,30 @@ MUST write no relation and MUST NOT fail the memory write. `SESSION` and
 - AND the queue MUST expose both memory contents, titles, the proposed relation, confidence, and reason
 - AND a human verdict MUST use `supersedes`, `conflicts`, `related`, `compatible`, `scoped`, or `not_conflict`
 - AND pending relations whose memories are outside the selected customer's scope MUST NOT be listed there
+
+### Requirement: MEM-12 — Handoff Marker
+
+The assistant MAY mark an agent-authored memory as a **handoff** — a continuation point across threads (an open line of work or the ordering of pending tasks) — by passing `handoff: true` to `memory.write`. The marker MUST persist on the stored row, MUST default to `false` for rows written without it, and MUST remain `false` for pre-existing rows. A repeat upsert of the same `(proyecto, scope, entity_id, topic_key)` that OMITS `handoff` MUST leave the stored marker unchanged; only an explicit `handoff: false` MAY clear it.
+
+#### Scenario: A handoff write persists the marker
+- GIVEN an agent writes a memory through `memory.write` with `handoff: true`
+- WHEN the row is persisted
+- THEN the stored memory has `handoff` set to true
+
+#### Scenario: Default is false
+- GIVEN a memory is written without passing `handoff`
+- WHEN it is persisted
+- THEN the stored memory has `handoff` set to false
+
+#### Scenario: An omitted handoff preserves the marker
+- GIVEN an existing memory holds `handoff` true
+- WHEN the same `(proyecto, scope, entity_id, topic_key)` is upserted again without passing `handoff`
+- THEN the stored `handoff` remains true
+
+#### Scenario: An explicit false clears the marker
+- GIVEN an existing memory holds `handoff` true
+- WHEN it is upserted with `handoff: false`
+- THEN the stored `handoff` becomes false
 
 ## MODIFIED Requirements
 
