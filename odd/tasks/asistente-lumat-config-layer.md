@@ -97,7 +97,7 @@ Non-goals (explicitly dropped after review):
 | --- | --- | --- | --- | --- |
 | T0 feature doc | — | inline | done | this commit |
 | T1 default-on 7 opt-in | S1 | inline | done | 49227b57 |
-| T2 sidebar Capacidades wired | S2 | inline | pending | — |
+| T2 sidebar Capacidades wired | S2 | inline | done | fd5e39e2 |
 | T3 Recursos selector (B) | S3 | inline | pending | — |
 | T4 tray/library separation | S4 | inline | pending | — |
 | T5 multimodal tool results | S5 | inline | pending | — |
@@ -186,3 +186,16 @@ full backend suite green (2166 collected, 0 failures). Env: worktree `.venv` syn
 isolated test DB raised with `infra/test-db.sh up` (port 6376).
 RDD assess (`--base-ref 143ced8b --committed-only`): risk `medium`, `review_due=false`
 (`under_budget`) → boundary stays pending in the slice.
+
+L15 — T2 done (fd5e39e2). The "Capacidades del asistente" section was stuck on `Sin datos`
+because nothing fetched `GET /panel/api/assistant/capabilities`. First attempt put the fetch
+in `AgentChat` on mount, but that broke 12 order-sensitive tests (`mockResolvedValueOnce`
+chains) with an extra request. Final design: `AssistantWorkspace` loads it itself
+(uncontrolled) and only when the context panel is visible (`contextVisible ||
+threadDetailOpen`), still honoring a parent-supplied `capabilities` prop (controlled).
+TDD: RED test in `AgentChat.test.tsx` asserts the fetch and the rendered counts; GREEN after
+the move. Evidence: `AgentChat.test.tsx` 72/72, `AssistantWorkspace.test.tsx` 31/31, full
+frontend suite 1190/1191 (the one failure is the pre-existing load-flaky
+`ClientesList > distinguishes a filtered-empty result…`, green in isolation 42/42), `npm run
+build` green. Env: `npm install` in `web/` (the worktree had no `node_modules`).
+RDD assess: risk `medium`, `review_due=false` (`under_budget`).
