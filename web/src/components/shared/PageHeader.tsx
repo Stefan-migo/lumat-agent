@@ -21,9 +21,14 @@ export function PageHeader({ title, meta, titleIcon, titleAdornment, subtitle, e
     <header className={`page-header${headerClassName ? ` ${headerClassName}` : ""}`}>
       {!hideCopy ? <div className="page-header__copy">
         {eyebrow ? <p className="page-header__eyebrow">{eyebrow}</p> : null}
-        <div className="page-header__title-row">{titleIcon ? <span className="page-header__icon"><Icon icon={titleIcon} /></span> : null}<h1>{title}</h1>{titleAdornment}</div>
-        {subtitle ? <p>{subtitle}</p> : null}
-        {meta ? <p>{meta}</p> : null}
+        <div className="page-header__heading">
+          {titleIcon ? <span className="page-header__icon"><Icon icon={titleIcon} /></span> : null}
+          <div className="page-header__heading-copy">
+            <div className="page-header__title-row"><h1>{title}</h1>{titleAdornment}</div>
+            {subtitle ? <p>{subtitle}</p> : null}
+            {meta ? <p>{meta}</p> : null}
+          </div>
+        </div>
       </div> : null}
       {actions ? <div className="page-header__actions">{actions}</div> : null}
     </header>

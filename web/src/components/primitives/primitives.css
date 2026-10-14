@@ -1257,6 +1257,8 @@
   padding-left: var(--space-4);
 }
 .page-header__title-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.page-header__heading { display: flex; align-items: center; gap: var(--space-3); }
+.page-header__heading-copy { min-width: 0; }
 .page-header__icon {
   display: inline-flex;
   flex: 0 0 auto;
