@@ -38,7 +38,7 @@ The office can see the visit's technician-state. Location is an open question (a
 | ID | Task | Specs | Route | Status | Commit |
 |----|------|-------|-------|--------|--------|
 | WU1 | Frontend unification: explicit role→view map; route the technician through `PanelShell`; role-gate nav and routes; remove `TechnicianShell` | S1, S2 | inline | pending | — |
-| WU2 | Privacy: remove `phone` from the technician serializer; amend `TECH-PRIVACY-1` + `SS-TECH-2`; update failing tests | S3 | inline | pending | — |
+| WU2 | Privacy: remove `phone` from the technician serializer; amend `TECH-PRIVACY-1` + `SS-TECH-2`; update failing tests | S3 | inline | done | `a7b512b0`, `7274f8e0` |
 | WU3 | Technician visit-detail read: allow-listed payload enabling `AppointmentDetail` reuse | S2 | inline | pending | — |
 | WU4 | Technician close route (own appointment, `completed`/`no_show`) + audit | S4 | inline | pending | — |
 | WU5 | Visit-state axis: migration `054` (`technician_state`, `technician_state_at`) + `en_route`/`arrived` transitions with window guards + audit | S5, S6 | inline | pending | — |
@@ -75,3 +75,6 @@ L2 — Source: Rapso session `.rapsodia-code/sessions/archived/2026-10-14-panel-
 L3 — Open questions carried: (a) Proyectos/Sesiones removal assumption; (b) operator close fallback kept; (c) office semaphore location; (d) Meta template approval is external and gates end-to-end testing.
 
 L4 — Start: worktree `../lumat-agent-odd-panel-tecnico` created from `main` (repo moved to `1719cc43`; another runtime is active in the main checkout, so isolation is required).
+
+L5 (WU2 done, S3) — Evidence: RED observed (`assert {'address','comuna','name','phone'} == {'address','comuna','name'}` → `Extra items: 'phone'`), then GREEN. Removed `phone` from `to_technician_appointment_dict` (`app/panel/api/serializers.py`), from the `TechnicianCustomer` type, and the `tel:` render in `TechnicianAgenda.tsx`; amended `TECH-PRIVACY-1` + `SS-TECH-2`. Suites: backend `uv run pytest -q` 100% pass; frontend `vitest run` 105 files / 1186 tests pass; `npm run build` (`tsc -b`) exit 0. Commits `a7b512b0` (frontend), `7274f8e0` (backend + specs).
+- Environment note: this worktree needs `cp ../lumat-agent/infra/.env infra/.env`, `infra/test-db.sh up` (port 6030), `eval "$(infra/test-db.sh env)"` before `pytest`, and `npm install` under `web/` before `vitest`/`build`.
