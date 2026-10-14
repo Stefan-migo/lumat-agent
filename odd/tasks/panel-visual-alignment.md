@@ -1,7 +1,8 @@
 # panel-visual-alignment
 
 Objective: redesign the project-detail tabs (Contexto, Agentes, Skills, Hilos) to match the owner's
-reference images. Frontend only. Branch `odd/panel-visual-alignment`.
+reference images. Started frontend-only; the owner later authorized bounded backend additions (the
+`kb_document_id` link and project-file folders). Branch `odd/panel-visual-alignment`.
 Delivery: ask-on-risk. Runner: `npm test` (vitest) + `npm run build` (tsc -b + vite build).
 
 Scope lock: agents stay fixed system roles. Hilos is wired to the existing endpoint. No palette/token
@@ -56,6 +57,22 @@ title, supporting copy, `Abrir historial` CTA, footer note). Assumption to confi
 empty-state copy reflects a real empty project (not "unavailable"), e.g. `Aún no hay hilos en este
 proyecto`.
 
+S6 — Project file folders + delete (backend feature; refs images 2-3). Owner-authorized.
+- Data: a project-scoped `project_folders` table (`parent_id` for nesting) and `project_files.folder_id`.
+- Folder CRUD: create (name + optional parent), rename, delete. Delete is recursive: it removes its
+  files (and each file's linked KB document) and subfolders; the confirmation states the file count.
+  Empty folders are allowed.
+- Upload targets a folder (`folder_id`, optional → project root).
+- File delete: `DELETE /panel/api/projects/{slug}/files/{file_id}` removes the stored bytes, the row and
+  the linked KB document. KB documents are removed through the existing `DELETE /panel/api/kb/{id}`.
+- Tree UI: a root project node with collapsible folders and file rows (name, size, `En la KB` badge,
+  download, delete), a `Buscar archivo o carpeta…` search, a `Subir archivo` action, and a
+  `N archivos · M carpetas` footer.
+- Confirmation dialogs (ref image 3) for file delete and KB document delete: icon tile + title + close,
+  the question, a preview card with name/size/state, `Proyecto: <name>`, footer `Cancelar` + red action.
+- Knowledge card: `Buscar documento…`, rows with `FORMAT · vN` and an `Activo` badge, a delete action,
+  and a document-count footer.
+
 ## Tasks
 
 | ID | Spec | Route | Status | Evidence |
@@ -67,6 +84,10 @@ proyecto`.
 | T3 Agentes | S3 | inline | pending | — |
 | T4 Skills | S4 | inline | pending | — |
 | T5 Hilos wire | S5 | inline | pending | — |
+| T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
+| T7 files tree UI | S6 | inline | pending | — |
+| T8 delete + confirm dialogs | S6 | inline | pending | — |
+| T9 knowledge card layout | S6 | inline | pending | — |
 
 ## Log
 
@@ -103,3 +124,17 @@ document was listed twice. `to_doc_dict` did not expose the file link. Implement
 054 adds `project_files.kb_document_id` (backfilled from chunk provenance), the serializer exposes it,
 and the Contexto tab now shows one files table with an "En la KB" column while the knowledge card keeps
 only documents added straight to the project KB (with its own `POST /kb` upload action).
+L9 (owner): "carpetas reales (con backend)". Authorized a real folder feature (S6) instead of a flat
+search list, plus the delete actions and confirmation dialogs of ref image 3. Defaults chosen by the
+orchestrator unless the owner objects: deleting a project file also deletes the KB document it produced;
+deleting a folder is recursive and its confirmation states the file count; empty folders are allowed.
+L10: T6 done (fcc54f61 + f2fd0f28). Backend folders: migration 055 (`project_folders`,
+`project_files.folder_id`), folder CRUD, upload-to-folder, file delete (removes the linked KB document)
+and recursive folder delete. Verified live against the isolated stack (create/list/rename/upload/
+delete/404) and by `tests/integration/test_project_files.py` (9 passed) plus
+`tests/functional/test_api_project_files.py` + `test_api_projects.py` (18 passed). Note: the worktree's
+provisioned root-owned `.venv` and `media/` were empty and blocked the test runner; recreated them
+(`uv sync` + `mkdir media`).
+L11 (owner): "ok cerramos aqui. guarda memoria. dame el handoff para continuar con T7 frontend en un
+nuevo chat." Session closed after T6. Next: T7 (frontend folders tree). Handoff written to
+`odd/handoffs/panel-visual-alignment.md` in the primary worktree.
