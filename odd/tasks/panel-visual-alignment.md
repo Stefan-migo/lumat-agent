@@ -135,3 +135,6 @@ delete/404) and by `tests/integration/test_project_files.py` (9 passed) plus
 `tests/functional/test_api_project_files.py` + `test_api_projects.py` (18 passed). Note: the worktree's
 provisioned root-owned `.venv` and `media/` were empty and blocked the test runner; recreated them
 (`uv sync` + `mkdir media`).
+L11 (owner): "ok cerramos aqui. guarda memoria. dame el handoff para continuar con T7 frontend en un
+nuevo chat." Session closed after T6. Next: T7 (frontend folders tree). Handoff written to
+`odd/handoffs/panel-visual-alignment.md` in the primary worktree.
