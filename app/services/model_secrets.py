@@ -22,6 +22,21 @@ _cache_expires_at = 0.0
 _cache_generation = 0
 
 
+def _mask(key: str) -> str:
+    return "…" + key[-4:] if len(key) >= 4 else "…"
+
+
+def model_api_key_status(session: Session) -> dict[str, bool | str]:
+    row = session.scalar(select(PanelSecret).where(PanelSecret.key == MODEL_API_KEY))
+    if row:
+        key = crypto.decrypt(row.ciphertext, row.nonce)
+        return {"configured": True, "source": "panel", "masked": _mask(key)}
+    key = get_settings().deepseek_api_key
+    if key:
+        return {"configured": True, "source": "env", "masked": _mask(key)}
+    return {"configured": False, "source": "none", "masked": ""}
+
+
 def get_model_api_key(session: Session) -> str | None:
     row = session.scalar(select(PanelSecret).where(PanelSecret.key == MODEL_API_KEY))
     return crypto.decrypt(row.ciphertext, row.nonce) if row else get_settings().deepseek_api_key

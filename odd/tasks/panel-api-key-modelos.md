@@ -96,12 +96,12 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   `assistant_chat_provider=deepseek`); fallback a env cuando no hay key en DB; `openrouter` sigue usando su key.
 
 ### Work unit 3 — API del panel (write-only + ping)
-- [ ] **AK-11 — Validación por ping.** Ping `GET https://api.deepseek.com/models` (httpx, Bearer candidata):
+- [x] **AK-11 — Validación por ping.** Ping `GET https://api.deepseek.com/models` (httpx, Bearer candidata):
   200 → válida; **402 → válida sin saldo (aceptar)**; 401 → rechazar; timeout/error → 502 con mensaje.
-- [ ] **AK-12 — Rutas.** `app/panel/api/routes/settings.py`: `POST /panel/api/settings/model_api_key`
+- [x] **AK-12 — Rutas.** `app/panel/api/routes/settings.py`: `POST /panel/api/settings/model_api_key`
   (admin-only; body `{api_key}`; valida, cifra, invalida caché); `DELETE .../model_api_key` (clear).
   El GET suma un bloque `model_api_key: {configured, source: "env"|"panel"|"none", masked}` — **nunca** el valor.
-- [ ] **AK-13 — Tests functional.** POST válido/inválido (mockeando el ping), DELETE, el GET nunca expone
+- [x] **AK-13 — Tests functional.** POST válido/inválido (mockeando el ping), DELETE, el GET nunca expone
   la key, admin-only (operador → 403).
 
 ### Work unit 4 — Frontend
@@ -146,8 +146,7 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   - Follow-up (AK-17): el test de integración prueba el contrato de la fábrica
     (`openai_client`), no los consumidores reales (`chat/graph.py`, `agent_chat.py`).
 
-## Review nativa RDD (PR1)
-- Con Gentle AI 4.1.1 (3.7.0 tenía el defecto #5058), la review nativa corrió: tier **medium**,
+## Review nativa RDD (PR1)- Con Gentle AI 4.1.1 (3.7.0 tenía el defecto #5058), la review nativa corrió: tier **medium**,
   lens `review-reliability`, lineage `review-ee9ee3eb4ae97252`.
 - Resultado: **APPROVED**. Advisory non-blocking **R3-001** (WARNING, `app/services/model_secrets.py:54`)
   → registrado como **AK-18**. La autoridad fue **quemada** (`review-acknowledged/v1`).
@@ -161,3 +160,14 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   invalidan **antes** de que el caller haga commit; un `resolve` que corre entre la invalidación y el
   commit puede leer el valor viejo y publicarlo por hasta 45s. Fix probable: mover la invalidación al
   caller post-commit (o que el resolver compare una revisión barata). Bounded por el TTL, non-blocking.
+
+## Evidencia (PR2 — WU3)
+- `uv run pytest tests/` → **1991 passed**, exit 0 (10 tests nuevos funcionales).
+- `app/services/deepseek_key.py` (nuevo): ping `GET https://api.deepseek.com/models` (200 válida / 402
+  válida-sin-saldo / 401 inválida / resto no disponible).
+- `app/services/model_secrets.py`: `model_api_key_status(session)` → `{configured, source, masked}`
+  (nunca el valor).
+- `app/panel/api/routes/settings.py`: `POST`/`DELETE /settings/model_api_key` admin-only, registrados
+  **antes** del catch-all; el GET suma el bloque `model_api_key`.
+- RDD assess: `risk medium`, `review_due false` (`under_budget`) → sin review nativa para este slice.
+- Spot check del parent: `test_api_model_api_key.py` + `test_api_kb_settings.py` verdes.
