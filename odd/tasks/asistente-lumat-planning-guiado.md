@@ -5,7 +5,7 @@
 **Base**: `6d7988b2` (= `main` = `origin/main`, merge of PR #592)
 **Delivery strategy**: `exception-ok` (repo convention: one PR per `odd/<slug>` branch, `size:exception` when > 400 authored lines)
 **Test runner**: `uv run --no-sync pytest tests/` (strict TDD ON); frontend `npm test` + `npm run build`
-**Status**: In progress. T1 + T2 done. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
+**Status**: In progress. T1 + T2 + T3 done. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
 
 ## Objective
 
@@ -135,9 +135,13 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   The persona names both tools as confirmation-only. `to_cortex_session_dict` now exposes
   `decisions`/`notes`. Commits `cbcaa049` (feat) + `79e6882e` (test); full `pytest tests/` exit 0;
   `review_due: false (under_budget)`.
-- [ ] **T3 — Own thread per session + UI switch** (S1). Open route/tool creates the thread; new SSE
-  event carries the new `thread_id`; frontend switches via `onThreadOpened`; `/planning` command and
-  button no longer reuse the current thread. Route: inline.
+- [x] **T3 — Own thread per session + UI switch** (S1). Done (delegated writer). `planning.open`
+  now creates a **dedicated thread** via `planning.open_in_new_thread`; `_execution_events` appends a
+  `planning` SSE event carrying `planning_thread_id`; the frontend switches via `onThreadOpened` only
+  when the run **settles** (filtered by `run_id`, no live switch → no stream race); the `/planning`
+  command and the button no longer send `thread_id`. The route is untouched. Commits `ab4f8991`
+  (backend) + `58043745` (frontend); `pytest tests/` exit 0; `npm run build` exit 0; `npm test` green
+  on rerun (one unrelated load-flaky test on the first run).
 - [ ] **T4 — Facilitator overlay + read-only carve-out** (S2, S5). Add
   `agent/prompts/planning_facilitator.md`; inject it in `_effective_persona`/`_responder_system_prompt`
   when the session is active; carve `planning.*` into `_effective_tools`. Route: inline.
@@ -185,8 +189,11 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   `planning.record_decision`/`planning.record_note` in the planning service, registered + whitelisted +
   persona. Exact-set/golden contracts refreshed. Commits `cbcaa049`, `79e6882e` (delegated to
   `gentle-ai-worker`; parent spot-check re-ran the full suite: exit 0).
-- Engram mirror **pending** (the `mem_save` failed: multiple active runtime sessions for `lumat-agent`;
-  no authoritative `session_id` available — not invented).
+- **T3 done** — own thread per session. `planning.open_in_new_thread`, the `planning` SSE event
+  (`_planning_thread_event`), and the settled-run UI switch (never live, filtered by `run_id`). Commits
+  `ab4f8991`, `58043745`. Parent spot-check: backend `pytest tests/` exit 0; `npm run build` exit 0;
+  `npm test` green on rerun (first run flaked on an unrelated test).
+- Engram mirror **saved** (`obs-4a78e87d2755f7b1`, topic `odd/asistente-lumat-planning-guiado/tasks`).
 
 ## Log
 
