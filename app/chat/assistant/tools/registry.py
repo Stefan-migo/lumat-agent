@@ -316,6 +316,11 @@ class PlanningRecordNoteArgs(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 
 
+class PlanningReadReportArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    slug: str = Field(min_length=1, max_length=200)
+
+
 def _plain(value: Any) -> Any:
     if isinstance(value, Enum):
         return value.value
@@ -808,6 +813,24 @@ def _planning_record_note(session, args: PlanningRecordNoteArgs, *, trusted_thre
     return {"session": state, "thread_id": thread.id, **result}
 
 
+def _planning_read_report(session, args: PlanningReadReportArgs, *, trusted_thread_id: int | None = None, owner_id: int | None = None, proyecto: str = "default"):
+    if type(owner_id) is not int or owner_id <= 0:
+        raise ToolValidationError("planning.read_report requires the authenticated owner")
+    thread = planning.find_session_thread(session, slug=args.slug, owner_id=owner_id)
+    if thread is None:
+        raise ToolValidationError("planning session not found")
+    report = planning.report_memory(session, thread)
+    if report is None:
+        raise ToolValidationError("planning session has no report yet")
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    return {
+        "slug": args.slug,
+        "topic": cortex.get("topic"),
+        "title": report.titulo,
+        "report": report.contenido,
+    }
+
+
 def _assistant_capabilities(_session, _args: CapabilitiesArgs):
     from app.services.prompts import load_assistant_config
 
@@ -891,6 +914,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "planning.close": ToolDefinition("planning.close", PlanningCloseArgs, False, _planning_close, "Close the active planning session and write its final report.", tier="default"),
     "planning.record_decision": ToolDefinition("planning.record_decision", PlanningRecordDecisionArgs, False, _planning_record_decision, "Record a structured decision on the active planning session after the user confirms it.", tier="default"),
     "planning.record_note": ToolDefinition("planning.record_note", PlanningRecordNoteArgs, False, _planning_record_note, "Record a structured note on the active planning session after the user confirms it.", tier="default"),
+    "planning.read_report": ToolDefinition("planning.read_report", PlanningReadReportArgs, True, _planning_read_report, "Read a closed planning session's final report by its slug.", tier="default"),
 }
 
 ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
@@ -930,6 +954,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "planning.close": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "planning.record_decision": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "planning.record_note": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "planning.read_report": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
 }
 
 # Roles that may read business-shared memory (agent-role-access D2/D3/D5).

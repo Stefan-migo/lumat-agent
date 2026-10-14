@@ -31,6 +31,7 @@ DEFAULT_TOOLS = {
     "planning.close",
     "planning.record_decision",
     "planning.record_note",
+    "planning.read_report",
 }
 
 OPT_IN_TOOLS = {
