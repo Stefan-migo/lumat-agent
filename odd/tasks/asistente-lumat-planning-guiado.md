@@ -5,7 +5,7 @@
 **Base**: `6d7988b2` (= `main` = `origin/main`, merge of PR #592)
 **Delivery strategy**: `exception-ok` (repo convention: one PR per `odd/<slug>` branch, `size:exception` when > 400 authored lines)
 **Test runner**: `uv run --no-sync pytest tests/` (strict TDD ON); frontend `npm test` + `npm run build`
-**Status**: In progress. T1 + T2 + T3 done. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
+**Status**: Guided core complete (T1–T7). T8 (SDB handoff) deferred to Slice 5. Scope = guided core (WU1–WU6).
 
 ## Objective
 
@@ -142,15 +142,18 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   command and the button no longer send `thread_id`. The route is untouched. Commits `ab4f8991`
   (backend) + `58043745` (frontend); `pytest tests/` exit 0; `npm run build` exit 0; `npm test` green
   on rerun (one unrelated load-flaky test on the first run).
-- [ ] **T4 — Facilitator overlay + read-only carve-out** (S2, S5). Add
-  `agent/prompts/planning_facilitator.md`; inject it in `_effective_persona`/`_responder_system_prompt`
-  when the session is active; carve `planning.*` into `_effective_tools`. Route: inline.
-- [ ] **T5 — Substantive report + preview** (S7, S8). `close_cortex_session` builds markdown from the
-  captures; detail/close responses expose it; UI renders "Informe de cierre". Route: inline.
-- [ ] **T6 — Close gate: minimum + gaps** (S6). Close computes the checklist vs the minimum and returns
-  `gaps`; overlay instructs not to offer close before the minimum; never blocks. Route: inline.
-- [ ] **T7 — Frontend surfaces** (S1, S3, S4, S8). Session header/checklist in the planning thread,
-  capture/close affordances, report card. Route: inline.
+- [x] **T4 — Facilitator overlay + read-only carve-out** (S2, S5). Done. `agent/prompts/planning_facilitator.md`
+  is injected by `_planning_overlay` inside `_effective_persona` (and thus the responder), only for an
+  **active** session; `planning.*` was already carved into `_effective_tools` in T1. Commit `6e917dec`.
+- [x] **T5 — Substantive report + preview** (S7, S8). Done. `planning.build_report` assembles markdown
+  (Objective / Decisions / Risks / Next steps / Notes) from the captures instead of topic-only JSON; the
+  existing detail/close responses expose it. Commit `d41ab8c4`.
+- [x] **T6 — Close gate: minimum + gaps** (S6). Done. `planning.report_gaps` / `minimum_met` flag the
+  missing checklist items (minimum = objective + ≥1 decision); the report gains a `## Gaps` section and
+  the close result returns `gaps` / `minimum_met`; close is never blocked. Commit `79cf5d59`.
+- [x] **T7 — Frontend surfaces** (S1, S3, S4, S8). Done. The active-planning status shows the captured
+  checklist; the session report renders through the shared `Markdown` component in both `AgentChat` and
+  `PlanningSessions`. Commit `13e5a351`.
 - [ ] **T8 — SDB handoff** (S9). **Deferred to Slice 5** — not this feature.
 
 ## Acceptance criteria (slice)
@@ -193,6 +196,16 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
   (`_planning_thread_event`), and the settled-run UI switch (never live, filtered by `run_id`). Commits
   `ab4f8991`, `58043745`. Parent spot-check: backend `pytest tests/` exit 0; `npm run build` exit 0;
   `npm test` green on rerun (first run flaked on an unrelated test).
+- **T4 done** — facilitator overlay (`agent/prompts/planning_facilitator.md`, injected in
+  `_effective_persona` only for an active session). Commit `6e917dec`. Full backend suite exit 0.
+- **T5 done** — substantive markdown report from the captures. Commit `d41ab8c4`. Full backend suite exit 0.
+- **T6 done** — checklist gaps + minimum, close never blocked. Commit `79cf5d59`. Full backend suite exit 0.
+- **T7 done** — checklist in the active-planning status + report rendered with `Markdown`.
+  Commit `13e5a351`. Frontend `npm test` 1185 passed; `npm run build` exit 0.
+- **Feature closed (guided core).** RDD: `review_due: false (under_budget)`, medium risk, over the whole
+  branch (`1228` changed lines) — no receipt-driven review was due. Remaining: T8 (Slice 5), the PR, and
+  the pre-merge integration check. The legacy `POST /planning/sessions` `thread_id` reuse still exists
+  for API compatibility; the guided flows (tool + UI) always open a dedicated thread.
 - Engram mirror **saved** (`obs-4a78e87d2755f7b1`, topic `odd/asistente-lumat-planning-guiado/tasks`).
 
 ## Log
