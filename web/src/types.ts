@@ -212,6 +212,8 @@ export interface InternalChatThreadSummary {
   updated_at: string | null;
   run_status: string | null;
   approval_status: string | null;
+  /** Single-line snippet of the latest message; null when it is blank. */
+  preview: string | null;
 }
 export interface InternalChatThreadsResponse { threads: InternalChatThreadSummary[]; }
 export interface ActiveRun { thread_id: number; title: string | null; proyecto: string; agent: string; stage: string; run_id: string; updated_at: string | null; }

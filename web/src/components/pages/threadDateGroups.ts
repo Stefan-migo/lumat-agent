@@ -36,6 +36,24 @@ function activityTime(thread: InternalChatThreadSummary): number {
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
+/** `Hoy · 14:35` / `Ayer · 16:42` / `12 oct · 09:30` for a thread's last activity. */
+export function formatThreadActivity(thread: InternalChatThreadSummary, now = new Date()): string {
+  const value = thread.updated_at || thread.created_at;
+  if (!value) return "Sin fecha";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  const time = new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Santiago" }).format(date);
+  const key = dateKey(date);
+  const parts = dateParts(now);
+  const currentYear = Number(parts.year);
+  const today = dateKey(now);
+  const yesterday = dateKey(new Date(Date.UTC(currentYear, Number(parts.month) - 1, Number(parts.day) - 1, 12)));
+  if (key === today) return `Hoy · ${time}`;
+  if (key === yesterday) return `Ayer · ${time}`;
+  const label = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", ...(Number(dateParts(date).year) !== currentYear ? { year: "numeric" } : {}), timeZone: "America/Santiago" }).format(date).replace(".", "");
+  return `${label} · ${time}`;
+}
+
 function dateKey(date: Date): string {
   const { year, month, day } = dateParts(date);
   return `${year}-${month}-${day}`;
