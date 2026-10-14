@@ -982,6 +982,10 @@ class ProjectFile(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     stored_path: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'ready'"))
+    # 054: the project-scoped KB document this upload was indexed into. Null means
+    # not indexed (image or text-less payload); a failed ingestion keeps status
+    # "failed" and leaves this null.
+    kb_document_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("kb_documents.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = _ts()
 
 

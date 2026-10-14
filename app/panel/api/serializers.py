@@ -503,6 +503,7 @@ def to_project_file_dict(row) -> dict:
         "size": row.size,
         "sha256": row.sha256,
         "status": row.status,
+        "kb_document_id": row.kb_document_id,
         "created_at": _iso(row.created_at),
     }
 

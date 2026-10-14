@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { PageHeader } from "./PageHeader";
 
 export interface PageFrameProps {
   title: string;
   meta?: ReactNode;
+  /** Optional leading icon tile rendered before the page title. */
+  titleIcon?: LucideIcon;
   titleAdornment?: ReactNode;
   subtitle?: ReactNode;
   eyebrow?: ReactNode;
@@ -15,13 +18,14 @@ export interface PageFrameProps {
   children: ReactNode;
 }
 
-export function PageFrame({ title, meta, titleAdornment, subtitle, eyebrow, actions, state, hideCopy, headerClassName, className, children }: PageFrameProps) {
+export function PageFrame({ title, meta, titleIcon, titleAdornment, subtitle, eyebrow, actions, state, hideCopy, headerClassName, className, children }: PageFrameProps) {
   return (
     <main className={`page-frame${className ? ` ${className}` : ""}`}>
       <div className="page-frame__titlebar">
         <PageHeader
           title={title}
           meta={meta}
+          titleIcon={titleIcon}
           titleAdornment={titleAdornment}
           subtitle={subtitle}
           eyebrow={eyebrow}

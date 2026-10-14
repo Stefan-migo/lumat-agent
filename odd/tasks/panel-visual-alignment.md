@@ -1,0 +1,105 @@
+# panel-visual-alignment
+
+Objective: redesign the project-detail tabs (Contexto, Agentes, Skills, Hilos) to match the owner's
+reference images. Frontend only. Branch `odd/panel-visual-alignment`.
+Delivery: ask-on-risk. Runner: `npm test` (vitest) + `npm run build` (tsc -b + vite build).
+
+Scope lock: agents stay fixed system roles. Hilos is wired to the existing endpoint. No palette/token
+changes. One bounded backend addition was authorized later: `project_files.kb_document_id` (migration
+054) to remove the files/knowledge duplication (see L8).
+
+## Specs
+
+S1 — Shared page chrome (refs 6-9).
+The project-detail header adopts the reference shape: a leading folder icon tile, the project name as
+the page title, the status badge beside the title, the purpose as subtitle, and `Abrir asistente` as
+the primary action. No page-level breadcrumb: the shell top bar owns it. Reuse `PageFrame`/`PageHeader`;
+any new slot is additive and must not change existing pages. Tab bar keeps its underline-active style.
+
+S2 — Contexto tab (ref 6). Two-column layout.
+Left card `Instrucciones del proyecto`: icon + title + subtitle `Define el contexto compartido por el
+asistente.`; read-only `Nombre del proyecto` and `Propósito`; editable `Instrucciones del proyecto`
+with placeholder `Describe cómo debe trabajar el asistente en este proyecto…`; helper `Estas
+instrucciones forman parte del contexto del proyecto.`; footer action `Guardar cambios`.
+Right column: `Archivos del proyecto` card — icon + title + count badge + `Subir archivo`; empty state
+`Aún no hay archivos` / `Sube el primer documento de este proyecto.`; `Conocimiento del proyecto` card
+— icon + title + count + `Subir archivo a la KB`; empty state `Sin documentos indexados` / `Los
+archivos compatibles se indexan automáticamente.`; footer note `Los archivos del proyecto se comparten
+como contexto; los adjuntos de un hilo permanecen en ese hilo.`
+Behavior is already wired and must not change.
+
+S3 — Agentes tab (ref 8).
+Card `Agentes del proyecto` with subtitle `Roles disponibles para trabajar con el contexto del
+proyecto.` Three role cards, each with a dark circular icon tile, name, role chip, and description:
+- `Orquestador` · chip `Asistente del proyecto` · `Responde consultas y utiliza las herramientas
+  disponibles según la solicitud.`
+- `Verificador` · chip `Solo lectura` · `Contrasta criterios con evidencia y consulta herramientas de
+  solo lectura.`
+- `Explorador` · chip `Investigación` · `Investiga con las herramientas habilitadas para la
+  delegación.`
+Then `Última ejecución` card: subtitle `Estado registrado de la ejecución más reciente.`, status pill
+(e.g. `Completada`) and timestamp. Read-only; agents remain fixed system roles.
+
+S4 — Skills tab (ref 7).
+Search field `Buscar habilidad por nombre o descripción…`. `Catálogo global` card with count badge +
+`Habilidades globales de solo lectura.` and rows: icon tile, name, description, chips `Global` /
+`Solo lectura`. `Habilidades del proyecto` card with count + `Agregar habilidad` action, dashed empty
+state `Aún no hay habilidades en este proyecto` / `Agrega una habilidad para definir instrucciones
+específicas.`, and a collapsible `Agregar habilidad` disclosure. Footer note `Las habilidades globales
+se consultan; las del proyecto se gestionan aquí.` Existing add/edit/delete behavior preserved
+(whole-array PATCH via `updateProjectConfig`).
+
+S5 — Hilos tab, wired (ref 9).
+Replace the hardcoded placeholder. List the project's chat threads via `GET
+/panel/api/chat/threads?proyecto=<slug>`. When empty, show the reference empty-state visual (icon,
+title, supporting copy, `Abrir historial` CTA, footer note). Assumption to confirm with the owner: the
+empty-state copy reflects a real empty project (not "unavailable"), e.g. `Aún no hay hilos en este
+proyecto`.
+
+## Tasks
+
+| ID | Spec | Route | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| T1 shared chrome | S1 | inline | done | f194eef9 |
+| T1b workspace header fixes | S1 | inline | done | ef0a9524 |
+| T2 Contexto | S2 | inline | done | 641c1606 |
+| T2c KB link + unified files list | S2 | inline | done | 5c9d6606, de995673 |
+| T3 Agentes | S3 | inline | pending | — |
+| T4 Skills | S4 | inline | pending | — |
+| T5 Hilos wire | S5 | inline | pending | — |
+
+## Log
+
+L1 (owner, verbatim): "ok quiero trabajar en estos tres paneles. ... Estas tabs no han sido disea;adas
+y algunas no estan conectadas. hay que redise;ar completamente estas secciones estas son las
+referencias para el dise;o ... necesito que adaptemos lo que tenemos. entiendo que la seccion agentes
+deberia dar la posibilidad de crear un agente? o modificarlo? no estoy seguro. lo mismo con skills.
+deberia haber una forma de agregar skills?"
+L2 (owner): "vamos solo frontend." → agents stay fixed roles; no backend.
+L3 (owner): "si hilos si entra hay que cablearlo." → Hilos is in scope and wired.
+L4: T1 done (f194eef9). Added an additive `titleIcon` slot to shared `PageFrame`/`PageHeader`
+(optional, no existing page changed); project detail now renders the folder tile + status badge beside
+the title, purpose as subtitle. `npm run build` green; full vitest suite green (1182 passed; the two
+`ProjectsPage` header assertions were updated to the new structure).
+L5 (owner, verbatim): "vamos primero con el trabajo del 'workspace' - la linea vertical verde al lado
+del titulo se va. - aqui hay que quitar el boton volver al asistente ya que como se abre en un tab no
+es necesario. ya estamos en el asistente. - hay un espacio grande entre el titulo y los tabs hay que
+fixearlo". Also: the reference breadcrumb and the "Abrir asistente" button must NOT be added.
+L6: T1b done (ef0a9524). Embedded project detail (`projects-page--embedded`): removes the shared header
+lime rail, renders no action button, and adds `align-content: start` so the frame grid's auto rows stop
+stretching (the title bar was 132px tall for a 55px header). Title-to-tabs gap now ~16px. Full suite
+green (1184).
+L7: T2 done (31f11237 primitives + 641c1606 page). Contexto tab: left "Instrucciones del proyecto" card
+(icon + subtitle + helper + save footer), right column split into "Archivos del proyecto" and
+"Conocimiento del proyecto" cards with count badges, dashed empty states and a closing note. Additive
+primitives: `Card.footer`, `EmptyState` icon/action/dashed variant. Verified by headless screenshot in
+the workspace. `Abrir asistente`/breadcrumb intentionally omitted. Open item: the reference shows a
+"Subir archivo a la KB" button on the knowledge card; no distinct backend action exists (project files
+index automatically), so it was omitted pending the owner's call.
+L8 (owner decision): after review, the owner chose option **B** — a unified project-file list with a KB
+state, plus a bounded backend change. Findings that drove it: `POST /kb` already accepts `project_id`
+(not exposed in the UI), and `ingest_project_file` auto-indexes a supported upload, so the same
+document was listed twice. `to_doc_dict` did not expose the file link. Implemented in T2c: migration
+054 adds `project_files.kb_document_id` (backfilled from chunk provenance), the serializer exposes it,
+and the Contexto tab now shows one files table with an "En la KB" column while the knowledge card keeps
+only documents added straight to the project KB (with its own `POST /kb` upload action).

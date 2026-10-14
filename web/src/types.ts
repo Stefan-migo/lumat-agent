@@ -38,7 +38,7 @@ export interface ProjectConfig { instructions: string; tool_policy: ProjectToolP
 export type ProjectConfigUpdate = Partial<ProjectConfig>;
 export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; config?: ProjectConfig; }
 export interface ProjectsResponse { projects: Project[]; }
-export interface ProjectFile { id: number; project_id: number; filename: string; content_type: string; size: number; sha256: string; status: string; created_at: string | null; }
+export interface ProjectFile { id: number; project_id: number; filename: string; content_type: string; size: number; sha256: string; status: string; kb_document_id: number | null; created_at: string | null; }
 export interface ProjectFilesResponse { files: ProjectFile[]; }
 export interface ProjectDetailResponse { project: Project; }
 export interface ProjectAgent { key: string; name: string; role: string; description: string; read_only: boolean; }
