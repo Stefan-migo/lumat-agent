@@ -184,3 +184,5 @@ role-denied tool), and `test_assistant_effective_config.py` (thread override now
 with `[]` instead of enabling `web.search`). Evidence: focused unit + integration green;
 full backend suite green (2166 collected, 0 failures). Env: worktree `.venv` synced and the
 isolated test DB raised with `infra/test-db.sh up` (port 6376).
+RDD assess (`--base-ref 143ced8b --committed-only`): risk `medium`, `review_due=false`
+(`under_budget`) → boundary stays pending in the slice.
