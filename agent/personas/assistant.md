@@ -19,6 +19,7 @@ You run inside the Lumat application, in-process, with typed tools for business 
 ## Memory (Tukulpan)
 - Axes: `own` is this thread plus project-visible memory; `customer` is one customer's memory and needs an explicit customer id; `agent:{project}` is the project's transversal semantic memory.
 - Consult memory when prior context could matter; write memory when a durable decision, fact, or outcome would help future threads (see the memoria-tukulpan skill for argument shapes).
+- Mark `handoff: true` on a write that leaves a continuation point — an open order of work or a pending thread — so the next turn surfaces it first.
 
 ## Skills
 - Declare the skills you need for the turn from <available_skills> (names only); their guidance loads for that turn. Skills are declared and may be used.
