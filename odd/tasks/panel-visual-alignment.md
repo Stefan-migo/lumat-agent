@@ -103,7 +103,7 @@ scrolling with the document.
 | T1b workspace header fixes | S1 | inline | done | ef0a9524 |
 | T2 Contexto | S2 | inline | done | 641c1606 |
 | T2c KB link + unified files list | S2 | inline | done | 5c9d6606, de995673 |
-| T3 Agentes | S3 | inline | pending | — |
+| T3 Agentes | S3 | inline | done | b49d066e |
 | T4 Skills | S4 | inline | pending | — |
 | T5 Hilos wire | S5 | inline | pending | — |
 | T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
@@ -267,3 +267,22 @@ horizontal overflow. Build green; full suite green (1200 passed + the known flak
 snapshot stale`, which passes in isolation 68/68). The per-card caps from L13 (`.file-tree` and
 `.project-knowledge__list`, 22rem) are kept, so a very long card still scrolls internally as well as the
 tab; if the owner prefers a single scroll, drop those two `max-height` rules.
+
+L21: T3 done (b49d066e). Agentes tab redesigned: `Card` "Agentes del proyecto" with the subtitle
+`Roles disponibles para trabajar con el contexto del proyecto.` and three role cards (dark circular icon
+tile — `Bot`/`ShieldCheck`/`Compass` by role key — + name + role chip + description), then a separate
+`Última ejecución` card (`Estado registrado de la ejecución más reciente.`) with a status pill and
+timestamp. The pill maps the recorded `latest_run.status` (`completed` → `Completada`, `executing`/
+`responding`/`running`/`planned` → `En curso`/`Planificada`, `approval_pending` → `Pendiente de
+aprobación`, `failed`/`error` → `Fallida`, `degraded` → `Degradada`; unknown falls back to the raw
+value), so it reads as a recorded state, not a live feed. Data stays data-driven: `name`, `agent.role`
+and `description` come from `GET /panel/api/projects/{slug}/agents`; the icon is the only UI-owned
+affordance (roles are fixed system roles). Copy note flagged to the owner: the S3 reference chips were
+`Asistente del proyecto` / `Solo lectura` / `Investigación`, while the backend returns `Asistente del
+proyecto` / `Verificación independiente` / `Investigación de solo lectura` — the UI renders the backend
+copy, so aligning to the reference means editing the endpoint (one place), and the old standalone
+`Solo lectura` badge was folded into the role chip. Verified: focused 4/4, `npm run build` green, full
+suite green (1202; two load-flaky tests, `AgentChat > markdown snapshot stale` and `ClientesList >
+distinguishes a filtered-empty result…`, pass in isolation 110/110); live standalone (1440) and embedded
+(1440) screenshots, 3 cards, dark tile `rgb(20,60,44)`, pill `Completada` + timestamp, no horizontal
+overflow. RDD assess: medium, `under_budget`, no review due.
