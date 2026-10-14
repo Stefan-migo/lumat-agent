@@ -61,7 +61,7 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
             <p className="projects-page__hint">Estas instrucciones forman parte del contexto del proyecto.</p>
             {instructionsError ? <p role="alert">No se guardaron los cambios: {instructionsError}</p> : null}
           </Card>
-          <ProjectResources projectSlug={body.project.slug} projectId={body.project.id} role={role} />
+          <ProjectResources projectSlug={body.project.slug} projectId={body.project.id} projectName={body.project.name} role={role} />
         </div>;
       }}</Tabs> : null}
     </PageFrame>;
