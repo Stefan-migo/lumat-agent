@@ -156,15 +156,29 @@ delivery + kb/settings panel API + analytics service, 241 tests). Full backend s
 `uv run pytest tests/` green (only pre-existing warnings). No `app/chat/assistant/**` file touched —
 S10 held.
 
+**L7 (evidence, 2026-10-14):** T2+T3+T4 done (`419306cb` feat, `16b2dbef` test). New
+`PanelView chatbot-metrics` (NAVIGATION `adminOnly`, `Activity` icon), route in `panelRoutes.ts`,
+`AppShell` branch with `onOpenConversation` → existing `ConversationThread`, page
+`ChatbotMetrics.tsx` (+css), `api.ts` clients, `types.ts`. **Test-first note:** T1 had a true
+RED→GREEN; for T2/T3 the surface is brand new, so the page test was authored with the component and
+the nav-pinning tests were updated to the new expected state — no meaningful pre-existing RED. The
+page test **did** catch a real bug: `useAsyncData` refetches only on `enabled`/`refreshKey` change,
+not on a new fetcher closure, so the window selector needed `refreshKey = windowDays` (fixed in
+`ChatbotMetrics.tsx`). Checks: `npm run build` green (tsc + vite — the real type-check);
+full `npm test` 1188 passed + **1 pre-existing flaky** (`AgentChat > renders new stream content
+while a previous markdown snapshot is stale`, timing-sensitive; passes 69/69 in isolation and no
+AgentChat file was touched). Nav-pinning tests updated (`PanelShell.test.tsx` rail count 9→10 +
+restricted list, `AppShell.test.tsx` drawer count 9→10 + labels + admin/operador assertions,
+`panelRoutes.test.ts` key list).
+
 ## Progress
 
 - [x] T1 — `97ac3b89` feat: admin-only `/panel/api/analytics/chatbot` + `/analytics/chatbot/conversations` (+6 functional tests)
-- [ ] T2 — nav/route wiring + test
-- [ ] T3 — page + clients + types + tests
-- [ ] T4 — checks green
+- [x] T2 — `419306cb` feat: `chatbot-metrics` `PanelView` + nav item (adminOnly) + route + `AppShell` branch
+- [x] T3 — `419306cb`/`16b2dbef` feat+test: `ChatbotMetrics.tsx` (+css) + `api.ts` clients + `types.ts` + page tests
+- [x] T4 — checks: `npm run build` green (tsc + vite); full `npm test` 1188 passed + 1 pre-existing flaky; backend suite green
 
 ## Next step
 
-T2 (frontend nav/route): Graph Check on `web/src/components/domain/**`, then RED test (admin sees
-the item, operador does not) → `PanelView` + `NAVIGATION adminOnly` + `panelRoutes.ts` +
-`AppShell.tsx` → GREEN.
+Feature complete on the branch. Pending: pre-merge integration (`origin/main` into the branch +
+`npm test` + `npm run build` + `uv run pytest tests/` over the merged tree) and PR.
