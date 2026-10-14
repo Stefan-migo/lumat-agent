@@ -112,6 +112,7 @@ post-commit invalidation is therefore established in code rather than by an exis
 
 - Commit `02328eb4f8be467899006f234b68891311226d23` — `fix(panel): invalidate the model key cache after the write commits`.
 - Commit `6589ab4e005a28470c8e39b6f09c883885a63a4f` — `test(panel): cover the real model-key consumers`.
+- Correction commit `dcb8c58e5df9b3546a741c0f55d9129902ac0232` — `test(panel): make the cache-ordering regression fail pre-fix`.
 - The original cache-ordering test was invalid: it performed the production post-commit invalidation itself. It was replaced with a counting test that asserts the in-window read does not hit the DB.
 - Pre-fix command (only `model_secrets.py` and `routes/settings.py` checked out from `6d7988b2`): `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_model_key_cache_ordering.py::test_write_does_not_invalidate_the_cache_before_commit tests/functional/test_api_model_api_key.py::test_post_invalidates_cached_environment_key_after_commit` → exit 1. Raw assertion evidence: `E           AssertionError: the write invalidated the cache before commit`; `E           assert 2 == 1`; `1 failed, 1 passed in 1.53s`.
 - Post-fix command (restored source files from HEAD): same command → exit 0; `.. [100%]`; `2 passed in 1.32s`.
