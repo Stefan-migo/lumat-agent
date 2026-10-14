@@ -159,6 +159,20 @@ def test_cm1_greeting_is_stripped_before_classifying():
     assert fid.classify_outcome(replies) == "declined"
 
 
+def test_cm1_greeting_fused_with_the_answer_is_stripped_before_classifying():
+    """First turn: the greeting and the answer travel in ONE message (CM-1)."""
+    fused = f"{fid.greeting()}\n\n{fid.CANNOT_ANSWER_REPLY}"
+    assert fid.classify_outcome([fused]) == "declined"
+    assert fid.greeting_emitted([fused]) is True
+
+
+def test_cm1_short_greeting_fused_with_the_answer_is_stripped_too():
+    """A first turn that states the need gets the short greeting, also fused."""
+    fused = f"{fid.GREETING_SHORT_HEADER}\n\n{fid.CANNOT_ANSWER_REPLY}"
+    assert fid.classify_outcome([fused]) == "declined"
+    assert fid.greeting_emitted([fused]) is True
+
+
 def test_greeting_alone_is_not_an_answer():
     """A turn that only greeted produced no outcome to score.
 

@@ -6,6 +6,50 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.4] - 2026-10-14
+
+This release improves WhatsApp conversation quality, expands the panel assistant,
+and adds safer controls for model credentials, knowledge-base documents, users,
+and customer cases.
+
+### Added
+
+- **Tukulpan memory handoff.** Mark persistent memories as handoff points, read
+  the assistant's own memories at the start of a turn, and keep the
+  `memoria-tukulpan` guidance available to the responder.
+- **Model API key settings.** Admins can configure, validate, replace, and clear
+  the encrypted DeepSeek key from the panel; the chatbot and panel assistant use
+  it without a restart, while the UI exposes only masked status.
+- **Curated chatbot messages.** Add approved preset responses in Settings for
+  the bot to select and fill with real customer and visit details.
+- **Chatbot performance metrics.** The panel assistant can read bounded-window
+  metrics for containment, handoffs, knowledge-base hits, resolution turns, and
+  conversation costs.
+- **Knowledge-base and account controls.** Admins can permanently delete
+  visible knowledge-base documents and guardedly delete users; closed customer
+  cases can be archived and restored from the ficha.
+
+### Changed
+
+- **WhatsApp conversation flow.** Replies now use the message being processed
+  and recent conversation and booking context, format appointment slots for
+  people, and recognize conversational farewells.
+- **First-turn greeting.** The bot combines its introduction with the answer in
+  one message and skips the redundant opening question when the customer has
+  already explained their need.
+- **Panel assistant behavior.** The assistant is prompted to use tools for
+  requests that need data or action, treating the knowledge base as one source
+  rather than a prerequisite.
+
+### Fixed
+
+- **Panel status and customer views.** Realtime connection banners reflect the
+  current socket state, prior cases are paginated, and conversation summaries
+  display labeled details without dropping unrecognized content.
+- **Model key cache consistency.** Key changes invalidate the resolver cache
+  only after the database transaction commits, and both assistant consumers use
+  the configured key.
+
 ## [2026.10.3] - 2026-10-13
 
 This release brings the phone layout of Asistente Lumat: a dedicated mobile

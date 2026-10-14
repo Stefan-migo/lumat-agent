@@ -39,6 +39,8 @@ WINDOW_SIZE = 10
 
 # Standard replies (SS-5 settings source).
 GREETING_HEADER = MESSAGE_DEFAULTS["greeting"]
+# First turn where the customer already stated their need (no re-ask).
+GREETING_SHORT_HEADER = MESSAGE_DEFAULTS["greeting_short"]
 
 
 def conversation_transcript(window: list[dict], limit: int = 6) -> str:
@@ -178,6 +180,10 @@ class ConversationState:
     window: list[dict] = field(default_factory=list)
     # accumulator: nodes append their replies (reducer merges, last-write-wins off)
     replies: Annotated[list, add] = field(default_factory=list)
+    # CM-1 first-turn greeting chosen by `receive` (full greeting for a bare
+    # greeting, short greeting when the customer already stated their need).
+    # `run_conversation` fuses it with the turn's answer into one message.
+    first_turn_greeting: str = ""
     # CM-7: the customer's persistent memory context, loaded from the DB for
     # this message (empty string on first contact -> reply never blocked).
     memory_context: str = ""

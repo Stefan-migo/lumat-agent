@@ -1,6 +1,6 @@
 # panel-api-key-modelos — API key de modelos configurable desde el panel
 
-Estado: en curso. Rama `odd/panel-api-key-modelos`, base `origin/main 0299d8e1`
+Estado: cerrado — follow-ups AK-17 y AK-18 resueltos en `odd/panel-api-key-followups`. Rama `odd/panel-api-key-modelos`, base `origin/main 0299d8e1`
 (main avanzó con el merge del PR #586 `asistente-lumat-memoria-tukulpan`; el branch se creó desde ahí).
 Worktree: `/home/stefan/repos/lumat-agent-odd-panel-api-key-modelos`.
 Slice PR3 (WU4): worktree `/home/stefan/repos/lumat-agent-odd-panel-api-key-modelos-pr3`,
@@ -154,14 +154,8 @@ infra. Es *credential-at-rest*: cifrado en reposo, sin exposición en GET/audit/
   → registrado como **AK-18**. La autoridad fue **quemada** (`review-acknowledged/v1`).
 
 ## Follow-ups (no bloqueantes)
-- **AK-17 — Cobertura de consumidores.** Un test que ejercite el camino real del chatbot
-  (`chat/graph.py`) y del asistente (`agent_chat.py` / `chat/assistant/nodes.py`) contra la key del
-  panel, no solo `openai_client()`. Hoy el contrato de la fábrica está cubierto y los consumidores
-  pasan por ella, pero un bypass futuro no lo detectaría.
-- **AK-18 — Invalidar la caché después del commit (R3-001).** `set_model_api_key`/`clear_model_api_key`
-  invalidan **antes** de que el caller haga commit; un `resolve` que corre entre la invalidación y el
-  commit puede leer el valor viejo y publicarlo por hasta 45s. Fix probable: mover la invalidación al
-  caller post-commit (o que el resolver compare una revisión barata). Bounded por el TTL, non-blocking.
+- ✅ **AK-17 — Cobertura de consumidores.** Resuelto en `odd/panel-api-key-followups`: un test de integración ejercita los seams de chatbot y asistente y valida que el header `Authorization` lleva la key del panel.
+- ✅ **AK-18 — Invalidar la caché después del commit (R3-001).** Resuelto en `odd/panel-api-key-followups`: POST/DELETE invalidan después del commit; una regresión RED→GREEN cubre la lectura durante la ventana de escritura.
 
 ## Evidencia (PR2 — WU3)
 - `uv run pytest tests/` → **1991 passed**, exit 0 (10 tests nuevos funcionales).
