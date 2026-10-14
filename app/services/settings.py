@@ -396,3 +396,99 @@ def validate_message_templates(templates: Any) -> list[dict]:
             )
 
     return templates
+
+
+# Frente 2 unit 3: the exact setting keys the panel assistant may PROPOSE for a
+# write. The write itself is approval-gated by the tool contract; this allowlist
+# is the server-side bound. It deliberately excludes safety/routing/cost/notify
+# keys (emergency.*, scope_rules, cost.*, meta_pricing, notify.*, kpi.*).
+ASSISTANT_WRITABLE_SETTINGS: frozenset[str] = frozenset(
+    {
+        "tone.style",
+        "messages.greeting",
+        "messages.greeting_short",
+        "messages.farewell",
+        "messages.clarification",
+        "messages.cannot_answer",
+        "messages.out_of_hours",
+        "hours.timezone",
+        "hours.schedule",
+    }
+)
+
+_ASSISTANT_MESSAGE_KEYS: frozenset[str] = frozenset(
+    key for key in ASSISTANT_WRITABLE_SETTINGS if key.startswith("messages.")
+)
+
+# A runaway model string must not bloat a stored message; the schedule is already
+# bounded (each entry contributes >=1 unique weekday, and weekdays cannot repeat,
+# so at most 7 entries).
+ASSISTANT_MESSAGE_MAX_LENGTH = 2000
+
+
+def validate_assistant_setting(key: str, value: Any) -> None:
+    """Validate one assistant-proposed setting; raise ValueError when unsafe.
+
+    Guards the approval-gated `settings.update` tool: the key must be in the
+    curated allowlist and the value must pass the same shape rules the panel's
+    own Settings routes enforce (routes/settings.py).
+    """
+    if key not in ASSISTANT_WRITABLE_SETTINGS:
+        raise ValueError(f"setting key is not assistant-writable: {key!r}")
+    if key == "tone.style":
+        if value not in TONE_STYLES:
+            raise ValueError(f"tone.style must be one of {TONE_STYLES}")
+    elif key in _ASSISTANT_MESSAGE_KEYS:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{key} must be a non-empty string")
+        if len(value) > ASSISTANT_MESSAGE_MAX_LENGTH:
+            raise ValueError(f"{key} must be at most {ASSISTANT_MESSAGE_MAX_LENGTH} characters")
+    elif key == "hours.timezone":
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("hours.timezone must be a non-empty IANA timezone")
+        try:
+            ZoneInfo(value)
+        except (TypeError, ValueError, ZoneInfoNotFoundError):
+            raise ValueError("hours.timezone must be a valid IANA timezone")
+    elif key == "hours.schedule":
+        _validate_hours_schedule(value)
+
+
+def _validate_hours_schedule(schedule: Any) -> None:
+    if not isinstance(schedule, list):
+        raise ValueError("hours.schedule must be a list of objects")
+    seen_days: set[int] = set()
+    for entry in schedule:
+        if not isinstance(entry, dict):
+            raise ValueError("hours.schedule must be a list of objects")
+        days = entry.get("days")
+        opening = entry.get("open")
+        closing = entry.get("close")
+        if (
+            not isinstance(days, list)
+            or not days
+            or any(
+                isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 7
+                for day in days
+            )
+        ):
+            raise ValueError("hours.schedule days must be weekdays from 1 to 7")
+        if len(set(days)) != len(days) or seen_days.intersection(days):
+            raise ValueError("hours.schedule weekdays must not repeat")
+        seen_days.update(days)
+        if (
+            not isinstance(opening, str)
+            or not isinstance(closing, str)
+            or len(opening) != 5
+            or len(closing) != 5
+            or opening[2] != ":"
+            or closing[2] != ":"
+        ):
+            raise ValueError("hours.schedule times must use HH:MM")
+        try:
+            open_time = datetime.strptime(opening, "%H:%M").time()
+            close_time = datetime.strptime(closing, "%H:%M").time()
+        except ValueError:
+            raise ValueError("hours.schedule times must use HH:MM")
+        if open_time >= close_time:
+            raise ValueError("hours.schedule open must be before close")

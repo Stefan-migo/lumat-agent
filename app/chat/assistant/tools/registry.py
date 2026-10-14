@@ -20,6 +20,7 @@ from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
 from app.services import assistant_artifacts, automation_installations, cases, customers, kb, planning, project_files, projects, recipes, relations, scheduling, tukulpan as memory
+from app.services.settings import ASSISTANT_WRITABLE_SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.archive",
     "project.merge",
     "skill.propose",
+    "settings.update",
 })
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "planning.open", "planning.close", "planning.record_decision", "planning.record_note"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
@@ -108,6 +110,12 @@ class ConversationTranscriptArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     conversation_id: int = Field(gt=0)
     limit: int = Field(default=MAX_ITEMS, ge=1, le=MAX_ITEMS)
+
+
+class SettingsUpdateArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1, max_length=100)
+    value: Any
 
 
 class _MemoryReadBase(BaseModel):
@@ -431,6 +439,17 @@ def _conversation_transcript(session, args: ConversationTranscriptArgs):
     from app.services import conversations
 
     return conversations.conversation_transcript(session, args.conversation_id, args.limit)
+
+
+def _update_setting(session, args: SettingsUpdateArgs):
+    from app.services import settings as settings_service
+
+    try:
+        settings_service.validate_assistant_setting(args.key, args.value)
+    except ValueError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    settings_service.set_setting(session, args.key, args.value, actor="assistant")
+    return {"key": args.key, "value": args.value, "updated": True}
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
@@ -839,6 +858,14 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "analytics.chatbot_metrics": ToolDefinition("analytics.chatbot_metrics", ChatbotMetricsArgs, True, _chatbot_metrics, "Read chatbot performance metrics for a bounded time window.", tier="default"),
     "analytics.chatbot_conversations": ToolDefinition("analytics.chatbot_conversations", ChatbotConversationsArgs, True, _chatbot_conversations, "List the conversations that tripped a chatbot failure signal in a bounded window.", tier="default"),
     "conversations.transcript": ToolDefinition("conversations.transcript", ConversationTranscriptArgs, True, _conversation_transcript, "Read one conversation's bounded transcript and events.", tier="default"),
+    "settings.update": ToolDefinition(
+        "settings.update",
+        SettingsUpdateArgs,
+        False,
+        _update_setting,
+        "Propose a live chatbot settings change for approval, then apply it. Valid keys: " + ", ".join(sorted(ASSISTANT_WRITABLE_SETTINGS)),
+        tier="default",
+    ),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
     "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
     "automation.create_rule": ToolDefinition(
@@ -887,6 +914,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "analytics.chatbot_metrics": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "analytics.chatbot_conversations": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "conversations.transcript": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "settings.update": frozenset({UserRole.ADMIN}),
     "web.search": frozenset(UserRole),
     "web.fetch": frozenset(UserRole),
     "automation.create_rule": frozenset({UserRole.ADMIN}),

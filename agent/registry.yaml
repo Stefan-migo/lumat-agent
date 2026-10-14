@@ -83,6 +83,7 @@ assistant:
     - analytics.chatbot_metrics
     - analytics.chatbot_conversations
     - conversations.transcript
+    - settings.update
     - web.search
     - web.fetch
     - automation.create_rule

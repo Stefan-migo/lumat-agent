@@ -1,9 +1,11 @@
 import pytest
 
 from app.services.settings import (
+    ASSISTANT_WRITABLE_SETTINGS,
     MESSAGE_DEFAULTS,
     get_message_templates,
     get_service_duration,
+    validate_assistant_setting,
     validate_message_templates,
 )
 
@@ -84,3 +86,93 @@ def test_validate_message_templates_accepts_valid_lists(templates):
 def test_validate_message_templates_rejects_invalid_lists(templates):
     with pytest.raises(ValueError):
         validate_message_templates(templates)
+
+
+def test_assistant_writable_settings_is_the_curated_allowlist():
+    assert ASSISTANT_WRITABLE_SETTINGS == frozenset({
+        "tone.style",
+        "messages.greeting",
+        "messages.greeting_short",
+        "messages.farewell",
+        "messages.clarification",
+        "messages.cannot_answer",
+        "messages.out_of_hours",
+        "hours.timezone",
+        "hours.schedule",
+    })
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("tone.style", "formal"),
+        ("tone.style", "cercano"),
+        ("messages.greeting", "Hola, soy Lumat."),
+        ("messages.greeting_short", "Hola!"),
+        ("messages.out_of_hours", "Estamos cerrados."),
+        ("hours.timezone", "America/Santiago"),
+        ("hours.timezone", "UTC"),
+        ("hours.schedule", []),
+        ("hours.schedule", [{"days": [1, 2, 3, 4, 5], "open": "09:00", "close": "18:00"}]),
+    ],
+)
+def test_validate_assistant_setting_accepts_valid_values(key, value):
+    validate_assistant_setting(key, value)
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("tone.style", "sarcastico"),
+        ("tone.style", 3),
+        ("messages.greeting", ""),
+        ("messages.greeting", "   "),
+        ("messages.greeting", 123),
+        ("hours.timezone", "Marte/Crater"),
+        ("hours.timezone", ""),
+        ("hours.schedule", "not-a-list"),
+        ("hours.schedule", [{"days": [1], "open": "18:00", "close": "09:00"}]),
+        ("hours.schedule", [{"days": [9], "open": "09:00", "close": "18:00"}]),
+        ("hours.schedule", [{"days": [1], "open": "9:00", "close": "18:00"}]),
+        ("hours.schedule", [{"days": [1, 1], "open": "09:00", "close": "18:00"}]),
+        (
+            "hours.schedule",
+            [
+                {"days": [1], "open": "09:00", "close": "18:00"},
+                {"days": [1], "open": "09:00", "close": "13:00"},
+            ],
+        ),
+    ],
+)
+def test_validate_assistant_setting_rejects_invalid_values(key, value):
+    with pytest.raises(ValueError):
+        validate_assistant_setting(key, value)
+
+
+def test_validate_assistant_setting_rejects_keys_outside_the_allowlist():
+    with pytest.raises(ValueError):
+        validate_assistant_setting("cost.daily_limit", 0)
+    with pytest.raises(ValueError):
+        validate_assistant_setting("emergency.keywords", ["gas"])
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cost.conversation_limit",
+        "meta_pricing",
+        "notify.owner_email",
+        "messages.templates",
+        "kpi.window_days",
+        "tone.style ",
+        "TONE.STYLE",
+    ],
+)
+def test_validate_assistant_setting_rejects_near_miss_and_privileged_keys(key):
+    with pytest.raises(ValueError):
+        validate_assistant_setting(key, 0)
+
+
+def test_validate_assistant_setting_rejects_an_overlong_message():
+    with pytest.raises(ValueError):
+        validate_assistant_setting("messages.greeting", "x" * 2001)

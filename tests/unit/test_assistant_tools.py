@@ -102,6 +102,33 @@ def test_conversation_inspection_tools_are_in_assistant_whitelist():
     assert "conversations.transcript" in whitelist
 
 
+def test_settings_update_is_a_typed_bounded_write_tool():
+    from app.chat.assistant.tools.registry import (
+        APPROVED_WRITE_ALLOWLIST,
+        AUTONOMOUS_WRITE_ALLOWLIST,
+        is_tool_allowed_for_role,
+    )
+
+    assert "settings.update" in tool_schemas()
+    tool = get_tool("settings.update")
+    assert tool.read_only is False
+    assert tool.tier == "default"
+
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"value": "formal"})
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"key": "tone.style"})
+    with pytest.raises(ValueError):
+        tool.args_model.model_validate({"key": "tone.style", "value": "formal", "extra": True})
+
+    assert "settings.update" in APPROVED_WRITE_ALLOWLIST
+    assert "settings.update" not in AUTONOMOUS_WRITE_ALLOWLIST
+    assert is_tool_allowed_for_role("settings.update", "admin") is True
+    assert is_tool_allowed_for_role("settings.update", "operador") is False
+    assert is_tool_allowed_for_role("settings.update", "tecnico") is False
+    assert "settings.update" in load_assistant_config().tools_whitelist
+
+
 def test_skill_propose_is_owner_scoped_approval_write_and_upserts_project_skill(monkeypatch):
     from app.chat.assistant.approval import consume_approval
 
