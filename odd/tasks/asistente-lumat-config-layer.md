@@ -108,7 +108,7 @@ Non-goals (explicitly dropped after review):
 | T1 default-on 7 opt-in | S1 | inline | done | 49227b57 |
 | T2 sidebar Capacidades wired | S2 | inline | done | fd5e39e2 |
 | T3a Recursos selector + persistence | S3 | inline | done | b1313675, b1f670c0 |
-| T3b pinned resources in context | S3 | inline | pending | — |
+| T3b pinned resources in context | S3 | inline | done | f8ce9dbf |
 | T3c planning.read_report tool | S3 | inline | done | 51e9643f, 46d39657 |
 | T4 tray/library separation | S4 | inline | pending | — |
 | T5 multimodal tool results | S5 | inline | pending | — |
@@ -244,3 +244,15 @@ exact-set assertions), then GREEN. Evidence: focused 55/55; full backend suite g
 no frontend change. RDD assess (`--base-ref 143ced8b --committed-only`): risk `medium`,
 `review_due=false` (`under_budget`, 1047 changed lines) → boundary stays pending in the slice.
 Next: T3b (surface the pinned resources as a compact reference in the turn context).
+
+L19 — T3b done (`f8ce9dbf`). `thread_resources.pinned_context(session, thread)` returns the
+compact `<pinned_resources>` block (project file `#id "filename"`, planning `"slug" (topic)`,
+skill `"name"`; no content) plus the pinned skill names. `assemble_context_node` appends it as
+a `pinned_resources` context item — visible to planner and responder — and sets
+`effective["pinned_skills"]`; `_validated_skills` now merges the pinned skills so
+`_skill_context` loads their bodies for the responder. Content stays read on demand
+(`read_project_file`, `planning.read_report`, declared skills). TDD: RED first (3 functional
+tests in `test_thread_resources_context.py`), then GREEN. Evidence: focused 57/57; full
+backend suite green (EXIT 0); no frontend change. RDD assess (`--base-ref 143ced8b
+--committed-only`): risk `medium`, `review_due=false` (`under_budget`, 1238 changed lines).
+Next: T4 (tray vs thread file library separation).
