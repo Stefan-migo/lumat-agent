@@ -135,7 +135,7 @@ from app.chat.nodes.capture import (  # noqa: E402
 )
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY, CLARIFICATION_REPLY  # noqa: E402
-from app.chat.state import greeting  # noqa: E402
+from app.chat.state import GREETING_SHORT_HEADER, greeting  # noqa: E402
 
 OUTCOMES = (
     "answered",
@@ -205,22 +205,37 @@ def ungrounded_numbers(reply: str, chunk_texts: Sequence[str]) -> list[str]:
     return sorted(extract_numbers(reply) - grounded)
 
 
+def _strip_greeting(reply: str) -> str:
+    """Drop a CM-1 greeting from a reply; returns "" when it was greeting-only.
+
+    Handles both shapes: a first turn fuses the greeting with the answer into ONE
+    message (`run_conversation`), while the accumulator can still hold the greeting
+    as its own entry. The greeting has a full form (bare first turn) and a short
+    form (the customer already stated their need).
+    """
+    for header in (greeting(), GREETING_SHORT_HEADER):
+        if reply == header:
+            return ""
+        prefix = f"{header}\n\n"
+        if reply.startswith(prefix):
+            return reply[len(prefix) :]
+    return reply
+
+
 def terminal_reply(replies: Sequence[str]) -> str | None:
     """The reply produced by the terminal node, with the CM-1 greeting removed.
 
-    `replies` is an accumulator (`app/chat/state.py:175`), so a first-contact turn
-    yields `[greeting, <terminal reply>]` and the greeting must not be read as the
-    answer.
+    `replies` is an accumulator (`app/chat/state.py:179`), so a first-contact turn
+    carries the greeting — either fused with the answer in one message or, on the
+    older shape, as its own entry — and the greeting must not be read as the answer.
     """
-    greeting_text = greeting()
-    terminal = [reply for reply in replies if reply != greeting_text]
+    terminal = [stripped for reply in replies if (stripped := _strip_greeting(reply))]
     return terminal[-1] if terminal else None
 
 
 def greeting_emitted(replies: Sequence[str]) -> bool:
     """Whether the CM-1 first-contact open greeting was part of these replies."""
-    greeting_text = greeting()
-    return any(reply == greeting_text for reply in replies)
+    return any(_strip_greeting(reply) != reply for reply in replies)
 
 
 def classify_outcome(replies: Sequence[str], events: Sequence[dict] = ()) -> str:
