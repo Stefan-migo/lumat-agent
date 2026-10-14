@@ -59,7 +59,7 @@ proyecto`.
 
 | ID | Spec | Route | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| T1 shared chrome | S1 | inline | pending | — |
+| T1 shared chrome | S1 | inline | done | f194eef9 |
 | T2 Contexto | S2 | inline | pending | — |
 | T3 Agentes | S3 | inline | pending | — |
 | T4 Skills | S4 | inline | pending | — |
@@ -74,3 +74,7 @@ deberia dar la posibilidad de crear un agente? o modificarlo? no estoy seguro. l
 deberia haber una forma de agregar skills?"
 L2 (owner): "vamos solo frontend." → agents stay fixed roles; no backend.
 L3 (owner): "si hilos si entra hay que cablearlo." → Hilos is in scope and wired.
+L4: T1 done (f194eef9). Added an additive `titleIcon` slot to shared `PageFrame`/`PageHeader`
+(optional, no existing page changed); project detail now renders the folder tile + status badge beside
+the title, purpose as subtitle. `npm run build` green; full vitest suite green (1182 passed; the two
+`ProjectsPage` header assertions were updated to the new structure).
