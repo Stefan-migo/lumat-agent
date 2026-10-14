@@ -3,9 +3,9 @@
 **Branch**: `odd/asistente-lumat-planning-guiado`
 **Worktree**: `../lumat-agent-odd-asistente-lumat-planning-guiado`
 **Base**: `6d7988b2` (= `main` = `origin/main`, merge of PR #592)
-**Delivery strategy**: `ask-on-risk` (forecast > 400 authored lines → ask once for chained PRs before the first work-unit commit)
+**Delivery strategy**: `exception-ok` (repo convention: one PR per `odd/<slug>` branch, `size:exception` when > 400 authored lines)
 **Test runner**: `uv run --no-sync pytest tests/` (strict TDD ON); frontend `npm test` + `npm run build`
-**Status**: In progress. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
+**Status**: In progress. T1 done. Scope = guided core (WU1–WU6). SDB handoff (WU7) deferred to Slice 5.
 
 ## Objective
 
@@ -120,11 +120,13 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
 
 ## Tasks
 
-- [ ] **T1 — Lifecycle tools `planning.open` / `planning.close`** (S3, S1 server side). Add
-  `ToolDefinition`s + args models; register in `TOOL_REGISTRY`, `ROLE_TOOL_ALLOWLIST` (admin,
-  operador), `agent/registry.yaml`, `AUTONOMOUS_WRITE_ALLOWLIST`; add a dispatch branch passing
-  `trusted_thread_id`/`proyecto`; `planning.open` creates a **dedicated thread** + active session;
-  `planning.close` closes. Route: inline. Evidence: RED→GREEN + commit.
+- [x] **T1 — Lifecycle tools `planning.open` / `planning.close`** (S3, S1 server side). Done — new
+  `app/services/planning.py` (single source for the routes and the tools), route refactor, the two
+  tools registered in `TOOL_REGISTRY` / `ROLE_TOOL_ALLOWLIST` (admin, operador) / `AUTONOMOUS_WRITE_ALLOWLIST`
+  / `agent/registry.yaml`, dispatch branch with `trusted_thread_id`, and the `planning.*` read-only
+  carve-out in `_effective_tools`. Route: inline. Evidence: `tests/functional/test_planning_tools.py`
+  RED→GREEN; full `pytest tests/` green; commits `186597c7` (refactor) + `4bcea4b6` (feat);
+  `review_due: false (under_budget)`.
 - [ ] **T2 — Capture tools + structured session state** (S4). `planning.record_decision(title,
   content)` and `planning.record_note(kind, content)` with `kind ∈ {objective, risk, next_step,
   general}`; extend `CortexSession` + `validate_cortex_session` with the capture fields. Route: inline.
@@ -168,6 +170,14 @@ any DB migration (`cortex_session` lives in `thread.assistant_state` JSONB).
 
 - Base `6d7988b2`; worktree provisioned (`uv sync --frozen`, `infra/.env`, `web/ npm ci`, test DB up).
 - Exploration done: `gentle-ai-explore` map + parent spot-check; corrections recorded in Problem.
+- **T1 done** — lifecycle tools. New `app/services/planning.py`; routes refactored to it; `planning.open`/
+  `planning.close` registered (roles admin/operador, autonomous write, whitelist) with the
+  `trusted_thread_id` dispatch; `_effective_tools` preserves `planning.*` in a read-only session; the
+  persona now names both tools as explicit-order writes. Touched exact-set/golden tests updated
+  (`test_assistant_tools.py`, `test_tool_tiers.py`, `test_effective_config.py`, `test_assistant_delegation.py`).
+  Commits `186597c7`, `4bcea4b6`.
+- Engram mirror **pending** (the `mem_save` failed: multiple active runtime sessions for `lumat-agent`;
+  no authoritative `session_id` available — not invented).
 
 ## Log
 
