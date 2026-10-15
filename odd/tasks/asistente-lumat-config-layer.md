@@ -114,7 +114,7 @@ Non-goals (explicitly dropped after review):
 | T5 multimodal tool results | S5 | inline | done | 9162183a, 32ec0106 |
 | T6 partial reads (offset/limit) | S6 | inline | done | 7563486f |
 | T7 docx/xlsx/md attachments | S7 | inline | done | 408902e3 |
-| T8 three global skills | S8 | inline | pending | — |
+| T8 three global skills | S8 | inline | done | 2d79c7c8 |
 | T9 TecnicoLumat agent | S9 | inline | pending | — |
 
 ## Log
@@ -322,3 +322,20 @@ now uses a `.zip`. TDD: RED first (allowlist + real docx/xlsx extraction tests +
 GREEN. Evidence: backend focused green; full backend suite green (EXIT 0); full frontend suite
 1222/1222 (EXIT 0); `npm run build` green. RDD assess (`--base-ref 3c72556e --committed-only`): risk
 `medium`, `review_due=false` (`under_budget`, 83 changed lines). Next: T8 (three global skills).
+
+L26 — T8 done (`2d79c7c8`, branch `odd/asistente-lumat-config-layer-t8`, from `main` @ 43237341).
+The assistant now declares four global skills: the three new ones (`planning`, `tools`, `kb`)
+alongside `memoria-tukulpan`, with bodies under `agent/skills/assistant/`. Verified the mechanism
+needs no harness change: the planner already receives `<available_skills>` (name + description, no
+body) and `PlannerOutput.skills` is validated against the global index in `_validated_skills`,
+while `_skill_context` loads the declared bodies for the responder. Also confirmed
+`_planner_tool_catalog` serialises tools only, so the frozen hash in `test_assistant_delegation.py`
+does not move. Skill content: `planning` = guided session flow + close contract; `tools` = default
+vs opt-in tiers, owner approval for writes, partial reads/multi-turn; `kb` = when and how to use
+`kb.retrieve` and stay grounded. TDD: RED first (`KeyError: 'planning'` in a new `test_skills.py`
+test asserting the three are indexed, loadable, planner-declarable, and responder-loadable), then
+GREEN. The exact-catalog assertion in `test_assistant_config.py` was extended from one skill to
+four. Evidence: focused `test_skills.py` + `test_api_skills.py` green; full backend suite 2212
+passed (EXIT 0). No frontend change (the `/panel/api/skills` route returns the new catalog and the
+frontend tests mock it). RDD assess (`--base-ref 43237341 --committed-only`): risk `medium`,
+`review_due=false` (`under_budget`, 130 changed lines). Next: T9 (TecnicoLumat agent).
