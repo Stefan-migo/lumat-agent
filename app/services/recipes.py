@@ -1,6 +1,6 @@
 """Code-defined automation recipe catalog and rule compilation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from typing import Any
 
@@ -31,6 +31,7 @@ class RecipeDefinition:
     cooldown_seconds: int = 0
     recipient_target: str = "customer"
     content: str = ""
+    conditions: dict = field(default_factory=dict)
 
     def validate_parameters(self, values: dict) -> dict:
         if not isinstance(values, dict):
@@ -73,7 +74,7 @@ class RecipeDefinition:
             raise ValueError("recipe has no channel parameter")
         fields = {
             "event_type": self.event_type,
-            "conditions": {},
+            "conditions": dict(self.conditions),
             "channel": values.get("channel"),
             "cooldown_seconds": self.cooldown_seconds,
             "recipient_target": self.recipient_target,
@@ -96,6 +97,7 @@ def _event_recipe(
     channel_allowed: frozenset[str],
     description: str,
     content: str,
+    conditions: dict | None = None,
 ) -> RecipeDefinition:
     return RecipeDefinition(
         recipe_id=recipe_id,
@@ -109,6 +111,7 @@ def _event_recipe(
         cooldown_seconds=0,
         recipient_target=recipient_target,
         content=content,
+        conditions=conditions or {},
     )
 
 
@@ -170,6 +173,7 @@ RECIPES: dict[str, RecipeDefinition] = {
             "appointment.booked", "customer", frozenset({"whatsapp"}),
             "Envía un mensaje automático al confirmar una reserva.",
             "Tu visita en Lumat quedó registrada. Te esperamos.",
+            conditions={"origin": "panel"},
         ),
         _event_recipe(
             "appointment_cancellation", "Aviso de cancelación", "reservas",

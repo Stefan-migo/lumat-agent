@@ -69,7 +69,7 @@ def test_approved_assistant_rule_is_persisted_audited_and_worker_visible(migrate
             event_type="appointment.booked",
             entity_type="appointment",
             entity_id=f"runtime-{suffix}",
-            payload={"phone": "+56911111111"},
+            payload={"phone": "+56911111111", "origin": "panel"},
             dedupe_key=f"runtime:{suffix}",
         )
         assert automation.evaluate_event(session, event) == [assistant_rule.id]
