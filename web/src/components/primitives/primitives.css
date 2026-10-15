@@ -1376,6 +1376,12 @@
 .appointment-detail__schedule { grid-area: schedule; }
 .appointment-detail__people { grid-area: people; }
 .appointment-detail__history { grid-area: history; }
+/* Technician field quick actions (WU7) reuse the timeline cell, which only the
+   operator's history card fills. */
+.appointment-detail__field-actions { grid-area: history; }
+.appointment-detail__field-state { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__field-buttons { display: flex; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-3); }
+.appointment-detail__field-note { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
 .appointment-detail-page .page-header { align-items: end; }
 .appointment-detail-page .page-header__copy { flex: 1 1 30rem; }
 .appointment-detail-page .page-header__actions { align-items: center; }

@@ -96,5 +96,26 @@ Reclassifying a document MUST NOT create a new version and MUST be recorded in t
 - WHEN the Lumat assistant retrieves KB content
 - THEN the document IS retrievable
 
+### Requirement: KB-6 — Document Scope
+
+Every KB document MUST have a scope: global (`kb_documents.project_id IS NULL`) or a single project (`kb_documents.project_id = <id>`). Scope is orthogonal to audience (KB-5): audience decides who may ground an answer, scope decides who the document belongs to. Conflating them into one enum MUST NOT be the mechanism for either restriction.
+
+The panel's global "Base de conocimiento" section MUST list global documents only; a project-scoped document MUST NOT surface there. A project's documents MUST remain reachable through that project's own surface.
+
+The admin retrieval probe MUST be scope-bounded to global documents, consistent with the section it serves. Its audience breadth (KB-5) is unchanged: it still reads the whole active corpus audience-wise.
+
+Assistant retrieval MUST be scope-bounded: global documents only without a project context, or global plus that project's documents with one.
+
+#### Scenario: Project document does not surface globally
+- GIVEN a KB document scoped to a project
+- WHEN an admin opens the global Base de conocimiento section
+- THEN the document is not listed there
+- AND it is still listed on that project's page
+
+#### Scenario: Probe stays scope-bounded
+- GIVEN a KB document scoped to a project
+- WHEN an admin runs the retrieval probe in the global KB section
+- THEN the document's chunks are not returned
+
 ## Boundary
 KB retrieval supplies content for `conversation-manager` (CM-4); the manager view is exposed in `admin-panel` (AP-6).
