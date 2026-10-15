@@ -110,7 +110,7 @@ Non-goals (explicitly dropped after review):
 | T3a Recursos selector + persistence | S3 | inline | done | b1313675, b1f670c0 |
 | T3b pinned resources in context | S3 | inline | done | f8ce9dbf |
 | T3c planning.read_report tool | S3 | inline | done | 51e9643f, 46d39657 |
-| T4 tray/library separation | S4 | inline | pending | — |
+| T4 tray/library separation | S4 | inline | done | dd99e416 |
 | T5 multimodal tool results | S5 | inline | pending | — |
 | T6 partial reads (offset/limit) | S6 | inline | pending | — |
 | T7 docx/xlsx/md attachments | S7 | inline | pending | — |
@@ -265,3 +265,14 @@ Branches pushed: `odd/asistente-lumat-config-layer-s1` (#616) and
 further cohesive split fits). T1/T2 never had separate PRs; they are commits on this branch.
 Pre-merge: sync `origin/main` into each branch before merging (repo integration discipline).
 T4–T9 still pending.
+
+L21 — T4 done (`dd99e416`, branch `odd/asistente-lumat-config-layer-t4`). The composer tray now
+shows only the files **selected for the next message** (ephemeral, cleared after send); every
+thread file lives in the **library** popover, where each row can be selected for the next
+message or deleted. Uploading a file or attaching a project file auto-selects it; `sendMessage`
+passes only the selected ids (the backend already injected only the ids it received), and the
+selection resets when the thread changes. TDD: RED first (rewrote the tray/library test + added
+the send-selection test), then GREEN. Evidence: `AgentChat.test.tsx` 74/74; full frontend suite
+1193/1193 (EXIT 0); `npm run build` (tsc -b + vite) green. No backend change.
+RDD assess (`--base-ref cc1d74f2 --committed-only`): risk `medium`, `review_due=false`
+(`under_budget`, 88 changed lines). Next: T5 (multimodal tool results).
