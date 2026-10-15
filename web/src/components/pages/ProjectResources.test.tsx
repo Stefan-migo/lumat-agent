@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ProjectResources } from "./ProjectResources";
+import { ToastProvider } from "../primitives/Toast";
 
 const projectFile = { id: 1, project_id: 7, filename: "manual.pdf", content_type: "application/pdf", size: 2048, sha256: "x", status: "ready", kb_document_id: 1, folder_id: null, created_at: "2026-07-10T14:02:00-04:00" };
 const projectDoc = { id: 1, project_id: 7, title: "Manual", format: "pdf", version: 1, active_version: 1, active: true, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: "2026-07-10T14:02:00-04:00" };
 const globalDoc = { ...projectDoc, id: 2, project_id: null, title: "Global" };
 const response = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
-const renderResources = (role?: "admin" | "operador") => render(<ProjectResources projectSlug="ops" projectId={7} projectName="TestProject" role={role} />);
+const renderResources = (role?: "admin" | "operador") =>
+  render(<ToastProvider><ProjectResources projectSlug="ops" projectId={7} projectName="TestProject" role={role} /></ToastProvider>);
 
 describe("ProjectResources", () => {
   afterEach(() => {
@@ -107,6 +109,7 @@ describe("ProjectResources", () => {
   });
 
   it("uploads the picked file into the chosen folder from the dialog", async () => {
+    const user = userEvent.setup();
     const folder = { id: 10, project_id: 7, parent_id: null, name: "Diseño", created_at: null };
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(response({ files: [] }))
@@ -115,7 +118,8 @@ describe("ProjectResources", () => {
       .mockResolvedValueOnce(response({ files: [{ ...projectFile, folder_id: 10 }] }));
     renderResources("operador");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Subir archivo" }));
+    await user.click(await screen.findByRole("button", { name: "Acciones de archivos" }));
+    await user.click(screen.getByRole("menuitem", { name: "Subir archivo" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Carpeta de destino"), { target: { value: "10" } });
     fireEvent.change(within(dialog).getByLabelText("Archivo del proyecto"), { target: { files: [new File(["pdf"], "manual.pdf", { type: "application/pdf" })] } });
@@ -178,5 +182,44 @@ describe("ProjectResources", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/files/1", expect.objectContaining({ method: "DELETE" })));
     expect(await screen.findByText("Archivo eliminado.")).toBeInTheDocument();
+  });
+
+  it("lists project knowledge documents with format, version and status and filters by search", async () => {
+    const user = userEvent.setup();
+    const directDoc = { ...projectDoc, id: 3, title: "Politica interna", format: "csv", active_version: 2 };
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [] }))
+      .mockResolvedValueOnce(response({ folders: [] }))
+      .mockResolvedValueOnce(response({ docs: [directDoc] }));
+    renderResources("admin");
+
+    expect(await screen.findByText("Politica interna")).toBeInTheDocument();
+    expect(screen.getByText("CSV · v2")).toBeInTheDocument();
+    expect(screen.getByText("Activo")).toBeInTheDocument();
+    expect(screen.getByText("1 documento")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Buscar documento"), "sin-coincidencia");
+    expect(await screen.findByText("Sin resultados", {}, { timeout: 2000 })).toBeInTheDocument();
+  });
+
+  it("deletes a knowledge document from the KB after confirming in the dialog", async () => {
+    const user = userEvent.setup();
+    const directDoc = { ...projectDoc, id: 3, title: "Politica interna" };
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [] }))
+      .mockResolvedValueOnce(response({ folders: [] }))
+      .mockResolvedValueOnce(response({ docs: [directDoc] }))
+      .mockResolvedValueOnce(response({ ok: true }))
+      .mockResolvedValueOnce(response({ docs: [] }));
+    renderResources("admin");
+
+    await user.click(await screen.findByRole("button", { name: "Eliminar Politica interna de la KB" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Eliminar de la KB" })).toBeInTheDocument();
+    expect(within(dialog).getByText("¿Quieres eliminar este documento de la KB?")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar de la KB" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb/3", expect.objectContaining({ method: "DELETE" })));
+    expect(await screen.findByText("Documento eliminado de la base de conocimiento.")).toBeInTheDocument();
   });
 });

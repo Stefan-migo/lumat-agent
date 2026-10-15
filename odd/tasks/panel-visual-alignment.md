@@ -86,6 +86,15 @@ S6b — File manager completeness (ref: owner feedback 2026-10-14, see L13). Own
 S6c — Global design decision: every vertical `⋯` (icon) menu trigger has **no background and no
 border** — just the vertical dots.
 
+S6d — Global design decision: action feedback is a **transient toast** anchored to a screen corner
+(bottom-right) that auto-dismisses; never a permanent inline banner.
+
+S6e — Embedded Contexto tab scroll (owner feedback 2026-10-14, see L20).
+Inside the assistant workspace the project page fills its row and the active tab body scrolls
+vertically **as a whole** (one scrollbar for the tab; the page header and the tab bar stay fixed), so a
+tall Contexto tab is never clipped past the bottom of the workspace. The standalone page keeps
+scrolling with the document.
+
 ## Tasks
 
 | ID | Spec | Route | Status | Evidence |
@@ -99,10 +108,12 @@ border** — just the vertical dots.
 | T5 Hilos wire | S5 | inline | pending | — |
 | T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
 | T7 files tree UI | S6 | inline | done | bb6b6a64, c0268a94 |
-| T8 delete + confirm dialogs | S6 | inline | pending | — |
-| T9 knowledge card layout | S6 | inline | pending | — |
+| T8 delete + confirm dialogs | S6 | inline | done | c32accd5 |
+| T9 knowledge card layout | S6 | inline | done | c32accd5 |
 | T10 move file endpoint + drag & drop | S6b | inline | done | 196ebd23 |
 | T11 upload dialog + tree/root/toolbar revisions | S6b, S6c | inline | done | c366119d |
+| T12 toast + menu stacking + tree polish | S6b, S6c, S6d | inline | done | 6b9af9b2, 43340a03 |
+| T13 embedded tab scroll | S6e | inline | done | 243447e9 |
 
 ## Log
 
@@ -196,3 +207,63 @@ wide table scrolls instead of overflowing. Verified: `npm run build` green, full
 screenshots at 1440 and 1024 px match the requested layout. RDD assess: medium, `under_budget`, no review
 due. Note: the visible `+ Subir archivo` button is kept alongside the `⋯` menu (which also lists `Subir
 archivo`); flag to the owner whether to drop the duplicate.
+
+L15 (owner, verbatim): "ok mejor. pero aun un par de cosas: - [Image 1] actual. ese destacador. hay que
+sacarlo o bien hay que cambiar el color pero se ve muy mal. - actual abriendo el boton mas[Image 2] , el
+boton subir archivo esta fuera deberia estar dentro. ademas el "testproyect" tapa el dialog abierto. -
+actual con toast [Image 3] . aqui el toast queda para siempre. no se va nunca. importante seria quizas
+tambien cambio global. redise;ar el toast. que aparezca en una equina superior o inferior derecha. y que
+se autooculte."
+
+L16: T12 done (6b9af9b2 + 43340a03). (1) Removed the folder selection highlight and the selection concept
+entirely (the upload dialog owns the destination). (2) `Subir archivo` moved inside the toolbar `⋯` menu;
+fixed a real stacking bug — the portal `.menu__content` had no z-index and lost to the sticky root row
+(`z-index: 1`), which hid the first menu item and let the root row paint over the menu; added
+`z-index: var(--z-modal)`. (3) New global `ToastProvider`/`useToast` primitive: transient notifications
+anchored bottom-right, auto-dismissing (5 s), stacking, closable; mounted around the app; the tree and
+knowledge action feedback now use it instead of a permanent inline banner. Added `--z-toast`. Verified:
+`npm run build` green, full vitest suite green (1199 passed), live checks (menu items both present, toast
+appears and is gone after 5.2 s), screenshots in `/tmp/opencode/tree-shots3/`. RDD assess: medium,
+`under_budget`, no review due.
+
+L17 (owner, verbatim): "si ahora se ve correcto. el toast abajo esta correcto igual [Image 1] . pero la
+fuente no es la correcta. debe ser la fuente que utilizamos en el dise;o lumat. cerramos con esa
+correccion. guarda la memoria. dame el handoff para continuar con T9 en un nuevo chat"
+
+L18: T12 follow-up done (569921f1). The toast inherited the browser default font; set
+`font-family: var(--font-ui)` (Inter) on `.toast`, matching the rest of the panel. Build green, full
+suite green (1199). Session closed. Next: T9 (knowledge card, ref image 1) then T8 (KB document delete
+dialog, ref image 2 right). Handoff written to `odd/handoffs/panel-visual-alignment-t9.md` in the primary
+worktree.
+
+L19 (owner): "podemos hacer t9 y t8 en un solo workunit? ... asegurate agregar tambien los sliders
+verticales para scroll de cada card y no romper el layout" — T8 and T9 shipped as **one work unit**
+(`c32accd5`, "feat(panel): redesign the project knowledge card and add KB document delete"), as asked.
+T9: the knowledge card drops the generic `DataTable` (the overflow source) for a row list matching the
+reference — subtitle `Documentos de la base de conocimiento (RAG).`, a `Buscar documento…` toolbar with
+the `Subir archivo a la KB` action, rows of icon + title + `FORMAT · vN` + `Activo` badge + trash, and a
+footer note plus the `N documentos` count. T8: the `Eliminar de la KB` dialog reuses the file-delete
+pattern (icon + title + question + preview card with `FORMAT · vN` + badge + `Proyecto: <name>` +
+`Cancelar`/red confirm) and calls the existing `deleteKbDocument`. Scroll: the document list caps at
+22rem and scrolls on its own, like the file tree, so each card keeps its grid track. Verified: `npm run
+build` green, full vitest suite green (1201 passed, +2 tests), no horizontal overflow at 1440/1100/900
+px, and the list scroll engages (clientHeight 352 / scrollHeight 1229, `overflow-y: auto`). RDD assess:
+medium, `under_budget`, no review due.
+
+L20 (owner, verbatim): "actual. [Image 1] . Se rompe el layout hacia el bottom. se alargan tanto las cards
+que desaparecen por el bottom. hay que arreglar eso. insisto que necesitamos un slider vertical para hacer
+scroll. puede ser un scroll por card individual o un slider global para toda la tab contexto. me parece
+que tiene mas sentido esta." → Captured as S6e and T13. Root cause: the embedded page lived in
+`.assistant-workspace__thread` (a full-height track) but `.assistant-workspace` has `overflow: hidden`,
+and the frame only had `align-content: start` with no scroll region, so a Contexto tab taller than the
+workspace was clipped with no scrollbar. Fix (243447e9, `ProjectsPage.css` only): the embedded frame is a
+flex column with `min-height: 0`; `.page-frame__content` fills the remaining row; the `.tabs` panel gets
+`flex: 1 1 auto; min-height: 0; overflow-y: auto` — one vertical scrollbar for the whole tab, with the
+page header and tab bar fixed. The standalone page is untouched (it scrolls with the document via
+`.panel-shell__content-area { min-height: 100dvh }`). Verified live in the embedded workspace
+(`/panel/app/chat?context=test`) at 1440x820 and 1280x640: `.tabs__panel` overflows and scrolls
+(clientHeight 498 / scrollHeight 958 and 318 / 1106, `overflow-y: auto`, `scrollTop` responsive), no
+horizontal overflow. Build green; full suite green (1200 passed + the known flaky `AgentChat > markdown
+snapshot stale`, which passes in isolation 68/68). The per-card caps from L13 (`.file-tree` and
+`.project-knowledge__list`, 22rem) are kept, so a very long card still scrolls internally as well as the
+tab; if the owner prefers a single scroll, drop those two `max-height` rules.

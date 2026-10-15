@@ -56,6 +56,29 @@
   font-size: var(--text-sm);
 }
 
+/* Knowledge card: its note and count stack in the footer, and the document
+   list scrolls on its own like the file tree so the card keeps its grid track
+   and never grows the layout. */
+.projects-page__kb-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.project-knowledge__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.project-knowledge__list .file-tree__row + .file-tree__row {
+  border-top: 1px solid var(--corp-border);
+}
+
 .file-tree {
   display: flex;
   flex-direction: column;
@@ -98,8 +121,7 @@
   font-weight: var(--weight-medium);
 }
 
-.file-tree__row:hover,
-.file-tree__row.is-selected {
+.file-tree__row:hover {
   background: var(--primary-50);
 }
 
@@ -147,16 +169,6 @@
 .file-tree__row .badge {
   flex: 0 0 auto;
   white-space: nowrap;
-}
-
-.file-tree__name--button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 
 .file-tree__count,
@@ -264,10 +276,30 @@
 .projects-page--embedded .page-header { margin-bottom: 0; }
 .projects-page--embedded .page-frame__titlebar { padding-bottom: 0; }
 .projects-page--embedded { gap: var(--space-4); }
-/* The workspace center gives the frame a full-height grid track; without this the
-   auto rows stretch and the title bar grows far past the header, leaving a huge gap
-   between the title and the tabs. */
-.projects-page--embedded { align-content: start; }
+/* The workspace center gives the frame a full-height track that CLIPS its overflow
+   (`.assistant-workspace { overflow: hidden }`). Lay the frame out as a column: the
+   page header and the tab bar stay put and the active tab body gets ONE vertical
+   scrollbar for the whole tab, so a tall Contexto tab scrolls instead of running past
+   the bottom. This replaces the old `align-content: start`: the title bar is an `auto`
+   flex item, so it no longer stretches on its own. */
+.projects-page--embedded {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.projects-page--embedded > .page-frame__content {
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+.projects-page--embedded .tabs { min-height: 0; }
+.projects-page--embedded .tabs__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
 
 @media (max-width: 800px) {
   .projects-page__context {
