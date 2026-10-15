@@ -14,7 +14,7 @@ import logging
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
-from app.models import InternalChatThread, UserRole
+from app.models import AssistantAttachment, InternalChatThread, UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
@@ -273,6 +273,12 @@ class ProjectListFilesArgs(BaseModel):
 class ProjectReadFileArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     file_id: int = Field(gt=0)
+
+
+class ViewImageArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source: Literal["project", "thread"]
+    id: int = Field(gt=0)
 
 
 class SkillProposeArgs(BaseModel):
@@ -740,6 +746,35 @@ def _read_project_file(session, args: ProjectReadFileArgs, *, owner_id: int | No
     return {"file_id": row.id, "filename": row.filename, **project_files.read_file_text(row)}
 
 
+def _view_image(session, args: ViewImageArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None, proyecto: str = "default", project_id: int | None = None):
+    """Return an image handle; the harness turns it into a vision part (S5)."""
+    from app.config import get_settings
+
+    if args.source == "project":
+        slug = proyecto if isinstance(proyecto, str) and proyecto and proyecto != "default" else None
+        project = project_files.owned_project(session, owner_id, project_id=project_id, slug=slug)
+        if project is None:
+            raise ToolValidationError("no accessible project for project files")
+        row = project_files.get_project_file(session, project.id, args.id)
+        if row is None:
+            raise ToolValidationError("project file not found")
+        if project_files.read_file_text(row)["kind"] != "image":
+            raise ToolValidationError("project file is not a viewable image")
+        mime, filename, size = row.content_type, row.filename, row.size
+    else:
+        if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
+            raise ToolValidationError("thread images require an authenticated chat thread")
+        row = session.get(AssistantAttachment, args.id)
+        if row is None or row.thread_id != trusted_thread_id or row.deleted_at is not None:
+            raise ToolValidationError("thread image not found")
+        if row.kind != "image":
+            raise ToolValidationError("attachment is not a viewable image")
+        mime, filename, size = row.content_type, row.filename, row.size
+    if size > get_settings().assistant_attachment_max_image_bytes:
+        raise ToolValidationError("image exceeds the vision size limit")
+    return {"image": {"source": args.source, "id": args.id, "filename": filename, "mime": mime}}
+
+
 def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
     thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
     if thread is None:
@@ -904,6 +939,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace.", tier="default"),
     "list_project_files": ToolDefinition("list_project_files", ProjectListFilesArgs, True, _list_project_files, "List the current project's stored files.", tier="default"),
     "read_project_file": ToolDefinition("read_project_file", ProjectReadFileArgs, True, _read_project_file, "Read one project file's exact extracted text.", tier="default"),
+    "view_image": ToolDefinition("view_image", ViewImageArgs, True, _view_image, "View an image on demand: a project file or a thread attachment, returned to the model as a vision part.", tier="default"),
     "artifact.save": ToolDefinition("artifact.save", ArtifactSaveArgs, False, _save_artifact, "Save a downloadable file artifact for the current conversation.", tier="default"),
     "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),
     "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval.", tier="opt_in"),
@@ -929,6 +965,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "view_image": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "artifact.save": frozenset(UserRole),
     "memory.read": frozenset(UserRole),
     "memory.search": frozenset(UserRole),
@@ -1013,7 +1050,7 @@ def execute_tool(
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name.startswith("planning.") or name in {"list_project_files", "read_project_file", "artifact.save", "skill.propose"} or (
+    owner_scoped = name.startswith("project.") or name.startswith("planning.") or name in {"list_project_files", "read_project_file", "view_image", "artifact.save", "skill.propose"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
@@ -1067,6 +1104,8 @@ def execute_tool(
     try:
         if name == "artifact.save":
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id))
+        elif name == "view_image":
+            result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id, proyecto=proyecto, project_id=project_id))
         elif name in {"list_project_files", "read_project_file", "skill.propose"}:
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, proyecto=proyecto, project_id=project_id))
         elif name.startswith("project."):

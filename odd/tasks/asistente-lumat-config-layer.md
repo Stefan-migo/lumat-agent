@@ -111,7 +111,7 @@ Non-goals (explicitly dropped after review):
 | T3b pinned resources in context | S3 | inline | done | f8ce9dbf |
 | T3c planning.read_report tool | S3 | inline | done | 51e9643f, 46d39657 |
 | T4 tray/library separation | S4 | inline | done | dd99e416 |
-| T5 multimodal tool results | S5 | inline | pending | — |
+| T5 multimodal tool results | S5 | inline | done | 9162183a, 32ec0106 |
 | T6 partial reads (offset/limit) | S6 | inline | pending | — |
 | T7 docx/xlsx/md attachments | S7 | inline | pending | — |
 | T8 three global skills | S8 | inline | pending | — |
@@ -279,3 +279,19 @@ RDD assess (`--base-ref cc1d74f2 --committed-only`): risk `medium`, `review_due=
 
 L22 — T4 delivery: PR **#618** (head `odd/asistente-lumat-config-layer-t4` → base #617). Chain so
 far: `main` ← #616 (T0–T2) ← #617 (T3) ← #618 (T4).
+
+L23 — T5 done (`9162183a` tool, `32ec0106` harness). Design closed with the owner: decision **(B)** —
+the image reaches **both** the planner re-plan and the responder. New read-only tool `view_image`
+(`tier="default"`, ADMIN/OPERADOR, owner-scoped) with args `{source: "project"|"thread", id}`:
+resolves a `ProjectFile` or an `AssistantAttachment`, validates it is an image and belongs to the
+thread's project/owner, and returns a compact **handle** `{"image": {source, id, filename, mime}}`
+(no bytes in the evidence). `_tool_image_parts`/`_resolve_tool_image` (`nodes.py`) resolve handles
+from this turn's `state["tool_results"]` to `image_url` parts and inject them into `plan_llm` and the
+responder's `execute`; the shared encoding was extracted to `attachments.image_url_part`. Because the
+handle lives only in the tool result, a thread image is **not** re-injected on later messages.
+Registered in `TOOL_REGISTRY`, `ROLE_TOOL_ALLOWLIST`, `agent/registry.yaml` and the effective-config
+`DEFAULT_TOOLS` sets; the frozen planner-catalog hash was refreshed. TDD: RED first (5 `view_image`
+function/lifecycle tests + 3 injection tests), then GREEN. Evidence: focused 8/8; full backend suite
+green (EXIT 0, no failures); no frontend change. RDD assess (`--base-ref f4b5489a --committed-only`):
+risk `medium`, `review_due=false` (`under_budget`, 405 changed lines).
+Next: T6 (partial reads `offset`/`limit`).
