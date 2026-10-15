@@ -114,8 +114,8 @@ Non-goals (explicitly dropped after review):
 | T5 multimodal tool results | S5 | inline | done | 9162183a, 32ec0106 |
 | T6 partial reads (offset/limit) | S6 | inline | done | 7563486f |
 | T7 docx/xlsx/md attachments | S7 | inline | done | 408902e3 |
-| T8 three global skills | S8 | inline | pending | — |
-| T9 TecnicoLumat agent | S9 | inline | pending | — |
+| T8 three global skills | S8 | inline | done | 2d79c7c8 |
+| T9 TecnicoLumat agent | S9 | inline | done | 092c40b1 |
 
 ## Log
 
@@ -322,3 +322,51 @@ now uses a `.zip`. TDD: RED first (allowlist + real docx/xlsx extraction tests +
 GREEN. Evidence: backend focused green; full backend suite green (EXIT 0); full frontend suite
 1222/1222 (EXIT 0); `npm run build` green. RDD assess (`--base-ref 3c72556e --committed-only`): risk
 `medium`, `review_due=false` (`under_budget`, 83 changed lines). Next: T8 (three global skills).
+
+L26 — T8 done (`2d79c7c8`, branch `odd/asistente-lumat-config-layer-t8`, from `main` @ 43237341).
+The assistant now declares four global skills: the three new ones (`planning`, `tools`, `kb`)
+alongside `memoria-tukulpan`, with bodies under `agent/skills/assistant/`. Verified the mechanism
+needs no harness change: the planner already receives `<available_skills>` (name + description, no
+body) and `PlannerOutput.skills` is validated against the global index in `_validated_skills`,
+while `_skill_context` loads the declared bodies for the responder. Also confirmed
+`_planner_tool_catalog` serialises tools only, so the frozen hash in `test_assistant_delegation.py`
+does not move. Skill content: `planning` = guided session flow + close contract; `tools` = default
+vs opt-in tiers, owner approval for writes, partial reads/multi-turn; `kb` = when and how to use
+`kb.retrieve` and stay grounded. TDD: RED first (`KeyError: 'planning'` in a new `test_skills.py`
+test asserting the three are indexed, loadable, planner-declarable, and responder-loadable), then
+GREEN. The exact-catalog assertion in `test_assistant_config.py` was extended from one skill to
+four. Evidence: focused `test_skills.py` + `test_api_skills.py` green; full backend suite 2212
+passed (EXIT 0). No frontend change (the `/panel/api/skills` route returns the new catalog and the
+frontend tests mock it). RDD assess (`--base-ref 43237341 --committed-only`): risk `medium`,
+`review_due=false` (`under_budget`, 130 changed lines). Next: T9 (TecnicoLumat agent).
+
+L27 — T9 design closed with the owner. Decisions: (a) registry **Option B** — keep the single
+`assistant:` block as the default and add a `role_agents:` map by role, reusing the same
+`_build_assistant` validator; (b) KB — the technician gets `kb.retrieve` but **audience-scoped** to
+`customer`, never internal; (c) memory — TecnicoLumat has its own memory and the business-shared
+exclusion is kept; (d) TecnicoLumat tools = KB, scoped agenda, its own memory, `artifact.save`,
+`assistant.capabilities`, web, and read-only project lookup (no `project.*` admin, no `planning.*`,
+no `skill.propose`); skills = `kb` + `tools`. A separate KB-panel privacy leak (project documents
+showing in the global "Base de conocimiento" list) was found during the discussion and deferred to
+its own ODD (recorded in Engram; fix is scope-based via `project_id`, not a new `KbVisibility`).
+
+L28 — T9 done (`092c40b1`, branch `odd/asistente-lumat-config-layer-t9`, chained on the T8 branch).
+The role now selects the agent: `Registry.role_agents` + `select_assistant()` +
+`load_assistant_config(role=...)` return TecnicoLumat for `tecnico` and the default `assistant` for
+every other/unknown role (the default blocks the fallback, so existing callers are unchanged). New
+`agent/personas/tecnico_lumat.md` and a `role_agents.tecnico` declaration (narrowed tools + `kb`/
+`tools` skills). KB scope: `kb.retrieve` is now allowed for `tecnico` in `ROLE_TOOL_ALLOWLIST`, and
+`_retrieve_kb` derives `audience=KbVisibility.CUSTOMER` from the role (admin/operador keep
+`audience=None` = whole corpus). Runtime wiring: planner/responder prompts, `resolve_effective_config`
+and `available_opt_in_tools` resolve by role, and the panel `/assistant/capabilities` route now
+describes the agent the role talks to. Memory: unchanged — `BUSINESS_MEMORY_ROLES` still excludes
+`tecnico` from business-shared memory, and the technician's memory is owner/project-scoped. TDD: RED
+first (6 failing tests across `test_assistant_roles.py` + a new effective-config integration test),
+then GREEN. Existing tests that encoded the old shape were updated: the technician tool matrix gained
+`kb.retrieve`, the technician capabilities test now expects TecnicoLumat's persona and a scoped KB,
+and the planner/harness/multimodal fixtures accept the new `role` kwarg. Evidence: focused suite
+green; full backend suite 2218 passed (EXIT 0). No frontend change (the panel capabilities payload is
+mocked in every frontend test).
+
+L29 — RDD assess for T9 (`--base-ref 0b39e949 --committed-only`): risk `medium`, `review_due=false`
+(`under_budget`, 16 paths / 346 changed lines). Boundary stays pending in the slice.

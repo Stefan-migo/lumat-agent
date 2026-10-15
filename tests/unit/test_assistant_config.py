@@ -20,7 +20,22 @@ def test_complete_assistant_configuration_loads_declared_skill_index(repo_root):
             "memoria-tukulpan",
             "Tukulpan memory: own vs customer axis, when to read/write, and correct memory.* argument shapes.",
             "skills/assistant/memoria-tukulpan.md",
-        )
+        ),
+        (
+            "planning",
+            "Guided planning sessions: the open/record/close flow, the close contract, and how to read a session report.",
+            "skills/assistant/planning.md",
+        ),
+        (
+            "tools",
+            "Assistant tools: default vs opt-in tiers, owner approval for writes, and multi-turn/partial-read usage.",
+            "skills/assistant/tools.md",
+        ),
+        (
+            "kb",
+            "Knowledge base: when and how to use kb.retrieve and how to stay grounded.",
+            "skills/assistant/kb.md",
+        ),
     ]
     assert "SECRET SKILL BODY" not in config.prompts["plan"]
     assert config.memoria_scope == "panel"

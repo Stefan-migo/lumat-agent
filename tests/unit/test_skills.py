@@ -89,6 +89,31 @@ def test_real_registry_indexes_and_lazily_loads_memoria_tukulpan(repo_root):
     assert not {item.name for item in index}.intersection({"emergency", "handoff", "capture"})
 
 
+def test_real_registry_exposes_the_three_global_skills_to_the_planner(repo_root):
+    from app.chat.assistant.nodes import _skill_context, _validated_skills
+    from app.services.skills import global_skill_index, load_skill_body
+
+    index = global_skill_index(load_assistant_config(repo_root / "agent" / "registry.yaml"))
+    by_name = {item.name: item for item in index}
+
+    for name in ("planning", "tools", "kb"):
+        skill = by_name[name]
+        assert skill.scope == "global"
+        assert skill.description.strip()
+        assert load_skill_body(skill).strip()
+
+    # The planner may declare them (PlannerOutput.skills) and the responder loads their bodies.
+    assert _validated_skills({"plan": {"skills": ["planning", "tools", "kb", "does-not-exist"]}}) == [
+        "planning",
+        "tools",
+        "kb",
+    ]
+    context = _skill_context({"guardrails": {"skills": ["planning", "tools", "kb"]}})
+    assert "### Skill: planning" in context
+    assert "### Skill: tools" in context
+    assert "### Skill: kb" in context
+
+
 def test_malformed_assistant_skill_entry_is_rejected(repo_root, tmp_path):
     registry_path = _registry_with_skills(
         repo_root, tmp_path,

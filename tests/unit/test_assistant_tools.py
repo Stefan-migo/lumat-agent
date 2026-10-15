@@ -322,7 +322,7 @@ def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncatio
     )
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(tools_whitelist=whitelist),
+        lambda **_kwargs: SimpleNamespace(tools_whitelist=whitelist),
     )
     result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
     names = [line.split(" — ", 1)[0] for line in result["capabilities"].splitlines()]
@@ -336,7 +336,7 @@ def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncatio
 def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypatch):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(tools_whitelist=["customers.search"]),
+        lambda **_kwargs: SimpleNamespace(tools_whitelist=["customers.search"]),
     )
 
     result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
@@ -1054,7 +1054,7 @@ def test_web_search_empty_results_are_the_only_empty_success():
 def test_web_search_missing_api_key_fails_fast(monkeypatch):
     monkeypatch.setattr(
         "app.chat.assistant.tools.search.get_settings",
-        lambda: SimpleNamespace(brave_search_api_key=" "),
+        lambda **_kwargs: SimpleNamespace(brave_search_api_key=" "),
     )
 
     with pytest.raises(SearchFailure, match="BRAVE_SEARCH_API_KEY"):

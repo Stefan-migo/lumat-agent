@@ -438,14 +438,14 @@ def test_conservative_directive_is_added_to_planner_user_prompt(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(
+        lambda **_kwargs: SimpleNamespace(
             prompts={"plan": "{{user_input}} {{available_tools}} {{context}}"},
             tools_whitelist=[], persona="persona", skills=(),
         ),
     )
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
-        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        lambda **_kwargs: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
             create=lambda **kwargs: calls.append(kwargs) or SimpleNamespace(
                 choices=[SimpleNamespace(message=SimpleNamespace(
                     content='{"kind":"respond","summary":"done"}',
@@ -473,7 +473,7 @@ def test_responder_user_prompt_carries_the_declared_tool_inventory(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
-        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        lambda **_kwargs: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
             create=lambda **kwargs: calls.append(kwargs) or [
                 SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))]),
             ],
@@ -499,7 +499,7 @@ def test_responder_user_prompt_forbids_tool_invocation_markup(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
-        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        lambda **_kwargs: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
             create=lambda **kwargs: calls.append(kwargs) or [
                 SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))]),
             ],
@@ -535,7 +535,7 @@ def test_responder_stream_and_persisted_response_strip_split_dsml(monkeypatch):
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
-        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        lambda **_kwargs: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
             create=lambda **kwargs: [
                 SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=token))])
                 for token in streamed
