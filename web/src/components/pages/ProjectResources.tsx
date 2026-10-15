@@ -81,7 +81,7 @@ export function ProjectResources({
   const files = useAsyncData(loadFiles, true);
   const loadFolders = useCallback(() => listProjectFolders(projectSlug), [projectSlug]);
   const folders = useAsyncData(loadFolders, true);
-  const loadDocs = useCallback(() => refreshKbDocuments(), []);
+  const loadDocs = useCallback(() => refreshKbDocuments(projectId), [projectId]);
   const docs = useAsyncData(loadDocs, isAdmin);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
