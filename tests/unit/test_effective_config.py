@@ -34,6 +34,7 @@ DEFAULT_TOOLS = {
     "project.find",
     "list_project_files",
     "read_project_file",
+    "view_image",
     "artifact.save",
     "skill.propose",
     "planning.open",
