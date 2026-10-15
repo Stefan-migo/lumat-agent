@@ -149,7 +149,7 @@ def test_recipe_event_targets_customer_and_uses_recipe_content(migrated_db):
         rule.enabled = True
         event = publish_event(
             session, event_type="appointment.booked", entity_type="appointment", entity_id="booked-1",
-            payload={"recipient": "+56912345678"}, dedupe_key="appointment:booked:recipe-customer",
+            payload={"recipient": "+56912345678", "origin": "panel"}, dedupe_key="appointment:booked:recipe-customer",
         )
         evaluate_event(session, event)
         operation = session.scalar(select(NotificationOperation).where(NotificationOperation.event_id == event.id))

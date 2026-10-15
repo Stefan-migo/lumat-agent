@@ -289,7 +289,10 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
     _history(session, appointment, actor=actor, action="booked", previous=None)
     record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
     dedupe_key = f"appointment:{appointment.id}:booked"
-    publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=dedupe_key)
+    # ponytail: only the chat node books as "assistant" (it confirms in-channel); every
+    # other caller is the panel. Revisit if a third booking origin appears.
+    origin = "assistant" if actor == "assistant" else "panel"
+    publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service, "origin": origin}, dedupe_key=dedupe_key)
     notify_admins(session, title="Nueva visita agendada", content=f"Se agendó una visita de {service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
     _maintain_reminder(session, appointment, schedule=True)
     return appointment
