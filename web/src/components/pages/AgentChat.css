@@ -41,6 +41,8 @@
 .assistant-chat__attachment-remove { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-6); height: var(--space-6); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--corp-fg-muted); cursor: pointer; }
 .assistant-chat__attachment-remove:hover { background: var(--primary-100); color: var(--corp-text); }
 .assistant-chat__attachment-remove:disabled { cursor: wait; opacity: .6; }
+.assistant-chat__attachment-select { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-6); height: var(--space-6); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--corp-fg-muted); cursor: pointer; }
+.assistant-chat__attachment-select:hover { background: var(--primary-100); color: var(--corp-text); }
 .assistant-chat__tool-option { position: relative; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); line-height: 1.25; cursor: pointer; }
 .assistant-chat__tool-option:hover { background: var(--surface); }
 .assistant-chat__tool-option input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
