@@ -47,7 +47,7 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 
 ## Tasks
 
-- [ ] T1 — Chain continues after an approved class-A write: `approve_plan`/`resume_thread` re-enter the graph instead of terminating. (S1, S2) — route: inline
+- [x] T1 — Chain continues after an approved class-A write: `approve_plan`/`resume_thread` re-enter the graph instead of terminating. (S1, S2) — route: inline — commit `TBD`
 - [ ] T2 — Sequential approval for step 2+: the chain can pause with a fresh approval per write and resume it. (S1, S2) — route: inline
 - [ ] T3 — Regression pins: read-only chaining and the single-write path are unchanged. (S4) — route: inline
 - [ ] T4 — Reject mid-chain aborts cleanly with an audit record. (S5) — route: inline
@@ -81,3 +81,9 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 **Decision (owner, 2026-10-15).** "A + B acotada": class A (all business/config writes) is human-approved per write; class B (bounded autonomous) is exactly the current `AUTONOMOUS_WRITE_ALLOWLIST` and does not grow. `skill.propose` was verified to write the project config directly (`registry.py:716`) despite its name, so it stays in A.
 
 **Next step.** Implement T1–T7 inline on this branch; independent verification at the end (high-risk: touches approval, recovery, audit).
+
+**T1 — implemented (2026-10-15).** `approve_plan`/`resume_thread` no longer call the bare `execute` node; `_run_approved_plan` re-enters the assistant graph via `run_assistant(resume_plan=…, resume_approval=…)`. The graph routes `memory_bootstrap → guardrails` on resume (skipping `plan_llm`, which would break the token's argument binding), executes the write inside the graph, then continues `tool_loop_head → verify_effects → respond_stream → evidence`. Two decisions made during implementation:
+  - **Re-entry is scoped to a plan that names a tool.** The `legacy_compat` pre-planner approval carries `tool: None`; re-entering the graph there grounds-refuses, so that degenerate path keeps the original `execute` node. Verified: `test_approved_plan_route_records_execution_audit`, `test_approved_plan_stream_replays_complete_execution_sequence`, `test_stopping_approval_pending_revokes_approval_and_prevents_execution` stay green unchanged.
+  - **Resume-scoped responder resilience.** The responder runs on the resume path to narrate the executed write; a provider failure there now degrades the reply and records a degraded evidence entry instead of raising, because by then the write has already executed and must not be rolled back. Non-resume turns keep the original raise.
+  - The seeded plan derives `kind` when missing (a persisted plan may predate it), so guardrails routes it as a tool plan.
+  - Evidence: RED observed (`tool settings.update completed.` ≠ responder text) → GREEN; `tests/integration/test_assistant_settings_write.py::test_approved_write_reenters_the_graph_and_responds`; full suite green.
