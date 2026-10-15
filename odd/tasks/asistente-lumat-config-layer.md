@@ -113,7 +113,7 @@ Non-goals (explicitly dropped after review):
 | T4 tray/library separation | S4 | inline | done | dd99e416 |
 | T5 multimodal tool results | S5 | inline | done | 9162183a, 32ec0106 |
 | T6 partial reads (offset/limit) | S6 | inline | done | 7563486f |
-| T7 docx/xlsx/md attachments | S7 | inline | pending | — |
+| T7 docx/xlsx/md attachments | S7 | inline | done | 408902e3 |
 | T8 three global skills | S8 | inline | pending | — |
 | T9 TecnicoLumat agent | S9 | inline | pending | — |
 
@@ -308,3 +308,17 @@ then GREEN. Evidence: focused green; full backend suite green (EXIT 0, no failur
 change. The two `read_file_text` lambdas in `test_assistant_tools.py` were widened with `**kwargs`
 for the new call shape. RDD assess (`--base-ref 173befd0 --committed-only`): risk `medium`,
 `review_due=false` (`under_budget`, 146 changed lines). Next: T7 (docx/xlsx/md attachments).
+
+L25 — T7 done (`408902e3`, branch `odd/asistente-lumat-config-layer-t7`, chained on the T6 branch).
+Thread attachments now accept `.docx`/`.xlsx`/`.md`: `attachments._DOCUMENTS` gained the three
+suffixes (with mime sets, so `.md` accepts `text/markdown` and `text/plain`),
+`assistant_attachment_allowed_types` default is `["pdf","csv","txt","md","docx","xlsx","image"]`, and
+`prepare_attachment_context` extracts text with the shared `extract_document_text` (which already
+powers project files) instead of the PDF/MD/CSV-only `kb.extract_text` — so docx/xlsx attachments now
+yield real text. Frontend: the file picker `accept` gained `.docx,.xlsx,.md` (the file-icon map
+already covered them; no client-side validation existed). Behaviour note: attaching a `.md` project
+file to a thread is no longer rejected → `test_project_file_attachment_rejects_other_project_and_unsupported_type`
+now uses a `.zip`. TDD: RED first (allowlist + real docx/xlsx extraction tests + picker accept), then
+GREEN. Evidence: backend focused green; full backend suite green (EXIT 0); full frontend suite
+1222/1222 (EXIT 0); `npm run build` green. RDD assess (`--base-ref 3c72556e --committed-only`): risk
+`medium`, `review_due=false` (`under_budget`, 83 changed lines). Next: T8 (three global skills).
