@@ -9,6 +9,7 @@ import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
 import { agendaDayKey, formatAgendaSlot } from '../shared/agendaTime';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
+import { pathForRoute } from '../domain/panelRoutes';
 
 /** Technician agenda (TECH-AGENDA-1).
  *
@@ -93,7 +94,7 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
       </Badge>
       {row.emergency ? <Badge tone="danger" className="technician-agenda__safety">Emergencia</Badge> : null}
       {row.priority === 'alta' ? <Badge tone="warning" className="technician-agenda__safety">Prioridad alta</Badge> : null}
-      <p className="technician-agenda__service">{row.service}</p>
+      <p className="technician-agenda__service"><a href={pathForRoute({ view: 'agenda', appointmentId: row.id })}>{row.service}</a></p>
       <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
       {mapQuery
          ? <Button className="technician-agenda__field-control" variant="secondary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</Button>

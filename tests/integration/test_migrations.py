@@ -690,6 +690,34 @@ def test_migration_052_adds_memory_handoff_column(tmp_path):
         assert column == ("boolean", "NO", "false")
 
 
+def test_migration_056_adds_the_technician_visit_state_axis(tmp_path):
+    """056 adds the orthogonal field-state axis as a new type, never touching appointment_status."""
+    with _scratch_migration_db(tmp_path, 55, 56) as (conn, apply_056, _):
+        result = apply_056()
+        assert result.returncode == 0, f"056 failed:\n{result.stdout}\n{result.stderr}"
+
+        columns = conn.execute(
+            "SELECT column_name, udt_name, is_nullable FROM information_schema.columns "
+            "WHERE table_name = 'appointments' AND column_name IN ('technician_state', 'technician_state_at') "
+            "ORDER BY column_name"
+        ).fetchall()
+        assert columns == [
+            ("technician_state", "technician_visit_state", "YES"),
+            ("technician_state_at", "timestamptz", "YES"),
+        ]
+        labels = conn.execute(
+            "SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+            "WHERE t.typname = 'technician_visit_state' ORDER BY e.enumsortorder"
+        ).fetchall()
+        assert labels == [("en_route",), ("arrived",)]
+        # The visit lifecycle enum is untouched by this axis.
+        status_labels = conn.execute(
+            "SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+            "WHERE t.typname = 'appointment_status' ORDER BY e.enumsortorder"
+        ).fetchall()
+        assert status_labels == [("booked",), ("cancelled",), ("completed",), ("no_show",)]
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -749,6 +777,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("053_panel_secrets",),
         ("054_project_files_kb_document",),
         ("055_project_folders",),
+        ("056_appointment_technician_state",),
     ]
 
 
