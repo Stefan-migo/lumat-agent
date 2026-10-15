@@ -40,3 +40,7 @@ Delivery: single PR (small work unit). Test runner: `uv run pytest` (backend), `
   (missing DELETE grant) and a FK-order failure before the final green.
 - L4: Backend focused green (59 passed); full backend suite exit 0 (2268 tests);
   frontend 108 files / 1229 tests green + `npm run build` green.
+- L5: Independent verification (gentle-ai-verify, read-only) — S1..S6 all MET, 0 blockers,
+  1 advisory (duplicate page-level error banner behind the dialog). Probes confirmed
+  isolation, dependency order, atomic rollback, the 057 grant, and that baseline RED was
+  `ImportError`/`405`. Probes committed as regression tests; advisory fixed.
