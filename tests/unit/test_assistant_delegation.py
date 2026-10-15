@@ -40,9 +40,10 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
 
     # SHA-256 of the serialized assistant catalog at the post-tool-catalog-trim
     # baseline, plus the planning-facilitator, unit-2 conversation-inspection,
-    # unit-3 settings.update, the planning read-report tools and view_image.
+    # unit-3 settings.update, the planning read-report tools, view_image and the
+    # read_project_file offset/limit paging fields.
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "5f8e60eff71124263d784ead095892bfe579d12bbabca90c3f83e6e15796a05d"
+        "dd7fb27a5673508c4af2daeda21258ddfe1aadaad79aba5f64b6451bcd777a42"
     )
 
 
