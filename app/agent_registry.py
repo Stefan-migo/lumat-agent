@@ -88,6 +88,7 @@ class Registry:
     orchestrator: Agent
     sub_agents: dict[str, SubAgent]
     assistant: Assistant
+    role_agents: dict[str, Assistant]
 
 
 def _coerce_str_list(value, *, what: str) -> tuple[str, ...]:
@@ -147,8 +148,7 @@ def _runtime_path(agent_dir: Path, value, *, what: str) -> str:
     return value
 
 
-def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
-    where = "assistant"
+def _build_assistant(root: dict, agent_dir: Path, where: str = "assistant") -> Assistant:
     if not isinstance(root, dict):
         raise RegistryError(f"{where} must be a mapping, got {type(root).__name__}")
     required = ("name", "persona", "prompts", "tools_whitelist", "model")
@@ -254,7 +254,46 @@ def load_registry(path: str | Path | None = None) -> Registry:
     if "assistant" not in raw:
         raise RegistryError("registry must declare an `assistant:` configuration")
     assistant = _build_assistant(raw["assistant"], path.parent)
-    return Registry(orchestrator=orchestrator, sub_agents=sub_agents, assistant=assistant)
+    role_agents = _build_role_agents(raw.get("role_agents"), path.parent)
+    return Registry(
+        orchestrator=orchestrator,
+        sub_agents=sub_agents,
+        assistant=assistant,
+        role_agents=role_agents,
+    )
+
+
+def _build_role_agents(value, agent_dir: Path) -> dict[str, Assistant]:
+    """Build the optional ``role_agents:`` map (role key -> assistant override).
+
+    A role with a binding talks to its own agent; every other role resolves to
+    the default ``assistant:`` block. Keys must be known user roles so a typo
+    cannot silently give the wrong role the default assistant.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise RegistryError(f"role_agents must be a mapping, got {type(value).__name__}")
+    from app.models import UserRole
+
+    valid_roles = {role.value for role in UserRole}
+    agents: dict[str, Assistant] = {}
+    for role, decl in value.items():
+        if not isinstance(role, str) or role not in valid_roles:
+            raise RegistryError(
+                f"role_agents: unknown role {role!r}; expected one of {sorted(valid_roles)}"
+            )
+        agents[role] = _build_assistant(decl, agent_dir, where=f"role_agents.{role}")
+    return agents
+
+
+def select_assistant(registry: Registry, role: str | None) -> Assistant:
+    """Return the agent bound to ``role`` in ``role_agents:``, else the default."""
+    if role:
+        bound = registry.role_agents.get(role)
+        if bound is not None:
+            return bound
+    return registry.assistant
 
 
 # Cached runtime getter (design line 43): ``load_registry`` reads + validates

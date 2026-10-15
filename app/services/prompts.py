@@ -174,12 +174,19 @@ def placeholders(content: str) -> set[str]:
     return set(_SLOT_RE.findall(content))
 
 
-@lru_cache(maxsize=8)
-def load_assistant_config(registry_path: str | Path | None = None) -> AssistantRuntimeConfig:
-    """Validate and load assistant references without loading skill files."""
-    from app.agent_registry import load_registry
+@lru_cache(maxsize=16)
+def load_assistant_config(
+    registry_path: str | Path | None = None, *, role: str | None = None
+) -> AssistantRuntimeConfig:
+    """Validate and load assistant references without loading skill files.
 
-    assistant = load_registry(registry_path).assistant
+    ``role`` selects the agent bound to it in ``role_agents:`` (S9). A role
+    with no binding, or a missing role, resolves to the default ``assistant:``
+    block, so every existing caller that passes no role is unchanged.
+    """
+    from app.agent_registry import load_registry, select_assistant
+
+    assistant = select_assistant(load_registry(registry_path), role)
     return AssistantRuntimeConfig(
         name=assistant.name,
         persona=load(assistant.persona),

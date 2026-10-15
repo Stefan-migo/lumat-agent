@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, ProjectFile, User
 from app.config import get_settings
-from app.agent_registry import get_registry
+from app.agent_registry import get_registry, select_assistant
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
@@ -483,7 +483,8 @@ def download_artifact(thread_id: int, artifact_id: int, session: Session = Depen
 def assistant_capabilities(current: User = Depends(require_agent_surface_json)) -> dict:
     """Return the validated assistant configuration without mutation controls."""
     registry = get_registry()
-    assistant = registry.assistant
+    # S9: describe the agent this role actually talks to (tecnico -> TecnicoLumat).
+    assistant = select_assistant(registry, current.role.value)
     # R3-001: the catalog must describe only what this role may execute, so the
     # panel count and the KB/memory flags never advertise a tool the role's map
     # denies. Intersect with the runtime whitelist; never replace it.

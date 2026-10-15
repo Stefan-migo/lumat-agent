@@ -452,7 +452,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
     """Ask the configured provider for a strict plan on every production turn."""
     from app.services.prompts import load_assistant_config
 
-    config = load_assistant_config()
+    config = load_assistant_config(role=state.get("actor_role"))
     user_prompt = config.prompts["plan"]
     available_tools = _planner_tool_catalog(list(_effective_tools(state)))
     available_skills = json.dumps(
@@ -588,7 +588,7 @@ def _effective_tools(state) -> tuple[str, ...]:
     else:
         from app.services.prompts import load_assistant_config
 
-        tools = load_assistant_config().tools_whitelist
+        tools = load_assistant_config(role=state.get("actor_role")).tools_whitelist
 
     if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
         return tools
@@ -615,7 +615,7 @@ def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
     effective = state.get("effective")
     if effective:
         return tuple(SkillDefinition(**skill) for skill in effective["skills_index"])
-    return global_skill_index(load_assistant_config())
+    return global_skill_index(load_assistant_config(role=state.get("actor_role")))
 
 
 def _validated_skills(state) -> list[str]:
@@ -1128,7 +1128,7 @@ def execute(state: AssistantState) -> AssistantState:
     if on_token is not None:
         from app.services.prompts import load_assistant_config
 
-        config = load_assistant_config()
+        config = load_assistant_config(role=state.get("actor_role"))
         prompt = config.prompts["respond"]
         tool_statement = (
             "A panel tool has already run for this request. Use its evidence to answer with text only; "

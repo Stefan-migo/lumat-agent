@@ -46,23 +46,24 @@ def test_technician_capabilities_exclude_every_business_read(client, make_user):
             "conversations.list",
             "customers.operational_history",
             "cases.list",
-            "kb.retrieve",
             "dashboard.summary",
             "automation.create_rule",
         }
     )
-    # WU3 grants the scoped technician agenda; the catalog must show it now that
-    # the role can execute it.
+    # S9: the technician talks to TecnicoLumat — it reads the (audience-scoped) KB
+    # and its own memory, and no longer advertises project-namespace administration.
+    assert payload["personas"] == ["personas/tecnico_lumat.md"]
     assert {
+        "kb.retrieve",
         "memory.read",
         "memory.search",
         "memory.write",
         "project.list",
-        "project.create",
         "appointments.upcoming",
     } <= names
+    assert "project.create" not in names
     # The derived flags must describe the same filtered catalog the count shows.
-    assert payload["kb_available"] is False
+    assert payload["kb_available"] is True
     assert payload["memory_available"] is True
 
 

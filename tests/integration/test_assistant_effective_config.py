@@ -129,3 +129,35 @@ def test_assistant_kb_reads_global_and_current_project_only(fake_embedder):
     assert {chunk["document_id"] for chunk in tool_result["result"]} == expected
     assert {chunk["document_id"] for chunk in unresolved_preanswer["kb_chunks"]} == {doc_ids[0]}
     assert {chunk["document_id"] for chunk in unresolved_tool_result["result"]} == {doc_ids[0]}
+
+
+def test_tecnico_effective_tools_come_from_the_tecnico_lumat_agent():
+    from app.services.project_config import resolve_effective_config
+
+    with SessionLocal() as session:
+        user = User(username=f"tecnico-roles-{uuid4().hex[:10]}", password_hash=hash_password("pass"), role="tecnico")
+        session.add(user)
+        session.flush()
+        project = Project(
+            owner_id=user.id,
+            slug=f"tecnico-{uuid4().hex[:8]}",
+            name="TecnicoLumat test",
+            purpose="Technician assistant configuration",
+            purpose_embedding=[0.0] * 384,
+        )
+        session.add(project)
+        session.flush()
+        thread = InternalChatThread(user_id=user.id, proyecto=project.slug)
+        session.add(thread)
+        session.flush()
+
+        effective = resolve_effective_config(session, thread, "tecnico")
+
+    tools = set(effective.tools_whitelist)
+    assert "kb.retrieve" in tools
+    assert "appointments.upcoming" in tools
+    # Narrowed by the TecnicoLumat whitelist, not by the role gate.
+    assert "project.create" not in tools
+    # Denied by the role gate for every technician-facing agent.
+    assert "customers.search" not in tools
+    assert {"kb", "tools"} <= {skill.name for skill in effective.skills_index}
