@@ -503,3 +503,152 @@ def test_execution_events_omit_handoff_without_a_proposal():
         "tool_results": [{"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}}],
         "tool_result": {"tool": "planning.open", "status": "completed", "result": {"thread_id": 9}},
     })
+
+
+def test_planning_read_report_is_registered_and_authorized(make_user):
+    make_user("planning-read", "planning-pass", role="admin")
+
+    whitelist = load_assistant_config().tools_whitelist
+    assert get_tool("planning.read_report").read_only is True
+    assert "planning.read_report" in whitelist
+    assert is_tool_allowed_for_role("planning.read_report", "admin") is True
+    assert is_tool_allowed_for_role("planning.read_report", "operador") is True
+    assert is_tool_allowed_for_role("planning.read_report", "tecnico") is False
+
+
+def _closed_session_with_report(owner_id: int, origin_id: int, topic: str) -> str:
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": topic},
+            role="admin",
+            trusted_thread_id=origin_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        session_thread_id = opened["result"]["thread_id"]
+        slug = opened["result"]["session"]["slug"]
+
+    with SessionLocal() as session:
+        execute_tool(
+            session,
+            "planning.record_note",
+            {"kind": "objective", "content": "Decidir el presupuesto"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        execute_tool(
+            session,
+            "planning.record_decision",
+            {"title": "Stack", "content": "Usar Postgres"},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        execute_tool(
+            session,
+            "planning.close",
+            {},
+            role="admin",
+            trusted_thread_id=session_thread_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+    return slug
+
+
+def test_planning_read_report_returns_the_persisted_report(make_user):
+    make_user("planning-read-run", "planning-pass", role="admin")
+    owner_id, origin_id = _owned_thread("planning-read-run")
+    slug = _closed_session_with_report(owner_id, origin_id, "Reporte leible")
+
+    with SessionLocal() as session:
+        result = execute_tool(
+            session,
+            "planning.read_report",
+            {"slug": slug},
+            role="admin",
+            trusted_thread_id=origin_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+
+    assert result["status"] == "completed"
+    assert result["read_only"] is True
+    report = result["result"]
+    assert report["slug"] == slug
+    assert "Decidir el presupuesto" in report["report"]
+    assert "**Stack** — Usar Postgres" in report["report"]
+
+
+def test_planning_read_report_rejects_an_unknown_slug(make_user):
+    make_user("planning-read-miss", "planning-pass", role="admin")
+    owner_id, thread_id = _owned_thread("planning-read-miss")
+
+    with SessionLocal() as session:
+        with pytest.raises(ToolValidationError, match="not found"):
+            execute_tool(
+                session,
+                "planning.read_report",
+                {"slug": "ghost-1"},
+                role="admin",
+                trusted_thread_id=thread_id,
+                owner_id=owner_id,
+                proyecto="default",
+            )
+
+
+def test_planning_read_report_rejects_a_session_without_a_report(make_user):
+    make_user("planning-read-open", "planning-pass", role="admin")
+    owner_id, origin_id = _owned_thread("planning-read-open")
+
+    with SessionLocal() as session:
+        opened = execute_tool(
+            session,
+            "planning.open",
+            {"topic": "Aun abierta"},
+            role="admin",
+            trusted_thread_id=origin_id,
+            owner_id=owner_id,
+            proyecto="default",
+        )
+        session.commit()
+        slug = opened["result"]["session"]["slug"]
+
+    with SessionLocal() as session:
+        with pytest.raises(ToolValidationError, match="no report"):
+            execute_tool(
+                session,
+                "planning.read_report",
+                {"slug": slug},
+                role="admin",
+                trusted_thread_id=origin_id,
+                owner_id=owner_id,
+                proyecto="default",
+            )
+
+
+def test_planning_read_report_rejects_a_foreign_owner(make_user):
+    make_user("planning-read-victim", "planning-pass", role="admin")
+    make_user("planning-read-attacker", "planning-pass", role="admin")
+    victim_id, victim_origin = _owned_thread("planning-read-victim")
+    attacker_id, attacker_origin = _owned_thread("planning-read-attacker")
+    slug = _closed_session_with_report(victim_id, victim_origin, "Sesion victima")
+
+    with SessionLocal() as session:
+        with pytest.raises(ToolValidationError, match="not found"):
+            execute_tool(
+                session,
+                "planning.read_report",
+                {"slug": slug},
+                role="admin",
+                trusted_thread_id=attacker_origin,
+                owner_id=attacker_id,
+                proyecto="default",
+            )

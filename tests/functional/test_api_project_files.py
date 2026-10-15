@@ -82,3 +82,28 @@ def test_project_file_api_rejects_invalid_files_and_missing_project(client, make
     oversized = client.post(f"/panel/api/projects/{slug}/files", files={"file": ("x.txt", b"large", "text/plain")})
     assert oversized.status_code == 400
     get_settings.cache_clear()
+
+
+def test_move_project_file_between_folder_and_root(client, make_user, monkeypatch, tmp_path):
+    from app.config import get_settings
+    owner_id = _login(client, make_user, "project-file-move")
+    slug = _seed_project(owner_id, "project-file-move")
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    folder = client.post(f"/panel/api/projects/{slug}/folders", json={"name": "Diseño"})
+    assert folder.status_code == 201, folder.text
+    folder_id = folder.json()["folder"]["id"]
+    uploaded = client.post(f"/panel/api/projects/{slug}/files", files={"file": ("notes.txt", b"hello", "text/plain")})
+    file_id = uploaded.json()["file"]["id"]
+
+    moved = client.patch(f"/panel/api/projects/{slug}/files/{file_id}", json={"folder_id": folder_id})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["file"]["folder_id"] == folder_id
+
+    back = client.patch(f"/panel/api/projects/{slug}/files/{file_id}", json={"folder_id": None})
+    assert back.status_code == 200
+    assert back.json()["file"]["folder_id"] is None
+
+    assert client.patch(f"/panel/api/projects/{slug}/files/{file_id}", json={"folder_id": 999}).status_code == 400
+    assert client.patch(f"/panel/api/projects/{slug}/files/999", json={"folder_id": folder_id}).status_code == 404
+    get_settings.cache_clear()

@@ -9,7 +9,7 @@ import { groupThreadsByDate } from "./threadDateGroups";
 
 describe("groupThreadsByDate", () => {
   it("groups by last activity, uses creation as a fallback, and sorts newest first", () => {
-    const thread = (id: number, updated_at: string | null, created_at: string | null = null): InternalChatThreadSummary => ({ id, title: `Thread ${id}`, proyecto: "ops", updated_at, created_at, run_status: null, approval_status: null });
+    const thread = (id: number, updated_at: string | null, created_at: string | null = null): InternalChatThreadSummary => ({ id, title: `Thread ${id}`, proyecto: "ops", updated_at, created_at, run_status: null, approval_status: null, preview: null });
     const groups = groupThreadsByDate([
       thread(1, "2026-10-12T12:00:00-03:00"), thread(2, "2026-10-11T12:00:00-03:00"),
       thread(3, "2026-10-05T12:00:00-03:00"), thread(4, null, "2026-10-12T09:00:00-03:00"),
@@ -61,10 +61,9 @@ describe("AssistantWorkspace", () => {
     const resourcesToggle = screen.getByRole("button", { name: /Recursos del proyecto/ });
     fireEvent.click(resourcesToggle);
     expect(resourcesToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Selección de recursos aún no disponible.")).toBeVisible();
+    expect(screen.queryByText("Selección de recursos aún no disponible.")).not.toBeInTheDocument();
     fireEvent.click(resourcesToggle);
     expect(resourcesToggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByText("Selección de recursos aún no disponible.")).not.toBeVisible();
   });
 
   it("keeps phone panes closed and updates pane visibility after resizing to desktop", async () => {

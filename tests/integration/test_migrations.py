@@ -73,6 +73,7 @@ EXPECTED_TABLES = {
     "project_aliases",
     "project_audit",
     "project_files",  # 042_project_files.sql (durable project-scoped file store)
+    "project_folders",  # 055_project_folders.sql (folders that group project files)
     "assistant_artifacts",  # 044_assistant_artifacts.sql (assistant-produced files)
     "panel_secrets",  # 053_panel_secrets.sql (encrypted panel-managed credentials)
     "schema_migrations",
@@ -689,11 +690,11 @@ def test_migration_052_adds_memory_handoff_column(tmp_path):
         assert column == ("boolean", "NO", "false")
 
 
-def test_migration_054_adds_the_technician_visit_state_axis(tmp_path):
-    """054 adds the orthogonal field-state axis as a new type, never touching appointment_status."""
-    with _scratch_migration_db(tmp_path, 53, 54) as (conn, apply_054, _):
-        result = apply_054()
-        assert result.returncode == 0, f"054 failed:\n{result.stdout}\n{result.stderr}"
+def test_migration_056_adds_the_technician_visit_state_axis(tmp_path):
+    """056 adds the orthogonal field-state axis as a new type, never touching appointment_status."""
+    with _scratch_migration_db(tmp_path, 55, 56) as (conn, apply_056, _):
+        result = apply_056()
+        assert result.returncode == 0, f"056 failed:\n{result.stdout}\n{result.stderr}"
 
         columns = conn.execute(
             "SELECT column_name, udt_name, is_nullable FROM information_schema.columns "
@@ -774,7 +775,9 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("051_cases_archived_at",),
         ("052_memory_handoff",),
         ("053_panel_secrets",),
-        ("054_appointment_technician_state",),
+        ("054_project_files_kb_document",),
+        ("055_project_folders",),
+        ("056_appointment_technician_state",),
     ]
 
 

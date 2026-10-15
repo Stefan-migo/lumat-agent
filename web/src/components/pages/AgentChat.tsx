@@ -27,7 +27,7 @@ import {
   uploadAssistantAttachment,
   threadAttachmentContentUrl,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, Plus, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -296,6 +296,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
   const [runId, setRunId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
+  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<number[]>([]);
   const [attachmentDeleteError, setAttachmentDeleteError] = useState<string | null>(null);
   const [attachmentDeletingId, setAttachmentDeletingId] = useState<number | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<AssistantAttachment | null>(null);
@@ -332,6 +333,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
 
   const loadThread = (result: InternalChatResponse, preserveArtifacts = false) => {
     const state = result.thread.assistant_state;
+    if (result.thread.id !== thread?.id) setSelectedAttachmentIds([]);
     setThread(result.thread);
     setMessages(result.messages ?? []);
     if (
@@ -365,6 +367,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     try {
       await deleteThreadAttachment(thread.id, attachment.id);
       setAttachments((current) => current.filter((item) => item.id !== attachment.id));
+      setSelectedAttachmentIds((current) => current.filter((value) => value !== attachment.id));
       if (previewAttachment?.id === attachment.id) setPreviewAttachment(null);
     } catch (reason) {
       setAttachmentDeleteError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el archivo. Inténtalo nuevamente.");
@@ -372,6 +375,14 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       setAttachmentDeletingId(null);
     }
   };
+
+  const toggleAttachmentSelection = (id: number) => {
+    setSelectedAttachmentIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  };
+
+  const selectedAttachments = attachments.filter((item) => selectedAttachmentIds.includes(item.id));
 
   useEffect(() => {
     const request = requestedId
@@ -692,9 +703,10 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       const result = await sendChatMessage(
         thread.id,
         submitted,
-        attachments.map((item) => item.id),
+        selectedAttachmentIds,
         sdbRequested,
       );
+      setSelectedAttachmentIds([]);
       setMessages((current) => [
         ...current.filter((item) => item.id !== optimisticId),
         result.message,
@@ -759,6 +771,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     try {
       const result = await uploadAssistantAttachment(thread.id, file);
       setAttachments((current) => [...current, result.attachment]);
+      setSelectedAttachmentIds((current) => [...current, result.attachment.id]);
     } catch (reason: unknown) {
       setError(reason instanceof ApiError ? reason.detail : "No pudimos subir el archivo");
     } finally {
@@ -806,6 +819,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     try {
       const result = await attachProjectFileToThread(thread.id, fileId);
       setAttachments((current) => [...current, result.attachment]);
+      setSelectedAttachmentIds((current) => [...current, result.attachment.id]);
     } catch (reason: unknown) {
       setProjectActionError(reason instanceof ApiError ? reason.detail : "No pudimos adjuntar el archivo del proyecto.");
     } finally { setProjectActionLoading(false); }
@@ -1137,10 +1151,9 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
             ) : null}
           </div>
           {thread ? <div className={`assistant-chat__composer-stack${activeConversation ? " assistant-chat__composer-stack--active" : ""}`}>
-            {attachments.length > 0 || uploading ? <div className="assistant-chat__attachment-tray" aria-label="Archivos adjuntos">
-              {attachments.map((item) => <div className="assistant-chat__attachment" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
+            {selectedAttachments.length > 0 || uploading ? <div className="assistant-chat__attachment-tray" aria-label="Archivos para el próximo mensaje">
+              {selectedAttachments.map((item) => <div className="assistant-chat__attachment" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" /><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><button type="button" className="assistant-chat__attachment-remove" aria-label={`Quitar ${item.filename} del próximo mensaje`} onClick={() => toggleAttachmentSelection(item.id)}><Icon icon={X} size="sm" /></button></div>)}
               {uploading ? <span role="status">Subiendo archivo…</span> : null}
-              {attachmentDeleteError ? <p role="alert">{attachmentDeleteError}</p> : null}
             </div> : null}
             {!activeConversation ? <div className="assistant-chat__composer-tray">
                 <div className="assistant-chat__composer-bottom-row assistant-chat__composer-bottom-row--grouped">
@@ -1155,7 +1168,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
                 <Popover title="Archivos de este hilo" triggerLabel={`Archivos ${attachments.length}`} trigger={<><Icon icon={Paperclip} size="sm" />Archivos <span>{attachments.length}</span></>}>
                   <SearchInput aria-label="Buscar archivo" placeholder="Buscar archivo…" onSearch={setFileSearch} />
                   {attachmentDeleteError ? <p role="alert">{attachmentDeleteError}</p> : null}
-                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <div className="assistant-chat__file-row" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" />{item.kind === "image" ? <button type="button" className="assistant-chat__file-preview" onClick={() => { setPreviewFailed(false); setPreviewAttachment(item); }}><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span></button> : <span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span>}<button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
+                  {attachments.filter((item) => item.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((item) => <div className="assistant-chat__file-row" key={item.id}><Icon icon={assistantFileIcon(item.filename, item.content_type)} size="sm" />{item.kind === "image" ? <button type="button" className="assistant-chat__file-preview" onClick={() => { setPreviewFailed(false); setPreviewAttachment(item); }}><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span></button> : <span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={item.filename}>{item.filename}</span><small>{item.kind.toLocaleUpperCase("es-CL")} · Adjuntado</small></span>}<button type="button" className="assistant-chat__attachment-select" aria-label={selectedAttachmentIds.includes(item.id) ? `Quitar ${item.filename} de la selección` : `Seleccionar ${item.filename} para el próximo mensaje`} onClick={() => toggleAttachmentSelection(item.id)}><Icon icon={selectedAttachmentIds.includes(item.id) ? Check : Plus} size="sm" /></button><button type="button" className="assistant-chat__attachment-remove" aria-label={`Eliminar ${item.filename}`} disabled={attachmentDeletingId !== null} onClick={() => void removeAttachment(item)}><Icon icon={X} size="sm" /></button></div>)}
                   {attachments.length === 0 ? <p role="status">Este hilo aún no tiene archivos adjuntos.</p> : null}
                   <div className="assistant-chat__file-actions"><label className="assistant-chat__tool-option" htmlFor="assistant-chat-file-picker"><strong>+ Adjuntar archivo</strong></label>
                   {thread.proyecto && thread.proyecto !== "default" ? <div className="assistant-chat__project-files-popover" onClick={(event) => { if (!(event.target as HTMLElement).closest(".popover__trigger")) return; setProjectFilesLoading(true); setProjectFilesError(null); void listProjectFiles(thread.proyecto!).then((result) => setProjectFiles(Array.isArray(result.files) ? result.files : [])).catch((reason: unknown) => setProjectFilesError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los archivos del proyecto.")).finally(() => setProjectFilesLoading(false)); }}><Popover title="Archivos del proyecto" triggerLabel="Agregar del proyecto">{projectFilesLoading ? <p role="status">Cargando archivos…</p> : null}{projectFilesError ? <p role="alert">{projectFilesError}</p> : null}{projectFiles.filter((file) => file.filename.toLocaleLowerCase("es-CL").includes(fileSearch.toLocaleLowerCase("es-CL"))).map((file) => <button type="button" className="assistant-chat__project-option" key={file.id} disabled={projectActionLoading || isRunActive} onClick={() => void attachProjectFile(file.id)}><Icon icon={assistantFileIcon(file.filename, file.content_type)} size="sm" /><span className="assistant-chat__menu-label"><span className="assistant-chat__filename" title={file.filename}>{file.filename}</span><small>{file.content_type}</small></span></button>)}{!projectFilesLoading && !projectFilesError && projectFiles.length === 0 ? <p role="status">Este proyecto no tiene archivos disponibles.</p> : null}</Popover></div> : null}</div>
@@ -1167,7 +1180,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
             <div className="assistant-chat__composer-wrap">
             {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
-              <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
+              <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt,.docx,.xlsx,.md" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
               <Textarea
                 label="Mensaje"
                 value={content}

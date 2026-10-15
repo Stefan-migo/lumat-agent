@@ -983,6 +983,18 @@ class AssistantArtifact(Base):
     created_at: Mapped[datetime] = _ts()
 
 
+class ProjectFolder(Base):
+    __tablename__ = "project_folders"
+    __table_args__ = (Index("idx_project_folders_project", "project_id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    # 055: nested folders; null is a top-level folder under the project root.
+    parent_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("project_folders.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+
+
 class ProjectFile(Base):
     __tablename__ = "project_files"
     __table_args__ = (Index("idx_project_files_project", "project_id"),)
@@ -996,6 +1008,12 @@ class ProjectFile(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     stored_path: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'ready'"))
+    # 054: the project-scoped KB document this upload was indexed into. Null means
+    # not indexed (image or text-less payload); a failed ingestion keeps status
+    # "failed" and leaves this null.
+    kb_document_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("kb_documents.id", ondelete="SET NULL"))
+    # 055: the containing folder; null is the project root.
+    folder_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("project_folders.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = _ts()
 
 

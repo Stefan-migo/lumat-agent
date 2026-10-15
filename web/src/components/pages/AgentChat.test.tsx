@@ -149,6 +149,16 @@ describe("AgentChat", () => {
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
   });
 
+  it("accepts docx, xlsx and markdown files in the attachment picker", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+
+    const picker = document.querySelector("#assistant-chat-file-picker") as HTMLInputElement;
+
+    expect(picker.accept).toBe("image/*,.pdf,.csv,.txt,.docx,.xlsx,.md");
+  });
+
   it("toggles web search and fetch together", async () => {
     let enabled: string[] = [];
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -248,6 +258,79 @@ describe("AgentChat", () => {
     ));
     expect(await screen.findByRole("button", { name: "Deteniendo…" })).toBeInTheDocument();
     expect(screen.queryByText("Cancelado")).not.toBeInTheDocument();
+  });
+
+  it("loads the assistant capabilities into the context sidebar", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.includes("/assistant/capabilities")) {
+        return jsonResponse({
+          tools: [{ name: "kb.retrieve", description: "Retrieve KB", read_only: true, write: false }],
+          personas: ["assistant"],
+          prompts: ["plan"],
+          kb_available: true,
+          memory_available: true,
+        });
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ });
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/assistant/capabilities", expect.anything());
+
+    fireEvent.click(await screen.findByRole("button", { name: /Capacidades del asistente/ }));
+
+    expect(await screen.findByText("1 herramientas disponibles")).toBeInTheDocument();
+    expect(screen.getByText("Base de conocimientos: Disponible")).toBeInTheDocument();
+    expect(screen.queryByText("Sin datos")).not.toBeInTheDocument();
+  });
+
+  it("pins project resources from the context sidebar", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
+    const available = {
+      project_files: [{ id: 12, filename: "manual.pdf", content_type: "application/pdf", size: 100 }],
+      planning_sessions: [{ slug: "plan-1", topic: "Plan de invierno", status: "closed" }],
+      skills: [{ name: "local-skill", description: "Local" }],
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.includes("/assistant/capabilities")) {
+        return jsonResponse({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: true });
+      }
+      if (url.endsWith("/resources")) {
+        if (init?.method === "PUT") {
+          const body = JSON.parse(String(init.body));
+          return jsonResponse({ resources: body, available, inherited: false });
+        }
+        return jsonResponse({ resources: { project_files: [], planning_sessions: [], skills: [] }, available, inherited: true });
+      }
+      return jsonResponse({ thread: makeThread(), messages: [] });
+    });
+
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Recursos del proyecto/ }));
+
+    const fileToggle = await screen.findByRole("checkbox", { name: "manual.pdf" });
+    expect(screen.getByRole("checkbox", { name: "Plan de invierno" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "local-skill" })).toBeInTheDocument();
+    expect(fileToggle).not.toBeChecked();
+
+    fireEvent.click(fileToggle);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/resources",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ project_files: [12], planning_sessions: [], skills: [] }),
+      }),
+    ));
   });
 
   it("does not show stop when no run is active", async () => {
@@ -1261,7 +1344,7 @@ describe("AgentChat", () => {
     expect(screen.getByRole("button", { name: /aprobar/i })).toBeEnabled();
   });
 
-  it("uploads an attachment from the composer and shows its filename", async () => {
+  it("uploads an attachment, adds it to the library and selects it for the next message", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -1278,13 +1361,18 @@ describe("AgentChat", () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
-    render(<AgentChat threadId={4} />);
+    const { container } = render(<AgentChat threadId={4} />);
     await screen.findByRole("textbox", { name: /mensaje/i });
     fireEvent.change(screen.getByLabelText(/adjuntar/i), {
       target: { files: [new File(["png"], "photo.png", { type: "image/png" })] },
     });
 
-    expect(await screen.findAllByText("photo.png")).toHaveLength(3);
+    const tray = await waitFor(() => {
+      const node = container.querySelector(".assistant-chat__attachment-tray");
+      expect(node).toBeInTheDocument();
+      return node as HTMLElement;
+    });
+    expect(within(tray).getByTitle("photo.png")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
@@ -1312,7 +1400,7 @@ describe("AgentChat", () => {
     expect(screen.getByRole("dialog", { name: "Archivos de este hilo" }).querySelector(`.assistant-chat__filename[title="${filename}"]`)?.parentElement?.querySelector("small")).toHaveTextContent("IMAGE · Adjuntado");
   });
 
-  it("shows the attachment tray only when attachments exist and deletes from both views", async () => {
+  it("keeps thread files in the library and only the selected ones in the tray", async () => {
     const filename = "manual-larguísimo-documento.pdf";
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -1322,17 +1410,61 @@ describe("AgentChat", () => {
     });
     const { container } = render(<AgentChat threadId={4} />);
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+
+    // The thread file lives in the library, not in the composer tray.
+    expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 1" }));
+    const popover = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+    expect(popover).toHaveTextContent(filename);
+
+    // Selecting it for the next message moves it into the tray.
+    fireEvent.click(within(popover).getByRole("button", { name: `Seleccionar ${filename} para el próximo mensaje` }));
     const tray = container.querySelector(".assistant-chat__attachment-tray");
     expect(tray).toBeInTheDocument();
     const trayName = tray!.querySelector(".assistant-chat__filename");
     expect(trayName).toHaveAttribute("title", filename);
     expect(trayName).toHaveClass("assistant-chat__filename");
-    fireEvent.click(screen.getByRole("button", { name: "Archivos 1" }));
-    const popover = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+
+    // Deleting from the library removes the thread file and empties the tray.
     fireEvent.click(within(popover).getByRole("button", { name: `Eliminar ${filename}` }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/attachments/12", expect.objectContaining({ method: "DELETE" })));
     await waitFor(() => expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument());
     expect(popover).not.toHaveTextContent(filename);
+  });
+
+  it("sends only the files selected for the next message and clears the selection after sending", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/messages" && init?.method === "POST") {
+        return jsonResponse({ message: { id: 3, author: "admin", content: "Hola", status: "processed" } }, 201);
+      }
+      if (url === "/panel/api/chat/threads/4" && !init?.method) {
+        return jsonResponse({ thread: makeThread(), messages: [], attachments: [
+          { id: 11, thread_id: 4, filename: "primero.txt", kind: "document", content_type: "text/plain", size: 1 },
+          { id: 12, thread_id: 4, filename: "segundo.txt", kind: "document", content_type: "text/plain", size: 2 },
+        ] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const { container } = render(<AgentChat threadId={4} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    fireEvent.click(screen.getByRole("button", { name: "Archivos 2" }));
+    const popover = screen.getByRole("dialog", { name: "Archivos de este hilo" });
+    fireEvent.click(within(popover).getByRole("button", { name: "Seleccionar primero.txt para el próximo mensaje" }));
+    expect(container.querySelector(".assistant-chat__attachment-tray")).toBeInTheDocument();
+
+    fireEvent.change(composer, { target: { value: "Hola" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/messages",
+      expect.objectContaining({ body: JSON.stringify({ content: "Hola", attachment_ids: [11] }) }),
+    ));
+    await waitFor(() => expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument());
   });
 
   it("does not render an attachment tray for an empty thread", async () => {

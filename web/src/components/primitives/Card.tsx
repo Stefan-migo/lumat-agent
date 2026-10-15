@@ -10,9 +10,10 @@ export interface CardProps {
   icon?: LucideIcon;
   description?: string;
   headerAction?: ReactNode;
+  footer?: ReactNode;
 }
 
-export function Card({ title, children, className = "", icon, description, headerAction }: CardProps) {
+export function Card({ title, children, className = "", icon, description, headerAction, footer }: CardProps) {
   return (
     <section className={`card ${className}`.trim()}>
       {title ? (
@@ -26,6 +27,7 @@ export function Card({ title, children, className = "", icon, description, heade
         </header>
       ) : null}
       {children}
+      {footer ? <footer className="card__footer">{footer}</footer> : null}
     </section>
   );
 }

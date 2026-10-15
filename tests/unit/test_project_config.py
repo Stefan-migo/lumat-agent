@@ -3,12 +3,22 @@ from pydantic import ValidationError
 
 from app.services.project_config import ProjectConfig
 
+OPT_IN_TOOLS = {
+    "web.search",
+    "web.fetch",
+    "automation.create_rule",
+    "project.create",
+    "project.rename",
+    "project.archive",
+    "project.merge",
+}
+
 
 def test_empty_project_config_uses_defaults():
     config = ProjectConfig.model_validate({})
 
     assert config.instructions == ""
-    assert config.tool_policy.opt_in_enabled == []
+    assert set(config.tool_policy.opt_in_enabled) == OPT_IN_TOOLS
     assert config.skills == []
 
 

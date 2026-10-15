@@ -18,6 +18,7 @@ from app.services.audit import record_audit
 from app.db import session_scope
 from app.services import kb
 from app.services import llm
+from app.services import project_files
 from app.services.costs import (
     combined_cost_mode,
     daily_cost_state,
@@ -28,8 +29,8 @@ from app.services.costs import (
     record_llm_cost,
 )
 from app.services.skills import SkillDefinition
-from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
-from app.models import InternalChatMessage
+from app.chat.assistant.attachments import build_multimodal_content, image_url_part, prepare_attachment_context
+from app.models import AssistantAttachment, InternalChatMessage
 from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, verification_required
 
 
@@ -464,13 +465,15 @@ def plan_llm(state: AssistantState) -> AssistantState:
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
+    tool_images = _tool_image_parts(state)
+    user_content: object = [{"type": "text", "text": user_prompt}, *tool_images] if tool_images else user_prompt
     completion = None
     raw_text = ""
     diagnosis = None
     try:
         completion = _assistant_client().chat.completions.create(
             model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
-            messages=[{"role": "system", "content": _effective_persona(state, config)}, {"role": "user", "content": user_prompt}],
+            messages=[{"role": "system", "content": _effective_persona(state, config)}, {"role": "user", "content": user_content}],
             temperature=0,
             response_format={"type": "json_object"},
         )
@@ -545,6 +548,14 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
             ],
         }
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
+    if thread is not None:
+        from app.services.thread_resources import pinned_context
+
+        reference, pinned_skills = pinned_context(state["session"], thread)
+        if reference:
+            context["items"].append({"source": "pinned_resources", "content": reference})
+        if effective is not None:
+            effective["pinned_skills"] = pinned_skills
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
 
 
@@ -609,9 +620,10 @@ def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
 
 def _validated_skills(state) -> list[str]:
     declared = (state.get("plan") or {}).get("skills") or []
+    pinned = (state.get("effective") or {}).get("pinned_skills") or []
     allowed = {skill.name for skill in _effective_skill_index(state)}
     valid = []
-    for name in declared:
+    for name in [*declared, *pinned]:
         if isinstance(name, str) and name in allowed and name not in valid:
             valid.append(name)
     return valid
@@ -816,6 +828,43 @@ def _render_tool_evidence(state: AssistantState) -> str:
         return prefix + body
     # A single result larger than the whole budget: truncate it, never the marker.
     return prefix + body[: _TOOL_EVIDENCE_LIMIT - len(prefix) - 1] + "…"
+
+
+def _resolve_tool_image(state: AssistantState, handle: dict) -> dict | None:
+    """Turn a `view_image` handle into a vision part, re-validating scope at call time."""
+    session = state.get("session")
+    image_id = handle.get("id")
+    if session is None or type(image_id) is not int:
+        return None
+    if handle.get("source") == "project":
+        project_id = (state.get("effective") or {}).get("project_id")
+        if not isinstance(project_id, int):
+            return None
+        source = project_files.get_project_file(session, project_id, image_id)
+    elif handle.get("source") == "thread":
+        row = session.get(AssistantAttachment, image_id)
+        source = row if row is not None and row.thread_id == state.get("thread_id") and row.deleted_at is None else None
+    else:
+        return None
+    if source is None:
+        return None
+    try:
+        return image_url_part(source.stored_path, mime=source.content_type, filename=source.filename)
+    except (OSError, ValueError):
+        return None
+
+
+def _tool_image_parts(state: AssistantState) -> list[dict]:
+    """Vision parts for images a tool returned this turn; empty otherwise (on-demand, S5)."""
+    parts: list[dict] = []
+    for result in state.get("tool_results") or []:
+        payload = result.get("result") if isinstance(result, dict) else None
+        handle = payload.get("image") if isinstance(payload, dict) else None
+        if isinstance(handle, dict):
+            part = _resolve_tool_image(state, handle)
+            if part is not None:
+                parts.append(part)
+    return parts
 
 
 def tool_loop_head(state: AssistantState) -> AssistantState:
@@ -1101,11 +1150,17 @@ def execute(state: AssistantState) -> AssistantState:
             prompt += "\n\n" + state["cost_directive"]
         client = _assistant_client()
         model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL)
+        tool_images = _tool_image_parts(state)
+        if attachments or tool_images:
+            base = build_multimodal_content(attachments, prompt) if attachments else [{"type": "text", "text": prompt}]
+            user_content: object = [*base, *tool_images]
+        else:
+            user_content = prompt
         completion = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": _responder_system_prompt(state, config)},
-                {"role": "user", "content": build_multimodal_content(attachments, prompt) if attachments else prompt},
+                {"role": "user", "content": user_content},
             ],
             temperature=0,
             stream=True,

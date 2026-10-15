@@ -449,13 +449,13 @@ def test_read_project_file_returns_exact_text_and_honest_image_state(monkeypatch
     row = SimpleNamespace(id=3, filename="a.pdf")
     monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
     monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.get_project_file", lambda *_args: row)
-    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.read_file_text", lambda _row: {"kind": "pdf", "text": "hello", "truncated": False, "chars": 5})
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.read_file_text", lambda _row, **kwargs: {"kind": "pdf", "text": "hello", "truncated": False, "chars": 5})
     result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")
     assert result["result"]["file_id"] == 3
     assert result["result"]["filename"] == "a.pdf"
     assert result["result"]["text"] == "hello"
 
-    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.read_file_text", lambda _row: {"kind": "image", "text": "", "truncated": False, "chars": 0})
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.read_file_text", lambda _row, **kwargs: {"kind": "image", "text": "", "truncated": False, "chars": 0})
     image = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")
     assert image["result"]["text"] == ""
 

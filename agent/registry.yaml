@@ -91,12 +91,14 @@ assistant:
     - project.find
     - list_project_files
     - read_project_file
+    - view_image
     - skill.propose
     - artifact.save
     - planning.open
     - planning.close
     - planning.record_decision
     - planning.record_note
+    - planning.read_report
     - project.create
     - project.rename
     - project.archive

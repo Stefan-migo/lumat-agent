@@ -106,12 +106,13 @@ export function putJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse, ProjectFile, ProjectFilesResponse } from './types';
-export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse, ProjectFile, ProjectFilesResponse, ProjectFolder, ProjectFoldersResponse } from './types';
+export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility, projectId?: number) => {
   const body = new FormData();
   body.append('title', title);
   body.append('file', file);
   body.append('visibility', visibility);
+  if (projectId !== undefined) body.append('project_id', String(projectId));
   return apiFetch<KbMutationResponse>('/panel/api/kb', { method: 'POST', body });
 };
 export const editKbDocument = (id: number, body: { title: string; content: string }) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/edit`, body);
@@ -127,7 +128,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
   return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
 }
 
-import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, ChatbotMetrics, ChatbotSignalConversations, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, TechnicianAppointmentDetail, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, TechnicianScheduleEntry, TechnicianScheduleResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, StopThreadRunResponse } from './types';
+import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, ChatbotMetrics, ChatbotSignalConversations, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, TechnicianAppointmentDetail, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, TechnicianScheduleEntry, TechnicianScheduleResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, ThreadResources, ThreadResourcesSelection, StopThreadRunResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; exclude_closed?: boolean; emergency?: boolean; has_case?: boolean; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -169,6 +170,9 @@ export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/pa
 export const getThreadToolPolicy = (id: number) => apiFetch<ThreadToolPolicy>(`/panel/api/chat/threads/${id}/tool-policy`);
 export const updateThreadToolPolicy = (id: number, optInEnabled: string[]) => apiFetch<ThreadToolPolicy>(`/panel/api/chat/threads/${id}/tool-policy`, { method: 'PUT', body: JSON.stringify({ opt_in_enabled: optInEnabled }) });
 export const resetThreadToolPolicy = (id: number) => apiFetch<ThreadToolPolicy>(`/panel/api/chat/threads/${id}/tool-policy`, { method: 'DELETE' });
+export const getThreadResources = (id: number) => apiFetch<ThreadResources>(`/panel/api/chat/threads/${id}/resources`);
+export const updateThreadResources = (id: number, resources: ThreadResourcesSelection) => apiFetch<ThreadResources>(`/panel/api/chat/threads/${id}/resources`, { method: 'PUT', body: JSON.stringify(resources) });
+export const resetThreadResources = (id: number) => apiFetch<ThreadResources>(`/panel/api/chat/threads/${id}/resources`, { method: 'DELETE' });
 export const stopChatThread = (threadId: number, runId?: string) => postJson<StopThreadRunResponse>(`/panel/api/chat/threads/${threadId}/stop`, runId === undefined ? undefined : { run_id: runId });
 export const approveChatPlan = (id: number, run_id: string, token: string, reject = false) => postJson<{ status: string; message: InternalChatMessage }>(`/panel/api/chat/threads/${id}/approval`, { run_id, token, reject });
 export async function streamChatEvents(id: number, runId: string, onEvent: (event: AssistantEvent) => void): Promise<void> {
@@ -313,11 +317,21 @@ export const listProjectAgents = (slug: string) => apiFetch<ProjectAgentsRespons
 export const updateProjectConfig = (slug: string, body: ProjectConfigUpdate) => patchJson<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/config`, body);
 export const listGlobalSkills = () => apiFetch<SkillsCatalogResponse>('/panel/api/skills');
 export const listProjectFiles = (slug: string) => apiFetch<ProjectFilesResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/files`);
-export const uploadProjectFile = (slug: string, file: File) => {
+export const uploadProjectFile = (slug: string, file: File, folderId?: number | null) => {
   const body = new FormData();
   body.append('file', file);
+  if (folderId != null) body.append('folder_id', String(folderId));
   return apiFetch<{ file: ProjectFile }>(`/panel/api/projects/${encodeURIComponent(slug)}/files`, { method: 'POST', body });
 };
+export const deleteProjectFile = (slug: string, fileId: number): Promise<void> =>
+  apiFetch<void>(`/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}`, { method: 'DELETE' });
+export const moveProjectFile = (slug: string, fileId: number, folderId: number | null) =>
+  patchJson<{ file: ProjectFile }>(`/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}`, { folder_id: folderId });
+export const listProjectFolders = (slug: string) => apiFetch<ProjectFoldersResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/folders`);
+export const createProjectFolder = (slug: string, body: { name: string; parent_id?: number | null }) => postJson<{ folder: ProjectFolder }>(`/panel/api/projects/${encodeURIComponent(slug)}/folders`, body);
+export const renameProjectFolder = (slug: string, folderId: number, name: string) => patchJson<{ folder: ProjectFolder }>(`/panel/api/projects/${encodeURIComponent(slug)}/folders/${folderId}`, { name });
+export const deleteProjectFolder = (slug: string, folderId: number): Promise<void> =>
+  apiFetch<void>(`/panel/api/projects/${encodeURIComponent(slug)}/folders/${folderId}`, { method: 'DELETE' });
 export async function downloadProjectFile(slug: string, fileId: number, filename: string): Promise<void> {
   triggerDownload(await apiFetchBlob(`/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}/download`), filename);
 }

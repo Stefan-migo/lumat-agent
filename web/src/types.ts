@@ -30,16 +30,24 @@ export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' 
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface ProjectToolPolicy { opt_in_enabled: string[]; }
 export interface ThreadToolPolicy { available: string[]; opt_in_enabled: string[]; inherited: boolean; }
+export interface ThreadResourcesSelection { project_files: number[]; planning_sessions: string[]; skills: string[]; }
+export interface ThreadResourceFile { id: number; filename: string; content_type: string; size: number; }
+export interface ThreadResourceSession { slug: string; topic: string | null; status: string | null; }
+export interface ThreadResourceSkill { name: string; description: string; }
+export interface ThreadResourcesAvailable { project_files: ThreadResourceFile[]; planning_sessions: ThreadResourceSession[]; skills: ThreadResourceSkill[]; }
+export interface ThreadResources { resources: ThreadResourcesSelection; available: ThreadResourcesAvailable; inherited: boolean; }
 export interface StopThreadRunResponse { status: 'stopping' | 'cancelled'; run_id: string; }
 export interface ProjectSkill { name: string; description: string; body: string; }
-export interface GlobalSkill { name: string; description: string; scope: "global"; }
+export interface GlobalSkill { name: string; description: string; scope: "global"; body: string | null; }
 export interface SkillsCatalogResponse { skills: GlobalSkill[]; }
 export interface ProjectConfig { instructions: string; tool_policy: ProjectToolPolicy; skills: ProjectSkill[]; }
 export type ProjectConfigUpdate = Partial<ProjectConfig>;
 export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; config?: ProjectConfig; }
 export interface ProjectsResponse { projects: Project[]; }
-export interface ProjectFile { id: number; project_id: number; filename: string; content_type: string; size: number; sha256: string; status: string; created_at: string | null; }
+export interface ProjectFile { id: number; project_id: number; filename: string; content_type: string; size: number; sha256: string; status: string; kb_document_id: number | null; folder_id: number | null; created_at: string | null; }
 export interface ProjectFilesResponse { files: ProjectFile[]; }
+export interface ProjectFolder { id: number; project_id: number; parent_id: number | null; name: string; created_at: string | null; }
+export interface ProjectFoldersResponse { folders: ProjectFolder[]; }
 export interface ProjectDetailResponse { project: Project; }
 export interface ProjectAgent { key: string; name: string; role: string; description: string; read_only: boolean; }
 export interface ProjectRunStatus { status: string; tool?: string | null; at?: string | null; }
@@ -210,6 +218,8 @@ export interface InternalChatThreadSummary {
   updated_at: string | null;
   run_status: string | null;
   approval_status: string | null;
+  /** Single-line snippet of the latest message; null when it is blank. */
+  preview: string | null;
 }
 export interface InternalChatThreadsResponse { threads: InternalChatThreadSummary[]; }
 export interface ActiveRun { thread_id: number; title: string | null; proyecto: string; agent: string; stage: string; run_id: string; updated_at: string | null; }
