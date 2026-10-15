@@ -128,7 +128,7 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
     state={showEmptyInstallBanner ? <div className="automation-recipes__empty-banner"><Icon icon={Timer} /><StateMessage tone="info" role="status" title="Aún no tienes automatizaciones instaladas." detail="Elige una plantilla para comenzar." /></div> : undefined}
     className="automation-recipes"
   >
-    {actionError && selected === null ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={actionError} /> : null}
+    {actionError && selected === null && confirmRemove === null ? <StateMessage tone="danger" role="alert" title="No se guardaron los cambios" detail={actionError} /> : null}
     {recipes.state === 'denied' ? stateBlock(recipes.state, recipes.retry, 'el catálogo') : null}
     {installations.state === 'denied' ? stateBlock(installations.state, installations.retry, 'las instalaciones') : null}
     {recipes.state === 'error' ? stateBlock(recipes.state, recipes.retry, 'el catálogo') : null}
