@@ -14,6 +14,7 @@ import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from '../
 import { ConversationSummary } from '../shared/ConversationSummary';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
+import { QUICK_ACTION_LABELS, fieldStateAge } from '../shared/visitState';
 import { composeAgendaTime } from '../shared/agendaTime';
 import { pathForRoute } from '../domain/panelRoutes';
 
@@ -37,10 +38,6 @@ export interface AppointmentDetailProps {
  *  backend re-validates every send; this only decides what the field sees. */
 const QUICK_ACTION_LEADS: Record<TechnicianVisitState, number> = { en_route: 60, arrived: 15 };
 const QUICK_ACTION_ORDER: Record<TechnicianVisitState, number> = { en_route: 1, arrived: 2 };
-const QUICK_ACTION_LABELS: Record<TechnicianVisitState, string> = {
-  en_route: 'Voy en camino',
-  arrived: 'Llegué / estoy afuera',
-};
 const QUICK_ACTION_ICONS = { en_route: Navigation, arrived: MapPin } as const;
 const QUICK_ACTIONS = ['en_route', 'arrived'] as const;
 
@@ -239,6 +236,9 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
   /** S6: the field actions live only inside an open visit; each opens on its own lead. */
   const visitOpen = appointment.status === 'booked' && nowMs < new Date(appointment.ends_at).getTime();
   const fieldActions = technician ? QUICK_ACTIONS.filter((action) => quickActionOpen(action, appointment, nowMs)) : [];
+  /** S9: how long ago the technician marked the state. The office semaphore and
+   *  the technician's own badge read the same value. */
+  const fieldStateAgeLabel = appointment.technician_state ? fieldStateAge(appointment.technician_state_at, new Date(nowMs)) : null;
   return <PageFrame className="appointment-detail-page" title={appointment.service} subtitle="Información y seguimiento de la visita."
     titleAdornment={<Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>}
     actions={<>
@@ -267,12 +267,13 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
             <h3>Resumen</h3>
             <div className="appointment-detail__summary-row"><span>Motivo</span><strong>{appointment.service}</strong></div>
             <div className="appointment-detail__summary-row"><span>Estado</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></div>
+            {!technician && appointment.technician_state ? <div className="appointment-detail__summary-row"><span>Estado en terreno</span><span className="appointment-detail__field-state-badge"><Badge tone="neutral">{QUICK_ACTION_LABELS[appointment.technician_state]}</Badge>{fieldStateAgeLabel ? <small>{fieldStateAgeLabel}</small> : null}</span></div> : null}
           </div>
         </Card>
       </section>
       {technician ? (visitOpen ? <div className="detail-region__main">
         <Card title="Avisar al cliente" icon={Send} className="appointment-detail__field-actions">
-          {appointment.technician_state ? <p className="appointment-detail__field-state"><span>Último aviso enviado</span><Badge tone="neutral">{QUICK_ACTION_LABELS[appointment.technician_state]}</Badge></p> : null}
+          {appointment.technician_state ? <p className="appointment-detail__field-state"><span>Último aviso enviado</span><Badge tone="neutral">{QUICK_ACTION_LABELS[appointment.technician_state]}</Badge>{fieldStateAgeLabel ? <small>{fieldStateAgeLabel}</small> : null}</p> : null}
           {fieldActions.length ? <div className="appointment-detail__field-buttons">
             {fieldActions.map((action) => {
               const until = detail.quick_actions?.[action]?.resend_available_at;

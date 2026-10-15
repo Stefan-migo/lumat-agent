@@ -1,9 +1,9 @@
 """Persistence and compilation of installed automation recipes."""
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models import AutomationInstallation, AutomationRule
+from app.models import AutomationExecution, AutomationInstallation, AutomationRule
 from app.services.audit import record_audit
 from app.services.recipes import get_recipe
 
@@ -99,3 +99,17 @@ def get_installation(session: Session, installation_id: int) -> AutomationInstal
 
 def list_installations(session: Session) -> list[AutomationInstallation]:
     return list(session.scalars(select(AutomationInstallation).order_by(AutomationInstallation.id)))
+
+
+def uninstall(session: Session, installation: AutomationInstallation, *, actor: str) -> None:
+    """Remove an installation together with its compiled rule and that rule's history."""
+    before = installation_snapshot(installation)
+    installation_id = installation.id
+    rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation_id))
+    if rule is not None:
+        session.execute(delete(AutomationExecution).where(AutomationExecution.rule_id == rule.id))
+        session.delete(rule)
+        session.flush()
+    session.delete(installation)
+    session.flush()
+    record_audit(session, actor=actor, action="automation.installation.delete", entity="automation_installation", entity_id=str(installation_id), before=before)
