@@ -47,7 +47,7 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 
 ## Tasks
 
-- [x] T1 — Chain continues after an approved class-A write: `approve_plan`/`resume_thread` re-enter the graph instead of terminating. (S1, S2) — route: inline — commit `TBD`
+- [x] T1 — Chain continues after an approved class-A write: `approve_plan`/`resume_thread` re-enter the graph instead of terminating. (S1, S2) — route: inline — commit `77b5ad28`
 - [ ] T2 — Sequential approval for step 2+: the chain can pause with a fresh approval per write and resume it. (S1, S2) — route: inline
 - [ ] T3 — Regression pins: read-only chaining and the single-write path are unchanged. (S4) — route: inline
 - [ ] T4 — Reject mid-chain aborts cleanly with an audit record. (S5) — route: inline
