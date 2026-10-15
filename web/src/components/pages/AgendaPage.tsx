@@ -23,6 +23,7 @@ import { AgendaTimeError, agendaDayLabel, agendaMonthDays, agendaPeriodLabel, ag
 import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
 import { TechnicianScheduleEditor, formatTechnicianSchedule } from "../shared/TechnicianScheduleEditor";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
+import { QUICK_ACTION_LABELS, fieldStateAge } from "../shared/visitState";
 import { pathForRoute } from "../domain/panelRoutes";
 
 export type AgendaPageState = AsyncDataState | "stale";
@@ -37,6 +38,15 @@ export interface AgendaPageProps {
 type ActionFeedback = { id: number; tone: "success" | "danger"; title: string; detail?: string };
 
 function localDate(value: string) { return value.slice(0, 10); }
+
+/** S9: the office semaphore on a visit row — what the technician marked, and
+ *  how long ago. Nothing renders until the technician touches the visit. */
+function fieldStateBadge(row: AgendaAppointment, now: Date) {
+  if (!row.technician_state) return null;
+  const age = fieldStateAge(row.technician_state_at, now);
+  return <span className="agenda-page__visit-field-state"><Badge tone="neutral">{QUICK_ACTION_LABELS[row.technician_state]}</Badge>{age ? <small>{age}</small> : null}</span>;
+}
+
 function clientOptionLabel(client: Customer) {
   return [client.name ?? `Cliente ${client.id}`, client.email, client.phone_e164].filter(Boolean).join(" · ");
 }
@@ -89,6 +99,9 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const retry = onRetry ?? fetched.retry;
   const today = agendaTodayKey(timezone);
   const appointments = data ?? [];
+  /** S9: the age on the field-state semaphore. Read once per render — the board
+   *  is not a live timer, and every mutation refetches the agenda. */
+  const fieldStateNow = new Date();
   const refreshAgenda = async () => {
     const response = await listAppointments(from, to, timezone);
     setUpdatedData(response.appointments);
@@ -268,7 +281,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`} className="agenda-page__section-heading"><span>{title}</span>{isToday ? <Badge tone="success">Hoy</Badge> : null}</h2>
        <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
-          <div className="agenda-page__visit-heading"><Icon icon={Clock3} size="lg" className="agenda-page__visit-clock" /><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div><time className="agenda-page__visit-when" dateTime={row.local_start}><span className="agenda-page__visit-when-date">{agendaDayLabel(localDate(row.local_start), row.timezone)}</span><span className="agenda-page__visit-when-time">{formatAgendaSlot(row.starts_at, row.timezone)}</span></time>
+          <div className="agenda-page__visit-heading"><Icon icon={Clock3} size="lg" className="agenda-page__visit-clock" /><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>{fieldStateBadge(row, fieldStateNow)}</div><time className="agenda-page__visit-when" dateTime={row.local_start}><span className="agenda-page__visit-when-date">{agendaDayLabel(localDate(row.local_start), row.timezone)}</span><span className="agenda-page__visit-when-time">{formatAgendaSlot(row.starts_at, row.timezone)}</span></time>
            <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
              ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar", icon: CalendarDays }, { value: "cancel", label: "Cancelar visita", icon: X, tone: "danger" as const }, { value: "close", label: "Cerrar visita", icon: Check }] : []),
              ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),

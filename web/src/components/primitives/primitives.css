@@ -1380,6 +1380,10 @@
    operator's history card fills. */
 .appointment-detail__field-actions { grid-area: history; }
 .appointment-detail__field-state { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__field-state small { font-size: inherit; }
+/* S9: the office semaphore — the same field state in the visit summary. */
+.appointment-detail__field-state-badge { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__field-state-badge small { font-size: inherit; }
 .appointment-detail__field-buttons { display: flex; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-3); }
 .appointment-detail__field-note { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
 .appointment-detail-page .page-header { align-items: end; }
@@ -3205,6 +3209,9 @@
 .agenda-page__visit-title { display: grid; justify-items: start; gap: var(--space-2); min-width: 0; }
 .agenda-page__visit-title a { color: var(--corp-text); font-size: var(--text-lg); font-weight: var(--weight-semibold); overflow-wrap: anywhere; text-decoration: none; }
 .agenda-page__visit-title a:hover { text-decoration: underline; }
+/* S9: the office semaphore on a visit row — the field state plus its age. */
+.agenda-page__visit-field-state { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.agenda-page__visit-field-state small { font-size: inherit; }
 .agenda-page__visit-details { display: grid; gap: var(--space-2); margin: 0; padding-block: var(--space-3); border-block: 1px solid var(--corp-border); }
 .agenda-page__visit-details > div { display: grid; grid-template-columns: minmax(5rem, .45fr) minmax(0, 1fr); gap: var(--space-3); }
 .agenda-page__visit-details dt { color: var(--corp-fg-muted); }

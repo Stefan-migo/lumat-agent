@@ -280,9 +280,9 @@ describe('AppointmentDetail (technician)', () => {
     conversation_summary: null,
     quick_actions: { en_route: { resend_available_at: null }, arrived: { resend_available_at: null } },
   };
-  const withState = (state: 'en_route' | 'arrived', quick_actions = technicianDetail.quick_actions): AppointmentDetailData => ({
+  const withState = (state: 'en_route' | 'arrived', quick_actions = technicianDetail.quick_actions, stateAt: string | null = null): AppointmentDetailData => ({
     ...technicianDetail,
-    appointment: { ...technicianDetail.appointment, technician_state: state },
+    appointment: { ...technicianDetail.appointment, technician_state: state, technician_state_at: stateAt },
     quick_actions,
   });
 
@@ -390,5 +390,33 @@ describe('AppointmentDetail (technician)', () => {
     expect(screen.getByRole('button', { name: 'Cerrar visita' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reprogramar' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Voy en camino' })).not.toBeInTheDocument();
+  });
+
+  /** S9: the office reads what the technician marked, and how long ago. */
+  it('shows the technician field state with its age to the operator', () => {
+    render(<AppointmentDetail
+      data={{ ...detail, appointment: { ...detail.appointment, technician_state: 'en_route', technician_state_at: '2026-09-26T12:50:00Z' } }}
+      role="operador"
+      now={FIELD_NOW}
+    />);
+
+    expect(screen.getByText('Estado en terreno')).toBeInTheDocument();
+    expect(screen.getByText('Voy en camino')).toBeInTheDocument();
+    expect(screen.getByText('hace 5 min')).toBeInTheDocument();
+  });
+
+  /** S9: a visit the technician has not touched carries no semaphore. */
+  it('hides the office semaphore for a visit the technician has not touched', () => {
+    render(<AppointmentDetail data={detail} role="operador" now={FIELD_NOW} />);
+
+    expect(screen.queryByText('Estado en terreno')).not.toBeInTheDocument();
+  });
+
+  /** S9: the technician's own badge gains the same age. */
+  it('shows how long ago the technician marked the state', () => {
+    render(<AppointmentDetail data={withState('en_route', technicianDetail.quick_actions, '2026-09-26T12:50:00Z')} role="tecnico" now={FIELD_NOW} />);
+
+    expect(screen.getByText('Último aviso enviado')).toBeInTheDocument();
+    expect(screen.getByText('hace 5 min')).toBeInTheDocument();
   });
 });
