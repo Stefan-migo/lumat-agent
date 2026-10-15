@@ -109,3 +109,18 @@ def enable_installation(installation_id: int, session: Session = Depends(get_db)
 @router.post("/automation-installations/{installation_id}/disable")
 def disable_installation(installation_id: int, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
     return _set_enabled(installation_id, False, session, current)
+
+
+@router.delete("/automation-installations/{installation_id}")
+def delete_installation(installation_id: int, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+    try:
+        installation = _installation(session, installation_id)
+        automation_installations.uninstall(session, installation, actor=current.username)
+        session.commit()
+        return {"ok": True}
+    except HTTPException:
+        session.rollback()
+        raise
+    except Exception:
+        session.rollback()
+        raise

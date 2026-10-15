@@ -2,15 +2,17 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, AutomationInstallation, AutomationRule
+from app.models import AuditLog, AutomationExecution, AutomationInstallation, AutomationRule, DomainEvent
 from app.services import recipes
 from app.services.automation_installations import (
     get_installation,
     install,
     list_installations,
     set_enabled,
+    uninstall,
     update_parameters,
 )
+from app.services.events import publish_event
 
 
 SYNTHETIC = recipes.RecipeDefinition(
@@ -183,3 +185,41 @@ def test_assistant_install_requires_executor_origin(migrated_db, synthetic_recip
         with pytest.raises(PermissionError):
             install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="assistant")
         assert install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="assistant", executor_origin=True)
+
+
+def test_uninstall_removes_installation_rule_and_executions(migrated_db, synthetic_recipe):
+    with SessionLocal() as session:
+        installation = install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="admin")
+        rule = session.scalar(select(AutomationRule).where(AutomationRule.installation_id == installation.id))
+        event = publish_event(
+            session, event_type="case.created", entity_type="case", entity_id="1",
+            payload={}, dedupe_key="uninstall:event",
+        )
+        session.add(AutomationExecution(rule_id=rule.id, event_id=event.id, execution_key="uninstall:exec", outcome="enqueued"))
+        session.flush()
+        installation_id, rule_id = installation.id, rule.id
+
+        uninstall(session, installation, actor="admin")
+        session.flush()
+
+        assert get_installation(session, installation_id) is None
+        assert session.scalar(select(AutomationRule).where(AutomationRule.id == rule_id)) is None
+        assert session.scalar(select(AutomationExecution).where(AutomationExecution.rule_id == rule_id)) is None
+        actions = session.scalars(select(AuditLog.action).where(AuditLog.action == "automation.installation.delete")).all()
+        assert actions == ["automation.installation.delete"]
+        # The recipe slot is freed, so the same recipe can be installed again.
+        assert install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="admin").id != installation_id
+        session.commit()
+
+
+def test_uninstall_without_compiled_rule_is_safe(migrated_db, synthetic_recipe):
+    with SessionLocal() as session:
+        installation = install(session, SYNTHETIC.recipe_id, {"channel": "email"}, actor="admin")
+        session.execute(
+            AutomationRule.__table__.delete().where(AutomationRule.installation_id == installation.id)
+        )
+        session.flush()
+        uninstall(session, installation, actor="admin")
+        session.flush()
+        assert get_installation(session, installation.id) is None
+        session.commit()
