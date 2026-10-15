@@ -273,6 +273,8 @@ class ProjectListFilesArgs(BaseModel):
 class ProjectReadFileArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     file_id: int = Field(gt=0)
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=project_files.MAX_FILE_TEXT_CHARS, ge=1, le=project_files.MAX_FILE_TEXT_CHARS)
 
 
 class ViewImageArgs(BaseModel):
@@ -743,7 +745,7 @@ def _read_project_file(session, args: ProjectReadFileArgs, *, owner_id: int | No
     row = project_files.get_project_file(session, project.id, args.file_id)
     if row is None:
         raise ToolValidationError("project file not found")
-    return {"file_id": row.id, "filename": row.filename, **project_files.read_file_text(row)}
+    return {"file_id": row.id, "filename": row.filename, **project_files.read_file_text(row, offset=args.offset, limit=args.limit)}
 
 
 def _view_image(session, args: ViewImageArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None, proyecto: str = "default", project_id: int | None = None):
@@ -938,7 +940,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.list": ToolDefinition("project.list", ProjectListArgs, True, _project_list, "List project namespaces.", tier="default"),
     "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace.", tier="default"),
     "list_project_files": ToolDefinition("list_project_files", ProjectListFilesArgs, True, _list_project_files, "List the current project's stored files.", tier="default"),
-    "read_project_file": ToolDefinition("read_project_file", ProjectReadFileArgs, True, _read_project_file, "Read one project file's exact extracted text.", tier="default"),
+    "read_project_file": ToolDefinition("read_project_file", ProjectReadFileArgs, True, _read_project_file, "Read one project file's exact extracted text. For a large file, page it with offset/limit and continue from the returned next_offset.", tier="default"),
     "view_image": ToolDefinition("view_image", ViewImageArgs, True, _view_image, "View an image on demand: a project file or a thread attachment, returned to the model as a vision part.", tier="default"),
     "artifact.save": ToolDefinition("artifact.save", ArtifactSaveArgs, False, _save_artifact, "Save a downloadable file artifact for the current conversation.", tier="default"),
     "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),

@@ -242,16 +242,29 @@ def owned_project(session: Session, owner_id: int | None, *, project_id: int | N
     return session.scalar(stmt)
 
 
-def read_file_text(row: ProjectFile) -> dict:
-    """Return the exact extracted text of a stored file, bounded for the model.
+def read_file_text(row: ProjectFile, *, offset: int = 0, limit: int = MAX_FILE_TEXT_CHARS) -> dict:
+    """Return a bounded slice of a stored file's exact extracted text.
 
     Reads the original stored blob (the source of truth) and re-extracts text,
-    so it works even when KB ingestion failed or was skipped.
+    so it works even when KB ingestion failed or was skipped. `offset`/`limit`
+    let the agent page a large file across tool-loop turns: `next_offset` is the
+    cursor for the following read, or None when the slice reached the end.
     """
     kind = allowed_project_file(row.filename, row.content_type, row.size)
     if kind == "image":
-        return {"kind": "image", "text": "", "truncated": False, "chars": 0}
+        return {"kind": "image", "text": "", "truncated": False, "chars": 0, "offset": 0, "limit": 0, "next_offset": None}
     content = Path(row.stored_path).read_bytes()
     text = extract_document_text(content, kind)
-    truncated = len(text) > MAX_FILE_TEXT_CHARS
-    return {"kind": kind, "text": text[:MAX_FILE_TEXT_CHARS], "truncated": truncated, "chars": len(text)}
+    total = len(text)
+    chunk = text[offset:offset + limit]
+    end = offset + len(chunk)
+    truncated = end < total
+    return {
+        "kind": kind,
+        "text": chunk,
+        "truncated": truncated,
+        "chars": total,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": end if truncated else None,
+    }
