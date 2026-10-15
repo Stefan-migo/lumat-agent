@@ -223,8 +223,7 @@ def test_free_rule_defaults_to_payload_recipient_and_message_content(migrated_db
         assert (operation.recipient, operation.content) == ("+56911112222", "Customer message")
 
 
-def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db, monkeypatch):
-    monkeypatch.setattr(scheduling, "_schedule_followup", lambda *args, **kwargs: None)
+def test_real_publishers_persist_message_case_and_appointment_transitions(migrated_db):
     with SessionLocal() as session:
         suffix = str(uuid4().int)[:10]
         phone = f"+56949{suffix[:6]}"

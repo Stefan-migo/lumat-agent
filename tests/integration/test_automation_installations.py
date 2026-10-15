@@ -55,7 +55,7 @@ def test_recipe_catalog_compiles_and_validates_parameters():
 
 
 def test_catalog_has_compilable_recipes_with_unique_ids():
-    assert len(recipes.RECIPES) == 9
+    assert len(recipes.RECIPES) == 12
     assert len(recipes.RECIPES) == len({recipe.recipe_id for recipe in recipes.RECIPES.values()})
     for recipe in recipes.RECIPES.values():
         assert recipe.trigger_kind in {"event", "offset", "schedule"}

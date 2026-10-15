@@ -1,20 +1,37 @@
 """NT-1/NT-2 integration tests for durable notification delivery."""
 
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import psycopg
 import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.models import AuditLog, Customer, NotificationAttempt, NotificationOperation
-from app.services import notifications
+from app.models import (
+    Appointment,
+    AppointmentStatus,
+    AuditLog,
+    Case,
+    Customer,
+    DomainEvent,
+    NotificationAttempt,
+    NotificationOperation,
+    NotificationTemplateVersion,
+    User,
+    UserRole,
+)
+from app.services import notifications, notify, scheduling
+from app.services.automation import evaluate_event
+from app.services.automation_installations import install
 from app.services.customers import get_or_create_customer
+from app.services.settings import get_setting, set_setting
+from app.services.time_triggers import evaluate_time_triggers
 from _testdb import admin_database_url
 
 
 ADMIN_DB_URL = admin_database_url()
-FOLLOWUP_NOW = datetime(2030, 1, 1, 12, tzinfo=timezone.utc)
+FOLLOWUP_DELAY = timedelta(hours=24)
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +39,7 @@ def clean_notifications_db(migrated_db):
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE notification_attempts, notification_operations, audit_log, "
+            "automation_executions, automation_rules, automation_installations, domain_events, "
             "cases, messages, conversations, customers RESTART IDENTITY CASCADE"
         )
     yield
@@ -34,13 +52,73 @@ def _operation(**overrides):
         "content": "Appointment reminder",
         "source_entity": "appointment",
         "source_id": "42",
-        "idempotency_key": "appointment:42:reminder:24h",
+        "idempotency_key": "appointment:42:manual",
     }
     values.update(overrides)
     with SessionLocal() as session:
         operation = notifications.create_operation(session, **values)
         session.commit()
         return operation.id
+
+
+def _install_recipe(session, recipe_id, channel="whatsapp"):
+    return install(session, recipe_id, {"channel": channel}, actor="admin", enabled=True)
+
+
+def _booked_appointment(session, *, starts_at, created_at=None, status=AppointmentStatus.BOOKED, name="Ana"):
+    suffix = uuid4().hex[:10]
+    technician = User(username=f"notif-tech-{suffix}", password_hash="x", role=UserRole.TECNICO)
+    customer = Customer(phone_e164=f"+569{suffix[:8]}", name=name)
+    session.add_all([technician, customer])
+    session.flush()
+    case = Case(customer_id=customer.id, status="open")
+    session.add(case)
+    session.flush()
+    appointment = Appointment(
+        service="Visit", customer_id=customer.id, case_id=case.id, technician_id=technician.id,
+        local_start=starts_at.astimezone(timezone.utc).replace(tzinfo=None), timezone="UTC",
+        starts_at=starts_at, ends_at=starts_at + timedelta(hours=1), duration_minutes=60,
+        status=status,
+    )
+    if created_at is not None:
+        appointment.created_at = created_at
+    session.add(appointment)
+    session.flush()
+    return appointment, customer
+
+
+def _scan_reminders(session, now):
+    """Run the 24h reminder scan and evaluate its events through the engine."""
+    evaluate_time_triggers(session, now)
+    for event in session.scalars(
+        select(DomainEvent).where(DomainEvent.event_type == "appointment.reminder_due")
+    ):
+        evaluate_event(session, event)
+    session.flush()
+
+
+def _reminder_event(session, appointment):
+    return session.scalar(select(DomainEvent).where(
+        DomainEvent.event_type == "appointment.reminder_due",
+        DomainEvent.entity_id == str(appointment.id),
+    ))
+
+
+def _appointment_operation(session, appointment, channel="whatsapp"):
+    return session.scalar(select(NotificationOperation).where(
+        NotificationOperation.source_entity == "appointment",
+        NotificationOperation.source_id == str(appointment.id),
+        NotificationOperation.channel == channel,
+    ))
+
+
+def _approved_reminder_template(session):
+    session.add(NotificationTemplateVersion(
+        event="appointment.reminder.24h", channel="whatsapp", locale="es", version=1,
+        content="Visita {date} {time}", required_variables=["date", "time"], approved=True,
+        smtp_allowed=True, created_by="test",
+    ))
+    session.flush()
 
 
 def test_operation_is_persisted_before_delivery_and_duplicate_is_safe(migrated_db, monkeypatch):
@@ -53,7 +131,7 @@ def test_operation_is_persisted_before_delivery_and_duplicate_is_safe(migrated_d
         assert operation.status == "pending"
         assert operation.recipient == "+56911111111"
         assert operation.content == "Appointment reminder"
-        assert operation.idempotency_key == "appointment:42:reminder:24h"
+        assert operation.idempotency_key == "appointment:42:manual"
         duplicate = notifications.create_operation(
             session,
             recipient=operation.recipient,
@@ -129,342 +207,237 @@ def test_due_reminder_is_idempotent_and_sweep_is_bounded(migrated_db, monkeypatc
 
 
 def test_appointment_reminder_is_appointment_keyed_and_due_in_utc(migrated_db):
-    from app.models import Appointment, AppointmentStatus, Case
-    from app.services import scheduling
-    from app.models import User, UserRole
-
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333333")
-        technician = User(username="reminder-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        appointment = scheduling.book(
-            session, service="Visita técnica", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=datetime(2030, 1, 2).date(),
-            local_time=datetime.strptime("12:00", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        _install_recipe(session, "appointment_reminder")
+        starts_at = now + timedelta(days=3)
+        appointment, customer = _booked_appointment(
+            session, starts_at=starts_at, created_at=now - timedelta(days=1)
         )
-        session.flush()
-        reminder = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.source_id == str(appointment.id)
-        ))
-        assert reminder is not None
-        assert reminder.idempotency_key == f"appointment:{appointment.id}:reminder:24h"
-        assert reminder.next_attempt_at == appointment.starts_at - timedelta(hours=24)
-        assert reminder.next_attempt_at.tzinfo is not None
+        scan_now = starts_at - timedelta(hours=23)
+        _scan_reminders(session, scan_now)
+
+        event = _reminder_event(session, appointment)
+        assert event is not None
+        assert (event.entity_type, event.entity_id) == ("appointment", str(appointment.id))
+        assert event.dedupe_key == f"appointment:{appointment.id}:reminder:24h"
+        assert event.payload == {
+            "customer_id": customer.id,
+            "appointment_id": appointment.id,
+            "recipient": customer.phone_e164,
+        }
+
+        operation = _appointment_operation(session, appointment)
+        assert operation is not None
+        assert operation.next_attempt_at is not None
+        assert operation.next_attempt_at.tzinfo is not None
+
+        # A second scan reuses the same event and never creates a second operation.
+        _scan_reminders(session, scan_now)
+        assert session.scalar(select(func.count()).select_from(DomainEvent).where(
+            DomainEvent.event_type == "appointment.reminder_due",
+            DomainEvent.entity_id == str(appointment.id),
+        )) == 1
         assert session.scalar(select(func.count()).select_from(NotificationOperation).where(
-            NotificationOperation.idempotency_key == reminder.idempotency_key
+            NotificationOperation.source_id == str(appointment.id)
         )) == 1
         session.commit()
 
 
-def test_cancelled_appointment_invalidates_its_pending_reminder(migrated_db):
-    from app.models import Appointment, Case, User, UserRole
-    from app.services import scheduling
-
+def test_cancelled_appointment_is_never_reminded(migrated_db):
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333334")
-        technician = User(username="cancel-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=datetime(2030, 1, 2).date(),
-            local_time=datetime.strptime("12:00", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        _install_recipe(session, "appointment_reminder")
+        starts_at = now + timedelta(days=3)
+        appointment, _ = _booked_appointment(
+            session, starts_at=starts_at, created_at=now - timedelta(days=1)
         )
         scheduling.cancel(session, appointment, actor="test")
-        reminder = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:reminder:24h"
-        ))
-        assert reminder.status == "permanently_failed"
+        _scan_reminders(session, starts_at - timedelta(hours=23))
+        assert _reminder_event(session, appointment) is None
+        assert _appointment_operation(session, appointment) is None
 
 
 def test_appointment_reminder_dispatches_approved_template_then_customer_email_fallback(migrated_db, monkeypatch):
-    from app.models import Case, NotificationTemplateVersion, User, UserRole
-    from app.services import scheduling, notify
-
     sent = []
     monkeypatch.setattr(notify, "send_template", lambda phone, params, *, template_name=None: (_ for _ in ()).throw(OSError("Meta down")))
     monkeypatch.setattr(notify, "send_email", lambda session, to, subject, body: sent.append((to, subject, body)))
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333335")
+        _install_recipe(session, "appointment_reminder")
+        starts_at = now + timedelta(days=3)
+        appointment, customer = _booked_appointment(
+            session, starts_at=starts_at, created_at=now - timedelta(days=1)
+        )
         customer.email = "customer@example.com"
-        technician = User(username="delivery-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        local_date = datetime.now(timezone.utc).date() + timedelta(days=3)
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=local_date,
-            local_time=datetime.strptime("12:00", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
-        )
-        template = NotificationTemplateVersion(
-            event="appointment.reminder.24h", channel="whatsapp", locale="es", version=1,
-            content="Visita {date} {time}", required_variables=["date", "time"], approved=True,
-            smtp_allowed=True, created_by="test",
-        )
-        session.add(template)
-        session.flush()
-        operation = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.source_id == str(appointment.id)
-        ))
+        _approved_reminder_template(session)
+        _scan_reminders(session, starts_at - timedelta(hours=23))
+        operation = _appointment_operation(session, appointment)
         assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
         assert sent and sent[0][0] == "customer@example.com"
-        assert local_date.strftime("%d/%m/") in sent[0][2]
+        assert appointment.local_start.strftime("%d/%m/") in sent[0][2]
 
 
 def test_appointment_reminder_without_customer_email_permanently_fails(migrated_db, monkeypatch):
-    from app.models import Case, NotificationTemplateVersion, User, UserRole, AuditLog
-    from app.services import scheduling, notify
-
     monkeypatch.setattr(notify, "send_template", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("Meta down")))
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333336")
-        technician = User(username="no-email-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=datetime.now(timezone.utc).date() + timedelta(days=3),
-            local_time=datetime.strptime("12:00", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        _install_recipe(session, "appointment_reminder")
+        starts_at = now + timedelta(days=3)
+        appointment, _ = _booked_appointment(
+            session, starts_at=starts_at, created_at=now - timedelta(days=1)
         )
-        session.add(NotificationTemplateVersion(
-            event="appointment.reminder.24h", channel="whatsapp", locale="es", version=1,
-            content="Visita {date} {time}", required_variables=["date", "time"], approved=True,
-            smtp_allowed=True, created_by="test",
-        ))
-        session.flush()
-        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.source_id == str(appointment.id)))
-        notifications.process_operation(session, operation.id, now=operation.next_attempt_at)
+        _approved_reminder_template(session)
+        _scan_reminders(session, starts_at - timedelta(hours=23))
+        operation = _appointment_operation(session, appointment)
+        assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is False
         assert operation.status == "permanently_failed"
         assert session.scalar(select(AuditLog).where(AuditLog.action == "notification.reminder_no_email")) is not None
 
 
 def test_booking_inside_the_24h_window_creates_no_reminder(migrated_db):
-    from app.models import Case, User, UserRole
-    from app.services import scheduling
-
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333337")
-        technician = User(username="short-window-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        starts = datetime.now(timezone.utc) + timedelta(hours=2)
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=starts.date(), local_time=starts.time().replace(tzinfo=None),
-            timezone_name="UTC", duration_minutes=60, actor="test",
-        )
-        key = f"appointment:{appointment.id}:reminder:24h"
-        assert appointment.starts_at - datetime.now(timezone.utc) < timedelta(hours=24)
-        assert session.scalar(select(NotificationOperation).where(
-            NotificationOperation.idempotency_key == key
-        )) is None
-        assert session.scalar(select(NotificationOperation).where(
-            NotificationOperation.source_entity == "appointment",
-            NotificationOperation.source_id == str(appointment.id),
-        )) is None
+        _install_recipe(session, "appointment_reminder")
+        # Booked now for a visit only two hours ahead: less than 24h notice.
+        starts_at = now + timedelta(hours=2)
+        appointment, _ = _booked_appointment(session, starts_at=starts_at)
+        _scan_reminders(session, now)
+        assert starts_at - now < FOLLOWUP_DELAY
+        assert _reminder_event(session, appointment) is None
+        assert _appointment_operation(session, appointment) is None
 
 
-def test_reschedule_moves_the_pending_reminder(migrated_db):
-    from app.models import Case, User, UserRole
-    from app.services import scheduling
-
+def test_reschedule_uses_the_appointment_current_start_time(migrated_db):
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333338")
-        technician = User(username="move-reminder-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        first = datetime.now(timezone.utc) + timedelta(days=3)
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=first.date(), local_time=first.time().replace(tzinfo=None),
-            timezone_name="UTC", duration_minutes=60, actor="test",
-        )
-        key = f"appointment:{appointment.id}:reminder:24h"
-        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.idempotency_key == key))
-        operation_id = operation.id
-        assert operation.next_attempt_at == appointment.starts_at - timedelta(hours=24)
+        _install_recipe(session, "appointment_reminder")
+        first = now + timedelta(days=5)
+        appointment, _ = _booked_appointment(session, starts_at=first)
 
-        new_start = datetime.now(timezone.utc) + timedelta(days=5)
-        scheduling.reschedule(
-            session, appointment, local_date=new_start.date(), local_time=new_start.time().replace(tzinfo=None),
-            timezone_name="UTC", duration_minutes=60, technician_id=technician.id, actor="test",
-        )
-        moved = session.scalar(select(NotificationOperation).where(NotificationOperation.idempotency_key == key))
-        assert moved.id == operation_id
-        assert moved.idempotency_key == key
-        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(
-            NotificationOperation.idempotency_key == key
-        )) == 1
-        assert moved.next_attempt_at == appointment.starts_at - timedelta(hours=24)
+        # Far from its start: outside the 24h horizon, nothing is due yet.
+        assert evaluate_time_triggers(session, now) == 0
+        assert _reminder_event(session, appointment) is None
 
-        near_start = datetime.now(timezone.utc) + timedelta(hours=2)
+        # Rescheduled into the horizon: the scan reads the new starts_at.
+        second = now + timedelta(days=2)
         scheduling.reschedule(
-            session, appointment, local_date=near_start.date(), local_time=near_start.time().replace(tzinfo=None),
-            timezone_name="UTC", duration_minutes=60, technician_id=technician.id, actor="test",
+            session, appointment, local_date=second.date(), local_time=second.time().replace(tzinfo=None),
+            timezone_name="UTC", duration_minutes=60, technician_id=appointment.technician_id, actor="test",
         )
-        assert moved.status == "permanently_failed"
+        assert evaluate_time_triggers(session, second - timedelta(hours=23)) == 1
+        assert _reminder_event(session, appointment) is not None
+
+        # Rescheduled to less than 24h notice: the created_at guard excludes it.
+        near = now + timedelta(hours=2)
+        scheduling.reschedule(
+            session, appointment, local_date=near.date(), local_time=near.time().replace(tzinfo=None),
+            timezone_name="UTC", duration_minutes=60, technician_id=appointment.technician_id, actor="test",
+        )
+        assert evaluate_time_triggers(session, now) == 0
 
 
 def test_appointment_reminder_sends_configured_template_and_local_datetime_params(migrated_db, monkeypatch):
-    from app.models import Case, NotificationTemplateVersion, User, UserRole
-    from app.services import scheduling, notify
-    from app.services.settings import set_setting
-
     calls = []
     monkeypatch.setattr(notify, "send_template", lambda phone, params, *, template_name="emergency_alert":
                         calls.append((phone, params, template_name)) or "wamid-reminder")
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333339")
-        technician = User(username="template-success-tech", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
         set_setting(session, "notify.reminder_template_name", "recordatorio_prueba")
-        local_date = datetime.now(timezone.utc).date() + timedelta(days=3)
-        local_time = datetime.strptime("14:35", "%H:%M").time()
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=local_date, local_time=local_time,
-            timezone_name="UTC", duration_minutes=60, actor="test",
+        _install_recipe(session, "appointment_reminder")
+        starts_at = datetime(2030, 1, 3, 14, 35, tzinfo=timezone.utc)
+        appointment, customer = _booked_appointment(
+            session, starts_at=starts_at, created_at=datetime(2030, 1, 1, tzinfo=timezone.utc)
         )
-        session.add(NotificationTemplateVersion(
-            event="appointment.reminder.24h", channel="whatsapp", locale="es", version=1,
-            content="Visita {date} {time}", required_variables=["date", "time"], approved=True,
-            smtp_allowed=True, created_by="test",
-        ))
-        session.flush()
-        operation = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:reminder:24h"
-        ))
+        _approved_reminder_template(session)
+        _scan_reminders(session, starts_at - timedelta(hours=23))
+        operation = _appointment_operation(session, appointment)
         assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
-        assert calls == [(customer.phone_e164, [local_date.strftime("%d/%m/%Y"), "14:35"], "recordatorio_prueba")]
+        assert calls == [(customer.phone_e164, ["03/01/2030", "14:35"], "recordatorio_prueba")]
         assert len(calls[0][1]) == 2
         assert operation.status == "sent"
         assert operation.delivered_at is not None
 
 
-@pytest.mark.parametrize("outcome", ["completed", "no_show"])
-def test_close_schedules_followup_and_publishes_outcome_event(migrated_db, outcome):
-    from app.models import AppointmentStatus, Case, DomainEvent, User, UserRole
-    from app.services import scheduling
-    from app.services.settings import get_setting
-
+@pytest.mark.parametrize(
+    "outcome,recipe_id",
+    [("completed", "appointment_followup"), ("no_show", "appointment_followup_no_show")],
+)
+def test_close_publishes_outcome_event_and_followup_recipe_delays_delivery(migrated_db, outcome, recipe_id):
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333340")
-        technician = User(username=f"followup-{outcome}", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
-            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        _install_recipe(session, recipe_id)
+        before = datetime.now(timezone.utc)
+        appointment, customer = _booked_appointment(
+            session, starts_at=datetime.now(timezone.utc) + timedelta(days=2)
         )
-        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test", now=FOLLOWUP_NOW)
-        key = f"appointment:{appointment.id}:followup:{outcome}"
-        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.idempotency_key == key))
-        assert operation is not None
-        assert operation.next_attempt_at == FOLLOWUP_NOW + timedelta(hours=24)
-        assert operation.recipient == get_setting(session, "notify.owner_whatsapp")
-        assert operation.status == "pending"
-        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(NotificationOperation.idempotency_key == key)) == 1
-        event_type = f"appointment.{outcome}"
-        event = session.scalar(select(DomainEvent).where(DomainEvent.event_type == event_type, DomainEvent.entity_id == str(appointment.id)))
+        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test")
+
+        event = session.scalar(select(DomainEvent).where(
+            DomainEvent.event_type == f"appointment.{outcome}",
+            DomainEvent.entity_id == str(appointment.id),
+        ))
         assert event is not None
         assert event.dedupe_key == f"appointment:{appointment.id}:{outcome}"
         assert event.payload == {
-            "customer_id": customer.id, "case_id": case.id,
+            "customer_id": customer.id, "case_id": appointment.case_id,
             "recipient": customer.phone_e164, "outcome": outcome,
         }
 
+        assert evaluate_event(session, event) != []
+        operation = _appointment_operation(session, appointment)
+        assert operation is not None
+        assert operation.recipient == get_setting(session, "notify.owner_whatsapp")
+        assert operation.status == "pending"
+        assert abs(operation.next_attempt_at - (before + FOLLOWUP_DELAY)) < timedelta(seconds=60)
+        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(
+            NotificationOperation.source_id == str(appointment.id),
+            NotificationOperation.channel == "whatsapp",
+        )) == 1
+
 
 def test_close_cannot_schedule_followup_twice(migrated_db):
-    from app.models import AppointmentStatus, Case, User, UserRole
-    from app.services import scheduling
-
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333341")
-        technician = User(username="followup-once", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
-            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        _install_recipe(session, "appointment_followup")
+        appointment, _ = _booked_appointment(
+            session, starts_at=datetime.now(timezone.utc) + timedelta(days=2)
         )
-        scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test", now=FOLLOWUP_NOW)
+        scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test")
         with pytest.raises(ValueError):
-            scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test", now=FOLLOWUP_NOW)
-        key = f"appointment:{appointment.id}:followup:completed"
-        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(NotificationOperation.idempotency_key == key)) == 1
+            scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test")
+
+        event = session.scalar(select(DomainEvent).where(
+            DomainEvent.event_type == "appointment.completed",
+            DomainEvent.entity_id == str(appointment.id),
+        ))
+        assert evaluate_event(session, event) != []
+        # Re-evaluating the same event reuses the execution and creates no duplicate.
+        assert evaluate_event(session, event) != []
+        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(
+            NotificationOperation.source_id == str(appointment.id),
+            NotificationOperation.channel == "whatsapp",
+        )) == 1
 
 
 @pytest.mark.parametrize(
-    "outcome,template_event,setting_key,template_name",
+    "outcome,recipe_id,template_event,setting_key,template_name",
     [
-        ("completed", "appointment.followup.completed", "notify.followup_template_name", "appointment_followup"),
-        ("no_show", "appointment.followup.no_show", "notify.followup_no_show_template_name", "appointment_followup_no_show"),
+        ("completed", "appointment_followup", "appointment.followup.completed", "notify.followup_template_name", "appointment_followup"),
+        ("no_show", "appointment_followup_no_show", "appointment.followup.no_show", "notify.followup_no_show_template_name", "appointment_followup_no_show"),
     ],
 )
 def test_followup_dispatch_uses_outcome_specific_template_and_parameters(
-    migrated_db, monkeypatch, outcome, template_event, setting_key, template_name,
+    migrated_db, monkeypatch, outcome, recipe_id, template_event, setting_key, template_name,
 ):
-    from app.models import AppointmentStatus, Case, NotificationTemplateVersion, User, UserRole
-    from app.services import scheduling, notify
-    from app.services.settings import set_setting
-
     calls = []
     monkeypatch.setattr(notify, "send_template", lambda phone, params, *, template_name=None:
                         calls.append((phone, params, template_name)) or "wamid-followup")
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, f"+5693333334{0 if outcome == 'completed' else 2}")
-        customer.name = "Ana"
-        technician = User(username=f"dispatch-followup-{outcome}", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
+        _install_recipe(session, recipe_id)
         set_setting(session, setting_key, template_name)
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
-            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        appointment, customer = _booked_appointment(
+            session, starts_at=datetime(2030, 1, 3, 14, 35, tzinfo=timezone.utc),
+            created_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
         )
-        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test", now=FOLLOWUP_NOW)
+        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test")
         session.add(NotificationTemplateVersion(
             event=template_event, channel="whatsapp", locale="es", version=1,
             content="Follow-up {customer_name} {date} {time}",
@@ -472,46 +445,42 @@ def test_followup_dispatch_uses_outcome_specific_template_and_parameters(
             smtp_allowed=True, created_by="test",
         ))
         session.flush()
-        operation = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:followup:{outcome}"
+        event = session.scalar(select(DomainEvent).where(
+            DomainEvent.event_type == f"appointment.{outcome}",
+            DomainEvent.entity_id == str(appointment.id),
         ))
+        assert evaluate_event(session, event) != []
+        operation = _appointment_operation(session, appointment)
         assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
         assert calls == [(operation.recipient, ["Ana", "03/01/2030", "14:35"], template_name)]
 
 
-@pytest.mark.parametrize("outcome", ["completed", "no_show"])
-def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_db, monkeypatch, outcome):
-    from app.models import AppointmentStatus, Case, NotificationTemplateVersion, User, UserRole
-    from app.services import scheduling, notify
-    from app.services.settings import get_setting
-
+@pytest.mark.parametrize(
+    "outcome,recipe_id",
+    [("completed", "appointment_followup"), ("no_show", "appointment_followup_no_show")],
+)
+def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_db, monkeypatch, outcome, recipe_id):
     emails = []
     monkeypatch.setattr(notify, "send_template", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("Meta down")))
     monkeypatch.setattr(notify, "send_email", lambda session, to, subject, body: emails.append((to, subject, body)))
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, f"+5693333334{3 if outcome == 'completed' else 4}")
-        customer.name = "Ana"
-        technician = User(username="fallback-followup", password_hash="x", role=UserRole.TECNICO)
-        session.add(technician)
-        session.flush()
-        case = Case(customer_id=customer.id, status="open")
-        session.add(case)
-        session.flush()
-        appointment = scheduling.book(
-            session, service="Visit", customer_id=customer.id, case_id=case.id,
-            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
-            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
-            duration_minutes=60, actor="test",
+        _install_recipe(session, recipe_id)
+        appointment, _ = _booked_appointment(
+            session, starts_at=datetime(2030, 1, 3, 14, 35, tzinfo=timezone.utc),
+            created_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
         )
-        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test", now=FOLLOWUP_NOW)
+        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test")
         session.add(NotificationTemplateVersion(
             event=f"appointment.followup.{outcome}", channel="whatsapp", locale="es", version=1,
             content="Follow-up", required_variables=[], approved=True, smtp_allowed=True, created_by="test",
         ))
         session.flush()
-        operation = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:followup:{outcome}"
+        event = session.scalar(select(DomainEvent).where(
+            DomainEvent.event_type == f"appointment.{outcome}",
+            DomainEvent.entity_id == str(appointment.id),
         ))
+        assert evaluate_event(session, event) != []
+        operation = _appointment_operation(session, appointment)
         assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
         address = get_setting(session, "notify.owner_email")
         assert emails and emails[0][0] == address

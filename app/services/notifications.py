@@ -345,15 +345,6 @@ def process_operation(
                 from app.services.templates import TemplatePolicyError
                 raise TemplatePolicyError(f"no renderer registered for template event {template_event}")
             external_id = renderer(session, operation)
-        elif (operation.idempotency_key.endswith(":reminder:24h") and operation.source_entity == "appointment"
-                and session.get(Appointment, int(operation.source_id)) is not None):
-            external_id = _send_appointment_reminder(session, operation)
-        elif operation.source_entity == "appointment" and operation.idempotency_key in {
-            f"appointment:{operation.source_id}:followup:completed",
-            f"appointment:{operation.source_id}:followup:no_show",
-        }:
-            outcome = operation.idempotency_key.rsplit(":", 1)[1]
-            external_id = _send_appointment_followup(session, operation, outcome)
         elif operation.channel == "push":
             external_id = (deliver or send_push)(operation.recipient, operation.content)
         else:
