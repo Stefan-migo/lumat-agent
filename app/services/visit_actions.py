@@ -10,9 +10,8 @@ customer-facing half of a quick action:
 
 Transition, audit row and send are one transaction: a delivery failure rolls
 the whole action back, so the technician can retry immediately. The template
-body contract is `{{1}}` customer name, `{{2}}` visit date, `{{3}}` visit time —
-the same shape as `appointment_followup` (`app/services/notifications.py`); the
-two Meta templates themselves are external (EXT).
+body contract is `{{1}}` customer name, `{{2}}` technician name, `{{3}}` visit
+date, `{{4}}` visit time — the two Meta templates themselves are external (EXT).
 
 The route that calls this acquires the appointment row `FOR UPDATE` first, so
 two rapid clicks serialize on the cooldown read. The operation's
@@ -29,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Appointment, AuditLog, Customer, TechnicianVisitState
+from app.models import Appointment, AuditLog, Customer, TechnicianVisitState, User
 from app.services import notify, visit_state
 from app.services.notifications import create_operation, process_operation
 from app.services.settings import get_setting
@@ -133,12 +132,18 @@ def _send_state_template(
     """Send the business-initiated WhatsApp template for the state (S8).
 
     The recipient is `customer.phone_e164`, resolved here and never returned.
+    `{{2}}` is the technician's display name — the customer is about to receive
+    a stranger at their door — with the login username as the fallback.
     """
     template_name = get_setting(
         session, _TEMPLATE_SETTING_KEYS[state], default=_DEFAULT_TEMPLATE_NAMES[state]
     )
+    technician = session.get(User, appointment.technician_id)
+    if technician is None:
+        raise VisitNotificationFailed("appointment has no technician")
     params = [
         customer.name,
+        technician.name or technician.username,
         appointment.local_start.strftime("%d/%m/%Y"),
         appointment.local_start.strftime("%H:%M"),
     ]

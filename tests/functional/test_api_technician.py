@@ -15,6 +15,7 @@ from app.models import (
     Customer,
     NotificationOperation,
     TechnicianVisitState,
+    User,
 )
 from app.services import scheduling, visit_actions
 from app.services.settings import SETTINGS_DEFAULTS, set_setting
@@ -390,6 +391,32 @@ def test_technician_quick_action_uses_the_configured_template_name(client, make_
     assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 200
 
     assert _meta_template_body(mock_meta_send)["template"]["name"] == "en_camino_aprobado"
+
+
+def test_technician_quick_action_sends_the_four_parameter_template_contract(client, make_user, recorded_sends):
+    """Meta template contract: {{1}} customer, {{2}} technician, {{3}} date, {{4}} time."""
+    named = make_user("tech", "tech-pass", role="tecnico")
+    with SessionLocal() as session:
+        session.query(User).filter_by(id=named).update({"name": "Pedro Soto"})
+        session.commit()
+    unnamed = make_user("tech2", "tech2-pass", role="tecnico")
+    first = _open_window_appointment(named, "+56900000491")
+    second = _open_window_appointment(unnamed, "+56900000492")
+    _login(client)
+    assert client.post(f"/panel/api/technician/appointments/{first}/en_route").status_code == 200
+    _login(client, "tech2", "tech2-pass")
+    assert client.post(f"/panel/api/technician/appointments/{second}/en_route").status_code == 200
+
+    recipient, params, template_name = recorded_sends[0]
+    assert recipient == "+56900000491"
+    assert template_name == "en_route"
+    assert len(params) == 4
+    assert params[0] == "Customer 91"
+    assert params[1] == "Pedro Soto"
+    datetime.strptime(params[2], "%d/%m/%Y")
+    datetime.strptime(params[3], "%H:%M")
+    # A technician with no display name falls back to their login username.
+    assert recorded_sends[1][1][1] == "tech2"
 
 
 def test_technician_quick_action_cooldown_rejects_a_second_click(client, make_user, mock_meta_send):
