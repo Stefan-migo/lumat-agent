@@ -117,7 +117,7 @@ describe("projects panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect(await screen.findByLabelText("Instrucciones del proyecto")).toHaveValue("Answer in Spanish.");
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
   });
 
   it("explains that project-scoped threads are not supported and loads the project agent roster", async () => {

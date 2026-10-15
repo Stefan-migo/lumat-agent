@@ -85,7 +85,7 @@ S6 — Project file folders + delete (backend feature; refs images 2-3). Owner-a
 | T4 Skills | S4 | inline | pending | — |
 | T5 Hilos wire | S5 | inline | pending | — |
 | T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
-| T7 files tree UI | S6 | inline | pending | — |
+| T7 files tree UI | S6 | inline | done | bb6b6a64, c0268a94 |
 | T8 delete + confirm dialogs | S6 | inline | pending | — |
 | T9 knowledge card layout | S6 | inline | pending | — |
 
@@ -138,3 +138,15 @@ provisioned root-owned `.venv` and `media/` were empty and blocked the test runn
 L11 (owner): "ok cerramos aqui. guarda memoria. dame el handoff para continuar con T7 frontend en un
 nuevo chat." Session closed after T6. Next: T7 (frontend folders tree). Handoff written to
 `odd/handoffs/panel-visual-alignment.md` in the primary worktree.
+
+L12: T7 done (bb6b6a64 API client + c0268a94 tree UI). Frontend folder tree in `ProjectResources.tsx`:
+search toolbar + `Subir archivo` (targets the selected folder, root by default), a project-root node,
+collapsible folders with recursive file counts, file rows (type icon, name, size, `En la KB` badge,
+download, delete), folder create/rename/delete via a row `⋯` menu, and a `N archivos · M carpetas`
+footer. Deletes go through a confirmation `Dialog`. New `ProjectFolder` type, `folder_id` on
+`ProjectFile`, and API helpers in `api.ts`. `ProjectsPage` now passes `projectName`. Reference default
+the owner did not spec: folder CRUD affordances = `Menu` kebab (root → `Nueva carpeta`; row →
+`Nueva subcarpeta`/`Renombrar`/`Eliminar`). Verified: `npm run build` green, full vitest suite green
+(1193 passed), and standalone screenshots of `/panel/app/projects/test` match reference image 1.
+Note: file rows use a type icon, not image thumbnails (the list API serves no thumbnail). RDD assess:
+medium, `under_budget`, no review due.
