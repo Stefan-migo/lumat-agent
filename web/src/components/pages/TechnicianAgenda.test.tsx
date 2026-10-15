@@ -223,7 +223,22 @@ describe('technician surface — visit safety and location', () => {
     const missingAddress = await screen.findByText('Dirección no registrada');
     const card = missingAddress.closest('article');
     expect(missingAddress).toBeInTheDocument();
-    expect(within(card as HTMLElement).queryByRole('link')).not.toBeInTheDocument();
+    const links = within(card as HTMLElement).queryAllByRole('link');
+    expect(links.some((link) => (link.getAttribute('href') ?? '').includes('google.com/maps'))).toBe(false);
+    expect(within(card as HTMLElement).queryByRole('link', { name: 'Ñuñoa' })).not.toBeInTheDocument();
+  });
+});
+
+describe('technician surface — opening the visit', () => {
+  it('opens the visit detail from the service link', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: [appointment] }), { status: 200 }),
+    );
+
+    render(<TechnicianAgenda />);
+
+    const link = await screen.findByRole('link', { name: 'Calefont' });
+    expect(link).toHaveAttribute('href', '/panel/app/agenda/7');
   });
 });
 
