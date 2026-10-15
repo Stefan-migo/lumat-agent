@@ -46,7 +46,7 @@ def test_run_assistant_uses_effective_project_config(monkeypatch):
             InternalChatThread(
                 user_id=user.id,
                 proyecto=project.slug,
-                assistant_state={"tool_policy": {"opt_in_enabled": ["web.search"]}},
+                assistant_state={"tool_policy": {"opt_in_enabled": []}},
             ),
         ]
         session.add_all(threads)
@@ -68,8 +68,8 @@ def test_run_assistant_uses_effective_project_config(monkeypatch):
         json.loads(re.search(r"<available_tools>(.*?)</available_tools>", call["messages"][-1]["content"], re.DOTALL).group(1))
         for call in planner_calls
     ]
-    assert "web.search" not in {tool["name"] for tool in catalogs[0]}
-    assert "web.search" in {tool["name"] for tool in catalogs[1]}
+    assert "web.search" in {tool["name"] for tool in catalogs[0]}
+    assert "web.search" not in {tool["name"] for tool in catalogs[1]}
     system_message = planner_calls[0]["messages"][0]["content"]
     assert system_message.startswith(
         f"{load_assistant_config().persona}\n\nUse the project-specific vocabulary."
