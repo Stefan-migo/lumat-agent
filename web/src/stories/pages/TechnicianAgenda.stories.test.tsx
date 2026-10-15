@@ -11,13 +11,12 @@ describe("TechnicianAgenda page story", () => {
     }
   });
 
-  it("renders one page heading, the shell brand and the session control", () => {
+  it("renders one page heading inside the shared panel chrome", () => {
     render(<TechnicianSurfaceView />);
 
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(screen.getByAltText("Lumat")).toBeInTheDocument();
-    expect(screen.getByText("tec-agenda")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
+    expect(screen.getAllByAltText("Lumat").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("tec-agenda").length).toBeGreaterThan(0);
   });
 
   it("reads as a schedule: today marked, past separated, the slot leading each card", () => {
@@ -41,7 +40,7 @@ describe("TechnicianAgenda page story", () => {
     expect(screen.getAllByText("Cliente sin nombre").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Dirección no registrada").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Comuna no registrada").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(within(document.getElementById("panel-main-content") as HTMLElement).queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("groups a twelve-visit roster without losing a day or a card", () => {

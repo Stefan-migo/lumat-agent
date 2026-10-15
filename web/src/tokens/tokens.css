@@ -140,6 +140,8 @@ body {
   --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.16); /* DS-TKN-7 */
 
   --z-modal: 100;
+  /* Transient toasts sit above every modal surface. */
+  --z-toast: 200;
 
   /* Lumat brand primitives — additive roles from DESIGN_SYSTEM.md */
   --brand-lime: #abc333;

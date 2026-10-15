@@ -71,9 +71,9 @@ describe("projects panel", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
-    expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
-    expect(screen.getByText("Run ops · Activo").closest("p")).toBeInTheDocument();
-    expect(screen.getByText("Run ops · Activo").closest("p")?.querySelector(".badge")).toBeNull();
+    const header = (await screen.findByRole("heading", { level: 1, name: "Operations" })).closest(".page-header");
+    expect(header).toHaveTextContent("Run ops");
+    expect(header?.querySelector(".badge")).toHaveTextContent("Activo");
     fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
     expect(back).toHaveBeenCalled();
   });
@@ -92,7 +92,8 @@ describe("projects panel", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
 
-    expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
+    const header = (await screen.findByRole("heading", { level: 1, name: "Operations" })).closest(".page-header");
+    expect(header).toHaveTextContent("Run ops");
     expect(screen.getByRole("tab", { name: "Contexto" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("Nombre del proyecto")).toHaveValue("Operations");
     expect(screen.getByLabelText("Nombre del proyecto")).toBeDisabled();
@@ -116,17 +117,25 @@ describe("projects panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect(await screen.findByLabelText("Instrucciones del proyecto")).toHaveValue("Answer in Spanish.");
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
   });
 
-  it("explains that project-scoped threads are not supported and loads the project agent roster", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 })).mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
+  it("wires the Hilos tab to the project thread list and loads the project agent roster", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/chat/threads")) return new Response(JSON.stringify({ threads: [{ id: 5, title: "Revisión de herramientas", proyecto: "ops", created_at: null, updated_at: null, run_status: null, approval_status: null, preview: "Consulta de las herramientas disponibles." }] }), { status: 200 });
+      if (url.includes("/panel/api/projects/ops/agents")) return new Response(JSON.stringify({ agents: [], latest_run: null }), { status: 200 });
+      if (url.includes("/panel/api/projects/ops/files")) return new Response(JSON.stringify({ files: [] }), { status: 200 });
+      if (url.includes("/panel/api/projects/ops/folders")) return new Response(JSON.stringify({ folders: [] }), { status: 200 });
+      if (url.includes("/panel/api/projects/ops")) return new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
     await screen.findByRole("tab", { name: "Hilos" });
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Hilos" }), { button: 0 });
-    expect(await screen.findByText("Esta vista todavía no puede filtrar hilos por proyecto. La API no entrega la asociación del proyecto en el listado de hilos.")).toBeInTheDocument();
-    expect(screen.queryByText(/Conversación|thread/i)).not.toBeInTheDocument();
+    expect(await screen.findByText("Revisión de herramientas")).toBeInTheDocument();
+    expect(screen.getByText("Consulta de las herramientas disponibles.")).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Agentes" }), { button: 0 });
     expect(await screen.findByRole("heading", { name: "Agentes del proyecto" })).toBeInTheDocument();
