@@ -90,17 +90,17 @@ not in the audience enum.
 
 ### WU2 — scope the admin retrieval probe
 
-- [ ] **T5** — RED: `tests/functional/test_api_kb_settings.py` — a project-scoped document's chunk
+- [x] **T5** — RED: `tests/functional/test_api_kb_settings.py` — a project-scoped document's chunk
       must NOT be returned by `GET /panel/api/kb/search`. Observe RED.
-- [ ] **T6** — GREEN: `app/panel/api/routes/kb.py` — pass `global_only=True` to the probe.
-- [ ] **WU2 commit** — `fix(kb): scope the admin retrieval probe to global documents`
+- [x] **T6** — GREEN: `app/panel/api/routes/kb.py` — pass `global_only=True` to the probe.
+- [x] **WU2 commit** — `fix(kb): scope the admin retrieval probe to global documents`
 
 ### WU3 — spec delta
 
-- [ ] **T7** — `openspec/specs/knowledge-base/spec.md` — add the scope-boundary requirement / scenario
+- [x] **T7** — `openspec/specs/knowledge-base/spec.md` — add the scope-boundary requirement / scenario
       that the current spec does not state (KB-3 covers the manager, KB-5 covers audience; neither
       covers listing scope).
-- [ ] **WU3 commit** — `docs(specs): state the KB listing scope boundary`
+- [x] **WU3 commit** — `docs(specs): state the KB listing scope boundary`
 
 ## Verification
 
@@ -167,3 +167,22 @@ stays in `ready-for-odd/` (its ODD task doc does not exist yet).
 - **Full frontend suite** — `npx vitest run --maxWorkers=2` — **1228 passed** (108 files).
 - **Build / type check** — `npm run build` — built in 4.93s (tsc -b + vite), no type errors.
 - **WU1 commit** — `04dd2e54 fix(kb): scope the panel document list to global or one project`.
+- **WU2 RED (backend)** — `uv run --no-sync pytest tests/functional/test_api_kb_settings.py -k
+  "probe_excludes"` — **1 failed**; the probe returned `[1, 2]` (the project document leaked).
+- **WU2 GREEN (backend)** — `uv run --no-sync pytest tests/functional/test_api_kb_settings.py` —
+  **67 passed**.
+- **WU2 commit** — `9fb983e1 fix(kb): scope the admin retrieval probe to global documents`.
+- **WU3** — spec delta, no runnable RED (documentation). `openspec` CLI is not installed in this
+  environment, so the markdown was reviewed by hand against the KB-1..KB-5 shape.
+- **WU3 commit** — `06a1c2d3 docs(specs): state the KB document scope boundary`.
+- **Full backend suite (final state)** — `uv run --no-sync pytest tests/` — **2267 passed, 2 warnings**
+  in 281.34s.
+
+**Status**: all work units complete; awaiting review and delivery.
+
+## Follow-ups
+
+- `ProjectResources.tsx:478` still filters the payload client-side (`doc.project_id === projectId`).
+  It is now redundant but harmless; removing it is a separate cleanup, not this fix.
+- `KbDocument` has no user axis — scope is per project only. If a per-user scope is ever needed, it
+  is a new axis and a new requirement, not a widening of `project_id`.
