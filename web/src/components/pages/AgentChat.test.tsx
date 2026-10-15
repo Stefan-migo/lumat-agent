@@ -149,6 +149,16 @@ describe("AgentChat", () => {
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4/tool-policy", expect.anything());
   });
 
+  it("accepts docx, xlsx and markdown files in the attachment picker", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ thread: makeThread(), messages: [] }));
+    render(<AgentChat threadId={4} />);
+    await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
+
+    const picker = document.querySelector("#assistant-chat-file-picker") as HTMLInputElement;
+
+    expect(picker.accept).toBe("image/*,.pdf,.csv,.txt,.docx,.xlsx,.md");
+  });
+
   it("toggles web search and fetch together", async () => {
     let enabled: string[] = [];
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
