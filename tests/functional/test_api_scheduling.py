@@ -13,6 +13,7 @@ from app.models import (
     Conversation,
     Customer,
     TechnicianAvailability,
+    TechnicianVisitState,
     User,
 )
 
@@ -186,6 +187,29 @@ def test_appointments_range_joins_orders_and_keeps_lifecycle_and_sync_independen
     assert rows[2]["sync"] == {"status": "failed", "error": "provider unavailable", "retry": True}
 
 
+def test_appointments_range_carries_the_technician_field_state(client, make_user):
+    """S9: the office board reads the field visit state off the agenda list, so
+    it can show what the technician marked and how long ago."""
+    make_user("oper", "oper-pass")
+    with SessionLocal() as session:
+        _agenda_rows(session)
+        late = session.query(Appointment).filter_by(service="late").one()
+        late.technician_state = TechnicianVisitState.EN_ROUTE
+        late.technician_state_at = datetime(2026, 7, 15, 13, 45, tzinfo=timezone.utc)
+        session.commit()
+
+    assert client.post("/panel/api/login", json={"username": "oper", "password": "oper-pass"}).status_code == 200
+    response = client.get("/panel/api/appointments?from=2026-07-15&to=2026-07-16&timezone=America/Santiago")
+
+    assert response.status_code == 200
+    rows = {row["service"]: row for row in response.json()["appointments"]}
+    assert rows["late"]["technician_state"] == "en_route"
+    assert rows["late"]["technician_state_at"] == "2026-07-15T13:45:00+00:00"
+    # A visit the technician has not touched carries a null state, not a missing key.
+    assert rows["failed"]["technician_state"] is None
+    assert rows["failed"]["technician_state_at"] is None
+
+
 def test_appointments_range_rejects_timezone_and_bounds_without_mutation(client, make_user):
     make_user("oper", "oper-pass")
     assert client.post("/panel/api/login", json={"username": "oper", "password": "oper-pass"}).status_code == 200
@@ -291,6 +315,7 @@ def test_appointment_detail_embeds_conversation_summary_and_related_records(clie
     assert set(payload["appointment"]) == {
         "id", "service", "customer_id", "case_id", "technician_id", "local_start",
         "timezone", "starts_at", "ends_at", "duration_minutes", "status", "history",
+        "technician_state", "technician_state_at",
     }
 
 

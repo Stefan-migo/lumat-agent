@@ -215,6 +215,19 @@ def to_admin_user_dict(user: User) -> dict:
     }
 
 
+def _field_state(appointment: Appointment) -> dict:
+    """S5/S9 — the field visit-state axis, shared by every appointment shape.
+
+    It is orthogonal to `status`: the office board (S9) reads it to show what the
+    technician marked and when, and the technician detail (S5) to show its own
+    actions. Both keys are always present, `None` when the technician has not
+    touched the visit."""
+    return {
+        "technician_state": appointment.technician_state.value if appointment.technician_state is not None else None,
+        "technician_state_at": _iso(appointment.technician_state_at),
+    }
+
+
 def to_appointment_dict(appointment: Appointment) -> dict:
     return {
         "id": appointment.id,
@@ -228,6 +241,7 @@ def to_appointment_dict(appointment: Appointment) -> dict:
         "ends_at": _iso(appointment.ends_at),
         "duration_minutes": appointment.duration_minutes,
         "status": appointment.status.value,
+        **_field_state(appointment),
         "history": [
             {"id": h.id, "actor": h.actor, "action": h.action,
              "from_status": h.from_status.value if h.from_status else None,
@@ -302,8 +316,7 @@ def to_technician_appointment_detail_dict(
             "ends_at": _iso(appointment.ends_at),
             "duration_minutes": appointment.duration_minutes,
             "status": appointment.status.value,
-            "technician_state": appointment.technician_state.value if appointment.technician_state is not None else None,
-            "technician_state_at": _iso(appointment.technician_state_at),
+            **_field_state(appointment),
         },
         "customer": {"id": customer.id, "name": customer.name, "address": customer.address, "comuna": customer.comuna},
         "case": {"id": case.id, "conversation_id": case.conversation_id},
@@ -402,6 +415,7 @@ def to_agenda_dict(appointment: Appointment, *, customer_name: str | None, custo
         "starts_at": _iso(appointment.starts_at),
         "ends_at": _iso(appointment.ends_at),
         "status": appointment.status.value,
+        **_field_state(appointment),
         "sync": {
             "status": sync.status if sync else "pending",
             "error": sync.error if sync else None,
