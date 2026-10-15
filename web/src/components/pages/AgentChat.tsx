@@ -1180,7 +1180,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
             <div className="assistant-chat__composer-wrap">
             {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
-              <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
+              <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt,.docx,.xlsx,.md" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
               <Textarea
                 label="Mensaje"
                 value={content}

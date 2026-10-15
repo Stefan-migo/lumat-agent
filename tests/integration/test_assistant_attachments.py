@@ -25,6 +25,48 @@ def test_allowed_attachment_accepts_supported_document_and_rejects_mismatch():
         allowed_attachment("manual.pdf", "text/plain", 120)
 
 
+def test_allowed_attachment_accepts_docx_xlsx_and_markdown():
+    docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    assert allowed_attachment("doc.docx", docx, 120) == "docx"
+    assert allowed_attachment("sheet.xlsx", xlsx, 120) == "xlsx"
+    assert allowed_attachment("notes.md", "text/markdown", 120) == "md"
+    assert allowed_attachment("notes.md", "text/plain", 120) == "md"
+
+
+def test_document_context_extracts_real_docx(tmp_path):
+    from docx import Document as DocxDocument
+
+    document = DocxDocument()
+    document.add_paragraph("Hola desde docx")
+    source = tmp_path / "a.docx"
+    document.save(str(source))
+    attachment = type("Attachment", (), {"kind": "docx", "stored_path": str(source), "filename": "a.docx", "id": 11})()
+
+    result = prepare_attachment_context([attachment], max_chars=1000)
+
+    assert result[0]["kind"] == "docx"
+    assert "Hola desde docx" in result[0]["text"]
+
+
+def test_document_context_extracts_real_xlsx(tmp_path):
+    from openpyxl import Workbook
+
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["producto", "plan"])
+    sheet.append(["internet", "fibra 1000"])
+    source = tmp_path / "a.xlsx"
+    book.save(str(source))
+    attachment = type("Attachment", (), {"kind": "xlsx", "stored_path": str(source), "filename": "a.xlsx", "id": 12})()
+
+    result = prepare_attachment_context([attachment], max_chars=1000)
+
+    assert result[0]["kind"] == "xlsx"
+    assert "fibra 1000" in result[0]["text"]
+
+
 def test_attachment_limits_cover_size_and_count():
     with pytest.raises(ValueError, match="size"):
         allowed_attachment("photo.png", "image/png", MAX_FILE_SIZE + 1)
@@ -33,8 +75,8 @@ def test_attachment_limits_cover_size_and_count():
 
 def test_document_context_uses_extracted_text_and_is_bounded(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "app.chat.assistant.attachments.extract_text",
-        lambda content, fmt: "manual: " + content.decode(),
+        "app.chat.assistant.attachments.extract_document_text",
+        lambda content, kind: "manual: " + content.decode(),
     )
     source = tmp_path / "a.txt"
     source.write_bytes(b"hello")
@@ -275,7 +317,7 @@ def test_project_file_attachment_rejects_other_project_and_unsupported_type(clie
         session.flush()
         foreign_id = _project_file(session, second.id, user.id, tmp_path / "foreign.txt")
         unsupported_id = _project_file(
-            session, first.id, user.id, tmp_path / "unsupported.md", filename="notes.md", content_type="text/markdown"
+            session, first.id, user.id, tmp_path / "unsupported.zip", filename="notes.zip", content_type="application/zip"
         )
         session.commit()
     assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
