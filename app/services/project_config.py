@@ -86,6 +86,7 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
     """Resolve project and thread policy against the global catalog and role."""
     from app.services.projects import normalize_slug
 
+    role_value = role.value if isinstance(role, UserRole) else role
     project_cfg = ProjectConfig()
     project_id = None
     proyecto = thread.proyecto
@@ -97,7 +98,8 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
             project_id = project.id
             project_cfg = ProjectConfig.model_validate(project.config or {})
 
-    global_skills = global_skill_index(load_assistant_config())
+    # The role selects the agent (S9): its tools/skills are the global base.
+    global_skills = global_skill_index(load_assistant_config(role=role_value))
     project_skills = {
         skill.name: SkillDefinition(
             name=skill.name,
@@ -117,8 +119,7 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
     if "tool_policy" in assistant_state:
         enabled_opt_in = ToolPolicy.model_validate(assistant_state["tool_policy"]).opt_in_enabled
 
-    role_value = role.value if isinstance(role, UserRole) else role
-    global_whitelist = load_assistant_config().tools_whitelist
+    global_whitelist = load_assistant_config(role=role_value).tools_whitelist
     enabled = set(enabled_opt_in)
     tools = tuple(
         name
@@ -138,7 +139,7 @@ def available_opt_in_tools(role: UserRole | str) -> list[str]:
     """List globally enabled opt-in tools that this role is authorized to execute."""
     role_value = role.value if isinstance(role, UserRole) else role
     return [
-        name for name in load_assistant_config().tools_whitelist
+        name for name in load_assistant_config(role=role_value).tools_whitelist
         if TOOL_REGISTRY[name].tier == "opt_in" and is_tool_allowed_for_role(name, role_value)
     ]
 

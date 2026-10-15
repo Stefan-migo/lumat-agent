@@ -60,7 +60,7 @@ def _planner_client(captured):
 def _monkeypatch_planner(monkeypatch):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
+        lambda **_kwargs: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
 
 

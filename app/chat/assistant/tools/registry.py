@@ -14,7 +14,7 @@ import logging
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
-from app.models import AssistantAttachment, InternalChatThread, UserRole
+from app.models import AssistantAttachment, InternalChatThread, KbVisibility, UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
@@ -420,10 +420,13 @@ def _operational_history(session, args: OperationalHistoryArgs):
     }
 
 
-def _retrieve_kb(session, args: KbArgs, *, project_id: int | None = None):
-    # The Lumat assistant is internal and deliberately reads the whole corpus, including internal documents.
+def _retrieve_kb(session, args: KbArgs, *, project_id: int | None = None, role: str | None = None):
+    # The Lumat assistant is internal and reads the whole corpus, including internal
+    # documents. The technician-facing agent is scoped to the customer audience so
+    # internal documents never reach the tecnico role (S9).
+    audience = KbVisibility.CUSTOMER if role == UserRole.TECNICO.value else None
     return kb.retrieve(
-        session, args.query, top_k=args.top_k, audience=None,
+        session, args.query, top_k=args.top_k, audience=audience,
         project_id=project_id, global_only=project_id is None,
     )
 
@@ -868,10 +871,10 @@ def _planning_read_report(session, args: PlanningReadReportArgs, *, trusted_thre
     }
 
 
-def _assistant_capabilities(_session, _args: CapabilitiesArgs):
+def _assistant_capabilities(_session, _args: CapabilitiesArgs, *, role: str | None = None):
     from app.services.prompts import load_assistant_config
 
-    whitelist = load_assistant_config().tools_whitelist
+    whitelist = load_assistant_config(role=role).tools_whitelist
     lines = []
     for name in whitelist:
         definition = TOOL_REGISTRY[name]
@@ -964,7 +967,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "appointments.upcoming": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
     "customers.operational_history": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "cases.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
-    "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "view_image": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
@@ -1128,7 +1131,9 @@ def execute_tool(
                 )
             )
         elif name == "kb.retrieve":
-            result = _plain(definition.handler(session, parsed, project_id=project_id))
+            result = _plain(definition.handler(session, parsed, project_id=project_id, role=role))
+        elif name == "assistant.capabilities":
+            result = _plain(definition.handler(session, parsed, role=role))
         elif name == "appointments.upcoming":
             result = _plain(definition.handler(session, parsed, role=role, owner_id=owner_id))
         elif name.startswith("planning."):
