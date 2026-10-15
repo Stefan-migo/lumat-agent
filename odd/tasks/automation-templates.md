@@ -67,6 +67,7 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
 - T5 (S6,S2) — delete the hardcoded `:reminder:24h` and `followup:*` branches in `process_operation`; `_send_appointment_reminder`/`_send_appointment_followup` stay as renderers.
   T3–T5 land in one commit: `f6a5ec18`
 - T6 (S7) — `docs/meta-templates.md` recipe mapping + stale "known defect" corrected; frontend catalog untouched (its tests use local fixtures).
+- T7 (verification) — independent probes from `gentle-ai-verify` committed as `tests/integration/test_verifier_probes.py` (23 tests, S1–S7).
 
 ## Log
 
@@ -104,3 +105,13 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
   caller used `close(now=...)`, so dropping that unused parameter is safe. Executions' advisory: an
   operation whose rule was uninstalled before its delayed sweep falls back to the generic path.
   Commit `f6a5ec18`.
+- L10 (verification, S1–S7): independent read-only verifier (`gentle-ai-verify`) over `bc36318c..HEAD`:
+  every `S1..S7` **MET**, 0 blockers, 23 independent probes green. Advisories (accepted, not fixed):
+  (a) uninstalling a rule before a delayed follow-up sweep makes that pending operation fall back to the
+  generic free-form path; (b) `_reminder_due` omits the `installation.created_at` floor its sibling
+  evaluators apply, so a first install reminds every already-booked visit inside the next 24h (intended:
+  opt-in + imminent visits); (c) a visit booked >24h ahead then rescheduled into <24h notice is still
+  reminded (immutable `created_at`); (d) pre-deploy pending operations keyed `appointment:{id}:reminder:24h`
+  would free-form once after deploy. Probes committed as `tests/integration/test_verifier_probes.py`.
+  Frontend (vitest/build) not run: no `web/` file changed. Native risk assessment: `medium`,
+  `review_due=false` (`under_budget`).
