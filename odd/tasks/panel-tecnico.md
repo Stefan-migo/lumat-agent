@@ -1,13 +1,13 @@
 # panel-tecnico — technician gets a restricted view of the general panel + WhatsApp field quick-actions
 
-Branch: chained slices off `main`; current slice `odd/panel-tecnico-wu7` (worktree `../lumat-agent-odd-panel-tecnico-wu7`), base `main` (`6a44b631`).
+Branch: chained slices off `main`; current slice `odd/panel-tecnico-wu8` (worktree `../lumat-agent-odd-panel-tecnico-wu8`), base `main` (`3f329cb9`).
 Delivery: chained PRs (feature exceeds the ~400-authored-line heuristic).
 Test runners: backend `pytest`; frontend `vitest` (+ `tsc -b` only via `npm run build`).
 
 ## Specs
 
 S1 — Unified role-gated navigation.
-The technician signs in and lands on the SAME panel shell as every other role (`PanelShell`), with the navigation filtered by role. The navigation MUST show only: Agenda, visit detail, Asistente, Notificaciones, Perfil. The separate `TechnicianShell` (`web/src/components/domain/TechnicianShell.tsx`) MUST be removed. The technician loses Proyectos and Sesiones de planificación (assumption, per D1; owner may veto).
+The technician signs in and lands on the SAME panel shell as every other role (`PanelShell`), with the navigation filtered by role. The navigation MUST show only: Agenda, visit detail, Asistente, Notificaciones, Perfil. The separate `TechnicianShell` (`web/src/components/domain/TechnicianShell.tsx`) MUST be removed. The technician loses Proyectos and Sesiones de planificación (confirmed by the owner, 2026-10-15 — see L24; it was flagged as an assumption of D1 with an owner veto).
 
 S2 — One visit-detail page, role-gated.
 The visit detail is the SAME page (`web/src/components/pages/AppointmentDetail.tsx`) for operator and technician, with actions, sections and payload gated by role. For the technician it MUST NOT render: the "Ver ficha del cliente" link, the conversation summary, `appointment.history`, email, or consent.
@@ -31,7 +31,7 @@ S8 — WhatsApp send, phone resolved server-side.
 Each state transition sends a Meta-approved business-initiated template for that state. The backend resolves `customer.phone_e164`; the number MUST NOT reach the frontend. Contains no free-form text (free-form is only legal inside the 24h window).
 
 S9 — Office semaphore.
-The office can see the visit's technician-state. Location is an open question (agenda list vs appointment detail) — MUST NOT be assumed.
+The office can see the visit's technician-state. Location decided by the owner, 2026-10-15 (see L24): BOTH the agenda list AND the visit detail (it was an open question; MUST NOT have been assumed).
 
 ## Tasks
 
@@ -146,4 +146,9 @@ L22 (2026-10-15, WU7 verification) — Independent verifier (Risk item 2): **no 
 - RDD: `review assess` over `6a44b631..HEAD` (`--committed-only`) read **medium risk, `review_due: false` (`under_budget`)**, so no native review for this candidate — same as WU3–WU6.
 
 L23 (2026-10-15, delivery) — WU7 pushed as PR **#627** (base `main`). The whole thread now starts from `main`, not from a stack. Before merging, `origin/main` was merged into the branch (main had advanced to `9eaaceba` with #625 and #626 — the assistant global-skills/roles threads, **zero shared files** with WU7) and the local integration was re-run over the merged tree: backend `pytest` **2268 passed** (exit 0), frontend `vitest run` **108 files / 1233 tests pass**, `npm run build` (`tsc -b` + vite) exit 0. That is the repo's pre-merge discipline: the branch must contain the current head of the base and the local integration runs over the merged tree, because `mergeable: CLEAN` says nothing about semantics. Remaining thread work: WU8 (office semaphore) and EXT (Meta templates).
+
+L24 (2026-10-15, WU8 open, S1/S9) — Two owner decisions recorded, taken in the handoff conversation `odd/handoffs/panel-tecnico-wu8.md`:
+- **S1 confirmed**: the technician loses Proyectos and Sesiones de planificación. S1 loses its "assumption, per D1; owner may veto" caveat.
+- **S9 location decided: BOTH** — the office semaphore goes in the **agenda list** AND in the **visit detail**. S9 loses its "MUST NOT be assumed" open-question caveat.
+Doc-only entry; the code lands with WU8 (same lesson as L20: a one-line doc change does not warrant its own CI cycle). Also fixes the stale header (it still named the WU7 slice at base `6a44b631`). Note: the WU5 rows and L13 still say migration `054`; PR #624 renumbered it to `056_appointment_technician_state.sql` while aligning the header with the filename (see L20) — history is left as written.
 
