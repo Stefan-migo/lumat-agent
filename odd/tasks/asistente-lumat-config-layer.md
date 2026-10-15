@@ -112,7 +112,7 @@ Non-goals (explicitly dropped after review):
 | T3c planning.read_report tool | S3 | inline | done | 51e9643f, 46d39657 |
 | T4 tray/library separation | S4 | inline | done | dd99e416 |
 | T5 multimodal tool results | S5 | inline | done | 9162183a, 32ec0106 |
-| T6 partial reads (offset/limit) | S6 | inline | pending | — |
+| T6 partial reads (offset/limit) | S6 | inline | done | 7563486f |
 | T7 docx/xlsx/md attachments | S7 | inline | pending | — |
 | T8 three global skills | S8 | inline | pending | — |
 | T9 TecnicoLumat agent | S9 | inline | pending | — |
@@ -295,3 +295,16 @@ function/lifecycle tests + 3 injection tests), then GREEN. Evidence: focused 8/8
 green (EXIT 0, no failures); no frontend change. RDD assess (`--base-ref f4b5489a --committed-only`):
 risk `medium`, `review_due=false` (`under_budget`, 405 changed lines).
 Next: T6 (partial reads `offset`/`limit`).
+
+L24 — T6 done (`7563486f`, branch `odd/asistente-lumat-config-layer-t6`, chained on the T5 branch).
+`read_file_text` now takes `offset`/`limit` and returns the slice plus `offset`, `limit`, `chars`
+(total), `truncated` and `next_offset` (the cursor for the next read, or None at the end);
+`read_project_file` exposes `offset` (ge=0) and `limit` (1..`MAX_FILE_TEXT_CHARS`, default = the full
+20k cap, so a plain call is unchanged). The agent pages a large file across the existing bounded
+tool loop (`MAX_ASSISTANT_TOOL_STEPS = 2`, chaining via `plan.follow_up`) — no loop change needed;
+the planner already sees the new fields in the tool schema. Tool description updated so the planner
+knows to continue from `next_offset`. TDD: RED first (5 paging tests + 3 range-validation cases),
+then GREEN. Evidence: focused green; full backend suite green (EXIT 0, no failures); no frontend
+change. The two `read_file_text` lambdas in `test_assistant_tools.py` were widened with `**kwargs`
+for the new call shape. RDD assess (`--base-ref 173befd0 --committed-only`): risk `medium`,
+`review_due=false` (`under_budget`, 146 changed lines). Next: T7 (docx/xlsx/md attachments).
