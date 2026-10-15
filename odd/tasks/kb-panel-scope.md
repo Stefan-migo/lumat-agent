@@ -180,6 +180,13 @@ stays in `ready-for-odd/` (its ODD task doc does not exist yet).
 
 **Status**: all work units complete; awaiting review and delivery.
 
+**L6** — 2026-10-15. `origin/main` advanced to `3f329cb9` (PR #627, `odd/panel-tecnico-wu7`) before
+push. That PR also touches `web/src/api.ts` — the file this branch edits — so the merge is a semantic
+merge, not a textual one. Merged `origin/main` into the branch (`cfd04034`, auto-merged, no
+conflicts) and re-ran the full integration over the merged tree: backend **2271 passed**, frontend
+**1234 passed** (108 files), `npm run build` OK. `refreshKbDocuments`, `ProjectResources.tsx:84` and
+`kb_list` all verified intact after the merge.
+
 ## Follow-ups
 
 - `ProjectResources.tsx:478` still filters the payload client-side (`doc.project_id === projectId`).
