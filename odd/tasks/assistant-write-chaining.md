@@ -1,8 +1,8 @@
 # assistant-write-chaining (Unit 1) — approved writes chain inside the panel loop
 
 **Objective**: let the panel assistant complete a multi-step write chain inside one user turn, where every business write is human-approved before it runs and the bounded autonomous class runs without per-step approval.
-**Branch**: `odd/assistant-write-chaining` (cut from `main` = `97b63c00`; synced with `origin/main` = `bc36318c`).
-**Delivery strategy**: `ask-on-risk` (default). Forecast ≈ 350 authored changed lines.
+**Branch**: `odd/assistant-write-chaining` (T1; cut from `main` = `97b63c00`, synced with `origin/main` = `bc36318c`, merged as PR #631) → `odd/assistant-write-chaining-t2` (T2; cut from `main` = `7c80b456`).
+**Delivery strategy**: `chained` (owner decision, 2026-10-15). Slices: **PR #631** = T1; `odd/assistant-write-chaining-t2` = T2. The ≈350-line forecast was exceeded by T1 alone (619 authored lines), which is what triggered the chain.
 **Test runner**: `pytest` (backend). Focused: `tests/unit/test_assistant_tool_loop.py`, `tests/integration/test_assistant_chat.py`, `tests/integration/test_assistant_harness_guardrails.py`.
 
 ## Specs
@@ -48,7 +48,7 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 ## Tasks
 
 - [x] T1 — Chain continues after an approved class-A write: `approve_plan`/`resume_thread` re-enter the graph instead of terminating. (S1, S2) — route: inline — commit `77b5ad28`
-- [ ] T2 — Sequential approval for step 2+: the chain can pause with a fresh approval per write and resume it. (S1, S2) — route: inline
+- [x] T2 — Sequential approval for step 2+: the chain can pause with a fresh approval per write and resume it. (S1, S2) — route: inline — commit `cb2cf13d`
 - [ ] T3 — Regression pins: read-only chaining and the single-write path are unchanged. (S4) — route: inline
 - [ ] T4 — Reject mid-chain aborts cleanly with an audit record. (S5) — route: inline
 - [ ] T5 — Recovery/resume is exactly-once per approved write. (S6) — route: inline
@@ -95,3 +95,12 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 **Session paused (2026-10-15).** T1 is done and verified; T2 is next. Resume from `odd/handoffs/assistant-write-chaining-t2.md` (main repo). The next task's load-bearing work is persisting the chain's accumulated `tool_results`/`tool_steps` across the approval pause, so a resumed chain keeps prior evidence.
 
 **Main sync + merged-tree verification (2026-10-15).** The branch was 18 commits behind `origin/main` (`97b63c00` → `bc36318c`, which brought PR #629 `automation-uninstall` and PR #630 `panel-tecnico-wu8`). `origin/main` was merged into the branch as `23fbb7ed`: textually clean, with **zero shared files** — the branch touches only `app/chat/assistant/{graph,nodes,state}.py`, `app/services/agent_chat.py`, this document, and `tests/integration/test_assistant*.py`, while main's 24 changed files are all under `web/`, `app/panel/`, `db/migrations/` and the unrelated `automation-*` tests. Merged-tree evidence, run on the merged tree and not on the pre-merge branch: backend `pytest` **2293 collected, no failures**; panel `npm run build` (`tsc -b` + vite) exit 0; panel `npm test` (vitest) **109 files / 1244 tests pass**. The branch is pushed and tracked as PR (draft) so T1 is reviewable while T2–T7 continue.
+
+**Delivery strategy (owner, 2026-10-15).** T1 alone authored 619 changed lines against a ≈350 forecast, so the owner chose `chained` over one growing PR: **PR #631** (T1) was marked ready, merged into `main` as `7c80b456`, and T2 starts on `odd/assistant-write-chaining-t2` cut from that merge.
+
+**T2 — implemented (2026-10-15).** The chain now continues past a write and pauses on each class-A write. The three blockers, all closed:
+  - **`tool_loop_head`** (`nodes.py`) no longer ends the turn for a non-read-only tool: any step that opted into `follow_up` continues — the read-only-only rule (D3) is reversed by the owner's decision — and it clears `approval` on continuation, so the next plan can never inherit the spent token. The cap (`MAX_ASSISTANT_TOOL_STEPS`, still 2; raising it is T6) still ends the chain and records `cap_reached`.
+  - **`guardrails`** (`nodes.py`) replaces the `loop_write_refused` refusal with the invariant it actually needs: a class-A write proceeds only with a consumed approval matching *this exact* plan (`validate_execution`), and otherwise a fresh approval is issued — at any step. `PANEL_LOOP_WRITE_REFUSAL` and the decision are gone, and `_after_guardrails` drops its terminal entry.
+  - **The chain state survives the pause.** `run_assistant` seeds `resume_tool_results`/`resume_tool_steps`; `_run_approved_plan` passes the accumulated evidence; `_persist_resumed_result` writes the fresh approval (assigned *after* the merge — merging a new token over a spent one would leave the spent token's fields on it), the new `current_plan` the next approval binds to, and `tool_results`/`tool_steps`/`cap_reached`; `_park_chain_on_next_approval` leaves the operator message pending with the plan/approval events continuing the sequence, because a chain shares one run id and a repeated sequence would be de-duplicated away.
+  - **Deliberate updates to earlier pins.** `test_autonomous_write_turn_does_not_chain` → `..._chains_in_loop` (S3); `test_step_two_write_plan_is_refused_by_guardrails` and `test_graph_refuses_step_two_write_before_execution_or_approval` → the fresh-approval contract (S1/S2), split into its class-A and class-B cases. The verifier probe `test_resume_with_pending_approval_refuses_execution` keeps its invariant — no write without a consumed approval — but the enforcement changed from a hard `PermissionError` to parking behind a fresh approval, and the probe now asserts that shape. That also closes the T1 advisory: the `NotNullViolation` came from `approve_plan`/`resume_thread` building a reply out of a `None` response on `approval_pending`, and both now park instead of replying.
+  - **Evidence.** RED observed first: 8 failures — 6 new rules plus the 2 rewritten pins — while the 2 regression pins (a write without `follow_up` still ends the turn; a resume with its own consumed approval still executes without a new prompt) passed at baseline. Then GREEN. New coverage in `tests/integration/test_assistant_write_chain.py`: a two-write chain driven through `approve_plan`, the continuation planner seeing step 1's evidence, and a reject at step 2 leaving it unexecuted. Full suite green (2293 collected).
