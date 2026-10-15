@@ -7,13 +7,13 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AutomationExecution, AutomationRule, DomainEvent
+from app.models import AutomationExecution, AutomationInstallation, AutomationRule, DomainEvent
 from app.services.audit import record_audit
 from app.services.notifications import create_operation
 from app.services.settings import get_setting
 
 ALLOWED_CHANNELS = {"whatsapp", "email"}
-ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.rescheduled", "appointment.cancelled", "appointment.completed", "appointment.no_show", "appointment.review_due", "customer.maintenance_due", "admin.daily_summary_due", "admin.weekly_summary_due"}
+ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.rescheduled", "appointment.cancelled", "appointment.completed", "appointment.no_show", "appointment.reminder_due", "appointment.review_due", "customer.maintenance_due", "admin.daily_summary_due", "admin.weekly_summary_due"}
 MAX_AUTHORING_COOLDOWN_SECONDS = 2_592_000
 
 
@@ -155,7 +155,16 @@ def evaluate_event(session: Session, event: DomainEvent) -> list[int]:
                 if not recipient:
                     outcome, reason = "skipped", "missing_recipient"
                 else:
-                    operation = create_operation(session, recipient=recipient, channel=rule.channel, content=content, source_entity=event.entity_type, source_id=event.entity_id, idempotency_key=execution_key, event_id=event.id)
+                    from app.services.recipes import get_recipe
+
+                    installation = (
+                        session.get(AutomationInstallation, rule.installation_id)
+                        if rule.installation_id else None
+                    )
+                    recipe = get_recipe(installation.recipe_id) if installation else None
+                    delay = recipe.delay_seconds if recipe else 0
+                    extra = {"next_attempt_at": now + timedelta(seconds=delay)} if delay else {}
+                    operation = create_operation(session, recipient=recipient, channel=rule.channel, content=content, source_entity=event.entity_type, source_id=event.entity_id, idempotency_key=execution_key, event_id=event.id, **extra)
                     outcome, reason = "enqueued", "matched"
                     operation_rule_ids.append(rule.id)
         session.add(AutomationExecution(rule_id=rule.id, event_id=event.id, execution_key=execution_key, outcome=outcome, reason=reason, operation_id=operation.id if operation else None))

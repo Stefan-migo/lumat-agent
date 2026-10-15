@@ -32,6 +32,8 @@ class RecipeDefinition:
     recipient_target: str = "customer"
     content: str = ""
     conditions: dict = field(default_factory=dict)
+    template_event: str | None = None
+    delay_seconds: int = 0
 
     def validate_parameters(self, values: dict) -> dict:
         if not isinstance(values, dict):
@@ -192,6 +194,47 @@ RECIPES: dict[str, RecipeDefinition] = {
             "appointment.no_show", "admin", frozenset({"whatsapp", "email"}),
             "Envía un aviso automático al registrar una inasistencia.",
             "Aviso: una visita agendada no se presentó.",
+        ),
+        RecipeDefinition(
+            recipe_id="appointment_reminder",
+            name="Recordatorio de visita",
+            description="Recuerda al cliente su visita 24 horas antes de la cita.",
+            category="reservas",
+            trigger_kind="offset",
+            event_type="appointment.reminder_due",
+            channel_allowed=frozenset({"whatsapp"}),
+            parameters=_EVENT_CHANNEL,
+            recipient_target="customer",
+            content="Appointment reminder",
+            template_event="appointment.reminder.24h",
+        ),
+        RecipeDefinition(
+            recipe_id="appointment_followup",
+            name="Seguimiento de visita",
+            description="Pide al equipo el seguimiento de una visita completada, 24 horas después.",
+            category="postventa",
+            trigger_kind="event",
+            event_type="appointment.completed",
+            channel_allowed=frozenset({"whatsapp", "email"}),
+            parameters=_EVENT_CHANNEL,
+            recipient_target="admin",
+            content="Appointment follow-up: completed visit",
+            template_event="appointment.followup.completed",
+            delay_seconds=86400,
+        ),
+        RecipeDefinition(
+            recipe_id="appointment_followup_no_show",
+            name="Seguimiento de visita no asistida",
+            description="Pide al equipo el seguimiento de una visita no asistida, 24 horas después.",
+            category="postventa",
+            trigger_kind="event",
+            event_type="appointment.no_show",
+            channel_allowed=frozenset({"whatsapp", "email"}),
+            parameters=_EVENT_CHANNEL,
+            recipient_target="admin",
+            content="Appointment follow-up: no-show visit",
+            template_event="appointment.followup.no_show",
+            delay_seconds=86400,
         ),
         _event_recipe(
             "case_new_request", "Nueva solicitud al equipo", "operacion",

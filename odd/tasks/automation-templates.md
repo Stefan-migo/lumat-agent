@@ -3,8 +3,8 @@
 Objective: let an automation recipe declare a business-initiated Meta template, migrate the 24h
 customer reminder and the owner follow-up from `scheduling.py` into catalog recipes (full-engine),
 and stop the confirmation recipe from double-confirming chat bookings (origin filter).
-Branch: `odd/automation-templates` · Worktree: `../lumat-agent-odd-automation-templates` · Base: `main`
-Delivery: chained PRs — PR1 = S1 (origin filter); PR2 = S2–S6 (template engine + recipes + cleanup).
+Branch: `odd/automation-templates` (PR1) · stacked `odd/automation-templates-engine` (PR2) · Worktree: `../lumat-agent-odd-automation-templates` · Base: `main`
+Delivery: chained PRs — PR1 = S1 (origin filter, branch `odd/automation-templates`); PR2 = S2–S6 (template engine + recipes + cleanup, branch `odd/automation-templates-engine` stacked on PR1).
 Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run build` (web).
 
 ## Specs
@@ -16,20 +16,25 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
   and `appointment_confirmation` declares `{"origin": "panel"}` so the chat path does not double-confirm
   (the chatbot confirms in-chat). Recipes with no conditions keep today's behavior (empty conditions).
 
-- **S2 — A recipe can declare a business-initiated Meta template.** `RecipeDefinition` may declare a
-  template: the registry `event` key (used to find the latest approved `NotificationTemplateVersion`
-  for channel `whatsapp`, locale `es`), the Meta template-name setting, and a positional-param builder.
-  When such a recipe's operation is delivered on WhatsApp, the send path calls `notify.send_template`
-  after `templates.validate_channel_policy(channel="whatsapp", approved=<row.approved>,
-  business_initiated=True)`, instead of free-form `send_text`. A missing or unapproved registry row
-  raises `TemplatePolicyError` (no free-form fallback for a template recipe).
+- **S2 — A recipe can declare a business-initiated Meta template.** `RecipeDefinition` may declare
+  `template_event`, the registry key of the approved `NotificationTemplateVersion` (channel `whatsapp`,
+  locale `es`) the recipe delivers. At send time the operation's recipe is resolved from its compiled
+  rule (`AutomationExecution.operation_id → rule.installation_id → recipe_id`) and a WhatsApp operation
+  routes to the renderer registered for that `template_event` (`notifications._TEMPLATE_RENDERERS`),
+  which calls `notify.send_template` after `templates.validate_channel_policy(channel="whatsapp",
+  approved=<row.approved>, business_initiated=True)`, instead of free-form `send_text`. The renderer
+  owns the Meta template-name setting and the positional params. A missing or unapproved registry row
+  raises `TemplatePolicyError` (no free-form fallback). Non-template and non-recipe operations keep the
+  generic path. No template data is persisted: no column is added to `AutomationRule`/`NotificationOperation`.
 
 - **S3 — The 24h reminder is a catalog recipe.** `appointment_reminder` (recipient customer, channel
-  whatsapp, template `appointment_reminder_24h`, 2 positional params: `dd/mm/YYYY`, `HH:MM`) is opt-in
-  through an installation. The engine emits it 24h before a `booked` visit; a cancelled visit is never
-  reminded (state filter) and a rescheduled visit is reminded at its new date. A visit booked with less
-  than 24h notice gets no reminder (current behavior preserved). `scheduling._maintain_reminder` and its
-  callers (`book`, `cancel`, `reschedule`) are removed in the same change.
+  whatsapp, `template_event="appointment.reminder.24h"` → Meta `appointment_reminder_24h`, 2 positional
+  params `dd/mm/YYYY`, `HH:MM`) is opt-in through an installation. A time-trigger scan
+  (`time_triggers._reminder_due`) publishes `appointment.reminder_due` for visits that are `booked`,
+  start inside the next 24h, and were booked with at least 24h notice (`created_at <= starts_at - 24h`);
+  a cancelled visit is never reminded (status filter) and a rescheduled visit uses its current
+  `starts_at`. `scheduling._maintain_reminder` and its callers (`book`, `cancel`, `reschedule`) are
+  removed in the same change.
 
 - **S4 — The owner follow-up is a catalog recipe with delay.** `appointment_followup` (recipient admin,
   channel whatsapp, templates `appointment_followup` for `completed` and `appointment_followup_no_show`
@@ -55,12 +60,14 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
 
 ## Tasks
 
-- T1 (S1) — recipe `conditions` support + `origin` in the `appointment.booked` payload + `appointment_confirmation` filter. RED→GREEN backend tests. commit `fc511da4` (PR1)
-- T2 (S2,S5) — `RecipeTemplate` on `RecipeDefinition` + generic WhatsApp-template send path in `notifications.py` (keeps email fallback). RED→GREEN tests.
-- T3 (S3,S6) — `appointment_reminder` recipe + `_reminder_due` time-trigger evaluator + delete `_maintain_reminder`/callers. Tests.
-- T4 (S4,S6) — `appointment_followup` recipe + engine delay (`delay_seconds`) + delete `_schedule_followup`. Tests.
-- T5 (S6,S2) — delete the hardcoded `_send_appointment_reminder`/`_send_appointment_followup` branches (now driven by the recipe template); confirm no double send.
-- T6 (S7) — `docs/meta-templates.md` mapping + frontend catalog check (new recipes appear; update page tests if they assert the catalog).
+- T1 (S1) — recipe `conditions` support + `origin` in the `appointment.booked` payload + `appointment_confirmation` filter. RED→GREEN. commit `fc511da4` (PR1)
+- T2 (S2,S5) — `RecipeDefinition.template_event` + recipe→renderer resolution in `notifications.py` (`_operation_template_event` + `_TEMPLATE_RENDERERS`), keeping the email fallback. RED→GREEN. commit `5bb2e25b`
+- T3 (S3,S6) — `appointment_reminder` recipe + `time_triggers._reminder_due` + single `_EVALUATORS` map + delete `_maintain_reminder`/callers. Tests.
+- T4 (S4,S6) — `appointment_followup` + `appointment_followup_no_show` recipes, `delay_seconds`, engine delay in `evaluate_event` + delete `_schedule_followup`. Tests.
+- T5 (S6,S2) — delete the hardcoded `:reminder:24h` and `followup:*` branches in `process_operation`; `_send_appointment_reminder`/`_send_appointment_followup` stay as renderers.
+  T3–T5 land in one commit: `f6a5ec18`
+- T6 (S7) — `docs/meta-templates.md` recipe mapping + stale "known defect" corrected; frontend catalog untouched (its tests use local fixtures).
+- T7 (verification) — independent probes from `gentle-ai-verify` committed as `tests/integration/test_verifier_probes.py` (23 tests, S1–S7).
 
 ## Log
 
@@ -85,3 +92,26 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
   `test_h4_automations.py`, which simulated `appointment.booked` payloads without `origin`, to the
   real publisher shape (`origin: panel`). Focused green; full backend suite green (`EXIT=0`).
   Commit `fc511da4`.
+- L8 (T2, S2/S5): design refined — the recipe declares only `template_event` (a registry key); the Meta
+  template-name setting and the positional params stay in the renderer in `notifications.py`, so the
+  catalog stays DB-free and no import cycle is introduced (`recipes` imports `automation`; `automation`
+  imports `recipes` only inside `evaluate_event`). RED observed: `TypeError: RecipeDefinition.__init__()
+  got an unexpected keyword argument 'template_event'`. Focused green; full suite `EXIT=0`. Commit `5bb2e25b`.
+- L9 (T3–T5, S3/S4/S5/S6): delegated to a bounded worker (`gentle-ai-worker`) at the context backstop,
+  with the design above fixed in advance. It reports 69 focused tests and 2299 full-suite tests green
+  (`EXIT=0`); the parent re-ran the focused command (69 passed). Its `_reminder_due` keeps
+  `created_at <= starts_at - 24h`, so a visit booked >24h ahead then rescheduled into <24h notice still
+  gets a reminder (created_at is immutable) — flagged, not a regression of a tested rule. No production
+  caller used `close(now=...)`, so dropping that unused parameter is safe. Executions' advisory: an
+  operation whose rule was uninstalled before its delayed sweep falls back to the generic path.
+  Commit `f6a5ec18`.
+- L10 (verification, S1–S7): independent read-only verifier (`gentle-ai-verify`) over `bc36318c..HEAD`:
+  every `S1..S7` **MET**, 0 blockers, 23 independent probes green. Advisories (accepted, not fixed):
+  (a) uninstalling a rule before a delayed follow-up sweep makes that pending operation fall back to the
+  generic free-form path; (b) `_reminder_due` omits the `installation.created_at` floor its sibling
+  evaluators apply, so a first install reminds every already-booked visit inside the next 24h (intended:
+  opt-in + imminent visits); (c) a visit booked >24h ahead then rescheduled into <24h notice is still
+  reminded (immutable `created_at`); (d) pre-deploy pending operations keyed `appointment:{id}:reminder:24h`
+  would free-form once after deploy. Probes committed as `tests/integration/test_verifier_probes.py`.
+  Frontend (vitest/build) not run: no `web/` file changed. Native risk assessment: `medium`,
+  `review_due=false` (`under_budget`).

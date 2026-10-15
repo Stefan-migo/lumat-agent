@@ -10,7 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db import session_scope
-from app.models import Appointment, AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification, PushSubscription, User, UserRole
+from app.models import Appointment, AutomationExecution, AutomationInstallation, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification, PushSubscription, User, UserRole
 from app.services.audit import record_audit
 from app.services.send import send_text
 from app.services.push import send_push
@@ -111,6 +111,28 @@ def _send_appointment_followup(
                      entity="notification_operation", entity_id=str(operation.id),
                      after={"recipient": address, "whatsapp_error": str(whatsapp_error)[:2000]})
         return f"email:{address}"
+
+
+_TEMPLATE_RENDERERS = {
+    "appointment.reminder.24h": _send_appointment_reminder,
+    "appointment.followup.completed": lambda session, operation: _send_appointment_followup(session, operation, "completed"),
+    "appointment.followup.no_show": lambda session, operation: _send_appointment_followup(session, operation, "no_show"),
+}
+
+
+def _operation_template_event(session: Session, operation: NotificationOperation) -> str | None:
+    """Resolve the template event of the recipe that produced this operation, if any."""
+    from app.services.recipes import get_recipe
+
+    recipe_id = session.scalar(
+        select(AutomationInstallation.recipe_id)
+        .join(AutomationRule, AutomationRule.installation_id == AutomationInstallation.id)
+        .join(AutomationExecution, AutomationExecution.rule_id == AutomationRule.id)
+        .where(AutomationExecution.operation_id == operation.id)
+        .order_by(AutomationExecution.id)
+    )
+    recipe = get_recipe(recipe_id) if recipe_id else None
+    return recipe.template_event if recipe else None
 
 
 def send_whatsapp(recipient: str, content: str) -> str:
@@ -316,15 +338,13 @@ def process_operation(
     session.add(attempt)
     session.flush()
     try:
-        if (operation.idempotency_key.endswith(":reminder:24h") and operation.source_entity == "appointment"
-                and session.get(Appointment, int(operation.source_id)) is not None):
-            external_id = _send_appointment_reminder(session, operation)
-        elif operation.source_entity == "appointment" and operation.idempotency_key in {
-            f"appointment:{operation.source_id}:followup:completed",
-            f"appointment:{operation.source_id}:followup:no_show",
-        }:
-            outcome = operation.idempotency_key.rsplit(":", 1)[1]
-            external_id = _send_appointment_followup(session, operation, outcome)
+        template_event = _operation_template_event(session, operation)
+        if template_event is not None and operation.channel == "whatsapp":
+            renderer = _TEMPLATE_RENDERERS.get(template_event)
+            if renderer is None:
+                from app.services.templates import TemplatePolicyError
+                raise TemplatePolicyError(f"no renderer registered for template event {template_event}")
+            external_id = renderer(session, operation)
         elif operation.channel == "push":
             external_id = (deliver or send_push)(operation.recipient, operation.content)
         else:

@@ -14,6 +14,12 @@ The panel holds a *registry row* used only as the policy gate and the operator-f
 are required for a send to succeed. Getting one right and the other wrong fails at delivery time,
 not at publish time.
 
+**Opt-in.** These sends only happen when the matching catalog recipe is installed in the panel; the
+code ships the recipes, not an active schedule. At send time the operation's recipe is resolved from
+its compiled rule (`AutomationExecution -> AutomationRule -> installation -> recipe`), and the
+recipe's `template_event` selects the renderer. Deleting a hardcoded send path in favour of the
+recipe is what makes the catalog the single source of truth for these messages.
+
 ## Hard constraints (each one breaks the send if violated)
 
 | Constraint | Why |
@@ -36,7 +42,8 @@ not at publish time.
 | `{{2}}` | visit local time, `HH:MM` |
 | Registry event (panel row) | `appointment.reminder.24h` |
 | Settings key | `notify.reminder_template_name` |
-| Code | `app/services/notifications.py:26-58` (`_send_appointment_reminder`) |
+| Recipe (panel catalog) | `appointment_reminder` — opt-in; fired by the time-trigger scan `appointment.reminder_due` on booked visits inside the next 24 h |
+| Renderer | `app/services/notifications.py` `_send_appointment_reminder`, registered in `_TEMPLATE_RENDERERS` |
 
 Recipient: the **customer's** WhatsApp number. The email fallback mirrors this wording
 (`app/services/notifications.py:51-52`), which is why the body below reuses it.
@@ -60,7 +67,8 @@ Te recordamos tu visita de Lumat el {{1}} a las {{2}}.
 | `{{3}}` | visit local time, `HH:MM` |
 | Registry event (panel row) | `appointment.followup.completed` |
 | Settings key | `notify.followup_template_name` |
-| Code | `app/services/notifications.py:61-108` (`_send_appointment_followup`) |
+| Recipe (panel catalog) | `appointment_followup` — opt-in; triggers on `appointment.completed`, delivered 24 h later (`delay_seconds = 86400`) |
+| Renderer | `app/services/notifications.py` `_send_appointment_followup`, registered in `_TEMPLATE_RENDERERS` |
 
 Recipient: the **team's** number (`notify.owner_whatsapp`), not the customer. The customer name is
 the first parameter precisely because the operator has to know who to call back.
@@ -84,7 +92,8 @@ La visita de {{1}} del {{2}} a las {{3}} quedo cerrada como completada. Contacta
 | Body parameters | **3**, positional (same order as template 2) |
 | Registry event (panel row) | `appointment.followup.no_show` |
 | Settings key | `notify.followup_no_show_template_name` |
-| Code | `app/services/notifications.py:61-108` (`_send_appointment_followup`) |
+| Recipe (panel catalog) | `appointment_followup_no_show` — opt-in; triggers on `appointment.no_show`, delivered 24 h later (`delay_seconds = 86400`) |
+| Renderer | `app/services/notifications.py` `_send_appointment_followup`, registered in `_TEMPLATE_RENDERERS` |
 
 Recipient: the **team's** number.
 
@@ -148,11 +157,10 @@ and is due 24 h later, then either wait for the five-minute sweep cron or read
 failure leaves it retryable, then falls back to the team email and audits
 `notification.followup_email_fallback`.
 
-## Known defect found while writing this contract
+## Follow-up email fallback language
 
-`_send_appointment_followup` (`app/services/notifications.py`) builds its **email fallback** in
-English — subject `"Appointment follow-up"`, body `"Please follow up with ..."` — while every other
-user-facing string in this flow is Spanish (the reminder's fallback is
-`"Recordatorio de visita Lumat"` / `"Te recordamos tu visita el ..."`). The recipient is the team,
-which reads Spanish. Not yet fixed; it is a source change and therefore belongs to its own reviewed
-change, not to this document.
+The follow-up email fallback (`_send_appointment_followup` in `app/services/notifications.py`) is
+Spanish, matching the rest of the flow: subject `"Seguimiento de visita Lumat"`, body
+`"La visita de {name} del {date} a las {time} quedo ..."`. An earlier revision of this document
+recorded an English fallback as a known defect; that no longer applies. The fallback writes
+`notification.followup_email_fallback` to the audit trail.

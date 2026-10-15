@@ -99,6 +99,29 @@ def _maintenance_due(session: Session, installation: AutomationInstallation, rec
             )
 
 
+def _reminder_due(session: Session, installation: AutomationInstallation, recipe: RecipeDefinition, now: datetime):
+    parameters = recipe.validate_parameters(installation.parameters or {})
+    horizon = now + timedelta(hours=24)
+    rows = session.execute(
+        select(Appointment, Customer)
+        .join(Customer, Customer.id == Appointment.customer_id)
+        .where(
+            Appointment.status == AppointmentStatus.BOOKED,
+            Appointment.starts_at > now,
+            Appointment.starts_at <= horizon,
+            Appointment.created_at <= Appointment.starts_at - timedelta(hours=24),
+        )
+    )
+    for appointment, customer in rows:
+        recipient = _recipient(customer, parameters)
+        if recipient:
+            yield DueOccurrence(
+                "appointment", str(appointment.id),
+                {"customer_id": customer.id, "appointment_id": appointment.id, "recipient": recipient},
+                f"appointment:{appointment.id}:reminder:24h",
+            )
+
+
 def _summary_due(session: Session, installation: AutomationInstallation, recipe: RecipeDefinition, now: datetime):
     parameters = recipe.validate_parameters(installation.parameters or {})
     period = "daily" if recipe.recipe_id == "admin_daily_summary" else "weekly"
@@ -123,9 +146,7 @@ def _summary_due(session: Session, installation: AutomationInstallation, recipe:
 _EVALUATORS = {
     "appointment_review_request": _review_due,
     "customer_maintenance": _maintenance_due,
-}
-
-_SCHEDULE_EVALUATORS = {
+    "appointment_reminder": _reminder_due,
     "admin_daily_summary": _summary_due,
     "admin_weekly_summary": _summary_due,
 }
@@ -142,13 +163,7 @@ def evaluate_time_triggers(session: Session, now: datetime) -> int:
             recipe = get_recipe(installation.recipe_id)
             if recipe is None:
                 continue
-            evaluator = (
-                _EVALUATORS.get(installation.recipe_id)
-                if recipe.trigger_kind == "offset"
-                else _SCHEDULE_EVALUATORS.get(installation.recipe_id)
-                if recipe.trigger_kind == "schedule"
-                else None
-            )
+            evaluator = _EVALUATORS.get(installation.recipe_id)
             if evaluator is None:
                 continue
             for occurrence in evaluator(session, installation, recipe, now):

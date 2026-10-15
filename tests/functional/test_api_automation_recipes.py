@@ -15,7 +15,8 @@ def test_admin_can_list_recipe_catalog(client, make_user):
     payload = client.get("/panel/api/automation-recipes").json()["recipes"]
     assert [item["recipe_id"] for item in payload] == [
         "appointment_confirmation", "appointment_cancellation", "appointment_rescheduled",
-        "appointment_no_show", "case_new_request",
+        "appointment_no_show", "appointment_reminder", "appointment_followup",
+        "appointment_followup_no_show", "case_new_request",
         "appointment_review_request", "customer_maintenance",
         "admin_daily_summary", "admin_weekly_summary",
     ]

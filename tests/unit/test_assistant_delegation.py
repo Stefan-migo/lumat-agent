@@ -40,10 +40,12 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
 
     # SHA-256 of the serialized assistant catalog at the post-tool-catalog-trim
     # baseline, plus the planning-facilitator, unit-2 conversation-inspection,
-    # unit-3 settings.update, the planning read-report tools, view_image and the
-    # read_project_file offset/limit paging fields.
+    # unit-3 settings.update, the planning read-report tools, view_image, the
+    # read_project_file offset/limit paging fields, and the T3/T4 appointment
+    # recipes (appointment_reminder, appointment_followup,
+    # appointment_followup_no_show) in automation.create_rule's recipe list.
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "dd7fb27a5673508c4af2daeda21258ddfe1aadaad79aba5f64b6451bcd777a42"
+        "c73d185ddbcaf0de35b2385f53fa98d65e334f008dd25857fddf26b6b58994e4"
     )
 
 
