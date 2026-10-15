@@ -14,10 +14,11 @@ from app.models import (
     Conversation,
     Customer,
     DomainEvent,
+    NotificationAttempt,
     NotificationOperation,
     User,
 )
-from app.services import recipes, scheduling
+from app.services import notifications, recipes, scheduling
 from app.services.automation import evaluate_event
 from app.services.automation_installations import install
 from app.services.events import publish_event
@@ -103,4 +104,49 @@ def test_book_publishes_origin_in_the_event_payload(migrated_db, actor, expected
         )
         assert event is not None
         assert event.payload["origin"] == expected
+        session.commit()
+
+
+TEMPLATE_RECIPE = recipes.RecipeDefinition(
+    recipe_id="test.template",
+    name="Plantilla de prueba",
+    description="Receta sintética con template",
+    category="operacion",
+    trigger_kind="event",
+    event_type="case.created",
+    channel_allowed=frozenset({"whatsapp"}),
+    parameters=(recipes.RecipeParameter("channel", "Canal", "channel", True),),
+    template_event="test.template",
+)
+
+
+def test_recipe_without_template_event_keeps_the_generic_path():
+    assert recipes.get_recipe("case_new_request").template_event is None
+
+
+def test_recipe_declares_its_template_event():
+    assert TEMPLATE_RECIPE.template_event == "test.template"
+    fields = TEMPLATE_RECIPE.compile_rule_fields({"channel": "whatsapp"})
+    assert fields["event_type"] == "case.created"
+
+
+def test_recipe_with_template_event_delivers_through_its_renderer(migrated_db, monkeypatch):
+    monkeypatch.setitem(recipes.RECIPES, TEMPLATE_RECIPE.recipe_id, TEMPLATE_RECIPE)
+    monkeypatch.setitem(
+        notifications._TEMPLATE_RENDERERS, "test.template",
+        lambda session, operation: "rendered",
+    )
+    with SessionLocal() as session:
+        install(session, TEMPLATE_RECIPE.recipe_id, {"channel": "whatsapp"}, actor="admin", enabled=True)
+        event = publish_event(
+            session, event_type="case.created", entity_type="case", entity_id="tpl-1",
+            payload={"recipient": "+56900000009"}, dedupe_key="tpl:event",
+        )
+        session.flush()
+        assert evaluate_event(session, event) != []
+        operation = session.scalar(select(NotificationOperation))
+        assert operation.recipient == "+56900000009"
+        assert notifications.process_operation(session, operation.id) is True
+        attempt = session.scalar(select(NotificationAttempt).order_by(NotificationAttempt.id.desc()))
+        assert attempt.external_id == "rendered"
         session.commit()

@@ -32,6 +32,7 @@ class RecipeDefinition:
     recipient_target: str = "customer"
     content: str = ""
     conditions: dict = field(default_factory=dict)
+    template_event: str | None = None
 
     def validate_parameters(self, values: dict) -> dict:
         if not isinstance(values, dict):
