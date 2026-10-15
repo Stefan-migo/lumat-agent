@@ -33,6 +33,7 @@ import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
 import { Tabs } from "../primitives/Tabs";
+import { canOpen, footerViewsForRole } from "./panelAccess";
 
 export function formatNotificationTime(createdAt: string | null, now = new Date()): string {
   if (!createdAt) return "";
@@ -78,6 +79,25 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   'chatbot-metrics': { label: "Métricas del bot", icon: Activity, adminOnly: true },
   users: { label: "Usuarios", icon: UserRound, adminOnly: true },
 };
+
+/** Short mobile-tab labels. The destination keeps its canonical name in
+ *  NAVIGATION; the tab uses shorter copy so every destination fits. */
+const FOOTER_ITEMS: Partial<Record<PanelView, { label: string; icon: LucideIcon }>> = {
+  dashboard: { label: "Panel", icon: PanelLeft },
+  conversations: { label: "Chats", icon: MessageSquare },
+  chat: { label: "Asistente", icon: Bot },
+  agenda: { label: "Agenda", icon: Calendar },
+  clients: { label: "Clientes", icon: Users },
+  notifications: { label: "Avisos", icon: Bell },
+  profile: { label: "Perfil", icon: UserRound },
+};
+
+/** Whether a destination is administrative (admin-only). Single source: the
+ *  navigation itself, so the router and the sidebar cannot disagree about which
+ *  destinations an operator may see. */
+export function isAdminOnlyView(view: PanelView): boolean {
+  return Boolean(NAVIGATION[view as keyof typeof NAVIGATION]?.adminOnly);
+}
 
 const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
   dashboard: "Dashboard",
@@ -294,6 +314,7 @@ function Navigation({
 }: Pick<PanelShellProps, "currentView" | "onNavigate" | "user"> & { collapsed?: boolean; search?: string }) {
   const items = (Object.keys(NAVIGATION) as Array<keyof typeof NAVIGATION>).filter(
     (view) => (!NAVIGATION[view].adminOnly || user.role === "admin")
+      && canOpen(user.role, view)
       && NAVIGATION[view].label.toLocaleLowerCase("es-CL").includes(search.toLocaleLowerCase("es-CL")),
   );
   const groups: Array<[string, typeof items]> = [
@@ -644,8 +665,8 @@ export function PanelShell({
         {/* Mobile tabs use short display labels so all five fit without clipping. The destination itself keeps its
             canonical label in NAVIGATION, which is what the sidebar, the drawer and the breadcrumb render. */}
         <nav className="panel-shell__footer-nav" aria-label="Navegación inferior">
-          {(["dashboard", "conversations", "chat", "agenda", "clients"] as PanelView[]).map((view) => {
-            const item = view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Asistente", icon: Bot } : view === "conversations" ? { label: "Chats", icon: MessageSquare } : view === "agenda" ? { label: "Agenda", icon: Calendar } : { label: "Clientes", icon: Users };
+          {footerViewsForRole(user.role).map((view) => {
+            const item = FOOTER_ITEMS[view] ?? { label: view, icon: PanelLeft };
             return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><Icon icon={item.icon} /><span>{item.label}</span></button>;
          })}
        </nav>

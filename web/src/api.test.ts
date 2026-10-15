@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
+import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, deleteProjectFile, moveProjectFile, listProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -379,6 +379,52 @@ describe('project file and artifact API contracts', () => {
     await uploadProjectFile('ops', new File(['contents'], 'notes.txt'));
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/files', expect.objectContaining({ method: 'POST', body: expect.any(FormData) }));
     expect(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body).toBeInstanceOf(FormData);
+  });
+
+  it('appends the target folder when uploading into one', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ file: {} }), { status: 201 }));
+    await uploadProjectFile('ops', new File(['contents'], 'notes.txt'), 12);
+    const body = vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as FormData;
+    expect(body.get('folder_id')).toBe('12');
+  });
+
+  it('deletes a project file without a response body', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(deleteProjectFile('ops', 7)).resolves.toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/files/7', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('moves a project file into a folder (or back to the root)', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ file: {} }), { status: 200 })));
+    await moveProjectFile('ops', 7, 12);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/files/7', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ folder_id: 12 }) }));
+    await moveProjectFile('ops', 7, null);
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/projects/ops/files/7', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ folder_id: null }) }));
+  });
+
+  it('lists project folders from the encoded project URL', async () => {
+    const payload = { folders: [{ id: 1, project_id: 3, parent_id: null, name: 'Diseño', created_at: null }] };
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    await expect(listProjectFolders('my project')).resolves.toEqual(payload);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/my%20project/folders', expect.anything());
+  });
+
+  it('creates a folder with an optional parent', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ folder: {} }), { status: 201 }));
+    await createProjectFolder('ops', { name: 'Reportes', parent_id: 4 });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/folders', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Reportes', parent_id: 4 }) }));
+  });
+
+  it('renames a folder by PATCHing its name', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ folder: {} }), { status: 200 }));
+    await renameProjectFolder('ops', 9, 'Operación');
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/folders/9', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Operación' }) }));
+  });
+
+  it('deletes a folder recursively without a response body', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(deleteProjectFolder('ops', 9)).resolves.toBeUndefined();
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/folders/9', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it.each([

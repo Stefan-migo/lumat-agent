@@ -4,8 +4,9 @@ import { listNotifications, markAllNotificationsRead } from '../../api';
 import type { NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
 import type { NotificationState, PanelView } from './PanelShell';
-import { PanelShell } from './PanelShell';
+import { PanelShell, isAdminOnlyView } from './PanelShell';
 import { isDetailRoute, parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
+import { canOpen, defaultViewForRole } from './panelAccess';
 import { Dashboard } from '../pages/Dashboard';
 import { ClientesList } from '../pages/ClientesList';
 import { ClientFicha } from '../pages/ClientFicha';
@@ -19,6 +20,7 @@ import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
 import { AgentChat } from '../pages/AgentChat';
 import { AgendaPage } from '../pages/AgendaPage';
+import { TechnicianAgenda } from '../pages/TechnicianAgenda';
 import { AutomationRecipesPage } from '../pages/AutomationRecipesPage';
 import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { ChatbotMetrics } from '../pages/ChatbotMetrics';
@@ -33,6 +35,14 @@ import { realtimeClient } from '../../realtime';
  * rendered from list views, not top-level nav, so they do not appear here. */
 export type View = PanelView;
 
+/** A role can only open the destinations its surface allows (S1/D1). Anything
+ *  else — a hand-edited URL, a stale bookmark — falls back to the role's
+ *  landing view, so no role ever renders a page it cannot use. */
+function routeForRole(route: PanelRoute, role: User['role']): PanelRoute {
+  const allowed = canOpen(role, route.view) && (role === 'admin' || !isAdminOnlyView(route.view));
+  return allowed ? route : { view: defaultViewForRole(role) };
+}
+
 export interface AppShellProps {
   user: User;
   onLogout?: () => void | Promise<void>;
@@ -41,7 +51,7 @@ export interface AppShellProps {
 
 /** Application shell: PanelShell frame and native History API navigation. */
 export function AppShell({ user, onLogout, inspector }: AppShellProps) {
-  const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(`${window.location.pathname}${window.location.search}`));
+  const [route, setRoute] = useState<PanelRoute>(() => routeForRole(parsePanelPath(`${window.location.pathname}${window.location.search}`), user.role));
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
   const [notifications, setNotifications] = useState<PanelNotification[]>([]);
@@ -79,7 +89,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   };
 
   useEffect(() => {
-    const parsed = parsePanelPath(`${window.location.pathname}${window.location.search}`);
+    const parsed = routeForRole(parsePanelPath(`${window.location.pathname}${window.location.search}`), user.role);
     const canonicalPath = pathForRoute(parsed);
     if (`${window.location.pathname}${window.location.search}` !== canonicalPath) {
       window.history.replaceState({}, '', canonicalPath);
@@ -87,24 +97,26 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
     }
 
     const handlePopState = () => {
-      const nextRoute = parsePanelPath(`${window.location.pathname}${window.location.search}`);
+      const nextRoute = routeForRole(parsePanelPath(`${window.location.pathname}${window.location.search}`), user.role);
       const nextPath = pathForRoute(nextRoute);
       if (`${window.location.pathname}${window.location.search}` !== nextPath) window.history.replaceState({}, '', nextPath);
       setRoute(nextRoute);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [user.role]);
 
   const navigate = (nextView: PanelView) => {
-    const nextRoute: PanelRoute = nextView === 'cases'
+    const requested: PanelRoute = nextView === 'cases'
       ? { view: 'conversations', conversationTab: 'case' }
       : { view: nextView };
+    const nextRoute = routeForRole(requested, user.role);
     window.history.pushState({}, '', pathForRoute(nextRoute));
     setRoute(nextRoute);
   };
 
-  const navigateToRoute = (nextRoute: PanelRoute) => {
+  const navigateToRoute = (requested: PanelRoute) => {
+    const nextRoute = routeForRole(requested, user.role);
     window.history.pushState({}, '', pathForRoute(nextRoute));
     setRoute(nextRoute);
   };
@@ -123,7 +135,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'chatbot-metrics' ? <ChatbotMetrics onOpenConversation={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
-      : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} /> : <AgendaPage />
+      : view === 'agenda' ? user.role === 'tecnico' ? <TechnicianAgenda /> : appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} /> : <AgendaPage />
       : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
@@ -133,7 +145,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
         : view === 'users' ? user.role !== 'admin' ? <div role="alert">No tienes permiso para ver este panel</div> : userId !== null ? <UserFicha userId={userId} /> : <UserManagement currentUser={user} onOpenUser={(id) => navigateToRoute({ view: 'users', userId: id })} />
        : view === 'profile' ? <SelfProfile />
-           : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} role={user.role} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} />
+            : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} role={user.role} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} onOpenThread={(threadId) => navigateToRoute({ view: 'chat', threadId })} onOpenHistory={(slug) => navigateToRoute({ view: 'chat', historyProjectSlug: slug })} />
          : view === 'planning-sessions' ? <PlanningSessions projectSlug={route.projectSlug} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
       : <Settings />;
 

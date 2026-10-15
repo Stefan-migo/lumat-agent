@@ -705,6 +705,47 @@ def test_thread_list_excludes_empty_threads_and_orders_message_ties_by_id(client
     assert empty not in [row["id"] for row in response.json()["threads"]]
 
 
+def test_thread_list_preview_is_a_single_line_snippet_of_the_latest_message(client):
+    _user("thread-preview", "admin")
+    _login(client, "thread-preview")
+    short_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    long_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    long_body = "Consulta de las **herramientas**\n\ndisponibles " + ("para el proyecto " * 20)
+    with SessionLocal() as session:
+        session.add_all([
+            InternalChatMessage(thread_id=short_id, author="admin", content="Consulta breve", status="processed",
+                                created_at=datetime(2026, 3, 1, tzinfo=timezone.utc)),
+            InternalChatMessage(thread_id=long_id, author="agent", content="primer mensaje", status="processed",
+                                created_at=datetime(2026, 3, 2, tzinfo=timezone.utc)),
+            InternalChatMessage(thread_id=long_id, author="agent", content=long_body, status="processed",
+                                created_at=datetime(2026, 3, 3, tzinfo=timezone.utc)),
+        ])
+        session.commit()
+
+    rows = {row["id"]: row for row in client.get("/panel/api/chat/threads?limit=10&proyecto=default").json()["threads"]}
+
+    assert rows[short_id]["preview"] == "Consulta breve"
+    preview = rows[long_id]["preview"]
+    assert "\n" not in preview and "  " not in preview
+    assert preview.startswith("Consulta de las herramientas disponibles para el proyecto")
+    assert preview.endswith("…")
+    assert len(preview) <= 140
+
+
+def test_thread_list_preview_is_null_when_the_latest_message_is_blank(client):
+    _user("thread-preview-blank", "admin")
+    _login(client, "thread-preview-blank")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    with SessionLocal() as session:
+        session.add(InternalChatMessage(thread_id=thread_id, author="agent", content="   \n  ", status="processed",
+                                        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc)))
+        session.commit()
+
+    rows = client.get("/panel/api/chat/threads?limit=10&proyecto=default").json()["threads"]
+
+    assert rows[0]["preview"] is None
+
+
 def test_thread_rename_and_delete_are_owned_and_not_exposed(client):
     _user("thread-owner", "admin")
     _user("thread-other-owner", "admin")

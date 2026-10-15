@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch, ApiError, fetchMe, postJson } from './api';
 import type { LoginResponse, User } from './types';
 import { AppShell } from './components/domain/AppShell';
-import { TechnicianShell } from './components/domain/TechnicianShell';
 import { LoginAuth } from './components/pages/LoginAuth';
+import { ToastProvider } from './components/primitives/Toast';
 
 /** Auth gate for the panel SPA (B6/T6.4; PDW-AUTH-1/2, D4).
  *
@@ -22,6 +22,14 @@ type GateState =
   | { kind: 'error'; detail: string };
 
 export default function App() {
+  return (
+    <ToastProvider>
+      <AppGate />
+    </ToastProvider>
+  );
+}
+
+function AppGate() {
   const [state, setState] = useState<GateState>({ kind: 'loading' });
 
   const probe = useCallback(async () => {
@@ -66,9 +74,6 @@ export default function App() {
   }
 
   if (state.kind === 'authed') {
-    if (state.user.role === 'tecnico') {
-      return <TechnicianShell user={state.user} onLogout={logout} />;
-    }
     return <AppShell user={state.user} onLogout={logout} />;
   }
 
