@@ -1,14 +1,42 @@
-from datetime import date, time
+import json
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from app.db import SessionLocal
-from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, Case, Conversation, Customer
+from app.models import (
+    Appointment,
+    AppointmentHistory,
+    AppointmentStatus,
+    AuditLog,
+    Case,
+    Conversation,
+    Customer,
+    TechnicianVisitState,
+)
 from app.services import scheduling
+from app.services.settings import SETTINGS_DEFAULTS, set_setting
 
 
 def _login(client, name="tech", password="tech-pass"):
     assert client.post("/panel/api/login", json={"username": name, "password": password}).status_code == 200
+
+
+def _meta_template_body(router) -> dict:
+    """The JSON body of the last Meta send the router intercepted."""
+    return json.loads(router.calls.last.request.content)
+
+
+@pytest.fixture
+def recorded_sends(monkeypatch):
+    """Record Meta template sends without hitting the network (never-sent proof)."""
+    calls: list = []
+    monkeypatch.setattr(
+        "app.services.notify.send_template",
+        lambda recipient, params, *, template_name: calls.append((recipient, params, template_name)) or "wamid.test",
+    )
+    return calls
 
 
 def _appointment(technician_id, phone, day, summary, *, emergency=False, priority=None):
@@ -22,6 +50,25 @@ def _appointment(technician_id, phone, day, summary, *, emergency=False, priorit
         appointment = scheduling.book(session, service="calefont", customer_id=customer.id, case_id=case.id, technician_id=technician_id, local_date=day, local_time=time(10), timezone_name="America/Santiago", duration_minutes=60, actor="oper")
         session.commit()
         return appointment.id
+
+
+def _open_window_appointment(technician_id, phone, *, minutes_ahead=10):
+    """Book a visit whose quick-action window is open right now.
+
+    The visit starts `minutes_ahead` from now, so `en_route` (T-60) and
+    `arrived` (T-15) are both available and the visit is not yet closed."""
+    appointment_id = _appointment(technician_id, phone, date(2026, 6, 1), "quick action")
+    starts = datetime.now(timezone.utc) + timedelta(minutes=minutes_ahead)
+    with SessionLocal() as session:
+        session.query(Appointment).filter_by(id=appointment_id).update(
+            {
+                "starts_at": starts,
+                "ends_at": starts + timedelta(minutes=60),
+                "local_start": starts.astimezone(ZoneInfo("America/Santiago")).replace(tzinfo=None),
+            }
+        )
+        session.commit()
+    return appointment_id
 
 
 def test_technician_gets_owned_past_today_future_in_chronological_order(client, make_user):
@@ -249,3 +296,169 @@ def test_technician_close_cannot_forge_ownership_with_a_body_field(client, make_
     assert response.status_code == 404
     with SessionLocal() as session:
         assert session.get(Appointment, foreign_id).status is AppointmentStatus.BOOKED
+
+
+# ---------------------------------------------------------------------------
+# WU6 — WhatsApp quick actions: field state + template send + cooldown (S7, S8)
+# ---------------------------------------------------------------------------
+
+
+def test_visit_action_templates_are_registered_settings():
+    assert SETTINGS_DEFAULTS["notify.en_route_template_name"] == "en_route"
+    assert SETTINGS_DEFAULTS["notify.arrived_template_name"] == "arrived"
+
+
+def test_technician_en_route_sends_the_customer_template_and_never_leaks_the_phone(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000401")
+    _login(client)
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["technician_state"] == "en_route"
+    assert datetime.fromisoformat(body["resend_available_at"]) > datetime.now(timezone.utc)
+    # S8: the customer phone is resolved server-side and never returned.
+    assert "+56900000401" not in response.text
+    assert "phone" not in response.text
+
+    sent = _meta_template_body(mock_meta_send)
+    assert sent["to"] == "+56900000401"
+    assert sent["type"] == "template"
+    assert sent["template"]["name"] == "en_route"
+    assert sent["template"]["language"]["code"] == "es"
+
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.technician_state is TechnicianVisitState.EN_ROUTE
+        assert appointment.technician_state_at is not None
+        assert session.query(AuditLog).filter_by(action="appointment.en_route", entity_id=str(appointment_id)).count() == 1
+
+
+def test_technician_arrived_sends_its_own_template(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000402")
+    _login(client)
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/arrived")
+
+    assert response.status_code == 200
+    assert response.json()["technician_state"] == "arrived"
+    assert "+56900000402" not in response.text
+    assert _meta_template_body(mock_meta_send)["template"]["name"] == "arrived"
+
+
+def test_technician_quick_action_uses_the_configured_template_name(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000403")
+    with SessionLocal() as session:
+        set_setting(session, "notify.en_route_template_name", "en_camino_aprobado")
+        session.commit()
+    _login(client)
+
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 200
+
+    assert _meta_template_body(mock_meta_send)["template"]["name"] == "en_camino_aprobado"
+
+
+def test_technician_quick_action_cooldown_rejects_a_second_click(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000411")
+    _login(client)
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 200
+
+    second = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert second.status_code == 429
+    detail = second.json()["detail"]
+    assert detail["code"] == "resend_cooldown"
+    assert 0 < detail["retry_after_seconds"] <= 300
+    assert len(mock_meta_send.calls) == 1  # the rejected click never reached Meta
+    with SessionLocal() as session:
+        assert session.query(AuditLog).filter_by(action="appointment.en_route", entity_id=str(appointment_id)).count() == 1
+
+
+def test_technician_quick_action_allows_a_resend_after_the_cooldown(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000421")
+    _login(client)
+    with SessionLocal() as session:
+        session.add(
+            AuditLog(
+                actor="tech",
+                action="appointment.en_route",
+                entity="appointment",
+                entity_id=str(appointment_id),
+                created_at=datetime.now(timezone.utc) - timedelta(minutes=6),
+            )
+        )
+        session.commit()
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 200
+    assert _meta_template_body(mock_meta_send)["template"]["name"] == "en_route"
+
+
+def test_technician_quick_action_rejects_outside_the_window_and_sends_nothing(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000431", minutes_ahead=240)
+    _login(client)
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "visit_state_unavailable"
+    assert recorded_sends == []
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.technician_state is None
+        assert session.query(AuditLog).filter_by(action="appointment.en_route", entity_id=str(appointment_id)).count() == 0
+
+
+def test_technician_quick_action_rejects_a_backwards_transition(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000441")
+    _login(client)
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/arrived").status_code == 200
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "visit_state_unavailable"
+    with SessionLocal() as session:
+        assert session.get(Appointment, appointment_id).technician_state is TechnicianVisitState.ARRIVED
+
+
+def test_technician_quick_action_hides_foreign_and_unknown_appointments_as_not_found(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    other = make_user("other-tech", "other-pass", role="tecnico")
+    foreign_id = _open_window_appointment(other, "+56900000451")
+    _login(client)
+
+    foreign = client.post(f"/panel/api/technician/appointments/{foreign_id}/en_route")
+    unknown = client.post("/panel/api/technician/appointments/999999/en_route")
+
+    assert foreign.status_code == 404
+    assert unknown.status_code == 404
+    assert foreign.text == unknown.text == '{"detail":"appointment not found"}'
+    assert recorded_sends == []
+    with SessionLocal() as session:
+        assert session.get(Appointment, foreign_id).technician_state is None
+
+
+def test_technician_quick_action_rejects_non_technician_role(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000461")
+    _login(client, "oper", "oper-pass")
+
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 403
+
+
+def test_technician_quick_action_requires_authenticated_session(client):
+    response = client.post("/panel/api/technician/appointments/1/en_route")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}
