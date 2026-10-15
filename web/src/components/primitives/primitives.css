@@ -45,6 +45,7 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
   text-decoration: none;
   transition: background-color var(--duration-base) var(--ease-out);
@@ -1137,8 +1138,17 @@
   align-items: center;
   justify-content: center;
   min-width: 40px;
+  border-color: transparent;
+  background: none;
   border-radius: var(--radius-md);
   padding: var(--space-2);
+}
+/* Global design decision (owner, 2026-10-14): a vertical `⋯` trigger is just the
+   dots — no background and no border, in every state. */
+.menu__trigger--icon[data-state="open"],
+.menu__trigger--icon:hover {
+  background: none;
+  border-color: transparent;
 }
 .menu__content {
   min-width: 12rem;

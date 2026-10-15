@@ -73,6 +73,19 @@ S6 — Project file folders + delete (backend feature; refs images 2-3). Owner-a
 - Knowledge card: `Buscar documento…`, rows with `FORMAT · vN` and an `Activo` badge, a delete action,
   and a document-count footer.
 
+S6b — File manager completeness (ref: owner feedback 2026-10-14, see L13). Owner-authorized.
+- The layout MUST NOT break at any width: the toolbar and card content wrap gracefully; no control is
+  clipped and no text overflows its row.
+- The folder tree scrolls vertically on its own when its content exceeds the visible height.
+- The project node is the tree **root**: it is not collapsible and carries no twisty.
+- A `⋯` action menu groups `Subir archivo` and `Crear carpeta`.
+- Drag-and-drop moves a file into a folder (or back to the project root).
+- The upload dialog states and lets the user pick the destination folder, and offers `Crear carpeta`
+  inline.
+
+S6c — Global design decision: every vertical `⋯` (icon) menu trigger has **no background and no
+border** — just the vertical dots.
+
 ## Tasks
 
 | ID | Spec | Route | Status | Evidence |
@@ -88,6 +101,8 @@ S6 — Project file folders + delete (backend feature; refs images 2-3). Owner-a
 | T7 files tree UI | S6 | inline | done | bb6b6a64, c0268a94 |
 | T8 delete + confirm dialogs | S6 | inline | pending | — |
 | T9 knowledge card layout | S6 | inline | pending | — |
+| T10 move file endpoint + drag & drop | S6b | inline | done | 196ebd23 |
+| T11 upload dialog + tree/root/toolbar revisions | S6b, S6c | inline | done | c366119d |
 
 ## Log
 
@@ -150,3 +165,34 @@ the owner did not spec: folder CRUD affordances = `Menu` kebab (root → `Nueva 
 (1193 passed), and standalone screenshots of `/panel/app/projects/test` match reference image 1.
 Note: file rows use a type icon, not image thumbnails (the list API serves no thumbnail). RDD assess:
 medium, `under_budget`, no review due.
+
+L13 (owner, verbatim): "actual [Image 1] . aun se sigue rompiedo el layout tenemos que asegurarnos que no
+se rompa el layout. el arbol de carpetas no activa slider vertical para scroll.
+
+ref card archivos de proyecto actual [Image 2] .
+- debemos crear un boton mas "..." verticales. para agrupar tanto el boton subir archivo mas un boton
+  para crear carpeta.
+- la primera carpeta visible es la carpeta del propio proyecto pero no es necesario. hay que dejarlo
+  como raiz. no es necesario hacer colapsable o expandible la carpeta del proyecto. ya estamos ahi.
+- necesitamos drag and drop aqui. para mover archivos de carpeta.
+- el dialog para subir un archivo se tiene que adaptar y tiene que mostrar un boton para crear carpeta y
+  tambien especificar bien en que carpeta se va a subir el archivo.
+
+- basicamente a este arbol de archivos debe tener todo para poder manejar los archivos correctamente.
+
+esto es desicion de dise;o general. todos lso botones mas "..." verticales. deben estar sin bacground y
+sin borde. solo los ... verticales."
+→ Captured as S6b/S6c and tasks T10/T11.
+
+L14: T10 + T11 done (196ebd23 backend move + c366119d frontend). Backend:
+`PATCH /panel/api/projects/{slug}/files/{file_id}` with optional `folder_id` (null = root), service
+`move_project_file` + audit; verified by 2 new tests (integration + functional). Frontend: root node is a
+non-collapsible project root; the toolbar `⋯` groups `Subir archivo` + `Nueva carpeta`; the upload dialog
+selects the destination folder and creates folders inline; drag & drop moves a file into a folder (or
+back to the root) via the new endpoint; global decision — every vertical `⋯` trigger is borderless and
+backgroundless; `.btn` labels no longer wrap; resource cards keep their grid track at any width and a
+wide table scrolls instead of overflowing. Verified: `npm run build` green, full vitest suite green
+(1196 passed), tree scroll measured live (`scrollHeight 1356 > clientHeight 350`, `overflow-y: auto`),
+screenshots at 1440 and 1024 px match the requested layout. RDD assess: medium, `under_budget`, no review
+due. Note: the visible `+ Subir archivo` button is kept alongside the `⋯` menu (which also lists `Subir
+archivo`); flag to the owner whether to drop the duplicate.

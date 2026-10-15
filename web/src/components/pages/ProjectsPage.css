@@ -19,6 +19,17 @@
   min-width: 0;
 }
 
+/* Keep the resource cards inside their grid track at any width: the header
+   wraps instead of pushing its action out, and a wide table scrolls instead
+   of overflowing the card. */
+.projects-page__resources .card__header {
+  flex-wrap: wrap;
+}
+
+.projects-page__table-scroll {
+  overflow-x: auto;
+}
+
 .projects-page__hint {
   margin: 0;
   color: var(--corp-fg-muted);
@@ -92,6 +103,12 @@
   background: var(--primary-50);
 }
 
+.file-tree__row.is-drop-target {
+  background: var(--primary-100);
+  outline: 1px dashed var(--primary-600);
+  outline-offset: -2px;
+}
+
 .file-tree__twisty,
 .file-tree__spacer {
   flex: 0 0 auto;
@@ -161,6 +178,23 @@
 
 .file-tree__dialog-body {
   margin-bottom: var(--space-4);
+}
+
+.file-tree__upload-row {
+  display: flex;
+  margin-top: var(--space-3);
+}
+
+.file-tree__new-folder {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.file-tree__new-folder .field {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .file-tree__dialog-question {

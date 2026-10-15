@@ -69,7 +69,7 @@ describe("ProjectResources", () => {
     expect(await screen.findByText("Aún no hay archivos")).toBeInTheDocument();
   });
 
-  it("renders the project root, folders with counts, and the totals footer", async () => {
+  it("renders the project as a non-collapsible root with folders, counts and the totals footer", async () => {
     const folderA = { id: 10, project_id: 7, parent_id: null, name: "Diseño", created_at: null };
     const folderB = { id: 11, project_id: 7, parent_id: null, name: "Operación", created_at: null };
     vi.spyOn(globalThis, "fetch")
@@ -85,14 +85,28 @@ describe("ProjectResources", () => {
     renderResources("operador");
 
     expect(await screen.findByText("TestProject")).toBeInTheDocument();
-    expect(screen.getByText("Diseño")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Contraer TestProject|Expandir TestProject/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Contraer Diseño" })).toBeInTheDocument();
     expect(screen.getByText("(2)")).toBeInTheDocument();
     expect(screen.getByText("(1)")).toBeInTheDocument();
     expect(screen.getByText("4 archivos · 2 carpetas")).toBeInTheDocument();
     expect(screen.getByText("raiz.txt")).toBeInTheDocument();
   });
 
-  it("uploads a project file into the selected folder and refreshes the list", async () => {
+  it("groups upload and folder creation under the toolbar actions menu", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [projectFile] }))
+      .mockResolvedValueOnce(response({ folders: [] }));
+    renderResources("operador");
+
+    await user.click(await screen.findByRole("button", { name: "Acciones de archivos" }));
+    expect(screen.getByRole("menuitem", { name: "Subir archivo" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Nueva carpeta" }));
+    expect(await screen.findByLabelText("Nombre de la carpeta")).toBeInTheDocument();
+  });
+
+  it("uploads the picked file into the chosen folder from the dialog", async () => {
     const folder = { id: 10, project_id: 7, parent_id: null, name: "Diseño", created_at: null };
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(response({ files: [] }))
@@ -101,9 +115,11 @@ describe("ProjectResources", () => {
       .mockResolvedValueOnce(response({ files: [{ ...projectFile, folder_id: 10 }] }));
     renderResources("operador");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Diseño" }));
-    const input = screen.getByLabelText("Archivo del proyecto");
-    fireEvent.change(input, { target: { files: [new File(["pdf"], "manual.pdf", { type: "application/pdf" })] } });
+    fireEvent.click(await screen.findByRole("button", { name: "Subir archivo" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Carpeta de destino"), { target: { value: "10" } });
+    fireEvent.change(within(dialog).getByLabelText("Archivo del proyecto"), { target: { files: [new File(["pdf"], "manual.pdf", { type: "application/pdf" })] } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Subir archivo" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/files", expect.objectContaining({ method: "POST" })));
     const body = fetchMock.mock.calls.find((call) => call[1]?.method === "POST")?.[1]?.body as FormData;
@@ -121,12 +137,28 @@ describe("ProjectResources", () => {
       .mockResolvedValueOnce(response({ folders: [created] }));
     renderResources("operador");
 
-    await user.click(await screen.findByRole("button", { name: "Acciones del proyecto" }));
+    await user.click(await screen.findByRole("button", { name: "Acciones de archivos" }));
     await user.click(screen.getByRole("menuitem", { name: "Nueva carpeta" }));
     await user.type(screen.getByLabelText("Nombre de la carpeta"), "Reportes");
     await user.click(screen.getByRole("button", { name: "Crear carpeta" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/folders", expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Reportes", parent_id: null }) })));
+  });
+
+  it("moves a file into a folder on drop", async () => {
+    const folder = { id: 10, project_id: 7, parent_id: null, name: "Diseño", created_at: null };
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [projectFile] }))
+      .mockResolvedValueOnce(response({ folders: [folder] }))
+      .mockResolvedValueOnce(response({ file: { ...projectFile, folder_id: 10 } }))
+      .mockResolvedValueOnce(response({ files: [{ ...projectFile, folder_id: 10 }] }));
+    const { container } = renderResources("operador");
+
+    await screen.findByText("TestProject");
+    const folderRow = container.querySelector(".file-tree__row--folder") as HTMLElement;
+    fireEvent.drop(folderRow, { dataTransfer: { getData: () => "1", dropEffect: "move" } });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/files/1", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ folder_id: 10 }) })));
   });
 
   it("deletes a project file after confirming in the dialog", async () => {

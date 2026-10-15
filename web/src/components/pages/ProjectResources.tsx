@@ -24,6 +24,7 @@ import {
   downloadProjectFile,
   listProjectFiles,
   listProjectFolders,
+  moveProjectFile,
   refreshKbDocuments,
   renameProjectFolder,
   uploadKbDocument,
@@ -39,10 +40,13 @@ import { Icon } from "../primitives/Icon";
 import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
+import { Select } from "../primitives/Select";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { StateMessage } from "../shared/StateMessage";
 import { kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
+
+const ROOT_DROP_KEY = "root";
 
 function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
@@ -79,13 +83,12 @@ export function ProjectResources({
   const loadDocs = useCallback(() => refreshKbDocuments(), []);
   const docs = useAsyncData(loadDocs, isAdmin);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const kbInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
-  const [rootCollapsed, setRootCollapsed] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [uploadingKb, setUploadingKb] = useState(false);
   const [kbFeedback, setKbFeedback] = useState<{ tone: "success" | "danger"; text: string } | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
@@ -98,6 +101,15 @@ export function ProjectResources({
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFolderId, setUploadFolderId] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderBusy, setNewFolderBusy] = useState(false);
 
   const projectFiles = files.data?.files ?? [];
   const projectFolders = folders.data?.folders ?? [];
@@ -137,6 +149,25 @@ export function ProjectResources({
     return counts;
   }, [projectFolders, childFolders, filesByFolder]);
 
+  // Folder id -> "Parent / Child" label, for the destination selector.
+  const folderPaths = useMemo(() => {
+    const paths = new Map<number, string>();
+    const walk = (parentId: number | null, prefix: string) => {
+      for (const folder of childFolders.get(parentId) ?? []) {
+        const label = prefix ? `${prefix} / ${folder.name}` : folder.name;
+        paths.set(folder.id, label);
+        walk(folder.id, label);
+      }
+    };
+    walk(null, "");
+    return paths;
+  }, [childFolders]);
+
+  const destinationOptions = [
+    { value: "root", label: projectName },
+    ...[...folderPaths].map(([id, label]) => ({ value: String(id), label })),
+  ];
+
   const q = query.trim().toLowerCase();
   const matches = (text: string) => text.toLowerCase().includes(q);
   const fileMatches = (file: ProjectFile) => q === "" || matches(file.filename);
@@ -151,24 +182,6 @@ export function ProjectResources({
       : row.status === "failed" ? { label: "Falló", tone: "danger" }
         : { label: "No indexado", tone: "neutral" };
 
-  const upload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    setFeedback(null);
-    try {
-      await uploadProjectFile(projectSlug, file, selectedFolderId);
-      setFeedback({ tone: "success", text: "Archivo subido correctamente." });
-      files.retry();
-      if (isAdmin) docs.retry();
-    } catch (reason: unknown) {
-      setFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos subir el archivo." });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const download = async (row: ProjectFile) => {
     setBusyFileId(row.id);
     setFeedback(null);
@@ -178,6 +191,16 @@ export function ProjectResources({
       setFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos descargar el archivo." });
     } finally {
       setBusyFileId(null);
+    }
+  };
+
+  const moveFile = async (fileId: number, folderId: number | null) => {
+    setFeedback(null);
+    try {
+      await moveProjectFile(projectSlug, fileId, folderId);
+      files.retry();
+    } catch (reason: unknown) {
+      setFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos mover el archivo." });
     }
   };
 
@@ -198,6 +221,58 @@ export function ProjectResources({
       setKbFeedback({ tone: "danger", text: reason instanceof ApiError ? reason.detail : "No pudimos agregar el documento a la base de conocimientos." });
     } finally {
       setUploadingKb(false);
+    }
+  };
+
+  const openUpload = (folderId: number | null = selectedFolderId) => {
+    setUploadFile(null);
+    setUploadFolderId(folderId);
+    setUploadError(null);
+    setNewFolderOpen(false);
+    setNewFolderName("");
+    setUploadOpen(true);
+  };
+
+  const closeUpload = () => {
+    setUploadOpen(false);
+    setUploadFile(null);
+    setUploadError(null);
+    setNewFolderOpen(false);
+    setNewFolderName("");
+  };
+
+  const submitUpload = async () => {
+    if (!uploadFile) return;
+    setUploadBusy(true);
+    setUploadError(null);
+    try {
+      await uploadProjectFile(projectSlug, uploadFile, uploadFolderId);
+      closeUpload();
+      setFeedback({ tone: "success", text: "Archivo subido correctamente." });
+      files.retry();
+      if (isAdmin) docs.retry();
+    } catch (reason: unknown) {
+      setUploadError(reason instanceof ApiError ? reason.detail : "No pudimos subir el archivo.");
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  const createFolderInline = async () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    setNewFolderBusy(true);
+    setUploadError(null);
+    try {
+      const response = await createProjectFolder(projectSlug, { name, parent_id: uploadFolderId });
+      setUploadFolderId(response.folder.id);
+      setNewFolderName("");
+      setNewFolderOpen(false);
+      folders.retry();
+    } catch (reason: unknown) {
+      setUploadError(reason instanceof ApiError ? reason.detail : "No pudimos crear la carpeta.");
+    } finally {
+      setNewFolderBusy(false);
     }
   };
 
@@ -291,11 +366,28 @@ export function ProjectResources({
     }
   };
 
+  const dropProps = (key: string, folderId: number | null) => ({
+    onDragOver: (event: React.DragEvent) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; },
+    onDragEnter: () => setDropTarget(key),
+    onDragLeave: () => setDropTarget((current) => (current === key ? null : current)),
+    onDrop: (event: React.DragEvent) => {
+      event.preventDefault();
+      setDropTarget(null);
+      const fileId = Number(event.dataTransfer.getData("text/plain"));
+      if (Number.isFinite(fileId) && fileId > 0) void moveFile(fileId, folderId);
+    },
+  });
+
   const renderFile = (file: ProjectFile) => {
     if (!fileMatches(file)) return null;
     const state = kbState(file);
     return (
-      <li key={`file-${file.id}`} className="file-tree__row file-tree__row--file">
+      <li
+        key={`file-${file.id}`}
+        className="file-tree__row file-tree__row--file"
+        draggable
+        onDragStart={(event) => { event.dataTransfer.setData("text/plain", String(file.id)); event.dataTransfer.effectAllowed = "move"; }}
+      >
         <span className="file-tree__spacer" aria-hidden="true" />
         <Icon icon={fileIcon(file)} size="sm" />
         <span className="file-tree__name">{file.filename}</span>
@@ -315,7 +407,10 @@ export function ProjectResources({
     const count = fileCount.get(folder.id) ?? 0;
     return (
       <li key={`folder-${folder.id}`} className="file-tree__node">
-        <div className={`file-tree__row file-tree__row--folder${selectedFolderId === folder.id ? " is-selected" : ""}`}>
+        <div
+          className={`file-tree__row file-tree__row--folder${selectedFolderId === folder.id ? " is-selected" : ""}${dropTarget === String(folder.id) ? " is-drop-target" : ""}`}
+          {...dropProps(String(folder.id), folder.id)}
+        >
           <button type="button" className="file-tree__twisty" aria-label={`${isCollapsed ? "Expandir" : "Contraer"} ${folder.name}`} aria-expanded={!isCollapsed} onClick={() => toggleFolder(folder.id)}>
             <Icon icon={isCollapsed ? ChevronRight : ChevronDown} size="sm" />
           </button>
@@ -377,9 +472,18 @@ export function ProjectResources({
     >
       <div className="projects-page__resources-toolbar">
         <SearchInput aria-label="Buscar archivo o carpeta" placeholder="Buscar archivo o carpeta…" onSearch={setQuery} />
-        <Button variant="secondary" disabled={uploading} onClick={() => inputRef.current?.click()}><Icon icon={Plus} /> {uploading ? "Subiendo…" : "Subir archivo"}</Button>
+        <Button variant="secondary" onClick={() => openUpload()}><Icon icon={Plus} /> Subir archivo</Button>
+        <Menu
+          trigger="icon"
+          label="Acciones de archivos"
+          align="end"
+          items={[
+            { value: "upload", label: "Subir archivo", icon: Upload },
+            { value: "folder", label: "Nueva carpeta", icon: FolderPlus },
+          ]}
+          onSelect={(value) => (value === "upload" ? openUpload() : openCreate(null))}
+        />
       </div>
-      <input type="file" aria-label="Archivo del proyecto" hidden ref={inputRef} onChange={(event) => void upload(event)} />
       {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.text} /> : null}
       {loadState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando archivos" /> : null}
       {loadState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar los archivos" /><Button variant="secondary" onClick={() => { files.retry(); folders.retry(); }}>Reintentar</Button></> : null}
@@ -387,28 +491,20 @@ export function ProjectResources({
       {isEmpty ? <EmptyState variant="dashed" icon={Upload} title="Aún no hay archivos" description="Sube el primer documento de este proyecto." /> : null}
       {loadState === "ready" && !isEmpty ? (
         <div className="file-tree">
-          <div className={`file-tree__row file-tree__row--root${selectedFolderId === null ? " is-selected" : ""}`}>
-            <button type="button" className="file-tree__twisty" aria-label={`${rootCollapsed ? "Expandir" : "Contraer"} ${projectName}`} aria-expanded={!rootCollapsed} onClick={() => setRootCollapsed((value) => !value)}>
-              <Icon icon={rootCollapsed ? ChevronRight : ChevronDown} size="sm" />
-            </button>
+          <div
+            className={`file-tree__row file-tree__row--root${selectedFolderId === null ? " is-selected" : ""}${dropTarget === ROOT_DROP_KEY ? " is-drop-target" : ""}`}
+            {...dropProps(ROOT_DROP_KEY, null)}
+          >
+            <span className="file-tree__spacer" aria-hidden="true" />
             <Icon icon={Folder} size="sm" />
             <button type="button" className="file-tree__name file-tree__name--button" onClick={() => setSelectedFolderId(null)}>{projectName}</button>
             <span className="file-tree__grow" aria-hidden="true" />
-            <Menu
-              trigger="icon"
-              label="Acciones del proyecto"
-              align="end"
-              items={[{ value: "create", label: "Nueva carpeta", icon: FolderPlus }]}
-              onSelect={() => openCreate(null)}
-            />
           </div>
-          {!rootCollapsed ? (
-            <ul className="file-tree__children file-tree__children--root">
-              {rootFolders.map(renderFolder)}
-              {rootFiles.map(renderFile)}
-              {rootFolders.length === 0 && rootFiles.length === 0 ? <li className="file-tree__empty">Sin resultados</li> : null}
-            </ul>
-          ) : null}
+          <ul className="file-tree__children file-tree__children--root">
+            {rootFolders.map(renderFolder)}
+            {rootFiles.map(renderFile)}
+            {rootFolders.length === 0 && rootFiles.length === 0 ? <li className="file-tree__empty">Sin resultados</li> : null}
+          </ul>
         </div>
       ) : null}
     </Card>
@@ -425,9 +521,39 @@ export function ProjectResources({
         {docsState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el conocimiento del proyecto" /><Button variant="secondary" onClick={docs.retry}>Reintentar</Button></> : null}
         {docsState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver el conocimiento del proyecto." /> : null}
         {docsState === "empty" ? <EmptyState variant="dashed" icon={FileSearch} title="Sin documentos agregados a la KB" description="Sube un documento directo a la KB del proyecto; los archivos del proyecto se indexan solos arriba." /> : null}
-        {docsState === "ready" ? <DataTable columns={docColumns} rows={directDocs} rowKey={(row) => String(row.id)} /> : null}
+        {docsState === "ready" ? <div className="projects-page__table-scroll"><DataTable columns={docColumns} rows={directDocs} rowKey={(row) => String(row.id)} /></div> : null}
       </>}
     </Card>
+
+    <Dialog open={uploadOpen} onClose={closeUpload} title="Subir archivo" icon={Upload}>
+      <div className="file-tree__dialog-body">
+        <Select
+          label="Carpeta de destino"
+          value={uploadFolderId == null ? "root" : String(uploadFolderId)}
+          options={destinationOptions}
+          onChange={(event) => setUploadFolderId(event.target.value === "root" ? null : Number(event.target.value))}
+        />
+        <input ref={uploadInputRef} type="file" aria-label="Archivo del proyecto" hidden onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
+        <div className="file-tree__upload-row">
+          <Button variant="secondary" onClick={() => uploadInputRef.current?.click()}>
+            <Icon icon={Upload} /> {uploadFile ? uploadFile.name : "Elegir archivo"}
+          </Button>
+        </div>
+        {newFolderOpen ? (
+          <div className="file-tree__new-folder">
+            <Input label="Nombre de la carpeta" value={newFolderName} autoFocus placeholder="Ej. Reportes" onChange={(event) => setNewFolderName(event.target.value)} />
+            <Button variant="secondary" disabled={newFolderBusy || newFolderName.trim() === ""} onClick={() => void createFolderInline()}>{newFolderBusy ? "Creando…" : "Crear carpeta"}</Button>
+          </div>
+        ) : (
+          <Button variant="tertiary" onClick={() => setNewFolderOpen(true)}><Icon icon={FolderPlus} /> Crear carpeta</Button>
+        )}
+        {uploadError ? <StateMessage tone="danger" role="alert" title={uploadError} /> : null}
+      </div>
+      <div className="file-tree__dialog-actions">
+        <Button variant="secondary" onClick={closeUpload}>Cancelar</Button>
+        <Button disabled={uploadBusy || !uploadFile} onClick={() => void submitUpload()}>{uploadBusy ? "Subiendo…" : "Subir archivo"}</Button>
+      </div>
+    </Dialog>
 
     <Dialog
       open={folderDialog !== null}

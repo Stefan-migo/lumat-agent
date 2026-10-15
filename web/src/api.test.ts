@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, deleteProjectFile, listProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
+import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, deleteProjectFile, moveProjectFile, listProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -392,6 +392,14 @@ describe('project file and artifact API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(null, { status: 204 }));
     await expect(deleteProjectFile('ops', 7)).resolves.toBeUndefined();
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/files/7', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('moves a project file into a folder (or back to the root)', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ file: {} }), { status: 200 })));
+    await moveProjectFile('ops', 7, 12);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects/ops/files/7', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ folder_id: 12 }) }));
+    await moveProjectFile('ops', 7, null);
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/projects/ops/files/7', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ folder_id: null }) }));
   });
 
   it('lists project folders from the encoded project URL', async () => {
