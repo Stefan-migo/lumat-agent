@@ -172,13 +172,16 @@ def test_technician_reads_owned_appointment_detail_allow_list(client, make_user)
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"appointment", "customer", "case"}
+    assert set(body) == {"appointment", "customer", "case", "quick_actions"}
     assert set(body["appointment"]) == {
         "id", "service", "customer_id", "case_id", "technician_id", "local_start",
         "timezone", "starts_at", "ends_at", "duration_minutes", "status",
+        "technician_state", "technician_state_at",
     }
     assert set(body["customer"]) == {"id", "name", "address", "comuna"}
     assert set(body["case"]) == {"id", "conversation_id"}
+    assert set(body["quick_actions"]) == {"en_route", "arrived"}
+    assert all(set(action) == {"resend_available_at"} for action in body["quick_actions"].values())
     assert body["appointment"]["id"] == appointment_id
     assert body["appointment"]["service"] == "calefont"
     assert all(
@@ -218,6 +221,46 @@ def test_technician_cannot_reach_the_operator_detail_endpoint(client, make_user)
     _login(client)
 
     assert client.get(f"/panel/api/appointments/{appointment_id}").status_code == 403
+
+
+def test_technician_detail_exposes_visit_state_and_resend_availability(client, make_user, recorded_sends):
+    """WU7: the read carries the field state and, per action, when a resend unlocks."""
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000071")
+    _login(client)
+
+    fresh = client.get(f"/panel/api/technician/appointments/{appointment_id}")
+    assert fresh.status_code == 200
+    body = fresh.json()
+    assert body["appointment"]["technician_state"] is None
+    assert body["appointment"]["technician_state_at"] is None
+    assert body["quick_actions"] == {
+        "en_route": {"resend_available_at": None},
+        "arrived": {"resend_available_at": None},
+    }
+
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 200
+
+    after = client.get(f"/panel/api/technician/appointments/{appointment_id}").json()
+    assert after["appointment"]["technician_state"] == "en_route"
+    assert after["appointment"]["technician_state_at"] is not None
+    unlock = datetime.fromisoformat(after["quick_actions"]["en_route"]["resend_available_at"])
+    assert timedelta(minutes=4) < unlock - datetime.now(timezone.utc) <= timedelta(minutes=5)
+    assert after["quick_actions"]["arrived"]["resend_available_at"] is None
+
+
+def test_technician_detail_resend_availability_is_read_from_the_audit_log(client, make_user):
+    """WU7/S7: the cooldown surfaced on the read comes from the action's audit row."""
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000072")
+    _prior_send_event(appointment_id, "appointment.en_route", age_seconds=60)
+    _login(client)
+
+    body = client.get(f"/panel/api/technician/appointments/{appointment_id}").json()
+
+    unlock = datetime.fromisoformat(body["quick_actions"]["en_route"]["resend_available_at"])
+    assert timedelta(minutes=3) < unlock - datetime.now(timezone.utc) <= timedelta(minutes=4)
+    assert body["quick_actions"]["arrived"]["resend_available_at"] is None
 
 
 @pytest.mark.parametrize("outcome", ["completed", "no_show"])
