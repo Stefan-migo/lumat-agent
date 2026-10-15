@@ -67,17 +67,22 @@ def prepare_attachment_context(attachments, max_chars: int | None = None) -> lis
     return context
 
 
+def image_url_part(path, *, mime: str | None = None, filename: str | None = None) -> dict:
+    """One OpenAI-style `image_url` part from a stored image file, bounded by the vision limit."""
+    content = Path(path).read_bytes()
+    if len(content) > get_settings().assistant_attachment_max_image_bytes:
+        raise ValueError("image exceeds the vision size limit")
+    resolved_mime = mime or mimetypes.guess_type(filename or str(path))[0] or "application/octet-stream"
+    encoded = base64.b64encode(content).decode("ascii")
+    return {"type": "image_url", "image_url": {"url": f"data:{resolved_mime};base64,{encoded}"}}
+
+
 def build_multimodal_content(attachments, prompt: str) -> list[dict]:
     parts: list[dict] = [{"type": "text", "text": prompt}]
     for attachment in attachments:
         if attachment.kind != "image":
             continue
-        content = Path(attachment.stored_path).read_bytes()
-        if len(content) > get_settings().assistant_attachment_max_image_bytes:
-            raise ValueError("image exceeds the vision size limit")
-        mime = mimetypes.guess_type(attachment.filename)[0] or "application/octet-stream"
-        encoded = base64.b64encode(content).decode("ascii")
-        parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}})
+        parts.append(image_url_part(attachment.stored_path, filename=attachment.filename))
     return parts
 
 
