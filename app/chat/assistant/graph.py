@@ -42,7 +42,7 @@ def _after_guardrails(state: AssistantState) -> str:
     if _is_terminal_plan_failure(state):
         return END
     decision = (state.get("guardrails") or {}).get("decision")
-    if decision in {"grounding_refusal", "loop_write_refused", "delegate_refused"}:
+    if decision in {"grounding_refusal", "delegate_refused"}:
         return END
     if decision == "delegate":
         return "delegation_span"
@@ -111,7 +111,7 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None, resume_plan: dict | None = None, resume_approval: dict | None = None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None, resume_plan: dict | None = None, resume_approval: dict | None = None, resume_tool_results: list[dict] | None = None, resume_tool_steps: int | None = None) -> AssistantState:
     if project_authorization is not None:
         from app.services.projects import _ProjectAuthorization
         if not isinstance(project_authorization, _ProjectAuthorization):
@@ -150,6 +150,10 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         state["planner"] = {"valid": True}
         state["status"] = "planned"
         state["resume"] = True
+        # A chain that paused on its second write resumes with the evidence the earlier
+        # steps produced: that evidence is what the continuation step plans from.
+        state["tool_results"] = list(resume_tool_results or [])
+        state["tool_steps"] = resume_tool_steps or 0
     graph = build_assistant_graph()
     if on_stage is None:
         return graph.invoke(state)

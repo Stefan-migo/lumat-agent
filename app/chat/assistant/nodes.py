@@ -56,10 +56,6 @@ PANEL_KB_UNAVAILABLE = (
     "La base de conocimiento no está disponible para esta consulta. "
     "No pude consultarla; un operador deberá revisarla."
 )
-PANEL_LOOP_WRITE_REFUSAL = (
-    "No puedo ejecutar esa acción dentro de una consulta de varios pasos. "
-    "Pídemela directamente y te pediré confirmación antes de ejecutarla."
-)
 PANEL_DELEGATION_REFUSAL = "I cannot safely delegate that request."
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
@@ -776,16 +772,10 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "status": "completed",
             }
     autonomous_write = _is_autonomous_write(tool_name, state.get("thread_id"))
-    if not get_tool(tool_name).read_only and state.get("tool_steps", 0) >= 1:
-        decisions["decision"] = "loop_write_refused"
-        decisions["approval_required"] = False
-        return {
-            "approval": None,
-            "guardrails": decisions,
-            "response": PANEL_LOOP_WRITE_REFUSAL,
-            "status": "completed",
-        }
-    if not get_tool(tool_name).read_only and not autonomous_write and not state.get("approval"):
+    # Every class-A write needs its own consumed approval, at any step of a chain: the
+    # step that just ran spent the previous token, and an approval is bound to the exact
+    # plan it was granted for, so it can never authorize the next plan.
+    if not get_tool(tool_name).read_only and not autonomous_write and not validate_execution(plan_data, state.get("approval") or {}):
         from app.chat.assistant.approval import issue_approval
         decisions["approval_required"] = True
         decisions["decision"] = "approval_pending"
@@ -868,7 +858,7 @@ def _tool_image_parts(state: AssistantState) -> list[dict]:
 
 
 def tool_loop_head(state: AssistantState) -> AssistantState:
-    """Finish or request an explicitly opted-in, bounded read-only follow-up."""
+    """Finish the turn or continue to the next step of an opted-in, bounded chain."""
     plan = state.get("plan") or {}
     steps = state.get("tool_steps", 0)
     cost = _cost_snapshot(state.get("session"), state["thread_id"])
@@ -886,16 +876,15 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
         }
     if plan.get("kind") != "tool" or not plan.get("tool"):
         return {"status": "completed"}
-    # Chaining is read-only end to end (D3): a write is an action, not evidence, so it always
-    # ends the turn -- including an autonomous write that opted into a follow-up step.
-    if not get_tool(plan["tool"]).read_only:
-        return {"status": "completed"}
     if not plan.get("follow_up"):
         return {"status": "completed"}
     # Record the cap only when another step was requested and the budget ended the turn.
     if steps >= MAX_ASSISTANT_TOOL_STEPS:
         return {"cap_reached": True, "status": "completed"}
-    return {"status": "planned"}
+    # The step that just ran spent its approval. Clearing it is what makes the next plan
+    # earn its own: an approval is bound to one exact plan, so carrying it forward would
+    # either re-authorize an identical write or break the binding of a different one.
+    return {"status": "planned", "approval": None}
 
 
 def _tool_accumulation(state: AssistantState, result: dict) -> dict:

@@ -467,6 +467,7 @@ def _run_agent_turn_session(
             "guardrails": result.get("guardrails", {}),
             "cost_mode": result.get("cost_mode", "normal"),
             "cost_directive": result.get("cost_directive", ""),
+            "tool_results": result.get("tool_results") or [],
             "tool_steps": result.get("tool_steps", 0),
             "cap_reached": result.get("cap_reached", False),
             "compaction": compaction,
@@ -612,13 +613,13 @@ def submit_message(
     return message
 
 
-def _events_for(result: dict, thread_id: int, run_id: str) -> list[dict]:
+def _events_for(result: dict, thread_id: int, run_id: str, sequence: int = 0) -> list[dict]:
     events = [
-        {"type": "plan", "thread_id": thread_id, "run_id": run_id, "sequence": 0, "plan": result.get("plan", {})},
-        {"type": "approval", "thread_id": thread_id, "run_id": run_id, "sequence": 1, "approval": result.get("approval"), "status": result.get("status")},
+        {"type": "plan", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "plan": result.get("plan", {})},
+        {"type": "approval", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 1, "approval": result.get("approval"), "status": result.get("status")},
     ]
     if result.get("status") != "approval_pending":
-        events.extend(_execution_events(result, thread_id, run_id, len(events)))
+        events.extend(_execution_events(result, thread_id, run_id, sequence + len(events)))
     return events
 
 
@@ -812,6 +813,10 @@ def _run_approved_plan(session: Session, thread: InternalChatThread, user: User,
             cortex_session=(thread.assistant_state or {}).get("cortex_session"),
             resume_plan=plan,
             resume_approval=approval,
+            # The chain's accumulated evidence rides through the pause: the continuation
+            # step plans from what the earlier steps already produced.
+            resume_tool_results=(thread.assistant_state or {}).get("tool_results") or [],
+            resume_tool_steps=(thread.assistant_state or {}).get("tool_steps") or 0,
         )
     return execute({
         "thread_id": thread.id,
@@ -824,6 +829,55 @@ def _run_approved_plan(session: Session, thread: InternalChatThread, user: User,
         "actor_role": actor_role,
         "request_message_id": message.id,
     })
+
+
+def _persist_resumed_result(thread: InternalChatThread, result: dict, run_id: str) -> str:
+    """Persist what a resumed turn produced, including a second pause of a chain.
+
+    A resumed turn can pause again on the next write, so it must persist exactly what
+    `_run_agent_turn_session` persists for a fresh turn: the fresh approval, the plan that
+    approval binds to, and the evidence accumulated so far. The approval is assigned after
+    the merge on purpose -- merging a new token over a spent one would leave the spent
+    token's fields on it.
+    """
+    status = result.get("status")
+    paused = status == "approval_pending"
+    thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
+        "stage": status,
+        "recoverable": True,
+        "execution_status": "pending" if paused else status,
+        "live": {"run_id": run_id, "status": "approval_pending" if paused else "completed"},
+        "tool_results": result.get("tool_results") or [],
+        "tool_steps": result.get("tool_steps", 0),
+        "cap_reached": result.get("cap_reached", False),
+        "guardrails": result.get("guardrails", {}),
+        "verification": result.get("verification"),
+    })
+    thread.assistant_state["approval"] = result.get("approval")
+    thread.current_plan = result.get("plan") or thread.current_plan
+    return status
+
+
+def _park_chain_on_next_approval(
+    session: Session, thread: InternalChatThread, message: InternalChatMessage, result: dict, run_id: str,
+) -> InternalChatMessage:
+    """Park a resumed turn that paused again on the next write of a chain.
+
+    The graph returned at a safe boundary with a fresh approval and no reply, exactly as a
+    first pause does: the operator message stays pending so the panel can offer that
+    approval, and the plan/approval events keep the stream in step. Sequences continue from
+    the events already persisted, because a chain shares one run id and a repeated
+    sequence would be de-duplicated away.
+    """
+    message.status = "approval_pending"
+    message.assistant_metadata = {**(message.assistant_metadata or {}), "approval": result.get("approval")}
+    events = thread.assistant_state.get("events") or []
+    thread.assistant_state = {
+        **thread.assistant_state,
+        "events": [*events, *_events_for(result, thread.id, run_id, len(events))],
+    }
+    session.flush()
+    return message
 
 
 def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:
@@ -878,9 +932,11 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     if not claim_execution(session, thread):
         return None
     result = _run_approved_plan(session, thread, user, message, run_id, plan, actor_role)
-    message.status = "processed" if result.get("status") == "completed" else "failed"
+    status = _persist_resumed_result(thread, result, run_id)
+    if status == "approval_pending":
+        return _park_chain_on_next_approval(session, thread, message, result, run_id)
+    message.status = "processed" if status == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
-    thread.assistant_state = {**thread.assistant_state, "stage": result.get("status"), "execution_status": result.get("status"), "verification": result.get("verification")}
     response_message = InternalChatMessage(
         thread_id=thread.id, author="agent", content=result["response"], status="processed",
         completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},
@@ -1019,9 +1075,12 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
     actor_role = getattr(user.role, "value", user.role)
     thread.assistant_state = {**(thread.assistant_state or {}), "actor_role": actor_role}
     result = _run_approved_plan(session, thread, user, message, run_id, thread.current_plan or {}, actor_role)
-    message.status = "processed" if result.get("status") == "completed" else "failed"
+    status = _persist_resumed_result(thread, result, run_id)
+    if status == "approval_pending":
+        _park_chain_on_next_approval(session, thread, message, result, run_id)
+        return True
+    message.status = "processed" if status == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
-    thread.assistant_state = {**thread.assistant_state, "stage": result.get("status"), "execution_status": result.get("status"), "verification": result.get("verification")}
     session.add(InternalChatMessage(
         thread_id=thread.id, author="agent", content=result["response"], status="processed",
         completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},

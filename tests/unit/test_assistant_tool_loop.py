@@ -8,7 +8,6 @@ import pytest
 from app.chat.assistant.graph import END, _after_cost_gate, _after_execute, _after_guardrails, _after_tool_loop, build_assistant_graph, run_assistant
 from app.chat.assistant.nodes import (
     MAX_ASSISTANT_TOOL_STEPS,
-    PANEL_LOOP_WRITE_REFUSAL,
     _TOOL_EVIDENCE_LIMIT,
     _context_text,
     execute,
@@ -474,7 +473,9 @@ def test_sessionless_normal_cost_mode_keeps_two_step_chain(monkeypatch):
     assert len([call for call in calls if not call.get("stream")]) == 2
 
 
-def test_autonomous_write_turn_does_not_chain(monkeypatch):
+def test_autonomous_write_turn_chains_in_loop(monkeypatch):
+    """T2/S3: a class-B write that opted into a follow-up keeps the chain going with no
+    approval prompt. U1's read-only-only loop is exactly what T2 reopens."""
     calls = []
     handler_calls = []
     plans = [
@@ -503,8 +504,8 @@ def test_autonomous_write_turn_does_not_chain(monkeypatch):
         thread_id=7, user_id=1, content="Save Ana", run_id="run-write-close", on_token=lambda _token: None
     )
 
-    assert handler_calls == ["memory.write"]
-    assert len([call for call in calls if not call.get("stream")]) == 1
+    assert handler_calls == ["memory.write", "memory.search"]
+    assert len([call for call in calls if not call.get("stream")]) == 2
 
 
 def test_read_only_tool_with_follow_up_still_chains():
@@ -516,22 +517,26 @@ def test_read_only_tool_with_follow_up_still_chains():
     assert _after_tool_loop(result) == "plan_llm"
 
 
-def test_step_two_write_plan_is_refused_by_guardrails():
+def test_step_two_write_plan_gets_its_own_approval(monkeypatch):
+    """T2/S2: a class-A write at step 2+ no longer ends the turn; it pauses with a fresh
+    approval bound to its own arguments."""
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"automation.create_rule"})
     state = _tool_state(
         tool_steps=1,
         plan={
-            "kind": "tool", "tool": "memory.write",
-            "arguments": {"titulo": "N", "contenido": "Content", "topic_key": "agent:test", "tipo": "discovery"},
-            "summary": "Write memory", "requires_approval": True, "follow_up": False,
+            "kind": "tool", "tool": "automation.create_rule",
+            "arguments": {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}},
+            "summary": "Create rule", "requires_approval": True, "follow_up": False,
         },
     )
 
     result = guardrails(state)
 
-    assert result["status"] == "completed"
-    assert result["approval"] is None
-    assert result["guardrails"]["decision"] == "loop_write_refused"
-    assert result["response"] == PANEL_LOOP_WRITE_REFUSAL
+    assert result["status"] == "approval_pending"
+    assert result["guardrails"]["decision"] == "approval_pending"
+    assert result["guardrails"]["approval_required"] is True
+    assert result["approval"]["status"] == "pending"
+    assert result["approval"]["tool"] == "automation.create_rule"
 
 
 def test_global_skill_name_collision_is_audited_and_never_issues_approval(monkeypatch):
@@ -595,42 +600,20 @@ def test_rejecting_skill_proposal_audits_without_executing(monkeypatch):
     assert [item["action"] for item in audits] == ["skill.propose.rejected"]
 
 
-@pytest.mark.parametrize(
-    "tool_name,arguments",
-    [
-        (
-            "memory.write",
-            {
-                "titulo": "N",
-                "contenido": "Content",
-                "topic_key": "agent:test",
-                "tipo": "discovery",
-            },
-        ),
-        (
-            "automation.create_rule",
-            {
-                "recipe_id": "appointment_confirmation",
-                "parameters": {"channel": "whatsapp"},
-            },
-        ),
-    ],
-)
-@pytest.mark.parametrize("follow_up", [True, False])
-def test_graph_refuses_step_two_write_before_execution_or_approval(
-    monkeypatch, tool_name, arguments, follow_up
-):
+def test_graph_pauses_step_two_class_a_write_for_its_own_approval(monkeypatch):
+    """T2/S1+S2: the chain reaches the second step inside the same turn, and that step's
+    class-A write pauses with a fresh approval instead of ending the turn."""
     calls = []
     handler_calls = []
     plans = [
         '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
         json.dumps({
             "kind": "tool",
-            "tool": tool_name,
-            "arguments": arguments,
+            "tool": "automation.create_rule",
+            "arguments": {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}},
             "summary": "Write",
             "requires_approval": True,
-            "follow_up": follow_up,
+            "follow_up": False,
         }),
     ]
     issued = []
@@ -648,15 +631,134 @@ def test_graph_refuses_step_two_write_before_execution_or_approval(
     monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
 
     final = run_assistant(
-        thread_id=7, user_id=1, content="Find Ana", run_id="run-write-refusal", on_token=lambda _token: None
+        thread_id=7, user_id=1, content="Find Ana", run_id="run-write-chain", on_token=lambda _token: None
     )
 
     assert handler_calls == ["customers.search"]
-    assert final["response"] == PANEL_LOOP_WRITE_REFUSAL
-    assert final.get("approval") is None
-    assert issued == []
+    assert final["status"] == "approval_pending"
+    assert final["approval"] == {"status": "pending"}
+    assert [plan["tool"] for plan in issued] == ["automation.create_rule"]
     assert [call for call in calls if call.get("stream")] == []
-    assert _after_guardrails({**final, "guardrails": {"decision": "loop_write_refused"}}) == END
+
+
+def test_graph_runs_step_two_class_b_write_in_loop(monkeypatch):
+    """T2/S3: the bounded autonomous class keeps running inside the chain with no
+    per-step approval."""
+    calls = []
+    handler_calls = []
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
+        json.dumps({
+            "kind": "tool",
+            "tool": "memory.write",
+            "arguments": {"titulo": "N", "contenido": "Content", "topic_key": "agent:test", "tipo": "discovery"},
+            "summary": "Write",
+            "requires_approval": False,
+            "follow_up": False,
+        }),
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, name, *_args, **_kwargs: handler_calls.append(name)
+        or {"tool": name, "status": "completed", "result": [{"name": "Ana"}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    final = run_assistant(
+        thread_id=7, user_id=1, content="Find Ana", run_id="run-write-chain-b", on_token=lambda _token: None
+    )
+
+    assert handler_calls == ["customers.search", "memory.write"]
+    assert final["status"] == "completed"
+    assert final["tool_steps"] == 2
+    assert final["tool_results"][-1]["tool"] == "memory.write"
+
+
+def test_write_with_follow_up_chains_and_spends_its_approval():
+    """T2/S1+S2: a write that opted into a follow-up continues the chain, and the approval
+    that authorized it does not carry into the next plan."""
+    state = _tool_state(
+        tool_steps=1,
+        plan={**_tool_state()["plan"], "tool": "settings.update", "follow_up": True},
+        approval={"status": "consumed"},
+    )
+
+    result = tool_loop_head(state)
+
+    assert result["status"] == "planned"
+    assert result["approval"] is None
+    assert _after_tool_loop(result) == "plan_llm"
+
+
+def test_write_without_follow_up_still_ends_the_turn():
+    """S4 regression: a write that did not opt into a follow-up ends the turn as before."""
+    state = _tool_state(
+        tool_steps=1,
+        plan={**_tool_state()["plan"], "tool": "settings.update", "follow_up": False},
+    )
+
+    assert tool_loop_head(state) == {"status": "completed"}
+
+
+def test_write_chain_stops_at_the_iteration_cap():
+    """T2/S7: the cap still terminates a chain that keeps requesting follow-ups."""
+    state = _tool_state(
+        tool_steps=MAX_ASSISTANT_TOOL_STEPS,
+        plan={**_tool_state()["plan"], "tool": "settings.update", "follow_up": True},
+    )
+
+    result = tool_loop_head(state)
+
+    assert result["status"] == "completed"
+    assert result["cap_reached"] is True
+
+
+def test_step_two_write_with_a_spent_approval_gets_a_fresh_one(monkeypatch):
+    """T2/S2: the previous step's consumed approval cannot authorize the next plan."""
+    from app.chat.assistant.approval import consume_approval, issue_approval
+
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"settings.update"})
+    spent = issue_approval({"tool": "settings.update", "arguments": {"key": "tone.style", "value": "formal"}})
+    assert consume_approval(spent, spent["token"]) is True
+    state = _tool_state(
+        tool_steps=1,
+        approval=spent,
+        plan={
+            "kind": "tool", "tool": "settings.update",
+            "arguments": {"key": "messages.farewell", "value": "Nos vemos."},
+            "requires_approval": True,
+        },
+    )
+
+    result = guardrails(state)
+
+    assert result["status"] == "approval_pending"
+    assert result["guardrails"]["decision"] == "approval_pending"
+    assert result["approval"]["status"] == "pending"
+    assert result["approval"]["token"] != spent["token"]
+
+
+def test_resumed_plan_with_its_consumed_approval_executes_without_a_new_prompt(monkeypatch):
+    """S4 regression (T1): the resume path already holds the approval it was granted, so
+    guardrails must not ask for it again."""
+    from app.chat.assistant.approval import consume_approval, issue_approval
+
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"settings.update"})
+    plan = {
+        "kind": "tool",
+        "tool": "settings.update",
+        "arguments": {"key": "tone.style", "value": "formal"},
+        "requires_approval": True,
+    }
+    approval = issue_approval(plan)
+    assert consume_approval(approval, approval["token"]) is True
+    state = _tool_state(plan=plan, approval=approval)
+
+    result = guardrails(state)
+
+    assert result["status"] == "executing"
 
 
 def test_single_autonomous_write_executes_without_loop_refusal(monkeypatch):
