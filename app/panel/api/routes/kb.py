@@ -103,9 +103,11 @@ def kb_search(
     if not q.strip():
         raise HTTPException(status_code=400, detail="query must not be blank")
 
-    # The admin probe deliberately reads the whole corpus, including internal documents.
+    # The admin probe deliberately reads the whole audience corpus, including internal
+    # documents, but stays scope-bounded to global documents: a project-private document
+    # never surfaces in the global KB section's probe.
     results = kb_service.retrieve(
-        session, q, top_k=top_k, min_sim=min_sim, audience=None
+        session, q, top_k=top_k, min_sim=min_sim, audience=None, global_only=True
     )
     document_ids = {result["document_id"] for result in results}
     titles = {}

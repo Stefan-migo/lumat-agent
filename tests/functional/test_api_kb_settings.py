@@ -321,6 +321,23 @@ def test_kb_search_filters_threshold_and_disabled_documents(client, make_user, f
     assert miss.json() == {"results": []}
 
 
+def test_kb_search_probe_excludes_project_scoped_documents(client, make_user, fake_embedder):
+    """The admin probe is scope-bounded to global documents (S3)."""
+    owner_id = make_user("adm", "adm-pass", role="admin")
+    global_id = _seed_doc(title="Global phrase", content=b"unique probe phrase")
+    _seed_doc(
+        title="Project phrase",
+        content=b"unique probe phrase",
+        project_id=_seed_project(owner_id, "kb-probe-scope"),
+    )
+    _login(client)
+
+    resp = client.get("/panel/api/kb/search?q=unique probe phrase&min_sim=0", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert [item["document_id"] for item in resp.json()["results"]] == [global_id]
+
+
 def test_kb_search_honors_top_k_and_min_sim(client, make_user, fake_embedder):
     _seed_doc(title="One", content=b"shared phrase one")
     _seed_doc(title="Two", content=b"shared phrase two")
