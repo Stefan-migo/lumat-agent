@@ -45,7 +45,7 @@ The office can see the visit's technician-state. Location decided by the owner, 
 | WU6 | WhatsApp send + cooldown: template send per state, cooldown guard, technician-only routes | S7, S8 | inline | done | `61cc4b07`, `72d47e04` |
 | WU7 | Frontend actions: visit-detail close + quick actions with cooldown countdown | S2, S4, S5, S7 | inline | done | `eef007ee`, `d53457cc`, `cbbf0c22`, `e862c719` |
 | WU8 | Office semaphore UX | S9 | inline | done | `8e838159`, `f8fb5c9f`, `890a557e` |
-| EXT | Create and approve Meta templates `en_route` + `arrived` | S8 | external | pending | — |
+| EXT | Create and approve Meta templates `en_route` + `arrived` | S8 | external | created, awaiting Meta approval | — |
 
 ## Log
 
@@ -168,3 +168,7 @@ L26 (2026-10-15, WU8 verification) — Independent verifier (Risk item 3): **no 
 
 L27 (2026-10-15, WU8 delivery) — WU8 pushed as PR **#630** (base `main`). Before pushing, `origin/main` was merged into the branch (main had advanced to `97b63c00` with #628, the `kb-panel-scope` thread — verified **zero shared files** with WU8) and the local integration was re-run over the merged tree: backend `pytest` **2273 passed** (exit 0), frontend `vitest run` **109 files / 1242 tests pass**, `npm run build` (`tsc -b` + vite) exit 0. The frontend full run was green this time, so the `AgentChat` flake did not reproduce under the merged tree. Remaining thread work: **EXT** only (Meta template creation + approval).
 
+
+L28 (2026-10-15, WU8 pre-merge re-sync + EXT status) — Before merging, `origin/main` had advanced again (to `58e7652f`, PR **#629**, the `automation-uninstall` thread). That branch is the first one to **share a file** with WU8: `web/src/api.ts` (WU8 carries it from #628, #629 edits it too). The merge came out textually clean, but a clean text merge says nothing about semantics, so the local integration was re-run over the re-merged tree: backend `pytest` **2285 passed** (exit 0), frontend `vitest run` **109 files / 1244 tests pass**, `npm run build` (`tsc -b` + vite) exit 0. This is the case the repo's pre-merge discipline exists for.
+- **EXT status updated by the owner**: the two Meta templates (`en_route`, `arrived`) are **created** and now await Meta's approval. The row moves from `pending` to `created, awaiting Meta approval`. Until approval lands, the end-to-end WhatsApp send stays mocked; the code path is unchanged and needs no further work.
+- Owner decision: **no maker-checker**. The operator/admin confirming the technician's close is explicitly **not needed for now** — the open question recorded in the WU8 handoff is closed as "not now", so `scheduling.close` stays terminal and irreversible for both roles.
