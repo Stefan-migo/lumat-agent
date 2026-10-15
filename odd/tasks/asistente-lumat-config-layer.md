@@ -276,3 +276,6 @@ the send-selection test), then GREEN. Evidence: `AgentChat.test.tsx` 74/74; full
 1193/1193 (EXIT 0); `npm run build` (tsc -b + vite) green. No backend change.
 RDD assess (`--base-ref cc1d74f2 --committed-only`): risk `medium`, `review_due=false`
 (`under_budget`, 88 changed lines). Next: T5 (multimodal tool results).
+
+L22 — T4 delivery: PR **#618** (head `odd/asistente-lumat-config-layer-t4` → base #617). Chain so
+far: `main` ← #616 (T0–T2) ← #617 (T3) ← #618 (T4).
