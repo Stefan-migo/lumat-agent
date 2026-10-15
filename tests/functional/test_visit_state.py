@@ -54,7 +54,7 @@ def test_arrived_window_opens_at_t_minus_15(make_user):
     with SessionLocal() as session:
         appointment = session.get(Appointment, appointment_id)
 
-        assert visit_state.is_available(appointment, TechnicianVisitState.ARRIVED, appointment.starts_at - timedelta(minutes=16)) is False
+        assert visit_state.is_available(appointment, TechnicianVisitState.ARRIVED, appointment.starts_at - timedelta(minutes=15, seconds=1)) is False
         assert visit_state.is_available(appointment, TechnicianVisitState.ARRIVED, appointment.starts_at - timedelta(minutes=15)) is True
 
 
@@ -76,15 +76,19 @@ def test_window_closes_at_ends_at(make_user):
 
         assert visit_state.is_available(appointment, TechnicianVisitState.ARRIVED, appointment.ends_at - timedelta(seconds=1)) is True
         assert visit_state.is_available(appointment, TechnicianVisitState.ARRIVED, appointment.ends_at) is False
+        assert visit_state.is_available(appointment, TechnicianVisitState.EN_ROUTE, appointment.ends_at - timedelta(seconds=1)) is True
+        assert visit_state.is_available(appointment, TechnicianVisitState.EN_ROUTE, appointment.ends_at) is False
 
 
-def test_a_closed_visit_closes_the_window(make_user):
+@pytest.mark.parametrize("closed", [AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW, AppointmentStatus.CANCELLED])
+def test_a_closed_visit_closes_the_window(make_user, closed):
     appointment_id = _booked(make_user("tech", "tech-pass", role="tecnico"))
     with SessionLocal() as session:
         appointment = session.get(Appointment, appointment_id)
-        appointment.status = AppointmentStatus.COMPLETED
+        appointment.status = closed
 
         assert visit_state.is_available(appointment, TechnicianVisitState.ARRIVED, appointment.starts_at) is False
+        assert visit_state.is_available(appointment, TechnicianVisitState.EN_ROUTE, appointment.starts_at) is False
 
 
 def test_transitions_are_forward_only(make_user):
