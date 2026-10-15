@@ -62,6 +62,22 @@ describe('AgendaPage', () => {
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
   });
 
+  /** S9: the office board reads the technician's field state, and how long ago. */
+  it('shows the technician field state with its age on a visit row', () => {
+    render(<AgendaPage data={[appointment({ technician_state: 'en_route', technician_state_at: '2026-09-05T11:55:00-04:00' })]} state="ready" />);
+
+    expect(screen.getByText('Voy en camino')).toBeInTheDocument();
+    expect(screen.getByText('hace 5 min')).toBeInTheDocument();
+  });
+
+  /** S9: a visit the technician has not touched carries no semaphore. */
+  it('shows no semaphore on a visit the technician has not touched', () => {
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+
+    expect(screen.queryByText('Voy en camino')).not.toBeInTheDocument();
+    expect(screen.queryByText('Llegué / estoy afuera')).not.toBeInTheDocument();
+  });
+
   it('loads technician roster and summaries only when the technician tab is selected', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis Pérez' }] });

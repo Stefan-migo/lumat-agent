@@ -617,6 +617,10 @@ export interface AgendaAppointment {
   ends_at: string;
   duration_minutes?: number;
   status: string;
+  /** Technician field position (S9) — the office semaphore reads it off the
+   *  agenda list. Always present, `null` until the technician marks it. */
+  technician_state?: TechnicianVisitState | null;
+  technician_state_at?: string | null;
   sync: { status: AppointmentSyncStatus; error: string | null; retry: boolean };
 }
 
