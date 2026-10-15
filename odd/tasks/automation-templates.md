@@ -55,7 +55,7 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
 
 ## Tasks
 
-- T1 (S1) — recipe `conditions` support + `origin` in the `appointment.booked` payload + `appointment_confirmation` filter. RED→GREEN backend tests.
+- T1 (S1) — recipe `conditions` support + `origin` in the `appointment.booked` payload + `appointment_confirmation` filter. RED→GREEN backend tests. commit `fc511da4` (PR1)
 - T2 (S2,S5) — `RecipeTemplate` on `RecipeDefinition` + generic WhatsApp-template send path in `notifications.py` (keeps email fallback). RED→GREEN tests.
 - T3 (S3,S6) — `appointment_reminder` recipe + `_reminder_due` time-trigger evaluator + delete `_maintain_reminder`/callers. Tests.
 - T4 (S4,S6) — `appointment_followup` recipe + engine delay (`delay_seconds`) + delete `_schedule_followup`. Tests.
@@ -80,3 +80,8 @@ Test runner: `uv run pytest` (backend, `tests/`), `npx vitest run` + `npm run bu
 - L5: Worktree `odd/automation-templates` created and provisioned (venv + `infra/.env` + test DB).
 - L6 (2026-10-15, owner decision): delivery = **chained PRs**. PR1 = T1 (S1, origin filter); PR2 =
   T2–T6 (template engine + recipes + cleanup).
+- L7 (T1, S1): RED observed — `KeyError: 'origin'` (2 tests) and `conditions` mismatch (2 tests);
+  GREEN after recipe `conditions` + `book()` origin. Updated `test_assistant_tools.py` and
+  `test_h4_automations.py`, which simulated `appointment.booked` payloads without `origin`, to the
+  real publisher shape (`origin: panel`). Focused green; full backend suite green (`EXIT=0`).
+  Commit `fc511da4`.
