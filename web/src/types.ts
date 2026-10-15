@@ -32,7 +32,7 @@ export interface ProjectToolPolicy { opt_in_enabled: string[]; }
 export interface ThreadToolPolicy { available: string[]; opt_in_enabled: string[]; inherited: boolean; }
 export interface StopThreadRunResponse { status: 'stopping' | 'cancelled'; run_id: string; }
 export interface ProjectSkill { name: string; description: string; body: string; }
-export interface GlobalSkill { name: string; description: string; scope: "global"; }
+export interface GlobalSkill { name: string; description: string; scope: "global"; body: string | null; }
 export interface SkillsCatalogResponse { skills: GlobalSkill[]; }
 export interface ProjectConfig { instructions: string; tool_policy: ProjectToolPolicy; skills: ProjectSkill[]; }
 export type ProjectConfigUpdate = Partial<ProjectConfig>;

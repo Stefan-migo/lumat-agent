@@ -41,14 +41,20 @@ proyecto.` Three role cards, each with a dark circular icon tile, name, role chi
 Then `Última ejecución` card: subtitle `Estado registrado de la ejecución más reciente.`, status pill
 (e.g. `Completada`) and timestamp. Read-only; agents remain fixed system roles.
 
-S4 — Skills tab (ref 7).
+S4 — Skills tab (owner images 2026-10-14). Owner-authorized bounded backend addition.
 Search field `Buscar habilidad por nombre o descripción…`. `Catálogo global` card with count badge +
-`Habilidades globales de solo lectura.` and rows: icon tile, name, description, chips `Global` /
-`Solo lectura`. `Habilidades del proyecto` card with count + `Agregar habilidad` action, dashed empty
-state `Aún no hay habilidades en este proyecto` / `Agrega una habilidad para definir instrucciones
-específicas.`, and a collapsible `Agregar habilidad` disclosure. Footer note `Las habilidades globales
-se consultan; las del proyecto se gestionan aquí.` Existing add/edit/delete behavior preserved
-(whole-array PATCH via `updateProjectConfig`).
+subtitle `Habilidades globales de solo lectura.` and rows: icon tile, name, description, chips `Global` /
+`Solo lectura`. `Habilidades del proyecto` card with count + subtitle `Se guardan en la configuración de
+este proyecto.` + `Agregar habilidad` action, dashed empty state `Aún no hay habilidades en este
+proyecto` / `Agrega una habilidad para definir instrucciones específicas.`, and the `Agregar habilidad`
+card action opens a dialog with the name, description and content form (editing reuses the same dialog).
+Every row expands into a read-only `Contenido de la habilidad` / `Vista de
+lectura` panel that renders the skill body as markdown; a project row also carries an `...` menu
+(`Editar` / `Eliminar`). Footer note `Las habilidades globales se consultan; las del proyecto se
+gestionan aquí.` Existing add/edit/delete behavior preserved (whole-array PATCH via
+`updateProjectConfig`). Backend addition: `GET /panel/api/skills` now returns each global skill's
+declared `body` (read through `load_skill_body`; an unreadable body degrades to `null` instead of
+failing the catalog).
 
 S5 — Hilos tab, wired (ref 9).
 Replace the hardcoded placeholder. List the project's chat threads via `GET
@@ -103,8 +109,8 @@ scrolling with the document.
 | T1b workspace header fixes | S1 | inline | done | ef0a9524 |
 | T2 Contexto | S2 | inline | done | 641c1606 |
 | T2c KB link + unified files list | S2 | inline | done | 5c9d6606, de995673 |
-| T3 Agentes | S3 | inline | pending | — |
-| T4 Skills | S4 | inline | pending | — |
+| T3 Agentes | S3 | inline | done | b49d066e |
+| T4 Skills | S4 | inline | done | 310d1f8a, 9435dcee |
 | T5 Hilos wire | S5 | inline | pending | — |
 | T6 backend project folders | S6 | inline | done | fcc54f61, f2fd0f28 |
 | T7 files tree UI | S6 | inline | done | bb6b6a64, c0268a94 |
@@ -267,3 +273,52 @@ horizontal overflow. Build green; full suite green (1200 passed + the known flak
 snapshot stale`, which passes in isolation 68/68). The per-card caps from L13 (`.file-tree` and
 `.project-knowledge__list`, 22rem) are kept, so a very long card still scrolls internally as well as the
 tab; if the owner prefers a single scroll, drop those two `max-height` rules.
+
+L21: T3 done (b49d066e). Agentes tab redesigned: `Card` "Agentes del proyecto" with the subtitle
+`Roles disponibles para trabajar con el contexto del proyecto.` and three role cards (dark circular icon
+tile — `Bot`/`ShieldCheck`/`Compass` by role key — + name + role chip + description), then a separate
+`Última ejecución` card (`Estado registrado de la ejecución más reciente.`) with a status pill and
+timestamp. The pill maps the recorded `latest_run.status` (`completed` → `Completada`, `executing`/
+`responding`/`running`/`planned` → `En curso`/`Planificada`, `approval_pending` → `Pendiente de
+aprobación`, `failed`/`error` → `Fallida`, `degraded` → `Degradada`; unknown falls back to the raw
+value), so it reads as a recorded state, not a live feed. Data stays data-driven: `name`, `agent.role`
+and `description` come from `GET /panel/api/projects/{slug}/agents`; the icon is the only UI-owned
+affordance (roles are fixed system roles). Copy note flagged to the owner: the S3 reference chips were
+`Asistente del proyecto` / `Solo lectura` / `Investigación`, while the backend returns `Asistente del
+proyecto` / `Verificación independiente` / `Investigación de solo lectura` — the UI renders the backend
+copy, so aligning to the reference means editing the endpoint (one place), and the old standalone
+`Solo lectura` badge was folded into the role chip. Verified: focused 4/4, `npm run build` green, full
+suite green (1202; two load-flaky tests, `AgentChat > markdown snapshot stale` and `ClientesList >
+distinguishes a filtered-empty result…`, pass in isolation 110/110); live standalone (1440) and embedded
+(1440) screenshots, 3 cards, dark tile `rgb(20,60,44)`, pill `Completada` + timestamp, no horizontal
+overflow. RDD assess: medium, `under_budget`, no review due.
+
+L22 (owner): T3 approved as-is ("esta bien como esta"), then "vamos a T4. aqui estan las referencias
+para skills" with two reference images. Asked whether to include the reference's expandable read view,
+which needs the global skill body; the owner chose **(a)**: full T4 including the expander and the small
+backend addition. Done in two atomic commits — `310d1f8a` (backend + `GlobalSkill` type + backend test)
+and `9435dcee` (component + CSS + `ProjectsPage` + frontend test). Backend: `GET /panel/api/skills`
+returns `body` per global skill via `load_skill_body`, degrading to `null` on `SkillError` so a missing
+file never breaks the catalog. Frontend: `ProjectSkills.tsx` rewritten — full-width search
+(`Buscar habilidad por nombre o descripción…`), `Catálogo global` card (count badge, subtitle, rows with
+icon tile + name + description + `Global`/`Solo lectura` chips), `Habilidades del proyecto` card (count
+badge, subtitle `Se guardan en la configuración de este proyecto.`, `+ Agregar habilidad`, dashed empty
+state, collapsible add/edit disclosure), a page footer note, and a per-row expander rendering the body
+through the shared `Markdown` component (`.markdown` styles reused). The project row gained an `...`
+menu (`Editar` / `Eliminar`) replacing the old inline buttons; the old `projectId` prop (only used in
+the title) was dropped. Verified: frontend focused 4/4, backend `test_api_skills.py` + `test_skills.py`
+9 passed, `npm run build` green, full frontend suite green (1204); live standalone capture shows the
+empty-project state matching reference image 2 and the expanded global skill matching image 1 (real body
+rendered from `agent/skills/assistant/memoria-tukulpan.md`, headings `Tukulpan memory` / `Axes and
+ownership` / `Tool arguments` / `Gotchas`, content scroll clientHeight 288 / scrollHeight 1242), no
+horizontal overflow. RDD assess: medium, `under_budget`, no review due.
+
+L23 (owner, verbatim): "el boton agregar habilidad y el dropdown agregar habilidad. llevan donde mismo.
+simplemente sacar el dropdown de la parte de abajo y dejar solo el boton agregar habilidad en el header
+del card. luego crear un modal/dialog para agregar el nuevo skill" — done (7fd3e20b). Removed the
+collapsible bottom `Agregar habilidad` disclosure (and its CSS) so the card has a single action, and
+moved the add/edit form into a `Dialog` opened by the header button; the row `...` → `Editar` reuses the
+same dialog (`Editar habilidad`). Actions are `Cancelar` + `Guardar habilidad`. Verified: focused 5/5,
+`npm run build` green, full suite green (1205); live capture confirms one header button, no bottom
+disclosure, and the dialog with title `Agregar habilidad`, the three fields and both actions. RDD
+assess: medium, `under_budget`, no review due.
