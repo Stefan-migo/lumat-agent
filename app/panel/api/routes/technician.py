@@ -93,11 +93,19 @@ def technician_agenda(
 def technician_appointment(
     appointment_id: int, session: Session = Depends(get_db), current: User = Depends(require_tecnico)
 ) -> dict:
-    """Read one of the technician's own visits (S2)."""
+    """Read one of the technician's own visits (S2), with the field state and the
+    per-action resend cooldown (S5/S7)."""
     appointment = _owned_appointment(session, appointment_id, current)
     customer = session.get(Customer, appointment.customer_id)
     case = session.get(Case, appointment.case_id)
-    return to_technician_appointment_detail_dict(appointment, customer=customer, case=case)
+    now = datetime.now(timezone.utc)
+    resend_available_at = {
+        state: visit_actions.resend_available_at(session, appointment.id, state, now=now)
+        for state in TechnicianVisitState
+    }
+    return to_technician_appointment_detail_dict(
+        appointment, customer=customer, case=case, resend_available_at=resend_available_at
+    )
 
 
 @router.post("/technician/appointments/{appointment_id}/close")

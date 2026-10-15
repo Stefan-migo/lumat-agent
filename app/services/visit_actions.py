@@ -93,6 +93,22 @@ def cooldown_remaining(
     return remaining if remaining > timedelta(0) else timedelta(0)
 
 
+def resend_available_at(
+    session: Session,
+    appointment_id: int,
+    state: TechnicianVisitState,
+    *,
+    now: datetime | None = None,
+) -> datetime | None:
+    """When this quick action unlocks again, or `None` when it is not cooling down (S7).
+
+    Same audit-row read as the guard, exposed so a read can render the countdown
+    without the frontend re-deriving the cooldown."""
+    moment = now or datetime.now(timezone.utc)
+    remaining = cooldown_remaining(session, appointment_id, state, now=moment)
+    return moment + remaining if remaining > timedelta(0) else None
+
+
 def notify_customer(
     session: Session,
     appointment: Appointment,

@@ -565,6 +565,18 @@ export interface Appointment {
   status: string;
   calendar_status?: string | null;
   calendar_error?: string | null;
+  /** Technician field position (S5); present only on the technician detail.
+   *  Orthogonal to `status` — the visit lifecycle is `status`. */
+  technician_state?: TechnicianVisitState | null;
+  technician_state_at?: string | null;
+}
+
+/** `en_route` / `arrived` — the field visit-state axis (S5), never a `status`. */
+export type TechnicianVisitState = 'en_route' | 'arrived';
+
+/** Per quick action, when a resend unlocks (S7); `null` means not cooling down. */
+export interface TechnicianQuickActionAvailability {
+  resend_available_at: string | null;
 }
 
 export interface AppointmentHistoryEntry {
@@ -582,6 +594,8 @@ export interface AppointmentDetail {
   customer: { id: number; name: string | null; address: string | null; comuna: string | null };
   case: { id: number; conversation_id: number | null };
   conversation_summary: string | null;
+  /** Technician quick-action cooldowns (S7); present only on the technician detail. */
+  quick_actions?: Record<TechnicianVisitState, TechnicianQuickActionAvailability>;
 }
 
 export type AppointmentSyncStatus = 'pending' | 'synced' | 'failed';
@@ -660,4 +674,5 @@ export interface TechnicianAppointmentDetail {
   appointment: Omit<Appointment, 'history'>;
   customer: { id: number; name: string | null; address: string | null; comuna: string | null };
   case: { id: number; conversation_id: number | null };
+  quick_actions: Record<TechnicianVisitState, TechnicianQuickActionAvailability>;
 }

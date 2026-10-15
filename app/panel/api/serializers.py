@@ -29,6 +29,7 @@ from app.models import (
     NotificationTemplateVersion,
     NotificationOperation,
     PanelNotification,
+    TechnicianVisitState,
     InternalChatMessage,
     InternalChatThread,
     AssistantAttachment,
@@ -271,13 +272,23 @@ def to_technician_appointment_dict(
 
 
 def to_technician_appointment_detail_dict(
-    appointment: Appointment, *, customer: Customer, case: Case
+    appointment: Appointment,
+    *,
+    customer: Customer,
+    case: Case,
+    resend_available_at: dict[TechnicianVisitState, object] | None = None,
 ) -> dict:
-    """Allow-listed visit detail for the technician's own appointment (S2/S3).
+    """Allow-listed visit detail for the technician's own appointment (S2/S3/S5/S7).
 
     Same page as the operator detail, narrower payload: the technician never
     receives the customer phone, the change history, the conversation summary,
-    the customer email or the consent status."""
+    the customer email or the consent status. It does carry the field visit
+    state and, per quick action, when a resend unlocks (S5/S7) — the number
+    itself stays server-side.
+
+    Window availability (S6) is derived by the caller from `starts_at`/`ends_at`;
+    only the cooldown is exposed here, because it is read from the audit log and
+    cannot be recomputed on the client."""
     return {
         "appointment": {
             "id": appointment.id,
@@ -291,9 +302,15 @@ def to_technician_appointment_detail_dict(
             "ends_at": _iso(appointment.ends_at),
             "duration_minutes": appointment.duration_minutes,
             "status": appointment.status.value,
+            "technician_state": appointment.technician_state.value if appointment.technician_state is not None else None,
+            "technician_state_at": _iso(appointment.technician_state_at),
         },
         "customer": {"id": customer.id, "name": customer.name, "address": customer.address, "comuna": customer.comuna},
         "case": {"id": case.id, "conversation_id": case.conversation_id},
+        "quick_actions": {
+            state.value: {"resend_available_at": _iso((resend_available_at or {}).get(state))}
+            for state in TechnicianVisitState
+        },
     }
 
 

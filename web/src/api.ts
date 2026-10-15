@@ -128,7 +128,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
   return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
 }
 
-import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, ChatbotMetrics, ChatbotSignalConversations, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, TechnicianAppointmentDetail, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, TechnicianScheduleEntry, TechnicianScheduleResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, ThreadResources, ThreadResourcesSelection, StopThreadRunResponse } from './types';
+import type { ActiveConversationsResponse, ActiveRunsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationInstallationResponse, AutomationInstallationsResponse, AutomationRecipesResponse, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, ChatbotMetrics, ChatbotSignalConversations, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadSummary, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, TechnicianAppointmentDetail, TechnicianVisitState, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, ProjectConfigUpdate, ProjectAgentsResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, TechnicianScheduleEntry, TechnicianScheduleResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse, SkillsCatalogResponse, ThreadToolPolicy, ThreadResources, ThreadResourcesSelection, StopThreadRunResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; exclude_closed?: boolean; emergency?: boolean; has_case?: boolean; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -295,6 +295,19 @@ export const getTechnicianAppointment = (id: number): Promise<AppointmentDetail>
     appointment: { ...detail.appointment, history: [] },
     conversation_summary: null,
   }));
+
+/** The technician's own close (S4) — the operator route stays for the office. */
+export function closeTechnicianAppointment(id: number, outcome: 'completed' | 'no_show') {
+  return postJson<{ ok: true }>(`/panel/api/technician/appointments/${id}/close`, { outcome });
+}
+
+/** A field quick action (S5/S8). The response carries the recorded state and when
+ *  a resend unlocks (S7); the customer phone never leaves the server. */
+export function sendTechnicianQuickAction(id: number, action: TechnicianVisitState) {
+  return postJson<{ ok: true; technician_state: TechnicianVisitState; resend_available_at: string }>(
+    `/panel/api/technician/appointments/${id}/${action}`,
+  );
+}
 export const getAssistantCapabilities = () => apiFetch<AssistantCapabilities>('/panel/api/assistant/capabilities');
 export const fetchUsers = () => apiFetch<AdminUsersResponse>('/panel/api/users');
 export const getAdminUser = (id: number) => apiFetch<{ user: AdminUser }>(`/panel/api/users/${id}`);
