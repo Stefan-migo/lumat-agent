@@ -263,6 +263,40 @@ def test_technician_detail_resend_availability_is_read_from_the_audit_log(client
     assert body["quick_actions"]["arrived"]["resend_available_at"] is None
 
 
+def test_technician_detail_without_an_audit_row_surfaces_no_cooldown(client, make_user):
+    """S7: the cooldown is the audit log — a state column alone is not a send."""
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000073")
+    with SessionLocal() as session:
+        session.query(Appointment).filter_by(id=appointment_id).update({
+            "technician_state": TechnicianVisitState.EN_ROUTE,
+            "technician_state_at": datetime.now(timezone.utc),
+        })
+        session.commit()
+    _login(client)
+
+    body = client.get(f"/panel/api/technician/appointments/{appointment_id}").json()
+
+    assert body["appointment"]["technician_state"] == "en_route"
+    assert body["appointment"]["technician_state_at"] is not None
+    assert body["quick_actions"]["en_route"]["resend_available_at"] is None
+
+
+def test_operator_detail_payload_carries_no_technician_field_state(client, make_user):
+    """S2: one page, two shapes — WU7 adds the field state to the technician
+    payload only; the operator payload is unchanged."""
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    make_user("oper", "oper-pass", role="operador")
+    appointment_id = _appointment(technician, "+56900000074", date(2026, 1, 10), "operador")
+    _login(client, "oper", "oper-pass")
+
+    body = client.get(f"/panel/api/appointments/{appointment_id}").json()
+
+    assert set(body) == {"appointment", "customer", "case", "conversation_summary"}
+    assert "technician_state" not in body["appointment"]
+    assert "technician_state_at" not in body["appointment"]
+
+
 @pytest.mark.parametrize("outcome", ["completed", "no_show"])
 def test_technician_closes_own_appointment_and_it_is_audited(client, make_user, outcome):
     technician = make_user("tech", "tech-pass", role="tecnico")
