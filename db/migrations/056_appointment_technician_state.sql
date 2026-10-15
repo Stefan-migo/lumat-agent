@@ -1,4 +1,4 @@
--- 054_appointment_technician_state.sql — technician field quick-action state (S5/S6).
+-- 056_appointment_technician_state.sql — technician field quick-action state (S5/S6).
 
 -- A new axis for the field quick actions, deliberately NOT folded into
 -- appointment_status: `en_route` and `arrived` describe where the technician is
