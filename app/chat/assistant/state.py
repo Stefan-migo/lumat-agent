@@ -163,6 +163,7 @@ class AssistantState(TypedDict, total=False):
     kb_chunks: list[dict]
     cortex_session: dict
     legacy_compat: bool
+    resume: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
     cost_directive: str
     project_authorization: object

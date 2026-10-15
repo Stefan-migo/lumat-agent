@@ -67,6 +67,13 @@ def _after_plan(state: AssistantState) -> str:
     return "guardrails"
 
 
+def _after_memory_bootstrap(state: AssistantState) -> str:
+    # A resumed approval carries the exact plan it was approved for. Re-planning would
+    # break the binding (the token is hashed against those arguments), so the stored
+    # plan goes straight to guardrails and executes, then the loop continues normally.
+    return "guardrails" if state.get("resume") else "plan_llm"
+
+
 def _after_cost_gate(state: AssistantState) -> str:
     return "evidence" if state.get("cost_mode") == "blocked" else "memory_bootstrap"
 
@@ -88,7 +95,7 @@ def build_assistant_graph():
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"memory_bootstrap": "memory_bootstrap", "evidence": "evidence"})
-    builder.add_edge("memory_bootstrap", "plan_llm")
+    builder.add_conditional_edges("memory_bootstrap", _after_memory_bootstrap, {"plan_llm": "plan_llm", "guardrails": "guardrails"})
     builder.add_conditional_edges(
         "plan_llm", _after_plan,
         {"guardrails": "guardrails"},
@@ -104,7 +111,7 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None, resume_plan: dict | None = None, resume_approval: dict | None = None) -> AssistantState:
     if project_authorization is not None:
         from app.services.projects import _ProjectAuthorization
         if not isinstance(project_authorization, _ProjectAuthorization):
@@ -131,6 +138,18 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "tool_results": [],
         "tool_steps": 0,
     }
+    if resume_plan is not None:
+        # Re-entry after an approved write: the stored plan and its consumed approval go
+        # into the graph so the write executes in place and the loop continues from it.
+        # A persisted plan may predate `kind` (the pre-planner approval fallback), so derive
+        # it instead of trusting a missing key to route the turn.
+        plan = dict(resume_plan)
+        plan.setdefault("kind", "tool" if plan.get("tool") else "respond")
+        state["plan"] = plan
+        state["approval"] = resume_approval
+        state["planner"] = {"valid": True}
+        state["status"] = "planned"
+        state["resume"] = True
     graph = build_assistant_graph()
     if on_stage is None:
         return graph.invoke(state)

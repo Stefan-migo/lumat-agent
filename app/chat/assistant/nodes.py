@@ -1148,44 +1148,54 @@ def execute(state: AssistantState) -> AssistantState:
             prompt = prompt.replace("{{" + key + "}}", str(value))
         if state.get("cost_directive"):
             prompt += "\n\n" + state["cost_directive"]
-        client = _assistant_client()
-        model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL)
-        tool_images = _tool_image_parts(state)
-        if attachments or tool_images:
-            base = build_multimodal_content(attachments, prompt) if attachments else [{"type": "text", "text": prompt}]
-            user_content: object = [*base, *tool_images]
-        else:
-            user_content = prompt
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _responder_system_prompt(state, config)},
-                {"role": "user", "content": user_content},
-            ],
-            temperature=0,
-            stream=True,
-            stream_options={"include_usage": True},
-        )
-        chunks: list[str] = []
-        markup_sanitizer = ToolCallMarkupSanitizer()
-        usage_seen = False
-        for chunk in completion:
-            if getattr(chunk, "usage", None) is not None:
-                _record_usage(state, "response", chunk)
-                usage_seen = True
-            token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
-            if token:
-                clean_token = markup_sanitizer.feed(token)
-                if clean_token:
-                    chunks.append(clean_token)
-                    on_token(clean_token)
-        clean_tail = markup_sanitizer.flush()
-        if clean_tail:
-            chunks.append(clean_tail)
-            on_token(clean_tail)
-        if not usage_seen:
-            _record_usage(state, "response", None)
-        response = "".join(chunks) or response
+        try:
+            client = _assistant_client()
+            model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL)
+            tool_images = _tool_image_parts(state)
+            if attachments or tool_images:
+                base = build_multimodal_content(attachments, prompt) if attachments else [{"type": "text", "text": prompt}]
+                user_content: object = [*base, *tool_images]
+            else:
+                user_content = prompt
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _responder_system_prompt(state, config)},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=0,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            chunks: list[str] = []
+            markup_sanitizer = ToolCallMarkupSanitizer()
+            usage_seen = False
+            for chunk in completion:
+                if getattr(chunk, "usage", None) is not None:
+                    _record_usage(state, "response", chunk)
+                    usage_seen = True
+                token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
+                if token:
+                    clean_token = markup_sanitizer.feed(token)
+                    if clean_token:
+                        chunks.append(clean_token)
+                        on_token(clean_token)
+            clean_tail = markup_sanitizer.flush()
+            if clean_tail:
+                chunks.append(clean_tail)
+                on_token(clean_tail)
+            if not usage_seen:
+                _record_usage(state, "response", None)
+            response = "".join(chunks) or response
+        except Exception as exc:
+            if not state.get("resume"):
+                raise
+            # A resumed approval has already executed its write by the time narration runs:
+            # a provider failure here must degrade the reply, never roll the write back.
+            logger.warning("Responder failed after an approved write: %s", exc)
+            state.setdefault("evidence", []).append(
+                make_evidence(tool=None, status="degraded", detail="Assistant response generation failed")
+            )
     verification = state.get("verification") or {}
     if verification.get("status") in {"failed", "unverifiable"}:
         effect_ran = EFFECT_TOOLS.intersection(item.get("tool") for item in state.get("tool_results", []))
