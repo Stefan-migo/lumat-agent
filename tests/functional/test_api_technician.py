@@ -13,9 +13,10 @@ from app.models import (
     Case,
     Conversation,
     Customer,
+    NotificationOperation,
     TechnicianVisitState,
 )
-from app.services import scheduling
+from app.services import scheduling, visit_actions
 from app.services.settings import SETTINGS_DEFAULTS, set_setting
 
 
@@ -39,7 +40,7 @@ def recorded_sends(monkeypatch):
     return calls
 
 
-def _appointment(technician_id, phone, day, summary, *, emergency=False, priority=None):
+def _appointment(technician_id, phone, day, summary, *, emergency=False, priority=None, local_time=time(10)):
     with SessionLocal() as session:
         customer = Customer(phone_e164=phone, name=f"Customer {phone[-2:]}", email="private@example.test", address="Sensitive address 42", comuna="Providencia", consent_status=True)
         session.add(customer); session.flush()
@@ -47,17 +48,17 @@ def _appointment(technician_id, phone, day, summary, *, emergency=False, priorit
         session.add(conversation); session.flush()
         case = Case(conversation_id=conversation.id, customer_id=customer.id, service="calefont", summary=summary, status="open", emergency=emergency, priority=priority)
         session.add(case); session.flush()
-        appointment = scheduling.book(session, service="calefont", customer_id=customer.id, case_id=case.id, technician_id=technician_id, local_date=day, local_time=time(10), timezone_name="America/Santiago", duration_minutes=60, actor="oper")
+        appointment = scheduling.book(session, service="calefont", customer_id=customer.id, case_id=case.id, technician_id=technician_id, local_date=day, local_time=local_time, timezone_name="America/Santiago", duration_minutes=60, actor="oper")
         session.commit()
         return appointment.id
 
 
-def _open_window_appointment(technician_id, phone, *, minutes_ahead=10):
+def _open_window_appointment(technician_id, phone, *, minutes_ahead=10, local_time=time(10), day=date(2026, 6, 1)):
     """Book a visit whose quick-action window is open right now.
 
     The visit starts `minutes_ahead` from now, so `en_route` (T-60) and
     `arrived` (T-15) are both available and the visit is not yet closed."""
-    appointment_id = _appointment(technician_id, phone, date(2026, 6, 1), "quick action")
+    appointment_id = _appointment(technician_id, phone, day, "quick action", local_time=local_time)
     starts = datetime.now(timezone.utc) + timedelta(minutes=minutes_ahead)
     with SessionLocal() as session:
         session.query(Appointment).filter_by(id=appointment_id).update(
@@ -69,6 +70,34 @@ def _open_window_appointment(technician_id, phone, *, minutes_ahead=10):
         )
         session.commit()
     return appointment_id
+
+
+def _prior_send_event(appointment_id, action, age_seconds):
+    """Insert the audit row a previous send would have left (app can INSERT audit_log)."""
+    with SessionLocal() as session:
+        session.add(
+            AuditLog(
+                actor="tech",
+                action=action,
+                entity="appointment",
+                entity_id=str(appointment_id),
+                created_at=datetime.now(timezone.utc) - timedelta(seconds=age_seconds),
+            )
+        )
+        session.commit()
+
+
+def _snapshot(appointment_id, action):
+    """State, per-action audit rows, total audit rows and notification operations."""
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        return {
+            "state": appointment.technician_state,
+            "state_at": appointment.technician_state_at,
+            "action_audit": session.query(AuditLog).filter_by(action=action, entity="appointment", entity_id=str(appointment_id)).count(),
+            "audit_total": session.query(AuditLog).count(),
+            "operations": session.query(NotificationOperation).count(),
+        }
 
 
 def test_technician_gets_owned_past_today_future_in_chronological_order(client, make_user):
@@ -368,6 +397,7 @@ def test_technician_quick_action_cooldown_rejects_a_second_click(client, make_us
     appointment_id = _open_window_appointment(technician, "+56900000411")
     _login(client)
     assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 200
+    before = _snapshot(appointment_id, "appointment.en_route")
 
     second = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
 
@@ -375,9 +405,10 @@ def test_technician_quick_action_cooldown_rejects_a_second_click(client, make_us
     detail = second.json()["detail"]
     assert detail["code"] == "resend_cooldown"
     assert 0 < detail["retry_after_seconds"] <= 300
-    assert len(mock_meta_send.calls) == 1  # the rejected click never reached Meta
-    with SessionLocal() as session:
-        assert session.query(AuditLog).filter_by(action="appointment.en_route", entity_id=str(appointment_id)).count() == 1
+    assert "Retry-After" in second.headers
+    # A rejected click writes nothing and never reaches Meta.
+    assert len(mock_meta_send.calls) == 1
+    assert _snapshot(appointment_id, "appointment.en_route") == before
 
 
 def test_technician_quick_action_allows_a_resend_after_the_cooldown(client, make_user, mock_meta_send):
@@ -462,3 +493,121 @@ def test_technician_quick_action_requires_authenticated_session(client):
     response = client.post("/panel/api/technician/appointments/1/en_route")
     assert response.status_code == 401
     assert response.json() == {"detail": "unauthorized"}
+
+
+def test_technician_quick_action_cooldown_refuses_one_second_inside(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000471")
+    _prior_send_event(appointment_id, "appointment.en_route", 299)
+    _login(client)
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 429
+    assert recorded_sends == []
+
+
+def test_technician_quick_action_cooldown_allows_a_send_at_the_edge(client, make_user, mock_meta_send):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000472")
+    _prior_send_event(appointment_id, "appointment.en_route", 300)
+    _login(client)
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 200
+    assert _meta_template_body(mock_meta_send)["template"]["name"] == "en_route"
+
+
+def test_technician_quick_action_cooldown_is_per_action(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000473")
+    _login(client)
+
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route").status_code == 200
+    assert client.post(f"/panel/api/technician/appointments/{appointment_id}/arrived").status_code == 200
+
+    assert [template for _, _, template in recorded_sends] == ["en_route", "arrived"]
+
+
+def test_technician_quick_action_cooldown_is_per_appointment(client, make_user, recorded_sends):
+    first_tech = make_user("tech", "tech-pass", role="tecnico")
+    second_tech = make_user("tech2", "tech2-pass", role="tecnico")
+    first = _open_window_appointment(first_tech, "+56900000474")
+    second = _open_window_appointment(second_tech, "+56900000475")
+    _login(client)
+
+    assert client.post(f"/panel/api/technician/appointments/{first}/en_route").status_code == 200
+    _login(client, "tech2", "tech2-pass")
+    assert client.post(f"/panel/api/technician/appointments/{second}/en_route").status_code == 200
+
+    assert len(recorded_sends) == 2
+
+
+def test_technician_quick_action_cooldown_reads_the_audit_log_not_the_state_column(client, make_user, recorded_sends):
+    """S7: the cooldown comes from the last matching audit_log event."""
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000476")
+    with SessionLocal() as session:
+        session.query(Appointment).filter_by(id=appointment_id).update(
+            {"technician_state": TechnicianVisitState.EN_ROUTE, "technician_state_at": datetime.now(timezone.utc)}
+        )
+        session.commit()
+    _login(client)
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/en_route")
+
+    assert response.status_code == 200, response.text  # recent state, no audit event -> no cooldown
+    assert len(recorded_sends) == 1
+
+
+def test_technician_quick_action_error_bodies_carry_no_customer_data(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    far = _open_window_appointment(technician, "+56900000478", minutes_ahead=240)
+    live = _open_window_appointment(technician, "+56900000479", local_time=time(14))
+    _login(client)
+    assert client.post(f"/panel/api/technician/appointments/{live}/en_route").status_code == 200
+
+    responses = [
+        client.post("/panel/api/technician/appointments/999999/arrived"),
+        client.post(f"/panel/api/technician/appointments/{far}/arrived"),
+        client.post(f"/panel/api/technician/appointments/{live}/en_route"),
+    ]
+
+    assert [response.status_code for response in responses] == [404, 409, 429]
+    for response in responses:
+        for token in ("+56900000478", "+56900000479", "phone", "email", "consent", "history", "conversation"):
+            assert token not in response.text, (response.status_code, token, response.text)
+
+
+def test_technician_quick_action_unreachable_customer_fails_without_writing(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "")
+    _login(client)
+    before = _snapshot(appointment_id, "appointment.arrived")
+
+    response = client.post(f"/panel/api/technician/appointments/{appointment_id}/arrived")
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "notification_failed"
+    assert "phone" not in response.text
+    assert recorded_sends == []
+    assert _snapshot(appointment_id, "appointment.arrived") == before
+
+
+def test_technician_quick_action_genuine_resend_sends_and_audits_twice(client, make_user, recorded_sends):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _open_window_appointment(technician, "+56900000481")
+    first = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        visit_actions.notify_customer(session, appointment, state=TechnicianVisitState.EN_ROUTE, actor="tech", now=first)
+        session.commit()
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        visit_actions.notify_customer(session, appointment, state=TechnicianVisitState.EN_ROUTE, actor="tech", now=first + timedelta(seconds=301))
+        session.commit()
+
+    assert [template for _, _, template in recorded_sends] == ["en_route", "en_route"]
+    with SessionLocal() as session:
+        assert session.query(AuditLog).filter_by(action="appointment.en_route", entity_id=str(appointment_id)).count() == 2
