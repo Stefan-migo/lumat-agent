@@ -164,6 +164,16 @@ class AppointmentStatus(str, enum.Enum):
     NO_SHOW = "no_show"
 
 
+class TechnicianVisitState(str, enum.Enum):
+    """Where the technician is relative to the visit (S5).
+
+    An axis orthogonal to `AppointmentStatus`: it is never folded into that enum.
+    Forward-only, and only the two field quick-action states are storable."""
+
+    EN_ROUTE = "en_route"
+    ARRIVED = "arrived"
+
+
 class ObservationType(str, enum.Enum):
     RECURRENCIA = "recurrencia"
     SIN_RESPUESTA = "sin_respuesta"
@@ -711,6 +721,10 @@ class Appointment(Base):
         pg_enum(AppointmentStatus, "appointment_status"),
         default=AppointmentStatus.BOOKED, server_default="booked",
     )
+    technician_state: Mapped[TechnicianVisitState | None] = mapped_column(
+        pg_enum(TechnicianVisitState, "technician_visit_state"), nullable=True
+    )
+    technician_state_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     history: Mapped[list["AppointmentHistory"]] = relationship(
