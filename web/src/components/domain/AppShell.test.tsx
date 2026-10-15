@@ -225,7 +225,9 @@ describe('AppShell (T6.4)', () => {
     render(<AppShell user={tecnico} />);
     expect(await screen.findByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Ver ficha del cliente/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
+    // S4: closing is shared — the technician closes their own visit; rescheduling stays operator-only.
+    expect(screen.getByRole('button', { name: 'Cerrar visita' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/panel/api/technician/appointments/7', expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith('/panel/api/appointments/7', expect.anything());
     fetchMock.mockRestore();
