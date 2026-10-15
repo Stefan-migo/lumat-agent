@@ -256,3 +256,12 @@ tests in `test_thread_resources_context.py`), then GREEN. Evidence: focused 57/5
 backend suite green (EXIT 0); no frontend change. RDD assess (`--base-ref 143ced8b
 --committed-only`): risk `medium`, `review_due=false` (`under_budget`, 1238 changed lines).
 Next: T4 (tray vs thread file library separation).
+
+L20 — Delivery opened as **two chained PRs** (owner choice). PR **#616** = T0–T2 (commits
+`05b46b91`..`3e84fcf3`) → `main`; PR **#617** = T3 (`04d7d4d9`..`a95316d4`) → base PR #616.
+Branches pushed: `odd/asistente-lumat-config-layer-s1` (#616) and
+`odd/asistente-lumat-config-layer` (#617). Both carry `type:feature`; #617 carries
+`size:exception` (955 / 400 — one cohesive T3 slice; the owner accepted the 2-PR split, no
+further cohesive split fits). T1/T2 never had separate PRs; they are commits on this branch.
+Pre-merge: sync `origin/main` into each branch before merging (repo integration discipline).
+T4–T9 still pending.
