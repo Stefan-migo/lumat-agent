@@ -787,6 +787,45 @@ async def stream_events_async(session_factory, thread_id: int, run_id: str, *, t
     yield {"type": "timeout", "thread_id": thread_id, "run_id": run_id}
 
 
+def _run_approved_plan(session: Session, thread: InternalChatThread, user: User, message: InternalChatMessage, run_id: str, plan: dict, actor_role: str) -> dict:
+    """Execute an approved plan.
+
+    A plan that names a tool re-enters the assistant graph, so the write executes in
+    place and the turn continues through verification and narration (T1). A tool-less
+    pre-planner approval keeps the original single-node execution.
+    """
+    approval = (thread.assistant_state or {}).get("approval")
+    if plan.get("tool"):
+        return run_assistant(
+            thread_id=thread.id,
+            user_id=user.id,
+            content=message.content,
+            run_id=run_id,
+            request_message_id=message.id,
+            # The responder narrates the executed write; this synchronous route has no live
+            # stream to publish to, so its tokens are discarded rather than streamed.
+            on_token=lambda _token: None,
+            session=session,
+            actor=user.username,
+            actor_role=actor_role,
+            project_authorization=_thread_project_authorization(session, thread),
+            cortex_session=(thread.assistant_state or {}).get("cortex_session"),
+            resume_plan=plan,
+            resume_approval=approval,
+        )
+    return execute({
+        "thread_id": thread.id,
+        "run_id": run_id,
+        "content": message.content,
+        "plan": plan,
+        "approval": approval,
+        "session": session,
+        "actor": user.username,
+        "actor_role": actor_role,
+        "request_message_id": message.id,
+    })
+
+
 def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:
     """Atomically consume or reject the approval stored on the thread."""
     plan = thread.current_plan or {}
@@ -838,17 +877,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     session.flush()
     if not claim_execution(session, thread):
         return None
-    result = execute({
-        "thread_id": thread.id,
-        "run_id": run_id,
-        "content": message.content,
-        "plan": plan,
-        "approval": thread.assistant_state["approval"],
-        "session": session,
-        "actor": user.username,
-        "actor_role": actor_role,
-        "request_message_id": message.id,
-    })
+    result = _run_approved_plan(session, thread, user, message, run_id, plan, actor_role)
     message.status = "processed" if result.get("status") == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
     thread.assistant_state = {**thread.assistant_state, "stage": result.get("status"), "execution_status": result.get("status"), "verification": result.get("verification")}
@@ -989,17 +1018,7 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         return False
     actor_role = getattr(user.role, "value", user.role)
     thread.assistant_state = {**(thread.assistant_state or {}), "actor_role": actor_role}
-    result = execute({
-        "thread_id": thread.id,
-        "run_id": run_id,
-        "content": message.content,
-        "plan": thread.current_plan or {},
-        "approval": thread.assistant_state.get("approval"),
-        "session": session,
-        "actor": user.username,
-        "actor_role": actor_role,
-        "request_message_id": message.id,
-    })
+    result = _run_approved_plan(session, thread, user, message, run_id, thread.current_plan or {}, actor_role)
     message.status = "processed" if result.get("status") == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
     thread.assistant_state = {**thread.assistant_state, "stage": result.get("status"), "execution_status": result.get("status"), "verification": result.get("verification")}
