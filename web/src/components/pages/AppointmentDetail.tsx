@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, ExternalLink, FileText, UserRound } from 'lucide-react';
-import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment } from '../../api';
+import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, ExternalLink, FileText, MapPin, Navigation, Send, UserRound } from 'lucide-react';
+import { ApiError, closeAppointment, closeTechnicianAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment, sendTechnicianQuickAction } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
-import type { AppointmentDetail as AppointmentDetailData, Role } from '../../types';
+import type { AppointmentDetail as AppointmentDetailData, Role, TechnicianVisitState } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
 import { Card } from '../primitives/Card';
@@ -26,6 +26,45 @@ export interface AppointmentDetailProps {
   data?: AppointmentDetailData | null;
   state?: AsyncDataState;
   onRetry?: () => void;
+  /** Fixed clock for the field-action windows in stories and tests; when
+   *  provided, the live countdown clock is not started. */
+  now?: Date;
+}
+
+/** S5/S6 — the two field quick actions. Mirrors `app/services/visit_state.py`:
+ *  `en_route` opens at T-60min, `arrived` at T-15min, both close at `ends_at`
+ *  or when the visit is no longer booked, and the axis only moves forward. The
+ *  backend re-validates every send; this only decides what the field sees. */
+const QUICK_ACTION_LEADS: Record<TechnicianVisitState, number> = { en_route: 60, arrived: 15 };
+const QUICK_ACTION_ORDER: Record<TechnicianVisitState, number> = { en_route: 1, arrived: 2 };
+const QUICK_ACTION_LABELS: Record<TechnicianVisitState, string> = {
+  en_route: 'Voy en camino',
+  arrived: 'Llegué / estoy afuera',
+};
+const QUICK_ACTION_ICONS = { en_route: Navigation, arrived: MapPin } as const;
+const QUICK_ACTIONS = ['en_route', 'arrived'] as const;
+
+function quickActionOpen(action: TechnicianVisitState, appointment: AppointmentDetailData['appointment'], nowMs: number) {
+  if (appointment.status !== 'booked') return false;
+  if (nowMs >= new Date(appointment.ends_at).getTime()) return false;
+  if (nowMs < new Date(appointment.starts_at).getTime() - QUICK_ACTION_LEADS[action] * 60_000) return false;
+  const current = appointment.technician_state;
+  return !current || QUICK_ACTION_ORDER[current] <= QUICK_ACTION_ORDER[action];
+}
+
+/** `m:ss` remaining, never negative. */
+function countdownLabel(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Field copy for the quick-action failure codes the routes return (S6/S7/S8). */
+function quickActionErrorTitle(error: unknown) {
+  const code = error instanceof ApiError ? error.structuredDetail?.code : undefined;
+  if (code === 'resend_cooldown') return 'Espera antes de reenviar el aviso';
+  if (code === 'visit_state_unavailable') return 'Este aviso ya no está disponible';
+  if (code === 'notification_failed') return 'No pudimos avisar al cliente';
+  return error instanceof Error ? error.message : 'No se pudo registrar el aviso';
 }
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' });
@@ -92,8 +131,17 @@ function stateMessage(state: AsyncDataState) {
   return null;
 }
 
-export function AppointmentDetail({ appointmentId, role, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
+export function AppointmentDetail({ appointmentId, role, data: controlledData, state: controlledState, onRetry, now: controlledNow }: AppointmentDetailProps) {
   const technician = role === 'tecnico';
+  /** Live clock for the field-action windows and the resend countdown. Only a
+   *  technician's own visit needs it, and a fixed clock (stories/tests) stops it. */
+  const [liveNowMs, setLiveNowMs] = useState(() => (controlledNow ? controlledNow.getTime() : Date.now()));
+  useEffect(() => {
+    if (controlledNow || !technician) return;
+    const id = window.setInterval(() => setLiveNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [controlledNow, technician]);
+  const nowMs = controlledNow ? controlledNow.getTime() : liveNowMs;
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>('completed');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -131,12 +179,30 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
     setMutating(true);
     setFeedback(null);
     try {
-      await closeAppointment(detail.appointment.id, outcome);
+      // S4: the technician closes through the role-scoped route; the operator
+      // keeps the office fallback.
+      await (technician
+        ? closeTechnicianAppointment(detail.appointment.id, outcome)
+        : closeAppointment(detail.appointment.id, outcome));
       setCloseOpen(false);
       setFeedback({ tone: 'success', title: outcome === 'completed' ? 'Visita completada' : 'Visita marcada como no asistida' });
       await retry();
     } catch (error) {
       setFeedback({ tone: 'danger', title: 'No se pudo registrar el resultado', detail: error instanceof Error ? error.message : 'Intenta nuevamente.' });
+    } finally {
+      setMutating(false);
+    }
+  };
+  const sendQuickAction = async (action: TechnicianVisitState) => {
+    if (!detail || mutating) return;
+    setMutating(true);
+    setFeedback(null);
+    try {
+      await sendTechnicianQuickAction(detail.appointment.id, action);
+      setFeedback({ tone: 'success', title: action === 'en_route' ? 'Avisamos que vas en camino' : 'Avisamos que llegaste' });
+      await retry();
+    } catch (error) {
+      setFeedback({ tone: 'danger', title: quickActionErrorTitle(error) });
     } finally {
       setMutating(false);
     }
@@ -170,12 +236,15 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
   const { appointment, customer, conversation_summary: summary } = detail;
   const localStart = new Date(`${appointment.local_start.slice(0, 16)}:00Z`);
   const technicianLabel = appointment.technician_id ? technicianDirectory.find((technician) => technician.id === appointment.technician_id)?.username ?? `Técnico #${appointment.technician_id}` : 'Técnico no asignado';
+  /** S6: the field actions live only inside an open visit; each opens on its own lead. */
+  const visitOpen = appointment.status === 'booked' && nowMs < new Date(appointment.ends_at).getTime();
+  const fieldActions = technician ? QUICK_ACTIONS.filter((action) => quickActionOpen(action, appointment, nowMs)) : [];
   return <PageFrame className="appointment-detail-page" title={appointment.service} subtitle="Información y seguimiento de la visita."
     titleAdornment={<Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>}
     actions={<>
         <Button variant="secondary" onClick={() => window.history.back()}>Volver a agenda</Button>
-        {!technician && appointment.status === 'booked' ? <>
-          <Button variant="secondary" aria-label="Reprogramar" title="Reprogramar" onClick={() => { const start = appointment.local_start; setRescheduleForm({ local_date: start.slice(0, 10), local_time: start.slice(11, 16), duration_minutes: String(appointment.duration_minutes ?? 60), technician_id: String(appointment.technician_id ?? '') }); setFeedback(null); setRescheduleOpen(true); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === 'tecnico'))); }}><Icon icon={CalendarDays} /><span>Reprogramar</span></Button>
+        {appointment.status === 'booked' ? <>
+          {technician ? null : <Button variant="secondary" aria-label="Reprogramar" title="Reprogramar" onClick={() => { const start = appointment.local_start; setRescheduleForm({ local_date: start.slice(0, 10), local_time: start.slice(11, 16), duration_minutes: String(appointment.duration_minutes ?? 60), technician_id: String(appointment.technician_id ?? '') }); setFeedback(null); setRescheduleOpen(true); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === 'tecnico'))); }}><Icon icon={CalendarDays} /><span>Reprogramar</span></Button>}
           <Button variant="primary" aria-label="Cerrar visita" title="Cerrar visita" onClick={() => { setFeedback(null); setCloseOpen(true); }}><Icon icon={Check} /><span>Cerrar visita</span></Button>
         </> : null}
       </>} state={stateMessage(state)}>
@@ -201,7 +270,22 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
           </div>
         </Card>
       </section>
-      {technician ? null : <div className="detail-region__main">
+      {technician ? (visitOpen ? <div className="detail-region__main">
+        <Card title="Avisar al cliente" icon={Send} className="appointment-detail__field-actions">
+          {appointment.technician_state ? <p className="appointment-detail__field-state"><span>Último aviso enviado</span><Badge tone="neutral">{QUICK_ACTION_LABELS[appointment.technician_state]}</Badge></p> : null}
+          {fieldActions.length ? <div className="appointment-detail__field-buttons">
+            {fieldActions.map((action) => {
+              const until = detail.quick_actions?.[action]?.resend_available_at;
+              const remaining = until ? new Date(until).getTime() - nowMs : 0;
+              const cooling = remaining > 0;
+              return <Button key={action} variant={action === 'arrived' ? 'primary' : 'secondary'} disabled={cooling || mutating} onClick={() => void sendQuickAction(action)}>
+                <Icon icon={QUICK_ACTION_ICONS[action]} />
+                <span>{cooling ? `Reenviar en ${countdownLabel(remaining)}` : QUICK_ACTION_LABELS[action]}</span>
+              </Button>;
+            })}
+          </div> : <p className="appointment-detail__field-note">Podrás avisar al cliente desde 60 minutos antes de la visita.</p>}
+        </Card>
+      </div> : null) : <div className="detail-region__main">
         {summary ? <Card title="Resumen de la conversación"><ConversationSummary summary={summary} /></Card> : null}
         <Card title="Historial de la visita" icon={FileText} className="appointment-detail__history">
           {appointment.history.length ? <ol aria-label="Historial de la visita">

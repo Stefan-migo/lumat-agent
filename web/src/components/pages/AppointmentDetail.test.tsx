@@ -3,11 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
-import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment } from '../../api';
+import { closeAppointment, closeTechnicianAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment, sendTechnicianQuickAction } from '../../api';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-vi.mock('../../api', () => ({ getAppointment: vi.fn(), getTechnicianAppointment: vi.fn(), closeAppointment: vi.fn(), fetchTechnicians: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
+// Spread the real module so `ApiError` (used for the quick-action error codes)
+// stays a real class; only the network functions are stubbed.
+vi.mock('../../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api')>()),
+  getAppointment: vi.fn(),
+  getTechnicianAppointment: vi.fn(),
+  closeAppointment: vi.fn(),
+  closeTechnicianAppointment: vi.fn(),
+  sendTechnicianQuickAction: vi.fn(),
+  fetchTechnicians: vi.fn(),
+  fetchUsers: vi.fn(),
+  rescheduleAppointment: vi.fn(),
+}));
 
 const detail: AppointmentDetailData = {
   appointment: {
@@ -259,15 +271,24 @@ describe('AppointmentDetail', () => {
 });
 
 describe('AppointmentDetail (technician)', () => {
+  /** A fixed clock 5 minutes before `starts_at` (13:00Z): both quick actions are
+   *  open (en_route from T-60, arrived from T-15) and the visit is not closed. */
+  const FIELD_NOW = new Date('2026-09-26T12:55:00.000Z');
   const technicianDetail: AppointmentDetailData = {
     ...detail,
     appointment: { ...detail.appointment, history: [] },
     conversation_summary: null,
+    quick_actions: { en_route: { resend_available_at: null }, arrived: { resend_available_at: null } },
   };
+  const withState = (state: 'en_route' | 'arrived', quick_actions = technicianDetail.quick_actions): AppointmentDetailData => ({
+    ...technicianDetail,
+    appointment: { ...technicianDetail.appointment, technician_state: state },
+    quick_actions,
+  });
 
   /** S2: the same page, with the operator-only affordances gated by role. */
   it('reads the visit without the operator-only affordances', () => {
-    render(<AppointmentDetail data={{ ...technicianDetail, conversation_summary: 'El cliente pide una reparación.' }} role="tecnico" />);
+    render(<AppointmentDetail data={{ ...technicianDetail, conversation_summary: 'El cliente pide una reparación.' }} role="tecnico" now={FIELD_NOW} />);
 
     expect(screen.getByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
@@ -276,14 +297,13 @@ describe('AppointmentDetail (technician)', () => {
     expect(screen.queryByText('Resumen de la conversación')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Historial de la visita' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Volver a agenda' })).toBeInTheDocument();
   });
 
   it('loads the technician visit from the technician endpoint', async () => {
     vi.mocked(getTechnicianAppointment).mockResolvedValue(technicianDetail);
 
-    render(<AppointmentDetail appointmentId={7} role="tecnico" />);
+    render(<AppointmentDetail appointmentId={7} role="tecnico" now={FIELD_NOW} />);
 
     expect(await screen.findByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
     expect(getTechnicianAppointment).toHaveBeenCalledWith(7);
@@ -291,10 +311,84 @@ describe('AppointmentDetail (technician)', () => {
     expect(fetchTechnicians).not.toHaveBeenCalled();
   });
 
-  it('keeps the operator affordances for an operator role', () => {
+  /** S4: the technician closes their own visit; the route is the technician one. */
+  it('offers the close action and closes through the technician endpoint', async () => {
+    const user = userEvent.setup();
+    vi.mocked(closeTechnicianAppointment).mockResolvedValue({ ok: true });
+    vi.mocked(getTechnicianAppointment).mockResolvedValue(technicianDetail);
+
+    render(<AppointmentDetail appointmentId={7} role="tecnico" now={FIELD_NOW} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Cerrar visita' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
+
+    await waitFor(() => expect(closeTechnicianAppointment).toHaveBeenCalledWith(7, 'completed'));
+    expect(closeAppointment).not.toHaveBeenCalled();
+  });
+
+  /** S5: the two field quick actions, inside their window. */
+  it('offers both field quick actions while their windows are open', () => {
+    render(<AppointmentDetail data={technicianDetail} role="tecnico" now={FIELD_NOW} />);
+
+    expect(screen.getByRole('heading', { name: 'Avisar al cliente' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Voy en camino' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Llegué / estoy afuera' })).toBeEnabled();
+  });
+
+  /** S6: each action opens on its own lead time, not together. */
+  it('opens each quick action on its own lead time', () => {
+    render(<AppointmentDetail data={technicianDetail} role="tecnico" now={new Date('2026-09-26T12:20:00.000Z')} />);
+    expect(screen.getByRole('button', { name: 'Voy en camino' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Llegué / estoy afuera' })).not.toBeInTheDocument();
+
+    cleanup();
+    render(<AppointmentDetail data={technicianDetail} role="tecnico" now={new Date('2026-09-26T11:50:00.000Z')} />);
+    expect(screen.queryByRole('button', { name: 'Voy en camino' })).not.toBeInTheDocument();
+    expect(screen.getByText(/60 minutos antes/)).toBeInTheDocument();
+  });
+
+  /** S7: a recent send shows a countdown instead of allowing an instant resend. */
+  it('counts down the resend cooldown per action', () => {
+    render(<AppointmentDetail
+      data={withState('en_route', {
+        en_route: { resend_available_at: '2026-09-26T12:57:30.000Z' },
+        arrived: { resend_available_at: null },
+      })}
+      role="tecnico"
+      now={FIELD_NOW}
+    />);
+
+    expect(screen.getByRole('button', { name: 'Reenviar en 2:30' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Llegué / estoy afuera' })).toBeEnabled();
+  });
+
+  /** S5: the axis only moves forward — an action already passed is not offered. */
+  it('hides an action the field axis has already passed', () => {
+    render(<AppointmentDetail data={withState('arrived')} role="tecnico" now={FIELD_NOW} />);
+
+    expect(screen.queryByRole('button', { name: 'Voy en camino' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Llegué / estoy afuera' })).toBeEnabled();
+  });
+
+  /** S8: the send goes through the technician endpoint and refreshes the visit. */
+  it('sends a quick action through the technician endpoint and refreshes', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getTechnicianAppointment).mockResolvedValue(technicianDetail);
+    vi.mocked(sendTechnicianQuickAction).mockResolvedValue({ ok: true, technician_state: 'en_route', resend_available_at: '2026-09-26T13:00:00.000Z' });
+
+    render(<AppointmentDetail appointmentId={7} role="tecnico" now={FIELD_NOW} />);
+    await user.click(await screen.findByRole('button', { name: 'Voy en camino' }));
+
+    await waitFor(() => expect(sendTechnicianQuickAction).toHaveBeenCalledWith(7, 'en_route'));
+    expect(await screen.findByRole('status')).toHaveTextContent('Avisamos que vas en camino');
+  });
+
+  it('keeps the operator affordances for an operator role and no field actions', () => {
     render(<AppointmentDetail data={detail} role="operador" />);
 
     expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cerrar visita' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reprogramar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Voy en camino' })).not.toBeInTheDocument();
   });
 });
