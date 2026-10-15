@@ -132,6 +132,7 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
     </Card>
 
     <Card
+      className="project-skills__project-card"
       title="Habilidades del proyecto"
       description="Se guardan en la configuración de este proyecto."
       headerAction={<><Badge>{items.length}</Badge><Button onClick={openCreate}><Icon icon={Plus} /> Agregar habilidad</Button></>}

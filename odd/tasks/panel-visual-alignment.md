@@ -127,6 +127,7 @@ scrolling with the document.
 | T11 upload dialog + tree/root/toolbar revisions | S6b, S6c | inline | done | c366119d |
 | T12 toast + menu stacking + tree polish | S6b, S6c, S6d | inline | done | 6b9af9b2, 43340a03 |
 | T13 embedded tab scroll | S6e | inline | done | 243447e9 |
+| T14 mobile tabs bar + skills layout | S1, S4, S6b | inline | done | 62faed16, adb77b9c |
 
 ## Log
 
@@ -352,3 +353,22 @@ standalone (1280) and embedded (1280, ~456px column) captures match reference im
 overflow, and the embedded `.tabs__panel` stays `overflow-y: auto`. RDD assess: medium, `under_budget`,
 no review due. Open item flagged to the owner: the real-empty state has no `Nuevo hilo` button (it
 matches ref 9's empty layout); threads are created from the assistant workspace.
+
+L25 (owner, verbatim, 2026-10-14): "un detalle en la version mobile. ref tab contexto version mobile
+actual [Image 1] , se rompe el component de tabs. cuando se abre el tab contexto este tapa parcialmente,
+casi completamente los tabs. en las otras no pasa. … ref skills mobile [Image 5] , puedes mejorar la
+visualizacion de la skill el card muestra la descripcion y titulo muy colapsado hay que rediseñar el
+layout para que se vea bien en mobile version." Also, per the owner: the real-empty Hilos state keeps no
+`Nuevo hilo` button. → Captured as T14. Root cause of the tabs bug: `.tabs` is a column flexbox and, on
+mobile, the `[role="tablist"]` gets `overflow-y: hidden`, which drops its automatic minimum size to 0 — so
+under the tall Contexto panel it shrank (measured 20px) and the content painted over the labels;
+Hilos/Agentes/Skills have shorter panels, hence no shrink. Fix (62faed16): `flex-shrink: 0` on
+`.tabs [role="tablist"]` in `primitives.css` — a shared-primitive change (risk item 3). Skills fix: a
+`@media (max-width: 39.99rem)` block wraps the chips row (`__meta`) onto its own line (the copy column went
+25px → 262px) and a `.project-skills__project-card` modifier stacks the wide `Agregar habilidad` action so
+the title fits on one line. Verified by an independent verifier against scratch copies (current vs baseline
+`2ba5bd15`): both fixes confirmed, no regression across 11 tabbed routes, no blockers; one pre-existing
+advisory (the primitive's mobile tab `min-height` stops at `39.99rem`, so bars are 34px at ≥640px).
+Durable regression probes added as `web/playwright/panel-mobile-layout.spec.ts` (3/3 green on the fix,
+2/3 red on the baseline), carried by `adb77b9c` together with the breakpoint alignment. `npm run build`
+green; full vitest suite 1213 passed. RDD assess: medium, `under_budget`, no review due.
