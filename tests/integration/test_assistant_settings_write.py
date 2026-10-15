@@ -1,5 +1,6 @@
 """Runtime coverage for the approval-gated assistant settings write tool."""
 
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -182,3 +183,57 @@ def test_settings_update_refuses_an_unconsumed_approval(migrated_db):
                 role="admin",
             )
         assert get_setting(session, "tone.style") == "cercano"
+
+
+def test_approved_write_reenters_the_graph_and_responds(migrated_db, monkeypatch):
+    """T1: the approval path re-enters the assistant graph, so an approved write ends
+    with a responder-produced message instead of the canned `Tool ... completed.` line."""
+    from app.chat.assistant import nodes as assistant_nodes
+
+    class _Completions:
+        def create(self, **kwargs):
+            if kwargs.get("stream"):
+                return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Listo, actualicé la despedida."))])]
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))
+    monkeypatch.setattr(assistant_nodes, "_assistant_client", lambda: fake)
+
+    suffix = uuid4().hex[:10]
+    with SessionLocal() as session:
+        user = User(username=f"settings-reentry-{suffix}", password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        run_id = f"settings-reentry-{suffix}"
+        plan = {
+            "tool": "settings.update",
+            "arguments": {"key": "messages.farewell", "value": "Nos vemos."},
+            "requires_approval": True,
+        }
+        approval = issue_approval(plan)
+        thread = InternalChatThread(
+            user_id=user.id,
+            active_run_id=run_id,
+            current_plan=plan,
+            assistant_state={"stage": "approval_pending", "approval": approval, "actor_role": "admin"},
+        )
+        session.add(thread)
+        session.flush()
+        session.add(InternalChatMessage(
+            thread_id=thread.id, author="admin", content="change the farewell",
+            status="approval_pending", assistant_metadata={"run_id": run_id, "approval": approval},
+        ))
+        session.commit()
+
+        message = approve_plan(session, thread, user, run_id, approval["token"])
+        session.commit()
+
+        assert message is not None
+        assert get_setting(session, "messages.farewell") == "Nos vemos."
+        agent_message = session.scalar(
+            select(InternalChatMessage).where(
+                InternalChatMessage.thread_id == thread.id, InternalChatMessage.author == "agent"
+            )
+        )
+        assert agent_message is not None
+        assert agent_message.content == "Listo, actualicé la despedida."
