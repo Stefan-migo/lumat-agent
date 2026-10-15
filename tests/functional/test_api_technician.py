@@ -717,3 +717,37 @@ def test_technician_quick_action_genuine_resend_sends_and_audits_twice(client, m
     assert [template for _, _, template in recorded_sends] == ["en_route", "en_route"]
     with SessionLocal() as session:
         assert session.query(AuditLog).filter_by(action="appointment.en_route", entity_id=str(appointment_id)).count() == 2
+
+
+def test_readonly_office_reads_never_mutate_the_field_state(client, make_user):
+    """S9 non-regression: the office reads are reads. Once signed in, a marked
+    state, its audit trail and the history stay identical after a successful
+    detail read, a successful agenda read, an unknown id and a malformed range.
+
+    The snapshot is taken after the login: signing in is a mutation by design
+    (`app/panel/api/routes/auth.py` audits it), so it cannot be part of a
+    read-only invariant."""
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    make_user("oper", "oper-pass", role="operador")
+    appointment_id = _appointment(technician, "+56900000075", date(2026, 2, 10), "state")
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        appointment.technician_state = TechnicianVisitState.EN_ROUTE
+        appointment.technician_state_at = datetime(2026, 2, 10, 13, 45, tzinfo=timezone.utc)
+        session.commit()
+
+    assert client.post("/panel/api/login", json={"username": "oper", "password": "oper-pass"}).status_code == 200
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        before = (appointment.technician_state, appointment.technician_state_at,
+                  session.query(AuditLog).count(), session.query(AppointmentHistory).count())
+
+    assert client.get(f"/panel/api/appointments/{appointment_id}").status_code == 200
+    assert client.get("/panel/api/appointments?from=2026-02-10&to=2026-02-11&timezone=America/Santiago").status_code == 200
+    assert client.get("/panel/api/appointments/999999").status_code == 404
+    assert client.get("/panel/api/appointments?from=x&to=2026-02-11&timezone=UTC").status_code in (400, 422)
+
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        assert (appointment.technician_state, appointment.technician_state_at,
+                session.query(AuditLog).count(), session.query(AppointmentHistory).count()) == before
