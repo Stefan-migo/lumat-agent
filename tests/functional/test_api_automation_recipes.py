@@ -71,3 +71,35 @@ def test_installation_api_lifecycle_and_validation(client, make_user):
 def test_request_bodies_forbid_extra_fields(client, make_user):
     _login(client, make_user, "recipe-admin", "admin-pass", "admin")
     assert client.post("/panel/api/automation-installations", json={"recipe_id": "x", "parameters": {}, "extra": 1}).status_code == 422
+
+
+def test_admin_can_uninstall_installation_and_reinstall_recipe(client, make_user):
+    _login(client, make_user, "recipe-admin", "admin-pass", "admin")
+    url = "/panel/api/automation-installations"
+    body = {"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}}
+    created = client.post(url, json=body).json()["installation"]
+    installation_id = created["id"]
+    path = f"{url}/{installation_id}"
+    with SessionLocal() as session:
+        assert session.query(AutomationRule).filter_by(installation_id=installation_id).count() == 1
+
+    response = client.delete(path)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"ok": True}
+    assert client.get(url).json()["installations"] == []
+    with SessionLocal() as session:
+        assert session.query(AutomationRule).filter_by(installation_id=installation_id).count() == 0
+        audit = session.query(AuditLog).filter_by(entity="automation_installation").order_by(AuditLog.id).all()
+        assert audit[-1].action == "automation.installation.delete"
+    # The recipe slot is freed: reinstalling the same recipe succeeds.
+    assert client.post(url, json=body).status_code == 201
+    assert client.delete(path).status_code == 404
+
+
+def test_operator_cannot_uninstall_installation(client, make_user):
+    _login(client, make_user, "recipe-admin", "admin-pass", "admin")
+    url = "/panel/api/automation-installations"
+    created = client.post(url, json={"recipe_id": "appointment_confirmation", "parameters": {"channel": "whatsapp"}}).json()["installation"]
+    client.post("/panel/api/logout")
+    _login(client, make_user, "recipe-operator", "operator-pass", "operador")
+    assert client.delete(f"{url}/{created['id']}").status_code == 403

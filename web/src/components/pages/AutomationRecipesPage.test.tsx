@@ -93,4 +93,41 @@ describe('AutomationRecipesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(attempts).toBe(2));
   });
+
+  it('uninstalls an installed recipe after confirmation and refreshes the list', async () => {
+    let deleted = false;
+    const calls: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/automation-recipes')) return json({ recipes });
+      if (init?.method === 'DELETE') { deleted = true; calls.push(`${path}:${init.method}`); return json({ ok: true }); }
+      return json({ installations: deleted ? [] : [installation] });
+    });
+    render(<AutomationRecipesPage loadRecipes={async () => ({ recipes })} loadInstallations={async () => ({ installations: deleted ? [] : [installation] })} />);
+    fireEvent.click(screen.getByRole('button', { name: /Ver instaladas/ }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Instaladas (1)' })).toHaveAttribute('aria-selected', 'true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
+    const dialog = await screen.findByRole('dialog', { name: /Quitar Confirmación de reserva/ });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Quitar' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations/8', expect.objectContaining({ method: 'DELETE' })));
+    expect(calls).toEqual(['/panel/api/automation-installations/8:DELETE']);
+    await waitFor(() => expect(screen.getByText('Aún no hay automatizaciones instaladas')).toBeInTheDocument());
+  });
+
+  it('keeps the uninstall dialog open and surfaces the error when removal fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = String(input);
+      if (path.endsWith('/automation-recipes')) return json({ recipes });
+      if (init?.method === 'DELETE') return json({ detail: 'No se pudo quitar.' }, 409);
+      return json({ installations: [installation] });
+    });
+    page(async () => ({ installations: [installation] }));
+    fireEvent.click(screen.getByRole('button', { name: /Ver instaladas/ }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Instaladas (1)' })).toHaveAttribute('aria-selected', 'true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
+    const dialog = await screen.findByRole('dialog', { name: /Quitar Confirmación de reserva/ });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Quitar' }));
+    expect(await within(dialog).findByText('No se pudo quitar.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /Quitar Confirmación de reserva/ })).toBeInTheDocument();
+  });
 });

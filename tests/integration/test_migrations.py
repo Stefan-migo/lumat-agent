@@ -778,6 +778,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("054_project_files_kb_document",),
         ("055_project_folders",),
         ("056_appointment_technician_state",),
+        ("057_grant_automation_installation_delete",),
     ]
 
 
