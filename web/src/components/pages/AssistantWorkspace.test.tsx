@@ -61,10 +61,9 @@ describe("AssistantWorkspace", () => {
     const resourcesToggle = screen.getByRole("button", { name: /Recursos del proyecto/ });
     fireEvent.click(resourcesToggle);
     expect(resourcesToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Selección de recursos aún no disponible.")).toBeVisible();
+    expect(screen.queryByText("Selección de recursos aún no disponible.")).not.toBeInTheDocument();
     fireEvent.click(resourcesToggle);
     expect(resourcesToggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByText("Selección de recursos aún no disponible.")).not.toBeVisible();
   });
 
   it("keeps phone panes closed and updates pane visibility after resizing to desktop", async () => {

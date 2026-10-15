@@ -97,6 +97,7 @@ assistant:
     - planning.close
     - planning.record_decision
     - planning.record_note
+    - planning.read_report
     - project.create
     - project.rename
     - project.archive

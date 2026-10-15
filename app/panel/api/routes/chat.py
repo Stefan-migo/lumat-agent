@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
-from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, ProjectFile, User
+from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, ProjectFile, User
 from app.config import get_settings
 from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
@@ -31,12 +31,18 @@ from app.panel.api.serializers import (
 )
 from app.services.audit import record_audit
 from sqlalchemy import func, select
-from app.services import planning, projects, tukulpan
+from app.services import planning, projects
 from app.services import assistant_artifacts
 from app.services.project_config import (
     reset_thread_tool_policy,
     set_thread_tool_policy,
     thread_tool_policy,
+)
+from app.services.thread_resources import (
+    ThreadResources,
+    read_thread_resources,
+    reset_thread_resources,
+    set_thread_resources,
 )
 
 router = APIRouter(tags=["panel-api-chat"])
@@ -81,6 +87,12 @@ class ChatThreadBody(BaseModel):
 
 class ChatThreadToolPolicyBody(BaseModel):
     opt_in_enabled: list[str]
+
+
+class ChatThreadResourcesBody(BaseModel):
+    project_files: list[int] = []
+    planning_sessions: list[str] = []
+    skills: list[str] = []
 
 
 def _tool_policy_thread(session: Session, thread_id: int, current: User) -> InternalChatThread:
@@ -142,22 +154,44 @@ def delete_thread_tool_policy(
     return _thread_tool_policy_response(session, thread, current)
 
 
-def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:
-    threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == user_id)).all()
-    return next((thread for thread in threads if ((thread.assistant_state or {}).get("cortex_session") or {}).get("slug") == slug), None)
+@router.get("/chat/threads/{thread_id}/resources")
+def read_thread_resources_route(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    return read_thread_resources(session, thread)
 
 
-def _planning_report(session: Session, thread: InternalChatThread) -> Memory | None:
-    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
-    if not cortex.get("report_key"):
-        return None
-    proyecto = thread.proyecto or "default"
-    authorization = None if proyecto == "default" else projects.agent_context(session, proyecto, owner_id=thread.user_id)
-    return tukulpan.get_by_key(
-        session, scope=tukulpan.AGENT_SCOPE, entity_id=tukulpan.agent_memory_entity(proyecto),
-        topic_key=cortex["report_key"], proyecto=proyecto,
-        owner_id=authorization.owner_id if authorization else None,
-    )
+@router.put("/chat/threads/{thread_id}/resources")
+def update_thread_resources_route(
+    thread_id: int,
+    body: ChatThreadResourcesBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
+    try:
+        set_thread_resources(session, thread, ThreadResources(**body.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    session.flush()
+    return read_thread_resources(session, thread)
+
+
+@router.delete("/chat/threads/{thread_id}/resources")
+def delete_thread_resources_route(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    thread = _tool_policy_thread(session, thread_id, current)
+    _require_no_active_run(thread)
+    reset_thread_resources(thread)
+    session.flush()
+    return read_thread_resources(session, thread)
 
 
 @router.post("/chat/threads", status_code=201)
@@ -324,16 +358,16 @@ def list_planning_sessions(
 
 @router.get("/planning/sessions/{slug}")
 def planning_session_detail(slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
-    thread = _planning_thread(session, slug, current.id)
+    thread = planning.find_session_thread(session, slug=slug, owner_id=current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
     return {"session": to_cortex_session_dict(thread), "thread": thread_dict(thread),
-            "report": to_cortex_report_dict(_planning_report(session, thread))}
+            "report": to_cortex_report_dict(planning.report_memory(session, thread))}
 
 
 @router.post("/planning/sessions/{slug}/close")
 def close_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
-    thread = _planning_thread(session, slug, current.id)
+    thread = planning.find_session_thread(session, slug=slug, owner_id=current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
     try:
@@ -341,12 +375,12 @@ def close_planning_session(slug: str, session: Session = Depends(get_db), curren
     except planning.PlanningSessionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     session.flush()
-    return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(_planning_report(session, thread))}
+    return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(planning.report_memory(session, thread))}
 
 
 @router.post("/planning/sessions/{slug}/reopen")
 def reopen_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
-    thread = _planning_thread(session, slug, current.id)
+    thread = planning.find_session_thread(session, slug=slug, owner_id=current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}

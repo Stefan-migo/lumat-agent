@@ -33,6 +33,15 @@ Exact current placeholder string: `Selección de recursos aún no disponible.`
 "B definitivamente. pero solo me parece interesante los archivos del proyecto y las
 sesiones de planning quizas las skills tambien estarian bien en recursos." → the selector
 covers **project files**, **planning sessions**, and **project skills**.
+Semantics (owner decision, verbatim: "b marca +lectura por tool"): fixing a resource
+**marks** it for the thread (persisted in `thread.assistant_state["resources"] =
+{project_files: [ids], planning_sessions: [slugs], skills: [names]}`) and surfaces a
+**compact reference** (names/ids/slugs) in the turn context. Content is read **on demand
+with tools**, never injected in full every turn:
+- project files → existing `read_project_file` (S6 adds `offset`/`limit`),
+- planning reports → a new `planning.read_report` tool (owner request, verbatim: "deberia
+  exsitir una tool que permita leer un reporte. lo podriamos agregar aca?"),
+- skills → the existing declared-skill mechanism (bodies via `_skill_context`).
 
 S4 — Tray vs library separation.
 Owner, verbatim: "los archivos del hilo no deberian mostrarse en el tray del chatbox. solo
@@ -98,7 +107,9 @@ Non-goals (explicitly dropped after review):
 | T0 feature doc | — | inline | done | this commit |
 | T1 default-on 7 opt-in | S1 | inline | done | 49227b57 |
 | T2 sidebar Capacidades wired | S2 | inline | done | fd5e39e2 |
-| T3 Recursos selector (B) | S3 | inline | pending | — |
+| T3a Recursos selector + persistence | S3 | inline | done | b1313675, b1f670c0 |
+| T3b pinned resources in context | S3 | inline | done | f8ce9dbf |
+| T3c planning.read_report tool | S3 | inline | done | 51e9643f, 46d39657 |
 | T4 tray/library separation | S4 | inline | pending | — |
 | T5 multimodal tool results | S5 | inline | pending | — |
 | T6 partial reads (offset/limit) | S6 | inline | pending | — |
@@ -199,3 +210,58 @@ frontend suite 1190/1191 (the one failure is the pre-existing load-flaky
 `ClientesList > distinguishes a filtered-empty result…`, green in isolation 42/42), `npm run
 build` green. Env: `npm install` in `web/` (the worktree had no `node_modules`).
 RDD assess: risk `medium`, `review_due=false` (`under_budget`).
+
+L16 — T3 design closed. Owner chose (b) "marca +lectura por tool" for project files, and
+asked for a planning-report read tool. Design: fixing a resource marks it in
+`thread.assistant_state["resources"]` and surfaces a compact reference in context; content
+is read on demand (`read_project_file`, new `planning.read_report`, declared skills). T3 is
+split into T3a (selector + persistence), T3b (pinned resources in context), T3c
+(`planning.read_report` tool).
+
+L17 — T3a done (backend b1313675, frontend b1f670c0). Backend:
+`app/services/thread_resources.py` (+ `ThreadResources` model) stores the selection in
+`thread.assistant_state["resources"]`; routes GET/PUT/DELETE
+`/panel/api/chat/threads/{id}/resources` mirror `tool-policy` (owner-scoped, 409 while a run
+is active) and validate every reference against the thread's project (files/skills) and
+owner (planning sessions). Frontend: `ThreadResources.tsx` selector (3 groups with a toggle
+per item, whole-selection PUT), wired into the context panel's "Recursos del proyecto"
+section; it fetches lazily when the section is expanded. Evidence: backend
+`test_api_thread_resources.py` 5/5, full backend suite 2171 collected / 0 failures;
+frontend full suite 1192/1192, `npm run build` green. Two tests encoding the old placeholder
+were updated. Note: the frontend full suite crashed once on this box (low memory) and was
+re-run with `--maxWorkers=2`. RDD assess: risk `medium`, `review_due=false`
+(`under_budget`, 788 changed lines).
+
+L18 — T3c done (`51e9643f` refactor, `46d39657` feat). New read-only tool
+`planning.read_report` (args `{slug}`, `tier="default"`, ADMIN/OPERADOR) returns a closed
+session's persisted report by slug. Extracted `find_session_thread` (slug→owner thread) and
+`report_memory` (persisted report `Memory`) from the chat route into `app/services/planning.py`
+and reused them in both the route and the tool. Registered in `agent/registry.yaml`
+(`tools_whitelist`) + `ROLE_TOOL_ALLOWLIST` + `DEFAULT_TOOLS` (`test_tool_tiers.py`,
+`test_effective_config.py`); refreshed the frozen planner-catalog hash in
+`test_assistant_delegation.py`. TDD: RED first (four functional `read_report` tests + the
+exact-set assertions), then GREEN. Evidence: focused 55/55; full backend suite green (EXIT 0);
+no frontend change. RDD assess (`--base-ref 143ced8b --committed-only`): risk `medium`,
+`review_due=false` (`under_budget`, 1047 changed lines) → boundary stays pending in the slice.
+Next: T3b (surface the pinned resources as a compact reference in the turn context).
+
+L19 — T3b done (`f8ce9dbf`). `thread_resources.pinned_context(session, thread)` returns the
+compact `<pinned_resources>` block (project file `#id "filename"`, planning `"slug" (topic)`,
+skill `"name"`; no content) plus the pinned skill names. `assemble_context_node` appends it as
+a `pinned_resources` context item — visible to planner and responder — and sets
+`effective["pinned_skills"]`; `_validated_skills` now merges the pinned skills so
+`_skill_context` loads their bodies for the responder. Content stays read on demand
+(`read_project_file`, `planning.read_report`, declared skills). TDD: RED first (3 functional
+tests in `test_thread_resources_context.py`), then GREEN. Evidence: focused 57/57; full
+backend suite green (EXIT 0); no frontend change. RDD assess (`--base-ref 143ced8b
+--committed-only`): risk `medium`, `review_due=false` (`under_budget`, 1238 changed lines).
+Next: T4 (tray vs thread file library separation).
+
+L20 — Delivery opened as **two chained PRs** (owner choice). PR **#616** = T0–T2 (commits
+`05b46b91`..`3e84fcf3`) → `main`; PR **#617** = T3 (`04d7d4d9`..`a95316d4`) → base PR #616.
+Branches pushed: `odd/asistente-lumat-config-layer-s1` (#616) and
+`odd/asistente-lumat-config-layer` (#617). Both carry `type:feature`; #617 carries
+`size:exception` (955 / 400 — one cohesive T3 slice; the owner accepted the 2-PR split, no
+further cohesive split fits). T1/T2 never had separate PRs; they are commits on this branch.
+Pre-merge: sync `origin/main` into each branch before merging (repo integration discipline).
+T4–T9 still pending.

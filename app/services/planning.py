@@ -64,6 +64,44 @@ def open_in_new_thread(session, *, owner_id: int, proyecto: str, topic: str):
     return thread, state
 
 
+def find_session_thread(session, *, slug: str, owner_id: int):
+    """Return the owner's thread whose cortex session slug matches, or None."""
+    from sqlalchemy import select
+
+    from app.models import InternalChatThread
+
+    threads = session.scalars(
+        select(InternalChatThread).where(InternalChatThread.user_id == owner_id)
+    ).all()
+    return next(
+        (
+            thread
+            for thread in threads
+            if ((thread.assistant_state or {}).get("cortex_session") or {}).get("slug") == slug
+        ),
+        None,
+    )
+
+
+def report_memory(session, thread):
+    """Return the persisted report Memory for a session thread, or None when not closed."""
+    from app.services import projects, tukulpan
+
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    if not cortex.get("report_key"):
+        return None
+    proyecto = thread.proyecto or "default"
+    authorization = None if proyecto == "default" else projects.agent_context(session, proyecto, owner_id=thread.user_id)
+    return tukulpan.get_by_key(
+        session,
+        scope=tukulpan.AGENT_SCOPE,
+        entity_id=tukulpan.agent_memory_entity(proyecto),
+        topic_key=cortex["report_key"],
+        proyecto=proyecto,
+        owner_id=authorization.owner_id if authorization else None,
+    )
+
+
 def build_report(cortex: dict) -> str:
     """Assemble the substantive markdown report from the captured session items (S8)."""
     notes = cortex.get("notes") or []
