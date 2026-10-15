@@ -174,6 +174,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.reminder_template_name": "appointment_reminder_24h",
     "notify.followup_template_name": "appointment_followup",
     "notify.followup_no_show_template_name": "appointment_followup_no_show",
+    # WU6: technician field quick-action templates (business-initiated; the two
+    # Meta templates are created and approved externally — EXT).
+    "notify.en_route_template_name": "en_route",
+    "notify.arrived_template_name": "arrived",
     "notify.smtp_host": DEFAULT_SMTP_HOST,
     "notify.smtp_from": DEFAULT_SMTP_FROM,
     # SS-5: tone style used by the chat nodes.

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, ExternalLink, FileText, UserRound } from 'lucide-react';
-import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
+import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
-import type { AppointmentDetail as AppointmentDetailData } from '../../types';
+import type { AppointmentDetail as AppointmentDetailData, Role } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
 import { Card } from '../primitives/Card';
@@ -19,6 +19,10 @@ import { pathForRoute } from '../domain/panelRoutes';
 
 export interface AppointmentDetailProps {
   appointmentId?: number;
+  /** Role of the reader. A `tecnico` reads the same page from the technician
+   *  endpoint, without the customer ficha link, the conversation summary, the
+   *  history or the operator actions (S2). */
+  role?: Role;
   data?: AppointmentDetailData | null;
   state?: AsyncDataState;
   onRetry?: () => void;
@@ -88,7 +92,8 @@ function stateMessage(state: AsyncDataState) {
   return null;
 }
 
-export function AppointmentDetail({ appointmentId, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
+export function AppointmentDetail({ appointmentId, role, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
+  const technician = role === 'tecnico';
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>('completed');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -99,15 +104,15 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
   const fetchDetail = useCallback(() => {
     if (appointmentId === undefined) throw new Error('appointment id is required');
-    return getAppointment(appointmentId);
-  }, [appointmentId]);
+    return technician ? getTechnicianAppointment(appointmentId) : getAppointment(appointmentId);
+  }, [appointmentId, technician]);
   const fetched = useAsyncData(fetchDetail, appointmentId !== undefined && controlledData === undefined);
   const detail = controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? 'ready' : fetched.state);
   const retry = onRetry ?? fetched.retry;
   const technicianId = detail?.appointment.technician_id;
   useEffect(() => {
-    if (!detail) {
+    if (technician || !detail) {
       setTechnicianDirectory([]);
       return;
     }
@@ -120,7 +125,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         if (current) setTechnicianDirectory([]);
       });
     return () => { current = false; };
-  }, [detail?.appointment.id, technicianId]);
+  }, [detail?.appointment.id, technicianId, technician]);
   const close = async (outcome: 'completed' | 'no_show') => {
     if (!detail || mutating) return;
     setMutating(true);
@@ -169,7 +174,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
     titleAdornment={<Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>}
     actions={<>
         <Button variant="secondary" onClick={() => window.history.back()}>Volver a agenda</Button>
-        {appointment.status === 'booked' ? <>
+        {!technician && appointment.status === 'booked' ? <>
           <Button variant="secondary" aria-label="Reprogramar" title="Reprogramar" onClick={() => { const start = appointment.local_start; setRescheduleForm({ local_date: start.slice(0, 10), local_time: start.slice(11, 16), duration_minutes: String(appointment.duration_minutes ?? 60), technician_id: String(appointment.technician_id ?? '') }); setFeedback(null); setRescheduleOpen(true); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === 'tecnico'))); }}><Icon icon={CalendarDays} /><span>Reprogramar</span></Button>
           <Button variant="primary" aria-label="Cerrar visita" title="Cerrar visita" onClick={() => { setFeedback(null); setCloseOpen(true); }}><Icon icon={Check} /><span>Cerrar visita</span></Button>
         </> : null}
@@ -187,7 +192,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
           <div className="appointment-detail__address"><strong>Dirección</strong>{customer.address ? <a className="address-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([customer.address, customer.comuna].filter(Boolean).join(', '))}`}><Icon icon={ExternalLink} size="sm" />{[customer.address, customer.comuna].filter(Boolean).join(', ')}</a> : <span>Dirección no registrada</span>}</div>
         </Card>
         <Card title="Cliente" icon={UserRound} className="appointment-detail__people">
-          <div className="appointment-detail__identity"><Avatar name={customer.name ?? 'Cliente sin nombre'} /><div><strong>{customer.name ?? 'Cliente sin nombre'}</strong><a href={pathForRoute({ view: 'clients', clientId: customer.id })}>Ver ficha del cliente <Icon icon={ArrowRight} /></a></div></div>
+          <div className="appointment-detail__identity"><Avatar name={customer.name ?? 'Cliente sin nombre'} /><div><strong>{customer.name ?? 'Cliente sin nombre'}</strong>{technician ? null : <a href={pathForRoute({ view: 'clients', clientId: customer.id })}>Ver ficha del cliente <Icon icon={ArrowRight} /></a>}</div></div>
           <div className="appointment-detail__identity appointment-detail__technician"><Avatar name={technicianLabel} /><div><h3>Técnico asignado</h3><strong>{technicianLabel}</strong><span>Responsable de la visita</span></div></div>
           <div className="appointment-detail__summary">
             <h3>Resumen</h3>
@@ -196,7 +201,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
           </div>
         </Card>
       </section>
-      <div className="detail-region__main">
+      {technician ? null : <div className="detail-region__main">
         {summary ? <Card title="Resumen de la conversación"><ConversationSummary summary={summary} /></Card> : null}
         <Card title="Historial de la visita" icon={FileText} className="appointment-detail__history">
           {appointment.history.length ? <ol aria-label="Historial de la visita">
@@ -215,7 +220,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
             </li>)}
           </ol> : <p>No hay cambios registrados.</p>}
         </Card>
-      </div>
+      </div>}
     </div>
     <AppointmentClosureDialog
       open={closeOpen}
