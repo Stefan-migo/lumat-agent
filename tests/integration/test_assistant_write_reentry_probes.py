@@ -164,7 +164,9 @@ def test_tampered_plan_arguments_are_refused_at_approval(migrated_db):
 
 
 def test_resume_with_pending_approval_refuses_execution(migrated_db, fake_assistant_client):
-    """S2/S4: resume never executes a write without a consumed approval."""
+    """S2/S4: resume never executes a write without a consumed approval. T2 keeps that
+    invariant but changes how it is enforced: instead of a hard `PermissionError` the gate
+    parks the plan behind a fresh approval, and the write still does not run."""
     fake_assistant_client()
     with SessionLocal() as session:
         set_setting(session, "messages.farewell", DEFAULT_FAREWELL)
@@ -180,11 +182,15 @@ def test_resume_with_pending_approval_refuses_execution(migrated_db, fake_assist
         thread.assistant_state = {**thread.assistant_state, "execution_status": "pending"}
         session.flush()
 
-        with pytest.raises(PermissionError):
-            resume_thread(session, thread, user)
-        session.rollback()
+        assert resume_thread(session, thread, user) is True
+        session.commit()
         assert get_setting(session, "messages.farewell") != value
         assert _agent_message(session, thread.id) is None
+        session.refresh(thread)
+        assert thread.assistant_state["stage"] == "approval_pending"
+        fresh = thread.assistant_state["approval"]
+        assert fresh["status"] == "pending"
+        assert fresh["token"] != approval["token"]
 
 
 def test_resume_responder_failure_degrades_without_rolling_back_the_write(migrated_db, fake_assistant_client):
