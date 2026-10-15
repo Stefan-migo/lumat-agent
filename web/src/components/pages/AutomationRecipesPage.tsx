@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { CalendarCheck, CalendarClock, CalendarDays, CalendarX, FileText, Info, Mail, MessageCircle, RefreshCw, Star, Timer, UserX, Wrench } from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarDays, CalendarX, FileText, Info, Mail, MessageCircle, RefreshCw, Star, Timer, Trash2, UserX, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { ApiError, createAutomationInstallation, disableAutomationInstallation, enableAutomationInstallation, listAutomationInstallations, listAutomationRecipes, updateAutomationInstallation } from '../../api';
+import { ApiError, createAutomationInstallation, deleteAutomationInstallation, disableAutomationInstallation, enableAutomationInstallation, listAutomationInstallations, listAutomationRecipes, updateAutomationInstallation } from '../../api';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { AutomationInstallation, AutomationRecipe, AutomationInstallationsResponse, AutomationRecipesResponse } from '../../types';
 import { Badge } from '../primitives/Badge';
@@ -71,6 +71,7 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ recipe: AutomationRecipe; installation?: AutomationInstallation } | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<AutomationInstallation | null>(null);
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
   const [pending, setPending] = useState<string | number | null>(null);
   const [actionError, setActionError] = useState('');
@@ -109,6 +110,13 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
     void run(installation?.id ?? recipe.recipe_id, () => installation
       ? updateAutomationInstallation(installation.id, parameters)
       : createAutomationInstallation(recipe.recipe_id, parameters));
+  };
+  const recipeName = (installation: AutomationInstallation) => recipeList.find((recipe) => recipe.recipe_id === installation.recipe_id)?.name ?? installation.recipe_id;
+  const removeInstallation = async (installation: AutomationInstallation) => {
+    setPending(installation.id); setActionError('');
+    try { await deleteAutomationInstallation(installation.id); setConfirmRemove(null); setRefresh((value) => value + 1); }
+    catch (error) { setActionError(error instanceof ApiError ? error.detail : 'No pudimos quitar la automatización.'); }
+    finally { setPending(null); }
   };
   const showEmptyInstallBanner = installations.state === 'ready' && installationList.length === 0;
 
@@ -169,6 +177,7 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
               <Badge tone={installation.enabled ? 'success' : 'neutral'}>{installation.enabled ? 'Activa' : 'Inactiva'}</Badge>
               <Button variant="secondary" disabled={pending !== null} onClick={() => void run(installation.id, () => installation.enabled ? disableAutomationInstallation(installation.id) : enableAutomationInstallation(installation.id))}>{pending === installation.id ? 'Guardando…' : installation.enabled ? 'Desactivar' : 'Activar'}</Button>
               {recipe ? <Button variant="secondary" disabled={pending !== null} onClick={() => openConfiguration(recipe, installation)}>Editar</Button> : null}
+              <Button variant="secondary" disabled={pending !== null} onClick={() => { setActionError(''); setConfirmRemove(installation); }}>Quitar</Button>
             </article>;
           })}</div>
         </section> : null}
@@ -180,6 +189,16 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
         {selected.recipe.parameters.map((parameter) => parameter.key === 'channel' ? <Select key={parameter.key} label={parameter.label} required={parameter.required} value={String(parameters[parameter.key] ?? '')} disabled={pending !== null} onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: event.target.value }))} options={selected.recipe.channel_allowed.map((value) => ({ value, label: channelLabel[value] ?? value }))} /> : parameter.type === 'weekday' ? <Select key={parameter.key} label={parameter.label} required={parameter.required} value={String(parameters[parameter.key] ?? '')} disabled={pending !== null} onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: Number(event.target.value) }))} options={weekdayOptions} /> : <Input key={parameter.key} label={parameter.label} type={parameter.type === 'time' ? 'time' : parameter.type === 'number' ? 'number' : 'text'} required={parameter.required} value={String(parameters[parameter.key] ?? '')} disabled={pending !== null} onChange={(event) => setParameters((current) => ({ ...current, [parameter.key]: parameter.type === 'number' ? Number(event.target.value) : event.target.value }))} />)}
         <div className="automation-recipes__dialog-actions"><Button type="submit" disabled={pending !== null}>{pending ? selected.installation ? 'Guardando…' : 'Configurando…' : selected.installation ? 'Guardar cambios' : 'Configurar'}</Button><Button type="button" variant="secondary" disabled={pending !== null} onClick={() => setSelected(null)}>Cancelar</Button></div>
       </form> : null}
+    </Dialog>
+    <Dialog open={confirmRemove !== null} onClose={() => setConfirmRemove(null)} title={confirmRemove ? `Quitar ${recipeName(confirmRemove)}` : 'Quitar automatización'} description="Se borrará la configuración de esta automatización y dejará de enviarse." icon={Trash2} variant="sheet">
+      {confirmRemove ? <div className="automation-recipes__form">
+        {actionError ? <StateMessage tone="danger" role="alert" title="No pudimos quitar la automatización" detail={actionError} /> : null}
+        <p className="automation-recipes__confirm-copy">Esta acción no se puede deshacer. Podrás volver a configurar la automatización desde el catálogo.</p>
+        <div className="automation-recipes__dialog-actions">
+          <Button disabled={pending !== null} onClick={() => void removeInstallation(confirmRemove)}>{pending === confirmRemove.id ? 'Quitando…' : 'Quitar'}</Button>
+          <Button type="button" variant="secondary" disabled={pending !== null} onClick={() => setConfirmRemove(null)}>Cancelar</Button>
+        </div>
+      </div> : null}
     </Dialog>
   </PageFrame>;
 }

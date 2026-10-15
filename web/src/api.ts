@@ -256,6 +256,7 @@ export const createAutomationInstallation = (recipe_id: string, parameters: Reco
 export const updateAutomationInstallation = (id: number, parameters: Record<string, unknown>) => patchJson<AutomationInstallationResponse>(`/panel/api/automation-installations/${id}`, { parameters });
 export const enableAutomationInstallation = (id: number) => postJson<{ ok: true; installation: AutomationInstallationResponse['installation'] }>(`/panel/api/automation-installations/${id}/enable`);
 export const disableAutomationInstallation = (id: number) => postJson<{ ok: true; installation: AutomationInstallationResponse['installation'] }>(`/panel/api/automation-installations/${id}/disable`);
+export const deleteAutomationInstallation = (id: number) => apiFetch<{ ok: true }>(`/panel/api/automation-installations/${id}`, { method: 'DELETE' });
 export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
   const end = new Date();
   const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
