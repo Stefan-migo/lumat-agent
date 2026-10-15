@@ -63,7 +63,7 @@ Step 5: FINALIZE — mem_save + rapso close --message "<summary>"
 ## Pre-merge integration check (MANDATORY discipline)
 
 `main` is shared, and a PR can be green while still landing a broken tree. Two ways get
-past the checks we have:
+past the checks *running on that PR*:
 
 1. **A semantic merge.** Git merges textually clean and GitHub reports `CLEAN`, while the
    combined tree does not compile — two branches adding the same import is the canonical
@@ -71,26 +71,47 @@ past the checks we have:
 2. **A stale green check.** If the base branch moves after the check ran, the tree that
    actually lands was never tested.
 
-Before merging any PR, the human — or the agent, on the owner's explicit authorization —
-MUST:
+### What GitHub enforces (verified 2026-10-15 against the API)
 
-- ensure the branch contains the current head of the base branch; merging `origin/main`
-  into the branch is enough, and it forces a fresh CI run over the real tree;
+`main` **does have branch protection**. An earlier version of this section claimed it did
+not ("private, no GitHub Pro, so `gh pr merge` works with a red check") — that is **wrong
+now**, and it was the most misleading line in this file, because it tells you the gate is
+optional:
+
+- **Required status checks**: `test` and `panel` (`.github/workflows/tests.yml`). `test`
+  runs `uv run pytest tests/` against a real pgvector Postgres; `panel` runs `npm ci` →
+  `npm run build` → `npm test`, so the `tsc -b` type check is a **required** gate, not a
+  courtesy.
+- **Require branches to be up to date before merging** (`strict: true`). A PR cannot merge
+  while its head predates the current `main`, so bringing `origin/main` into the branch is
+  forced — and that push re-runs the gate over the combined tree.
+- **A pull request is required** (zero approving reviews); force-pushes and deletion of
+  `main` are blocked.
+- **`enforce_admins: false`** — a repository admin can still bypass all of it with
+  `gh pr merge --admin`. That is the one remaining hole, and the reason the discipline
+  below is not redundant.
+
+Both failure modes above are therefore caught by CI rather than by memory: `strict` kills
+the stale green check, and it is what forces the tested tree to be the combined one.
+
+### What the author still does
+
+Before merging any PR, the human — or the agent, on the owner's explicit authorization —
+SHOULD:
+
+- let the required checks finish on the branch head, and never reach for `--admin`;
+- when another branch landed first, merge the current `origin/main` into the branch — now
+  mandatory anyway, and it re-runs the gate;
 - for a branch that touches a file another in-flight branch also touches, run the local
   integration over the merged tree before pushing: the frontend suite, `npm run build`,
-  and the backend suite.
+  and the backend suite. The same three things `tests.yml` runs, only sooner and locally.
 
-The frontend type check is not optional: in this repository `tsc -b` lives only inside
-`npm run build`, and a green Vitest suite does **not** prove the tree type-checks.
+The frontend type check is not optional: `tsc -b` lives only inside `npm run build`, and a
+green Vitest suite does **not** prove the tree type-checks.
 
 This is deliberately **report-only and fail-closed**. Nothing here auto-merges, auto-fixes,
 pushes, or edits the working tree: it produces evidence and stops. The merge decision stays
 human.
-
-**Limitation, stated honestly.** This repository has no branch protection (private, no
-GitHub Pro), so no check can block a merge — `gh pr merge` works with a red check. The
-discipline above is evidence, not enforcement. Enforcement would need branch protection or
-a local hook, and a hook is bypassable and does not cover GitHub's merge.
 
 ## Reporting Rapsodia Defects
 
