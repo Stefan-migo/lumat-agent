@@ -1,7 +1,7 @@
 # assistant-write-chaining (Unit 1) — approved writes chain inside the panel loop
 
 **Objective**: let the panel assistant complete a multi-step write chain inside one user turn, where every business write is human-approved before it runs and the bounded autonomous class runs without per-step approval.
-**Branch**: `odd/assistant-write-chaining` (cut from `main` = `97b63c00`).
+**Branch**: `odd/assistant-write-chaining` (cut from `main` = `97b63c00`; synced with `origin/main` = `bc36318c`).
 **Delivery strategy**: `ask-on-risk` (default). Forecast ≈ 350 authored changed lines.
 **Test runner**: `pytest` (backend). Focused: `tests/unit/test_assistant_tool_loop.py`, `tests/integration/test_assistant_chat.py`, `tests/integration/test_assistant_harness_guardrails.py`.
 
@@ -93,3 +93,5 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 **Follow-up (advisory, not a T1 blocker).** `resume_thread` on an *executing tool-plan with no approval at all* makes guardrails issue a fresh approval (`status=approval_pending`, `response=None`), and the caller then inserts an agent message with `content=None` → `NotNullViolation`, where baseline raised `PermissionError`. Only reachable from internally inconsistent persisted state; no normal path produces it, and no write occurs either way. Fold the guard into **T5** (recovery), which owns `resume_thread`.
 
 **Session paused (2026-10-15).** T1 is done and verified; T2 is next. Resume from `odd/handoffs/assistant-write-chaining-t2.md` (main repo). The next task's load-bearing work is persisting the chain's accumulated `tool_results`/`tool_steps` across the approval pause, so a resumed chain keeps prior evidence.
+
+**Main sync + merged-tree verification (2026-10-15).** The branch was 18 commits behind `origin/main` (`97b63c00` → `bc36318c`, which brought PR #629 `automation-uninstall` and PR #630 `panel-tecnico-wu8`). `origin/main` was merged into the branch as `23fbb7ed`: textually clean, with **zero shared files** — the branch touches only `app/chat/assistant/{graph,nodes,state}.py`, `app/services/agent_chat.py`, this document, and `tests/integration/test_assistant*.py`, while main's 24 changed files are all under `web/`, `app/panel/`, `db/migrations/` and the unrelated `automation-*` tests. Merged-tree evidence, run on the merged tree and not on the pre-merge branch: backend `pytest` **2293 collected, no failures**; panel `npm run build` (`tsc -b` + vite) exit 0; panel `npm test` (vitest) **109 files / 1244 tests pass**. The branch is pushed and tracked as PR (draft) so T1 is reviewable while T2–T7 continue.
