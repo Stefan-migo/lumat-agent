@@ -3,7 +3,8 @@
 Admin-only JSON wrappers over `app/services/kb.py` (thin, no new business
 logic; the mutation audits are the existing service calls, SH-5):
 
-- GET  /kb              -> {"docs": [{provider, model, cost_meta}]} (newest 1st)
+- GET  /kb              -> {"docs": [{provider, model, cost_meta}]} (newest 1st);
+                          scope-bounded: global only, or one project via ?project_id=
 - GET  /kb/{id}         -> document detail including content
 - GET  /kb/search       -> retrieval probe with ranked chunks and titles
 - POST /kb              -> multipart title + file (pdf/md/txt/csv); ingest + audit
@@ -69,11 +70,24 @@ def _doc_or_404(session: Session, doc_id: int) -> KbDocument:
 
 @router.get("/kb")
 def kb_list(
+    project_id: int | None = Query(None, ge=1),
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
-    """Document list for the KB manager (provider/model/cost exposed, AP-6)."""
-    docs = session.scalars(select(KbDocument).order_by(KbDocument.id.desc())).all()
+    """Document list for the KB manager (provider/model/cost exposed, AP-6).
+
+    Scope-bounded. Without ``project_id`` it returns the global documents only, so a
+    project-private document never surfaces in the global Base de conocimiento section.
+    With ``project_id`` it returns that project's documents, for the project page.
+    """
+    scope = (
+        KbDocument.project_id.is_(None)
+        if project_id is None
+        else KbDocument.project_id == project_id
+    )
+    docs = session.scalars(
+        select(KbDocument).where(scope).order_by(KbDocument.id.desc())
+    ).all()
     return {"docs": [to_doc_dict(doc) for doc in docs]}
 
 
@@ -89,9 +103,11 @@ def kb_search(
     if not q.strip():
         raise HTTPException(status_code=400, detail="query must not be blank")
 
-    # The admin probe deliberately reads the whole corpus, including internal documents.
+    # The admin probe deliberately reads the whole audience corpus, including internal
+    # documents, but stays scope-bounded to global documents: a project-private document
+    # never surfaces in the global KB section's probe.
     results = kb_service.retrieve(
-        session, q, top_k=top_k, min_sim=min_sim, audience=None
+        session, q, top_k=top_k, min_sim=min_sim, audience=None, global_only=True
     )
     document_ids = {result["document_id"] for result in results}
     titles = {}

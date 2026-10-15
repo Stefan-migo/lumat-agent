@@ -49,14 +49,15 @@ def _login(client, username: str = "adm", password: str = "adm-pass") -> None:
 
 
 def _seed_doc(*, title: str = "Tarifas 2026", content: bytes = b"# Tarifas\nRevision anual: $49.990",
-              ext: str = ".md") -> int:
+              ext: str = ".md", project_id: int | None = None) -> int:
     """Seed a KB document through the service path (v1, embedded)."""
     from app.models import DocumentFormat
 
     fmt = {".pdf": DocumentFormat.PDF, ".md": DocumentFormat.MD, ".csv": DocumentFormat.CSV}[ext]
     with SessionLocal() as session:
         doc = kb_service.ingest_document(
-            session, title, fmt, content, source_meta={"seed": True}, actor="seed"
+            session, title, fmt, content, source_meta={"seed": True}, actor="seed",
+            project_id=project_id,
         )
         session.commit()
         return doc.id
@@ -235,6 +236,42 @@ def test_kb_list_returns_docs_with_provider_model_cost(client, make_user, fake_e
     assert all("content" not in d for d in docs)
 
 
+def test_kb_list_excludes_project_scoped_documents(client, make_user, fake_embedder):
+    """The global KB section lists global documents only (S1)."""
+    owner_id = make_user("adm", "adm-pass", role="admin")
+    _seed_doc(title="Global tarifas", content=b"global document content")
+    _seed_doc(
+        title="Project private",
+        content=b"project document content",
+        project_id=_seed_project(owner_id, "kb-list-global-only"),
+    )
+    _login(client)
+
+    resp = client.get("/panel/api/kb", follow_redirects=False)
+
+    assert resp.status_code == 200
+    titles = [doc["title"] for doc in resp.json()["docs"]]
+    assert "Global tarifas" in titles
+    assert "Project private" not in titles
+
+
+def test_kb_list_scoped_to_project_returns_only_that_project(client, make_user, fake_embedder):
+    """`?project_id=X` answers the scope it was asked for (S2)."""
+    owner_id = make_user("adm", "adm-pass", role="admin")
+    project_a = _seed_project(owner_id, "kb-list-scope-a")
+    project_b = _seed_project(owner_id, "kb-list-scope-b")
+    _seed_doc(title="Global tarifas", content=b"global document content")
+    _seed_doc(title="A private", content=b"a document content", project_id=project_a)
+    _seed_doc(title="B private", content=b"b document content", project_id=project_b)
+    _login(client)
+
+    resp = client.get(f"/panel/api/kb?project_id={project_a}", follow_redirects=False)
+
+    assert resp.status_code == 200
+    titles = [doc["title"] for doc in resp.json()["docs"]]
+    assert titles == ["A private"]
+
+
 def test_kb_detail_returns_content(client, make_user, fake_embedder):
     doc_id = _seed_doc(content=b"stored document content")
     make_user("adm", "adm-pass", role="admin")
@@ -282,6 +319,23 @@ def test_kb_search_filters_threshold_and_disabled_documents(client, make_user, f
 
     assert [item["document_id"] for item in hit.json()["results"]] == [doc_id]
     assert miss.json() == {"results": []}
+
+
+def test_kb_search_probe_excludes_project_scoped_documents(client, make_user, fake_embedder):
+    """The admin probe is scope-bounded to global documents (S3)."""
+    owner_id = make_user("adm", "adm-pass", role="admin")
+    global_id = _seed_doc(title="Global phrase", content=b"unique probe phrase")
+    _seed_doc(
+        title="Project phrase",
+        content=b"unique probe phrase",
+        project_id=_seed_project(owner_id, "kb-probe-scope"),
+    )
+    _login(client)
+
+    resp = client.get("/panel/api/kb/search?q=unique probe phrase&min_sim=0", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert [item["document_id"] for item in resp.json()["results"]] == [global_id]
 
 
 def test_kb_search_honors_top_k_and_min_sim(client, make_user, fake_embedder):

@@ -33,6 +33,17 @@ describe("ProjectResources", () => {
     expect(screen.queryByText("Global")).not.toBeInTheDocument();
   });
 
+  it("requests the project-scoped knowledge list, not the global one", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response({ files: [] }))
+      .mockResolvedValueOnce(response({ folders: [] }))
+      .mockResolvedValueOnce(response({ docs: [projectDoc] }));
+    renderResources("admin");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb?project_id=7", expect.anything()));
+    expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/kb", expect.anything());
+  });
+
   it("downloads a file using its filename", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(response({ files: [projectFile] }))
