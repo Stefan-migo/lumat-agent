@@ -675,7 +675,7 @@ def _handoff_event(result: dict, thread_id: int, run_id: str, sequence: int) -> 
     return []
 
 
-_TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending", "cancelled"}
+_TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending", "cancelled", "rejected"}
 
 
 class _EventCursor:
@@ -914,12 +914,35 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         return None
     if reject:
         message.status = "rejected"
+        message.completed_at = datetime.now(timezone.utc)
+        # A rejected write is terminal for the whole chain: no later step is dispatched,
+        # the approval can never be reused, and nothing is left pending to resume or reap.
+        # The status event keeps the persisted stream in step with the live stage, and the
+        # audit records the operator's decision regardless of which tool was rejected.
+        settled = thread.assistant_state or {}
+        thread.assistant_state = merge_assistant_state(settled, {
+            "stage": "rejected",
+            "execution_status": "rejected",
+            "recoverable": True,
+            "live": {"run_id": run_id, "stage": "rejected", "status": "rejected"},
+            "events": [*(settled.get("events") or []), {
+                "type": "status", "thread_id": thread.id, "run_id": run_id,
+                "sequence": len(settled.get("events") or []), "status": "rejected",
+            }],
+        })
+        record_audit(
+            session, actor=user.username, action="internal_chat.approval_rejected",
+            entity="internal_chat_thread", entity_id=str(thread.id),
+            after={"run_id": run_id, "tool": plan.get("tool"), "reason": "operator_rejected",
+                   "step": settled.get("tool_steps", 0)},
+        )
         if plan.get("tool") == "skill.propose":
             record_audit(
                 session, actor=user.username, action="skill.propose.rejected",
                 entity="internal_chat_thread", entity_id=str(thread.id),
                 after={"run_id": run_id, "name": (plan.get("arguments") or {}).get("name")},
             )
+        session.flush()
         return message
     actor_role = getattr(user.role, "value", user.role)
     thread.assistant_state = {

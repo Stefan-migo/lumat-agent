@@ -592,12 +592,15 @@ def test_rejecting_skill_proposal_audits_without_executing(monkeypatch):
         def scalar(self, _query):
             return message
 
+        def flush(self):
+            pass
+
     monkeypatch.setattr(agent_chat, "record_audit", lambda session, **kwargs: audits.append(kwargs))
     result = agent_chat.approve_plan(Session(), thread, SimpleNamespace(username="admin", role="admin"), "run", approval["token"], reject=True)
 
     assert result is message
     assert message.status == "rejected"
-    assert [item["action"] for item in audits] == ["skill.propose.rejected"]
+    assert [item["action"] for item in audits] == ["internal_chat.approval_rejected", "skill.propose.rejected"]
 
 
 def test_graph_pauses_step_two_class_a_write_for_its_own_approval(monkeypatch):
