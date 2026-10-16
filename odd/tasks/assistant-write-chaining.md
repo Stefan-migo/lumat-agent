@@ -49,7 +49,7 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
 
 - [x] T1 — Chain continues after an approved class-A write: `approve_plan`/`resume_thread` re-enter the graph instead of terminating. (S1, S2) — route: inline — commit `77b5ad28`
 - [x] T2 — Sequential approval for step 2+: the chain can pause with a fresh approval per write and resume it. (S1, S2) — route: inline — commit `cb2cf13d`
-- [ ] T3 — Regression pins: read-only chaining and the single-write path are unchanged. (S4) — route: inline
+- [x] T3 — Regression pins: read-only chaining and the single-write path are unchanged. (S4) — route: inline — commit `7dbca10f`
 - [ ] T4 — Reject mid-chain aborts cleanly with an audit record. (S5) — route: inline
 - [ ] T5 — Recovery/resume is exactly-once per approved write. (S6) — route: inline
 - [ ] T6 — Iteration cap raised + per-iteration cost gate honored. (S7) — route: inline
@@ -111,3 +111,11 @@ B does not grow when domains are added. `memory.delete` is the only B entry that
   - Rejecting a mid-chain approval leaves the thread at `stage=approval_pending` / `execution_status=pending`. Pre-existing at the baseline for the single-write reject; **T4** owns that cleanup.
   - When a resume pauses again, `_park_chain_on_next_approval` appends only the plan/approval events, so the earlier steps' `tool`/`evidence` events never reach the stream. A new situation, and no spec item requires them; **T7** owns the panel timeline — decide there whether a chain should emit its completed steps.
   - The verifier could not finish the whole backend suite inside its scratch copy (a tmpfs quota blocked the embedding-model download, and the scratch copy has no `.git` for the deploy-script test). The full suite was run green in the worktree instead: 2293 collected, no failures.
+
+**T3 — implemented (2026-10-15).** Regression pins for S4. T2 reopened the read-only-only loop (D3) on purpose, so S4's two protected behaviours are exactly what the chain must not have changed. The broad shapes were already covered (~10 read-only-loop pins and ~7 single-write pins in `tests/unit/test_assistant_tool_loop.py`, `tests/integration/test_assistant_settings_write.py` and `test_assistant_write_reentry_probes.py`), so T3 adds **only the gaps the chain could have opened, and no others**:
+  - `tests/integration/test_assistant_write_chain_regressions.py` — a single class-A write with `follow_up: False` still asks for **one** approval, executes **once**, completes, and triggers **no** re-plan and **no** fresh approval. This is the pin that stops the chain from quietly turning every write into a chain.
+  - `tests/unit/test_assistant_tool_loop.py` — `guardrails` at step 0 still pauses a class-A write with exactly one pending approval, and a read-only turn still issues **no** approval, at any step.
+  - **No meaningful runnable RED** (the ODD test-first exception): these characterise behaviour that already exists, so they pass at baseline — and they do. What makes them trustworthy is the mutation check, not a red run.
+  - **Mutation check.** Ignoring `follow_up` in `tool_loop_head` (so every write chains) makes the single-write pin fail on `planner_calls == []`: the pin bites instead of passing vacuously. The mutation was reverted; `nodes.py` is clean.
+  - **S4 evidence.** `git diff 7c80b456..HEAD -- tests/integration/test_assistant_settings_write.py` is **empty** — the single-write approval test is literally unchanged and passes. Of the `tool_loop` tests that did change since the baseline, the three are exactly the ones that pinned the reversed D3 decision (`loop_write_refused` at step 2, and "an autonomous write does not chain"); none of them pins S4's protected behaviours.
+  - Full suite green with T3's 3 new tests.
