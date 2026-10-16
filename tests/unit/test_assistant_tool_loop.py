@@ -761,6 +761,38 @@ def test_resumed_plan_with_its_consumed_approval_executes_without_a_new_prompt(m
     assert result["status"] == "executing"
 
 
+def test_single_class_a_write_at_step_zero_still_pauses_once(monkeypatch):
+    """S4: the single-write path still asks for exactly one approval before executing."""
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"settings.update"})
+    state = _tool_state(plan={
+        "kind": "tool",
+        "tool": "settings.update",
+        "arguments": {"key": "tone.style", "value": "formal"},
+        "requires_approval": True,
+        "follow_up": False,
+    })
+
+    result = guardrails(state)
+
+    assert result["status"] == "approval_pending"
+    assert result["guardrails"]["decision"] == "approval_pending"
+    assert result["approval"]["status"] == "pending"
+    assert result["approval"]["tool"] == "settings.update"
+
+
+def test_read_only_turn_still_issues_no_approval(monkeypatch):
+    """S4: read-only chaining is unchanged — it never asks for an approval, at any step."""
+    issued = []
+    monkeypatch.setattr("app.chat.assistant.approval.issue_approval", lambda plan: issued.append(plan))
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_tools", lambda _state: {"customers.search"})
+    state = _tool_state(tool_steps=1, plan={**_tool_state()["plan"], "follow_up": True})
+
+    result = guardrails(state)
+
+    assert result["status"] == "executing"
+    assert issued == []
+
+
 def test_single_autonomous_write_executes_without_loop_refusal(monkeypatch):
     calls = []
     handler_calls = []
