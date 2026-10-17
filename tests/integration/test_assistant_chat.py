@@ -1148,6 +1148,71 @@ def test_a_capped_read_only_turn_responder_receives_combined_tool_evidence(clien
     assert _agent_answer(settled) == "answer"
 
 
+def test_a_write_chain_emits_each_executed_step_before_the_next_approval(client, monkeypatch):
+    """S1/S2 + T7 timeline: a chain shares one run id, and the panel renders a run's
+    activity from every `evidence` event it can see. Each time the chain pauses again it
+    must emit the steps the resume executed, so the write the operator just approved is
+    visible before the next approval card -- and each step is reported exactly once."""
+    _user("assistant-chain-timeline", "admin")
+    _login(client, "assistant-chain-timeline")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "settings.update",
+            "arguments": {"key": "messages.farewell", "value": "Nos vemos."},
+            "summary": "Cambiar la despedida", "requires_approval": True, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "settings.update",
+            "arguments": {"key": "tone.style", "value": "formal"},
+            "summary": "Cambiar el tono", "requires_approval": True, "follow_up": False,
+        }),
+    ]
+    stream_calls: list = []
+    provider = _scripted_client(plans, stream_calls=stream_calls)
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: provider)
+
+    posted = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "cambiá las dos cosas"})
+    run_id = posted.json()["message"]["assistant_metadata"]["run_id"]
+    settled = _wait_for_run(client, thread_id, run_id)
+    first = next(item["assistant_metadata"]["approval"] for item in settled["messages"] if item["author"] == "admin")
+
+    approved = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval", json={"run_id": run_id, "token": first["token"]},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approval_pending"
+    settled = _wait_for_run(client, thread_id, run_id)
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    chain_events = [event for event in state["events"] if event["run_id"] == run_id]
+    # The approved step is on the stream before the next approval card, and the sequences
+    # keep climbing so nothing is de-duplicated away.
+    assert [event["type"] for event in chain_events] == ["plan", "approval", "tool", "evidence", "plan", "approval"]
+    assert [event["sequence"] for event in chain_events] == list(range(6))
+    assert [entry["tool"] for event in chain_events for entry in event.get("evidence", [])] == ["settings.update"]
+
+    second = next(item["assistant_metadata"]["approval"] for item in settled["messages"] if item["author"] == "admin")
+    final = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval", json={"run_id": run_id, "token": second["token"]},
+    )
+    assert final.status_code == 200
+    assert final.json()["status"] == "processed"
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    chain_events = [event for event in state["events"] if event["run_id"] == run_id]
+    assert [event["type"] for event in chain_events] == [
+        "plan", "approval", "tool", "evidence", "plan", "approval", "tool", "evidence", "status", "response",
+    ]
+    # The operator's activity shows both executed writes, each reported exactly once.
+    assert [entry["tool"] for event in chain_events for entry in event.get("evidence", [])] == [
+        "settings.update", "settings.update",
+    ]
+    assert stream_calls  # the responder narrated the completed chain
+
+
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
     _user("assistant-disconnect", "admin")
     _login(client, "assistant-disconnect")
