@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import smtplib
-from email.message import EmailMessage
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -139,14 +137,18 @@ def send_whatsapp(recipient: str, content: str) -> str:
     return send_text(recipient, content)
 
 
-def send_email(recipient: str, content: str) -> None:
-    message = EmailMessage()
-    message["From"] = "notificaciones@lumat.cl"
-    message["To"] = recipient
-    message["Subject"] = "Notificación Lumat"
-    message.set_content(content)
-    with smtplib.SMTP("localhost") as server:
-        server.send_message(message)
+def send_email(session: Session, recipient: str, content: str) -> None:
+    """Deliver a generic email operation.
+
+    Delegates to the single settings-aware transport in `app.services.notify`
+    (WU-E/S3): this path used to hardcode `smtplib.SMTP("localhost")` and a
+    fixed From, ignoring every configured SMTP value. The import is deferred
+    because `notify` imports this module at load time.
+    """
+    from app.services import notify
+
+    # from_name=None keeps this path's pre-WU-E bare From header.
+    notify.send_email(session, recipient, "Notificación Lumat", content, from_name=None)
 
 
 def create_operation(session: Session, **values) -> NotificationOperation:
@@ -347,8 +349,12 @@ def process_operation(
             external_id = renderer(session, operation)
         elif operation.channel == "push":
             external_id = (deliver or send_push)(operation.recipient, operation.content)
+        elif deliver is not None:
+            external_id = deliver(operation.recipient, operation.content)
+        elif operation.channel == "whatsapp":
+            external_id = send_whatsapp(operation.recipient, operation.content)
         else:
-            external_id = (deliver or (send_whatsapp if operation.channel == "whatsapp" else send_email))(operation.recipient, operation.content)
+            external_id = send_email(session, operation.recipient, operation.content)
     except Exception as exc:
         error = str(exc)[:2000]
         if isinstance(exc, MissingReminderEmail):
