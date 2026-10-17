@@ -4,10 +4,12 @@ import json
 from types import SimpleNamespace
 from uuid import uuid4
 
+from sqlalchemy import select
+
 from app.chat.assistant.approval import issue_approval
 from app.db import SessionLocal
-from app.models import InternalChatMessage, InternalChatThread, User
-from app.services.agent_chat import approve_plan
+from app.models import AuditLog, InternalChatMessage, InternalChatThread, User
+from app.services.agent_chat import approve_plan, reap_stale_run
 from app.services.settings import get_setting
 from app.services.users import hash_password
 
@@ -165,3 +167,55 @@ def test_chain_rejecting_the_second_write_leaves_step_two_unexecuted(migrated_db
         assert get_setting(session, "messages.farewell") == "Nos vemos."
         assert get_setting(session, "tone.style") == "cercano"
         assert client.stream_calls == 0
+
+        session.refresh(thread)
+        state = thread.assistant_state
+        # S5: rejecting the paused step is terminal -- no pending run survives and
+        # the approval can never be reused.
+        assert state["stage"] == "rejected"
+        assert state["execution_status"] == "rejected"
+        assert state["live"]["status"] == "rejected"
+        assert state["approval"]["status"] == "rejected"
+        # Nothing is left for a recovery pass to reclaim.
+        assert reap_stale_run(session, thread) is False
+        # The rejection is recorded.
+        actions = {entry.action for entry in session.scalars(
+            select(AuditLog).where(AuditLog.entity_id == str(thread.id))
+        )}
+        assert "internal_chat.approval_rejected" in actions
+
+
+def test_rejecting_a_single_write_settles_the_thread(migrated_db, monkeypatch):
+    """S5: rejecting the only write of a turn is terminal too -- no pending run, no
+    executable approval, and the rejection is recorded."""
+    run_id = f"single-reject-{uuid4().hex[:10]}"
+    plan = {
+        "kind": "tool",
+        "tool": "settings.update",
+        "arguments": {"key": "messages.farewell", "value": "Nos vemos."},
+        "summary": "Cambiar la despedida",
+        "requires_approval": True,
+        "follow_up": False,
+    }
+    with SessionLocal() as session:
+        before = get_setting(session, "messages.farewell")
+        approval = issue_approval(plan)
+        user, thread = _pending_write_thread(session, plan=plan, approval=approval, run_id=run_id)
+
+        rejected = approve_plan(session, thread, user, run_id, approval["token"], reject=True)
+        session.commit()
+
+        assert rejected is not None
+        assert rejected.status == "rejected"
+        assert get_setting(session, "messages.farewell") == before
+        session.refresh(thread)
+        state = thread.assistant_state
+        assert state["stage"] == "rejected"
+        assert state["execution_status"] == "rejected"
+        assert state["live"]["status"] == "rejected"
+        assert state["approval"]["status"] == "rejected"
+        assert reap_stale_run(session, thread) is False
+        actions = {entry.action for entry in session.scalars(
+            select(AuditLog).where(AuditLog.entity_id == str(thread.id))
+        )}
+        assert "internal_chat.approval_rejected" in actions
