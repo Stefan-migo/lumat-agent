@@ -94,6 +94,15 @@ export interface SaveModelApiKeyResponse extends ModelApiKeyResponse { validatio
 export const getModelApiKeyStatus = () => apiFetch<{ model_api_key: ModelApiKeyStatus }>('/panel/api/settings').then(({ model_api_key }) => model_api_key);
 export const saveModelApiKey = (api_key: string) => postJson<SaveModelApiKeyResponse>('/panel/api/settings/model_api_key', { api_key });
 export const deleteModelApiKey = () => apiFetch<ModelApiKeyResponse>('/panel/api/settings/model_api_key', { method: 'DELETE' });
+export interface SmtpPasswordStatus { configured: boolean; masked: string; }
+export interface EmailSettingsResponse { ok: true; email: SmtpEmailSettings; }
+export interface SmtpPasswordResponse { ok: true; email: { password: SmtpPasswordStatus }; }
+export const saveEmailSettings = (body: Omit<SmtpEmailSettings, 'password'>) =>
+  postJson<EmailSettingsResponse>('/panel/api/settings/email', body);
+export const saveSmtpPassword = (password: string) =>
+  postJson<SmtpPasswordResponse>('/panel/api/settings/email/password', { password });
+export const deleteSmtpPassword = () =>
+  apiFetch<SmtpPasswordResponse>('/panel/api/settings/email/password', { method: 'DELETE' });
 export const fetchPushConfig = () => apiFetch<{ public_key: string | null }>('/panel/api/push-config');
 export const savePushSubscription = (subscription: { endpoint: string; p256dh: string; auth: string; user_agent?: string }) =>
   postJson('/panel/api/push-subscription', subscription);
@@ -106,7 +115,7 @@ export function putJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse, ProjectFile, ProjectFilesResponse, ProjectFolder, ProjectFoldersResponse } from './types';
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse, ProjectFile, ProjectFilesResponse, ProjectFolder, ProjectFoldersResponse, SmtpEmailSettings } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility, projectId?: number) => {
   const body = new FormData();
   body.append('title', title);

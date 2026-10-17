@@ -1,0 +1,21 @@
+# Secret scanning configuration (ggshield / GitGuardian, schema version 2).
+#
+# The paths below are test fixtures for the SMTP settings and the panel login
+# routes. They necessarily spell the `password` key, and in a file that is about
+# SMTP the "SMTP credentials" detector reads any such key as a hardcoded
+# assignment. Every value in them is a plain placeholder ("adm-pass",
+# "smtp-pass-2468", a 32-zero-byte base64 test key), never a real credential.
+#
+# The exclusion is deliberately scoped to these fixture files rather than whole
+# directories: a real secret committed into an unrelated test still gets caught.
+version: 2
+secret:
+  ignored_paths:
+    - 'tests/integration/test_smtp*.py'
+    - 'tests/integration/test_verifier_wue_transport.py'
+    - 'tests/functional/test_api_settings_email.py'
+    - 'tests/functional/test_verifier_wue_api.py'
+    - 'tests/integration/test_emergency_notify.py'
+    - 'tests/integration/test_cost_guardrails.py'
+    - 'tests/integration/test_h4_notifications.py'
+    - 'web/src/components/pages/SettingsEmail.test.tsx'

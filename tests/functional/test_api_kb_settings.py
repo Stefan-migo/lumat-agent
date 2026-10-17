@@ -878,7 +878,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
-        "model_api_key",
+        "model_api_key", "email",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
