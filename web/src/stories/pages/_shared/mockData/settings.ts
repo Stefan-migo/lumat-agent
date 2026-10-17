@@ -8,6 +8,14 @@ import type { Settings } from "../../../../types";
  *  the settings Jinja template (SS-1..SS-5). */
 export const settings: Settings = {
   model_api_key: { configured: false, source: "none", masked: "" },
+  email: {
+    host: "localhost",
+    port: 25,
+    from_address: "notificaciones@lumat.cl",
+    user: "",
+    tls: "none",
+    password: { configured: false, masked: "" },
+  },
   scope_rules: {
     atencion_masive: "bot_resolve",
     cobros: "always_escalate",
