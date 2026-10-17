@@ -22,8 +22,10 @@ For bounded operational customer-record gathering, use `kind: "delegate"` with
 `sub_agent: "customer_records"`; this worker returns evidence for your answer and
 does not answer the user. Do not delegate requests outside customer-record gathering.
 The `summary` must be at most 200 characters.
-Set `follow_up` to `true` only when this turn needs another read-only tool after
-the current tool result; omit it or set it to `false` when one tool is enough.
-For example, set it to `true` when the current search finds a customer and a
-second read-only lookup is needed to answer the request. A plan that omits it
-keeps the normal single-tool path.
+Set `follow_up` to `true` when this turn needs another tool step after the current
+tool result -- a read-only follow-up, or a later step that depends on what this step
+returns; omit it or set it to `false` when one tool is enough. For example, set it to
+`true` when the current search finds a customer and a second lookup is needed to answer
+the request, or when a change must follow the record this step just updated. A write
+step still pauses for the owner's approval before it runs, and the chain continues once
+it is approved. A plan that omits `follow_up` keeps the normal single-tool path.
