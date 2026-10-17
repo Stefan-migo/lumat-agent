@@ -133,7 +133,12 @@ DEFAULT_EMERGENCY_NOTIFY_MESSAGE: str = (
 DEFAULT_OWNER_EMAIL: str = "emergencias@lumat.cl"
 DEFAULT_OWNER_WHATSAPP: str = "+56912345678"
 DEFAULT_SMTP_HOST: str = "localhost"
+# Defaults keep the pre-WU-E behavior (a plain `smtplib.SMTP("localhost")` used
+# port 25 with no auth/TLS), so an unconfigured install sends exactly as before.
+DEFAULT_SMTP_PORT: int = 25
 DEFAULT_SMTP_FROM: str = "notificaciones@lumat.cl"
+DEFAULT_SMTP_USER: str = ""
+DEFAULT_SMTP_TLS: str = "none"
 
 # SS-3: USD per million tokens. Sources/effective date are retained in the
 # default so a pricing change is auditable without a second configuration table.
@@ -179,7 +184,13 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.en_route_template_name": "en_route",
     "notify.arrived_template_name": "arrived",
     "notify.smtp_host": DEFAULT_SMTP_HOST,
+    "notify.smtp_port": DEFAULT_SMTP_PORT,
     "notify.smtp_from": DEFAULT_SMTP_FROM,
+    # WU-E: `notify.smtp_user` pairs with the encrypted `smtp_password` panel
+    # secret (`app/services/smtp.py`); `notify.smtp_tls` is "none" | "starttls"
+    # | "ssl". Both stay out of ASSISTANT_WRITABLE_SETTINGS (credentials).
+    "notify.smtp_user": DEFAULT_SMTP_USER,
+    "notify.smtp_tls": DEFAULT_SMTP_TLS,
     # SS-5: tone style used by the chat nodes.
     "tone.style": DEFAULT_TONE_STYLE,
     "messages.greeting": MESSAGE_DEFAULTS["greeting"],

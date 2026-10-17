@@ -480,6 +480,15 @@ export interface SpendSnapshot {
   mode: string;
 }
 
+export interface SmtpEmailSettings {
+  host: string;
+  port: number;
+  from_address: string;
+  user: string;
+  tls: 'none' | 'starttls' | 'ssl';
+  password: { configured: boolean; masked: string };
+}
+
 export interface Settings {
   model_api_key: { configured: boolean; source: 'env' | 'panel' | 'none'; masked: string };
   scope_rules: Record<string, string>;
@@ -501,6 +510,7 @@ export interface Settings {
   daily_limit: number;
   meta_cost: number;
   snapshot: SpendSnapshot;
+  email: SmtpEmailSettings;
 }
 
 export interface ClientFichaResponse {

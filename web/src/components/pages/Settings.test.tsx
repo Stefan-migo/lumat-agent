@@ -6,6 +6,7 @@ import { Settings } from "./Settings";
 
 const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   model_api_key: { configured: false, source: "none", masked: "" },
+  email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
   messages: { greeting: "Hola", cannot_answer: "No sé", clarification: "¿Cuál?", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
@@ -19,9 +20,9 @@ const capabilities = { tools: [], personas: [], prompts: [], kb_available: true,
 describe("Settings", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders six sections and selects Agente by default", () => {
+  it("renders seven sections and selects Agente by default", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Costos", "Capacidades", "API key de modelos"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Costos", "Capacidades", "API key de modelos", "Correo"]);
     expect(screen.getByRole("tab", { name: "Agente" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
   });

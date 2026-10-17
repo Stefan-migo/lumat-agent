@@ -40,8 +40,6 @@ from app.services.send import (
 from app.services.settings import (
     DEFAULT_OWNER_EMAIL,
     DEFAULT_OWNER_WHATSAPP,
-    DEFAULT_SMTP_FROM,
-    DEFAULT_SMTP_HOST,
     get_setting,
 )
 from app.services.notifications import create_operation, process_operation
@@ -95,22 +93,41 @@ def send_template(phone_e164: str, body_params: list[str], *, template_name: str
     return response.json()["messages"][0]["id"]
 
 
-def send_email(session: Session, to: str, subject: str, body: str) -> None:
+def send_email(
+    session: Session,
+    to: str,
+    subject: str,
+    body: str,
+    *,
+    from_name: str | None = "Lumat Emergencias",
+) -> None:
     """Send one plain-text email via the configured SMTP host (stdlib only).
 
     Thin `smtplib` wrapper (tasks.md ponytail guard: no SMTP dependency) so
     tests patch `app.services.notify.smtplib.SMTP` — never a real server.
+    Connection settings and the encrypted password come from
+    `app.services.smtp` (WU-E); with the defaults this opens the same plain
+    localhost:25 connection the hardcoded path used.
+    `from_name` keeps each caller's pre-WU-E From header: the emergency and
+    reminder paths always showed a display name, the generic operation sender
+    showed the bare address. Pass `None` for a bare address.
     Raises on SMTP failure; callers decide the fallback/audit.
     """
-    host = get_setting(session, "notify.smtp_host", default=DEFAULT_SMTP_HOST)
-    mail_from = get_setting(session, "notify.smtp_from", default=DEFAULT_SMTP_FROM)
+    from app.services import smtp
+
+    config = smtp.load_smtp_config(session)
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = formataddr(("Lumat Emergencias", mail_from))
+    msg["From"] = formataddr((from_name, config.from_address)) if from_name else config.from_address
     msg["To"] = to
     msg.set_content(body)
-    with smtplib.SMTP(host) as server:
-        server.sendmail(mail_from, [to], msg.as_string())
+    server_cls = smtplib.SMTP_SSL if config.tls == "ssl" else smtplib.SMTP
+    with server_cls(config.host, config.port) as server:
+        if config.tls == "starttls":
+            server.starttls()
+        if config.user and config.password:
+            server.login(config.user, config.password)
+        server.sendmail(config.from_address, [to], msg.as_string())
 
 
 def _customer_location(conversation: Conversation) -> str | None:

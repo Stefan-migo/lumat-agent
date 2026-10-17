@@ -231,7 +231,7 @@ def test_push_failure_uses_configured_email_fallback(monkeypatch):
     user_id = _user("email-fallback-admin")
     sent = []
     monkeypatch.setattr(notifications, "send_push", lambda *_: (_ for _ in ()).throw(RuntimeError("denied")))
-    monkeypatch.setattr(notifications, "send_email", lambda recipient, content: sent.append((recipient, content)))
+    monkeypatch.setattr(notifications, "send_email", lambda session, recipient, content: sent.append((recipient, content)))
     with SessionLocal() as session:
         event = publish_event(
             session, event_type="case.created", entity_type="case", entity_id="fallback-email",

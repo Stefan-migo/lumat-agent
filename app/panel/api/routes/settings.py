@@ -15,6 +15,8 @@ upserts the KV row AND audits with the acting admin, SH-5):
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
+- POST /settings/email -> SMTP connection settings (WU-E): host/port/from/user/tls
+- POST|DELETE /settings/email/password -> the encrypted SMTP password (write-only)
 
 Section names mirror the Jinja POST routes (/panel/settings/{scope,keywords,
 tone,limits,meta}); an unknown section is a 400 (PDW-API-3). Role enforcement
@@ -30,13 +32,13 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.models import User
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services import costs, model_secrets, settings as settings_service
+from app.services import costs, model_secrets, settings as settings_service, smtp
 from app.services.deepseek_key import (
     InvalidApiKeyError,
     KeyValidationUnavailableError,
@@ -97,6 +99,66 @@ class MetaBody(BaseModel):
 
 class ModelApiKeyBody(BaseModel):
     api_key: str
+
+
+class EmailBody(BaseModel):
+    # `extra="forbid"`: the password has its own route, so a stray `password`
+    # here must fail loudly instead of returning 200 with it silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
+    host: str
+    port: int
+    from_address: str
+    user: str = ""
+    tls: str = "none"
+
+
+class SmtpPasswordBody(BaseModel):
+    password: str
+
+
+def _email_payload(session: Session) -> dict:
+    """Current SMTP config + password status; the plaintext never leaves here."""
+    return {
+        "host": settings_service.get_setting(
+            session, "notify.smtp_host", default=settings_service.DEFAULT_SMTP_HOST
+        ),
+        "port": settings_service.get_setting(
+            session, "notify.smtp_port", default=settings_service.DEFAULT_SMTP_PORT
+        ),
+        "from_address": settings_service.get_setting(
+            session, "notify.smtp_from", default=settings_service.DEFAULT_SMTP_FROM
+        ),
+        "user": settings_service.get_setting(
+            session, "notify.smtp_user", default=settings_service.DEFAULT_SMTP_USER
+        ),
+        "tls": settings_service.get_setting(
+            session, "notify.smtp_tls", default=settings_service.DEFAULT_SMTP_TLS
+        ),
+        "password": smtp.smtp_password_status(session),
+    }
+
+
+def _parse_email(body: EmailBody) -> dict[str, object]:
+    host = body.host.strip()
+    if not host:
+        raise HTTPException(status_code=400, detail="smtp host must not be empty")
+    from_address = body.from_address.strip()
+    if not from_address:
+        raise HTTPException(status_code=400, detail="smtp from address must not be empty")
+    if not 1 <= body.port <= 65535:
+        raise HTTPException(status_code=400, detail="smtp port must be between 1 and 65535")
+    if body.tls not in smtp.TLS_MODES:
+        raise HTTPException(
+            status_code=400, detail=f"tls must be one of {', '.join(smtp.TLS_MODES)}"
+        )
+    return {
+        "host": host,
+        "port": body.port,
+        "from_address": from_address,
+        "user": body.user.strip(),
+        "tls": body.tls,
+    }
 
 
 def _save(session: Session, key: str, value, current: User) -> None:
@@ -214,6 +276,7 @@ def settings_get(
         "meta_cost": (meta or {}).get("service_message_cost", 0.01),
         "snapshot": costs.spend_snapshot(session),
         "model_api_key": model_secrets.model_api_key_status(session),
+        "email": _email_payload(session),
     }
 
 
@@ -249,6 +312,53 @@ def settings_model_api_key_clear(
     session.commit()
     model_secrets.invalidate_model_key_cache()
     return {"ok": True, "model_api_key": model_secrets.model_api_key_status(session)}
+
+
+@router.post("/settings/email")
+def settings_email(
+    body: EmailBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """WU-E: the SMTP connection settings (host/port/from/user/tls).
+
+    The password is a separate write-only route; it never travels with the
+    connection settings so a config save can never blank a stored credential.
+    """
+    parsed = _parse_email(body)
+    _save(session, "notify.smtp_host", parsed["host"], current)
+    _save(session, "notify.smtp_port", parsed["port"], current)
+    _save(session, "notify.smtp_from", parsed["from_address"], current)
+    _save(session, "notify.smtp_user", parsed["user"], current)
+    _save(session, "notify.smtp_tls", parsed["tls"], current)
+    session.commit()
+    return {"ok": True, "email": _email_payload(session)}
+
+
+@router.post("/settings/email/password")
+def settings_email_password(
+    body: SmtpPasswordBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Store the SMTP password encrypted; only its masked tail is ever returned."""
+    if body.password == "":
+        raise HTTPException(status_code=400, detail="password must not be empty")
+    smtp.set_smtp_password(
+        session, body.password, actor=current.username, updated_by=current.id
+    )
+    session.commit()
+    return {"ok": True, "email": {"password": smtp.smtp_password_status(session)}}
+
+
+@router.delete("/settings/email/password")
+def settings_email_password_clear(
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    smtp.clear_smtp_password(session, actor=current.username)
+    session.commit()
+    return {"ok": True, "email": {"password": smtp.smtp_password_status(session)}}
 
 
 @router.post("/settings/scope")
@@ -362,7 +472,7 @@ def settings_meta(
 # Catch-all MUST stay registered AFTER the specific POST routes above: FastAPI
 # matches routes in registration order, so the
 # literal sections win and anything else is an unknown section (PDW-API-3).
-_KNOWN_SECTIONS = {"scope", "keywords", "tone", "messages", "hours", "limits", "meta"}
+_KNOWN_SECTIONS = {"scope", "keywords", "tone", "messages", "hours", "limits", "meta", "email"}
 
 
 @router.post("/settings/{section}")

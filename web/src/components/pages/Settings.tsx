@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { ApiError, apiFetch, deleteModelApiKey, getAssistantCapabilities, postJson, saveModelApiKey, type ModelApiKeyStatus } from "../../api";
+import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
+import type { AssistantCapabilities, Settings as SettingsData, SmtpEmailSettings } from "../../types";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Accordion } from "../primitives/Accordion";
@@ -39,6 +39,7 @@ const SECTIONS = [
   { id: "agent", label: "Agente" }, { id: "messages", label: "Mensajes" },
   { id: "schedule", label: "Horarios y avisos" }, { id: "costs", label: "Costos" },
   { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
+  { id: "email", label: "Correo" },
 ];
 const MESSAGE_TEMPLATES = [
   { id: "greeting", label: "Saludo", description: "Inicio de conversación", icon: MessageCircle },
@@ -215,8 +216,20 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [modelApiKey, setModelApiKey] = useState("");
   const [modelApiKeyBusy, setModelApiKeyBusy] = useState(false);
   const [modelApiKeyFeedback, setModelApiKeyFeedback] = useState("");
+  const [emailDraft, setEmailDraft] = useState<Omit<SmtpEmailSettings, "password">>({ host: "", port: 25, from_address: "", user: "", tls: "none" });
+  const [emailPasswordStatus, setEmailPasswordStatus] = useState<SmtpEmailSettings["password"] | undefined>(data?.email?.password);
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState("");
 
   useEffect(() => { if (data?.model_api_key) setModelApiKeyStatus(data.model_api_key); }, [data?.model_api_key]);
+
+  useEffect(() => {
+    if (!data?.email) return;
+    const { password, ...connection } = data.email;
+    setEmailDraft(connection);
+    setEmailPasswordStatus(password);
+  }, [data?.email]);
 
   const saveModelKey = async () => {
     setModelApiKeyBusy(true); setModelApiKeyFeedback("");
@@ -243,6 +256,44 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
 
   const modelApiKeyOrigin = modelApiKeyStatus?.source === "env" ? "Configurada en el servidor (variable de entorno)"
     : modelApiKeyStatus?.source === "panel" ? "Configurada desde el panel" : "No configurada";
+
+  const emailPasswordOrigin = emailPasswordStatus?.configured ? "Contraseña guardada en el panel" : "Sin contraseña guardada";
+  const port = Number(emailDraft.port);
+  const emailValid = emailDraft.host.trim() !== "" && emailDraft.from_address.trim() !== "" && Number.isInteger(port) && port >= 1 && port <= 65535;
+
+  const saveEmail = async () => {
+    setEmailBusy(true); setEmailFeedback("");
+    try {
+      const result = await saveEmailSettings({ ...emailDraft, host: emailDraft.host.trim(), from_address: emailDraft.from_address.trim(), user: emailDraft.user.trim() });
+      setEmailPasswordStatus(result.email.password);
+      setEmailFeedback("Configuración de correo guardada.");
+    } catch {
+      setEmailFeedback("No se pudo guardar la configuración.");
+    } finally { setEmailBusy(false); }
+  };
+
+  const saveSmtpPasswordHandler = async () => {
+    setEmailBusy(true); setEmailFeedback("");
+    try {
+      const result = await saveSmtpPassword(emailPassword);
+      setEmailPasswordStatus(result.email.password);
+      setEmailPassword("");
+      setEmailFeedback("Contraseña guardada.");
+    } catch {
+      setEmailFeedback("No se pudo guardar la contraseña.");
+    } finally { setEmailBusy(false); }
+  };
+
+  const deleteSmtpPasswordHandler = async () => {
+    setEmailBusy(true); setEmailFeedback("");
+    try {
+      const result = await deleteSmtpPassword();
+      setEmailPasswordStatus(result.email.password);
+      setEmailFeedback("Contraseña eliminada del panel.");
+    } catch {
+      setEmailFeedback("No se pudo borrar la contraseña.");
+    } finally { setEmailBusy(false); }
+  };
 
   useEffect(() => {
     if (!data) return;
@@ -416,6 +467,26 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               <Button variant="danger" disabled={modelApiKeyBusy || modelApiKeyStatus?.source !== "panel"} onClick={() => void deleteModelKey()}>Borrar</Button>
             </div>
             {modelApiKeyFeedback ? <p className="settings-model-key__feedback" role="status">{modelApiKeyFeedback}</p> : null}
+          </div>
+        </Card> : null}
+        {active === "email" ? <Card title="Correo" description="Configura el servidor SMTP que usa el sistema para enviar correos.">
+          <div className="settings-email">
+            <p className="settings-email__origin">{emailPasswordOrigin}</p>
+            {emailPasswordStatus?.configured ? <code className="settings-email__masked">{emailPasswordStatus.masked}</code> : null}
+            <Input label="Servidor SMTP" value={emailDraft.host} onChange={(event) => setEmailDraft({ ...emailDraft, host: event.target.value })} />
+            <Input label="Puerto" inputMode="numeric" value={emailDraft.port} onChange={(event) => setEmailDraft({ ...emailDraft, port: Number(event.target.value.replace(/\D/g, "")) })} />
+            <Input label="Remitente" value={emailDraft.from_address} onChange={(event) => setEmailDraft({ ...emailDraft, from_address: event.target.value })} />
+            <Input label="Usuario" value={emailDraft.user} onChange={(event) => setEmailDraft({ ...emailDraft, user: event.target.value })} />
+            <Select label="Seguridad" value={emailDraft.tls} onChange={(event) => setEmailDraft({ ...emailDraft, tls: event.target.value as SmtpEmailSettings["tls"] })} options={[{ value: "none", label: "Sin cifrado" }, { value: "starttls", label: "STARTTLS (587)" }, { value: "ssl", label: "SSL (465)" }]} />
+            <div className="settings-email__actions">
+              <Button disabled={emailBusy || !emailValid} onClick={() => void saveEmail()}>Guardar correo</Button>
+            </div>
+            <Input label="Contraseña SMTP" type="password" autoComplete="new-password" value={emailPassword} onChange={(event) => setEmailPassword(event.target.value)} />
+            <div className="settings-email__actions">
+              <Button disabled={emailBusy || emailPassword === ""} onClick={() => void saveSmtpPasswordHandler()}>Guardar contraseña</Button>
+              <Button variant="danger" disabled={emailBusy || !emailPasswordStatus?.configured} onClick={() => void deleteSmtpPasswordHandler()}>Borrar contraseña</Button>
+            </div>
+            {emailFeedback ? <p className="settings-email__feedback" role="status">{emailFeedback}</p> : null}
           </div>
         </Card> : null}
       </div>}

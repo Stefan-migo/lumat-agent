@@ -324,6 +324,10 @@ The app reads every secret from the environment (`app/config.py`,
 `infra/.env` (gitignored); the repo carries only `infra/.env.example` with
 `change-me` placeholders.
 
+Two credentials are entered in the panel instead (an explicit exception, see
+"Panel-stored secrets" below): the model API key and the SMTP password. Both
+are encrypted at rest and never stored in the repo either.
+
 ```bash
 # 1. repo is clean of real secrets (no sk- keys, no Meta tokens, no change-me leaks):
 git grep -nE 'sk-[A-Za-z0-9]{20}|EAAG[A-Za-z0-9]{20}' || echo "clean"
@@ -354,6 +358,40 @@ APP_SECRET=<set>
 $ docker history --no-trunc lumat-api:prod | grep -iE 'secret|token|sk-' || echo "clean"
 clean
 ```
+
+### Panel-stored secrets (the two exceptions)
+
+`panel_secrets` holds the model API key (`deepseek_api_key`) and, since WU-E,
+the SMTP password (`smtp_password`). Both are entered in the panel, encrypted
+at rest with AES-GCM (`app/services/crypto.py`, key from the env-only
+`SETTINGS_ENCRYPTION_KEY`), audited on every set/clear, and only ever returned
+masked (last 4 characters). `SETTINGS_ENCRYPTION_KEY` itself stays env-only.
+
+The remaining SMTP connection settings are ordinary KV settings (`settings`
+table), editable under **Configuración → Correo**:
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `notify.smtp_host` | SMTP server | `localhost` |
+| `notify.smtp_port` | SMTP port | `25` |
+| `notify.smtp_from` | From address | `notificaciones@lumat.cl` |
+| `notify.smtp_user` | auth user (empty = no auth) | `""` |
+| `notify.smtp_tls` | `none` \| `starttls` \| `ssl` | `none` |
+| `panel_secrets.smtp_password` | auth password, encrypted | unset |
+
+The defaults preserve the previous behavior (a plain `localhost:25` connection),
+so an unconfigured install sends exactly as before. `notify.*` stays out of
+`ASSISTANT_WRITABLE_SETTINGS`, so the panel assistant cannot change the mail
+configuration.
+
+For cPanel/Bluehosting mail: host `mail.<domain>`, port `587` with STARTTLS or
+`465` with SSL, user = the full email address, password = the mailbox password;
+confirm the VPS can reach that port outbound.
+
+- [ ] **SMTP delivery verified end-to-end (pending — owner):** send one real
+  email with production credentials and observe the `notification.operation_sent`
+  audit row for the `NotificationOperation`. Not runnable in CI (no real
+  credentials).
 
 ---
 
