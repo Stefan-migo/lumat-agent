@@ -216,7 +216,7 @@ def test_opted_in_turn_executes_two_tools_and_narrates_combined_evidence(monkeyp
     handler_calls = []
     plans = [
         '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
-        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":false}',
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
@@ -250,7 +250,7 @@ def test_chained_turn_publishes_planning_after_first_execution(monkeypatch):
     stages = []
     plans = [
         '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
-        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":false}',
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
@@ -333,13 +333,14 @@ def test_replan_marker_never_cuts_the_newest_result(monkeypatch):
     assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
 
 
-def test_cap_refuses_a_third_execution(monkeypatch):
+def test_cap_refuses_the_step_after_the_budget(monkeypatch):
     calls = []
     handler_calls = []
+    # One follow-up-requesting plan per allowed step, so the chain runs the whole
+    # budget and only the step *after* it is refused.
     plans = [
-        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
-        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
-        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana again","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}'
+        for _ in range(MAX_ASSISTANT_TOOL_STEPS)
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
@@ -363,6 +364,34 @@ def test_cap_refuses_a_third_execution(monkeypatch):
     result = tool_loop_head(state)
     assert result["cap_reached"] is True
     assert result["status"] == "completed"
+
+
+def test_three_step_chain_completes_within_the_budget(monkeypatch):
+    """S7/T6: the iteration budget fits a 3-step chain -- it runs all three steps in one
+    turn and is not capped."""
+    calls = []
+    handler_calls = []
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"s1","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"s2","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"s3","requires_approval":false,"follow_up":false}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, tool_name, *_args, **_kwargs: handler_calls.append(tool_name)
+        or {"tool": tool_name, "status": "completed", "result": [{"evidence": tool_name}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    final = run_assistant(
+        thread_id=7, user_id=1, content="Find Ana", run_id="run-three-step", on_token=lambda _token: None
+    )
+
+    assert handler_calls == ["customers.search", "memory.search", "customers.search"]
+    assert final["tool_steps"] == 3
+    assert final.get("cap_reached", False) is False
 
 
 def test_cap_is_recorded_only_when_follow_up_is_still_requested():
@@ -456,7 +485,7 @@ def test_sessionless_normal_cost_mode_keeps_two_step_chain(monkeypatch):
     handler_calls = []
     plans = [
         '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
-        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":false}',
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
@@ -489,7 +518,7 @@ def test_autonomous_write_turn_chains_in_loop(monkeypatch):
                 "follow_up": True,
             }
         ),
-        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":false}',
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
