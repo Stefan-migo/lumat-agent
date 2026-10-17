@@ -6,6 +6,68 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.5] - 2026-10-17
+
+This release adds configurable email delivery, the technician field workflow, and
+Meta template delivery for automation recipes. It also turns the assistant into a
+project-scoped configuration layer with multi-step write chains, and finishes the
+panel's role-scoped shell and project workspace.
+
+### Added
+
+- **Configurable email (SMTP).** Settings gains a Correo tab for the server, port,
+  sender, user, TLS mode, and a write-only password, with the password kept in the
+  encrypted panel secret store. Notifications deliver through one SMTP transport
+  instead of the previous hardcoded localhost relay, so WhatsApp is no longer the
+  only configured channel.
+- **Technician field workflow.** Technicians get field quick actions with WhatsApp
+  send and a resend cooldown, a visit close action, and a privacy-scoped detail
+  view. The office sees a field-state semaphore on the agenda and the visit
+  detail, and the technician contract no longer carries the customer phone.
+- **Project folders and knowledge-base scope.** Create, rename, and move project
+  files through a folder tree, and keep panel knowledge-base documents and
+  retrieval scoped to global or single-project documents.
+- **Project-scoped assistant configuration.** Personality, response format, memory
+  behavior, knowledge-base relationship, skills, agents, and planning sessions are
+  configurable per project on top of a global baseline. The seven opt-in tools ship
+  enabled by default, the role and tier gates still apply to destructive ones, and
+  the capabilities panel reflects the resolved policy.
+- **Assistant tools and media.** Attach docx, xlsx, and markdown files to threads;
+  inspect images on demand with `view_image` and multimodal tool results; page
+  through project files with `read_project_file`; pin project resources and read
+  planning reports on demand; and add the TecnicoLumat agent for the technician
+  role.
+- **Write chains.** An approved tool write re-enters the assistant graph instead of
+  ending the turn, chains further writes behind a fresh approval per step, settles a
+  rejected step as terminal with an audit record, and emits each executed step in
+  the chain timeline before the next approval.
+- **Chatbot operations.** Admins get a metrics view for containment, handoffs,
+  knowledge-base hits, resolution turns, and conversation costs; inspection tools
+  read recent conversations; the assistant can propose settings writes behind
+  approval; and guided planning sessions offer the SDB handoff on close.
+- **Automation templates.** Recipe notifications deliver through their Meta
+  template, appointment reminders and follow-ups run from the recipe engine, booking
+  confirmations are scoped to panel origin, and installed recipe installations can
+  be uninstalled.
+
+### Changed
+
+- **Panel shell.** One role-scoped shell and navigation serves every role, with
+  shared project chrome, a Contexto tab, redesigned Agentes and Skills tabs, a wired
+  Hilos tab, and a file manager that moves files between folders.
+- **Panel layout and feedback.** Global toasts, corrected page headers, a tab bar
+  that holds at smaller sizes, stacked skill rows, and an embedded project tab that
+  scrolls instead of clipping.
+- **Assistant loop budget.** The tool loop now fits a three-step write chain.
+
+### Fixed
+
+- **Knowledge-base panel scope.** The document list and the admin retrieval probe now
+  read global documents as well as the selected project's.
+- **Assistant turn hygiene.** Handoff verification persists on the normal turn,
+  message values are bounded, and transcript events are capped to the latest window.
+- **Automation uninstall dialog.** Removed the duplicate error banner behind it.
+
 ## [2026.10.4] - 2026-10-14
 
 This release improves WhatsApp conversation quality, expands the panel assistant,
