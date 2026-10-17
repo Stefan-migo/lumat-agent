@@ -1110,15 +1110,8 @@ def test_a_chained_read_only_turn_persists_the_tool_step_cap(client, monkeypatch
         json.dumps({
             "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
             "summary": "find customer", "requires_approval": False, "follow_up": True,
-        }),
-        json.dumps({
-            "kind": "tool", "tool": "memory.search", "arguments": {"query": "ana"},
-            "summary": "find memory", "requires_approval": False, "follow_up": True,
-        }),
-        json.dumps({
-            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
-            "summary": "find customer again", "requires_approval": False, "follow_up": True,
-        }),
+        })
+        for _ in range(MAX_ASSISTANT_TOOL_STEPS)
     ]
     _, _, thread_id = _turn_with_plan(client, monkeypatch, "capped-read-only", plans)
 
@@ -1141,6 +1134,10 @@ def test_a_capped_read_only_turn_responder_receives_combined_tool_evidence(clien
         json.dumps({
             "kind": "tool", "tool": "assistant.capabilities", "arguments": {},
             "summary": "list capabilities again", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "summary": "find customer", "requires_approval": False, "follow_up": True,
         }),
     ]
     settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "capped-evidence", plans)

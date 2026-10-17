@@ -153,26 +153,28 @@ def test_s6_parked_chain_survives_restart_and_second_approval(migrated_db, monke
 
 
 def test_s7_cap_bounds_chain_across_pause(migrated_db, monkeypatch):
+    """S6/S7: `tool_steps` is cumulative across the approval pause, so the iteration cap
+    holds across it -- a chain that keeps requesting follow-ups pauses per step and is cut
+    at the budget, not at the first pause."""
     run_id = f"p-{uuid4().hex[:10]}"
-    second = {
-        "kind": "tool", "tool": "settings.update",
-        "arguments": {"key": "tone.style", "value": "formal"},
-        "summary": "tono", "requires_approval": True, "follow_up": True,
-    }
-    c = _client(monkeypatch, [json.dumps(second)])
+    steps = _first()  # a class-A write that asks for another step every time
+    c = _client(monkeypatch, [json.dumps(steps) for _ in range(MAX_ASSISTANT_TOOL_STEPS)])
     with SessionLocal() as session:
-        a1 = issue_approval(_first())
-        user, thread = _thread(session, plan=_first(), approval=a1, run_id=run_id)
-        assert approve_plan(session, thread, user, run_id, a1["token"]).status == "approval_pending"
-        session.commit()
-        session.refresh(thread)
-        a2 = thread.assistant_state["approval"]
-        assert approve_plan(session, thread, user, run_id, a2["token"]).status == "processed"
-        session.commit()
-        session.refresh(thread)
-        state = thread.assistant_state
-        assert state["tool_steps"] == MAX_ASSISTANT_TOOL_STEPS and state["cap_reached"] is True
-        assert len(c.planner_calls) == 1
+        approval = issue_approval(steps)
+        user, thread = _thread(session, plan=steps, approval=approval, run_id=run_id)
+        message = None
+        for executed in range(1, MAX_ASSISTANT_TOOL_STEPS + 1):
+            message = approve_plan(session, thread, user, run_id, approval["token"])
+            assert message is not None
+            session.commit()
+            session.refresh(thread)
+            approval = thread.assistant_state["approval"]
+            assert thread.assistant_state["tool_steps"] == executed
+            if executed < MAX_ASSISTANT_TOOL_STEPS:
+                assert message.status == "approval_pending"
+        assert message.status == "processed"
+        assert thread.assistant_state["cap_reached"] is True
+        assert len(c.planner_calls) == MAX_ASSISTANT_TOOL_STEPS - 1
 
 
 def test_s7_cost_gate_stops_the_loop(monkeypatch):
