@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import validate_approval
+from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.nodes import execute
 from app.chat.assistant.tools.registry import BUSINESS_MEMORY_ROLES
 from app.chat.assistant import nodes as assistant_nodes
@@ -623,6 +624,49 @@ def _events_for(result: dict, thread_id: int, run_id: str, sequence: int = 0) ->
     return events
 
 
+def _step_evidence(entry: dict) -> dict:
+    """Bounded activity record for one already-executed chain step."""
+    status = entry.get("status", "completed")
+    detail = "Tool execution completed" if status == "completed" else (
+        entry.get("error") or entry.get("degraded_reason") or "Tool did not complete"
+    )
+    return make_evidence(tool=entry.get("tool"), status=status, detail=detail)
+
+
+def _paused_step_events(result: dict, thread_id: int, run_id: str, sequence: int, *, reported: int) -> list[dict]:
+    """Emit the steps a resumed approval executed before the chain paused again.
+
+    A chain shares one run id, and the panel renders a run's activity from every
+    `evidence` event it can see, so the steps the operator just approved must be visible
+    before the next approval card. The graph replaces `evidence` per run instead of
+    accumulating it, so the activity is derived from the accumulated `tool_results`, and
+    only the steps this resume executed are emitted -- re-emitting an earlier pause's
+    step would duplicate it in the activity block.
+    """
+    executed = list(result.get("tool_results") or [])[reported:]
+    if not executed:
+        return []
+    events = [
+        {
+            "type": "tool",
+            "thread_id": thread_id,
+            "run_id": run_id,
+            "sequence": sequence + index,
+            "tool": entry.get("tool"),
+            "status": entry.get("status", "completed"),
+        }
+        for index, entry in enumerate(executed)
+    ]
+    events.append({
+        "type": "evidence",
+        "thread_id": thread_id,
+        "run_id": run_id,
+        "sequence": sequence + len(events),
+        "evidence": [_step_evidence(entry) for entry in executed],
+    })
+    return events
+
+
 def _planning_thread_event(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
     """Emit a `planning` event when this run opened a session on a dedicated thread."""
     candidates = [*(result.get("tool_results") or [])]
@@ -859,7 +903,7 @@ def _persist_resumed_result(thread: InternalChatThread, result: dict, run_id: st
 
 
 def _park_chain_on_next_approval(
-    session: Session, thread: InternalChatThread, message: InternalChatMessage, result: dict, run_id: str,
+    session: Session, thread: InternalChatThread, message: InternalChatMessage, result: dict, run_id: str, *, reported: int = 0,
 ) -> InternalChatMessage:
     """Park a resumed turn that paused again on the next write of a chain.
 
@@ -867,14 +911,16 @@ def _park_chain_on_next_approval(
     first pause does: the operator message stays pending so the panel can offer that
     approval, and the plan/approval events keep the stream in step. Sequences continue from
     the events already persisted, because a chain shares one run id and a repeated
-    sequence would be de-duplicated away.
+    sequence would be de-duplicated away. The steps this resume executed are emitted first,
+    so the panel shows the write the operator just approved before it offers the next one.
     """
     message.status = "approval_pending"
     message.assistant_metadata = {**(message.assistant_metadata or {}), "approval": result.get("approval")}
     events = thread.assistant_state.get("events") or []
+    step_events = _paused_step_events(result, thread.id, run_id, len(events), reported=reported)
     thread.assistant_state = {
         **thread.assistant_state,
-        "events": [*events, *_events_for(result, thread.id, run_id, len(events))],
+        "events": [*events, *step_events, *_events_for(result, thread.id, run_id, len(events) + len(step_events))],
     }
     session.flush()
     return message
@@ -954,10 +1000,11 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     session.flush()
     if not claim_execution(session, thread):
         return None
+    already_reported = len((thread.assistant_state or {}).get("tool_results") or [])
     result = _run_approved_plan(session, thread, user, message, run_id, plan, actor_role)
     status = _persist_resumed_result(thread, result, run_id)
     if status == "approval_pending":
-        return _park_chain_on_next_approval(session, thread, message, result, run_id)
+        return _park_chain_on_next_approval(session, thread, message, result, run_id, reported=already_reported)
     message.status = "processed" if status == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
     response_message = InternalChatMessage(
@@ -1097,10 +1144,11 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         return False
     actor_role = getattr(user.role, "value", user.role)
     thread.assistant_state = {**(thread.assistant_state or {}), "actor_role": actor_role}
+    already_reported = len((thread.assistant_state or {}).get("tool_results") or [])
     result = _run_approved_plan(session, thread, user, message, run_id, thread.current_plan or {}, actor_role)
     status = _persist_resumed_result(thread, result, run_id)
     if status == "approval_pending":
-        _park_chain_on_next_approval(session, thread, message, result, run_id)
+        _park_chain_on_next_approval(session, thread, message, result, run_id, reported=already_reported)
         return True
     message.status = "processed" if status == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)

@@ -13,13 +13,18 @@ use the exact argument shape the catalog gives you.
   `project.create|rename|archive|merge`, `skill.propose`) require an explicit owner
   approval of the exact plan before they run. Propose the precise arguments; a
   paraphrase is not an approval.
+- Each write of a chain is approved on its own. After the owner approves one step the
+  loop continues, and the next write pauses for its own approval; an approval never
+  carries over to the following plan.
 - A tool denied for the current role stays denied. Do not retry it or look for a
   workaround.
 
 ## Multi-turn work
 
 - Set `follow_up: true` on the plan to run one more tool step after reading this
-  result. The loop is bounded, so plan only the steps you actually need.
+  result -- a read-only follow-up, or a later step that depends on this result. A write
+  step pauses for the owner's approval before it runs. The loop is bounded, so plan only
+  the steps you actually need.
 - Read large files in chunks: `read_project_file(file_id, offset, limit)` returns
   `next_offset`; continue from it until `next_offset` is `null`.
 - Discover file ids with `list_project_files`; read a project or thread image on

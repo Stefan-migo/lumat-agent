@@ -43,3 +43,23 @@ def test_persona_tells_when_to_mark_handoff():
     persona = _read("personas/assistant.md")
     assert "handoff" in persona
     assert "continuation point" in persona
+
+
+def test_persona_documents_the_chain_across_a_write():
+    """The owner's decision (2026-10-15) reversed the read-only-only loop: the chain now
+    crosses a class-A write, so the standing persona must say so."""
+    persona = _read("personas/assistant.md")
+    assert "read-only steps run in-loop" in persona
+    assert "a class-A write pauses for the owner's approval and then continues to the next step" in persona
+
+
+def test_plan_prompt_carries_follow_up_through_a_write():
+    prompt = _read("prompts/assistant_plan.md")
+    assert "a later step that depends on what this step" in prompt
+    assert "A write step still pauses for the owner's approval" in prompt
+
+
+def test_tools_skill_documents_the_per_write_approval():
+    skill = _read("skills/assistant/tools.md")
+    assert "Each write of a chain is approved on its own" in skill
+    assert "an approval never carries over to the following plan" in skill
