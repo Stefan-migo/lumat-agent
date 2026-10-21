@@ -34,14 +34,11 @@ from app.db import SessionLocal
 from app.models import (
     Case,
     Conversation,
-    DocumentFormat,
-    KbVisibility,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
 )
-from app.services import kb as kb_service
 from app.services.customers import get_or_create_customer
 from _testdb import admin_database_url
 
@@ -57,16 +54,6 @@ COMMUNES = [
     "Colina",
     "Huechuraba",
 ]
-
-PRICE_DOC = """# Precios de Lumat
-
-**Mantención de caldera: $80.000 de marzo a octubre y $60.000 de noviembre a febrero.**
-
-**Mantención de calefont: $50.000 de marzo a octubre y $40.000 de noviembre a febrero.**
-
-**Visita técnica: $30.000.**
-"""
-
 
 # ---------------------------------------------------------------------------
 # Deterministic provider mock (V4 §E1 behaviors, classifies like the real prompt)
@@ -228,20 +215,6 @@ def _captured(conv_id: int) -> dict:
         return dict(session.get(Conversation, conv_id).captured_data or {})
 
 
-def _seed_prices() -> None:
-    with SessionLocal() as session:
-        kb_service.ingest_document(
-            session,
-            "Precios de Lumat",
-            DocumentFormat.MD,
-            b"",
-            content_text=PRICE_DOC,
-            actor="test",
-            visibility=KbVisibility.CUSTOMER,
-        )
-        session.commit()
-
-
 def _asked_for_admin_data(reply: str) -> bool:
     lowered = reply.lower()
     return any(
@@ -326,8 +299,8 @@ def test_t08_price_question_does_not_start_the_capture_form(chat):
     # scores real Spanish text around 0.36 cosine, under the production 0.50
     # threshold, so a KB hit here would measure the double, not the product.
     # Retrieval fidelity is measured by `scripts/kb_fidelity.py` (step 6).
-    _seed_prices()
-
+    # Prices reach the model through the <tarifario> block built from settings,
+    # never through a customer KB document (S5), so nothing is seeded here.
     reply = _first_turn("¿Cuánto cuesta la mantención de caldera?")[-1]
 
     assert "correo" not in reply.lower()

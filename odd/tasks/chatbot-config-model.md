@@ -32,6 +32,8 @@ El editor de duraciones desde el panel queda para F6: el espacio de claves es ab
 `docs/kb/lumat-precios.md` deja de ser documento de cliente. Los precios viven solo en settings.
 El descuento de la visita y la emisión de boleta/factura se conservan en `docs/kb/lumat-garantias-pagos.md`. La KB de cliente queda en cuatro documentos: identidad, servicios, cobertura-horarios, garantías-pagos.
 Criterio de aceptación: ninguna cifra de precio aparece en un documento con `visibility=customer`.
+`lumat-precios.md` se **elimina**, no se conserva como documento `internal`: dejar una tabla paralela en la KB crea una segunda fuente de precios que se desactualiza en silencio. El descuento de la visita y la frase de detalle tributario se movieron a `lumat-garantias-pagos.md`; "otros trabajos se presupuestan" ya estaba en `lumat-servicios.md`.
+La suite T01–T12 dejó de sembrar un documento de cliente con precios: el bloque `<tarifario>` ya viene de settings.
 
 ### Capa 2 — Copy (F2)
 
@@ -117,7 +119,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T2 | Resolución por fecha, fecha y `<tarifario>` en el prompt | S2 | inline | ✅ |
 | T3 | `coverage.communes`, normalización y editor del panel | S3 | inline | ✅ |
 | T4 | Validación de duraciones y horarios | S4 | inline | ✅ |
-| T5 | Sacar precios de la KB de cliente | S5 | inline | pendiente |
+| T5 | Sacar precios de la KB de cliente | S5 | inline | ✅ |
 | T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | pendiente |
 | T7 | `capture.questions` como fallback | S7 | inline | pendiente |
 | T8 | Textos de agenda/cancelación/derivación | S8 | inline | pendiente |
@@ -147,7 +149,6 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 - Redacción default exacta de cada pregunta de captura (T7).
 - Derivaciones activas por defecto (T10).
 - Si el saludo se personaliza con el nombre (producto).
-- Si `lumat-precios.md` se conserva como documento `internal` (T5).
 - De Lumat: IVA de los cuatro precios, exigibilidad del 15%, matriz de garantías, documentos SEC emitibles.
 
 ## Log
@@ -167,6 +168,8 @@ El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 **T3 (2026-10-21) — cerrado.** `coverage.communes` con las siete comunas; `normalize_comuna` pliega mayúsculas, tildes y espacios internos; `comuna_cubierta` devuelve `False` para vacío o `None`; la validación rechaza strings vacíos y duplicados que colisionan al normalizar. `POST /settings/coverage` + `GET /settings` y la sección Cobertura del panel. La conducta fuera de cobertura sigue siendo T15. Verde: las tres suites en orden, panel (110 archivos / 1248 tests) y `npm run build`.
 
 **T4 (2026-10-21) — cerrado.** `validate_service_durations` (entero 1–1440, claves no vacías, sin colisiones al normalizar), `get_service_durations` con fallback a mapa vacío, `POST /settings/durations` y su lugar en `GET /settings`. La validación de horarios quedó en un solo lugar: el panel ya no duplica las reglas de días y horas, usa `validate_hours_schedule`. Editor de duraciones diferido a F6 con razón registrada. Verde: las tres suites en orden, panel (110 archivos / 1248 tests) y `npm run build`.
+
+**T5 (2026-10-21) — cerrado.** `docs/kb/lumat-precios.md` eliminado; la KB de cliente queda en cuatro documentos. Descuento de la visita y detalle tributario movidos a `lumat-garantias-pagos.md`. El contrato de la KB ahora exige lo inverso: ningún documento de cliente puede citar una cifra ni un `$`. La suite T01–T12 ya no siembra precios en la KB. Verde: unit (también contra una `DATABASE_URL` inalcanzable), integration y functional.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

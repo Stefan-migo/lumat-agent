@@ -2,7 +2,9 @@
 
 Spec: `odd/tasks/chatbot-cerebro-max-v4.md`. These are DB-free: they pin the
 documents' shape and content, and the persona's normative lines, so a later edit
-cannot silently drop a tariff, a commune, a guarantee or the honesty rule.
+cannot silently drop a commune, a guarantee or the honesty rule. Prices are not
+part of the customer KB: they live in settings and reach the prompt resolved by
+date, so a document must never quote one.
 
 The chunker invariant is the reason S3 exists: `app/services/kb.py` splits at
 500 characters with 50 of overlap and `respond` hands the model only 5 chunks
@@ -20,7 +22,6 @@ KB = "docs/kb"
 DOCS = [
     "lumat-identidad.md",
     "lumat-servicios.md",
-    "lumat-precios.md",
     "lumat-cobertura-horarios.md",
     "lumat-garantias-pagos.md",
 ]
@@ -52,8 +53,8 @@ def _facts(text: str) -> list[str]:
     ]
 
 
-def test_kb_has_five_customer_docs_without_internal_jargon(repo_root):
-    """S2: five documents, written for the customer."""
+def test_kb_has_four_customer_docs_without_internal_jargon(repo_root):
+    """S2/S5: four documents, written for the customer."""
     assert sorted(path.name for path in (repo_root / KB).glob("*.md")) == sorted(DOCS)
     for name in DOCS:
         text = _read(repo_root, name)
@@ -74,11 +75,13 @@ def test_kb_fact_paragraphs_fit_and_survive_the_chunker(repo_root):
             assert any(paragraph in chunk for chunk in chunks), f"{name}: split fact"
 
 
-def test_kb_publishes_the_exact_tariff(repo_root):
-    """S4: the seven source amounts."""
-    text = _read(repo_root, "lumat-precios.md")
-    for amount in AMOUNTS:
-        assert amount in text, amount
+def test_customer_kb_publishes_no_price(repo_root):
+    """S5: prices live only in settings, resolved by date before the prompt."""
+    for name in DOCS:
+        text = _read(repo_root, name)
+        for amount in AMOUNTS:
+            assert amount not in text, f"{name} quotes {amount}"
+        assert not re.search(r"\$\s?\d", text), f"{name} quotes a price"
 
 
 def test_kb_makes_no_tax_claim(repo_root):
@@ -86,7 +89,7 @@ def test_kb_makes_no_tax_claim(repo_root):
     for name in DOCS:
         text = _read(repo_root, name)
         assert not re.search(r"\b(IVA|total|neto|bruto)\b", text, re.I), name
-    assert "detalle tributario" in _read(repo_root, "lumat-precios.md")
+    assert "detalle tributario" in _read(repo_root, "lumat-garantias-pagos.md")
 
 
 def test_kb_each_service_declares_scope(repo_root):
