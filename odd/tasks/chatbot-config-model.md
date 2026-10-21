@@ -20,6 +20,7 @@ Si `tarifa.precios` no está configurado, no se inyecta el bloque y el prompt ma
 **S3 — Cobertura en settings.**
 `coverage.communes` contiene exactamente las siete comunas: Las Condes, Ñuñoa, Lo Barnechea, La Reina, Peñalolén, Colina y Huechuraba.
 Normalización: comparación sin tildes, sin mayúsculas y con alias razonables (`ñuñoa`, `nunoa`). Una comuna fuera de la lista no se rechaza: se coordina con un asesor (ver S15).
+La sección **Cobertura** del panel edita la lista (una comuna por línea) y guarda vía `POST /settings/coverage`. Los duplicados que colisionan al normalizar se rechazan.
 
 **S4 — Duraciones y horarios validados.**
 `booking.service_durations` y `hours.schedule` ya existen; se les agrega validación de panel y valores por defecto coherentes. `hours.schedule` vacío significa atención 24/7 y sigue siendo el default deseado; la agenda real sigue limitada por disponibilidad de técnicos.
@@ -111,7 +112,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 |---|---|---|---|---|
 | T1 | `tarifa.precios`, validación y editor del panel | S1 | inline | ✅ |
 | T2 | Resolución por fecha, fecha y `<tarifario>` en el prompt | S2 | inline | ✅ |
-| T3 | `coverage.communes` + normalización | S3 | inline | pendiente |
+| T3 | `coverage.communes`, normalización y editor del panel | S3 | inline | ✅ |
 | T4 | Validación de duraciones y horarios | S4 | inline | pendiente |
 | T5 | Sacar precios de la KB de cliente | S5 | inline | pendiente |
 | T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | pendiente |
@@ -159,6 +160,8 @@ El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 **T1 (2026-10-21) — cerrado.** Commits `5d40c6de` (settings, validación, `POST /settings/tarifa`, tests) y `9f6198ff` (sección Tarifas del panel). Verde: `tests/unit`, `tests/integration`, `tests/functional`, `npm test` (110 archivos / 1247 tests) y `npm run build` (`tsc -b`). La forma elegida es una lista de rangos de meses por prestación que debe particionar el año; `visita_tecnica` usa un rango 1–12 y las tres estacionales dos rangos.
 
 **T2 (2026-10-21) — cerrado.** `tarifa_vigente(tarifa, fecha)` resuelve el mes contra los rangos (incluye el rango que cruza diciembre) y omite un servicio sin precio en vez de inventarlo. `respond` inyecta `<fecha>` y `<tarifario>` con solo los precios vigentes, resueltos en `hours.timezone`. La persona dejó de instruir "entrega ambos valores con su rango de meses": ahora dice que los precios vigentes vienen en `<tarifario>` y prohíbe nombrar temporadas. Verde: `tests/unit` (con la DB de test migrada), `tests/integration` y `tests/functional` en ese orden.
+
+**T3 (2026-10-21) — cerrado.** `coverage.communes` con las siete comunas; `normalize_comuna` pliega mayúsculas, tildes y espacios internos; `comuna_cubierta` devuelve `False` para vacío o `None`; la validación rechaza strings vacíos y duplicados que colisionan al normalizar. `POST /settings/coverage` + `GET /settings` y la sección Cobertura del panel. La conducta fuera de cobertura sigue siendo T15. Verde: las tres suites en orden, panel (110 archivos / 1248 tests) y `npm run build`.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

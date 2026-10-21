@@ -150,6 +150,20 @@ DEFAULT_LLM_RATES = {
     "_effective_date": "2026-09-11",
 }
 
+COVERAGE_COMMUNES_KEY = "coverage.communes"
+# The seven communes the owner services. Matching is accent- and case-insensitive
+# (see `normalize_comuna`); a name outside the list is coordinated with an
+# advisor, never rejected outright.
+DEFAULT_COVERAGE_COMMUNES = [
+    "Las Condes",
+    "Ñuñoa",
+    "Lo Barnechea",
+    "La Reina",
+    "Peñalolén",
+    "Colina",
+    "Huechuraba",
+]
+
 TARIFA_PRECIOS_KEY = "tarifa.precios"
 # The commercial catalogue. Prices live here, never in a customer-facing KB
 # document: a date resolves to exactly one price, so an old season can never
@@ -205,6 +219,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "booking.service_durations": {},
     # S1: the commercial tariff, resolved by date before the prompt sees it.
     TARIFA_PRECIOS_KEY: DEFAULT_TARIFA_PRECIOS,
+    # S3: service coverage, matched without accents or case.
+    COVERAGE_COMMUNES_KEY: DEFAULT_COVERAGE_COMMUNES,
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
     "emergency.keywords": DEFAULT_EMERGENCY_KEYWORDS,
     # EM-3: safety protocol content delivered by the emergency node (T4.2).
@@ -279,6 +295,48 @@ def get_service_duration(
                 return duration
             return default
     return default
+
+
+def normalize_comuna(value: str) -> str:
+    """Fold a commune name for matching: case, accents and inner spacing."""
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(without_accents.split())
+
+
+def validate_coverage_communes(value: Any) -> list[str]:
+    """Validate the coverage list before persistence and return it unchanged."""
+    if not isinstance(value, list):
+        raise ValueError("coverage.communes must be a list of commune names")
+
+    seen: set[str] = set()
+    for index, nombre in enumerate(value):
+        if not isinstance(nombre, str) or not nombre.strip():
+            raise ValueError(f"coverage.communes[{index}] must be a non-empty string")
+        normalized = normalize_comuna(nombre)
+        if normalized in seen:
+            raise ValueError(f"coverage.communes has a duplicate commune: {nombre!r}")
+        seen.add(normalized)
+    return value
+
+
+def get_coverage_communes(session: Session) -> list[str]:
+    """Return the configured coverage, or the seven defaults when malformed."""
+    value = get_setting(session, COVERAGE_COMMUNES_KEY, default=DEFAULT_COVERAGE_COMMUNES)
+    try:
+        return validate_coverage_communes(value)
+    except ValueError:
+        return DEFAULT_COVERAGE_COMMUNES
+
+
+def comuna_cubierta(communes: list[str], nombre: str | None) -> bool:
+    """True when ``nombre`` matches a covered commune under normalization."""
+    if not isinstance(nombre, str):
+        return False
+    normalized = normalize_comuna(nombre)
+    if not normalized:
+        return False
+    return any(normalize_comuna(item) == normalized for item in communes)
 
 
 def get_tarifa_precios(session: Session) -> dict[str, list[dict[str, int]]]:

@@ -519,6 +519,7 @@ export interface Settings {
     schedule: Array<{ days: number[]; open: string; close: string }>;
   };
   tarifa: Record<TarifaService, TarifaRango[]>;
+  coverage: string[];
   conversation_limit: number;
   daily_limit: number;
   meta_cost: number;

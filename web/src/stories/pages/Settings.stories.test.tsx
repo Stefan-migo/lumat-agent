@@ -461,6 +461,26 @@ describe("Settings API page", () => {
     fetchMock.mockRestore();
   });
 
+  it("edits and saves the coverage communes", async () => {
+    render(<SettingsView />);
+    await selectSection("Cobertura");
+    const card = screen.getByRole("heading", { name: "Cobertura" }).closest(".card") as HTMLElement;
+    const field = within(card).getByLabelText("Comunas con cobertura");
+    expect(field).toHaveValue(["Las Condes", "Ñuñoa", "Lo Barnechea", "La Reina", "Peñalolén", "Colina", "Huechuraba"].join("\n"));
+
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    fireEvent.change(field, { target: { value: "Las Condes\nColina" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Guardar cobertura" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/settings/coverage",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ communes: ["Las Condes", "Colina"] }) }),
+    ));
+    fetchMock.mockRestore();
+  });
+
   it("renders permission denied when an operador receives 403", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }),

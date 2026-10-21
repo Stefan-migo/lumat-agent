@@ -6,6 +6,7 @@ import { settings } from "./settings";
  *  daily_limit, meta_cost, snapshot, model_api_key, email}. */
 const SETTINGS_KEYS = [
   "conversation_limit",
+  "coverage",
   "daily_limit",
   "email",
   "hours",

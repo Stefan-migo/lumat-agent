@@ -878,7 +878,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
-        "model_api_key", "email", "tarifa",
+        "model_api_key", "email", "tarifa", "coverage",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
@@ -1252,4 +1252,57 @@ def test_settings_update_tarifa_rejects_gap_without_persisting(client, make_user
     assert "does not cover months" in resp.json()["detail"]
     with SessionLocal() as session:
         assert session.get(Settings, "tarifa.precios") is None
+    assert _last_audit("settings.change") is None
+
+
+def test_settings_get_includes_coverage(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    body = client.get("/panel/api/settings", follow_redirects=False).json()
+
+    assert body["coverage"] == [
+        "Las Condes",
+        "Ñuñoa",
+        "Lo Barnechea",
+        "La Reina",
+        "Peñalolén",
+        "Colina",
+        "Huechuraba",
+    ]
+
+
+def test_settings_update_coverage_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/coverage",
+        json={"communes": ["Las Condes", "Colina"]},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Settings, "coverage.communes").value == ["Las Condes", "Colina"]
+    audit = _last_audit("settings.change")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.entity_id == "coverage.communes"
+
+
+def test_settings_update_coverage_rejects_duplicates_without_persisting(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/coverage",
+        json={"communes": ["Ñuñoa", "Nunoa"]},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    with SessionLocal() as session:
+        assert session.get(Settings, "coverage.communes") is None
     assert _last_audit("settings.change") is None

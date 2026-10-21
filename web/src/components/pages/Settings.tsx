@@ -47,7 +47,7 @@ function formatShortDate(value: string) {
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const SECTIONS = [
   { id: "agent", label: "Agente" }, { id: "messages", label: "Mensajes" },
-  { id: "schedule", label: "Horarios y avisos" }, { id: "tarifa", label: "Tarifas" }, { id: "costs", label: "Costos" },
+  { id: "schedule", label: "Horarios y avisos" }, { id: "tarifa", label: "Tarifas" }, { id: "coverage", label: "Cobertura" }, { id: "costs", label: "Costos" },
   { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
   { id: "email", label: "Correo" },
 ];
@@ -60,7 +60,7 @@ const MESSAGE_TEMPLATES = [
 ] as const;
 type HoursData = SettingsData["hours"];
 type Drafts = {
-  scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData; tarifa: SettingsData["tarifa"];
+  scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData; tarifa: SettingsData["tarifa"]; coverage: string;
   conversationLimit: string; dailyLimit: string; metaCost: string;
 };
 type DraftKey = keyof Drafts;
@@ -74,6 +74,7 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     templates: data?.templates ?? [],
     hours: data?.hours ?? { timezone: "America/Santiago", schedule: [] },
     tarifa: data?.tarifa ?? EMPTY_TARIFA,
+    coverage: (data?.coverage ?? []).join("\n"),
     conversationLimit: String(data?.conversation_limit ?? ""), dailyLimit: String(data?.daily_limit ?? ""), metaCost: String(data?.meta_cost ?? ""),
   };
 }
@@ -481,7 +482,19 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             </div>
           </Card>
         </> : null}
-          {active === "costs" ? <div className="settings-costs">
+          {active === "coverage" ? <>
+          <Card title="Cobertura" description="Comunas donde se agenda una visita. Fuera de esta lista el asistente no rechaza el trabajo: coordina con un asesor." icon={Globe}>
+            <div className="settings-agent__layout">
+              <div className="settings-agent__form">
+                <Textarea label="Comunas con cobertura" rows={8} value={draft.coverage} onChange={(event) => update("coverage", event.target.value)} />
+                <p className="settings-agent__helper">Una comuna por línea. Se comparan sin tildes y sin distinguir mayúsculas.</p>
+                <div className="settings-agent__footer">{footer()}<Button disabled={saving("coverage") || !draft.coverage.split("\n").some((value) => value.trim())} onClick={() => void save("coverage", "/panel/api/settings/coverage", { communes: draft.coverage.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.coverage)}>Guardar cobertura</Button></div>
+              </div>
+              <HelpPanel icon={Globe} title="Cómo se aplica"><p>El asistente reconoce la comuna aunque el cliente la escriba sin tildes o en minúsculas.</p><p>Una comuna fuera de la lista se coordina con un asesor; nunca se rechaza el trabajo.</p></HelpPanel>
+            </div>
+          </Card>
+        </> : null}
+        {active === "costs" ? <div className="settings-costs">
             <Card title="Gasto actual" description="Resumen del consumo en el periodo actual." headerAction={snapshot ? <Badge tone="neutral"><CalendarDays aria-hidden="true" />{formatShortDate(snapshot.date)}</Badge> : undefined}>
               {snapshot ? <StatCard metrics={[
                 { label: "Gasto diario", value: `USD ${snapshot.daily_spend.toFixed(4)}`, context: snapshot.conversation_percent !== null ? `Conversación: ${snapshot.conversation_percent}% de USD ${snapshot.conversation_limit.toFixed(2)}` : undefined },

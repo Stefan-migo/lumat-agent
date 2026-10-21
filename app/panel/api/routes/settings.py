@@ -13,6 +13,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   tone   {"tone": str}                    -> tone.style
   messages {"greeting": str, ...}         -> messages.*
   tarifa {"precios": {service: [range]}}  -> tarifa.precios (validated, S1)
+  coverage {"communes": [str]}            -> coverage.communes (validated, S3)
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
@@ -91,6 +92,10 @@ class HoursBody(BaseModel):
 
 class TarifaBody(BaseModel):
     precios: dict[str, Any]
+
+
+class CoverageBody(BaseModel):
+    communes: list[Any]
 
 
 class LimitsBody(BaseModel):
@@ -273,6 +278,7 @@ def settings_get(
             "schedule": settings_service.get_hours_schedule(session),
         },
         "tarifa": settings_service.get_tarifa_precios(session),
+        "coverage": settings_service.get_coverage_communes(session),
         "conversation_limit": settings_service.get_setting(
             session, "cost.conversation_limit", default=1.50
         ),
@@ -471,6 +477,21 @@ def settings_meta(
         {"service_message_cost": _number(body.service_message_cost, "service_message_cost")},
         current,
     )
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/coverage")
+def settings_coverage(
+    body: CoverageBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    try:
+        communes = settings_service.validate_coverage_communes(body.communes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.COVERAGE_COMMUNES_KEY, communes, current)
     session.commit()
     return {"ok": True}
 
