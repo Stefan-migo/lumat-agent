@@ -1,0 +1,153 @@
+"""Chat conduct (S10): one settings key with the four closed-option fields.
+
+`chat.conduct` holds the order of the capture fields, the redaction mode, the
+question budget per message and the active derivation rules. F3 only validates
+and stores it: nothing reads it until T11/F4, so the current flow keeps working
+with the shipped order.
+
+Validation is order-aware and receives the capture fields as a parameter (same
+shape as `validate_capture_questions`), so `settings` never imports `capture`.
+"""
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from app.services.settings import (
+    CHAT_CONDUCT_DEFAULTS,
+    CHAT_CONDUCT_KEY,
+    CONDUCT_DERIVACIONES,
+    get_conduct,
+    validate_conduct,
+)
+
+FIELDS = ["failure", "equipment", "comuna", "availability", "name", "email", "address"]
+VALID = {
+    "orden": FIELDS,
+    "redaccion": "llm",
+    "max_preguntas_por_mensaje": 1,
+    "derivaciones": list(CONDUCT_DERIVACIONES),
+}
+
+
+def test_the_key_is_chat_conduct():
+    assert CHAT_CONDUCT_KEY == "chat.conduct"
+
+
+def test_the_default_order_is_the_shipped_capture_order():
+    assert CHAT_CONDUCT_DEFAULTS["orden"] == FIELDS
+
+
+def test_the_defaults_are_the_closed_enum_values():
+    assert CHAT_CONDUCT_DEFAULTS["redaccion"] == "llm"
+    assert CHAT_CONDUCT_DEFAULTS["max_preguntas_por_mensaje"] == 1
+    assert CHAT_CONDUCT_DEFAULTS["derivaciones"] == list(CONDUCT_DERIVACIONES)
+
+
+def test_the_closed_derivation_list_is_the_five_rules():
+    assert set(CONDUCT_DERIVACIONES) == {
+        "cobertura",
+        "pedido_explicito",
+        "garantia",
+        "servicio_sin_tarifa",
+        "presupuesto_especial",
+    }
+
+
+def test_validate_accepts_a_complete_conduct_object():
+    assert validate_conduct(VALID, FIELDS) == VALID
+
+
+def test_validate_accepts_a_subset_order():
+    """Dropping a field from the order is the owner turning that ask off."""
+    value = {**VALID, "orden": ["failure", "comuna", "name", "email", "address"]}
+
+    assert validate_conduct(value, FIELDS)["orden"] == [
+        "failure",
+        "comuna",
+        "name",
+        "email",
+        "address",
+    ]
+
+
+def test_validate_accepts_a_reordered_order():
+    value = {**VALID, "orden": ["equipment", "failure", "availability", "address", "name", "email"]}
+
+    assert validate_conduct(value, FIELDS)["orden"] == [
+        "equipment",
+        "failure",
+        "availability",
+        "address",
+        "name",
+        "email",
+    ]
+
+
+def test_validate_accepts_plantilla_and_two_questions():
+    value = {**VALID, "redaccion": "plantilla", "max_preguntas_por_mensaje": 2}
+
+    assert validate_conduct(value, FIELDS)["redaccion"] == "plantilla"
+    assert validate_conduct(value, FIELDS)["max_preguntas_por_mensaje"] == 2
+
+
+def test_validate_accepts_a_single_active_derivation():
+    value = {**VALID, "derivaciones": ["cobertura"]}
+
+    assert validate_conduct(value, FIELDS)["derivaciones"] == ["cobertura"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param([], id="not-a-map"),
+        pytest.param("orden=failure", id="not-a-map-string"),
+        pytest.param({}, id="empty"),
+        pytest.param({key: val for key, val in VALID.items() if key != "orden"}, id="missing-orden"),
+        pytest.param({**VALID, "orden": []}, id="empty-order"),
+        pytest.param({**VALID, "orden": "failure"}, id="order-not-a-list"),
+        pytest.param({**VALID, "orden": ["failure", "telefono"]}, id="unknown-field"),
+        pytest.param({**VALID, "orden": ["failure", "failure"]}, id="repeated-field"),
+        pytest.param(
+            {**VALID, "orden": ["name", "failure", "equipment", "comuna", "availability", "email", "address"]},
+            id="name-before-availability",
+        ),
+        pytest.param(
+            {**VALID, "orden": ["failure", "equipment", "address", "comuna", "availability", "name", "email"]},
+            id="address-before-availability",
+        ),
+        pytest.param({**VALID, "redaccion": "magia"}, id="unknown-redaccion"),
+        pytest.param({**VALID, "redaccion": None}, id="redaccion-not-a-string"),
+        pytest.param({**VALID, "max_preguntas_por_mensaje": 3}, id="max-out-of-enum"),
+        pytest.param({**VALID, "max_preguntas_por_mensaje": 0}, id="max-zero"),
+        pytest.param({**VALID, "max_preguntas_por_mensaje": "1"}, id="max-not-an-int"),
+        pytest.param({**VALID, "max_preguntas_por_mensaje": True}, id="max-is-a-bool"),
+        pytest.param({**VALID, "derivaciones": []}, id="no-derivation-reachable"),
+        pytest.param({**VALID, "derivaciones": "cobertura"}, id="derivaciones-not-a-list"),
+        pytest.param({**VALID, "derivaciones": ["cobertura", "inventada"]}, id="unknown-derivation"),
+    ],
+)
+def test_validate_rejects_malformed_conduct(value):
+    with pytest.raises(ValueError):
+        validate_conduct(value, FIELDS)
+
+
+def test_get_returns_the_defaults_without_a_row():
+    session = MagicMock()
+    session.get.return_value = None
+
+    assert get_conduct(session) == CHAT_CONDUCT_DEFAULTS
+
+
+def test_get_falls_back_per_key_on_a_partial_row():
+    session = MagicMock()
+    row = MagicMock()
+    row.value = {"orden": ["failure"], "redaccion": "plantilla"}
+    session.get.return_value = row
+
+    conduct = get_conduct(session)
+
+    assert conduct["orden"] == ["failure"]
+    assert conduct["redaccion"] == "plantilla"
+    assert conduct["max_preguntas_por_mensaje"] == 1
+    assert conduct["derivaciones"] == list(CONDUCT_DERIVACIONES)
