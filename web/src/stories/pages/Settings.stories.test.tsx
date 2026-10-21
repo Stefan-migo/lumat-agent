@@ -441,6 +441,26 @@ describe("Settings API page", () => {
     expect(screen.getByText(/Derivación a una persona/)).toBeInTheDocument();
   });
 
+  it("edits and saves the tariff with the agreed services", async () => {
+    render(<SettingsView />);
+    await selectSection("Tarifas");
+    const card = screen.getByRole("heading", { name: "Tarifario" }).closest(".card") as HTMLElement;
+    expect(within(card).getByLabelText(/Visita técnica/)).toHaveValue(30000);
+    expect(within(card).getByLabelText(/Mantención de calefont .*marzo a octubre/i)).toHaveValue(50000);
+
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    fireEvent.change(within(card).getByLabelText(/Mantención de calefont .*marzo a octubre/i), { target: { value: "52000" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Guardar tarifas" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/settings/tarifa",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining("52000") }),
+    ));
+    fetchMock.mockRestore();
+  });
+
   it("renders permission denied when an operador receives 403", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }),

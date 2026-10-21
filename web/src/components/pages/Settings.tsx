@@ -28,6 +28,16 @@ export interface SettingsProps { data?: SettingsData | null; state?: SettingsSta
 const EMPTY_MESSAGES = { greeting: "", cannot_answer: "", clarification: "", farewell: "", out_of_hours: "" };
 const SHORT_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const TARIFA_LABELS: Array<[keyof SettingsData["tarifa"], string]> = [
+  ["visita_tecnica", "Visita técnica"],
+  ["mantencion_calefont", "Mantención de calefont"],
+  ["mantencion_caldera", "Mantención de caldera"],
+  ["lavado_red", "Lavado de red"],
+];
+const EMPTY_TARIFA: SettingsData["tarifa"] = {
+  visita_tecnica: [], mantencion_calefont: [], mantencion_caldera: [], lavado_red: [],
+};
 function formatShortDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!match) return value;
@@ -37,7 +47,7 @@ function formatShortDate(value: string) {
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const SECTIONS = [
   { id: "agent", label: "Agente" }, { id: "messages", label: "Mensajes" },
-  { id: "schedule", label: "Horarios y avisos" }, { id: "costs", label: "Costos" },
+  { id: "schedule", label: "Horarios y avisos" }, { id: "tarifa", label: "Tarifas" }, { id: "costs", label: "Costos" },
   { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
   { id: "email", label: "Correo" },
 ];
@@ -50,7 +60,7 @@ const MESSAGE_TEMPLATES = [
 ] as const;
 type HoursData = SettingsData["hours"];
 type Drafts = {
-  scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData;
+  scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData; tarifa: SettingsData["tarifa"];
   conversationLimit: string; dailyLimit: string; metaCost: string;
 };
 type DraftKey = keyof Drafts;
@@ -63,6 +73,7 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     keywords: data?.keywords.join("\n") ?? "", tone: data?.tone ?? "", messages: data?.messages ?? EMPTY_MESSAGES,
     templates: data?.templates ?? [],
     hours: data?.hours ?? { timezone: "America/Santiago", schedule: [] },
+    tarifa: data?.tarifa ?? EMPTY_TARIFA,
     conversationLimit: String(data?.conversation_limit ?? ""), dailyLimit: String(data?.daily_limit ?? ""), metaCost: String(data?.meta_cost ?? ""),
   };
 }
@@ -70,6 +81,14 @@ function draftsFrom(data?: SettingsData | null): Drafts {
 function isValidHours(hours: HoursData) {
   return hours.timezone.trim() !== "" && hours.schedule.length > 0 && hours.schedule.every((entry) =>
     entry.days.length > 0 && entry.open !== "" && entry.close !== "" && entry.open < entry.close);
+}
+
+function isTarifaValid(tarifa: SettingsData["tarifa"]) {
+  return TARIFA_LABELS.every(([service]) => {
+    const ranges = tarifa[service];
+    return ranges.length > 0 && ranges.every((rango) =>
+      Number.isInteger(rango.valor) && rango.valor > 0);
+  });
 }
 
 function isValidNonNegative(value: string) {
@@ -93,6 +112,35 @@ function stateMessage(state: SettingsState, errorDetail?: string | null) {
   if (state === "server-error") return <StateMessage tone="danger" role="alert" title="No pudimos guardar los cambios" detail={errorDetail || "Ocurrió un error del servidor. Reintenta en unos minutos."} />;
   if (state === "stale") return <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La última consulta no pudo completarse. Mostramos la información disponible." />;
   return null;
+}
+
+function TarifaEditor({ tarifa, onChange }: { tarifa: SettingsData["tarifa"]; onChange: (tarifa: SettingsData["tarifa"]) => void }) {
+  const setValor = (service: keyof SettingsData["tarifa"], index: number, valor: number) => {
+    const ranges = tarifa[service].map((rango, current) => current === index ? { ...rango, valor } : rango);
+    onChange({ ...tarifa, [service]: ranges });
+  };
+
+  return <div className="settings-tarifa">
+    {TARIFA_LABELS.map(([service, label]) => <fieldset className="settings-tarifa__service" key={service}>
+      <legend>{label}</legend>
+      <div className="settings-tarifa__ranges">
+        {tarifa[service].map((rango, index) => {
+          const periodo = rango.desde_mes === 1 && rango.hasta_mes === 12
+            ? "todo el año"
+            : `${MONTHS_FULL[rango.desde_mes - 1]} a ${MONTHS_FULL[rango.hasta_mes - 1]}`;
+          return <Input
+            key={`${rango.desde_mes}-${rango.hasta_mes}`}
+            label={`${label} (${periodo})`}
+            type="number"
+            min={1}
+            suffix="CLP"
+            value={rango.valor === 0 ? "" : String(rango.valor)}
+            onChange={(event) => setValor(service, index, Number(event.target.value))}
+          />;
+        })}
+      </div>
+    </fieldset>)}
+  </div>;
 }
 
 function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: HoursData) => void }) {
@@ -422,6 +470,17 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
           <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div> : null}
+        {active === "tarifa" ? <>
+          <Card title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins}>
+            <div className="settings-agent__layout">
+              <div className="settings-agent__form">
+                <TarifaEditor tarifa={draft.tarifa} onChange={(value) => update("tarifa", value)} />
+                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
+              </div>
+              <HelpPanel icon={Coins} title="Cómo se aplica"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></HelpPanel>
+            </div>
+          </Card>
+        </> : null}
           {active === "costs" ? <div className="settings-costs">
             <Card title="Gasto actual" description="Resumen del consumo en el periodo actual." headerAction={snapshot ? <Badge tone="neutral"><CalendarDays aria-hidden="true" />{formatShortDate(snapshot.date)}</Badge> : undefined}>
               {snapshot ? <StatCard metrics={[

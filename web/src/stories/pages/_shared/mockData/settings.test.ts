@@ -15,6 +15,7 @@ const SETTINGS_KEYS = [
   "model_api_key",
   "scope_rules",
   "snapshot",
+  "tarifa",
   "tone",
   "templates",
 ].sort();
