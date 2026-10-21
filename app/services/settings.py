@@ -150,6 +150,35 @@ DEFAULT_LLM_RATES = {
     "_effective_date": "2026-09-11",
 }
 
+TARIFA_PRECIOS_KEY = "tarifa.precios"
+# The commercial catalogue. Prices live here, never in a customer-facing KB
+# document: a date resolves to exactly one price, so an old season can never
+# reach the model.
+TARIFA_SERVICES = (
+    "visita_tecnica",
+    "mantencion_calefont",
+    "mantencion_caldera",
+    "lavado_red",
+)
+# One or more month ranges per service (1-12, inclusive). The ranges must
+# partition the year: no gaps, no overlaps. "Visita técnica" has a single
+# all-year range; the three seasonal services have two.
+DEFAULT_TARIFA_PRECIOS: dict[str, list[dict[str, int]]] = {
+    "visita_tecnica": [{"desde_mes": 1, "hasta_mes": 12, "valor": 30000}],
+    "mantencion_calefont": [
+        {"desde_mes": 3, "hasta_mes": 10, "valor": 50000},
+        {"desde_mes": 11, "hasta_mes": 2, "valor": 40000},
+    ],
+    "mantencion_caldera": [
+        {"desde_mes": 3, "hasta_mes": 10, "valor": 80000},
+        {"desde_mes": 11, "hasta_mes": 2, "valor": 60000},
+    ],
+    "lavado_red": [
+        {"desde_mes": 3, "hasta_mes": 10, "valor": 140000},
+        {"desde_mes": 11, "hasta_mes": 2, "valor": 120000},
+    ],
+}
+
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
 # Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
@@ -167,6 +196,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
     "booking.service_durations": {},
+    # S1: the commercial tariff, resolved by date before the prompt sees it.
+    TARIFA_PRECIOS_KEY: DEFAULT_TARIFA_PRECIOS,
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
     "emergency.keywords": DEFAULT_EMERGENCY_KEYWORDS,
     # EM-3: safety protocol content delivered by the emergency node (T4.2).
@@ -241,6 +272,87 @@ def get_service_duration(
                 return duration
             return default
     return default
+
+
+def get_tarifa_precios(session: Session) -> dict[str, list[dict[str, int]]]:
+    """Return the configured tariff, or the default when unset or malformed."""
+    value = get_setting(session, TARIFA_PRECIOS_KEY, default=DEFAULT_TARIFA_PRECIOS)
+    try:
+        return validate_tarifa_precios(value)
+    except ValueError:
+        return DEFAULT_TARIFA_PRECIOS
+
+
+def _tarifa_months(desde_mes: int, hasta_mes: int) -> set[int]:
+    """Expand one inclusive range, wrapping december -> january."""
+    months: set[int] = set()
+    month = desde_mes
+    while True:
+        months.add(month)
+        if month == hasta_mes:
+            return months
+        month = month % 12 + 1
+
+
+def validate_tarifa_precios(value: Any) -> dict[str, list[dict[str, int]]]:
+    """Validate the tariff before persistence and return it unchanged.
+
+    Shape: ``{service: [{"desde_mes", "hasta_mes", "valor"}, ...]}``. Each
+    service must exist exactly once, every range must cover whole months, and
+    the ranges of one service must partition months 1-12 (no gap, no overlap).
+    """
+    if not isinstance(value, dict):
+        raise ValueError("tarifa.precios must be an object keyed by service")
+    if set(value) != set(TARIFA_SERVICES):
+        missing = sorted(set(TARIFA_SERVICES) - set(value))
+        unknown = sorted(set(value) - set(TARIFA_SERVICES))
+        raise ValueError(
+            "tarifa.precios must cover exactly the known services "
+            f"(missing: {missing}, unknown: {unknown})"
+        )
+
+    for service in TARIFA_SERVICES:
+        ranges = value[service]
+        if not isinstance(ranges, list) or not ranges:
+            raise ValueError(f"tarifa.precios[{service!r}] must be a non-empty list")
+
+        covered: set[int] = set()
+        for index, rango in enumerate(ranges):
+            if not isinstance(rango, dict):
+                raise ValueError(f"tarifa.precios[{service!r}][{index}] must be an object")
+            if set(rango) != {"desde_mes", "hasta_mes", "valor"}:
+                raise ValueError(
+                    f"tarifa.precios[{service!r}][{index}] must have exactly "
+                    "desde_mes, hasta_mes and valor"
+                )
+
+            months = (rango["desde_mes"], rango["hasta_mes"])
+            for month in months:
+                if not isinstance(month, int) or isinstance(month, bool) or not 1 <= month <= 12:
+                    raise ValueError(
+                        f"tarifa.precios[{service!r}][{index}] months must be integers 1-12"
+                    )
+            valor = rango["valor"]
+            if not isinstance(valor, int) or isinstance(valor, bool) or valor <= 0:
+                raise ValueError(
+                    f"tarifa.precios[{service!r}][{index}] valor must be a positive integer"
+                )
+
+            range_months = _tarifa_months(*months)
+            overlap = covered & range_months
+            if overlap:
+                raise ValueError(
+                    f"tarifa.precios[{service!r}] ranges overlap in months {sorted(overlap)}"
+                )
+            covered |= range_months
+
+        missing_months = set(range(1, 13)) - covered
+        if missing_months:
+            raise ValueError(
+                f"tarifa.precios[{service!r}] does not cover months {sorted(missing_months)}"
+            )
+
+    return value
 
 
 def set_setting(

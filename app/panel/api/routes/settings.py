@@ -12,6 +12,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   keywords {"keywords": [str]}            -> emergency.keywords
   tone   {"tone": str}                    -> tone.style
   messages {"greeting": str, ...}         -> messages.*
+  tarifa {"precios": {service: [range]}}  -> tarifa.precios (validated, S1)
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
@@ -86,6 +87,10 @@ class MessageTemplatesBody(BaseModel):
 class HoursBody(BaseModel):
     timezone: Any
     schedule: Any
+
+
+class TarifaBody(BaseModel):
+    precios: dict[str, Any]
 
 
 class LimitsBody(BaseModel):
@@ -267,6 +272,7 @@ def settings_get(
             "timezone": settings_service.get_hours_timezone(session),
             "schedule": settings_service.get_hours_schedule(session),
         },
+        "tarifa": settings_service.get_tarifa_precios(session),
         "conversation_limit": settings_service.get_setting(
             session, "cost.conversation_limit", default=1.50
         ),
@@ -465,6 +471,21 @@ def settings_meta(
         {"service_message_cost": _number(body.service_message_cost, "service_message_cost")},
         current,
     )
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/tarifa")
+def settings_tarifa(
+    body: TarifaBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    try:
+        precios = settings_service.validate_tarifa_precios(body.precios)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.TARIFA_PRECIOS_KEY, precios, current)
     session.commit()
     return {"ok": True}
 

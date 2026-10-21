@@ -10,6 +10,7 @@ Origen: rapso session `2026-10-21-chatbot-config-brain` (`.rapsodia-code/session
 **S1 — Tarifario en settings, con temporadas.**
 `tarifa.precios` vive en el KV de settings con las cuatro prestaciones y sus dos temporadas: visita técnica `$30.000`; mantención de calefont `$50.000` de marzo a octubre y `$40.000` de noviembre a febrero; mantención de caldera `$80.000` / `$60.000`; lavado de red `$140.000` / `$120.000`.
 Validación al guardar: montos enteros positivos, las dos temporadas presentes en cada prestación, sin huecos ni solapamientos de meses, y meses en rango 1–12. Un valor inválido no se persiste y devuelve error legible.
+La sección **Tarifas** del panel expone el editor en F1 (no espera al rediseño de F6): cuatro prestaciones con sus rangos de meses visibles y un input por rango. En F1 se editan los valores, no los rangos de meses. Criterio de aceptación: cambiar un precio desde el panel y guardar persiste la fila; un valor inválido se rechaza con el mensaje del backend.
 
 **S2 — Resolución por fecha e inyección al prompt.**
 El servidor resuelve la temporada vigente con la fecha en `America/Santiago` (`hours.timezone`), no con la fecha del cliente ni con la del LLM.
@@ -106,27 +107,27 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 
 ## Tasks
 
-| ID | Task | Specs | Ruta | Estado | Commit |
-|---|---|---|---|---|---|
-| T1 | `tarifa.precios` + validación de temporadas | S1 | inline | pendiente | — |
-| T2 | Resolución por fecha, fecha y `<tarifario>` en el prompt | S2 | inline | pendiente | — |
-| T3 | `coverage.communes` + normalización | S3 | inline | pendiente | — |
-| T4 | Validación de duraciones y horarios | S4 | inline | pendiente | — |
-| T5 | Sacar precios de la KB de cliente | S5 | inline | pendiente | — |
-| T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | pendiente | — |
-| T7 | `capture.questions` como fallback | S7 | inline | pendiente | — |
-| T8 | Textos de agenda/cancelación/derivación | S8 | inline | pendiente | — |
-| T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | pendiente | — |
-| T10 | Objeto `chat.conduct` + validación | S10 | inline | pendiente | — |
-| T11 | Orden de captura efectivo desde configuración | S11 | inline | pendiente | — |
-| T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente | — |
-| T13 | Protocolo de emergencia editable | S13 | inline | pendiente | — |
-| T14 | Una pregunta por mensaje y no repetir | S14 | inline | pendiente | — |
-| T15 | Cobertura fuera de las siete comunas | S15 | inline | pendiente | — |
-| T16 | Responder preguntas durante la captura | S16 | inline | pendiente | — |
-| T17 | No duplicar respuesta por turno | S17 | inline | pendiente | — |
-| T18 | Rediseño del panel (último) | S18 | inline | pendiente | — |
-| T19 | Test de contrato de los cinco invariantes | S19 | inline | pendiente | — |
+| ID | Task | Specs | Ruta | Estado |
+|---|---|---|---|---|
+| T1 | `tarifa.precios`, validación y editor del panel | S1 | inline | ✅ |
+| T2 | Resolución por fecha, fecha y `<tarifario>` en el prompt | S2 | inline | pendiente |
+| T3 | `coverage.communes` + normalización | S3 | inline | pendiente |
+| T4 | Validación de duraciones y horarios | S4 | inline | pendiente |
+| T5 | Sacar precios de la KB de cliente | S5 | inline | pendiente |
+| T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | pendiente |
+| T7 | `capture.questions` como fallback | S7 | inline | pendiente |
+| T8 | Textos de agenda/cancelación/derivación | S8 | inline | pendiente |
+| T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | pendiente |
+| T10 | Objeto `chat.conduct` + validación | S10 | inline | pendiente |
+| T11 | Orden de captura efectivo desde configuración | S11 | inline | pendiente |
+| T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente |
+| T13 | Protocolo de emergencia editable | S13 | inline | pendiente |
+| T14 | Una pregunta por mensaje y no repetir | S14 | inline | pendiente |
+| T15 | Cobertura fuera de las siete comunas | S15 | inline | pendiente |
+| T16 | Responder preguntas durante la captura | S16 | inline | pendiente |
+| T17 | No duplicar respuesta por turno | S17 | inline | pendiente |
+| T18 | Rediseño del panel (último) | S18 | inline | pendiente |
+| T19 | Test de contrato de los cinco invariantes | S19 | inline | pendiente |
 
 ## Restricciones técnicas
 
@@ -149,6 +150,11 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 
 **L1 (2026-10-21, autorización de esta feature):**
 > si abre el pr de lo que ya tenemos merge limpieza y continuamos con chatbot-config-model
+
+**L2 (2026-10-21, alcance del editor):**
+> en F1
+
+El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

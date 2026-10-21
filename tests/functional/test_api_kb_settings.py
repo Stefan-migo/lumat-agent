@@ -878,7 +878,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
-        "model_api_key", "email",
+        "model_api_key", "email", "tarifa",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
@@ -1189,3 +1189,67 @@ def test_settings_update_unknown_section_400_json(client, make_user):
     assert resp.headers["content-type"].startswith("application/json")
     assert "unknown section" in resp.json()["detail"]
     assert _last_audit("settings.change") is None, "unknown section must not audit"
+
+
+def test_settings_get_includes_the_tariff(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    body = client.get("/panel/api/settings", follow_redirects=False).json()
+
+    assert set(body["tarifa"]) == {
+        "visita_tecnica",
+        "mantencion_calefont",
+        "mantencion_caldera",
+        "lavado_red",
+    }
+    assert body["tarifa"]["visita_tecnica"] == [
+        {"desde_mes": 1, "hasta_mes": 12, "valor": 30000}
+    ]
+
+
+def test_settings_update_tarifa_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {
+        "visita_tecnica": [{"desde_mes": 1, "hasta_mes": 12, "valor": 31000}],
+        "mantencion_calefont": [
+            {"desde_mes": 3, "hasta_mes": 10, "valor": 51000},
+            {"desde_mes": 11, "hasta_mes": 2, "valor": 41000},
+        ],
+        "mantencion_caldera": [
+            {"desde_mes": 4, "hasta_mes": 9, "valor": 81000},
+            {"desde_mes": 10, "hasta_mes": 3, "valor": 61000},
+        ],
+        "lavado_red": [{"desde_mes": 1, "hasta_mes": 12, "valor": 141000}],
+    }
+
+    resp = client.post("/panel/api/settings/tarifa", json={"precios": value}, follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Settings, "tarifa.precios").value == value
+    audit = _last_audit("settings.change")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.entity_id == "tarifa.precios"
+
+
+def test_settings_update_tarifa_rejects_gap_without_persisting(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {
+        "visita_tecnica": [{"desde_mes": 1, "hasta_mes": 11, "valor": 31000}],
+        "mantencion_calefont": [{"desde_mes": 1, "hasta_mes": 12, "valor": 51000}],
+        "mantencion_caldera": [{"desde_mes": 1, "hasta_mes": 12, "valor": 81000}],
+        "lavado_red": [{"desde_mes": 1, "hasta_mes": 12, "valor": 141000}],
+    }
+
+    resp = client.post("/panel/api/settings/tarifa", json={"precios": value}, follow_redirects=False)
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    assert "does not cover months" in resp.json()["detail"]
+    with SessionLocal() as session:
+        assert session.get(Settings, "tarifa.precios") is None
+    assert _last_audit("settings.change") is None
