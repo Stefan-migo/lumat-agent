@@ -177,6 +177,29 @@ def test_media_during_capture_resumes_agenda(mock_openai_chat):
         assert session.get(Conversation, conv_id).state.value == "bot"
 
 
+def test_configured_consent_question_is_used(mock_openai_chat):
+    custom = "¿Nos autorizas a guardar tus datos?"
+    with session_scope() as session:
+        settings_service.set_setting(
+            session,
+            settings_service.REPLY_TEXTS_KEY,
+            {**settings_service.REPLY_TEXT_DEFAULTS, "capture_consent": custom},
+            actor="test",
+        )
+        session.commit()
+
+    conv_id = _start_conversation()
+    replies: list[str] = []
+    for index, text in enumerate(
+        ["quiero una visita", "No enciende", "Calefont", "Providencia",
+         "mañanas", "Juan", "juan@mail.cl", "Calle 1"],
+        start=1,
+    ):
+        replies = _turn(conv_id, text, f"wamid.custom-consent{index}")
+
+    assert replies == [custom]
+
+
 def test_configured_capture_questions_are_the_fallback_text(mock_openai_chat):
     """S7: `capture.questions` replaces the built-in fallback, field by field."""
     from app.chat.nodes.capture import CAPTURE_FIELDS
@@ -198,7 +221,6 @@ def test_configured_capture_questions_are_the_fallback_text(mock_openai_chat):
 
 def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
     from app.chat.nodes.capture import EVIDENCE_QUESTION
-
     conv_id = _start_conversation()
     all_replies = []
     for index, text in enumerate(

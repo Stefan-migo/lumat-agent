@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 
+from app.chat.nodes.replies import render_reply
 from app.chat.nodes.summary import compose_fallback_summary, generate_summary
 from app.chat.state import ConversationState, set_conversation_state
 from app.db import session_scope
@@ -32,12 +33,13 @@ from app.models import (
 from app.services.audit import record_audit
 from app.services.cases import create_handoff_case
 from app.services.realtime import record_activity
+from app.services.settings import REPLY_TEXT_DEFAULTS, get_reply_texts
 
 logger = logging.getLogger(__name__)
 
-# H1 handoff reply: a human takes over (same wording the escalation summary
-# used pre-T4.4, so the customer-facing message is unchanged).
-HANDOFF_REPLY = "Un asesor revisará tu caso y te contactará a la brevedad."
+# The shipped handoff wording. The node answers with the configured `handoff`
+# text from settings; this alias is the default the tests assert.
+HANDOFF_REPLY = REPLY_TEXT_DEFAULTS["handoff"]
 
 
 def _escalate_reason(state: ConversationState) -> str:
@@ -53,8 +55,8 @@ def handoff(state: ConversationState) -> dict:
         customer = session.get(Customer, state.customer_id)
     if state.cost_mode == "blocked":
         # SS-3: under a cost block NO LLM runs anywhere — the escalation
-        # summary is skipped and the reply is the deterministic HANDOFF_REPLY
-        # canned fallback.
+        # summary is skipped and the reply is the deterministic `handoff` text
+        # from settings.
         summary_text = compose_fallback_summary(state)
     else:
         try:
@@ -67,6 +69,7 @@ def handoff(state: ConversationState) -> dict:
             summary_text = compose_fallback_summary(state)
 
     with session_scope() as session:
+        handoff_reply = render_reply(get_reply_texts(session), "handoff")
         conversation = session.get(Conversation, state.conversation_id)
         case = create_handoff_case(
             session, state, summary_text=summary_text, reason=reason
@@ -99,5 +102,5 @@ def handoff(state: ConversationState) -> dict:
         "escalate": True,
         "escalate_reason": reason,
         "summary": summary_text,
-        "replies": [HANDOFF_REPLY],
+        "replies": [handoff_reply],
     }

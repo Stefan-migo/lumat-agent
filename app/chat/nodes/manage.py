@@ -10,10 +10,11 @@ from sqlalchemy import select
 
 from app.chat.state import ConversationState
 from app.chat.nodes.booking import _resolve
+from app.chat.nodes.replies import render_reply
 from app.db import session_scope
 from app.models import Appointment, AppointmentStatus, Conversation
 from app.services import scheduling
-from app.services.settings import get_hours_timezone
+from app.services.settings import get_hours_timezone, get_reply_texts
 
 OFFER_TTL = timedelta(minutes=30)
 MAX_INVALID_REPLIES = 1
@@ -59,31 +60,49 @@ def _appointment_label(appointment: Appointment) -> str:
     return f"{appointment.local_start.strftime('%d/%m/%Y a las %H:%M')} — {appointment.service}"
 
 
-def _start_offer(session, state: ConversationState, now: datetime, mode: str) -> dict:
+def _start_offer(
+    session, state: ConversationState, now: datetime, mode: str, texts: dict[str, str]
+) -> dict:
     appointments = session.scalars(_appointment_query(state.customer_id, now)).all()
     if not appointments:
         _persist_offer(session, state, None)
         action = "reagendar" if mode == "reschedule" else "cancelar"
-        return {"next_step": "end", "replies": [f"No tienes visitas próximas para {action}."]}
+        return {"next_step": "end", "replies": [render_reply(texts, "manage_no_visits", accion=action)]}
 
     shown = appointments[:3]
     if len(appointments) == 1:
         appointment = shown[0]
         offer = {"mode": mode, "appointment_id": appointment.id, "phase": "confirm", "attempts": 0, "created_at": now.isoformat()}
-        prompt = f"Tienes una visita el {_appointment_label(appointment)}. ¿Confirmas que quieres cancelarla? Responde sí o no."
+        prompt = render_reply(
+            texts, "manage_confirm_cancel", visita=_appointment_label(appointment)
+        )
         if mode == "reschedule":
-            return _new_reschedule_offer(session, state, appointment, now)
+            return _new_reschedule_offer(session, state, appointment, now, texts)
     else:
         offer = {"mode": mode, "appointment_ids": [item.id for item in shown], "phase": "select", "attempts": 0, "created_at": now.isoformat()}
         action = "reagendar" if mode == "reschedule" else "cancelar"
-        prompt = f"¿Cuál visita quieres {action}?\n" + "\n".join(
-            f"{index}. {_appointment_label(appointment)}" for index, appointment in enumerate(shown, 1)
-        ) + "\nResponde con el número de la visita."
+        prompt = render_reply(
+            texts,
+            "manage_select",
+            accion=action,
+            opciones="\n".join(
+                f"{index}. {_appointment_label(appointment)}"
+                for index, appointment in enumerate(shown, 1)
+            ),
+        )
     _persist_offer(session, state, offer)
     return {"next_step": "end", "replies": [prompt]}
 
 
-def _new_reschedule_offer(session, state, appointment: Appointment, now: datetime, *, attempts: int = 0) -> dict:
+def _new_reschedule_offer(
+    session,
+    state: ConversationState,
+    appointment: Appointment,
+    now: datetime,
+    texts: dict[str, str],
+    *,
+    attempts: int = 0,
+) -> dict:
     assignments = scheduling.open_slots_for_assignment(
         session, now=now, days=7, duration_minutes=appointment.duration_minutes, limit=3
     )
@@ -98,9 +117,13 @@ def _new_reschedule_offer(session, state, appointment: Appointment, now: datetim
         "slots": slots, "created_at": now.isoformat(), "attempts": attempts,
     }
     _persist_offer(session, state, offer)
-    prompt = "Tengo estos horarios disponibles para reagendar tu visita:\n" + "\n".join(
-        f"{index}. {slot['date']} {slot['time']}" for index, slot in enumerate(slots, 1)
-    ) + "\nResponde con el número del horario que prefieres."
+    prompt = render_reply(
+        texts,
+        "manage_slots_offer",
+        opciones="\n".join(
+            f"{index}. {slot['date']} {slot['time']}" for index, slot in enumerate(slots, 1)
+        ),
+    )
     return {"next_step": "end", "replies": [prompt]}
 
 
@@ -119,19 +142,20 @@ def manage(state: ConversationState) -> dict:
     now = datetime.now(timezone.utc)
     classified_mode = "reschedule" if state.intent == "reagendar_visita" else "cancel"
     with session_scope() as session:
+        texts = get_reply_texts(session)
         conversation = session.get(Conversation, state.conversation_id)
         offer = dict((conversation.captured_data or {}).get("_manage_offer") or {}) if conversation else {}
         mode = offer.get("mode") or classified_mode
         if not offer:
-            return _start_offer(session, state, now, mode)
+            return _start_offer(session, state, now, mode, texts)
         try:
             created_at = datetime.fromisoformat(offer["created_at"])
             if created_at.tzinfo is None or now - created_at > OFFER_TTL:
                 _persist_offer(session, state, None)
-                return {"next_step": "end", "replies": ["La solicitud venció. Si aún necesitas gestionar tu visita, vuelve a escribirnos."]}
+                return {"next_step": "end", "replies": [render_reply(texts, "manage_expired")]}
         except (KeyError, ValueError):
             _persist_offer(session, state, None)
-            return {"next_step": "end", "replies": ["La solicitud venció. Si aún necesitas gestionar tu visita, vuelve a escribirnos."]}
+            return {"next_step": "end", "replies": [render_reply(texts, "manage_expired")]}
 
         if offer.get("mode") != mode:
             return _handoff(session, state, "manage_invalid_mode")
@@ -140,30 +164,54 @@ def manage(state: ConversationState) -> dict:
             index = int(match.group(1)) - 1 if match else -1
             ids = offer.get("appointment_ids") or []
             if not 0 <= index < len(ids):
-                return _invalid(session, state, offer, "No pude identificar una visita. Responde con el número de una opción.", "manage_unclear")
+                return _invalid(
+                    session,
+                    state,
+                    offer,
+                    render_reply(texts, "manage_appointment_unclear"),
+                    "manage_unclear",
+                )
             offer = {"mode": mode, "appointment_id": ids[index], "phase": "confirm", "attempts": 0, "created_at": offer["created_at"]}
             appointment = session.get(Appointment, ids[index])
             if appointment is None or appointment.customer_id != state.customer_id:
                 return _handoff(session, state, "manage_appointment_unavailable")
             if mode == "reschedule":
-                return _new_reschedule_offer(session, state, appointment, now)
+                return _new_reschedule_offer(session, state, appointment, now, texts)
             _persist_offer(session, state, offer)
-            return {"next_step": "end", "replies": [f"Tienes una visita el {_appointment_label(appointment)}. ¿Confirmas que quieres cancelarla? Responde sí o no."]}
+            return {
+                "next_step": "end",
+                "replies": [
+                    render_reply(
+                        texts,
+                        "manage_confirm_cancel",
+                        visita=_appointment_label(appointment),
+                    )
+                ],
+            }
 
         if mode == "reschedule" and offer.get("phase") == "slots":
             if " ".join(re.sub(r"[^\w\s]", " ", _fold(text)).split()) in {"no", "no gracias", "mejor no"}:
                 _persist_offer(session, state, None)
-                return {"next_step": "end", "replies": ["De acuerdo, mantendremos tu visita agendada."]}
+                return {"next_step": "end", "replies": [render_reply(texts, "manage_kept")]}
             slots = offer.get("slots") or []
             selected = _resolve(text, slots)
             if selected is None:
-                return _invalid(session, state, offer, "No pude identificar un único horario. Responde con el número de una opción.", "manage_unclear")
+                return _invalid(
+                    session,
+                    state,
+                    offer,
+                    render_reply(texts, "manage_slots_unclear"),
+                    "manage_unclear",
+                )
             appointment = session.get(Appointment, offer.get("appointment_id"))
             if (appointment is None or appointment.customer_id != state.customer_id
                     or appointment.status is not AppointmentStatus.BOOKED
                     or appointment.starts_at <= datetime.now(timezone.utc)):
                 _persist_offer(session, state, None)
-                return {"next_step": "end", "replies": ["No puedo reagendar esta visita porque ya no está disponible."]}
+                return {
+                    "next_step": "end",
+                    "replies": [render_reply(texts, "manage_reschedule_unavailable")],
+                }
             slot = slots[selected]
             timezone_name = get_hours_timezone(session)
             try:
@@ -174,18 +222,33 @@ def manage(state: ConversationState) -> dict:
                     technician_id=int(slot["technician_id"]), actor="assistant",
                 )
             except (scheduling.AppointmentConflict, scheduling.Unavailable):
-                return _new_reschedule_offer(session, state, appointment, now)
+                return _new_reschedule_offer(session, state, appointment, now, texts)
             _persist_offer(session, state, None)
-            return {"next_step": "summary", "replies": [f"Tu visita quedó reagendada para el {appointment.local_start.strftime('%d/%m/%Y a las %H:%M')}."]}
+            return {
+                "next_step": "summary",
+                "replies": [
+                    render_reply(
+                        texts,
+                        "manage_rescheduled",
+                        fecha=appointment.local_start.strftime("%d/%m/%Y a las %H:%M"),
+                    )
+                ],
+            }
 
         answer = " ".join(re.sub(r"[^\w\s]", " ", _fold(text)).split())
         affirmative = answer in {"si", "confirmo", "confirmar", "acepto", "yes", "si confirmo", "confirmo si"}
         negative = answer in {"no", "nope", "negativo", "no confirmo", "no gracias"}
         if not affirmative and not negative:
-            return _invalid(session, state, offer, "Responde sí para confirmar la cancelación o no para conservar la visita.", "manage_unclear")
+            return _invalid(
+                session,
+                state,
+                offer,
+                render_reply(texts, "manage_cancel_prompt"),
+                "manage_unclear",
+            )
         if negative:
             _persist_offer(session, state, None)
-            return {"next_step": "end", "replies": ["De acuerdo, mantendremos tu visita agendada."]}
+            return {"next_step": "end", "replies": [render_reply(texts, "manage_kept")]}
 
         appointment = session.get(Appointment, offer.get("appointment_id"))
         if (
@@ -195,7 +258,15 @@ def manage(state: ConversationState) -> dict:
             or appointment.starts_at <= datetime.now(timezone.utc)
         ):
             _persist_offer(session, state, None)
-            return {"next_step": "end", "replies": ["No puedo cancelar esta visita porque ya no está disponible para cancelación; su horario pudo haber comenzado o cambiado."]}
+            return {
+                "next_step": "end",
+                "replies": [render_reply(texts, "manage_cancel_unavailable")],
+            }
         scheduling.cancel(session, appointment, actor="assistant")
         _persist_offer(session, state, None)
-        return {"next_step": "summary", "replies": [f"Tu visita del {_appointment_label(appointment)} quedó cancelada."]}
+        return {
+            "next_step": "summary",
+            "replies": [
+                render_reply(texts, "manage_cancelled", visita=_appointment_label(appointment))
+            ],
+        }

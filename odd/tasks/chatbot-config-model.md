@@ -122,8 +122,8 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T5 | Sacar precios de la KB de cliente | S5 | inline | ✅ |
 | T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | ✅ |
 | T7 | `capture.questions` como fallback | S7 | inline | ✅ |
-| T8 | Textos de agenda/cancelación/derivación | S8 | inline | pendiente |
-| T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | pendiente |
+| T8 | Textos de agenda/cancelación/derivación | S8 | inline | ✅ |
+| T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | ✅ |
 | T10 | Objeto `chat.conduct` + validación | S10 | inline | pendiente |
 | T11 | Orden de captura efectivo desde configuración | S11 | inline | pendiente |
 | T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente |
@@ -161,6 +161,11 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 
 El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 
+**L3 (2026-10-21, alcance de T8):**
+> cobertura completa
+
+Todo texto determinista que el cliente puede leer en agenda, cancelación, reagendamiento, derivación y cierre queda editable, no solo las ocho anclas del handoff.
+
 **T1 (2026-10-21) — cerrado.** Commits `5d40c6de` (settings, validación, `POST /settings/tarifa`, tests) y `9f6198ff` (sección Tarifas del panel). Verde: `tests/unit`, `tests/integration`, `tests/functional`, `npm test` (110 archivos / 1247 tests) y `npm run build` (`tsc -b`). La forma elegida es una lista de rangos de meses por prestación que debe particionar el año; `visita_tecnica` usa un rango 1–12 y las tres estacionales dos rangos.
 
 **T2 (2026-10-21) — cerrado.** `tarifa_vigente(tarifa, fecha)` resuelve el mes contra los rangos (incluye el rango que cruza diciembre) y omite un servicio sin precio en vez de inventarlo. `respond` inyecta `<fecha>` y `<tarifario>` con solo los precios vigentes, resueltos en `hours.timezone`. La persona dejó de instruir "entrega ambos valores con su rango de meses": ahora dice que los precios vigentes vienen en `<tarifario>` y prohíbe nombrar temporadas. Verde: `tests/unit` (con la DB de test migrada), `tests/integration` y `tests/functional` en ese orden.
@@ -174,6 +179,12 @@ El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 **T6 (2026-10-21) — cerrado.** RED observado primero: `test_settings_update_messages_audited` con seis claves fallaba con `AttributeError` sobre la fila `messages.greeting_short` ausente (Pydantic ignora el campo extra, así que el endpoint respondía 200 y solo se perdía el dato), y el panel no tenía tab "Saludo corto". `MessagesBody` ahora exige las seis claves; `types.ts`, el mock, `SETTINGS_KEYS`, los dos fixtures de test, `EMPTY_MESSAGES` y `MESSAGE_TEMPLATES` suman `greeting_short`. La lectura ya existía (`MESSAGE_DEFAULTS` → `GET /settings` → `receive.py:67`), así que el trabajo fue la escritura. Commits `7173839a` (endpoint) y `c67a22b4` (panel). El commit del panel toca siete archivos y supera la guía de cinco: el contrato obliga a mover `types.ts`, el mock, los dos fixtures y la UI en el mismo cambio, o `tsc -b` queda rojo entre commits. Verde: `tests/unit`, `tests/integration`, `tests/functional` en ese orden, `npm test` (110 archivos / 1249 tests) y `npm run build`.
 
 **T7 (2026-10-21) — cerrado.** RED primero: el test unitario no importaba (`CAPTURE_QUESTIONS_KEY` inexistente) y el de integración moría en el mismo símbolo. `capture.questions` guarda `{campo: texto}`; `get_capture_questions` devuelve `{}` sin fila y `capture.py` mezcla sobre `_FIELD_QUESTIONS`, así que los defaults siguen en el nodo y el orden en `CAPTURE_FIELD_ORDER` (T10 lo mueve a `chat.conduct.orden`). `validate_capture_questions(value, fields)` exige texto en cada campo del orden, rechaza campos desconocidos y slots fuera de `ALLOWED_MESSAGE_TEMPLATE_SLOTS`; los slots los llena la redacción por LLM en F3, no esta slice. `POST /settings/capture-questions` va **antes** del catch-all: el path es de un solo segmento (`/settings/{section}`) y sin ese orden el catch-all se lo come con un 400 engañoso. Sin UI todavía: F6. Commits `f8b830d8` (validación), `615d58c7` (lectura en el nodo), `f6fc55a4` (ruta). Verde: `tests/unit` (DB-free), `tests/integration` y `tests/functional`.
+
+**T8 (2026-10-21) — cerrado.** RED primero: 19 claves inexistentes (`REPLY_TEXTS_KEY`), el endpoint en 404 y el test de booking fallando por la firma nueva de `_offer_text`. `reply.texts` guarda `{clave: texto}`; los defaults viven en `REPLY_TEXT_DEFAULTS` y son byte por byte el texto anterior, y `REPLY_TEXT_SLOTS` fija qué slots acepta cada clave (el owner puede quitar un slot, nunca inventar uno que la llamada no rellena). `render_reply` rellena solo lo declarado, así que un texto sin `{{fecha}}` no recibe un valor que no usa. Los cuatro nodos leen una vez por turno con `get_reply_texts` y renderizan: booking (3 textos), manage (13), handoff (1) y capture (`capture_evidence`, `capture_consent`). Commits `4194bd8f` (catálogo y validador), `b8a63b54`, `e9a3a18e`, `74444123`, `40a41a43` y `5aa1624a` (ruta). Verde: `tests/unit`, `tests/integration`, `tests/functional` y `tests/injection`.
+Hallazgos de la auditoría, fuera de estas cinco áreas y por eso sin configurar: `_SOCIAL_REPLY` (respuesta social a mitad de captura) y el prefijo "Entiendo, es un problema con tu {equipo}." de `_ask_next`; ambos son copy de captura, candidatos a S7 o a una slice de cierre. `COMPLETION_REPLY` no lo emite ningún flujo: solo lo usa `scripts/kb_fidelity.py` como fixture, quedó marcado con `ponytail:` en vez de borrarlo. `HANDOFF_REPLY`, `EVIDENCE_QUESTION` y `CONSENT_QUESTION` quedan como alias de los defaults para no tocar ocho archivos de test y script.
+
+**T9 (2026-10-21) — cerrado.** RED primero: el test nuevo de integración recibía "Hola , atendemos de ." (el `""` del slot vacío) y el unitario viejo `test_respond_template_slot_unknown_is_empty_and_visita_uses_booking_label` fijaba justamente ese contrato, así que se reescribió a propósito. `_render_template_reply` ahora devuelve `None` cuando algún slot declarado resuelve vacío (clave ausente, valor `"unknown"` o `{{visita}}` sin reserva) y el turno sigue por el camino normal: KB si tiene contenido, `cannot_answer` + derivación si no. La selección por `classify` y el catálogo no se tocaron. Commit `adbfa21e`. Verde: `tests/unit`, `tests/integration`, `tests/functional` y `tests/injection`.
+Trade-off registrado: una plantilla que dependa de un dato no se dispara hasta que ese dato exista en la ficha; es el precio de no mandar texto incompleto. Ojo: `odd/tasks/chatbot-message-catalog.md` todavía documenta que un slot desconocido se renderiza como `""`; S9 supersede esa línea y el doc del catálogo queda desactualizado (decisión del owner si se corrige).
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

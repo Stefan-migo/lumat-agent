@@ -14,7 +14,7 @@ from app.models import (
     TechnicianWeeklySchedule,
 )
 from app.services import scheduling
-from app.services.settings import set_setting
+from app.services.settings import REPLY_TEXT_DEFAULTS, REPLY_TEXTS_KEY, set_setting
 from app.services.customers import get_or_create_customer
 from _testdb import admin_database_url
 
@@ -136,6 +136,33 @@ def test_chat_booking_uses_configured_service_duration(
             select(Appointment).where(Appointment.customer_id == customer_id)
         )
         assert appointment.duration_minutes == expected_duration
+
+
+def test_configured_booking_texts_render_their_slots(mock_openai_chat):
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            REPLY_TEXTS_KEY,
+            {
+                **REPLY_TEXT_DEFAULTS,
+                "booking_confirmed": "Quedaste agendado para el {{fecha}}.",
+            },
+            actor="test",
+        )
+        session.commit()
+    conv_id, customer_id, case_id, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+
+    offer = _invoke(conv_id, _add_message(conv_id, "si", "wamid.custom.ask"))
+    assert any("1." in reply for reply in offer)
+
+    confirmation = _invoke(conv_id, _add_message(conv_id, "1", "wamid.custom.confirm"))
+
+    assert len(confirmation) == 1
+    assert confirmation[0].startswith("Quedaste agendado para el ")
+    assert "{{" not in confirmation[0]
 
 
 def test_no_confirmation_does_not_book(mock_openai_chat):
