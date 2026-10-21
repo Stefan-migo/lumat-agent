@@ -128,10 +128,10 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T11 | Orden de captura efectivo desde configuración | S11 | inline | ✅ |
 | T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente |
 | T13 | Protocolo de emergencia editable | S13 | inline | pendiente |
-| T14 | Una pregunta por mensaje y no repetir | S14 | inline | pendiente |
-| T15 | Cobertura fuera de las siete comunas | S15 | inline | pendiente |
-| T16 | Responder preguntas durante la captura | S16 | inline | pendiente |
-| T17 | No duplicar respuesta por turno | S17 | inline | pendiente |
+| T14 | Una pregunta por mensaje y no repetir | S14 | inline | ✅ |
+| T15 | Cobertura fuera de las siete comunas | S15 | inline | ✅ |
+| T16 | Responder preguntas durante la captura | S16 | inline | ✅ |
+| T17 | No duplicar respuesta por turno | S17 | inline | ✅ |
 | T18 | Rediseño del panel (último) | S18 | inline | pendiente |
 | T19 | Test de contrato de los cinco invariantes | S19 | inline | pendiente |
 
@@ -148,6 +148,8 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 
 - Redacción default exacta de cada pregunta de captura (T7).
 - Señal de "aceptó la visita" para gatear `availability` (S11): no existe hoy; falta la decisión de producto.
+- Redacción de la reformulación (S14): hoy la segunda pasada repite el texto configurado; cambiarlo es copy.
+- `redaccion: llm | plantilla` (S10) sigue sin lector: no existe redacción por LLM de la pregunta. Es una llamada de costo por turno, así que no entra sin decisión.
 - Si el saludo se personaliza con el nombre (producto).
 - De Lumat: IVA de los cuatro precios, exigibilidad del 15%, matriz de garantías, documentos SEC emitibles.
 
@@ -189,6 +191,19 @@ Trade-off registrado: una plantilla que dependa de un dato no se dispara hasta q
 **T10 (2026-10-21) — cerrado.** RED primero: el unitario moría en `ImportError` de `CHAT_CONDUCT_DEFAULTS` y la ruta respondía 400 porque el catch-all `/settings/{section}` se comía `/settings/conduct` antes de que existiera la ruta literal. `chat.conduct` guarda los cuatro campos; `validate_conduct(value, fields)` recibe los campos de captura como parámetro —igual que `validate_capture_questions`— así que `settings` no importa `capture`; `get_conduct` cae al default por clave. Las tres preguntas abiertas del handoff quedaron resueltas: (1) `derivaciones` es **lista de slugs activos**, precedente `coverage.communes`, porque la validación de "al menos una alcanzable" pide lista no vacía; (2) **sin GET y sin UI**, igual que T7 y T8 — F6 expone el contrato completo de una sola vez; (3) el validador recibe el orden, sin ciclo `settings → capture`. Decisiones propias de T10, registradas: las **cinco derivaciones quedan activas por default** (desactivar una borra el caso que cubre, y S15 exige que una comuna fuera de cobertura llegue a un asesor sin tocar el panel); `orden` puede ser **subconjunto** del modelo de captura —sacar un campo es apagar esa pregunta— pero no vacío ni con repetidos, y la regla "`name/email/address` después de `availability`" solo aplica si `availability` está en el orden. Commit `74bafd3a`. Verde: `tests/unit` (DB-free, con `DATABASE_URL` inalcanzable), `tests/integration`, `tests/functional` y `tests/injection` en invocaciones separadas.
 
 **T11 (2026-10-21) — cerrado.** RED primero: `_missing_fields()` recibía un argumento y el test le pasaba dos (`TypeError`), y en integración el orden configurado seguía preguntando `failure` primero y `address` aunque estuviera fuera del orden. `_missing_fields(captured, order)` recibe la secuencia; `_ask_next` lee `get_conduct(session)["orden"]` una vez por turno y **funde los dos `session_scope()`** que abría (uno por rama) en uno solo. El empaquetado quedó en código, como manda S11: `MAX_ASKS` y `_DIAGNOSIS_FIELDS` no se configuran. El acoplamiento menos obvio, resuelto: `POST /settings/capture-questions` valida contra el **orden efectivo** (`get_conduct(session)["orden"]`), no contra el de envío; si no, cambiar el orden dejaba el mapa guardado inválido o guardable con claves que ya no se preguntan. `CAPTURE_FIELD_ORDER` queda como modelo de captura y default, y un test unitario fija que `CHAT_CONDUCT_DEFAULTS["orden"] == CAPTURE_FIELD_ORDER` para que las dos listas no se separen. **Gating fuera de alcance, con razón registrada:** "`availability` solo después de que el cliente aceptó la visita" no tiene señal hoy — el consentimiento es un paso posterior a todos los campos y la reserva viene después—, así que T11 entrega el orden configurable y el gating espera decisión de producto. Commit `c2a910b9`. Verde: `tests/unit` (también DB-free), `tests/integration`, `tests/functional` y `tests/injection` en invocaciones separadas.
+
+**L4 (2026-10-21, S16 — cuándo repreguntar el campo pendiente):**
+> Mismo turno (Recommended)
+
+S14 permite dos mensajes en un turno cuando el contenido difiere (informativo + pregunta) y S16 pide repreguntar "en el turno siguiente". Se resuelve por el mismo turno: S16 se interpreta como "el campo no se pierde", no como "esperá al próximo turno", para no dejar al cliente sin el siguiente paso.
+
+**T14 (2026-10-21) — cerrado.** RED primero: el unitario no importaba `MAX_ASKS_PER_FIELD` y en integración el lote de reserva seguía pidiendo 2–3 campos con `max_preguntas_por_mensaje=1`. `_ask_batch` reemplaza el lote fijo de `MAX_ASKS=3`: diagnóstico siempre de a uno, datos de reserva según `chat.conduct.max_preguntas_por_mensaje` (1 o 2). La pregunta opcional de evidencia ahora viaja en el último lote en vez de en cualquier turno con ≤3 campos. `_asked` cuenta cuántas veces se envió cada campo y `_exhausted` corta el tercer intento: el turno deriva al nodo `handoff` con razón `campo_sin_respuesta`, y `_after_capture` suma esa arista. Decisión registrada: la reformulación reutiliza el texto configurado (reescribirla es copy, ver Pendientes). El test que fijaba `_pending == ["email","address"]` se reescribió a propósito a `["email"]`, y el turno de derivación verifica además que no haya dos respuestas idénticas. Commit `50ed534b`. Verde: las cuatro suites en invocaciones separadas y `tests/unit` también DB-free.
+
+**T15 (2026-10-21) — cerrado.** RED primero: el flujo completaba la captura con "La Florida" sin derivar. `_out_of_coverage(captured, communes, derivaciones)` compara con `comuna_cubierta` (misma normalización que S3) y solo dispara si la regla `cobertura` está en `chat.conduct.derivaciones`; cuando dispara, `capture` deriva al nodo `handoff` con razón `cobertura` — el caso queda creado, la conversación pasa a humano y no se promete visita. **Hallazgo del slice:** la suite entera reservaba visitas en Providencia, que no está entre las siete comunas; con S15 eso deriva. Se migraron los flujos de chat a Ñuñoa (13 referencias en `test_chat_capture.py`, 2 en `test_handoff.py`, 3 en `test_conversation_flows.py`, 1 en `test_golden_threads.py`). Commit `e860d02d`, seis archivos con razón registrada: la migración de datos y la regla no se pueden separar sin dejar la suite roja entre commits.
+
+**T16 (2026-10-21) — cerrado.** RED primero: `_dispatch` no aceptaba el flag y una pregunta clasificada como intención de captura se guardaba como respuesta del campo. `_is_question` marca el mensaje con `?`, descontando los que son respuesta disfrazada (la extracción llenó un campo, "¿puede ser el sábado?") y los sociales ("Hola, ¿cómo estás?"), que `capture` contesta por su cuenta. Con `mid_capture` y pregunta, el dispatch va a research y `capture_paused` retoma el campo pendiente en el mismo turno (L4). Efecto colateral atrapado por la suite: sin el descarte de sociales, `test_t03_greeting_with_a_pending_caldera_keeps_the_context` derivaba por `kb_miss`. Commit `a85dd29b`. Verde: las cuatro suites.
+
+**T17 (2026-10-21) — cerrado sin cambio de producción.** S17 ya se cumplía estructuralmente: `respond` devuelve el preset antes de cualquier retrieval y cada rama devuelve un solo texto. Los dos tests nuevos fijan el contrato: con preset, una sola respuesta y **cero** llamadas al modelo; sin KB, una sola respuesta y `kb_miss`. Fueron verdes en la primera corrida, y eso es la evidencia de que la tarea era un guard, no un fix. Commit `df0ad1cb`.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

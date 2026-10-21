@@ -897,3 +897,27 @@ def test_s15_the_coverage_rule_can_be_turned_off(mock_openai_chat):
     with SessionLocal() as session:
         assert session.get(Conversation, conv_id).state.value != "human"
     assert _conversation_captured(conv_id)["_pending"] == ["availability"]
+
+
+# ---------------------------------------------------------------------------
+# S16 — a question mid-capture is answered, never stored as the field answer
+# ---------------------------------------------------------------------------
+
+
+def test_s16_a_question_with_a_capture_intent_is_answered_not_stored(
+    mock_openai_chat, fake_embedder
+):
+    _seed_kb_doc(
+        "cuanto cuesta la revision anual de calefont: 15000 pesos", KbVisibility.CUSTOMER
+    )
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s16a1")
+    assert _conversation_captured(conv_id)["_pending"] == ["failure"]
+
+    replies = _turn(conv_id, "¿cuanto cuesta la revision anual de calefont?", "wamid.s16a2")
+
+    assert any("Segun el manual de Lumat" in reply for reply in replies)
+    assert any("Cuéntame qué pasa con el equipo" in reply for reply in replies)
+    captured = _conversation_captured(conv_id)
+    assert "failure" not in captured
+    assert captured["_pending"] == ["failure"]
