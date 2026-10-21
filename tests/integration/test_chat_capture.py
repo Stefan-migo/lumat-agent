@@ -158,7 +158,89 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     assert captured["comuna"] == "Providencia"
     assert captured["availability"] == "mañanas"
     assert captured["name"] == "Juan Perez"
-    assert captured["_pending"] == ["email", "address"]
+    # S14: the configured max is 1 by default, so the booking data is asked one
+    # field per message too (it used to ride a 2–3 field batch).
+    assert captured["_pending"] == ["email"]
+
+
+# ---------------------------------------------------------------------------
+# S14 — one question per message, one reformulation, then a derivation
+# ---------------------------------------------------------------------------
+
+
+def _configure_conduct(**overrides) -> None:
+    with session_scope() as session:
+        settings_service.set_setting(
+            session,
+            settings_service.CHAT_CONDUCT_KEY,
+            {**settings_service.CHAT_CONDUCT_DEFAULTS, **overrides},
+            actor="test",
+        )
+        session.commit()
+
+
+def test_s14_one_question_per_message_is_the_default(mock_openai_chat):
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s14a1")
+    _turn(conv_id, "No enciende", "wamid.s14a2")
+    _turn(conv_id, "Calefont Bosch", "wamid.s14a3")
+
+    replies = _turn(conv_id, "Providencia", "wamid.s14a4")
+
+    assert any("días y horarios" in reply.lower() for reply in replies)
+    assert all("nombre" not in reply.lower() for reply in replies)
+    assert _conversation_captured(conv_id)["_pending"] == ["availability"]
+
+
+def test_s14_max_two_asks_two_booking_fields(mock_openai_chat):
+    _configure_conduct(max_preguntas_por_mensaje=2)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s14b1")
+    _turn(conv_id, "No enciende", "wamid.s14b2")
+    _turn(conv_id, "Calefont Bosch", "wamid.s14b3")
+
+    replies = _turn(conv_id, "Providencia", "wamid.s14b4")
+
+    assert _conversation_captured(conv_id)["_pending"] == ["availability", "name"]
+    assert any("nombre" in reply.lower() for reply in replies)
+
+
+def test_s14_a_field_asked_twice_without_an_answer_offers_a_derivation(
+    mock_openai_chat, fake_embedder
+):
+    """Ask once, reformulate once (the KB deviation turn re-asks), then derive."""
+    _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos", KbVisibility.CUSTOMER)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s14c1")
+    _turn(conv_id, "cuanto cuesta la revision anual", "wamid.s14c2")
+
+    replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.s14c3")
+
+    # S14: the same question is never sent twice in one turn.
+    assert len(replies) == len(set(replies))
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"
+        causes = session.scalars(
+            select(ConversationEvent.cause).where(
+                ConversationEvent.conversation_id == conv_id
+            )
+        ).all()
+    assert "handoff:campo_sin_respuesta" in causes
+
+
+def test_s14_two_questions_for_different_fields_do_not_derive(mock_openai_chat, fake_embedder):
+    """The reformulation budget is per field: answering the field clears it."""
+    _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos", KbVisibility.CUSTOMER)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s14d1")
+    _turn(conv_id, "cuanto cuesta la revision anual", "wamid.s14d2")
+    _turn(conv_id, "No enciende", "wamid.s14d3")
+    _turn(conv_id, "cuanto cuesta la revision anual", "wamid.s14d4")
+
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value != "human"
+    assert _conversation_captured(conv_id)["_pending"] == ["equipment"]
+
 
 
 def test_media_during_capture_resumes_agenda(mock_openai_chat):

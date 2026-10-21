@@ -175,7 +175,8 @@ def _route_path(state: ConversationState) -> str:
 
 def _after_capture(state: ConversationState) -> str:
     step = getattr(state, "next_step", None)
-    return step if step in {"booking", "summary"} else END
+    # S14: a field asked twice without an answer derives, so capture can hand off.
+    return step if step in {"booking", "summary", "handoff"} else END
 
 
 def _after_booking(state: ConversationState) -> str:
@@ -294,7 +295,7 @@ def build_graph():
             "handoff": "handoff",
         },
     )
-    builder.add_conditional_edges("capture", _after_capture, {"booking": "booking", "summary": "summary", END: END})
+    builder.add_conditional_edges("capture", _after_capture, {"booking": "booking", "summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("booking", _after_booking, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("manage", _after_manage, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("respond", _after_respond, {"handoff": "handoff", END: END})
