@@ -15,6 +15,7 @@ const SETTINGS_KEYS = [
   "messages",
   "model_api_key",
   "scope_rules",
+  "service_durations",
   "snapshot",
   "tarifa",
   "tone",

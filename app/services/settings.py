@@ -150,6 +150,10 @@ DEFAULT_LLM_RATES = {
     "_effective_date": "2026-09-11",
 }
 
+SERVICE_DURATIONS_KEY = "booking.service_durations"
+# A visit cannot reserve more than a day; anything longer is a typo, not intent.
+MAX_SERVICE_DURATION_MINUTES = 1440
+
 COVERAGE_COMMUNES_KEY = "coverage.communes"
 # The seven communes the owner services. Matching is accent- and case-insensitive
 # (see `normalize_comuna`); a name outside the list is coordinated with an
@@ -216,7 +220,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cost.llm_rates": DEFAULT_LLM_RATES,
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
-    "booking.service_durations": {},
+    SERVICE_DURATIONS_KEY: {},
     # S1: the commercial tariff, resolved by date before the prompt sees it.
     TARIFA_PRECIOS_KEY: DEFAULT_TARIFA_PRECIOS,
     # S3: service coverage, matched without accents or case.
@@ -271,6 +275,48 @@ def get_setting(session: Session, key: str, default: Any = None) -> Any:
     if key in SETTINGS_DEFAULTS:
         return SETTINGS_DEFAULTS[key]
     return default
+
+
+def validate_service_durations(value: Any) -> dict[str, int]:
+    """Validate the service -> minutes map before persistence.
+
+    Keys are service names as they arrive from the conversation, so they are
+    free text: what matters is that no two keys collapse under the same
+    normalization, or one would silently shadow the other in
+    `get_service_duration`.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("booking.service_durations must be an object")
+
+    seen: set[str] = set()
+    for service, minutes in value.items():
+        if not isinstance(service, str) or not service.strip():
+            raise ValueError("booking.service_durations keys must be non-empty strings")
+        normalized = normalize_comuna(service)
+        if normalized in seen:
+            raise ValueError(
+                f"booking.service_durations has a duplicate service: {service!r}"
+            )
+        seen.add(normalized)
+        if (
+            not isinstance(minutes, int)
+            or isinstance(minutes, bool)
+            or not 1 <= minutes <= MAX_SERVICE_DURATION_MINUTES
+        ):
+            raise ValueError(
+                "booking.service_durations values must be integers between 1 and "
+                f"{MAX_SERVICE_DURATION_MINUTES} minutes"
+            )
+    return value
+
+
+def get_service_durations(session: Session) -> dict[str, int]:
+    """Return the configured durations, or an empty map when malformed."""
+    value = get_setting(session, SERVICE_DURATIONS_KEY, default={})
+    try:
+        return validate_service_durations(value)
+    except ValueError:
+        return {}
 
 
 def get_service_duration(
@@ -661,10 +707,10 @@ def validate_assistant_setting(key: str, value: Any) -> None:
         except (TypeError, ValueError, ZoneInfoNotFoundError):
             raise ValueError("hours.timezone must be a valid IANA timezone")
     elif key == "hours.schedule":
-        _validate_hours_schedule(value)
+        validate_hours_schedule(value)
 
 
-def _validate_hours_schedule(schedule: Any) -> None:
+def validate_hours_schedule(schedule: Any) -> None:
     if not isinstance(schedule, list):
         raise ValueError("hours.schedule must be a list of objects")
     seen_days: set[int] = set()

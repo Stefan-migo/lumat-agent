@@ -14,6 +14,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   messages {"greeting": str, ...}         -> messages.*
   tarifa {"precios": {service: [range]}}  -> tarifa.precios (validated, S1)
   coverage {"communes": [str]}            -> coverage.communes (validated, S3)
+  durations {"service_durations": {...}}  -> booking.service_durations (S4)
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
@@ -96,6 +97,10 @@ class TarifaBody(BaseModel):
 
 class CoverageBody(BaseModel):
     communes: list[Any]
+
+
+class ServiceDurationsBody(BaseModel):
+    service_durations: dict[str, Any]
 
 
 class LimitsBody(BaseModel):
@@ -218,41 +223,10 @@ def _parse_hours(body: HoursBody) -> tuple[str, list[dict[str, Any]]]:
     except (TypeError, ValueError, ZoneInfoNotFoundError):
         raise HTTPException(status_code=400, detail="timezone must be a valid IANA timezone")
 
-    if not isinstance(body.schedule, list):
-        raise HTTPException(status_code=400, detail="schedule must be a list of objects")
-
-    seen_days: set[int] = set()
-    for entry in body.schedule:
-        if not isinstance(entry, dict):
-            raise HTTPException(status_code=400, detail="schedule must be a list of objects")
-        days = entry.get("days")
-        opening = entry.get("open")
-        closing = entry.get("close")
-        if (
-            not isinstance(days, list)
-            or not days
-            or any(isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 7 for day in days)
-        ):
-            raise HTTPException(status_code=400, detail="schedule days must be weekdays from 1 to 7")
-        if len(set(days)) != len(days) or seen_days.intersection(days):
-            raise HTTPException(status_code=400, detail="schedule weekdays must not repeat")
-        seen_days.update(days)
-        if (
-            not isinstance(opening, str)
-            or not isinstance(closing, str)
-            or len(opening) != 5
-            or len(closing) != 5
-            or opening[2] != ":"
-            or closing[2] != ":"
-        ):
-            raise HTTPException(status_code=400, detail="schedule times must use HH:MM")
-        try:
-            open_time = datetime.strptime(opening, "%H:%M").time()
-            close_time = datetime.strptime(closing, "%H:%M").time()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="schedule times must use HH:MM")
-        if open_time >= close_time:
-            raise HTTPException(status_code=400, detail="open must be before close")
+    try:
+        settings_service.validate_hours_schedule(body.schedule)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return body.timezone, body.schedule
 
 
@@ -279,6 +253,7 @@ def settings_get(
         },
         "tarifa": settings_service.get_tarifa_precios(session),
         "coverage": settings_service.get_coverage_communes(session),
+        "service_durations": settings_service.get_service_durations(session),
         "conversation_limit": settings_service.get_setting(
             session, "cost.conversation_limit", default=1.50
         ),
@@ -492,6 +467,21 @@ def settings_coverage(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     _save(session, settings_service.COVERAGE_COMMUNES_KEY, communes, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/durations")
+def settings_durations(
+    body: ServiceDurationsBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    try:
+        durations = settings_service.validate_service_durations(body.service_durations)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.SERVICE_DURATIONS_KEY, durations, current)
     session.commit()
     return {"ok": True}
 

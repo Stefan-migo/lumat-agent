@@ -24,6 +24,9 @@ La sección **Cobertura** del panel edita la lista (una comuna por línea) y gua
 
 **S4 — Duraciones y horarios validados.**
 `booking.service_durations` y `hours.schedule` ya existen; se les agrega validación de panel y valores por defecto coherentes. `hours.schedule` vacío significa atención 24/7 y sigue siendo el default deseado; la agenda real sigue limitada por disponibilidad de técnicos.
+Duraciones: minutos enteros entre 1 y 1440 (un día), claves no vacías y sin dos claves que colisionen al normalizar (una taparía a la otra en `get_service_duration`). `POST /settings/durations` valida y audita; `GET /settings` las expone.
+Horarios: el panel y la ruta del asistente comparten un único validador (`validate_hours_schedule`), sin reglas duplicadas.
+El editor de duraciones desde el panel queda para F6: el espacio de claves es abierto (el nombre del servicio viene de la conversación), y un formulario de cuatro campos fijos borraría en silencio cualquier clave propia.
 
 **S5 — La KB de cliente baja a cuatro documentos.**
 `docs/kb/lumat-precios.md` deja de ser documento de cliente. Los precios viven solo en settings.
@@ -113,7 +116,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T1 | `tarifa.precios`, validación y editor del panel | S1 | inline | ✅ |
 | T2 | Resolución por fecha, fecha y `<tarifario>` en el prompt | S2 | inline | ✅ |
 | T3 | `coverage.communes`, normalización y editor del panel | S3 | inline | ✅ |
-| T4 | Validación de duraciones y horarios | S4 | inline | pendiente |
+| T4 | Validación de duraciones y horarios | S4 | inline | ✅ |
 | T5 | Sacar precios de la KB de cliente | S5 | inline | pendiente |
 | T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | pendiente |
 | T7 | `capture.questions` como fallback | S7 | inline | pendiente |
@@ -162,6 +165,8 @@ El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 **T2 (2026-10-21) — cerrado.** `tarifa_vigente(tarifa, fecha)` resuelve el mes contra los rangos (incluye el rango que cruza diciembre) y omite un servicio sin precio en vez de inventarlo. `respond` inyecta `<fecha>` y `<tarifario>` con solo los precios vigentes, resueltos en `hours.timezone`. La persona dejó de instruir "entrega ambos valores con su rango de meses": ahora dice que los precios vigentes vienen en `<tarifario>` y prohíbe nombrar temporadas. Verde: `tests/unit` (con la DB de test migrada), `tests/integration` y `tests/functional` en ese orden.
 
 **T3 (2026-10-21) — cerrado.** `coverage.communes` con las siete comunas; `normalize_comuna` pliega mayúsculas, tildes y espacios internos; `comuna_cubierta` devuelve `False` para vacío o `None`; la validación rechaza strings vacíos y duplicados que colisionan al normalizar. `POST /settings/coverage` + `GET /settings` y la sección Cobertura del panel. La conducta fuera de cobertura sigue siendo T15. Verde: las tres suites en orden, panel (110 archivos / 1248 tests) y `npm run build`.
+
+**T4 (2026-10-21) — cerrado.** `validate_service_durations` (entero 1–1440, claves no vacías, sin colisiones al normalizar), `get_service_durations` con fallback a mapa vacío, `POST /settings/durations` y su lugar en `GET /settings`. La validación de horarios quedó en un solo lugar: el panel ya no duplica las reglas de días y horas, usa `validate_hours_schedule`. Editor de duraciones diferido a F6 con razón registrada. Verde: las tres suites en orden, panel (110 archivos / 1248 tests) y `npm run build`.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

@@ -60,6 +60,7 @@ export const settings: Settings = {
     "Colina",
     "Huechuraba",
   ],
+  service_durations: { Calefont: 60, Caldera: 90 },
   conversation_limit: 1.5,
   daily_limit: 5.0,
   meta_cost: 0.01,

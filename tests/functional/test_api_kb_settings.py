@@ -878,7 +878,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
-        "model_api_key", "email", "tarifa", "coverage",
+        "model_api_key", "email", "tarifa", "coverage", "service_durations",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
@@ -1306,3 +1306,68 @@ def test_settings_update_coverage_rejects_duplicates_without_persisting(client, 
     with SessionLocal() as session:
         assert session.get(Settings, "coverage.communes") is None
     assert _last_audit("settings.change") is None
+
+
+def test_settings_get_includes_service_durations(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    body = client.get("/panel/api/settings", follow_redirects=False).json()
+
+    assert body["service_durations"] == {}
+
+
+def test_settings_update_service_durations_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/durations",
+        json={"service_durations": {"Calefont": 60, "Caldera": 90}},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Settings, "booking.service_durations").value == {
+            "Calefont": 60,
+            "Caldera": 90,
+        }
+    audit = _last_audit("settings.change")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.entity_id == "booking.service_durations"
+
+
+def test_settings_update_service_durations_rejects_invalid_without_persisting(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/durations",
+        json={"service_durations": {"Caldera": 0}},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    with SessionLocal() as session:
+        assert session.get(Settings, "booking.service_durations") is None
+    assert _last_audit("settings.change") is None
+
+
+def test_settings_hours_rejects_invalid_values_with_the_shared_validator(client, make_user):
+    """The panel and the assistant path reject the same malformed schedule."""
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/hours",
+        json={"timezone": "UTC", "schedule": [{"days": [1, 1], "open": "09:00", "close": "17:00"}]},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert "weekdays must not repeat" in resp.json()["detail"]
+    with SessionLocal() as session:
+        assert session.get(Settings, "hours.schedule") is None
