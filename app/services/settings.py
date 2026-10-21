@@ -77,7 +77,7 @@ MESSAGE_DEFAULTS: dict[str, str] = {
         "revisará tu consulta y te contactará."
     ),
     "clarification": (
-        "Disculpá, no te entendí bien. ¿Me contás un poco más qué necesitás? "
+        "Disculpa, no te entendí bien. ¿Me cuentas un poco más qué necesitas? "
         "Puedo ayudarte con una consulta, coordinar una visita técnica o "
         "revisar un trabajo ya hecho."
     ),
@@ -92,6 +92,7 @@ MESSAGE_DEFAULTS: dict[str, str] = {
 # Stored as a plain list[str] — T4.2 compiles the regex from these.
 DEFAULT_EMERGENCY_KEYWORDS: list[str] = [
     "olor a gas",
+    "olor fuerte a gas",  # the adjective used to hide the phrase from the regex
     "huele a gas",  # variant
     "huelo gas",  # first person: the third person escalated, the first did not
     "huelo a gas",  # variant

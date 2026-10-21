@@ -330,8 +330,8 @@ def test_benign_text_passes_through_normal_flow(mock_openai_chat):
     conv_id = _start_conversation()
     replies = _turn(conv_id, "mi calefont no enciende", "wamid.emn1")
 
-    # normal first-contact flow: greeting menu + first capture question
-    assert any("nombre" in r.lower() for r in replies)
+    # normal first-contact flow: greeting + the first diagnostic question
+    assert any("qué pasa con el equipo" in r.lower() for r in replies)
     assert not any("INSTRUCCIONES DE SEGURIDAD" in r for r in replies)
     assert len(mock_openai_chat) == 1  # only the intent classification ran
 

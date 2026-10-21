@@ -83,7 +83,7 @@ def test_s2_greeting_with_content_is_one_short_greeting_and_does_not_ask_again(
     assert replies[0].startswith(SHORT_GREETING + "\n\n")
     assert "soy el asistente virtual de Lumat" in replies[0]
     assert ASK not in replies[0]
-    assert "¿Cuál es tu nombre?" in replies[0]
+    assert "Cuéntame qué pasa con el equipo" in replies[0]
 
 
 def test_s2_content_without_a_greeting_is_one_short_greeting_and_does_not_ask_again(

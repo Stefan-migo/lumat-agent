@@ -106,9 +106,10 @@ No bloquean la construcción: la persona ordena no inventar y derivar.
 | T7 | Verificación estructural S2–S12 | S2–S12 | inline | ✅ |
 | T8 | Persona de Max + espejo `FALLBACKS` | S13 | inline | ✅ |
 | T9 | Suite QA T01–T12 | S14 | inline | ✅ 6 verdes / 6 rojos |
-| T10 | Reordenar `capture.py` (resolver → orientar → técnico → datos) | S14 T02/T04/T09 | inline | pendiente |
-| T11 | Sacar `persona` del saludo social y actualizar equipo | S14 T03/T05/T07 | inline | pendiente |
+| T10 | Reordenar `capture.py` (diagnóstico → ubicación → datos) | S14 T02/T04/T09 | inline | ✅ |
+| T11 | Sacar `persona` del saludo social y actualizar equipo | S14 T03/T05/T07 | inline | ✅ |
 | T12 | Evaluación con `chat_harness` + `kb_fidelity` | S14 | inline | pendiente |
+| T14 | Corregir voseo rioplatense del copy y keyword de emergencia | S2 | inline | ✅ |
 | T13 | Tests de contrato de la KB y la persona (sin DB) | S2–S13 | inline | ✅ |
 
 ## Log
@@ -170,3 +171,15 @@ Archivo recibido: `CEREBRO_MAX_LUMAT_V4.pdf`, 16 páginas, fechado 20 de octubre
 - Advertencia aplicada: el vocabulario de veredictos del contrato no coincidía con S1 (`parcial`, `difiere`, `no aplica al código`). S1 se ajustó al vocabulario real y se agregó la fila E3 que faltaba.
 - Advertencias aceptadas y documentadas: varios tests de §E1 asertan un subconjunto de la conducta (porque `check_availability` está diferido), y el recargo del 15% quedó redactado como condición publicada aunque su exigibilidad siga pendiente.
 - Los probes del verificador se incorporaron como `tests/unit/test_chatbot_cerebro_kb.py`: 10 tests sin base de datos que cubren S2–S13, incluyendo que cada párrafo de hecho sobreviva entero al chunker real de 500/50.
+
+### Paso 5 — conducta conversacional (2026-10-21)
+
+- **`capture.py`:** orden nuevo `failure → equipment → comuna → availability → name → email → address`. Los campos de diagnóstico se preguntan de a uno; el bloque de 2–3 queda para los datos de reserva. El saludo en medio del formulario se responde y NO se guarda como respuesta (`is_social_only`).
+- **`capture.py`:** `equipment_type` se actualiza en cada turno con intención de artefacto, no solo en el primero (T07).
+- **`classify_intent.py`:** `persona` sobrevive solo si el texto pide explícitamente una persona (`is_explicit_human_request`); el modelo sobre-dispara esa intención con «¿cómo estás?».
+- **Voseo corregido:** `messages.clarification` decía «Disculpá… contás… necesitás». Ahora es español de Chile.
+- **Keyword de emergencia:** se agregó «olor fuerte a gas» a los defaults.
+- **Tests viejos actualizados a propósito**, no esquivados: `test_first_turn_greeting`, `test_chat_capture` (5), `test_conversation_flows` (3), `test_golden_threads` (1), `test_triage_reply_duplication`, `test_handoff`, `test_emergency`, `test_out_of_hours_and_farewell`, `test_prompts`. Codificaban el orden anterior (nombre/email primero), que es justamente lo que V4 declara defectuoso.
+- **Resultado:** T01–T12 en verde; `tests/unit` verde; `tests/functional` verde; `tests/integration` verde.
+
+**Acción pendiente en el panel (producción):** `messages.clarification` y `emergency.keywords` son settings. Cambiar el default NO cambia una fila ya guardada por el panel, así que hay que editar ambos valores en producción y en el harness.

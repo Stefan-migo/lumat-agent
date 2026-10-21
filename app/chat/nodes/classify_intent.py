@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 
 from sqlalchemy import func, select
 
@@ -60,6 +61,28 @@ _INJECTION_RE = re.compile("|".join(_INJECTION_PATTERNS), re.IGNORECASE)
 def is_injection(text: str) -> bool:
     """Deterministic SH-4 pattern check over the raw user text."""
     return bool(_INJECTION_RE.search(text))
+
+
+# V4 §A3: `persona` means an EXPLICIT request for a human. The model over-fires
+# it on social questions ("¿cómo estás?"), which used to hand the conversation
+# to a human and drop the customer's pending context. The intent only survives
+# when the text actually asks for a person.
+_HUMAN_REQUEST_PATTERNS = (
+    r"hablar con (una |un )?(persona|humano|humana|ejecutiv\w*|asesor\w*|alguien)",
+    r"comunic\w* con (una |un )?(persona|humano|ejecutiv\w*|asesor\w*)",
+    r"pas\w* (con |a )?(una |un )?(persona|humano|ejecutiv\w*|asesor\w*)",
+    r"(necesito|quiero|prefiero) (una |un )?(persona|humano|humana|ejecutiv\w*|asesor\w*)",
+    r"atencion humana",
+    r"persona real",
+)
+_HUMAN_REQUEST_RE = re.compile("|".join(_HUMAN_REQUEST_PATTERNS), re.IGNORECASE)
+
+
+def is_explicit_human_request(text: str) -> bool:
+    """True only when the message asks for a person in so many words."""
+    folded = unicodedata.normalize("NFD", (text or "").casefold())
+    folded = "".join(char for char in folded if unicodedata.category(char) != "Mn")
+    return bool(_HUMAN_REQUEST_RE.search(folded))
 
 
 def _current_text(state: ConversationState) -> str:
@@ -211,6 +234,14 @@ def classify_intent(state: ConversationState) -> dict:
     except Exception:
         logger.exception("LLM classify failed for conversation %s", state.conversation_id)
         result = {"intent": "unknown"}
+
+    if result.get("intent") == "persona" and not is_explicit_human_request(text):
+        # V4 §A3 / E1 T05: "¿cómo estás?" is not "quiero hablar con una persona".
+        logger.info(
+            "classify_intent: persona downgraded to unknown in conversation %s",
+            state.conversation_id,
+        )
+        result = {**result, "intent": "unknown"}
 
     if result.get("injection"):
         logger.warning("LLM flagged injection in conversation %s", state.conversation_id)
