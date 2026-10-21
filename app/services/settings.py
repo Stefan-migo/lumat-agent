@@ -57,6 +57,90 @@ MESSAGE_TEMPLATES_KEY = "messages.templates"
 # (`chat.conduct.orden` in T10).
 CAPTURE_QUESTIONS_KEY = "capture.questions"
 
+# S8: the deterministic (no-LLM) replies of booking, cancellation, rescheduling,
+# handoff and the capture steps. The owner edits the wording, never the flow: the
+# default is byte-for-byte the text the code shipped with.
+REPLY_TEXTS_KEY = "reply.texts"
+REPLY_TEXT_DEFAULTS: dict[str, str] = {
+    "booking_offer": (
+        "Tengo estos horarios disponibles para la visita técnica:\n"
+        "{{opciones}}\n"
+        "Responde con el número del horario que prefieres."
+    ),
+    "booking_unclear": (
+        "No pude identificar un único horario. Responde con el número de una opción."
+    ),
+    "booking_confirmed": "Tu visita técnica quedó confirmada para el {{fecha}}.",
+    "manage_no_visits": "No tienes visitas próximas para {{accion}}.",
+    "manage_confirm_cancel": (
+        "Tienes una visita el {{visita}}. ¿Confirmas que quieres cancelarla? "
+        "Responde sí o no."
+    ),
+    "manage_select": (
+        "¿Cuál visita quieres {{accion}}?\n"
+        "{{opciones}}\n"
+        "Responde con el número de la visita."
+    ),
+    "manage_slots_offer": (
+        "Tengo estos horarios disponibles para reagendar tu visita:\n"
+        "{{opciones}}\n"
+        "Responde con el número del horario que prefieres."
+    ),
+    "manage_expired": (
+        "La solicitud venció. Si aún necesitas gestionar tu visita, vuelve a escribirnos."
+    ),
+    "manage_appointment_unclear": (
+        "No pude identificar una visita. Responde con el número de una opción."
+    ),
+    "manage_slots_unclear": (
+        "No pude identificar un único horario. Responde con el número de una opción."
+    ),
+    "manage_kept": "De acuerdo, mantendremos tu visita agendada.",
+    "manage_reschedule_unavailable": (
+        "No puedo reagendar esta visita porque ya no está disponible."
+    ),
+    "manage_rescheduled": "Tu visita quedó reagendada para el {{fecha}}.",
+    "manage_cancel_prompt": (
+        "Responde sí para confirmar la cancelación o no para conservar la visita."
+    ),
+    "manage_cancel_unavailable": (
+        "No puedo cancelar esta visita porque ya no está disponible para cancelación; "
+        "su horario pudo haber comenzado o cambiado."
+    ),
+    "manage_cancelled": "Tu visita del {{visita}} quedó cancelada.",
+    "handoff": "Un asesor revisará tu caso y te contactará a la brevedad.",
+    "capture_evidence": "¿Tienes algo más para pasarle al técnico? (una foto, un audio…)",
+    "capture_consent": (
+        "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
+    ),
+}
+
+# S8: the slots each reply may use. The owner can drop a slot from a text, never
+# add one the call site does not fill: an unfilled `{{fecha}}` would reach the
+# customer. `opciones` is the numbered list, `accion` the verb (cancelar /
+# reagendar), `fecha` the appointment datetime and `visita` its full label.
+REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
+    "booking_offer": frozenset({"opciones"}),
+    "booking_unclear": frozenset(),
+    "booking_confirmed": frozenset({"fecha"}),
+    "manage_no_visits": frozenset({"accion"}),
+    "manage_confirm_cancel": frozenset({"visita"}),
+    "manage_select": frozenset({"accion", "opciones"}),
+    "manage_slots_offer": frozenset({"opciones"}),
+    "manage_expired": frozenset(),
+    "manage_appointment_unclear": frozenset(),
+    "manage_slots_unclear": frozenset(),
+    "manage_kept": frozenset(),
+    "manage_reschedule_unavailable": frozenset(),
+    "manage_rescheduled": frozenset({"fecha"}),
+    "manage_cancel_prompt": frozenset(),
+    "manage_cancel_unavailable": frozenset(),
+    "manage_cancelled": frozenset({"visita"}),
+    "handoff": frozenset(),
+    "capture_evidence": frozenset(),
+    "capture_consent": frozenset(),
+}
+
 # SS-1: the two legal scope modes per category. Anything else behaves as unset.
 SCOPE_MODES: tuple[str, ...] = ("bot_resolve", "always_escalate")
 DEFAULT_SCOPE_MODE = "bot_resolve"
@@ -670,6 +754,51 @@ def validate_message_templates(templates: Any) -> list[dict]:
             )
 
     return templates
+
+
+def validate_reply_texts(value: Any) -> dict[str, str]:
+    """Validate the deterministic reply texts before persistence (S8).
+
+    Every key needs text: a missing one would leave that branch with no reply.
+    Slots are whitelisted per key, so the owner can simplify a text but cannot
+    introduce a placeholder the call site does not know how to fill.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("reply.texts must be an object")
+
+    missing = [
+        key
+        for key in REPLY_TEXT_DEFAULTS
+        if not isinstance(value.get(key), str) or not value[key].strip()
+    ]
+    if missing:
+        raise ValueError(f"reply.texts is missing text for: {missing}")
+
+    unknown_keys = [key for key in value if key not in REPLY_TEXT_DEFAULTS]
+    if unknown_keys:
+        raise ValueError(f"reply.texts has unknown keys: {unknown_keys}")
+
+    for key, allowed in REPLY_TEXT_SLOTS.items():
+        unsupported = set(_MESSAGE_TEMPLATE_SLOT_RE.findall(value[key])) - allowed
+        if unsupported:
+            raise ValueError(
+                f"reply.texts[{key!r}] contains unsupported slots: {sorted(unsupported)}"
+            )
+
+    return {key: value[key] for key in REPLY_TEXT_DEFAULTS}
+
+
+def get_reply_texts(session: Session) -> dict[str, str]:
+    """Configured deterministic replies, defaulting per key to the shipped text."""
+    stored = get_setting(session, REPLY_TEXTS_KEY, default={})
+    if not isinstance(stored, dict):
+        stored = {}
+    return {
+        key: stored[key]
+        if isinstance(stored.get(key), str) and stored[key].strip()
+        else default
+        for key, default in REPLY_TEXT_DEFAULTS.items()
+    }
 
 
 def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, str]:
