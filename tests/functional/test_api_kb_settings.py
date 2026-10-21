@@ -1451,6 +1451,40 @@ def test_settings_update_conduct_rejects_an_unknown_derivation_without_persistin
     assert _last_audit("settings.change") is None
 
 
+def test_capture_questions_follow_the_configured_order(client, make_user):
+    """S11: `capture.questions` validates against the effective order, not the shipped one."""
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    order = ["failure", "equipment", "comuna", "availability", "name", "email"]
+    client.post(
+        "/panel/api/settings/conduct",
+        json={"conduct": {**_CONDUCT, "orden": order}},
+        follow_redirects=False,
+    )
+    questions = {field: f"¿{field}?" for field in order}
+
+    resp = client.post(
+        "/panel/api/settings/capture-questions",
+        json={"questions": questions},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    with SessionLocal() as session:
+        assert session.get(Settings, "capture.questions").value == questions
+
+    # `address` left the order, so it is now unknown config for the questions.
+    resp = client.post(
+        "/panel/api/settings/capture-questions",
+        json={"questions": {**questions, "address": "¿Cuál es tu dirección?"}},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    with SessionLocal() as session:
+        assert session.get(Settings, "capture.questions").value == questions
+
+
 def test_settings_update_reply_texts_audited(client, make_user):
     make_user("adm", "adm-pass", role="admin")
     _login(client)

@@ -512,7 +512,7 @@ def settings_capture_questions(
 ) -> dict:
     try:
         questions = settings_service.validate_capture_questions(
-            body.questions, CAPTURE_FIELD_ORDER
+            body.questions, settings_service.get_conduct(session)["orden"]
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
