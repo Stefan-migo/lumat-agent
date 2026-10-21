@@ -41,6 +41,7 @@ from app.services.customers import (
 from app.services.settings import (
     REPLY_TEXT_DEFAULTS,
     get_capture_questions,
+    get_conduct,
     get_reply_texts,
 )
 
@@ -49,7 +50,9 @@ logger = logging.getLogger(__name__)
 # CM-2 field order. V4 §A3/A7 (odd/tasks/chatbot-cerebro-max-v4.md, T10)
 # reorders it: the technical need comes first and identity/admin data only when
 # the visit is actually being booked. The old order started with name/email,
-# which turned every reported fault into an interrogation.
+# which turned every reported fault into an interrogation. S11: this list is the
+# shipped default and the capture model — the effective sequence is
+# `chat.conduct.orden`.
 CAPTURE_FIELDS: list[tuple[str, str]] = [
     ("failure", "Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?"),
     ("equipment", "¿Qué equipo es? Si sabes la marca y el modelo, mejor."),
@@ -63,8 +66,9 @@ CAPTURE_FIELDS: list[tuple[str, str]] = [
 # CI-3b: ask up to this many questions per message.
 MAX_ASKS = 3
 EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
-# The order stays in code (S11; `chat.conduct.orden` in T10). Only the wording
-# is configurable, under `capture.questions` (S7).
+# S11: the shipped order and the capture model. `chat.conduct.orden` is the
+# effective sequence; this list is its default and the fields the validators
+# accept. Only the wording is configurable under `capture.questions` (S7).
 CAPTURE_FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 _FIELD_QUESTIONS = dict(CAPTURE_FIELDS)
 
@@ -194,9 +198,13 @@ def _apply_consent_and_customer(session, state: ConversationState, captured: dic
         record_consent(session, customer, consent=consent)
 
 
-def _missing_fields(captured: dict) -> list[str]:
-    """Data fields not yet captured (a skipped field is stored, so not missing)."""
-    return [field for field in CAPTURE_FIELD_ORDER if field not in captured]
+def _missing_fields(captured: dict, order: list[str]) -> list[str]:
+    """Data fields of `order` not yet captured (a skip is stored, so not missing).
+
+    `order` is the effective sequence from `chat.conduct.orden` (S11); a field
+    the owner dropped from it is never asked.
+    """
+    return [field for field in order if field not in captured]
 
 
 def _field_questions(session) -> dict[str, str]:
@@ -272,20 +280,19 @@ def capture(state: ConversationState) -> dict:
 
 def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = False) -> dict:
     """Ask the next 2-3 missing fields, or the consent step when none remain."""
-    missing = _missing_fields(captured)
-    if not missing:
-        captured["_pending"] = "consent"
-        with session_scope() as session:
+    with session_scope() as session:
+        missing = _missing_fields(captured, get_conduct(session)["orden"])
+        if not missing:
+            captured["_pending"] = "consent"
             _persist_captured(session, state, captured)
             consent = render_reply(get_reply_texts(session), "capture_consent")
-        return {"captured": captured, "replies": [consent]}
+            return {"captured": captured, "replies": [consent]}
 
-    # V4 §A1/A3: one useful question per turn while diagnosing; two or three
-    # together only when the customer is already closing the booking.
-    limit = 1 if missing[0] in _DIAGNOSIS_FIELDS else MAX_ASKS
-    batch = missing[:limit]
-    captured["_pending"] = batch
-    with session_scope() as session:
+        # V4 §A1/A3: one useful question per turn while diagnosing; two or three
+        # together only when the customer is already closing the booking.
+        limit = 1 if missing[0] in _DIAGNOSIS_FIELDS else MAX_ASKS
+        batch = missing[:limit]
+        captured["_pending"] = batch
         texts = get_reply_texts(session)
         ask = _ask_text(batch, _field_questions(session))
         label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")

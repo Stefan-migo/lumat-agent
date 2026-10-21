@@ -125,7 +125,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T8 | Textos de agenda/cancelación/derivación | S8 | inline | ✅ |
 | T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | ✅ |
 | T10 | Objeto `chat.conduct` + validación | S10 | inline | ✅ |
-| T11 | Orden de captura efectivo desde configuración | S11 | inline | pendiente |
+| T11 | Orden de captura efectivo desde configuración | S11 | inline | ✅ |
 | T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente |
 | T13 | Protocolo de emergencia editable | S13 | inline | pendiente |
 | T14 | Una pregunta por mensaje y no repetir | S14 | inline | pendiente |
@@ -147,6 +147,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 ## Pendientes (no bloquean)
 
 - Redacción default exacta de cada pregunta de captura (T7).
+- Señal de "aceptó la visita" para gatear `availability` (S11): no existe hoy; falta la decisión de producto.
 - Si el saludo se personaliza con el nombre (producto).
 - De Lumat: IVA de los cuatro precios, exigibilidad del 15%, matriz de garantías, documentos SEC emitibles.
 
@@ -186,6 +187,8 @@ Hallazgos de la auditoría, fuera de estas cinco áreas y por eso sin configurar
 Trade-off registrado: una plantilla que dependa de un dato no se dispara hasta que ese dato exista en la ficha; es el precio de no mandar texto incompleto. Ojo: `odd/tasks/chatbot-message-catalog.md` todavía documenta que un slot desconocido se renderiza como `""`; S9 supersede esa línea y el doc del catálogo queda desactualizado (decisión del owner si se corrige).
 
 **T10 (2026-10-21) — cerrado.** RED primero: el unitario moría en `ImportError` de `CHAT_CONDUCT_DEFAULTS` y la ruta respondía 400 porque el catch-all `/settings/{section}` se comía `/settings/conduct` antes de que existiera la ruta literal. `chat.conduct` guarda los cuatro campos; `validate_conduct(value, fields)` recibe los campos de captura como parámetro —igual que `validate_capture_questions`— así que `settings` no importa `capture`; `get_conduct` cae al default por clave. Las tres preguntas abiertas del handoff quedaron resueltas: (1) `derivaciones` es **lista de slugs activos**, precedente `coverage.communes`, porque la validación de "al menos una alcanzable" pide lista no vacía; (2) **sin GET y sin UI**, igual que T7 y T8 — F6 expone el contrato completo de una sola vez; (3) el validador recibe el orden, sin ciclo `settings → capture`. Decisiones propias de T10, registradas: las **cinco derivaciones quedan activas por default** (desactivar una borra el caso que cubre, y S15 exige que una comuna fuera de cobertura llegue a un asesor sin tocar el panel); `orden` puede ser **subconjunto** del modelo de captura —sacar un campo es apagar esa pregunta— pero no vacío ni con repetidos, y la regla "`name/email/address` después de `availability`" solo aplica si `availability` está en el orden. Commit `74bafd3a`. Verde: `tests/unit` (DB-free, con `DATABASE_URL` inalcanzable), `tests/integration`, `tests/functional` y `tests/injection` en invocaciones separadas.
+
+**T11 (2026-10-21) — cerrado.** RED primero: `_missing_fields()` recibía un argumento y el test le pasaba dos (`TypeError`), y en integración el orden configurado seguía preguntando `failure` primero y `address` aunque estuviera fuera del orden. `_missing_fields(captured, order)` recibe la secuencia; `_ask_next` lee `get_conduct(session)["orden"]` una vez por turno y **funde los dos `session_scope()`** que abría (uno por rama) en uno solo. El empaquetado quedó en código, como manda S11: `MAX_ASKS` y `_DIAGNOSIS_FIELDS` no se configuran. El acoplamiento menos obvio, resuelto: `POST /settings/capture-questions` valida contra el **orden efectivo** (`get_conduct(session)["orden"]`), no contra el de envío; si no, cambiar el orden dejaba el mapa guardado inválido o guardable con claves que ya no se preguntan. `CAPTURE_FIELD_ORDER` queda como modelo de captura y default, y un test unitario fija que `CHAT_CONDUCT_DEFAULTS["orden"] == CAPTURE_FIELD_ORDER` para que las dos listas no se separen. **Gating fuera de alcance, con razón registrada:** "`availability` solo después de que el cliente aceptó la visita" no tiene señal hoy — el consentimiento es un paso posterior a todos los campos y la reserva viene después—, así que T11 entrega el orden configurable y el gating espera decisión de producto. Commit `c2a910b9`. Verde: `tests/unit` (también DB-free), `tests/integration`, `tests/functional` y `tests/injection` en invocaciones separadas.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 

@@ -709,3 +709,49 @@ def test_cm5_summary_stored_on_conversation_and_case(mock_openai_chat):
             )
         ).one()
         assert msg.cost_llm is not None and float(msg.cost_llm) > 0
+
+
+# ---------------------------------------------------------------------------
+# S11 — the effective capture order comes from `chat.conduct.orden`
+# ---------------------------------------------------------------------------
+
+
+def _configure_order(order: list[str]) -> None:
+    with session_scope() as session:
+        settings_service.set_setting(
+            session,
+            settings_service.CHAT_CONDUCT_KEY,
+            {**settings_service.CHAT_CONDUCT_DEFAULTS, "orden": order},
+            actor="test",
+        )
+        session.commit()
+
+
+def test_s11_configured_order_is_the_sequence_that_gets_asked(mock_openai_chat):
+    """The order is the source: comuna first asks comuna before the failure."""
+    _configure_order(["comuna", "failure", "equipment", "availability", "name", "email", "address"])
+    conv_id = _start_conversation()
+
+    replies = _turn(conv_id, "quiero una visita", "wamid.order1")
+
+    assert any("comuna" in reply.lower() for reply in replies)
+    captured = _conversation_captured(conv_id)
+    assert captured["_pending"][0] == "comuna"
+
+
+def test_s11_a_field_dropped_from_the_order_is_never_asked(mock_openai_chat):
+    """Address out of the order: the flow goes to consent without asking it."""
+    _configure_order(["failure", "equipment", "comuna", "availability", "name", "email"])
+    conv_id = _start_conversation()
+
+    replies: list[str] = []
+    for index, text in enumerate(
+        ["quiero una visita", "No enciende", "Calefont", "Providencia",
+         "mañanas", "Juan", "juan@mail.cl"],
+        start=1,
+    ):
+        replies = _turn(conv_id, text, f"wamid.drop-address{index}")
+
+    assert not any("dirección" in reply.lower() for reply in replies)
+    captured = _conversation_captured(conv_id)
+    assert captured["_pending"] == "consent"
