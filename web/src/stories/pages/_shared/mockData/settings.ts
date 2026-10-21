@@ -26,6 +26,7 @@ export const settings: Settings = {
   tone: "cercano",
   messages: {
     greeting: "Hola, soy el asistente virtual de Lumat.",
+    greeting_short: "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?",
     cannot_answer: "No puedo responder con seguridad a eso.",
     clarification: "¿Puedes elegir una opción del menú?",
     farewell: "Gracias por comunicarte con Lumat.",

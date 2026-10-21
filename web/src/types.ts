@@ -508,6 +508,7 @@ export interface Settings {
   tone: string;
   messages: {
     greeting: string;
+    greeting_short: string;
     cannot_answer: string;
     clarification: string;
     farewell: string;

@@ -117,13 +117,14 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(card).getByRole("button", { name: "Tono" })).toHaveTextContent("Cercano");
   });
 
-  it("renders the five editable standard messages", async () => {
+  it("renders the six editable standard messages", async () => {
     render(<SettingsView />);
     await selectSection("Mensajes");
     const card = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText("Menú de categorías automático")).toBeInTheDocument();
     const templates = [
       ["greeting", "Saludo", settings.messages.greeting],
+      ["greeting_short", "Saludo corto", settings.messages.greeting_short],
       ["cannot_answer", "Cuando no puede responder", settings.messages.cannot_answer],
       ["clarification", "Aclaración", settings.messages.clarification],
       ["farewell", "Despedida", settings.messages.farewell],
