@@ -121,7 +121,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T4 | Validación de duraciones y horarios | S4 | inline | ✅ |
 | T5 | Sacar precios de la KB de cliente | S5 | inline | ✅ |
 | T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | ✅ |
-| T7 | `capture.questions` como fallback | S7 | inline | pendiente |
+| T7 | `capture.questions` como fallback | S7 | inline | ✅ |
 | T8 | Textos de agenda/cancelación/derivación | S8 | inline | pendiente |
 | T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | pendiente |
 | T10 | Objeto `chat.conduct` + validación | S10 | inline | pendiente |
@@ -172,6 +172,8 @@ El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 **T5 (2026-10-21) — cerrado.** `docs/kb/lumat-precios.md` eliminado; la KB de cliente queda en cuatro documentos. Descuento de la visita y detalle tributario movidos a `lumat-garantias-pagos.md`. El contrato de la KB ahora exige lo inverso: ningún documento de cliente puede citar una cifra ni un `$`. La suite T01–T12 ya no siembra precios en la KB. Verde: unit (también contra una `DATABASE_URL` inalcanzable), integration y functional.
 
 **T6 (2026-10-21) — cerrado.** RED observado primero: `test_settings_update_messages_audited` con seis claves fallaba con `AttributeError` sobre la fila `messages.greeting_short` ausente (Pydantic ignora el campo extra, así que el endpoint respondía 200 y solo se perdía el dato), y el panel no tenía tab "Saludo corto". `MessagesBody` ahora exige las seis claves; `types.ts`, el mock, `SETTINGS_KEYS`, los dos fixtures de test, `EMPTY_MESSAGES` y `MESSAGE_TEMPLATES` suman `greeting_short`. La lectura ya existía (`MESSAGE_DEFAULTS` → `GET /settings` → `receive.py:67`), así que el trabajo fue la escritura. Commits `7173839a` (endpoint) y `c67a22b4` (panel). El commit del panel toca siete archivos y supera la guía de cinco: el contrato obliga a mover `types.ts`, el mock, los dos fixtures y la UI en el mismo cambio, o `tsc -b` queda rojo entre commits. Verde: `tests/unit`, `tests/integration`, `tests/functional` en ese orden, `npm test` (110 archivos / 1249 tests) y `npm run build`.
+
+**T7 (2026-10-21) — cerrado.** RED primero: el test unitario no importaba (`CAPTURE_QUESTIONS_KEY` inexistente) y el de integración moría en el mismo símbolo. `capture.questions` guarda `{campo: texto}`; `get_capture_questions` devuelve `{}` sin fila y `capture.py` mezcla sobre `_FIELD_QUESTIONS`, así que los defaults siguen en el nodo y el orden en `CAPTURE_FIELD_ORDER` (T10 lo mueve a `chat.conduct.orden`). `validate_capture_questions(value, fields)` exige texto en cada campo del orden, rechaza campos desconocidos y slots fuera de `ALLOWED_MESSAGE_TEMPLATE_SLOTS`; los slots los llena la redacción por LLM en F3, no esta slice. `POST /settings/capture-questions` va **antes** del catch-all: el path es de un solo segmento (`/settings/{section}`) y sin ese orden el catch-all se lo come con un 400 engañoso. Sin UI todavía: F6. Commits `f8b830d8` (validación), `615d58c7` (lectura en el nodo), `f6fc55a4` (ruta). Verde: `tests/unit` (DB-free), `tests/integration` y `tests/functional`.
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 
