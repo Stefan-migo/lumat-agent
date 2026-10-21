@@ -29,6 +29,7 @@ import re
 import unicodedata
 
 from app.chat.nodes.handoff_gate import is_media_evidence
+from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Conversation, Customer
@@ -37,7 +38,11 @@ from app.services.customers import (
     record_consent,
     update_captured_data,
 )
-from app.services.settings import get_capture_questions
+from app.services.settings import (
+    REPLY_TEXT_DEFAULTS,
+    get_capture_questions,
+    get_reply_texts,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +60,6 @@ CAPTURE_FIELDS: list[tuple[str, str]] = [
     ("address", "¿Cuál es tu dirección?"),
 ]
 
-EVIDENCE_QUESTION = "¿Tienes algo más para pasarle al técnico? (una foto, un audio…)"
-
-# CI-3: consent is an explicit step of its own, before booking. It is never a
-# data field and never extracted from free text (PII).
-CONSENT_QUESTION = "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
-
 # CI-3b: ask up to this many questions per message.
 MAX_ASKS = 3
 EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
@@ -68,11 +67,6 @@ EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
 # is configurable, under `capture.questions` (S7).
 CAPTURE_FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 _FIELD_QUESTIONS = dict(CAPTURE_FIELDS)
-
-COMPLETION_REPLY = (
-    "Gracias, tu solicitud quedó registrada. Un técnico la revisará y te "
-    "contactaremos para coordinar la visita."
-)
 
 # Skip answers -> field stored as "unknown", flow continues (CM-2).
 _SKIP_WORDS = (
@@ -117,6 +111,20 @@ _SOCIAL_ONLY = frozenset(
     }
 )
 _SOCIAL_REPLY = "¡Hola! Todo bien, gracias. Cuando quieras seguimos con lo de tu equipo."
+
+# Shipped wording of the capture steps (S8). The node answers with the configured
+# text from settings (`reply.texts`); these aliases are the defaults that tests
+# and `scripts/kb_fidelity.py` assert.
+EVIDENCE_QUESTION = REPLY_TEXT_DEFAULTS["capture_evidence"]
+CONSENT_QUESTION = REPLY_TEXT_DEFAULTS["capture_consent"]
+
+# ponytail: the flow no longer emits this text (completion replies go through
+# `summary`); it stays only as a classifier fixture in scripts/kb_fidelity.py.
+# Delete it when that fixture stops using it.
+COMPLETION_REPLY = (
+    "Gracias, tu solicitud quedó registrada. Un técnico la revisará y te "
+    "contactaremos para coordinar la visita."
+)
 
 # V4 §A3: the diagnostic fields are asked one at a time; the bundled ask is for
 # booking data (location, availability, identity) once the need is understood.
@@ -225,7 +233,9 @@ def capture(state: ConversationState) -> dict:
         # CI-3: the explicit consent step runs AFTER every data field, before
         # booking. A deviation on this step re-asks it instead of answering it.
         if state.capture_paused:
-            return {"capture_paused": False, "replies": [CONSENT_QUESTION]}
+            with session_scope() as session:
+                consent = render_reply(get_reply_texts(session), "capture_consent")
+            return {"capture_paused": False, "replies": [consent]}
         answer = _current_text(state)
         captured["consent"] = "unknown" if is_skip(answer) else answer
         captured.pop("_pending", None)
@@ -267,7 +277,8 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
         captured["_pending"] = "consent"
         with session_scope() as session:
             _persist_captured(session, state, captured)
-        return {"captured": captured, "replies": [CONSENT_QUESTION]}
+            consent = render_reply(get_reply_texts(session), "capture_consent")
+        return {"captured": captured, "replies": [consent]}
 
     # V4 §A1/A3: one useful question per turn while diagnosing; two or three
     # together only when the customer is already closing the booking.
@@ -275,12 +286,13 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
     batch = missing[:limit]
     captured["_pending"] = batch
     with session_scope() as session:
+        texts = get_reply_texts(session)
         ask = _ask_text(batch, _field_questions(session))
         label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
         if batch == ["failure"] and label:
             ask = f"Entiendo, es un problema con tu {label}. {ask}"
         if len(missing) <= MAX_ASKS and not captured.get("_evidence_asked"):
-            ask = f"{ask} {EVIDENCE_QUESTION}"
+            ask = f"{ask} {render_reply(texts, 'capture_evidence')}"
             captured["_evidence_asked"] = True
         _persist_captured(session, state, captured)
     updates: dict = {"captured": captured, "replies": [ask]}
