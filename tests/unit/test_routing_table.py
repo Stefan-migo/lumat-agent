@@ -203,3 +203,21 @@ def test_non_mid_capture_dispatch_is_unchanged():
         "next_step": "research", "active_sub_agent": "research_triage"
     }
     assert _dispatch("unknown") == {"next_step": "respond"}
+
+
+@pytest.mark.parametrize("intent", ["calefont", "caldera", "calefaccion", "unknown"])
+def test_mid_capture_question_shape_answers_then_resumes(intent):
+    """S16: a question with a capture intent is answered, never stored as the field.
+
+    '¿qué calefont me recomiendan?' classifies as `calefont`, which is a capture
+    intent: without the question flag it would be written as the pending field.
+    """
+    assert _dispatch(intent, mid_capture=True, question=True) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_a_statement_with_a_capture_intent_stays_a_field_answer():
+    assert _dispatch("calefont", mid_capture=True, question=False) == {"next_step": "capture"}

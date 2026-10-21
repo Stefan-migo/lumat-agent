@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 
+from app.chat.nodes.capture import is_social_only
 from app.chat.state import ConversationState
 
 logger = logging.getLogger(__name__)
@@ -51,12 +52,15 @@ def _dispatch(
     escalate_reason: str | None = None,
     mid_capture: bool = False,
     template_id: str | None = None,
+    question: bool = False,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
     Returns the state field updates (same shape the node returns):
     ``next_step`` is one of handoff | capture | research | respond; escalation
     flags ride along so the downstream node knows why it was chosen.
+    ``question`` marks a mid-capture message that asks something (S16): it is
+    answered and the pending field resumes, whatever intent the classifier gave.
     """
     # T4.4: any post-classification escalation (2x unknown, injection, SS-1
     # always_escalate) converges on handoff, reason preserved (route.py:25-30).
@@ -86,7 +90,7 @@ def _dispatch(
             "escalate_reason": "injection_detected",
         }
     if mid_capture:
-        if intent in RETRIEVAL_INTENTS:
+        if intent in RETRIEVAL_INTENTS or question:
             # Answer the deviation from KB, then resume the pending field (CI-2).
             return {
                 "next_step": "research",
@@ -117,6 +121,18 @@ def is_tool_whitelisted(whitelist: tuple[str, ...] | list[str] | None, tool: str
     return bool(whitelist) and tool in whitelist
 
 
+def _is_question(state: ConversationState) -> bool:
+    """A mid-capture message that asks something (S16).
+
+    A question mark is the deterministic signal the classifier contract honours.
+    Two guards keep answers in the capture flow: extraction (an answer phrased as
+    a question, "¿puede ser el sábado?") and the social set (a greeting like
+    "Hola, ¿cómo estás?" is answered by capture, never sent to retrieval).
+    """
+    text = (state.window[-1].get("text") or "") if state.window else ""
+    return "?" in text and not state.extracted and not is_social_only(text)
+
+
 def orchestrate(state: ConversationState) -> dict:
     """Dispatch the classified intent to a sub-graph (or handoff/respond).
 
@@ -131,6 +147,7 @@ def orchestrate(state: ConversationState) -> dict:
         escalate_reason=state.escalate_reason,
         mid_capture="_pending" in (state.captured or {}),
         template_id=getattr(state, "template_id", None),
+        question=_is_question(state),
     )
     if decision.get("active_sub_agent"):
         logger.info(
