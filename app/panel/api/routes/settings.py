@@ -16,6 +16,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   coverage {"communes": [str]}            -> coverage.communes (validated, S3)
   durations {"service_durations": {...}}  -> booking.service_durations (S4)
   capture-questions {"questions": {field: str}} -> capture.questions (S7)
+  reply-texts {"texts": {key: str}}        -> reply.texts (S8)
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
@@ -108,6 +109,10 @@ class ServiceDurationsBody(BaseModel):
 
 class CaptureQuestionsBody(BaseModel):
     questions: dict[str, Any]
+
+
+class ReplyTextsBody(BaseModel):
+    texts: dict[str, Any]
 
 
 class LimitsBody(BaseModel):
@@ -506,6 +511,21 @@ def settings_capture_questions(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     _save(session, settings_service.CAPTURE_QUESTIONS_KEY, questions, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/reply-texts")
+def settings_reply_texts(
+    body: ReplyTextsBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    try:
+        texts = settings_service.validate_reply_texts(body.texts)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.REPLY_TEXTS_KEY, texts, current)
     session.commit()
     return {"ok": True}
 

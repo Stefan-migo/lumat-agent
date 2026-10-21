@@ -37,6 +37,7 @@ from sqlalchemy import select
 from app.db import SessionLocal  # noqa: E402
 from app.models import AuditLog, KbChunk, KbDocument, Project, Settings  # noqa: E402
 from app.services import kb as kb_service  # noqa: E402
+from app.services.settings import REPLY_TEXT_DEFAULTS  # noqa: E402
 
 
 def _login(client, username: str = "adm", password: str = "adm-pass") -> None:
@@ -1402,6 +1403,46 @@ def test_settings_update_capture_questions_rejects_a_partial_map_without_persist
     assert resp.headers["content-type"].startswith("application/json")
     with SessionLocal() as session:
         assert session.get(Settings, "capture.questions") is None
+    assert _last_audit("settings.change") is None
+
+
+def test_settings_update_reply_texts_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {**REPLY_TEXT_DEFAULTS, "handoff": "Ya te contactamos."}
+
+    resp = client.post(
+        "/panel/api/settings/reply-texts",
+        json={"texts": value},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        stored = session.get(Settings, "reply.texts").value
+    assert stored["handoff"] == "Ya te contactamos."
+    assert stored["manage_kept"] == REPLY_TEXT_DEFAULTS["manage_kept"]
+    audit = _last_audit("settings.change")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.entity_id == "reply.texts"
+
+
+def test_settings_update_reply_texts_rejects_an_unfilled_slot_without_persisting(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {**REPLY_TEXT_DEFAULTS, "manage_kept": "De acuerdo, {{fecha}}."}
+
+    resp = client.post(
+        "/panel/api/settings/reply-texts",
+        json={"texts": value},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    with SessionLocal() as session:
+        assert session.get(Settings, "reply.texts") is None
     assert _last_audit("settings.change") is None
 
 
