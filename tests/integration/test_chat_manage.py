@@ -13,6 +13,7 @@ from app.models import (
 )
 from app.services import scheduling
 from app.services.customers import get_or_create_customer
+from app.services.settings import REPLY_TEXT_DEFAULTS, REPLY_TEXTS_KEY, set_setting
 from _testdb import admin_database_url
 
 
@@ -233,6 +234,24 @@ def test_negative_confirmation_keeps_appointment_booked(mock_openai_chat, monkey
     with SessionLocal() as session:
         assert session.get(Appointment, appointment_id).status is AppointmentStatus.BOOKED
         assert session.query(AuditLog).filter_by(action="appointment.cancelled").count() == 0
+
+
+def test_configured_manage_texts_are_used(mock_openai_chat, monkeypatch):
+    _classify_cancel(monkeypatch)
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            REPLY_TEXTS_KEY,
+            {**REPLY_TEXT_DEFAULTS, "manage_kept": "Listo, no cancelamos nada."},
+            actor="test",
+        )
+        session.commit()
+    conv_id, _, _ = _seed_conversation()
+    _invoke(conv_id, _add_message(conv_id, "quiero cancelar", "wamid.custom.manage.ask"))
+
+    replies = _invoke(conv_id, _add_message(conv_id, "no", "wamid.custom.manage.no"))
+
+    assert replies == ["Listo, no cancelamos nada."]
 
 
 def test_ambiguous_confirmation_hands_off_without_cancelling(mock_openai_chat, monkeypatch):
