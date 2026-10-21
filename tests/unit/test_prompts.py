@@ -424,21 +424,38 @@ def test_respond_template_preempts_the_kb_path(monkeypatch):
     assert called == []
 
 
-def test_respond_template_slot_unknown_is_empty_and_visita_uses_booking_label(monkeypatch):
+def test_respond_template_with_an_empty_slot_is_skipped(monkeypatch):
+    """S9: a missing, "unknown" or booking-less slot skips the preset.
+
+    Rendering "" would send an incomplete text ("/Santiago/" or "Ana//…"), so the
+    regular answer path takes the turn instead.
+    """
     catalog = [{"id": "v", "text": "{{nombre}}/{{comuna}}/{{visita}}"}]
+    skipped = []
     monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
     monkeypatch.setattr(_rn, "get_message_templates", lambda session: catalog)
-    # captured "unknown" -> ""; no booking -> "" for {{visita}}
+    monkeypatch.setattr(_rn.kb, "retrieve", lambda *a, **k: [{"content": "chunk"}])
+    monkeypatch.setattr(_rn, "_answer_from_kb", lambda *a, **k: skipped.append(1) or "kb answer")
+    # captured "unknown" -> skipped; no booking -> skipped for {{visita}}
     assert _rn.respond(
         _respond_state(template_id="v", captured={"name": "unknown", "comuna": "Santiago"})
-    ) == {"replies": ["/Santiago/"]}
+    ) == {"replies": ["kb answer"]}
     assert _rn.respond(
         _respond_state(
             template_id="v",
             captured={"name": "Ana", "comuna": "unknown"},
             booking={"service": "Visita", "label": "06/05 a las 15:30", "status": "booked"},
         )
-    ) == {"replies": ["Ana//06/05 a las 15:30"]}
+    ) == {"replies": ["kb answer"]}
+    assert skipped == [1, 1]
+    # every slot filled: the preset renders, {{visita}} from the booking label
+    assert _rn.respond(
+        _respond_state(
+            template_id="v",
+            captured={"name": "Ana", "comuna": "Santiago"},
+            booking={"service": "Visita", "label": "06/05 a las 15:30", "status": "booked"},
+        )
+    ) == {"replies": ["Ana/Santiago/06/05 a las 15:30"]}
 
 
 def test_respond_missing_template_falls_back_to_kb(monkeypatch):

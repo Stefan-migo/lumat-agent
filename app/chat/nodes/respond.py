@@ -74,7 +74,12 @@ def _slot_values(state: ConversationState, slots: set[str]) -> dict[str, str]:
 
 
 def _render_template_reply(state: ConversationState) -> str | None:
-    """Render the preset message the classifier picked; None if it is not stored."""
+    """Render the preset message the classifier picked.
+
+    None when it is not stored, or when one of its slots resolves empty: S9
+    forbids sending an incomplete text ("Hola , atendemos de ."), so the preset is
+    skipped and the regular answer path takes the turn.
+    """
     if not state.template_id:
         return None
     with session_scope() as session:
@@ -86,7 +91,10 @@ def _render_template_reply(state: ConversationState) -> str | None:
     if template is None:
         return None
     text = template.get("text") or ""
-    return prompts.render_text(text, **_slot_values(state, prompts.placeholders(text)))
+    values = _slot_values(state, prompts.placeholders(text))
+    if "" in values.values():
+        return None
+    return prompts.render_text(text, **values)
 
 
 def _current_text(state: ConversationState) -> str:

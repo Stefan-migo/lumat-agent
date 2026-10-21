@@ -254,6 +254,45 @@ def test_configured_manage_texts_are_used(mock_openai_chat, monkeypatch):
     assert replies == ["Listo, no cancelamos nada."]
 
 
+@pytest.mark.parametrize(
+    "captured",
+    [{}, {"availability": "unknown"}],
+    ids=["slot-missing", "slot-skipped"],
+)
+def test_preset_answer_with_an_empty_slot_is_not_sent(mock_openai_chat, monkeypatch, captured):
+    # S9: an empty slot must never reach the customer as incomplete text
+    # ("Hola , atendemos de ."). The preset is skipped and the regular answer
+    # path takes the turn.
+    from app.chat.nodes import classify_intent
+    from app.chat.nodes.respond import CANNOT_ANSWER_REPLY
+    from app.services.settings import MESSAGE_TEMPLATES_KEY, set_setting
+
+    monkeypatch.setattr(
+        classify_intent, "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "consulta", "service": None, "priority": None, "status": None,
+            "injection": False, "template_id": "horarios",
+        },
+    )
+    monkeypatch.setattr("app.services.kb.retrieve", lambda *a, **k: [])
+    conv_id, _, _ = _seed_conversation()
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        conversation.captured_data = dict(captured)
+        set_setting(
+            session,
+            MESSAGE_TEMPLATES_KEY,
+            [{"id": "horarios", "text": "Hola {{nombre}}, atendemos de {{disponibilidad}}."}],
+        )
+        session.commit()
+
+    replies = _invoke(conv_id, _add_message(conv_id, "a qué hora abren", "wamid.t9.empty"))
+
+    assert not any("atendemos de" in reply.lower() for reply in replies)
+    assert all("{{" not in reply for reply in replies)
+    assert replies[0] == CANNOT_ANSWER_REPLY
+
+
 def test_ambiguous_confirmation_hands_off_without_cancelling(mock_openai_chat, monkeypatch):
     _classify_cancel(monkeypatch)
     conv_id, _, appointment_id = _seed_conversation()
