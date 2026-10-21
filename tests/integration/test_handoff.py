@@ -465,7 +465,7 @@ def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_c
     _turn(conv_id, "quiero una visita", "wamid.b1")
     _turn(conv_id, "No enciende", "wamid.b2")
     _turn(conv_id, "Calefont", "wamid.b3")
-    _turn(conv_id, "Providencia", "wamid.b4")
+    _turn(conv_id, "Ñuñoa", "wamid.b4")
     _turn(conv_id, "mañanas", "wamid.b5")
     _turn(conv_id, "Juan", "wamid.b6")
     _turn(conv_id, "juan@mail.cl", "wamid.b7")
@@ -490,7 +490,7 @@ def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_c
         assert bundle["customer"]["name"] is None
         assert bundle["captured"]["name"] == "Juan"
         assert bundle["captured"]["email"] == "juan@mail.cl"
-        assert bundle["captured"]["comuna"] == "Providencia"
+        assert bundle["captured"]["comuna"] == "Ñuñoa"
         assert bundle["escalate_reason"] == "complaint"
 
         # full history snapshot (inbound + bot replies)

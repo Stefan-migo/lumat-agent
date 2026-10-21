@@ -77,7 +77,7 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
     # the flow asks for consent instead of assuming how many fields the
     # extractor already filled from the price-pivot message.
     for index, answer in enumerate(
-        ["Junkers 2019", "Providencia", "mañana en la tarde", "juan@mail.cl"], start=4
+        ["Junkers 2019", "Ñuñoa", "mañana en la tarde", "juan@mail.cl"], start=4
     ):
         post_message(client, f"wamid.ci5.book.{index}", answer)
         with SessionLocal() as session:

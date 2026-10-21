@@ -172,7 +172,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
         ("wamid.cm2c.2", "calefont"),                  # menu choice -> capture
         ("wamid.cm2c.3", "no enciende desde ayer"),    # failure
         ("wamid.cm2c.4", "Marca X modelo Y, 5 años"),  # equipment
-        ("wamid.cm2c.5", "Providencia"),               # comuna
+        ("wamid.cm2c.5", "Ñuñoa"),               # comuna
         ("wamid.cm2c.6", "lunes o martes en la tarde"),  # availability
         ("wamid.cm2c.7", "Juan Perez"),                # name
         ("wamid.cm2c.8", "juan@mail.cl"),              # email
@@ -191,7 +191,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     # CR-6: captured identification/location + consent on the ficha
     assert customer.name == "Juan Perez"
     assert customer.email == "juan@mail.cl"
-    assert customer.comuna == "Providencia"
+    assert customer.comuna == "Ñuñoa"
     assert customer.address == "Av. Siempre Viva 123"
     assert customer.consent_status is True
     assert customer.consent_at is not None
@@ -199,7 +199,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     # CM-2: mandatory answers are stored; optional evidence is not a field.
     assert captured["name"] == "Juan Perez"
     assert captured["email"] == "juan@mail.cl"
-    assert captured["comuna"] == "Providencia"
+    assert captured["comuna"] == "Ñuñoa"
     assert captured["equipment"] == "Marca X modelo Y, 5 años"
     assert captured["failure"] == "no enciende desde ayer"
     assert "evidence" not in captured
