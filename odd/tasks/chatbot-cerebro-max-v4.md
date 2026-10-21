@@ -41,6 +41,12 @@ Aceptamos los medios de pago habituales; el pago anticipado es opcional y tambi�
 ### S12 — Sin datos inventados
 Toda cifra o condición de la KB es trazable al cuestionario o a V4 §C. Ninguna decisión de negocio pendiente se resuelve por redacción.
 
+### S13 — Persona de Max
+`agent/personas/orchestrator.md` define: identidad (Max, asistente virtual de Lumat), honestidad (admite ser un bot si le preguntan, sin repetirlo), prohibición de atribuirse credencial SEC personal, regla anti-interrogatorio, español de Chile, registro tú/usted sostenido, sin emojis, un siguiente paso útil por turno, y protocolo de seguridad para gas. Debe ser byte-idéntica a `prompts.FALLBACKS["personas/orchestrator.md"]` (`tests/unit/test_prompts.py:162`).
+
+### S14 — Suite QA T01–T12
+Los doce casos de V4 §E1 existen como tests de integración sobre `run_conversation` en `tests/integration/test_chatbot_cerebro_qa.py`. Cada test rojo es un trabajo pendiente identificado, no una regresión silenciosa.
+
 ## Reconciliación V4 ↔ repo
 
 | V4 | Veredicto | Evidencia / razón |
@@ -96,7 +102,12 @@ No bloquean la construcción: la persona ordena no inventar y derivar.
 | T4 | KB precios | S2, S3, S4, S5 | inline | ✅ |
 | T5 | KB cobertura y horarios | S2, S3, S7, S8 | inline | ✅ |
 | T6 | KB garantías y pagos | S2, S3, S9, S11 | inline | ✅ |
-| T7 | Verificación estructural S2–S12 | S2–S12 | inline | pendiente |
+| T7 | Verificación estructural S2–S12 | S2–S12 | inline | ✅ |
+| T8 | Persona de Max + espejo `FALLBACKS` | S13 | inline | ✅ |
+| T9 | Suite QA T01–T12 | S14 | inline | ✅ 6 verdes / 6 rojos |
+| T10 | Reordenar `capture.py` (resolver → orientar → técnico → datos) | S14 T02/T04/T09 | inline | pendiente |
+| T11 | Sacar `persona` del saludo social y actualizar equipo | S14 T03/T05/T07 | inline | pendiente |
+| T12 | Evaluación con `chat_harness` + `kb_fidelity` | S14 | inline | pendiente |
 
 ## Log
 
@@ -135,3 +146,17 @@ Archivo recibido: `CEREBRO_MAX_LUMAT_V4.pdf`, 16 páginas, fechado 20 de octubre
 - Precios en KB con temporada explícita; sin motor de precios ni código nuevo.
 - Sin duplicar el tarifario dentro de los servicios: precios viven solo en `lumat-precios.md`.
 - La ingestión de los cinco documentos en la KB queda como paso manual vía panel (`visibility=customer`), no como script.
+
+### Ejecución (2026-10-21)
+
+- **T7 verificado:** ningún bloque supera 330 caracteres (límite fijado 480); las 7 cifras y las 7 comunas están exactas; cero apariciones de `IVA`/`total`/`neto`/`bruto` como palabra completa; cero jerga interna.
+- **T8:** persona reescrita (3300 caracteres, ≈800 tokens por turno) y espejo byte a byte en `prompts.FALLBACKS`. `tests/unit/test_prompts.py`: 43/43.
+- **T9:** doce tests. Verdes: T01, T06, T08, T10, T11, T12. Rojos: T02, T03, T04, T05, T07, T09.
+- Los seis rojos mapean exactamente T10 y T11 de la tabla de tasks: orden de `capture.py` y la regla `persona` del clasificador.
+
+### Hallazgos fuera de alcance (no se corrigieron)
+
+1. **Acoplamiento de suite:** `pytest tests/unit tests/integration/...` en una sola invocación hace fallar tests de integración. Verificado con `git stash`: ocurre también sin los cambios de esta slice, así que no es una regresión de este trabajo. CI corre `uv run pytest tests/`; conviene reproducirlo ahí antes de dar por sano el árbol.
+2. **Voseo rioplatense en un bot chileno:** `MESSAGE_DEFAULTS["clarification"]` (`app/services/settings.py:80`) dice «Disculpá, no te entendí bien. ¿Me contás un poco más qué necesitás?». V4 §A1 exige español de Chile.
+3. **Keyword de emergencia incompleto:** «olor **fuerte** a gas» no matchea la lista por defecto (`olor a gas`), así que no dispara el gate determinista. La lista es editable por panel.
+4. **El doble embedder determinista no sirve para medir grounding:** puntúa 0.36 de coseno contra texto real, bajo el umbral de producción 0.50. Por eso el grounding se evalúa con `kb_fidelity` / `chat_harness`, no en la suite.
