@@ -1406,6 +1406,51 @@ def test_settings_update_capture_questions_rejects_a_partial_map_without_persist
     assert _last_audit("settings.change") is None
 
 
+_CONDUCT = {
+    "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+    "redaccion": "plantilla",
+    "max_preguntas_por_mensaje": 2,
+    "derivaciones": ["cobertura", "garantia"],
+}
+
+
+def test_settings_update_conduct_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/conduct",
+        json={"conduct": _CONDUCT},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Settings, "chat.conduct").value == _CONDUCT
+    audit = _last_audit("settings.change")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.entity_id == "chat.conduct"
+
+
+def test_settings_update_conduct_rejects_an_unknown_derivation_without_persisting(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    invalid = {**_CONDUCT, "derivaciones": ["cobertura", "inventada"]}
+
+    resp = client.post(
+        "/panel/api/settings/conduct",
+        json={"conduct": invalid},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    with SessionLocal() as session:
+        assert session.get(Settings, "chat.conduct") is None
+    assert _last_audit("settings.change") is None
+
+
 def test_settings_update_reply_texts_audited(client, make_user):
     make_user("adm", "adm-pass", role="admin")
     _login(client)

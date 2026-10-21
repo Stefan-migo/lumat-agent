@@ -57,6 +57,29 @@ MESSAGE_TEMPLATES_KEY = "messages.templates"
 # (`chat.conduct.orden` in T10).
 CAPTURE_QUESTIONS_KEY = "capture.questions"
 
+# S10: the conduct object — capture order, redaction mode, question budget per
+# message and the active derivation rules. Closed options only: the five
+# invariants of S19 are NOT configurable and stay out of this key.
+CHAT_CONDUCT_KEY = "chat.conduct"
+CONDUCT_REDACCIONES: tuple[str, ...] = ("llm", "plantilla")
+CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
+# The closed list of derivation rules (S10). All five are active by default:
+# deactivating one silently drops the case it covers, and S15 requires the
+# out-of-coverage case to reach an advisor without any panel change.
+CONDUCT_DERIVACIONES: tuple[str, ...] = (
+    "cobertura",
+    "pedido_explicito",
+    "garantia",
+    "servicio_sin_tarifa",
+    "presupuesto_especial",
+)
+CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
+    "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+    "redaccion": "llm",
+    "max_preguntas_por_mensaje": 1,
+    "derivaciones": list(CONDUCT_DERIVACIONES),
+}
+
 # S8: the deterministic (no-LLM) replies of booking, cancellation, rescheduling,
 # handoff and the capture steps. The owner edits the wording, never the flow: the
 # default is byte-for-byte the text the code shipped with.
@@ -836,6 +859,83 @@ def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, s
             )
 
     return {field: value[field] for field in fields}
+
+
+def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
+    """Validate the conduct object before persistence (S10).
+
+    `fields` is the capture model's field list, passed by the caller so that
+    `settings` never imports `capture` (same shape as
+    `validate_capture_questions`). A field dropped from `orden` is the owner
+    turning that ask off; an unknown field would be dead config, a repeat would
+    ask the same field twice, and identity before `availability` would ask for
+    the name before the customer agreed to the visit.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("chat.conduct must be an object")
+
+    missing = [key for key in CHAT_CONDUCT_DEFAULTS if key not in value]
+    if missing:
+        raise ValueError(f"chat.conduct is missing: {missing}")
+
+    orden = value["orden"]
+    if not isinstance(orden, list) or not orden:
+        raise ValueError("chat.conduct.orden must be a non-empty list of fields")
+    unknown_fields = [field for field in orden if field not in fields]
+    if unknown_fields:
+        raise ValueError(f"chat.conduct.orden has unknown fields: {unknown_fields}")
+    repeated = sorted({field for field in orden if orden.count(field) > 1})
+    if repeated:
+        raise ValueError(f"chat.conduct.orden repeats fields: {repeated}")
+    if "availability" in orden:
+        availability_at = orden.index("availability")
+        too_early = [
+            field
+            for field in ("name", "email", "address")
+            if field in orden and orden.index(field) < availability_at
+        ]
+        if too_early:
+            raise ValueError(
+                f"chat.conduct.orden asks identity before availability: {too_early}"
+            )
+
+    redaccion = value["redaccion"]
+    if redaccion not in CONDUCT_REDACCIONES:
+        raise ValueError(
+            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
+        )
+
+    max_preguntas = value["max_preguntas_por_mensaje"]
+    if isinstance(max_preguntas, bool) or max_preguntas not in CONDUCT_MAX_PREGUNTAS:
+        raise ValueError(
+            "chat.conduct.max_preguntas_por_mensaje must be one of "
+            f"{list(CONDUCT_MAX_PREGUNTAS)}"
+        )
+
+    derivaciones = value["derivaciones"]
+    if not isinstance(derivaciones, list) or not derivaciones:
+        raise ValueError("chat.conduct.derivaciones must be a non-empty list of rules")
+    unknown_rules = [rule for rule in derivaciones if rule not in CONDUCT_DERIVACIONES]
+    if unknown_rules:
+        raise ValueError(f"chat.conduct.derivaciones has unknown rules: {unknown_rules}")
+
+    return {
+        "orden": list(orden),
+        "redaccion": redaccion,
+        "max_preguntas_por_mensaje": max_preguntas,
+        "derivaciones": list(derivaciones),
+    }
+
+
+def get_conduct(session: Session) -> dict[str, Any]:
+    """Configured conduct, falling back per key to the shipped default (S10)."""
+    stored = get_setting(session, CHAT_CONDUCT_KEY, default={})
+    if not isinstance(stored, dict):
+        stored = {}
+    return {
+        key: stored.get(key) or (list(default) if isinstance(default, list) else default)
+        for key, default in CHAT_CONDUCT_DEFAULTS.items()
+    }
 
 
 # Frente 2 unit 3: the exact setting keys the panel assistant may PROPOSE for a
