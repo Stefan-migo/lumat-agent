@@ -6,7 +6,7 @@ Alcance de esta slice (pasos 1–2): contrato de reconciliación V4 ↔ repo y K
 ## Specs
 
 ### S1 — Contrato de reconciliación
-`odd/tasks/chatbot-cerebro-max-v4.md` clasifica **toda** sección de `refs/CEREBRO_MAX_LUMAT_V4.pdf` — A1–A9, B1–B4, C1–C3, D1–D14, E1–E3, F — como `cumple`, `falta` o `descarta`, cada una con evidencia `path:line` del repo o una razón explícita de descarte. Criterio de aceptación: ninguna sección de V4 queda sin clasificar.
+`odd/tasks/chatbot-cerebro-max-v4.md` clasifica **toda** sección de `refs/CEREBRO_MAX_LUMAT_V4.pdf` — A1–A9, B1–B4, C1–C3, D1–D14, E1–E3, F — con uno de estos veredictos: `cumple`, `falta`, `parcial`, `descarta`, `difiere`, `no aplica al código`, cada uno con evidencia `path:line` del repo o una razón explícita. Criterio de aceptación: ninguna sección de V4 queda sin clasificar.
 
 ### S2 — KB comercial en español de Chile, audiencia cliente
 Existen cinco documentos bajo `docs/kb/`, escritos para el cliente final: sin jerga interna (`control humano`, `derivar`, `escalar`, `el bot`, `LLM`, `prompt`).
@@ -72,6 +72,7 @@ Los doce casos de V4 §E1 existen como tests de integración sobre `run_conversa
 | D1–D14 Guiones | **parcial** | Se usan como intuición de test, no como texto a copiar: V4 los declara reconstrucciones anonimizadas, no transcripciones |
 | E T01–T24 | **falta** | Ninguno existe como test. T01 (saludo sin formulario) ya cumple vía `receive.py:28-38` |
 | E Condición de salida T01–T12 | **falta** | Se implementa en el paso 4 |
+| E3 Guía para aislar el bug actual | **parcial** | Pasos 5–6 ya se cumplen: la KB se publica por panel con versión, no cargando PDFs sueltos. Pasos 3–4 (registrar `response_origin`, revisar la validación de campos faltantes) dependen de B4 y de T10 |
 | F Decisiones pendientes | **no aplica al código** | Se escala a Lumat; el prompt ya ordena no inventar |
 
 ### Lo que el repo ya tiene y V4 no reconoce
@@ -108,6 +109,7 @@ No bloquean la construcción: la persona ordena no inventar y derivar.
 | T10 | Reordenar `capture.py` (resolver → orientar → técnico → datos) | S14 T02/T04/T09 | inline | pendiente |
 | T11 | Sacar `persona` del saludo social y actualizar equipo | S14 T03/T05/T07 | inline | pendiente |
 | T12 | Evaluación con `chat_harness` + `kb_fidelity` | S14 | inline | pendiente |
+| T13 | Tests de contrato de la KB y la persona (sin DB) | S2–S13 | inline | ✅ |
 
 ## Log
 
@@ -150,7 +152,7 @@ Archivo recibido: `CEREBRO_MAX_LUMAT_V4.pdf`, 16 páginas, fechado 20 de octubre
 ### Ejecución (2026-10-21)
 
 - **T7 verificado:** ningún bloque supera 330 caracteres (límite fijado 480); las 7 cifras y las 7 comunas están exactas; cero apariciones de `IVA`/`total`/`neto`/`bruto` como palabra completa; cero jerga interna.
-- **T8:** persona reescrita (3300 caracteres, ≈800 tokens por turno) y espejo byte a byte en `prompts.FALLBACKS`. `tests/unit/test_prompts.py`: 43/43.
+- **T8:** persona reescrita (3440 caracteres, ≈800 tokens por turno) y espejo byte a byte en `prompts.FALLBACKS`. `tests/unit/test_prompts.py`: 43/43.
 - **T9:** doce tests. Verdes: T01, T06, T08, T10, T11, T12. Rojos: T02, T03, T04, T05, T07, T09.
 - Los seis rojos mapean exactamente T10 y T11 de la tabla de tasks: orden de `capture.py` y la regla `persona` del clasificador.
 
@@ -160,3 +162,11 @@ Archivo recibido: `CEREBRO_MAX_LUMAT_V4.pdf`, 16 páginas, fechado 20 de octubre
 2. **Voseo rioplatense en un bot chileno:** `MESSAGE_DEFAULTS["clarification"]` (`app/services/settings.py:80`) dice «Disculpá, no te entendí bien. ¿Me contás un poco más qué necesitás?». V4 §A1 exige español de Chile.
 3. **Keyword de emergencia incompleto:** «olor **fuerte** a gas» no matchea la lista por defecto (`olor a gas`), así que no dispara el gate determinista. La lista es editable por panel.
 4. **El doble embedder determinista no sirve para medir grounding:** puntúa 0.36 de coseno contra texto real, bajo el umbral de producción 0.50. Por eso el grounding se evalúa con `kb_fidelity` / `chat_harness`, no en la suite.
+
+### Verificación independiente (2026-10-21)
+
+- Verificador independiente sobre `b7ffcf1f..HEAD`: **S2–S14 MET, cero bloqueantes.** 9 archivos cambiados, ninguno fuera del alcance declarado. Persona byte-idéntica al `FALLBACKS` confirmada por dos vías (43 tests de `test_prompts.py` y comparación directa).
+- Advertencia aplicada: la persona había perdido el guardarraíl del baseline («nunca afirmes que hubo una escalada»). Restaurado como «No afirmes que derivaste el caso a una persona… si el sistema no lo confirma».
+- Advertencia aplicada: el vocabulario de veredictos del contrato no coincidía con S1 (`parcial`, `difiere`, `no aplica al código`). S1 se ajustó al vocabulario real y se agregó la fila E3 que faltaba.
+- Advertencias aceptadas y documentadas: varios tests de §E1 asertan un subconjunto de la conducta (porque `check_availability` está diferido), y el recargo del 15% quedó redactado como condición publicada aunque su exigibilidad siga pendiente.
+- Los probes del verificador se incorporaron como `tests/unit/test_chatbot_cerebro_kb.py`: 10 tests sin base de datos que cubren S2–S13, incluyendo que cada párrafo de hecho sobreviva entero al chunker real de 500/50.
