@@ -123,7 +123,7 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T6 | `greeting_short` en `MessagesBody` y UI | S6 | inline | ✅ |
 | T7 | `capture.questions` como fallback | S7 | inline | ✅ |
 | T8 | Textos de agenda/cancelación/derivación | S8 | inline | ✅ |
-| T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | pendiente |
+| T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | ✅ |
 | T10 | Objeto `chat.conduct` + validación | S10 | inline | pendiente |
 | T11 | Orden de captura efectivo desde configuración | S11 | inline | pendiente |
 | T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente |
@@ -182,6 +182,9 @@ Todo texto determinista que el cliente puede leer en agenda, cancelación, reage
 
 **T8 (2026-10-21) — cerrado.** RED primero: 19 claves inexistentes (`REPLY_TEXTS_KEY`), el endpoint en 404 y el test de booking fallando por la firma nueva de `_offer_text`. `reply.texts` guarda `{clave: texto}`; los defaults viven en `REPLY_TEXT_DEFAULTS` y son byte por byte el texto anterior, y `REPLY_TEXT_SLOTS` fija qué slots acepta cada clave (el owner puede quitar un slot, nunca inventar uno que la llamada no rellena). `render_reply` rellena solo lo declarado, así que un texto sin `{{fecha}}` no recibe un valor que no usa. Los cuatro nodos leen una vez por turno con `get_reply_texts` y renderizan: booking (3 textos), manage (13), handoff (1) y capture (`capture_evidence`, `capture_consent`). Commits `4194bd8f` (catálogo y validador), `b8a63b54`, `e9a3a18e`, `74444123`, `40a41a43` y `5aa1624a` (ruta). Verde: `tests/unit`, `tests/integration`, `tests/functional` y `tests/injection`.
 Hallazgos de la auditoría, fuera de estas cinco áreas y por eso sin configurar: `_SOCIAL_REPLY` (respuesta social a mitad de captura) y el prefijo "Entiendo, es un problema con tu {equipo}." de `_ask_next`; ambos son copy de captura, candidatos a S7 o a una slice de cierre. `COMPLETION_REPLY` no lo emite ningún flujo: solo lo usa `scripts/kb_fidelity.py` como fixture, quedó marcado con `ponytail:` en vez de borrarlo. `HANDOFF_REPLY`, `EVIDENCE_QUESTION` y `CONSENT_QUESTION` quedan como alias de los defaults para no tocar ocho archivos de test y script.
+
+**T9 (2026-10-21) — cerrado.** RED primero: el test nuevo de integración recibía "Hola , atendemos de ." (el `""` del slot vacío) y el unitario viejo `test_respond_template_slot_unknown_is_empty_and_visita_uses_booking_label` fijaba justamente ese contrato, así que se reescribió a propósito. `_render_template_reply` ahora devuelve `None` cuando algún slot declarado resuelve vacío (clave ausente, valor `"unknown"` o `{{visita}}` sin reserva) y el turno sigue por el camino normal: KB si tiene contenido, `cannot_answer` + derivación si no. La selección por `classify` y el catálogo no se tocaron. Commit `adbfa21e`. Verde: `tests/unit`, `tests/integration`, `tests/functional` y `tests/injection`.
+Trade-off registrado: una plantilla que dependa de un dato no se dispara hasta que ese dato exista en la ficha; es el precio de no mandar texto incompleto. Ojo: `odd/tasks/chatbot-message-catalog.md` todavía documenta que un slot desconocido se renderiza como `""`; S9 supersede esa línea y el doc del catálogo queda desactualizado (decisión del owner si se corrige).
 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 
