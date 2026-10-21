@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -51,6 +52,10 @@ ALLOWED_MESSAGE_TEMPLATE_SLOTS: frozenset[str] = frozenset(
     }
 )
 MESSAGE_TEMPLATES_KEY = "messages.templates"
+# S7: per-field fallback text for the capture questions. The code decides which
+# field is missing; this key only holds the wording, so the order stays in code
+# (`chat.conduct.orden` in T10).
+CAPTURE_QUESTIONS_KEY = "capture.questions"
 
 # SS-1: the two legal scope modes per category. Anything else behaves as unset.
 SCOPE_MODES: tuple[str, ...] = ("bot_resolve", "always_escalate")
@@ -624,6 +629,19 @@ def get_message_templates(session: Session) -> list[dict]:
     return templates if isinstance(templates, list) else []
 
 
+def get_capture_questions(session: Session) -> dict[str, str]:
+    """Return the stored capture questions, or an empty map so the caller keeps
+    its own defaults (the wording defaults live in `app/chat/nodes/capture.py`)."""
+    value = get_setting(session, CAPTURE_QUESTIONS_KEY, default={})
+    if not isinstance(value, dict):
+        return {}
+    return {
+        field: text
+        for field, text in value.items()
+        if isinstance(field, str) and isinstance(text, str) and text.strip()
+    }
+
+
 def validate_message_templates(templates: Any) -> list[dict]:
     """Validate message templates before persistence and return them unchanged."""
     if not isinstance(templates, list):
@@ -652,6 +670,43 @@ def validate_message_templates(templates: Any) -> list[dict]:
             )
 
     return templates
+
+
+def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, str]:
+    """Validate the per-field fallback questions before persistence (S7).
+
+    `fields` is the effective capture order. Every field needs text because the
+    fallback path has nothing else to ask, and an extra key would be dead config
+    that silently outlives the field. Slots use the same vocabulary as the
+    message templates; the LLM-redaction path in F3 fills them in.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("capture.questions must be an object")
+
+    missing = [
+        field
+        for field in fields
+        if not isinstance(value.get(field), str) or not value[field].strip()
+    ]
+    if missing:
+        raise ValueError(f"capture.questions is missing text for: {missing}")
+
+    unknown_fields = [field for field in value if field not in fields]
+    if unknown_fields:
+        raise ValueError(f"capture.questions has unknown fields: {unknown_fields}")
+
+    for field in fields:
+        unknown_slots = (
+            set(_MESSAGE_TEMPLATE_SLOT_RE.findall(value[field]))
+            - ALLOWED_MESSAGE_TEMPLATE_SLOTS
+        )
+        if unknown_slots:
+            raise ValueError(
+                f"capture.questions[{field!r}] contains unsupported slots: "
+                f"{sorted(unknown_slots)}"
+            )
+
+    return {field: value[field] for field in fields}
 
 
 # Frente 2 unit 3: the exact setting keys the panel assistant may PROPOSE for a

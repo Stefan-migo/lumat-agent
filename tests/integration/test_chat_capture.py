@@ -44,6 +44,7 @@ from app.models import (  # noqa: E402
     MessageType,
 )
 from app.services import kb as kb_service  # noqa: E402
+from app.services import settings as settings_service  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -174,6 +175,25 @@ def test_media_during_capture_resumes_agenda(mock_openai_chat):
     assert all(value not in (None, "unknown") for key, value in captured.items() if key != "_pending")
     with SessionLocal() as session:
         assert session.get(Conversation, conv_id).state.value == "bot"
+
+
+def test_configured_capture_questions_are_the_fallback_text(mock_openai_chat):
+    """S7: `capture.questions` replaces the built-in fallback, field by field."""
+    from app.chat.nodes.capture import CAPTURE_FIELDS
+
+    custom = "Cuéntame la falla con tus palabras."
+    questions = {**dict(CAPTURE_FIELDS), "failure": custom}
+    with session_scope() as session:
+        settings_service.set_setting(
+            session, settings_service.CAPTURE_QUESTIONS_KEY, questions, actor="test"
+        )
+        session.commit()
+
+    conv_id = _start_conversation()
+    replies = _turn(conv_id, "quiero una visita", "wamid.custom-question")
+
+    assert any(custom in reply for reply in replies)
+    assert all("Cuéntame qué pasa con el equipo" not in reply for reply in replies)
 
 
 def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):

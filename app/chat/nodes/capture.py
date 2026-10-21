@@ -37,6 +37,7 @@ from app.services.customers import (
     record_consent,
     update_captured_data,
 )
+from app.services.settings import get_capture_questions
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,10 @@ CONSENT_QUESTION = "¿Autorizas que guardemos tus datos para gestionar tu solici
 # CI-3b: ask up to this many questions per message.
 MAX_ASKS = 3
 EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
+# The order stays in code (S11; `chat.conduct.orden` in T10). Only the wording
+# is configurable, under `capture.questions` (S7).
+CAPTURE_FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 _FIELD_QUESTIONS = dict(CAPTURE_FIELDS)
-_FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 
 COMPLETION_REPLY = (
     "Gracias, tu solicitud quedó registrada. Un técnico la revisará y te "
@@ -185,12 +188,17 @@ def _apply_consent_and_customer(session, state: ConversationState, captured: dic
 
 def _missing_fields(captured: dict) -> list[str]:
     """Data fields not yet captured (a skipped field is stored, so not missing)."""
-    return [field for field in _FIELD_ORDER if field not in captured]
+    return [field for field in CAPTURE_FIELD_ORDER if field not in captured]
 
 
-def _ask_text(fields: list[str]) -> str:
+def _field_questions(session) -> dict[str, str]:
+    """Configured wording per field, falling back to the built-in text (S7)."""
+    return {**_FIELD_QUESTIONS, **get_capture_questions(session)}
+
+
+def _ask_text(fields: list[str], questions: dict[str, str]) -> str:
     """One message grouping 2-3 field questions, natural language, no list."""
-    return " ".join(_FIELD_QUESTIONS[field] for field in fields)
+    return " ".join(questions[field] for field in fields)
 
 
 def _merge_extracted(captured: dict, extracted: dict | None) -> None:
@@ -266,14 +274,14 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
     limit = 1 if missing[0] in _DIAGNOSIS_FIELDS else MAX_ASKS
     batch = missing[:limit]
     captured["_pending"] = batch
-    ask = _ask_text(batch)
-    label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
-    if batch == ["failure"] and label:
-        ask = f"Entiendo, es un problema con tu {label}. {ask}"
-    if len(missing) <= MAX_ASKS and not captured.get("_evidence_asked"):
-        ask = f"{ask} {EVIDENCE_QUESTION}"
-        captured["_evidence_asked"] = True
     with session_scope() as session:
+        ask = _ask_text(batch, _field_questions(session))
+        label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
+        if batch == ["failure"] and label:
+            ask = f"Entiendo, es un problema con tu {label}. {ask}"
+        if len(missing) <= MAX_ASKS and not captured.get("_evidence_asked"):
+            ask = f"{ask} {EVIDENCE_QUESTION}"
+            captured["_evidence_asked"] = True
         _persist_captured(session, state, captured)
     updates: dict = {"captured": captured, "replies": [ask]}
     if clear_paused:
