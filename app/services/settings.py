@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -160,6 +160,13 @@ TARIFA_SERVICES = (
     "mantencion_caldera",
     "lavado_red",
 )
+# Customer-facing service names for the prompt's <tarifario> block.
+TARIFA_LABELS = {
+    "visita_tecnica": "Visita técnica",
+    "mantencion_calefont": "Mantención de calefont",
+    "mantencion_caldera": "Mantención de caldera",
+    "lavado_red": "Lavado de red",
+}
 # One or more month ranges per service (1-12, inclusive). The ranges must
 # partition the year: no gaps, no overlaps. "Visita técnica" has a single
 # all-year range; the three seasonal services have two.
@@ -281,6 +288,23 @@ def get_tarifa_precios(session: Session) -> dict[str, list[dict[str, int]]]:
         return validate_tarifa_precios(value)
     except ValueError:
         return DEFAULT_TARIFA_PRECIOS
+
+
+def tarifa_vigente(
+    tarifa: dict[str, list[dict[str, int]]], fecha: date
+) -> dict[str, int]:
+    """Return the price in force for each service on ``fecha``.
+
+    A service whose ranges do not cover that month is omitted rather than
+    guessed, so the prompt never receives a figure the owner did not set.
+    """
+    vigente: dict[str, int] = {}
+    for service, ranges in tarifa.items():
+        for rango in ranges:
+            if fecha.month in _tarifa_months(rango["desde_mes"], rango["hasta_mes"]):
+                vigente[service] = rango["valor"]
+                break
+    return vigente
 
 
 def _tarifa_months(desde_mes: int, hasta_mes: int) -> set[int]:

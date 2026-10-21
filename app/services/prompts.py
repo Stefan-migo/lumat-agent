@@ -51,7 +51,7 @@ FALLBACKS = {
         "\n"
         "## Datos comerciales\n"
         "Precios, cobertura, horarios, garantías y alcance de cada servicio salen de <kb>. No los inventes ni los completes con conocimiento general.\n"
-        "Las mantenciones y el lavado de red tienen precio de temporada alta y baja. Informa el precio que corresponde a la fecha del servicio; si no puedes determinarla, entrega ambos valores con su rango de meses.\n"
+        "Los precios vigentes vienen en <tarifario> junto con la fecha de hoy. Informa solo el precio del servicio consultado; nunca menciones temporadas ni compares precios de otras fechas.\n"
         "Nunca presentes un precio como total con impuesto ni afirmes condiciones tributarias: el detalle de boleta y factura lo confirma un asesor.\n"
         "Si el trabajo no está entre los servicios con tarifa publicada, no inventes un valor: reúne los antecedentes y ofrece que un asesor lo presupueste.\n"
         "Si la comuna está fuera de la cobertura habitual, no rechaces el trabajo: pide los datos y ofrece coordinación.\n"
@@ -120,6 +120,8 @@ FALLBACKS = {
     "prompts/respond.md": (
         "<conversation>{{conversation}}</conversation>\n\n"
         "<booking>{{booking}}</booking>\n\n"
+        "<fecha>{{fecha}}</fecha>\n\n"
+        "<tarifario>{{tarifario}}</tarifario>\n\n"
         "<kb>{{kb_text}}</kb>\n\n"
         "<user_input>{{user_input}}</user_input>\n"
     ),

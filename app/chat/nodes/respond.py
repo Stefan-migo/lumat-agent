@@ -15,6 +15,8 @@ paths never call the LLM, design Cost Guardrails).
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
@@ -26,9 +28,13 @@ from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
 from app.services.settings import (
     MESSAGE_DEFAULTS,
+    TARIFA_LABELS,
+    get_hours_timezone,
     get_message,
     get_message_templates,
+    get_tarifa_precios,
     get_tone_directive,
+    tarifa_vigente,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,6 +117,30 @@ def list_unresolved_questions(session, limit: int = 100) -> list[Message]:
     )
 
 
+def build_tarifario_block(vigente: dict[str, int]) -> str:
+    """Render the prices in force for the prompt's <tarifario> block.
+
+    Only the current amount per service: no season names, no comparison with
+    another date, nothing for a service the owner did not price.
+    """
+    lines = [
+        f"{TARIFA_LABELS.get(service, service)}: ${valor:,.0f}".replace(",", ".")
+        for service, valor in vigente.items()
+    ]
+    return "\n".join(lines)
+
+
+def _tarifario_context() -> tuple[str, str]:
+    """Today's date and the current-price block, in the configured timezone."""
+    with session_scope() as session:
+        timezone_name = get_hours_timezone(session)
+        tarifa = get_tarifa_precios(session)
+    hoy = datetime.now(ZoneInfo(timezone_name))
+    return hoy.strftime("%Y-%m-%d"), build_tarifario_block(
+        tarifa_vigente(tarifa, hoy.date())
+    )
+
+
 def _answer_from_kb(
     text: str,
     kb_text: str,
@@ -134,6 +164,7 @@ def _answer_from_kb(
         prompts.load("personas/orchestrator_brief.md") if brief else ""
     ) + f"\n{tone_directive}"
     memory_block = f"\n<memory>{memory_context}</memory>" if memory_context else ""
+    fecha, tarifario = _tarifario_context()
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
@@ -144,6 +175,8 @@ def _answer_from_kb(
                     "prompts/respond.md",
                     conversation=conversation,
                     booking=booking,
+                    fecha=fecha,
+                    tarifario=tarifario,
                     kb_text=kb_text + memory_block,
                     user_input=text,
                 ),

@@ -54,6 +54,8 @@ def test_prompt_respond_template(repo_root):
     assert _read(repo_root, "prompts/respond.md") == (
         "<conversation>{{conversation}}</conversation>\n\n"
         "<booking>{{booking}}</booking>\n\n"
+        "<fecha>{{fecha}}</fecha>\n\n"
+        "<tarifario>{{tarifario}}</tarifario>\n\n"
         "<kb>{{kb_text}}</kb>\n\n"
         "<user_input>{{user_input}}</user_input>\n"
     )
@@ -168,12 +170,16 @@ def test_render_substitutes_all_slots():
         "prompts/respond.md",
         conversation="<prior turns>",
         booking="No booking.",
+        fecha="2026-03-15",
+        tarifario="Visita técnica: $30.000",
         kb_text="<kb text>",
         user_input="hola",
     )
     assert out == (
         "<conversation><prior turns></conversation>\n\n"
         "<booking>No booking.</booking>\n\n"
+        "<fecha>2026-03-15</fecha>\n\n"
+        "<tarifario>Visita técnica: $30.000</tarifario>\n\n"
         "<kb><kb text></kb>\n\n<user_input>hola</user_input>\n"
     )
 
@@ -294,11 +300,14 @@ def respond_client():
 def test_respond_answer_from_kb_persona_and_template(respond_client):
     # AC-3 static slot unchanged: system == orchestrator persona via loader.
     # AC-3 typed template identical: user == render(prompts/respond.md).
-    _rn._answer_from_kb(
-        "hola", "chunk uno\nchunk dos", message_id=7,
-        conversation="(sin mensajes previos)",
-        booking="El cliente no tiene ninguna visita agendada.",
-    )
+    with mock.patch.object(
+        _rn, "_tarifario_context", return_value=("2026-03-15", "Visita técnica: $30.000")
+    ):
+        _rn._answer_from_kb(
+            "hola", "chunk uno\nchunk dos", message_id=7,
+            conversation="(sin mensajes previos)",
+            booking="El cliente no tiene ninguna visita agendada.",
+        )
     call = respond_client.captured[-1]
     assert call["messages"][0]["content"] == (
         prompts.load("personas/orchestrator.md")
@@ -307,6 +316,7 @@ def test_respond_answer_from_kb_persona_and_template(respond_client):
     assert call["messages"][1]["content"] == prompts.render(
         "prompts/respond.md", conversation="(sin mensajes previos)",
         booking="El cliente no tiene ninguna visita agendada.",
+        fecha="2026-03-15", tarifario="Visita técnica: $30.000",
         kb_text="chunk uno\nchunk dos", user_input="hola"
     )
 
