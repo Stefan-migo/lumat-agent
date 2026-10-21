@@ -40,8 +40,10 @@ from app.services.customers import (
 )
 from app.services.settings import (
     REPLY_TEXT_DEFAULTS,
+    comuna_cubierta,
     get_capture_questions,
     get_conduct,
+    get_coverage_communes,
     get_reply_texts,
 )
 
@@ -67,6 +69,9 @@ CAPTURE_FIELDS: list[tuple[str, str]] = [
 # The second ask is the reformulation; a third one would just repeat the same
 # text again, so the turn escalates instead.
 MAX_ASKS_PER_FIELD = 2
+
+# S15: the closed-list derivation rule for a comuna outside `coverage.communes`.
+COVERAGE_DERIVATION = "cobertura"
 EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
 # S11: the shipped order and the capture model. `chat.conduct.orden` is the
 # effective sequence; this list is its default and the fields the validators
@@ -280,6 +285,28 @@ def capture(state: ConversationState) -> dict:
     return _ask_next(captured, state)
 
 
+def _out_of_coverage(
+    captured: dict, communes: list[str], derivaciones: list[str]
+) -> bool:
+    """True when the captured comuna is outside coverage and the rule is on (S15)."""
+    if COVERAGE_DERIVATION not in derivaciones:
+        return False
+    comuna = captured.get("comuna")
+    if not comuna or comuna == "unknown":
+        return False
+    return not comuna_cubierta(communes, comuna)
+
+
+def _derive(captured: dict, reason: str) -> dict:
+    """Send the capture to the handoff node with a reason (S14/S15)."""
+    return {
+        "captured": captured,
+        "next_step": "handoff",
+        "escalate": True,
+        "escalate_reason": reason,
+    }
+
+
 def _ask_batch(missing: list[str], max_preguntas: int) -> list[str]:
     """Leading missing fields for this message (S14).
 
@@ -301,6 +328,13 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
     """Ask the next missing fields, or the consent step when none remain."""
     with session_scope() as session:
         conduct = get_conduct(session)
+        if _out_of_coverage(
+            captured, get_coverage_communes(session), conduct["derivaciones"]
+        ):
+            # S15: an out-of-coverage comuna is not rejected; an advisor takes it.
+            captured.pop("_pending", None)
+            _persist_captured(session, state, captured)
+            return _derive(captured, COVERAGE_DERIVATION)
         missing = _missing_fields(captured, conduct["orden"])
         if not missing:
             captured["_pending"] = "consent"
@@ -315,12 +349,7 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             # the takeover; `_after_capture` routes there.
             captured.pop("_pending", None)
             _persist_captured(session, state, captured)
-            return {
-                "captured": captured,
-                "next_step": "handoff",
-                "escalate": True,
-                "escalate_reason": "campo_sin_respuesta",
-            }
+            return _derive(captured, "campo_sin_respuesta")
 
         captured["_pending"] = batch
         asked = dict(captured.get("_asked") or {})

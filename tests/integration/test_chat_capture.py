@@ -143,7 +143,7 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     replies = _turn(conv_id, "Calefont Bosch", "wamid.cap3")
     assert any("comuna" in r.lower() for r in replies)
 
-    replies = _turn(conv_id, "Providencia", "wamid.cap4")
+    replies = _turn(conv_id, "Ñuñoa", "wamid.cap4")
     assert any("horario" in r.lower() for r in replies)
 
     replies = _turn(conv_id, "mañanas", "wamid.cap5")
@@ -155,7 +155,7 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     captured = _conversation_captured(conv_id)
     assert captured["failure"] == "no enciende"
     assert captured["equipment"] == "Calefont Bosch"
-    assert captured["comuna"] == "Providencia"
+    assert captured["comuna"] == "Ñuñoa"
     assert captured["availability"] == "mañanas"
     assert captured["name"] == "Juan Perez"
     # S14: the configured max is 1 by default, so the booking data is asked one
@@ -185,7 +185,7 @@ def test_s14_one_question_per_message_is_the_default(mock_openai_chat):
     _turn(conv_id, "No enciende", "wamid.s14a2")
     _turn(conv_id, "Calefont Bosch", "wamid.s14a3")
 
-    replies = _turn(conv_id, "Providencia", "wamid.s14a4")
+    replies = _turn(conv_id, "Ñuñoa", "wamid.s14a4")
 
     assert any("días y horarios" in reply.lower() for reply in replies)
     assert all("nombre" not in reply.lower() for reply in replies)
@@ -199,7 +199,7 @@ def test_s14_max_two_asks_two_booking_fields(mock_openai_chat):
     _turn(conv_id, "No enciende", "wamid.s14b2")
     _turn(conv_id, "Calefont Bosch", "wamid.s14b3")
 
-    replies = _turn(conv_id, "Providencia", "wamid.s14b4")
+    replies = _turn(conv_id, "Ñuñoa", "wamid.s14b4")
 
     assert _conversation_captured(conv_id)["_pending"] == ["availability", "name"]
     assert any("nombre" in reply.lower() for reply in replies)
@@ -273,7 +273,7 @@ def test_configured_consent_question_is_used(mock_openai_chat):
     conv_id = _start_conversation()
     replies: list[str] = []
     for index, text in enumerate(
-        ["quiero una visita", "No enciende", "Calefont", "Providencia",
+        ["quiero una visita", "No enciende", "Calefont", "Ñuñoa",
          "mañanas", "Juan", "juan@mail.cl", "Calle 1"],
         start=1,
     ):
@@ -306,7 +306,7 @@ def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
     conv_id = _start_conversation()
     all_replies = []
     for index, text in enumerate(
-        ["quiero una visita", "No enciende", "Calefont", "Providencia",
+        ["quiero una visita", "No enciende", "Calefont", "Ñuñoa",
          "mañanas", "Juan", "juan@mail.cl", "Calle 1"],
         start=1,
     ):
@@ -351,7 +351,7 @@ def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_ch
 
 def test_cm2_field_answers_do_not_burn_unknown_attempts(mock_openai_chat):
     conv_id = _start_conversation()
-    for index, text in enumerate(["quiero una visita", "Juan Perez", "Providencia"]):
+    for index, text in enumerate(["quiero una visita", "Juan Perez", "Ñuñoa"]):
         _turn(conv_id, text, f"wamid.unknown-field{index}")
 
     with SessionLocal() as session:
@@ -370,7 +370,7 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
         ("quiero una visita", "wamid.comp1"),
         ("No enciende y pierde agua", "wamid.comp2"),
         ("Calefont Bosch 10 anios", "wamid.comp3"),
-        ("Providencia", "wamid.comp4"),
+        ("Ñuñoa", "wamid.comp4"),
         ("manana en la manana", "wamid.comp5"),
         ("Juan", "wamid.comp6"),
         ("juan@mail.cl", "wamid.comp7"),
@@ -394,7 +394,7 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     customer = _customer()
     assert customer.name == "Juan"
     assert customer.email == "juan@mail.cl"
-    assert customer.comuna == "Providencia"
+    assert customer.comuna == "Ñuñoa"
     assert customer.address == "Av Siempre Viva 123"
     assert customer.consent_status is True
     assert customer.consent_at is not None
@@ -415,7 +415,7 @@ def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
     conv_id = _start_conversation()
     _turn(conv_id, "calefont", "wamid.equipment0")
     for index, text in enumerate(
-        ["No enciende", "Calefont Bosch 10L", "Providencia", "mañana",
+        ["No enciende", "Calefont Bosch 10L", "Ñuñoa", "mañana",
          "Juan", "juan@mail.cl", "Av Siempre Viva 123", "si"],
         start=1,
     ):
@@ -508,7 +508,7 @@ def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
     conv_id = _start_conversation()
     replies = []
     for index, text in enumerate(
-        ["quiero una visita", "no enciende", "Calefont", "Providencia",
+        ["quiero una visita", "no enciende", "Calefont", "Ñuñoa",
          "manana", "Juan", "juan@mail.cl", "Calle 1"],
         start=1,
     ):
@@ -769,7 +769,7 @@ def test_cm5_summary_stored_on_conversation_and_case(mock_openai_chat):
     for text, wamid in [
         ("Juan", "wamid.sum1"),
         ("juan@mail.cl", "wamid.sum2"),
-        ("Providencia", "wamid.sum3"),
+        ("Ñuñoa", "wamid.sum3"),
         ("Av Siempre Viva 123", "wamid.sum4"),
         ("calefont", "wamid.sum5"),
         ("no enciende", "wamid.sum6"),
@@ -828,7 +828,7 @@ def test_s11_a_field_dropped_from_the_order_is_never_asked(mock_openai_chat):
 
     replies: list[str] = []
     for index, text in enumerate(
-        ["quiero una visita", "No enciende", "Calefont", "Providencia",
+        ["quiero una visita", "No enciende", "Calefont", "Ñuñoa",
          "mañanas", "Juan", "juan@mail.cl"],
         start=1,
     ):
@@ -837,3 +837,63 @@ def test_s11_a_field_dropped_from_the_order_is_never_asked(mock_openai_chat):
     assert not any("dirección" in reply.lower() for reply in replies)
     captured = _conversation_captured(conv_id)
     assert captured["_pending"] == "consent"
+
+
+# ---------------------------------------------------------------------------
+# S15 — a comuna outside coverage derives to an advisor, never a dead end
+# ---------------------------------------------------------------------------
+
+
+def _turn_causes(conv_id: int) -> list[str]:
+    with SessionLocal() as session:
+        return list(
+            session.scalars(
+                select(ConversationEvent.cause).where(
+                    ConversationEvent.conversation_id == conv_id
+                )
+            ).all()
+        )
+
+
+def _walk_to_comuna(conv_id: int) -> list[str]:
+    _turn(conv_id, "quiero una visita", "wamid.cov0")
+    _turn(conv_id, "No enciende", "wamid.cov1")
+    _turn(conv_id, "Calefont Bosch", "wamid.cov2")
+    return _turn(conv_id, "La Florida", "wamid.cov3")
+
+
+def test_s15_a_comuna_outside_coverage_derives_without_promising_a_visit(mock_openai_chat):
+    conv_id = _start_conversation()
+
+    replies = _walk_to_comuna(conv_id)
+
+    assert any("asesor" in reply.lower() for reply in replies)
+    assert all("horarios disponibles" not in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"
+    assert "handoff:cobertura" in _turn_causes(conv_id)
+
+
+def test_s15_a_covered_comuna_keeps_the_capture_going(mock_openai_chat):
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.covc0")
+    _turn(conv_id, "No enciende", "wamid.covc1")
+    _turn(conv_id, "Calefont Bosch", "wamid.covc2")
+
+    replies = _turn(conv_id, "Ñuñoa", "wamid.covc3")
+
+    assert any("días y horarios" in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value != "human"
+    assert "handoff:cobertura" not in _turn_causes(conv_id)
+
+
+def test_s15_the_coverage_rule_can_be_turned_off(mock_openai_chat):
+    _configure_conduct(derivaciones=["garantia"])
+    conv_id = _start_conversation()
+
+    _walk_to_comuna(conv_id)
+
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value != "human"
+    assert _conversation_captured(conv_id)["_pending"] == ["availability"]
