@@ -1357,6 +1357,54 @@ def test_settings_update_service_durations_rejects_invalid_without_persisting(cl
     assert _last_audit("settings.change") is None
 
 
+_CAPTURE_QUESTIONS = {
+    "failure": "Cuéntame la falla con tus palabras.",
+    "equipment": "¿Qué equipo es?",
+    "comuna": "¿En qué comuna estás?",
+    "availability": "¿Qué días te acomodan?",
+    "name": "¿Cómo te llamas?",
+    "email": "¿Cuál es tu correo?",
+    "address": "¿Cuál es tu dirección?",
+}
+
+
+def test_settings_update_capture_questions_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/capture-questions",
+        json={"questions": _CAPTURE_QUESTIONS},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Settings, "capture.questions").value == _CAPTURE_QUESTIONS
+    audit = _last_audit("settings.change")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.entity_id == "capture.questions"
+
+
+def test_settings_update_capture_questions_rejects_a_partial_map_without_persisting(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    partial = {key: value for key, value in _CAPTURE_QUESTIONS.items() if key != "comuna"}
+
+    resp = client.post(
+        "/panel/api/settings/capture-questions",
+        json={"questions": partial},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    with SessionLocal() as session:
+        assert session.get(Settings, "capture.questions") is None
+    assert _last_audit("settings.change") is None
+
+
 def test_settings_hours_rejects_invalid_values_with_the_shared_validator(client, make_user):
     """The panel and the assistant path reject the same malformed schedule."""
     make_user("adm", "adm-pass", role="admin")

@@ -15,6 +15,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   tarifa {"precios": {service: [range]}}  -> tarifa.precios (validated, S1)
   coverage {"communes": [str]}            -> coverage.communes (validated, S3)
   durations {"service_durations": {...}}  -> booking.service_durations (S4)
+  capture-questions {"questions": {field: str}} -> capture.questions (S7)
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
@@ -38,6 +39,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from app.chat.nodes.capture import CAPTURE_FIELD_ORDER
 from app.models import User
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
@@ -102,6 +104,10 @@ class CoverageBody(BaseModel):
 
 class ServiceDurationsBody(BaseModel):
     service_durations: dict[str, Any]
+
+
+class CaptureQuestionsBody(BaseModel):
+    questions: dict[str, Any]
 
 
 class LimitsBody(BaseModel):
@@ -483,6 +489,23 @@ def settings_durations(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     _save(session, settings_service.SERVICE_DURATIONS_KEY, durations, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/capture-questions")
+def settings_capture_questions(
+    body: CaptureQuestionsBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    try:
+        questions = settings_service.validate_capture_questions(
+            body.questions, CAPTURE_FIELD_ORDER
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.CAPTURE_QUESTIONS_KEY, questions, current)
     session.commit()
     return {"ok": True}
 
