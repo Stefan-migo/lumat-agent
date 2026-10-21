@@ -36,6 +36,31 @@ export const settings: Settings = {
     timezone: "America/Santiago",
     schedule: [{ days: [1, 2, 3, 4, 5], open: "09:00", close: "18:00" }],
   },
+  tarifa: {
+    visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }],
+    mantencion_calefont: [
+      { desde_mes: 3, hasta_mes: 10, valor: 50000 },
+      { desde_mes: 11, hasta_mes: 2, valor: 40000 },
+    ],
+    mantencion_caldera: [
+      { desde_mes: 3, hasta_mes: 10, valor: 80000 },
+      { desde_mes: 11, hasta_mes: 2, valor: 60000 },
+    ],
+    lavado_red: [
+      { desde_mes: 3, hasta_mes: 10, valor: 140000 },
+      { desde_mes: 11, hasta_mes: 2, valor: 120000 },
+    ],
+  },
+  coverage: [
+    "Las Condes",
+    "Ñuñoa",
+    "Lo Barnechea",
+    "La Reina",
+    "Peñalolén",
+    "Colina",
+    "Huechuraba",
+  ],
+  service_durations: { Calefont: 60, Caldera: 90 },
   conversation_limit: 1.5,
   daily_limit: 5.0,
   meta_cost: 0.01,

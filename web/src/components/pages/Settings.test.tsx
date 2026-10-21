@@ -11,6 +11,8 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   messages: { greeting: "Hola", cannot_answer: "No sé", clarification: "¿Cuál?", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
+  tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },
+  coverage: ["Las Condes"], service_durations: {},
   conversation_limit: 4, daily_limit: 20, meta_cost: 0.05,
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
@@ -20,9 +22,9 @@ const capabilities = { tools: [], personas: [], prompts: [], kb_available: true,
 describe("Settings", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders seven sections and selects Agente by default", () => {
+  it("renders every section and selects Agente by default", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Costos", "Capacidades", "API key de modelos", "Correo"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Tarifas", "Cobertura", "Costos", "Capacidades", "API key de modelos", "Correo"]);
     expect(screen.getByRole("tab", { name: "Agente" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
   });

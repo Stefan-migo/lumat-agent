@@ -164,3 +164,8 @@
   .settings-capabilities__tool { flex-wrap: wrap; }
   .settings-capabilities__tool-copy { flex-basis: calc(100% - var(--icon-md) - var(--space-3)); }
 }
+
+.settings-tarifa { display: grid; gap: var(--space-4); }
+.settings-tarifa__service { min-width: 0; margin: 0; padding: 0; border: 0; }
+.settings-tarifa__service legend { padding: 0; margin-bottom: var(--space-2); font-weight: var(--weight-semibold, 600); }
+.settings-tarifa__ranges { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-3); }

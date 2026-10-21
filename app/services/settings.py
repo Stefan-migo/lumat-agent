@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -150,6 +150,60 @@ DEFAULT_LLM_RATES = {
     "_effective_date": "2026-09-11",
 }
 
+SERVICE_DURATIONS_KEY = "booking.service_durations"
+# A visit cannot reserve more than a day; anything longer is a typo, not intent.
+MAX_SERVICE_DURATION_MINUTES = 1440
+
+COVERAGE_COMMUNES_KEY = "coverage.communes"
+# The seven communes the owner services. Matching is accent- and case-insensitive
+# (see `normalize_comuna`); a name outside the list is coordinated with an
+# advisor, never rejected outright.
+DEFAULT_COVERAGE_COMMUNES = [
+    "Las Condes",
+    "Ñuñoa",
+    "Lo Barnechea",
+    "La Reina",
+    "Peñalolén",
+    "Colina",
+    "Huechuraba",
+]
+
+TARIFA_PRECIOS_KEY = "tarifa.precios"
+# The commercial catalogue. Prices live here, never in a customer-facing KB
+# document: a date resolves to exactly one price, so an old season can never
+# reach the model.
+TARIFA_SERVICES = (
+    "visita_tecnica",
+    "mantencion_calefont",
+    "mantencion_caldera",
+    "lavado_red",
+)
+# Customer-facing service names for the prompt's <tarifario> block.
+TARIFA_LABELS = {
+    "visita_tecnica": "Visita técnica",
+    "mantencion_calefont": "Mantención de calefont",
+    "mantencion_caldera": "Mantención de caldera",
+    "lavado_red": "Lavado de red",
+}
+# One or more month ranges per service (1-12, inclusive). The ranges must
+# partition the year: no gaps, no overlaps. "Visita técnica" has a single
+# all-year range; the three seasonal services have two.
+DEFAULT_TARIFA_PRECIOS: dict[str, list[dict[str, int]]] = {
+    "visita_tecnica": [{"desde_mes": 1, "hasta_mes": 12, "valor": 30000}],
+    "mantencion_calefont": [
+        {"desde_mes": 3, "hasta_mes": 10, "valor": 50000},
+        {"desde_mes": 11, "hasta_mes": 2, "valor": 40000},
+    ],
+    "mantencion_caldera": [
+        {"desde_mes": 3, "hasta_mes": 10, "valor": 80000},
+        {"desde_mes": 11, "hasta_mes": 2, "valor": 60000},
+    ],
+    "lavado_red": [
+        {"desde_mes": 3, "hasta_mes": 10, "valor": 140000},
+        {"desde_mes": 11, "hasta_mes": 2, "valor": 120000},
+    ],
+}
+
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
 # Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
@@ -166,7 +220,11 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cost.llm_rates": DEFAULT_LLM_RATES,
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
-    "booking.service_durations": {},
+    SERVICE_DURATIONS_KEY: {},
+    # S1: the commercial tariff, resolved by date before the prompt sees it.
+    TARIFA_PRECIOS_KEY: DEFAULT_TARIFA_PRECIOS,
+    # S3: service coverage, matched without accents or case.
+    COVERAGE_COMMUNES_KEY: DEFAULT_COVERAGE_COMMUNES,
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
     "emergency.keywords": DEFAULT_EMERGENCY_KEYWORDS,
     # EM-3: safety protocol content delivered by the emergency node (T4.2).
@@ -219,6 +277,48 @@ def get_setting(session: Session, key: str, default: Any = None) -> Any:
     return default
 
 
+def validate_service_durations(value: Any) -> dict[str, int]:
+    """Validate the service -> minutes map before persistence.
+
+    Keys are service names as they arrive from the conversation, so they are
+    free text: what matters is that no two keys collapse under the same
+    normalization, or one would silently shadow the other in
+    `get_service_duration`.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("booking.service_durations must be an object")
+
+    seen: set[str] = set()
+    for service, minutes in value.items():
+        if not isinstance(service, str) or not service.strip():
+            raise ValueError("booking.service_durations keys must be non-empty strings")
+        normalized = normalize_comuna(service)
+        if normalized in seen:
+            raise ValueError(
+                f"booking.service_durations has a duplicate service: {service!r}"
+            )
+        seen.add(normalized)
+        if (
+            not isinstance(minutes, int)
+            or isinstance(minutes, bool)
+            or not 1 <= minutes <= MAX_SERVICE_DURATION_MINUTES
+        ):
+            raise ValueError(
+                "booking.service_durations values must be integers between 1 and "
+                f"{MAX_SERVICE_DURATION_MINUTES} minutes"
+            )
+    return value
+
+
+def get_service_durations(session: Session) -> dict[str, int]:
+    """Return the configured durations, or an empty map when malformed."""
+    value = get_setting(session, SERVICE_DURATIONS_KEY, default={})
+    try:
+        return validate_service_durations(value)
+    except ValueError:
+        return {}
+
+
 def get_service_duration(
     session: Session, service: str | None, default: int = 60
 ) -> int:
@@ -241,6 +341,146 @@ def get_service_duration(
                 return duration
             return default
     return default
+
+
+def normalize_comuna(value: str) -> str:
+    """Fold a commune name for matching: case, accents and inner spacing."""
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(without_accents.split())
+
+
+def validate_coverage_communes(value: Any) -> list[str]:
+    """Validate the coverage list before persistence and return it unchanged."""
+    if not isinstance(value, list):
+        raise ValueError("coverage.communes must be a list of commune names")
+
+    seen: set[str] = set()
+    for index, nombre in enumerate(value):
+        if not isinstance(nombre, str) or not nombre.strip():
+            raise ValueError(f"coverage.communes[{index}] must be a non-empty string")
+        normalized = normalize_comuna(nombre)
+        if normalized in seen:
+            raise ValueError(f"coverage.communes has a duplicate commune: {nombre!r}")
+        seen.add(normalized)
+    return value
+
+
+def get_coverage_communes(session: Session) -> list[str]:
+    """Return the configured coverage, or the seven defaults when malformed."""
+    value = get_setting(session, COVERAGE_COMMUNES_KEY, default=DEFAULT_COVERAGE_COMMUNES)
+    try:
+        return validate_coverage_communes(value)
+    except ValueError:
+        return DEFAULT_COVERAGE_COMMUNES
+
+
+def comuna_cubierta(communes: list[str], nombre: str | None) -> bool:
+    """True when ``nombre`` matches a covered commune under normalization."""
+    if not isinstance(nombre, str):
+        return False
+    normalized = normalize_comuna(nombre)
+    if not normalized:
+        return False
+    return any(normalize_comuna(item) == normalized for item in communes)
+
+
+def get_tarifa_precios(session: Session) -> dict[str, list[dict[str, int]]]:
+    """Return the configured tariff, or the default when unset or malformed."""
+    value = get_setting(session, TARIFA_PRECIOS_KEY, default=DEFAULT_TARIFA_PRECIOS)
+    try:
+        return validate_tarifa_precios(value)
+    except ValueError:
+        return DEFAULT_TARIFA_PRECIOS
+
+
+def tarifa_vigente(
+    tarifa: dict[str, list[dict[str, int]]], fecha: date
+) -> dict[str, int]:
+    """Return the price in force for each service on ``fecha``.
+
+    A service whose ranges do not cover that month is omitted rather than
+    guessed, so the prompt never receives a figure the owner did not set.
+    """
+    vigente: dict[str, int] = {}
+    for service, ranges in tarifa.items():
+        for rango in ranges:
+            if fecha.month in _tarifa_months(rango["desde_mes"], rango["hasta_mes"]):
+                vigente[service] = rango["valor"]
+                break
+    return vigente
+
+
+def _tarifa_months(desde_mes: int, hasta_mes: int) -> set[int]:
+    """Expand one inclusive range, wrapping december -> january."""
+    months: set[int] = set()
+    month = desde_mes
+    while True:
+        months.add(month)
+        if month == hasta_mes:
+            return months
+        month = month % 12 + 1
+
+
+def validate_tarifa_precios(value: Any) -> dict[str, list[dict[str, int]]]:
+    """Validate the tariff before persistence and return it unchanged.
+
+    Shape: ``{service: [{"desde_mes", "hasta_mes", "valor"}, ...]}``. Each
+    service must exist exactly once, every range must cover whole months, and
+    the ranges of one service must partition months 1-12 (no gap, no overlap).
+    """
+    if not isinstance(value, dict):
+        raise ValueError("tarifa.precios must be an object keyed by service")
+    if set(value) != set(TARIFA_SERVICES):
+        missing = sorted(set(TARIFA_SERVICES) - set(value))
+        unknown = sorted(set(value) - set(TARIFA_SERVICES))
+        raise ValueError(
+            "tarifa.precios must cover exactly the known services "
+            f"(missing: {missing}, unknown: {unknown})"
+        )
+
+    for service in TARIFA_SERVICES:
+        ranges = value[service]
+        if not isinstance(ranges, list) or not ranges:
+            raise ValueError(f"tarifa.precios[{service!r}] must be a non-empty list")
+
+        covered: set[int] = set()
+        for index, rango in enumerate(ranges):
+            if not isinstance(rango, dict):
+                raise ValueError(f"tarifa.precios[{service!r}][{index}] must be an object")
+            if set(rango) != {"desde_mes", "hasta_mes", "valor"}:
+                raise ValueError(
+                    f"tarifa.precios[{service!r}][{index}] must have exactly "
+                    "desde_mes, hasta_mes and valor"
+                )
+
+            months = (rango["desde_mes"], rango["hasta_mes"])
+            for month in months:
+                if not isinstance(month, int) or isinstance(month, bool) or not 1 <= month <= 12:
+                    raise ValueError(
+                        f"tarifa.precios[{service!r}][{index}] months must be integers 1-12"
+                    )
+            valor = rango["valor"]
+            if not isinstance(valor, int) or isinstance(valor, bool) or valor <= 0:
+                raise ValueError(
+                    f"tarifa.precios[{service!r}][{index}] valor must be a positive integer"
+                )
+
+            range_months = _tarifa_months(*months)
+            overlap = covered & range_months
+            if overlap:
+                raise ValueError(
+                    f"tarifa.precios[{service!r}] ranges overlap in months {sorted(overlap)}"
+                )
+            covered |= range_months
+
+        missing_months = set(range(1, 13)) - covered
+        if missing_months:
+            raise ValueError(
+                f"tarifa.precios[{service!r}] does not cover months {sorted(missing_months)}"
+            )
+
+    return value
 
 
 def set_setting(
@@ -467,10 +707,10 @@ def validate_assistant_setting(key: str, value: Any) -> None:
         except (TypeError, ValueError, ZoneInfoNotFoundError):
             raise ValueError("hours.timezone must be a valid IANA timezone")
     elif key == "hours.schedule":
-        _validate_hours_schedule(value)
+        validate_hours_schedule(value)
 
 
-def _validate_hours_schedule(schedule: Any) -> None:
+def validate_hours_schedule(schedule: Any) -> None:
     if not isinstance(schedule, list):
         raise ValueError("hours.schedule must be a list of objects")
     seen_days: set[int] = set()

@@ -489,6 +489,18 @@ export interface SmtpEmailSettings {
   password: { configured: boolean; masked: string };
 }
 
+export type TarifaService =
+  | "visita_tecnica"
+  | "mantencion_calefont"
+  | "mantencion_caldera"
+  | "lavado_red";
+
+export interface TarifaRango {
+  desde_mes: number;
+  hasta_mes: number;
+  valor: number;
+}
+
 export interface Settings {
   model_api_key: { configured: boolean; source: 'env' | 'panel' | 'none'; masked: string };
   scope_rules: Record<string, string>;
@@ -506,6 +518,9 @@ export interface Settings {
     timezone: string;
     schedule: Array<{ days: number[]; open: string; close: string }>;
   };
+  tarifa: Record<TarifaService, TarifaRango[]>;
+  coverage: string[];
+  service_durations: Record<string, number>;
   conversation_limit: number;
   daily_limit: number;
   meta_cost: number;
