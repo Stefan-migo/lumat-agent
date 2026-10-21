@@ -132,29 +132,32 @@ def _customer() -> Customer:
 def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     conv_id = _start_conversation()
 
+    # V4 §A3/A7: diagnose first (one question per turn); admin data last.
     replies = _turn(conv_id, "mi calefont falla", "wamid.cap1")
-    # turn 1: greeting + first capture question
-    assert any("nombre" in r.lower() for r in replies)
+    assert any("qué pasa con el equipo" in r.lower() for r in replies)
 
-    replies = _turn(conv_id, "Juan Perez", "wamid.cap2")
-    assert any("correo" in r.lower() for r in replies)
+    replies = _turn(conv_id, "no enciende", "wamid.cap2")
+    assert any("qué equipo" in r.lower() for r in replies)
 
-    replies = _turn(conv_id, "juan@mail.cl", "wamid.cap3")
+    replies = _turn(conv_id, "Calefont Bosch", "wamid.cap3")
     assert any("comuna" in r.lower() for r in replies)
 
     replies = _turn(conv_id, "Providencia", "wamid.cap4")
-    assert any("direcci" in r.lower() for r in replies)
+    assert any("horario" in r.lower() for r in replies)
 
-    replies = _turn(conv_id, "Av Siempre Viva 123", "wamid.cap5")
-    assert any("equipo" in r.lower() for r in replies)
+    replies = _turn(conv_id, "mañanas", "wamid.cap5")
+    assert any("nombre" in r.lower() for r in replies)
+
+    replies = _turn(conv_id, "Juan Perez", "wamid.cap6")
+    assert any("correo" in r.lower() for r in replies)
 
     captured = _conversation_captured(conv_id)
-    assert captured["name"] == "Juan Perez"
-    assert captured["email"] == "juan@mail.cl"
+    assert captured["failure"] == "no enciende"
+    assert captured["equipment"] == "Calefont Bosch"
     assert captured["comuna"] == "Providencia"
-    assert captured["address"] == "Av Siempre Viva 123"
-    # CI-3b: the ask is grouped (leading missing fields), not one per turn.
-    assert captured["_pending"] == ["equipment", "failure", "availability"]
+    assert captured["availability"] == "mañanas"
+    assert captured["name"] == "Juan Perez"
+    assert captured["_pending"] == ["email", "address"]
 
 
 def test_media_during_capture_resumes_agenda(mock_openai_chat):
@@ -166,7 +169,7 @@ def test_media_during_capture_resumes_agenda(mock_openai_chat):
 
     captured = _conversation_captured(conv_id)
     assert any("Recibí tu archivo" in reply for reply in replies)
-    assert any("¿Cuál es tu nombre?" in reply for reply in replies)
+    assert any("Cuéntame qué pasa con el equipo" in reply for reply in replies)
     assert captured["_pending"] == pending_before
     assert all(value not in (None, "unknown") for key, value in captured.items() if key != "_pending")
     with SessionLocal() as session:
@@ -179,23 +182,23 @@ def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
     conv_id = _start_conversation()
     all_replies = []
     for index, text in enumerate(
-        ["quiero una visita", "Juan", "juan@mail.cl", "Providencia", "Calle 1",
-         "Calefont", "no enciende"],
+        ["quiero una visita", "No enciende", "Calefont", "Providencia",
+         "mañanas", "Juan", "juan@mail.cl", "Calle 1"],
         start=1,
     ):
         replies = _turn(conv_id, text, f"wamid.optional{index}")
         all_replies.extend(replies)
 
+    # the optional evidence ask rides the last booking batch, never gates it
     assert any(EVIDENCE_QUESTION in reply for reply in all_replies)
     captured = _conversation_captured(conv_id)
     assert "evidence" not in captured
-    assert "availability" in captured["_pending"]
-
-    replies = _turn(conv_id, "paso", "wamid.optional-skip")
-    assert any("¿Autorizas" in reply for reply in replies)
-    captured = _conversation_captured(conv_id)
     assert captured["_pending"] == "consent"
-    assert "evidence" not in captured
+
+    _turn(conv_id, "paso", "wamid.optional-skip")
+    captured = _conversation_captured(conv_id)
+    assert captured["consent"] == "unknown"
+    assert "_pending" not in captured
 
 
 def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_chat, fake_embedder):
@@ -203,14 +206,14 @@ def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_ch
     conv_id = _start_conversation()
 
     _turn(conv_id, "quiero una visita", "wamid.dev0")
-    assert _conversation_captured(conv_id)["_pending"] == ["name", "email", "comuna"]
+    assert _conversation_captured(conv_id)["_pending"] == ["failure"]
     replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.dev1")
 
     assert any("Segun el manual de Lumat" in reply for reply in replies)
-    assert any("¿Cuál es tu nombre?" in reply for reply in replies)
+    assert any("Cuéntame qué pasa con el equipo" in reply for reply in replies)
     captured = _conversation_captured(conv_id)
-    assert captured.get("name") != "cuanto cuesta la revision anual"
-    assert captured["_pending"] == ["name", "email", "comuna"]
+    assert captured.get("failure") != "cuanto cuesta la revision anual"
+    assert captured["_pending"] == ["failure"]
     with SessionLocal() as session:
         unknown_count = session.scalar(
             select(ConversationEvent.id).where(
@@ -241,13 +244,13 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     conv_id = _start_conversation()
     turns = [
         ("quiero una visita", "wamid.comp1"),
-        ("Juan", "wamid.comp2"),
-        ("juan@mail.cl", "wamid.comp3"),
+        ("No enciende y pierde agua", "wamid.comp2"),
+        ("Calefont Bosch 10 anios", "wamid.comp3"),
         ("Providencia", "wamid.comp4"),
-        ("Av Siempre Viva 123", "wamid.comp5"),
-        ("Calefont Bosch 10 anios", "wamid.comp6"),
-        ("No enciende y pierde agua", "wamid.comp7"),
-        ("manana en la manana", "wamid.comp8"),
+        ("manana en la manana", "wamid.comp5"),
+        ("Juan", "wamid.comp6"),
+        ("juan@mail.cl", "wamid.comp7"),
+        ("Av Siempre Viva 123", "wamid.comp8"),
         ("si", "wamid.comp9"),  # consent
     ]
     last_replies = []
@@ -278,7 +281,8 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
         ).all()
         assert len(equipment) == 1
         assert equipment[0].details == "Calefont Bosch 10 anios"
-        assert equipment[0].equipment_type is None
+        # V4 T07: the appliance in the message now sets the type.
+        assert equipment[0].equipment_type == "calefont"
 
 
 def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
@@ -287,8 +291,8 @@ def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
     conv_id = _start_conversation()
     _turn(conv_id, "calefont", "wamid.equipment0")
     for index, text in enumerate(
-        ["Juan", "juan@mail.cl", "Providencia", "Av Siempre Viva 123",
-         "Calefont Bosch 10L", "No enciende", "mañana", "si"],
+        ["No enciende", "Calefont Bosch 10L", "Providencia", "mañana",
+         "Juan", "juan@mail.cl", "Av Siempre Viva 123", "si"],
         start=1,
     ):
         _turn(conv_id, text, f"wamid.equipment{index}")
@@ -362,12 +366,12 @@ def test_equipment_repromotion_preserves_operator_type_when_capture_omits_it():
 def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
     conv_id = _start_conversation()
     _turn(conv_id, "caldera", "wamid.skip0")
-    replies = _turn(conv_id, "no se", "wamid.skip1")  # skip the name field
+    replies = _turn(conv_id, "no se", "wamid.skip1")  # skip the failure field
 
     captured = _conversation_captured(conv_id)
-    assert captured["name"] == "unknown"
-    assert captured["_pending"] == ["email", "comuna", "address"]  # continued, not blocked
-    assert any("correo" in r.lower() for r in replies)
+    assert captured["failure"] == "unknown"
+    assert captured["_pending"] == ["equipment"]  # continued, not blocked
+    assert any("equipo" in r.lower() for r in replies)
 
 
 def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
@@ -380,8 +384,8 @@ def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
     conv_id = _start_conversation()
     replies = []
     for index, text in enumerate(
-        ["quiero una visita", "Juan", "juan@mail.cl", "Providencia", "Calle 1",
-         "Calefont", "no enciende", "manana"],
+        ["quiero una visita", "no enciende", "Calefont", "Providencia",
+         "manana", "Juan", "juan@mail.cl", "Calle 1"],
         start=1,
     ):
         replies = _turn(conv_id, text, f"wamid.consent{index}")

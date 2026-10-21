@@ -67,24 +67,32 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
     assert any("Segun el manual de Lumat" in reply for reply in replies)
     assert HANDOFF_REPLY not in replies
     pivot_reply = replies[-1]
-    assert "correo" in pivot_reply.lower() or "horario" in pivot_reply.lower()
+    assert any(k in pivot_reply.lower() for k in ("equipo", "horario", "comuna"))
     assert captured.get("name") == "Juan Pérez"
     assert captured.get("address") == "Los Leones 1234"
     assert "¿Cuál es tu nombre?" not in pivot_reply
     assert "¿Cuál es tu dirección?" not in pivot_reply
 
-    post_message(client, "wamid.ci5.book.4", "juan@mail.cl, Providencia, Junkers 2019")
-    post_message(client, "wamid.ci5.book.5", "no calienta, mañana en la tarde")
-    post_message(client, "wamid.ci5.book.6", "Providencia")
+    # V4 A3/A7 order: equipment, commune, availability, identity. Drive until
+    # the flow asks for consent instead of assuming how many fields the
+    # extractor already filled from the price-pivot message.
+    for index, answer in enumerate(
+        ["Junkers 2019", "Providencia", "mañana en la tarde", "juan@mail.cl"], start=4
+    ):
+        post_message(client, f"wamid.ci5.book.{index}", answer)
+        with SessionLocal() as session:
+            last_reply = _outbound_texts(session)[-1]
+        if "autorizas" in last_reply.lower():
+            break
+
+    assert "autorizas" in last_reply.lower()
     with SessionLocal() as session:
-        consent_prompt = _outbound_texts(session)[-1]
         customer, conversation = _customer_conversation(session)
         captured = conversation.captured_data or {}
-    assert "autorizas" in consent_prompt.lower()
     assert captured.get("_pending") == "consent"
     assert "consent" not in captured
 
-    post_message(client, "wamid.ci5.book.7", "sí")
+    post_message(client, "wamid.ci5.book.90", "sí")
     with SessionLocal() as session:
         slot_offer = _outbound_texts(session)[-1]
         customer, conversation = _customer_conversation(session)
@@ -92,7 +100,7 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
         assert session.query(Appointment).count() == 0
     assert "1." in slot_offer
 
-    post_message(client, "wamid.ci5.book.8", "1")
+    post_message(client, "wamid.ci5.book.91", "1")
     with SessionLocal() as session:
         confirmation = _outbound_texts(session)[-1]
         appointment = session.scalars(select(Appointment)).one()

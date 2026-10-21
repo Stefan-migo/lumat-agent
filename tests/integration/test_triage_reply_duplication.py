@@ -138,4 +138,4 @@ def test_non_subgraph_turn_is_unchanged(mock_openai_chat):
 
     assert len(replies) == 1, f"expected one fused message: {replies!r}"
     assert replies[0].count(GREETING) == 1, f"greeting duplicated: {replies!r}"
-    assert "¿Cuál es tu nombre?" in replies[0], f"the capture prompt was lost: {replies!r}"
+    assert "Cuéntame qué pasa con el equipo" in replies[0], f"the capture prompt was lost: {replies!r}"

@@ -463,10 +463,13 @@ def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_c
     """HH-2 "Handoff bundle complete": history + summary + customer + captured."""
     conv_id = _start_conversation()
     _turn(conv_id, "quiero una visita", "wamid.b1")
-    _turn(conv_id, "Juan", "wamid.b2")
-    _turn(conv_id, "juan@mail.cl", "wamid.b3")
+    _turn(conv_id, "No enciende", "wamid.b2")
+    _turn(conv_id, "Calefont", "wamid.b3")
     _turn(conv_id, "Providencia", "wamid.b4")
-    _turn(conv_id, "estoy molesto, quiero reclamar", "wamid.b5")
+    _turn(conv_id, "mañanas", "wamid.b5")
+    _turn(conv_id, "Juan", "wamid.b6")
+    _turn(conv_id, "juan@mail.cl", "wamid.b7")
+    _turn(conv_id, "estoy molesto, quiero reclamar", "wamid.b8")
 
     with SessionLocal() as session:
         conv = session.get(Conversation, conv_id)

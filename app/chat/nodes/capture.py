@@ -1,12 +1,20 @@
 """capture node — progressive structured data capture (CM-2).
 
 Each turn the classifier extracts any capturable fields present in the free
-text (CI-3b); the node merges them and asks the next 2-3 MISSING fields in one
-natural-language message (no numbered list), in the LumatRequest §1.5 order:
-identification (name, email), location (comuna, address), equipment, failure,
-availability. Evidence is an optional ask; received media is case evidence.
-A skip answer (no sé / no tengo / ...) marks the field
-`unknown` and continues without blocking (CM-2).
+text (CI-3b); the node merges them and asks the next MISSING fields in one
+natural-language message (no numbered list).
+
+Order (V4 §A3/A7, `odd/tasks/chatbot-cerebro-max-v4.md` T10): failure,
+equipment, comuna, availability, name, email, address. The diagnostic fields
+are asked ONE at a time; the 2–3 field bundle is reserved for booking data.
+Identity and address come last, when the visit is actually being booked —
+the old order started with name/email and turned every reported fault into an
+interrogation. A purely social message mid-capture is answered, never stored as
+a field answer (T03/T04).
+
+Evidence is an optional ask; received media is case evidence. A skip answer
+(no sé / no tengo / ...) marks the field `unknown` and continues without
+blocking (CM-2).
 
 CI-3: consent is NOT a data field. Once every field is captured the flow asks
 for consent as its own explicit step before booking; a positive answer writes
@@ -17,6 +25,8 @@ the captured name/email/comuna/address + consent onto the customer record
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 
 from app.chat.nodes.handoff_gate import is_media_evidence
 from app.chat.state import ConversationState
@@ -30,16 +40,18 @@ from app.services.customers import (
 
 logger = logging.getLogger(__name__)
 
-# CM-2 field order (LumatRequest §1.5): (field, question to ask). Identification
-# is name + email, then location, then the equipment/failure/availability block.
+# CM-2 field order. V4 §A3/A7 (odd/tasks/chatbot-cerebro-max-v4.md, T10)
+# reorders it: the technical need comes first and identity/admin data only when
+# the visit is actually being booked. The old order started with name/email,
+# which turned every reported fault into an interrogation.
 CAPTURE_FIELDS: list[tuple[str, str]] = [
+    ("failure", "Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?"),
+    ("equipment", "¿Qué equipo es? Si sabes la marca y el modelo, mejor."),
+    ("comuna", "¿En qué comuna te encuentras?"),
+    ("availability", "¿Qué días y horarios te acomodan para la visita?"),
     ("name", "¿Cuál es tu nombre?"),
     ("email", "¿Cuál es tu correo electrónico?"),
-    ("comuna", "¿En qué comuna te encuentras?"),
     ("address", "¿Cuál es tu dirección?"),
-    ("equipment", "¿Qué equipo tienes? (marca, modelo y años aproximados)"),
-    ("failure", "Describe el problema: qué falla, desde cuándo y con qué frecuencia."),
-    ("availability", "¿Qué días y horarios te acomodan para la visita?"),
 ]
 
 EVIDENCE_QUESTION = "¿Tienes algo más para pasarle al técnico? (una foto, un audio…)"
@@ -76,6 +88,53 @@ _SKIP_WORDS = (
 )
 _YES_WORDS = ("si", "sí", "yes", "ok", "claro", "confirmo", "acepto")
 _NO_WORDS = ("no", "nope", "negativo")
+
+# V4 §A3/D3: a social message mid-capture is a greeting, not a field answer.
+# Storing it would write "Hola, ¿cómo estás?" as the customer's name, and
+# re-listing the pending fields would turn a greeting into a form.
+_SOCIAL_ONLY = frozenset(
+    {
+        "hola",
+        "holaa",
+        "holaaa",
+        "holaaaa",
+        "buenas",
+        "hola buenas",
+        "buenos dias",
+        "buenas tardes",
+        "buenas noches",
+        "hey",
+        "como estas",
+        "como esta",
+        "que tal",
+        "todo bien",
+        "hola como estas",
+        "hola que tal",
+        "como andas",
+    }
+)
+_SOCIAL_REPLY = "¡Hola! Todo bien, gracias. Cuando quieras seguimos con lo de tu equipo."
+
+# V4 §A3: the diagnostic fields are asked one at a time; the bundled ask is for
+# booking data (location, availability, identity) once the need is understood.
+_DIAGNOSIS_FIELDS = frozenset({"failure", "equipment"})
+_EQUIPMENT_LABELS = {
+    "calefont": "calefont",
+    "caldera": "caldera",
+    "calefaccion": "sistema de calefacción",
+}
+
+
+def _normalize(text: str) -> str:
+    """Lower-case, accent-folded, non-alphanumerics collapsed to one space."""
+    folded = unicodedata.normalize("NFD", (text or "").casefold())
+    folded = "".join(char for char in folded if unicodedata.category(char) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", folded).strip()
+
+
+def is_social_only(text: str) -> bool:
+    """True when the whole message is a greeting or a social question."""
+    return _normalize(text) in _SOCIAL_ONLY
 
 
 def is_skip(text: str) -> bool:
@@ -144,6 +203,10 @@ def _merge_extracted(captured: dict, extracted: dict | None) -> None:
 def capture(state: ConversationState) -> dict:
     """Merge this turn's extraction and ask the next missing fields (CI-3b)."""
     captured = dict(state.captured)
+    if state.intent in {"calefont", "caldera", "calefaccion"}:
+        # V4 §E1 T07: a new fault replaces the equipment context instead of
+        # leaving the earlier appliance frozen in the record.
+        captured["equipment_type"] = state.intent
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         return _ask_next(captured, state)
@@ -163,6 +226,11 @@ def capture(state: ConversationState) -> dict:
             _persist_captured(session, state, captured)
         return {"captured": captured, "next_step": "booking"}
 
+    if isinstance(pending, list) and is_social_only(_current_text(state)):
+        # Answer the greeting without consuming it as a field answer and without
+        # re-listing the pending fields; the next turn resumes the batch.
+        return {"replies": [_SOCIAL_REPLY]}
+
     if state.capture_paused:
         # CI-2/CI-3b: a deviation was answered; resume without storing its text.
         captured.pop("_pending", None)
@@ -170,8 +238,6 @@ def capture(state: ConversationState) -> dict:
 
     if pending is None:
         # First capture turn: the current message is the intent, not an answer.
-        if state.intent in {"calefont", "caldera", "calefaccion"}:
-            captured["equipment_type"] = state.intent
         return _ask_next(captured, state)
 
     # An answer turn. Extraction already filled what it could. A single free-text
@@ -195,9 +261,15 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             _persist_captured(session, state, captured)
         return {"captured": captured, "replies": [CONSENT_QUESTION]}
 
-    batch = missing[:MAX_ASKS]
+    # V4 §A1/A3: one useful question per turn while diagnosing; two or three
+    # together only when the customer is already closing the booking.
+    limit = 1 if missing[0] in _DIAGNOSIS_FIELDS else MAX_ASKS
+    batch = missing[:limit]
     captured["_pending"] = batch
     ask = _ask_text(batch)
+    label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
+    if batch == ["failure"] and label:
+        ask = f"Entiendo, es un problema con tu {label}. {ask}"
     if len(missing) <= MAX_ASKS and not captured.get("_evidence_asked"):
         ask = f"{ask} {EVIDENCE_QUESTION}"
         captured["_evidence_asked"] = True

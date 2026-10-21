@@ -112,9 +112,9 @@ def test_first_greeting_with_service_content_still_classifies_and_routes(
     assert len(replies) == 1  # CM-1: greeting + answer fused into ONE message
     assert replies[0].startswith(MESSAGE_DEFAULTS["greeting_short"] + "\n\n")
     assert "¿En qué te puedo ayudar?" not in replies[0]  # the need is already stated
-    assert "¿Cuál es tu nombre?" in replies[0]
+    assert "Qué equipo es" in replies[0]  # V4 A3: one diagnostic question, not a form
     assert mock_openai_chat
-    assert conversation.captured_data["_pending"] == ["name", "email", "comuna"]
+    assert conversation.captured_data["_pending"] == ["equipment"]  # failure extracted from the message
 
 
 @pytest.mark.spec("CM-1")
@@ -133,9 +133,9 @@ def test_cm1_repeat_contact_resumes_not_restarts(
 
     assert len(replies) == 2
     assert "asistente virtual" in replies[0]  # greeting only on turn 1
-    assert "¿Cuál es tu nombre?" in replies[1]  # capture resumed (CM-2 field 1)
+    assert "Cuéntame qué pasa con el equipo" in replies[1]  # capture resumed (CM-2 field 1)
     assert "asistente virtual" not in replies[1]  # NOT restarted from scratch
-    assert captured["_pending"] == ["name", "email", "comuna"]  # state persisted (D2 rebuild)
+    assert captured["_pending"] == ["failure"]  # state persisted (D2 rebuild)
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +156,9 @@ def test_cm2_skip_marks_unknown_and_continues(client, mock_openai_chat, mock_met
         last_reply = _last_outbound(session).text
 
     # the skipped field is stored as unknown, NOT blocking the flow (CM-2)
-    assert captured.get("name") == "unknown"
-    assert captured["_pending"] == ["email", "comuna", "address"]  # advanced to next fields
-    assert "correo" in (last_reply or "").lower()
+    assert captured.get("failure") == "unknown"
+    assert captured["_pending"] == ["equipment"]  # advanced to the next field
+    assert "equipo" in (last_reply or "").lower()
 
 
 @pytest.mark.spec("CM-2")
@@ -170,13 +170,13 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     turns = [
         ("wamid.cm2c.1", "hola"),                      # greeting
         ("wamid.cm2c.2", "calefont"),                  # menu choice -> capture
-        ("wamid.cm2c.3", "Juan Perez"),                # name
-        ("wamid.cm2c.4", "juan@mail.cl"),              # email
+        ("wamid.cm2c.3", "no enciende desde ayer"),    # failure
+        ("wamid.cm2c.4", "Marca X modelo Y, 5 años"),  # equipment
         ("wamid.cm2c.5", "Providencia"),               # comuna
-        ("wamid.cm2c.6", "Av. Siempre Viva 123"),      # address
-        ("wamid.cm2c.7", "Marca X modelo Y, 5 años"),  # equipment
-        ("wamid.cm2c.8", "no enciende desde ayer"),    # failure
-        ("wamid.cm2c.9", "lunes o martes en la tarde"),  # availability
+        ("wamid.cm2c.6", "lunes o martes en la tarde"),  # availability
+        ("wamid.cm2c.7", "Juan Perez"),                # name
+        ("wamid.cm2c.8", "juan@mail.cl"),              # email
+        ("wamid.cm2c.9", "Av. Siempre Viva 123"),      # address
         ("wamid.cm2c.10", "sí"),                       # consent -> completion
     ]
     for wamid, text in turns:
