@@ -1005,6 +1005,7 @@ def test_settings_update_messages_audited(client, make_user):
     _login(client)
     value = {
         "greeting": "Hola editado",
+        "greeting_short": "Hola editado breve",
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
         "farewell": "Hasta luego",

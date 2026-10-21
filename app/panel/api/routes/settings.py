@@ -76,6 +76,7 @@ class ToneBody(BaseModel):
 
 class MessagesBody(BaseModel):
     greeting: str
+    greeting_short: str
     cannot_answer: str
     clarification: str
     farewell: str
