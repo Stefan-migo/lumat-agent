@@ -156,6 +156,8 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 
 El editor de tarifas entra en F1; el rediseño visual de F6 lo reutiliza.
 
+**T1 (2026-10-21) — cerrado.** Commits `5d40c6de` (settings, validación, `POST /settings/tarifa`, tests) y `9f6198ff` (sección Tarifas del panel). Verde: `tests/unit`, `tests/integration`, `tests/functional`, `npm test` (110 archivos / 1247 tests) y `npm run build` (`tsc -b`). La forma elegida es una lista de rangos de meses por prestación que debe particionar el año; `visita_tecnica` usa un rango 1–12 y las tres estacionales dos rangos.
+
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 
 **Hecho antes de esta feature (PR #643, merge `99e407f8`):** contrato V4↔repo, cinco documentos de KB comercial, persona de Max espejada, suite T01–T12 en verde, fix de conducta (diagnóstico primero, `persona` explícito, voseo, keyword de emergencia).
