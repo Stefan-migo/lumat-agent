@@ -8,12 +8,13 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 
+from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, Conversation
 from app.services import scheduling
 from app.services import technician_schedule
-from app.services.settings import get_hours_timezone, get_service_duration
+from app.services.settings import get_hours_timezone, get_reply_texts, get_service_duration
 
 OFFER_TTL = timedelta(minutes=30)
 MAX_INVALID_REPLIES = 1
@@ -40,14 +41,20 @@ def _persist_offer(session, state: ConversationState, offer: dict | None) -> Non
     conversation.captured_data = captured
 
 
-def _offer_text(slots: list[dict]) -> str:
-    return "Tengo estos horarios disponibles para la visita técnica:\n" + "\n".join(
-        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
-        for index, slot in enumerate(slots, 1)
-    ) + "\nResponde con el número del horario que prefieres."
+def _offer_text(slots: list[dict], texts: dict[str, str]) -> str:
+    return render_reply(
+        texts,
+        "booking_offer",
+        opciones="\n".join(
+            f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
+            for index, slot in enumerate(slots, 1)
+        ),
+    )
 
 
-def _new_offer(session, state: ConversationState, now: datetime, *, attempts: int = 0) -> dict:
+def _new_offer(
+    session, state: ConversationState, now: datetime, texts: dict[str, str], *, attempts: int = 0
+) -> dict:
     case = session.scalar(
         select(Case).where(
             Case.conversation_id == state.conversation_id,
@@ -69,7 +76,7 @@ def _new_offer(session, state: ConversationState, now: datetime, *, attempts: in
     ]
     offer = {"slots": slots, "created_at": now.isoformat(), "attempts": attempts}
     _persist_offer(session, state, offer)
-    return {"next_step": "end", "replies": [_offer_text(slots)]}
+    return {"next_step": "end", "replies": [_offer_text(slots, texts)]}
 
 
 def _resolve(text: str, slots: list[dict]) -> int | None:
@@ -94,18 +101,19 @@ def booking(state: ConversationState) -> dict:
     text = message.get("text") or ""
     now = datetime.now(timezone.utc)
     with session_scope() as session:
+        texts = get_reply_texts(session)
         conversation = session.get(Conversation, state.conversation_id)
         offer = dict((conversation.captured_data or {}).get("_booking_offer") or {}) if conversation else {}
         if not offer:
-            return _new_offer(session, state, now)
+            return _new_offer(session, state, now, texts)
         try:
             created_at = datetime.fromisoformat(offer["created_at"])
             if created_at.tzinfo is None or now - created_at > OFFER_TTL:
                 _persist_offer(session, state, None)
-                return _new_offer(session, state, now)
+                return _new_offer(session, state, now, texts)
         except (KeyError, ValueError):
             _persist_offer(session, state, None)
-            return _new_offer(session, state, now)
+            return _new_offer(session, state, now, texts)
 
         slots = offer.get("slots") or []
         selected = _resolve(text, slots)
@@ -116,7 +124,7 @@ def booking(state: ConversationState) -> dict:
                 return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unclear"}
             offer["attempts"] = attempts + 1
             _persist_offer(session, state, offer)
-            return {"next_step": "end", "replies": ["No pude identificar un único horario. Responde con el número de una opción."]}
+            return {"next_step": "end", "replies": [render_reply(texts, "booking_unclear")]}
 
         selected_slot = slots[selected]
         case = session.scalar(
@@ -141,10 +149,10 @@ def booking(state: ConversationState) -> dict:
             )
         except (scheduling.Unavailable, scheduling.AppointmentConflict):
             _persist_offer(session, state, None)
-            return _new_offer(session, state, now)
+            return _new_offer(session, state, now, texts)
         _persist_offer(session, state, None)
         slot_label = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
         return {
             "next_step": "summary",
-            "replies": [f"Tu visita técnica quedó confirmada para el {slot_label}."],
+            "replies": [render_reply(texts, "booking_confirmed", fecha=slot_label)],
         }
