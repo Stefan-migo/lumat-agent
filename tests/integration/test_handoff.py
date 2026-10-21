@@ -43,7 +43,7 @@ from app.models import (  # noqa: E402
     MessageType,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
-from app.services.settings import set_setting  # noqa: E402
+from app.services.settings import REPLY_TEXT_DEFAULTS, REPLY_TEXTS_KEY, set_setting  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
@@ -515,6 +515,27 @@ def test_handoff_summary_failure_uses_deterministic_fallback(monkeypatch):
         case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
         assert case.summary == "Solicitud registrada sin detalle del problema."
         assert case.bundle["summary"] == case.summary
+
+
+def test_configured_handoff_reply_is_used(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.nodes.handoff.generate_summary",
+        lambda state, customer: "resumen",
+    )
+    custom = "Ya avisamos a un asesor; te escribe en breve."
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            REPLY_TEXTS_KEY,
+            {**REPLY_TEXT_DEFAULTS, "handoff": custom},
+            actor="test",
+        )
+        session.commit()
+    conv_id = _start_conversation()
+
+    replies = _turn(conv_id, "quiero hablar con una persona", "wamid.custom-handoff")
+
+    assert replies == [custom]
 
 
 def test_empty_model_summary_is_persisted_as_fallback(monkeypatch):
