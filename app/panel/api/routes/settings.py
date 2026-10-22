@@ -43,7 +43,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from app.chat.nodes.capture import CAPTURE_FIELD_ORDER
+from app.chat.nodes.capture import CAPTURE_FIELD_LABELS, CAPTURE_FIELDS, CAPTURE_FIELD_ORDER
 from app.models import Settings, User
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
@@ -222,6 +222,47 @@ _VERSION_SCOPES = {
 }
 
 
+def _conduct_payload(session: Session) -> dict:
+    """Effective conduct + the closed option lists the panel renders (S10)."""
+    return {
+        **settings_service.get_conduct(session),
+        "customized": session.get(Settings, settings_service.CHAT_CONDUCT_KEY) is not None,
+        "options": {
+            "fields": [
+                {"value": field, "label": CAPTURE_FIELD_LABELS[field]}
+                for field in CAPTURE_FIELD_ORDER
+            ],
+            "max_preguntas_por_mensaje": list(settings_service.CONDUCT_MAX_PREGUNTAS),
+            "derivaciones": list(settings_service.CONDUCT_DERIVACIONES),
+        },
+    }
+
+
+def _capture_questions_payload(session: Session) -> dict:
+    """Effective wording per field, limited to the effective capture order (S7/S11)."""
+    order = settings_service.get_conduct(session)["orden"]
+    stored = settings_service.get_capture_questions(session)
+    defaults = dict(CAPTURE_FIELDS)
+    return {
+        "questions": {
+            field: stored.get(field) or defaults[field] for field in order
+        },
+        "customized": bool(stored),
+    }
+
+
+def _reply_texts_payload(session: Session) -> dict:
+    """Effective deterministic replies, plus the slots each one accepts (S8)."""
+    return {
+        "texts": settings_service.get_reply_texts(session),
+        "slots": {
+            key: sorted(slots)
+            for key, slots in settings_service.REPLY_TEXT_SLOTS.items()
+        },
+        "customized": session.get(Settings, settings_service.REPLY_TEXTS_KEY) is not None,
+    }
+
+
 def _persona_payload(session: Session) -> dict:
     """Effective persona text (override or bundled file) + whether it is overridden."""
     stored = settings_service.get_persona_texts(session)
@@ -359,6 +400,9 @@ def settings_get(
         },
         "tarifa": settings_service.get_tarifa_precios(session),
         "persona": _persona_payload(session),
+        "conduct": _conduct_payload(session),
+        "capture_questions": _capture_questions_payload(session),
+        "reply_texts": _reply_texts_payload(session),
         "emergency": _emergency_payload(session),
         "coverage": settings_service.get_coverage_communes(session),
         "service_durations": settings_service.get_service_durations(session),

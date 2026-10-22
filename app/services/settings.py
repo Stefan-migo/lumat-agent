@@ -853,8 +853,11 @@ def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, s
 
     `fields` is the effective capture order. Every field needs text because the
     fallback path has nothing else to ask, and an extra key would be dead config
-    that silently outlives the field. Slots use the same vocabulary as the
-    message templates; the LLM-redaction path in F3 fills them in.
+    that silently outlives the field.
+
+    Slots are rejected: nothing renders `capture.questions`, so `{{nombre}}`
+    would reach the client as literal braces. F3 shipped the LLM-redaction path
+    without a reader, so the contract is plain text until a renderer exists.
     """
     if not isinstance(value, dict):
         raise ValueError("capture.questions must be an object")
@@ -872,14 +875,10 @@ def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, s
         raise ValueError(f"capture.questions has unknown fields: {unknown_fields}")
 
     for field in fields:
-        unknown_slots = (
-            set(_MESSAGE_TEMPLATE_SLOT_RE.findall(value[field]))
-            - ALLOWED_MESSAGE_TEMPLATE_SLOTS
-        )
-        if unknown_slots:
+        if "{{" in value[field] or "}}" in value[field]:
             raise ValueError(
-                f"capture.questions[{field!r}] contains unsupported slots: "
-                f"{sorted(unknown_slots)}"
+                f"capture.questions[{field!r}] must not contain '{{{{' or '}}}}': "
+                "the question is sent verbatim"
             )
 
     return {field: value[field] for field in fields}

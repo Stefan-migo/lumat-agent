@@ -36,10 +36,24 @@ def test_validate_accepts_a_complete_map_in_field_order():
     assert validate_capture_questions(COMPLETE, FIELDS) == COMPLETE
 
 
-def test_validate_accepts_the_known_slots():
-    value = {**COMPLETE, "failure": "Hola {{nombre}}, cuéntame la falla."}
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Hola {{nombre}}, cuéntame la falla.",
+        "Hola {{ nombre }}, cuéntame la falla.",
+        "Hola {{nombre del cliente}}, cuéntame la falla.",
+        "Hola {{}}, cuéntame la falla.",
+        "Hola {{ nombre, cuéntame la falla.",
+    ],
+)
+def test_validate_rejects_any_slot_because_the_text_is_sent_verbatim(text):
+    """F6: nothing renders `capture.questions`, so a slot would reach the client
+    as literal braces. T7 allowed them assuming the F3 LLM-redaction path; that
+    path shipped without a reader, so the contract narrows to plain text."""
+    value = {**COMPLETE, "failure": text}
 
-    assert validate_capture_questions(value, FIELDS)["failure"] == "Hola {{nombre}}, cuéntame la falla."
+    with pytest.raises(ValueError):
+        validate_capture_questions(value, FIELDS)
 
 
 @pytest.mark.parametrize(
@@ -53,7 +67,6 @@ def test_validate_accepts_the_known_slots():
         pytest.param({**COMPLETE, "comuna": "   "}, id="blank-text"),
         pytest.param({**COMPLETE, "comuna": 5}, id="non-string-text"),
         pytest.param({**COMPLETE, "telefono": "¿Cuál es tu teléfono?"}, id="unknown-field"),
-        pytest.param({**COMPLETE, "comuna": "¿En qué comuna estás, {{telefono}}?"}, id="unknown-slot"),
     ],
 )
 def test_validate_rejects_malformed_questions(value):
