@@ -34,8 +34,6 @@ from app.chat.nodes.handoff import handoff
 from app.chat.nodes.orchestrate import RESEARCH_TRIAGE, is_tool_whitelisted
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import KbVisibility
-from app.services import kb
 from app.services.realtime import record_activity
 
 logger = logging.getLogger(__name__)
@@ -75,15 +73,10 @@ def _kb_check(state: ConversationState) -> dict:
         return {"next_step": "respond"}
 
     with session_scope() as session:
-        chunks = kb.retrieve(
-            session,
-            text,
-            top_k=kb.DEFAULT_TOP_K,
-            min_sim=kb.DEFAULT_MIN_SIM,
-            # This subgraph is part of the customer-facing chat surface.
-            audience=KbVisibility.CUSTOMER,
-            global_only=True,
-        )
+        # The shared helper (app/chat/nodes/respond.py) tries the customer text
+        # first and falls back to the classified `service` on a miss, so a
+        # wording problem cannot derive a conversation the KB can answer.
+        chunks = respond_node.retrieve_chunks(session, state)
         if chunks:
             record_activity(
                 session,
