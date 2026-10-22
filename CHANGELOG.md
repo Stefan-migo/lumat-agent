@@ -6,6 +6,50 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.6] - 2026-10-22
+
+This release turns the customer chatbot's behavior into configuration: the price
+list, the fixed copy, the conduct rules, the capture questions, and the persona
+with its emergency protocol now live in settings instead of code. It also pins the
+five invariants that must never be switchable and makes retrieval fall back to the
+classified service when the raw message misses.
+
+### Added
+
+- **Price list in settings.** `tarifa.precios` resolves by date in
+  `America/Santiago` and injects only the prices in force as a `<tarifario>` block,
+  so the customer knowledge base no longer carries a price document.
+- **Configurable copy.** The fixed messages, including `greeting_short`, the capture
+  questions, and the booking, cancellation, and derivation texts move to settings on
+  top of the preset-message catalog.
+- **Conduct object.** `chat.conduct` holds the capture order, the wording source
+  (`llm` or `template`), the question budget per message, and the derivation rules,
+  with closed options validated on save.
+- **Editable persona and emergency protocol.** Admins edit both with version, diff,
+  and restore; mustache placeholders and unknown body fields are rejected.
+- **Panel surface for conduct and capture.** The panel exposes conduct, capture
+  questions, flow replies, and service durations, and lists only the derivation
+  rules that have a reader.
+
+### Changed
+
+- **One capture question per message.** Capture asks one field at a time in the
+  configured order, answers a mid-capture question before resuming the field, and
+  derives after a single reformulation.
+- **Customer retrieval order.** The chat embeds the raw message first and falls back
+  to the classified `service` only on a miss, so conversational filler no longer
+  causes a handoff on a question the knowledge base can answer.
+
+### Fixed
+
+- **Spend limit and emergency keywords could be switched off.** A zero limit
+  returned a permanent `0.0` percentage and an empty keyword list compiled a pattern
+  that never matched. Both are refused on write and fail closed on read.
+- **Derivation rules without a reader.** The panel no longer offers the four rules
+  the bot never consults, and legacy rows are sanitized.
+- **Message-catalog slot contract.** The documentation now matches the code: a
+  template skips empty slots instead of failing.
+
 ## [2026.10.5] - 2026-10-17
 
 This release adds configurable email delivery, the technician field workflow, and
