@@ -44,7 +44,6 @@ refs/current/
 # rapso:start
 # Rapsodia managed entries
 .rapsodia-code/
-.opencode/tools/node_modules/
 .engram/
 .obsidian/workspace.json
 .obsidian/workspace
