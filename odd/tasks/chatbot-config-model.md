@@ -126,8 +126,8 @@ Criterio de aceptación: un test de contrato falla si alguna de estas claves apa
 | T9 | Contrato del catálogo de plantillas (sin rediseño) | S9 | inline | ✅ |
 | T10 | Objeto `chat.conduct` + validación | S10 | inline | ✅ |
 | T11 | Orden de captura efectivo desde configuración | S11 | inline | ✅ |
-| T12 | Persona editable con versión/diff/restaurar | S12 | inline | pendiente |
-| T13 | Protocolo de emergencia editable | S13 | inline | pendiente |
+| T12 | Persona editable con versión/diff/restaurar | S12 | inline | ✅ |
+| T13 | Protocolo de emergencia editable | S13 | inline | ✅ |
 | T14 | Una pregunta por mensaje y no repetir | S14 | inline | ✅ |
 | T15 | Cobertura fuera de las siete comunas | S15 | inline | ✅ |
 | T16 | Responder preguntas durante la captura | S16 | inline | ✅ |
@@ -208,3 +208,12 @@ S14 permite dos mensajes en un turno cuando el contenido difiere (informativo + 
 **L0 (2026-10-21, origen):** rapso session `2026-10-21-chatbot-config-brain`. Decisiones D1–D11, tradeoffs, riesgos y preguntas abiertas en `.rapsodia-code/sessions/archived/2026-10-21-chatbot-config-brain/`. Engram: topic `cortex-session/2026-10-21-chatbot-config-brain`.
 
 **Hecho antes de esta feature (PR #643, merge `99e407f8`):** contrato V4↔repo, cinco documentos de KB comercial, persona de Max espejada, suite T01–T12 en verde, fix de conducta (diagnóstico primero, `persona` explícito, voseo, keyword de emergencia).
+
+**L5 (2026-10-22, decisiones de F5 — las seis preguntas del handoff):**
+> 1. si vive en settings. 
+> 2. en F5
+> entran ambos
+
+La persona editable vive en el KV de settings (`persona.texts`), con `agent/personas/*.md` como default; el editor va en el panel dentro de F5, no en F6. Entran los dos archivos (persona y brief) como una sola unidad versionada, porque `respond` concatena el brief al system prompt. Derivadas resueltas sin preguntar: versiones desde el `audit_log` que `set_setting` ya escribía (sin tabla ni puntero nuevo), diff con `difflib` en el backend, y "rompe el contrato" = texto vacío, llaves `{{...}}` en la persona (se carga verbatim, nunca se renderiza) o un mapa incompleto.
+
+**T12/T13 (2026-10-22) — cerrados.** RED primero: `tests/unit/test_persona_config.py` moría en `AttributeError: validate_persona_texts`, y el test de wiring de `respond` seguía usando la persona del archivo. La persona y el protocolo de emergencia son overrides del KV (`persona.texts`, `emergency.protocol`); `prompts.load(key, override=...)` prefiere el texto configurado y mantiene el archivo como default, así que `tests/unit/test_prompts.py:162` (byte-acoplado con `FALLBACKS`) sigue probando el prompt publicado. Restaurar default **borra la fila** (`delete_setting`, acción `settings.reset`), nunca escribe una copia: así sigue al archivo en la próxima release. El historial sale del `audit_log` que `set_setting` ya escribía (`before`/`after` con el valor completo): una versión por estado auditado, versión 0 = default enviado, sin tabla nueva y sin `active_version`. Diff por campo con `difflib`; el backend traduce las claves de la persona (`personas/*.md` → `orchestrator`/`orchestrator_brief`) para que el panel no sepa el layout del repo. `emergency.safety_instructions|contacts|notify_message` se unificaron en `emergency.protocol`: un solo row = una sola versión, y no existían filas (nunca hubo superficie de escritura). El gate determinista no cambia: `emergency.keywords` sigue aparte y `get_emergency_protocol` no participa del disparo. Commits `6ebf8776` (settings + loader + nodos), `50ad6b13` (rutas) y `f6584827` (panel). Verde: `tests/unit` (también DB-free), `tests/integration`, `tests/functional`, `tests/injection`, `npm test` (111 archivos / 1257 tests) y `npm run build`.

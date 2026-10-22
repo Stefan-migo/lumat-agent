@@ -20,6 +20,7 @@ import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
 import { PushSettings } from "./PushSettings";
 import "./Settings.css";
 
@@ -46,7 +47,7 @@ function formatShortDate(value: string) {
 }
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const SECTIONS = [
-  { id: "agent", label: "Agente" }, { id: "messages", label: "Mensajes" },
+  { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "messages", label: "Mensajes" },
   { id: "schedule", label: "Horarios y avisos" }, { id: "tarifa", label: "Tarifas" }, { id: "coverage", label: "Cobertura" }, { id: "costs", label: "Costos" },
   { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
   { id: "email", label: "Correo" },
@@ -63,6 +64,8 @@ type HoursData = SettingsData["hours"];
 type Drafts = {
   scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData; tarifa: SettingsData["tarifa"]; coverage: string;
   conversationLimit: string; dailyLimit: string; metaCost: string;
+  persona: { orchestrator: string; orchestrator_brief: string };
+  emergencyProtocol: { safety_instructions: string; contacts: string; notify_message: string };
 };
 type DraftKey = keyof Drafts;
 const GENERIC_NOTE = "Los cambios se aplican al guardar.";
@@ -77,6 +80,12 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     tarifa: data?.tarifa ?? EMPTY_TARIFA,
     coverage: (data?.coverage ?? []).join("\n"),
     conversationLimit: String(data?.conversation_limit ?? ""), dailyLimit: String(data?.daily_limit ?? ""), metaCost: String(data?.meta_cost ?? ""),
+    persona: { orchestrator: data?.persona?.orchestrator ?? "", orchestrator_brief: data?.persona?.orchestrator_brief ?? "" },
+    emergencyProtocol: {
+      safety_instructions: (data?.emergency?.safety_instructions ?? []).join("\n"),
+      contacts: (data?.emergency?.contacts ?? []).join("\n"),
+      notify_message: data?.emergency?.notify_message ?? "",
+    },
   };
 }
 
@@ -261,6 +270,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
+  const [personaVersion, setPersonaVersion] = useState(0);
+  const [emergencyVersion, setEmergencyVersion] = useState(0);
   const [saveErrorDetail, setSaveErrorDetail] = useState<string | null>(null);
   const [modelApiKeyStatus, setModelApiKeyStatus] = useState<ModelApiKeyStatus | undefined>(data?.model_api_key);
   const [modelApiKey, setModelApiKey] = useState("");
@@ -385,6 +396,20 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     }
     void save("scope", "/panel/api/settings/scope", { rules }, draft.scope);
   };
+  const savePersona = async () => {
+    if (!draft.persona.orchestrator.trim() || !draft.persona.orchestrator_brief.trim()) { setSaveState("validation"); return; }
+    await save("persona", "/panel/api/settings/persona", draft.persona, draft.persona);
+    setPersonaVersion((current) => current + 1);
+  };
+  const saveEmergencyProtocol = async () => {
+    const instructions = draft.emergencyProtocol.safety_instructions.split("\n").map((value) => value.trim()).filter(Boolean);
+    const contacts = draft.emergencyProtocol.contacts.split("\n").map((value) => value.trim()).filter(Boolean);
+    const notify = draft.emergencyProtocol.notify_message.trim();
+    if (!instructions.length || !contacts.length || !notify) { setSaveState("validation"); return; }
+    const saved = { safety_instructions: instructions.join("\n"), contacts: contacts.join("\n"), notify_message: notify };
+    await save("emergencyProtocol", "/panel/api/settings/emergency", { safety_instructions: instructions, contacts, notify_message: notify }, saved);
+    setEmergencyVersion((current) => current + 1);
+  };
   const snapshot = data?.snapshot;
   const state = saveState ?? pageState;
   const retry = onRetry ?? fetched.retry;
@@ -426,6 +451,30 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               </div>
             </Card>
           </div>
+          <div className="settings-agent__row">
+            <Card title="Protocolo de emergencia" description="Lo que Max responde cuando detecta riesgo. La detección de la emergencia no depende de este texto: se revisa antes, en cada mensaje." icon={ShieldAlert} headerAction={data.emergency?.customized ? <Badge tone="success">Personalizado</Badge> : <Badge tone="neutral">Original</Badge>}>
+              <div className="settings-agent__form">
+                <Textarea label="Instrucciones de seguridad" rows={6} value={draft.emergencyProtocol.safety_instructions} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, safety_instructions: event.target.value })} />
+                <p className="settings-agent__helper">Una instrucción por línea.</p>
+                <Textarea label="Contactos de emergencia" rows={4} value={draft.emergencyProtocol.contacts} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, contacts: event.target.value })} />
+                <p className="settings-agent__helper">Un contacto por línea.</p>
+                <Textarea label="Mensaje al notificar" rows={3} value={draft.emergencyProtocol.notify_message} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, notify_message: event.target.value })} />
+                <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente aviso de emergencia.")}<Button disabled={saving("emergencyProtocol") || !draft.emergencyProtocol.notify_message.trim() || !draft.emergencyProtocol.safety_instructions.trim() || !draft.emergencyProtocol.contacts.trim()} onClick={() => void saveEmergencyProtocol()}>Guardar protocolo</Button></div>
+              </div>
+              <SettingsVersionHistory scope="emergency" refreshToken={emergencyVersion} onRestored={retry} />
+            </Card>
+          </div>
+        </> : null}
+        {active === "persona" ? <>
+          <Card title="Persona del asistente" description="El texto que define quién es Max y cómo conversa. Se aplica en el siguiente mensaje." icon={UserRound} headerAction={data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>
+            <div className="settings-agent__form">
+              <Textarea label="Texto de la persona" rows={18} value={draft.persona.orchestrator} onChange={(event) => update("persona", { ...draft.persona, orchestrator: event.target.value })} />
+              <Textarea label="Instrucción de brevedad" rows={4} value={draft.persona.orchestrator_brief} onChange={(event) => update("persona", { ...draft.persona, orchestrator_brief: event.target.value })} />
+              <p className="settings-agent__helper">Los datos variables se inyectan aparte: no escribas llaves como <code>{"{{nombre}}"}</code> en la persona.</p>
+              <div className="settings-agent__footer">{footer("Una persona que rompe el contrato no se guarda.")}<Button disabled={saving("persona") || !draft.persona.orchestrator.trim() || !draft.persona.orchestrator_brief.trim()} onClick={() => void savePersona()}>Guardar persona</Button></div>
+            </div>
+            <SettingsVersionHistory scope="persona" refreshToken={personaVersion} onRestored={retry} />
+          </Card>
         </> : null}
         {active === "messages" ? <>
           <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
