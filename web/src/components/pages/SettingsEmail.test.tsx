@@ -16,6 +16,28 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   conversation_limit: 4, daily_limit: 20, meta_cost: 0.05,
   persona: { orchestrator: "Eres Max.", orchestrator_brief: "Sé breve.", customized: false },
   emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },
+  conduct: {
+    orden: ["failure", "comuna", "name"],
+    redaccion: "llm",
+    max_preguntas_por_mensaje: 1,
+    derivaciones: ["cobertura"],
+    customized: false,
+    options: {
+      fields: [
+        { value: "failure", label: "Problema" },
+        { value: "equipment", label: "Equipo" },
+        { value: "comuna", label: "Comuna" },
+        { value: "availability", label: "Disponibilidad" },
+        { value: "name", label: "Nombre" },
+        { value: "email", label: "Correo" },
+        { value: "address", label: "Dirección" },
+      ],
+      max_preguntas_por_mensaje: [1, 2],
+      derivaciones: ["cobertura"],
+    },
+  },
+  capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },
+  reply_texts: { texts: { booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual." }, slots: { booking_offer: ["opciones"], manage_kept: [] }, customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });

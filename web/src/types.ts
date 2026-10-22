@@ -540,6 +540,30 @@ export interface Settings {
     notify_message: string;
     customized: boolean;
   };
+  /** S10/S18: effective conduct plus the closed option lists the panel renders. */
+  conduct: {
+    orden: string[];
+    redaccion: string;
+    max_preguntas_por_mensaje: number;
+    derivaciones: string[];
+    customized: boolean;
+    options: {
+      fields: Array<{ value: string; label: string }>;
+      max_preguntas_por_mensaje: number[];
+      derivaciones: string[];
+    };
+  };
+  /** S7/S18: effective capture-question wording, limited to the effective order. */
+  capture_questions: {
+    questions: Record<string, string>;
+    customized: boolean;
+  };
+  /** S8/S18: effective deterministic replies plus the slots each key accepts. */
+  reply_texts: {
+    texts: Record<string, string>;
+    slots: Record<string, string[]>;
+    customized: boolean;
+  };
 }
 
 /** One audited state of an editable scope (S12/S13). `null` = built-in default. */

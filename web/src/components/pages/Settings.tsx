@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -47,7 +47,7 @@ function formatShortDate(value: string) {
 }
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const SECTIONS = [
-  { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "messages", label: "Mensajes" },
+  { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "conduct", label: "Conducta" }, { id: "messages", label: "Mensajes" },
   { id: "schedule", label: "Horarios y avisos" }, { id: "tarifa", label: "Tarifas" }, { id: "coverage", label: "Cobertura" }, { id: "costs", label: "Costos" },
   { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
   { id: "email", label: "Correo" },
@@ -60,12 +60,55 @@ const MESSAGE_TEMPLATES = [
   { id: "farewell", label: "Despedida", description: "Cierre de conversación", icon: DoorOpen },
   { id: "out_of_hours", label: "Fuera de horario", description: "Atención no disponible", icon: Clock3 },
 ] as const;
+const DERIVACION_LABELS: Record<string, string> = {
+  cobertura: "Comuna fuera de cobertura",
+  pedido_explicito: "El cliente pide hablar con una persona",
+  garantia: "Consulta de garantía",
+  servicio_sin_tarifa: "Servicio sin tarifa publicada",
+  presupuesto_especial: "Presupuesto especial",
+};
+const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
+  { title: "Agendar", keys: ["booking_offer", "booking_unclear", "booking_confirmed"] },
+  { title: "Gestionar una visita", keys: [
+    "manage_no_visits", "manage_confirm_cancel", "manage_select", "manage_slots_offer",
+    "manage_expired", "manage_appointment_unclear", "manage_slots_unclear", "manage_kept",
+    "manage_reschedule_unavailable", "manage_rescheduled", "manage_cancel_prompt",
+    "manage_cancel_unavailable", "manage_cancelled",
+  ] },
+  { title: "Derivar a una persona", keys: ["handoff"] },
+  { title: "Captura", keys: ["capture_evidence", "capture_consent"] },
+];
+const REPLY_TEXT_LABELS: Record<string, string> = {
+  booking_offer: "Oferta de horarios",
+  booking_unclear: "No se entendió el horario pedido",
+  booking_confirmed: "Visita agendada",
+  manage_no_visits: "No tiene visitas",
+  manage_confirm_cancel: "Confirmar la cancelación",
+  manage_select: "Elegir una visita",
+  manage_slots_offer: "Ofrecer nuevos horarios",
+  manage_expired: "La visita ya pasó",
+  manage_appointment_unclear: "No se entendió la visita",
+  manage_slots_unclear: "No se entendió el horario",
+  manage_kept: "La visita sigue igual",
+  manage_reschedule_unavailable: "Sin horarios para reagendar",
+  manage_rescheduled: "Visita reagendada",
+  manage_cancel_prompt: "Pedir confirmación para cancelar",
+  manage_cancel_unavailable: "No se puede cancelar",
+  manage_cancelled: "Visita cancelada",
+  handoff: "Derivación a un asesor",
+  capture_evidence: "Pedir evidencia",
+  capture_consent: "Pedir consentimiento",
+};
 type HoursData = SettingsData["hours"];
 type Drafts = {
   scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData; tarifa: SettingsData["tarifa"]; coverage: string;
   conversationLimit: string; dailyLimit: string; metaCost: string;
   persona: { orchestrator: string; orchestrator_brief: string };
   emergencyProtocol: { safety_instructions: string; contacts: string; notify_message: string };
+  conduct: { orden: string[]; redaccion: string; max_preguntas_por_mensaje: number; derivaciones: string[] };
+  captureQuestions: Record<string, string>;
+  replyTexts: Record<string, string>;
+  serviceDurations: Array<{ name: string; minutes: string }>;
 };
 type DraftKey = keyof Drafts;
 const GENERIC_NOTE = "Los cambios se aplican al guardar.";
@@ -86,6 +129,15 @@ function draftsFrom(data?: SettingsData | null): Drafts {
       contacts: (data?.emergency?.contacts ?? []).join("\n"),
       notify_message: data?.emergency?.notify_message ?? "",
     },
+    conduct: {
+      orden: data?.conduct?.orden ?? [],
+      redaccion: data?.conduct?.redaccion ?? "llm",
+      max_preguntas_por_mensaje: data?.conduct?.max_preguntas_por_mensaje ?? 1,
+      derivaciones: data?.conduct?.derivaciones ?? [],
+    },
+    captureQuestions: data?.capture_questions?.questions ?? {},
+    replyTexts: data?.reply_texts?.texts ?? {},
+    serviceDurations: Object.entries(data?.service_durations ?? {}).map(([name, minutes]) => ({ name, minutes: String(minutes) })),
   };
 }
 
@@ -105,6 +157,13 @@ function isTarifaValid(tarifa: SettingsData["tarifa"]) {
 function isValidNonNegative(value: string) {
   // Reference bounds are pending the owner's visual pass; accept any finite non-negative number.
   return value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
+function isDurationListValid(entries: Array<{ name: string; minutes: string }>) {
+  const valid = entries.every(({ name, minutes }) => name.trim() !== ""
+    && Number.isInteger(Number(minutes)) && Number(minutes) >= 1 && Number(minutes) <= 1440);
+  const normalized = entries.map(({ name }) => name.trim().toLowerCase());
+  return entries.length > 0 && valid && new Set(normalized).size === normalized.length;
 }
 
 function sameValue(left: unknown, right: unknown) {
@@ -252,6 +311,38 @@ export function AssistantCapabilitiesView({ capabilities }: { capabilities: Assi
       <div className="settings-capabilities__path-section"><h3>Prompts</h3><p>Archivos de prompts que utiliza el asistente.</p>{capabilities.prompts.length ? capabilities.prompts.map((path) => <code className="settings-capabilities__path" key={path}>{path}</code>) : <code className="settings-capabilities__path">Sin configurar</code>}</div></section>
       <p className="settings-capabilities__config-footer">Configuración técnica del asistente.</p>
     </Card>
+  </div>;
+}
+
+function ConductOrderEditor({ order, options, onChange }: {
+  order: string[];
+  options: SettingsData["conduct"]["options"];
+  onChange: (order: string[]) => void;
+}) {
+  const label = (value: string) => options.fields.find((field) => field.value === value)?.label ?? value;
+  const move = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= order.length) return;
+    const next = [...order];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  };
+  const remaining = options.fields.filter((field) => !order.includes(field.value));
+
+  return <div className="settings-conduct__order">
+    <ol className="settings-conduct__list">
+      {order.map((field, index) => <li className="settings-conduct__item" key={field}>
+        <span className="settings-conduct__label">{label(field)}</span>
+        <div className="settings-conduct__actions">
+          <Button variant="tertiary" aria-label={`Subir ${label(field)}`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden="true" /></Button>
+          <Button variant="tertiary" aria-label={`Bajar ${label(field)}`} disabled={index === order.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden="true" /></Button>
+          <Button variant="tertiary" aria-label={`Quitar ${label(field)}`} disabled={order.length === 1} onClick={() => onChange(order.filter((each) => each !== field))}><Trash2 aria-hidden="true" /></Button>
+        </div>
+      </li>)}
+    </ol>
+    {remaining.length ? <div className="settings-conduct__add">
+      <Menu label="Agregar campo" ariaLabel="Agregar campo" showChevron items={remaining.map((field) => ({ value: field.value, label: field.label }))} onSelect={(value) => onChange([...order, value])} />
+    </div> : null}
   </div>;
 }
 
@@ -410,6 +501,27 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     await save("emergencyProtocol", "/panel/api/settings/emergency", { safety_instructions: instructions, contacts, notify_message: notify }, saved);
     setEmergencyVersion((current) => current + 1);
   };
+  const saveConduct = async () => {
+    if (!draft.conduct.orden.length || !draft.conduct.derivaciones.length) { setSaveState("validation"); return; }
+    await save("conduct", "/panel/api/settings/conduct", { conduct: draft.conduct }, draft.conduct);
+    // The capture-question form is keyed by the order this save may have changed.
+    retry();
+  };
+  const saveCaptureQuestions = async () => {
+    const values = Object.values(draft.captureQuestions);
+    if (!values.length || values.some((value) => !value.trim()) || values.some((value) => value.includes("{{") || value.includes("}}"))) { setSaveState("validation"); return; }
+    await save("captureQuestions", "/panel/api/settings/capture-questions", { questions: draft.captureQuestions }, draft.captureQuestions);
+  };
+  const saveReplyTexts = async () => {
+    if (Object.values(draft.replyTexts).some((value) => !value.trim())) { setSaveState("validation"); return; }
+    await save("replyTexts", "/panel/api/settings/reply-texts", { texts: draft.replyTexts }, draft.replyTexts);
+  };
+  const saveDurations = async () => {
+    if (!isDurationListValid(draft.serviceDurations)) { setSaveState("validation"); return; }
+    const map: Record<string, number> = {};
+    for (const { name, minutes } of draft.serviceDurations) map[name.trim()] = Number(minutes);
+    await save("serviceDurations", "/panel/api/settings/durations", { service_durations: map }, draft.serviceDurations);
+  };
   const snapshot = data?.snapshot;
   const state = saveState ?? pageState;
   const retry = onRetry ?? fetched.retry;
@@ -476,6 +588,34 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             <SettingsVersionHistory scope="persona" refreshToken={personaVersion} onRestored={retry} />
           </Card>
         </> : null}
+        {active === "conduct" ? <>
+          <Card title="Conducta de la conversación" description="Qué datos pide el bot, en qué orden y cuándo deriva a una persona." icon={SlidersHorizontal} headerAction={data.conduct?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>
+            <h3 className="settings-conduct__title">Orden de captura</h3>
+            <p className="settings-agent__helper">Un campo que quitas no se vuelve a preguntar. El nombre, el correo y la dirección van siempre después de la disponibilidad.</p>
+            <ConductOrderEditor order={draft.conduct.orden} options={data.conduct.options} onChange={(orden) => update("conduct", { ...draft.conduct, orden })} />
+            <div className="settings-conduct__row">
+              <span className="settings-conduct__row-label">Preguntas por mensaje</span>
+              <Menu label={String(draft.conduct.max_preguntas_por_mensaje)} ariaLabel="Preguntas por mensaje" showChevron items={data.conduct.options.max_preguntas_por_mensaje.map((value) => ({ value: String(value), label: value === 1 ? "Una pregunta" : `${value} preguntas` }))} onSelect={(value) => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Number(value) })} />
+            </div>
+            <fieldset className="settings-conduct__derivaciones">
+              <legend>Derivar a una persona cuando</legend>
+              {data.conduct.options.derivaciones.map((rule) => <label className="settings-conduct__check" key={rule}>
+                <input type="checkbox" checked={draft.conduct.derivaciones.includes(rule)} onChange={(event) => update("conduct", {
+                  ...draft.conduct,
+                  derivaciones: event.target.checked ? [...draft.conduct.derivaciones, rule] : draft.conduct.derivaciones.filter((each) => each !== rule),
+                })} />
+                <span>{DERIVACION_LABELS[rule] ?? rule}</span>
+              </label>)}
+            </fieldset>
+            <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
+            <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente mensaje.")}<Button disabled={saving("conduct") || !draft.conduct.orden.length || !draft.conduct.derivaciones.length} onClick={() => void saveConduct()}>Guardar conducta</Button></div>
+          </Card>
+          <Card title="Preguntas de captura" description="El texto exacto que recibe el cliente para cada dato. Se envía tal cual: sin llaves.">
+            <p className="settings-agent__helper">El orden lo define la tarjeta de arriba. Guarda el orden antes de editar los textos.</p>
+            {Object.entries(draft.captureQuestions).map(([field, text]) => <Textarea key={field} label={data.conduct.options.fields.find((each) => each.value === field)?.label ?? field} rows={2} value={text} onChange={(event) => update("captureQuestions", { ...draft.captureQuestions, [field]: event.target.value })} />)}
+            <div className="settings-agent__footer">{footer("El cliente recibe este texto literal.")}<Button disabled={saving("captureQuestions") || Object.values(draft.captureQuestions).some((value) => !value.trim() || value.includes("{{") || value.includes("}}"))} onClick={() => void saveCaptureQuestions()}>Guardar preguntas</Button></div>
+          </Card>
+        </> : null}
         {active === "messages" ? <>
           <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
            <Card title="Mensajes del asistente" className="settings-messages__editor">
@@ -516,11 +656,42 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                <Button disabled={saving("templates") || draft.templates.some(({ id, text }) => !id.trim() || !text.trim())} onClick={() => void save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates)}>Guardar respuestas</Button>
              </div>
            </Card>
+           <Card title="Respuestas del flujo" description="Los textos deterministas de agenda, cancelación, reagendamiento y derivación. No pasan por el modelo.">
+             <p className="settings-messages__helper">Cada respuesta acepta solo sus propios datos; debajo de cada campo ves los que usa.</p>
+             {REPLY_TEXT_GROUPS.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
+               <div className="settings-messages__reply-group">
+                 {group.keys.map((key) => {
+                   const slots = data.reply_texts?.slots?.[key] ?? [];
+                   return <div className="settings-messages__reply" key={key}>
+                     <Textarea label={REPLY_TEXT_LABELS[key] ?? key} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
+                     {slots.length ? <p className="settings-agent__helper">Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></p> : <p className="settings-agent__helper">Sin datos variables.</p>}
+                   </div>;
+                 })}
+               </div>
+             </Accordion>)}
+             <div className="settings-messages__footer">{footer()}<Button disabled={saving("replyTexts") || Object.values(draft.replyTexts).some((value) => !value.trim())} onClick={() => void saveReplyTexts()}>Guardar respuestas del flujo</Button></div>
+           </Card>
         </> : null}
-        {active === "schedule" ? <div className="settings-hours__layout">
+        {active === "schedule" ? <>
+        <div className="settings-hours__layout">
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
           <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
-        </div> : null}
+        </div>
+          <Card title="Duraciones por servicio" description="Cuánto ocupa cada servicio en la agenda. El nombre debe coincidir con el servicio que se conversa.">
+            <div className="settings-conduct__durations">
+              {draft.serviceDurations.map((entry, index) => <div className="settings-conduct__duration" key={index}>
+                <Input label={`Servicio ${index + 1}`} value={entry.name} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, name: event.target.value } : item))} />
+                <Input label={`Minutos ${index + 1}`} inputMode="numeric" value={entry.minutes} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, minutes: event.target.value } : item))} />
+                <Button variant="tertiary" aria-label={`Eliminar servicio ${index + 1}`} onClick={() => update("serviceDurations", draft.serviceDurations.filter((_, current) => current !== index))}><Trash2 aria-hidden="true" /></Button>
+              </div>)}
+            </div>
+            <div className="settings-agent__footer">
+              <Button variant="tertiary" onClick={() => update("serviceDurations", [...draft.serviceDurations, { name: "", minutes: "60" }])}><Plus aria-hidden="true" />Agregar servicio</Button>
+              <Button disabled={saving("serviceDurations") || !isDurationListValid(draft.serviceDurations)} onClick={() => void saveDurations()}>Guardar duraciones</Button>
+            </div>
+            {footer("Entre 1 y 1440 minutos por servicio, sin nombres repetidos.")}
+          </Card>
+        </> : null}
         {active === "tarifa" ? <>
           <Card title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins}>
             <div className="settings-agent__layout">
