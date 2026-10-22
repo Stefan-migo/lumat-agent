@@ -102,6 +102,57 @@ def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
 
 
+def retrieval_queries(state: ConversationState) -> list[str]:
+    """KB query strings for this turn, most conservative first (KB-2).
+
+    The customer's text is tried first so every turn that already finds a chunk
+    answers exactly as before; the classifier's normalized `service` is the
+    fallback for a miss. Measured on the seeded customer KB with the real
+    embedder: "me dieron tu contacto para una mantencion de caldera" scores
+    0.2686 raw — below `DEFAULT_MIN_SIM` — against 0.6070 as `service`, so the
+    polite filler was the whole difference between answering and handing off.
+    The raw text keeps the first slot because it carries the aspect the customer
+    asked about (garantía, plazo): "tienen garantia por la mantencion?" scores
+    0.510 raw against 0.341 as `service`.
+
+    `state.case` is refreshed by `classify_intent` on every classified turn; an
+    `unknown` turn writes no case, so a `service` there belongs to an earlier
+    topic and must not steer this turn's retrieval.
+    """
+    text = _current_text(state)
+    queries = [text] if text else []
+    if state.intent in (None, "unknown"):
+        return queries
+    service = (getattr(state, "case", None) or {}).get("service")
+    if isinstance(service, str):
+        service = service.strip()
+        if service and service.casefold() not in {query.casefold() for query in queries}:
+            queries.append(service)
+    return queries
+
+
+def retrieve_chunks(session, state: ConversationState) -> list[dict]:
+    """First non-empty KB retrieval across `retrieval_queries` (no LLM spend).
+
+    A miss on the customer text costs one more local embed + pgvector query,
+    never a model call: the fallback exists so a wording problem cannot become a
+    human handoff while the KB holds the answer.
+    """
+    for query in retrieval_queries(state):
+        chunks = kb.retrieve(
+            session,
+            query,
+            top_k=kb.DEFAULT_TOP_K,
+            min_sim=kb.DEFAULT_MIN_SIM,
+            # Customer chat may use customer-audience documents only.
+            audience=KbVisibility.CUSTOMER,
+            global_only=True,
+        )
+        if chunks:
+            return chunks
+    return []
+
+
 def log_unresolved(session, message_id: int, context: str) -> None:
     """CM-6: mark an inbound message as unresolved (question+context+ts)."""
     message = session.get(Message, message_id)
@@ -239,15 +290,7 @@ def respond(state: ConversationState) -> dict:
 
     with session_scope() as session:
         try:
-            chunks = kb.retrieve(
-                session,
-                text,
-                top_k=kb.DEFAULT_TOP_K,
-                min_sim=kb.DEFAULT_MIN_SIM,
-                # Customer chat may use customer-audience documents only.
-                audience=KbVisibility.CUSTOMER,
-                global_only=True,
-            )
+            chunks = retrieve_chunks(session, state)
         except Exception as error:
             # Unlike the panel this path records no evidence entry, so the log is
             # the only record of the outage: keep the traceback.

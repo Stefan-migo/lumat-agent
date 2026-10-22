@@ -122,7 +122,9 @@ def test_kb_hit_persists_kb_retrieved_activity(migrated_db, monkeypatch):
         customer, conversation = _conversation(session)
         session.commit()
         monkeypatch.setattr(research_triage, "_sub_whitelist", lambda: ("kb.retrieve",))
-        monkeypatch.setattr(research_triage.kb, "retrieve", lambda *args, **kwargs: [object()])
+        # Patch the service module itself: the retrieval call now lives in the
+        # shared `respond.retrieve_chunks` helper (research_triage delegates to it).
+        monkeypatch.setattr("app.services.kb.retrieve", lambda *args, **kwargs: [object()])
         state = ConversationState(
             customer_id=customer.id,
             conversation_id=conversation.id,
