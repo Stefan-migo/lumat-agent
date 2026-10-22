@@ -137,6 +137,22 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Gasto actual" })).toBeInTheDocument();
   });
 
+  it("cannot save a spend limit of zero (S19: 0 would disable the cost gate)", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Costos" }));
+    const conversationLimit = screen.getByLabelText("Límite por conversación");
+    const saveLimits = screen.getByRole("button", { name: "Guardar límites" });
+
+    await user.clear(conversationLimit);
+    await user.type(conversationLimit, "0");
+    expect(saveLimits).toBeDisabled();
+
+    await user.clear(conversationLimit);
+    await user.type(conversationLimit, "1.5");
+    expect(saveLimits).toBeEnabled();
+  });
+
   it("renders the tone selector and save action together", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
