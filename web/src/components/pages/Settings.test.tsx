@@ -16,6 +16,28 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   conversation_limit: 4, daily_limit: 20, meta_cost: 0.05,
   persona: { orchestrator: "Eres Max.", orchestrator_brief: "Sé breve.", customized: false },
   emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },
+  conduct: {
+    orden: ["failure", "comuna", "name"],
+    redaccion: "llm",
+    max_preguntas_por_mensaje: 1,
+    derivaciones: ["cobertura"],
+    customized: false,
+    options: {
+      fields: [
+        { value: "failure", label: "Problema" },
+        { value: "equipment", label: "Equipo" },
+        { value: "comuna", label: "Comuna" },
+        { value: "availability", label: "Disponibilidad" },
+        { value: "name", label: "Nombre" },
+        { value: "email", label: "Correo" },
+        { value: "address", label: "Dirección" },
+      ],
+      max_preguntas_por_mensaje: [1, 2],
+      derivaciones: ["cobertura", "pedido_explicito", "garantia", "servicio_sin_tarifa", "presupuesto_especial"],
+    },
+  },
+  capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },
+  reply_texts: { texts: { booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual." }, slots: { booking_offer: ["opciones"], manage_kept: [] }, customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });
@@ -26,7 +48,7 @@ describe("Settings", () => {
 
   it("renders every section and selects Agente by default", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Persona", "Mensajes", "Horarios y avisos", "Tarifas", "Cobertura", "Costos", "Capacidades", "API key de modelos", "Correo"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Persona", "Conducta", "Mensajes", "Horarios y avisos", "Tarifas", "Cobertura", "Costos", "Capacidades", "API key de modelos", "Correo"]);
     expect(screen.getByRole("tab", { name: "Agente" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
   });
@@ -308,6 +330,80 @@ describe("Settings", () => {
         contacts: ["Bomberos 132."],
         notify_message: "Notificado.",
       }),
+    })));
+  });
+  it("reorders the capture fields and saves the conduct object", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Conducta" }));
+
+    await user.click(screen.getByRole("button", { name: "Bajar Problema" }));
+    await user.click(screen.getByRole("button", { name: "Guardar conducta" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ conduct: { orden: ["comuna", "failure", "name"], redaccion: "llm", max_preguntas_por_mensaje: 1, derivaciones: ["cobertura"] } }),
+    })));
+  });
+
+  it("saves the capture-question wording exactly as typed", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Conducta" }));
+
+    const comuna = screen.getByLabelText("Comuna");
+    expect(comuna).toHaveValue("¿En qué comuna estás?");
+    fireEvent.change(comuna, { target: { value: "¿En qué comuna queda tu casa?" } });
+    await user.click(screen.getByRole("button", { name: "Guardar preguntas" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/capture-questions", expect.objectContaining({
+      body: JSON.stringify({ questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna queda tu casa?", name: "¿Cuál es tu nombre?" } }),
+    })));
+  });
+
+  it("blocks a capture question that carries braces", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Conducta" }));
+
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "{{nombre}}, ¿cómo te llamas?" } });
+
+    expect(screen.getByRole("button", { name: "Guardar preguntas" })).toBeDisabled();
+  });
+
+  it("saves one deterministic reply from its group", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await user.click(screen.getByRole("button", { name: /Agendar/ }));
+
+    const offer = screen.getByLabelText("Oferta de horarios");
+    expect(offer).toHaveValue("Horarios: {{opciones}}");
+    expect(screen.getByText("{{opciones}}")).toBeInTheDocument();
+    fireEvent.change(offer, { target: { value: "Estos horarios tengo: {{opciones}}" } });
+    await user.click(screen.getByRole("button", { name: "Guardar respuestas del flujo" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
+      body: JSON.stringify({ texts: { booking_offer: "Estos horarios tengo: {{opciones}}", manage_kept: "Quedó igual." } }),
+    })));
+  });
+
+  it("adds a service duration and saves the map", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Horarios y avisos" }));
+
+    await user.click(screen.getByRole("button", { name: "Agregar servicio" }));
+    fireEvent.change(screen.getByLabelText("Servicio 1"), { target: { value: "Calefont" } });
+    fireEvent.change(screen.getByLabelText("Minutos 1"), { target: { value: "90" } });
+    await user.click(screen.getByRole("button", { name: "Guardar duraciones" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/durations", expect.objectContaining({
+      body: JSON.stringify({ service_durations: { Calefont: 90 } }),
     })));
   });
 });
