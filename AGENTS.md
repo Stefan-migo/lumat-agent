@@ -4,46 +4,70 @@ gentle-ai:persona
 ## Rules
 
 - Never add "Co-Authored-By" or AI attribution to commits. Use conventional commits only.
-- This project uses the Rapsodia skill pack. The orchestrator loads rapso-persona automatically at session start.
-- For detailed persona rules, see .opencode/skills/rapso-persona/SKILL.md
+- This project runs on Pi through Gentle Shell. `gentle-ai` is the orchestrator and `gentle-engram`
+  provides memory; this project keeps its own skills, not a persona pack.
+- If `.rapsodia-code/prelude.md` exists when a session starts, read it before the first task: it
+  holds scored Engram context, the Graphify report, and the project manifest summary.
+- `rapso` prepares context; it never owns the session. `gentle-engram` opens the session, saves
+  summaries, and captures discoveries.
+
+## Runtime — Pi / Gentle Shell
+
+| Resource | Location |
+|---|---|
+| This workflow contract | `AGENTS.md` — Pi reads it natively |
+| Project skills | `.agents/skills/` |
+| Project extensions | `.pi/extensions/` — loaded only after project trust is granted |
+| Optional project MCP servers | `.pi/mcp.json` — read only after project trust is granted |
+| Local ignored state | `.rapsodia-code/` (manifest, sessions, prelude) |
+
+In a trusted project, `.pi/extensions/rapsodia-context.ts` refreshes `.rapsodia-code/prelude.md` in
+the background on session start and points the first user run at it. Without project trust the
+extension does not load, so run `rapso context` yourself when the prelude is stale; it only rewrites
+the prelude, opening no session and launching no agent.
 
 ## Contextual Skill Loading (MANDATORY)
 
-At session start, the orchestrator checks for `.opencode/skills/rapso-persona/SKILL.md`
-and loads it automatically. That skill defines:
-- Senior architect identity (Rioplatense Spanish in chat, English in artifacts)
-- Ponytail over-engineering rules (YAGNI → stdlib → native → one line → minimum)
-- 5-Step Execution Gate (Graph Check → Atomic Commit → Verify → Spec Check → Finalize)
-- Graphify knowledge graph integration
-- SDD pipeline hooks: Graphify in explore/design, Ponytail in propose/design/tasks/pre-apply
-- See rapso-persona/SKILL.md → "SDD Pipeline Integration" section
+Pi discovers the project's skills in `.agents/skills/`. Load the one that matches the work instead of
+carrying every rule in this file:
+
+| Skill | Load it when |
+|---|---|
+| `rapso-session` | the conversation turns to analysis, decisions, brainstorming, or planning before ODD |
+| `design-system` | building or reviewing UI |
+| `component-adapter` | wiring a component to the project's data and API layer |
+| `design-agent-lead` | coordinating a multi-part frontend change |
+| `panel-section-analysis` | analysing or changing a panel section |
+
+The retired Rapsodia persona, Ponytail pack and SDD pipeline are **not** part of this runtime. There
+is no `rapso-persona` skill: this file plus the skills above carry what the project needs.
 
 ## Graphify — Mandatory Graph Check
 
 Every agent that reads, designs, or writes code in this project MUST pass the
-Graph Check before touching files (rapso-persona 5-Step Execution Gate, Step 1):
+Graph Check before touching files (ODD 5-Step Execution Gate, Step 1):
 
 1. The knowledge graph lives in `graphify-out/` (`graph.json` + `GRAPH_REPORT.md`).
-   If it is missing or stale, build it FIRST with the `/graphify` skill
-   (`graphify <project-root>` or `graphify <project-root> --update`). A missing
-   graph is a blocker — report `blocked`, never skip.
+   If it is missing or stale, build it FIRST with `graphify .` (or `graphify . --update`).
+   A missing graph is a blocker — report `blocked`, never skip.
 2. Before each task, run `graphify query "<area>"` and `graphify path <A> <B>`
    on the modules you will touch, and read `graphify-out/GRAPH_REPORT.md` for
    god nodes and communities.
 3. Queries are mandatory on every task (step 2). The graph refresh with
-   `graphify <project-root> --update` runs ONCE per work session, when the
-   session closes — never after every batch or commit.
+   `graphify . --update` runs ONCE per work session, when the session closes — never after every
+   batch or commit.
 4. Record the graph nodes/edges consulted in every apply-progress, design, and
    exploration output.
 
 ### rapso-session — Planning Mode
 
-A standalone skill for structured planning discussions. Load it when the conversation shifts to analysis, decisions, brainstorming, or pre-SDD work.
+A standalone skill for structured planning discussions. Load it when the conversation shifts to
+analysis, decisions, brainstorming, or pre-ODD work.
 
-- **Trigger**: `/rapso-session` or natural planning-mode conversation
-- **Location**: `.opencode/skills/rapso-session/SKILL.md`
-- **Protocol**: session-init → discuss (auto-capture decisions/tradeoffs/risks to Engram) → session-close (consolidated report + SDD handoff)
-- See rapso-session/SKILL.md for the full protocol
+- **Trigger**: `/skill:rapso-session` or a natural planning-mode conversation
+- **Location**: `.agents/skills/rapso-session/SKILL.md`
+- **Protocol**: session-init → discuss (auto-capture decisions/tradeoffs/risks to Engram) →
+  session-close (consolidated report that seeds `odd/tasks/<feature>.md`)
 
 <!-- rapso:start -->
 ## ODD Worktrees
@@ -53,10 +77,12 @@ During ODD's `Classify` step, substantial work means two or more meaningful impl
 ### 5-Step Execution Gate (MANDATORY)
 ```
 Step 1: GRAPH CHECK — query_graph before editing
-Step 2: ATOMIC COMMIT — one concern per commit, ≤5 files
-Step 3: VERIFY — lint + typecheck + tests (block on failure)
-Step 4: SPEC CHECK — /sdd-verify after completion
-Step 5: FINALIZE — mem_save + rapso close --message "<summary>"
+Step 2: ATOMIC COMMIT — one concern per commit, <=5 files
+Step 3: VERIFY — this project's gates: backend `uv run pytest tests/` (needs the pgvector Postgres),
+        panel `npm ci` -> `npm run build` (tsc -b) -> `npm test`. Report the exact command and its
+        real output; never infer a pass from intent
+Step 4: SPEC CHECK — the specs in odd/tasks/<feature>.md; /sdd-verify is retired
+Step 5: FINALIZE — mem_save + `rapso close --message "<summary>"`
 ```
 <!-- rapso:end -->
 
