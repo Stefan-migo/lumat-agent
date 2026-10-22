@@ -79,6 +79,18 @@ EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS)
 CAPTURE_FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 _FIELD_QUESTIONS = dict(CAPTURE_FIELDS)
 
+# S18: short owner-facing labels for the panel's capture-order editor. The field
+# names are code identifiers; the owner reorders labels, never identifiers.
+CAPTURE_FIELD_LABELS: dict[str, str] = {
+    "failure": "Problema",
+    "equipment": "Equipo",
+    "comuna": "Comuna",
+    "availability": "Disponibilidad",
+    "name": "Nombre",
+    "email": "Correo",
+    "address": "Dirección",
+}
+
 # Skip answers -> field stored as "unknown", flow continues (CM-2).
 _SKIP_WORDS = (
     "no se",

@@ -882,6 +882,8 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "model_api_key", "email", "tarifa", "coverage", "service_durations",
         # S12/S13: the editable persona and safety protocol.
         "persona", "emergency",
+        # S18: the conduct surfaces F3/F4 shipped without a read.
+        "conduct", "capture_questions", "reply_texts",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)

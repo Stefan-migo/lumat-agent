@@ -74,6 +74,11 @@ CONDUCT_DERIVACIONES: tuple[str, ...] = (
     "servicio_sin_tarifa",
     "presupuesto_especial",
 )
+# S10/S18: the rules the derivation logic actually reads. T10 listed five and
+# T15 implemented `cobertura`; the other four gate nothing, so the panel renders
+# only the ones with a reader (same call as `redaccion`, L6). They stay in the
+# stored object so nothing is lost when the readers land.
+CONDUCT_DERIVACIONES_READ: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
     "redaccion": "llm",
@@ -766,11 +771,23 @@ def get_capture_questions(session: Session) -> dict[str, str]:
     value = get_setting(session, CAPTURE_QUESTIONS_KEY, default={})
     if not isinstance(value, dict):
         return {}
-    return {
+    kept = {
         field: text
         for field, text in value.items()
         if isinstance(field, str) and isinstance(text, str) and text.strip()
     }
+    # F6 rejected slots at write time. A row saved before that (T7 accepted
+    # them) would reach the client as literal braces, so it falls back to the
+    # shipped wording instead of being served.
+    with_slots = [
+        field for field, text in kept.items() if "{{" in text or "}}" in text
+    ]
+    if with_slots:
+        logger.warning(
+            "capture.questions has legacy slots for %s; using the shipped wording",
+            with_slots,
+        )
+    return {field: text for field, text in kept.items() if field not in with_slots}
 
 
 def validate_message_templates(templates: Any) -> list[dict]:
@@ -853,8 +870,11 @@ def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, s
 
     `fields` is the effective capture order. Every field needs text because the
     fallback path has nothing else to ask, and an extra key would be dead config
-    that silently outlives the field. Slots use the same vocabulary as the
-    message templates; the LLM-redaction path in F3 fills them in.
+    that silently outlives the field.
+
+    Slots are rejected: nothing renders `capture.questions`, so `{{nombre}}`
+    would reach the client as literal braces. F3 shipped the LLM-redaction path
+    without a reader, so the contract is plain text until a renderer exists.
     """
     if not isinstance(value, dict):
         raise ValueError("capture.questions must be an object")
@@ -872,14 +892,10 @@ def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, s
         raise ValueError(f"capture.questions has unknown fields: {unknown_fields}")
 
     for field in fields:
-        unknown_slots = (
-            set(_MESSAGE_TEMPLATE_SLOT_RE.findall(value[field]))
-            - ALLOWED_MESSAGE_TEMPLATE_SLOTS
-        )
-        if unknown_slots:
+        if "{{" in value[field] or "}}" in value[field]:
             raise ValueError(
-                f"capture.questions[{field!r}] contains unsupported slots: "
-                f"{sorted(unknown_slots)}"
+                f"capture.questions[{field!r}] must not contain '{{{{' or '}}}}': "
+                "the question is sent verbatim"
             )
 
     return {field: value[field] for field in fields}
