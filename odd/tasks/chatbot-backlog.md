@@ -83,7 +83,8 @@ es una escritura en producción y la ejecuta el owner.
 | T1 | S1–S5 | Crear este doc desde el reporte y archivar la sesión | inline | este commit |
 | T2 | S1 | `is_greeting_only` por variantes, en cualquier turno, sin sumar `unknown_intent` | inline, test-first | `31f4b4e7` |
 | T3 | S2 | Detector único de pedido humano, contador consecutivo, errores técnicos fuera, filtro de plataforma | worker + inline, test-first | `9a2777b1` |
-| T4 | S3 | Salida 3 + oferta en `kb_miss` + reset del contador + superficie de panel | pendiente | pendiente |
+| T4a | S3 | Salida 3 (D17): reformular, ofrecer y derivar, con la oferta editable en el panel | worker + inline, test-first | ver L6 |
+| T4b | S3 | `kb_miss` no terminal (D18): ofrece los dos caminos en vez de derivar | pendiente | pendiente |
 | T5 | S4 | Recuperación única por turno y fidelidad del medidor | pendiente | pendiente |
 | T6 | S5 | Cargar los 4 documentos `customer` y re-medir (owner, Risk item 5) | owner | pendiente |
 | T7 | — | Re-medir el desglose de handoffs con tráfico nuevo sobre `v2026.10.6` | lectura | pendiente |
@@ -166,3 +167,28 @@ Decisiones y límites de este slice:
 - **Incidente de proceso**: una corrida de suite se lanzó en paralelo con los tests de un worker y murió en un `TRUNCATE` por contienda de base. Se descartó y se repitió sola. Regla: una sola corrida de tests por worktree.
 - Costo LLM del slice: cero en S2a y S2d (deterministas); S2b cambia cuándo se escala, no cuántas llamadas se hacen.
 
+**L6 — S3a cerrado (2026-10-23), evidencia observada.** Salida 3 (D17):
+
+- **RED**: `tests/integration/test_unknown_offer.py` falla al colectar con `KeyError: 'cannot_understand_offer'`
+  (el setting no existe) y, una vez creado, los cuatro casos describen la conducta que hoy está mal: dos
+  fallos derivaban.
+- **GREEN**: 4/4 verdes. Secuencia: fallo 1 `messages.clarification` · fallo 2
+  `messages.cannot_understand_offer` y sigue en `bot` · fallo 3 deriva con causa
+  `unknown_intent_thrice`. El texto es configurable y se lee por `get_message`.
+- **Superficie de panel, cuatro archivos y no tres**: `MESSAGE_DEFAULTS` + registry de defaults en
+  `app/services/settings.py`, `MessagesBody` en `app/panel/api/routes/settings.py`,
+  `EMPTY_MESSAGES` + lista de campos en `web/src/components/pages/Settings.tsx`, y el tipo compartido
+  `web/src/types.ts`. El `npm run build` (`tsc -b`) fue el que destapó dos fixtures más
+  (`SettingsEmail.test.tsx`, `stories/.../mockData/settings.ts`) y el pin de claves del mock
+  (`mockData/settings.test.ts`): la suite de Vitest no los ve, el type gate sí.
+- **Pins movidos a propósito** (afirmaban la derivación en el segundo fallo): `test_chat_intent`,
+  `test_handoff`, `test_conversation_flows`, `test_chat_capture::...cm4_refusal`,
+  `test_unknown_streak::...consecutive...` y `test_webhook_ingest::retry_storm`. Ninguno se debilitó:
+  ahora verifican también el estado intermedio (en el fallo 2 la conversación sigue en `bot`).
+- **Causa renombrada**: `unknown_intent_twice` → `unknown_intent_thrice`. Cambia lo que se ve en
+  analítica y en la ficha de la conversación; el nombre viejo habría quedado mintiendo.
+- **Hallazgo**: en `retry_storm` no hay saludo porque los tres inbound se persisten antes del sweep y
+  ninguno es primer contacto. Las tres respuestas son la secuencia completa.
+- **Verificación**: backend completo exit 0 · `npm test` 1263 verdes · `npm run build` exit 0.
+- Costo LLM del slice: cero en los fallos 1 y 2 (deterministas); la clasificación de cada turno es la
+  única llamada, igual que antes.
