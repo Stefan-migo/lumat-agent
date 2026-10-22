@@ -674,8 +674,21 @@ def get_emergency_keywords(session: Session) -> list[str]:
 
     T4.2 compiles its detection regex from this list. Contract: stored value
     must be a list of strings — a malformed value is the panel's responsibility.
+
+    S19: an empty or all-blank stored list is treated as "not configured" and
+    degrades to the shipped triggers. An empty list compiles to a pattern that
+    matches nothing, so honouring it would switch the gate off from data.
     """
-    return get_setting(session, "emergency.keywords", default=DEFAULT_EMERGENCY_KEYWORDS)
+    stored = get_setting(session, "emergency.keywords", default=DEFAULT_EMERGENCY_KEYWORDS)
+    if isinstance(stored, list):
+        keywords = [
+            keyword.strip()
+            for keyword in stored
+            if isinstance(keyword, str) and keyword.strip()
+        ]
+        if keywords:
+            return keywords
+    return list(DEFAULT_EMERGENCY_KEYWORDS)
 
 
 def get_tone(session: Session) -> str:

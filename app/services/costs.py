@@ -176,7 +176,9 @@ def _percent(spend: float, limit: float) -> float:
     Decimal(str()) round-trip makes `1.20 of 1.50` exactly 80.0.
     """
     if limit <= 0:
-        return 0.0
+        # Fail closed. `_limit` never returns a non-positive value (S19), so this
+        # only guards a direct caller: "no limit" would otherwise read as 0%.
+        return 100.0
     return float(Decimal(str(spend)) / Decimal(str(limit)) * 100)
 
 
@@ -199,13 +201,20 @@ def combined_cost_mode(*modes: str) -> str:
 
 
 def _limit(session: Session, scope: str) -> float:
-    """Configured spend limit for a scope ("conversation" | "daily")."""
+    """Configured spend limit for a scope ("conversation" | "daily").
+
+    S19: a non-positive stored limit is treated as "not configured" and
+    degrades to the shipped default. Honouring it would unlock the bot
+    (`_percent` cannot divide by zero), which is the cost gate switched off
+    from data.
+    """
     default = (
         float(DEFAULT_CONVERSATION_LIMIT)
         if scope == "conversation"
         else float(DEFAULT_DAILY_LIMIT)
     )
-    return float(get_setting(session, f"cost.{scope}_limit", default=default))
+    value = float(get_setting(session, f"cost.{scope}_limit", default=default))
+    return value if value > 0 else default
 
 
 def conversation_cost_state(

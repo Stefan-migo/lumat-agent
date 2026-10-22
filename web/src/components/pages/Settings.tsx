@@ -159,6 +159,12 @@ function isValidNonNegative(value: string) {
   return value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
 }
 
+function isValidPositive(value: string) {
+  // S19: a spend limit of 0 reads as "no cap" and switches the cost gate off,
+  // so the panel requires > 0 (the API rejects 0 too).
+  return value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) > 0;
+}
+
 function isDurationListValid(entries: Array<{ name: string; minutes: string }>) {
   const valid = entries.every(({ name, minutes }) => name.trim() !== ""
     && Number.isInteger(Number(minutes)) && Number(minutes) >= 1 && Number(minutes) <= 1440);
@@ -531,7 +537,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       : capabilityData ? <AssistantCapabilitiesView capabilities={capabilityData} /> : null;
   const footer = (note = GENERIC_NOTE) => <p className="settings__footer-note">{note}</p>;
   const saving = (key: DraftKey) => Boolean(pending[key]);
-  const numericLimitsValid = isValidNonNegative(draft.conversationLimit) && isValidNonNegative(draft.dailyLimit);
+  const numericLimitsValid = isValidPositive(draft.conversationLimit) && isValidPositive(draft.dailyLimit);
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
   return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
