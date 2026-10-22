@@ -33,7 +33,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
         { value: "address", label: "Dirección" },
       ],
       max_preguntas_por_mensaje: [1, 2],
-      derivaciones: ["cobertura", "pedido_explicito", "garantia", "servicio_sin_tarifa", "presupuesto_especial"],
+      derivaciones: ["cobertura"],
     },
   },
   capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },

@@ -607,7 +607,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                 <span>{DERIVACION_LABELS[rule] ?? rule}</span>
               </label>)}
             </fieldset>
-            <p className="settings-agent__helper">Deja al menos una regla activa: sin derivaciones el bot no tiene a quién pasar el caso.</p>
+            <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
             <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente mensaje.")}<Button disabled={saving("conduct") || !draft.conduct.orden.length || !draft.conduct.derivaciones.length} onClick={() => void saveConduct()}>Guardar conducta</Button></div>
           </Card>
           <Card title="Preguntas de captura" description="El texto exacto que recibe el cliente para cada dato. Se envía tal cual: sin llaves.">
