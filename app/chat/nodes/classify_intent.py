@@ -21,11 +21,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-import unicodedata
 
-from sqlalchemy import func, select
-
-from app.chat.state import ConversationState, conversation_transcript
+from app.chat.human_request import is_human_request
+from app.chat.state import ConversationState, conversation_transcript, unknown_streak
 from app.chat.nodes.capture import EXTRACTABLE_FIELDS
 from app.db import session_scope
 from app.models import ConversationEvent
@@ -63,26 +61,10 @@ def is_injection(text: str) -> bool:
     return bool(_INJECTION_RE.search(text))
 
 
-# V4 §A3: `persona` means an EXPLICIT request for a human. The model over-fires
-# it on social questions ("¿cómo estás?"), which used to hand the conversation
-# to a human and drop the customer's pending context. The intent only survives
-# when the text actually asks for a person.
-_HUMAN_REQUEST_PATTERNS = (
-    r"hablar con (una |un )?(persona|humano|humana|ejecutiv\w*|asesor\w*|alguien)",
-    r"comunic\w* con (una |un )?(persona|humano|ejecutiv\w*|asesor\w*)",
-    r"pas\w* (con |a )?(una |un )?(persona|humano|ejecutiv\w*|asesor\w*)",
-    r"(necesito|quiero|prefiero) (una |un )?(persona|humano|humana|ejecutiv\w*|asesor\w*)",
-    r"atencion humana",
-    r"persona real",
-)
-_HUMAN_REQUEST_RE = re.compile("|".join(_HUMAN_REQUEST_PATTERNS), re.IGNORECASE)
-
-
+# V4 §A3: `persona` survives classification only for an explicit human request.
 def is_explicit_human_request(text: str) -> bool:
-    """True only when the message asks for a person in so many words."""
-    folded = unicodedata.normalize("NFD", (text or "").casefold())
-    folded = "".join(char for char in folded if unicodedata.category(char) != "Mn")
-    return bool(_HUMAN_REQUEST_RE.search(folded))
+    """Return whether the message explicitly requests a person."""
+    return is_human_request(text)
 
 
 def _current_text(state: ConversationState) -> str:
@@ -181,7 +163,7 @@ def _store_classification(session, state: ConversationState, result: dict) -> di
 
 
 def _record_unknown_intent(session, state: ConversationState, cause: str) -> int:
-    """Persist one unknown-intent attempt; returns the NEW total (HH-3)."""
+    """Persist one unknown-intent attempt; return the new streak used for escalation (HH-3)."""
     session.add(
         ConversationEvent(
             conversation_id=state.conversation_id,
@@ -191,13 +173,7 @@ def _record_unknown_intent(session, state: ConversationState, cause: str) -> int
         )
     )
     session.flush()
-    total = session.scalar(
-        select(func.count(ConversationEvent.id)).where(
-            ConversationEvent.conversation_id == state.conversation_id,
-            ConversationEvent.event == "unknown_intent",
-        )
-    )
-    return int(total or 0)
+    return unknown_streak(session, state.conversation_id)
 
 
 def classify_intent(state: ConversationState) -> dict:
@@ -233,7 +209,17 @@ def classify_intent(state: ConversationState) -> dict:
         )
     except Exception:
         logger.exception("LLM classify failed for conversation %s", state.conversation_id)
-        result = {"intent": "unknown"}
+        with session_scope() as session:
+            session.add(
+                ConversationEvent(
+                    conversation_id=state.conversation_id,
+                    event="classify_failed",
+                    cause="llm_exception",
+                    actor="system",
+                )
+            )
+            session.flush()
+        return {"intent": "unknown", "extracted": {}, "template_id": None}
 
     if result.get("intent") == "persona" and not is_explicit_human_request(text):
         # V4 §A3 / E1 T05: "¿cómo estás?" is not "quiero hablar con una persona".

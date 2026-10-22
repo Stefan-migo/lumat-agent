@@ -82,7 +82,7 @@ es una escritura en producción y la ejecuta el owner.
 |---|---|---|---|---|
 | T1 | S1–S5 | Crear este doc desde el reporte y archivar la sesión | inline | este commit |
 | T2 | S1 | `is_greeting_only` por variantes, en cualquier turno, sin sumar `unknown_intent` | inline, test-first | `31f4b4e7` |
-| T3 | S2 | Detector único de pedido humano, contador consecutivo, errores técnicos fuera, filtro de plataforma | pendiente | pendiente |
+| T3 | S2 | Detector único de pedido humano, contador consecutivo, errores técnicos fuera, filtro de plataforma | worker + inline, test-first | `9a2777b1` |
 | T4 | S3 | Salida 3 + oferta en `kb_miss` + reset del contador + superficie de panel | pendiente | pendiente |
 | T5 | S4 | Recuperación única por turno y fidelidad del medidor | pendiente | pendiente |
 | T6 | S5 | Cargar los 4 documentos `customer` y re-medir (owner, Risk item 5) | owner | pendiente |
@@ -151,3 +151,18 @@ producción) no se reabre.
 - No se corrió `scripts/chat_harness.py`: el harness monta el worktree principal y S1 no llama al
   modelo; los tests de integración ejercitan la misma entrada (`run_conversation`). Para S2/S3 la
   pasada por harness es obligatoria.
+
+**L5 — S2 cerrado (2026-10-23), evidencia observada.** Cuatro unidades, test-first cada una:
+
+- **S2a — detector único.** RED: 20 fallos en `tests/unit/test_human_request.py`. GREEN: 32 verdes. Un solo módulo, `app/chat/human_request.py::is_human_request`, y los dos call sites delegando (`_PERSONA_PATTERN` borrado del gate; `is_explicit_human_request` delega). Cuatro reglas de D5: petición + rol (verbo de contacto a ≤3 palabras del rol), guarda de negación (2 palabras antes del verbo), token suelto sólo si **todas** las palabras son roles, y roles ampliados. `tecnico/tecnica` son roles sólo-con-contacto, porque "necesito una visita técnica" es necesidad de servicio, no pedido de persona; y los verbos de contacto van en infinitivo e imperativo para que "una persona me atendió muy bien" no dispare.
+- **Differential viejo vs nuevo (38 mensajes reales)**: 17 veredictos cambian. Dieciséis son los buscados. **Uno fue una regresión detectada acá**: `"asesor humano"` era frase literal del patrón viejo y el detector nuevo la perdía; se corrigió generalizando la regla del token suelto a "todas las palabras son roles". Después del fix, el gate y el classifier coinciden en el 100% de los casos.
+- **S2b — racha y errores técnicos.** RED: 3 fallos en `tests/integration/test_unknown_streak.py` (+1 control que ya pasaba). GREEN: 4/4 y suite verde. `unknown_streak()` en `state.py` recorre eventos del más nuevo al más viejo (tope 50), cuenta `unknown_intent` y corta en el primer `classified` con `cause` distinto de `intent:unknown`; `from_db` y `_record_unknown_intent` lo usan. Una excepción del modelo escribe `classify_failed` y **no** suma ni escala. El control fija que dos fallos consecutivos **sí** escalan, con causa `handoff:unknown_intent_twice` verificada.
+- **S2d — plataforma.** RED: 1 fallo (`tests/integration/test_platform_messages.py`); el test de la guarda pasaba por accidente porque hoy el body se descarta. GREEN: 7/7. Los tipos `system`, `unsupported`, `ephemeral` y `request_welcome` guardan su `body` como `text` para el registro y `process_message` no corre el grafo para `MessageType.OTHER`. El worker demostró la guarda quitándola: el test falla. `test_webhook_ingest.py`: 30 verdes.
+
+Decisiones y límites de este slice:
+
+- **No se agregó dedupe de "reintento con la misma consulta" (U3)**: el grafo corre una vez por mensaje y Meta deduplica por `wamid`, así que no hay camino que duplique el conteo; un dedupe por texto rompería la secuencia de D17 (el cliente que repite la frase **sí** debe recibir la oferta).
+- **No se agregó guarda de "mensaje propio de la empresa"**: el payload del mensaje de onboarding no está capturado y `META_PHONE_NUMBER_ID` es un id interno de Meta, no un teléfono. La regla implementada es la defendible: sólo el contenido escrito por el cliente se clasifica.
+- **Incidente de proceso**: una corrida de suite se lanzó en paralelo con los tests de un worker y murió en un `TRUNCATE` por contienda de base. Se descartó y se repitió sola. Regla: una sola corrida de tests por worktree.
+- Costo LLM del slice: cero en S2a y S2d (deterministas); S2b cambia cuándo se escala, no cuántas llamadas se hacen.
+

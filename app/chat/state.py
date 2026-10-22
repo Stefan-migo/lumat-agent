@@ -82,6 +82,33 @@ def get_or_create_conversation(session: Session, customer: Customer, phone_e164:
     return conversation
 
 
+def unknown_streak(session: Session, conversation_id: int) -> int:
+    """Count unknown intents since the last understood classified turn.
+
+    H06/D6 measured the counter as an accumulated total, so two failures
+    separated by an understood turn still escalated. Only the current
+    consecutive streak should count.
+    """
+    events = session.scalars(
+        select(ConversationEvent)
+        .where(ConversationEvent.conversation_id == conversation_id)
+        .order_by(ConversationEvent.id.desc())
+        .limit(50)
+    )
+    streak = 0
+    for event in events:
+        if event.event == "unknown_intent":
+            streak += 1
+        elif (
+            event.event == "classified"
+            and event.cause
+            and event.cause.startswith("intent:")
+            and event.cause != "intent:unknown"
+        ):
+            break
+    return streak
+
+
 def set_conversation_state(
     session: Session,
     conversation: Conversation,
@@ -236,14 +263,8 @@ class ConversationState:
                 Message.direction == "inbound",
             )
         ) or 0
-        # HH-3: unknown-intent attempts persist as conversation_events so the
-        # counter survives the per-message state rebuild (D2).
-        unknown_count = session.scalar(
-            select(func.count(ConversationEvent.id)).where(
-                ConversationEvent.conversation_id == conversation_id,
-                ConversationEvent.event == "unknown_intent",
-            )
-        ) or 0
+        # HH-3: persist the consecutive unknown-intent streak across state rebuilds (D2).
+        unknown_count = unknown_streak(session, conversation_id)
         return cls(
             customer_id=conversation.customer_id,
             conversation_id=conversation_id,
