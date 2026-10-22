@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 from sqlalchemy import select
 
 from app.chat.state import get_or_create_conversation  # noqa: E402
@@ -45,13 +46,20 @@ SETTINGS = "/panel/api/settings"
 ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_ROUTER = ROOT / "app" / "panel" / "api" / "routes" / "settings.py"
 
-# A key whose last segment names a switch is an off switch no matter which
-# invariant it belongs to. Values inside an invariant never look like this.
+# A key whose segment names a switch is an off switch no matter which invariant
+# it belongs to. `_` and `.` are both segment boundaries, so compound names
+# (`gate_enabled`, `skip_emergency`) cannot slip through. Values inside an
+# invariant never look like this.
 _TOGGLE_SEGMENT = re.compile(
-    r"^(enabled?|disabled?|enable|disable|bypass|skip|activo|activa|on|off)$",
+    r"(^|[._])(enabled?|disabled?|enable|disable|bypass|skip|active|activo|activa|on|off)($|[._])",
     re.IGNORECASE,
 )
-_WRITTEN_KEY = re.compile(r'_save\(\s*session\s*,\s*"([^"]+)"')
+# `_save(session, "literal")`, `_save(session, f"prefix.{key}")` and
+# `_save(session, settings_service.CONSTANT)` are the three shapes the router
+# uses; the catch-all's `_save(session, key, ...)` stays out (it always raises).
+_WRITTEN_KEY = re.compile(
+    r'_save\(\s*session\s*,\s*(?:"([^"]+)"|f"([^"]+)"|settings_service\.([A-Z_]+))'
+)
 
 
 def _login(client, username: str = "adm", password: str = "adm-pass") -> None:
@@ -101,21 +109,71 @@ def _seed_spend(cost: float, phone: str = "+56912345678") -> int:
 # --- surface guard -----------------------------------------------------------
 
 
+def _written_keys() -> set[str]:
+    """Every settings key the panel router can write, from its own source.
+
+    Literal keys come through as-is, `f"messages.{key}"` contributes its fixed
+    prefix, and named constants are resolved through `settings_service` so the
+    scan cannot go blind when a key moves behind a constant.
+    """
+    source = SETTINGS_ROUTER.read_text()
+    keys: set[str] = set()
+    unresolved: list[str] = []
+    for literal, prefixed, constant in _WRITTEN_KEY.findall(source):
+        if literal:
+            keys.add(literal)
+        elif prefixed:
+            # `f"messages.{key}"` contributes its fixed text; the dynamic part
+            # is a `messages.*` key chosen by the route, never a new section.
+            keys.add(prefixed)
+        else:
+            value = getattr(settings_service, constant, None)
+            if not isinstance(value, str):
+                unresolved.append(constant)
+            else:
+                keys.add(value)
+    assert unresolved == [], f"settings router writes unresolvable constants: {unresolved}"
+    return keys
+
+
 def test_no_panel_settings_route_writes_a_toggle_key():
     """The panel may set values, never a switch.
 
     Scans the live router source, so a new `_save(session, "cost.enabled", ...)`
-    fails here even when nothing else in the suite reads it.
+    (or an `emergency.gate_enabled`) fails here even when nothing else in the
+    suite reads it.
     """
-    source = SETTINGS_ROUTER.read_text()
-    written = set(_WRITTEN_KEY.findall(source))
+    written = _written_keys()
 
-    assert written, "the scan found no written keys — the guard would be vacuous"
-    toggles = sorted(
-        key for key in written if _TOGGLE_SEGMENT.match(key.rsplit(".", 1)[-1])
-    )
+    assert len(written) >= 15, f"the scan went blind: only found {sorted(written)}"
+    toggles = sorted(key for key in written if _TOGGLE_SEGMENT.search(key))
 
     assert toggles == [], f"panel writes invariant switches: {toggles}"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "cost.enabled",
+        "emergency.gate_enabled",
+        "skip_emergency",
+        "bot_off",
+        "cost.disable",
+        "notify.bypass",
+        "emergency.active",
+    ],
+)
+def test_the_toggle_guard_catches_compound_switch_names(key):
+    """The scan is only as good as this predicate — pin it to real shapes."""
+    assert _TOGGLE_SEGMENT.search(key)
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["messages.out_of_hours", "cost.conversation_limit", "hours.timezone", "persona.texts"],
+)
+def test_the_toggle_guard_does_not_flag_ordinary_value_keys(key):
+    assert not _TOGGLE_SEGMENT.search(key)
 
 
 def test_unknown_settings_section_cannot_write_a_key(client, make_user):
