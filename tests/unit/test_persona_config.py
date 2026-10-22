@@ -53,9 +53,22 @@ def test_persona_texts_require_both_keys(field):
         settings.validate_persona_texts(value)
 
 
-def test_persona_texts_reject_a_placeholder():
-    """Personas are loaded verbatim, never rendered: a slot would leak literally."""
-    value = {**_valid_persona(), _ORCHESTRATOR: "Eres Max. Saluda a {{nombre}}."}
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Eres Max. Saluda a {{nombre}}.",
+        "Eres Max. Saluda a {{ nombre }}.",
+        "Eres Max. Saluda a {{nombre del cliente}}.",
+        "Eres Max. Saluda a {{nombre-del-cliente}}.",
+        "Eres Max. Saluda a {{nombre.cliente}}.",
+        "Eres Max. Saluda a {{}}.",
+        "Eres Max. Saluda a {{ nombre",
+        "Eres Max. Saluda a nombre }}.",
+    ],
+)
+def test_persona_texts_reject_any_mustache(text):
+    """Personas are loaded verbatim, never rendered: any delimiter would leak."""
+    value = {**_valid_persona(), _ORCHESTRATOR: text}
     with pytest.raises(ValueError):
         settings.validate_persona_texts(value)
 

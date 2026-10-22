@@ -121,6 +121,47 @@ def test_persona_that_breaks_the_contract_is_not_persisted(admin):
     assert _last_audit("settings.change") is None
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Eres Max. Saluda a {{nombre del cliente}}.",
+        "Eres Max. Saluda a {{nombre-del-cliente}}.",
+        "Eres Max. Saluda a {{nombre.cliente}}.",
+        "Eres Max. Saluda a {{}}.",
+        "Eres Max. Saluda a {{ nombre",
+    ],
+)
+def test_persona_with_a_malformed_mustache_is_not_persisted(admin, text):
+    resp = admin.post(PERSONA, json=_persona_body(orchestrator=text), follow_redirects=False)
+
+    assert resp.status_code == 400
+    with SessionLocal() as session:
+        assert session.get(Settings, settings_service.PERSONA_TEXTS_KEY) is None
+    assert _last_audit("settings.change") is None
+
+
+def test_persona_save_rejects_unknown_fields_instead_of_dropping_them(admin):
+    resp = admin.post(
+        PERSONA,
+        json={**_persona_body(), _ORCHESTRATOR: "no debería guardarse"},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 422
+    with SessionLocal() as session:
+        assert session.get(Settings, settings_service.PERSONA_TEXTS_KEY) is None
+
+
+def test_emergency_save_rejects_unknown_fields_instead_of_dropping_them(admin):
+    resp = admin.post(
+        EMERGENCY, json={**_PROTOCOL, "silence_everything": True}, follow_redirects=False
+    )
+
+    assert resp.status_code == 422
+    with SessionLocal() as session:
+        assert session.get(Settings, settings_service.EMERGENCY_PROTOCOL_KEY) is None
+
+
 def test_persona_save_requires_both_texts(admin):
     resp = admin.post(
         PERSONA, json={"orchestrator": "Eres Max."}, follow_redirects=False

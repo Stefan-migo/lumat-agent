@@ -1073,12 +1073,13 @@ def _validate_persona_text(text: Any, field: str) -> str:
         raise ValueError(
             f"persona.texts[{field!r}] exceeds {PERSONA_TEXT_MAX_CHARS} characters"
         )
-    if _MESSAGE_TEMPLATE_SLOT_RE.search(text):
-        # Personas are loaded verbatim and never rendered, so a slot would reach
-        # the model as literal `{{...}}` text: that is exactly the contract
-        # break S12 refuses to persist.
+    if "{{" in text or "}}" in text:
+        # Personas are loaded verbatim and never rendered, so ANY mustache would
+        # reach the model literally. Matching only `{{word}}` would leave
+        # `{{nombre del cliente}}`, `{{}}` or an unclosed `{{ nombre` through,
+        # which is the same contract break.
         raise ValueError(
-            f"persona.texts[{field!r}] must not contain slots: personas are used verbatim"
+            f"persona.texts[{field!r}] must not contain '{{{{' or '}}}}': personas are used verbatim"
         )
     return text
 

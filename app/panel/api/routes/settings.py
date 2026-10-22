@@ -152,11 +152,17 @@ class SmtpPasswordBody(BaseModel):
 
 
 class PersonaBody(BaseModel):
+    # `extra="forbid"`: an unknown prompt key must fail loudly, not be dropped
+    # with a 200 that looks like the write succeeded.
+    model_config = ConfigDict(extra="forbid")
+
     orchestrator: str
     orchestrator_brief: str
 
 
 class EmergencyProtocolBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     safety_instructions: list[str]
     contacts: list[str]
     notify_message: str
