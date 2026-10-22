@@ -294,7 +294,7 @@ def test_sh4_injection_detected_by_llm_also_escalates(mock_chat):
 
 
 # ---------------------------------------------------------------------------
-# HH-3 — unknown intent counter escalates at 2
+# D17 — unknown intent counter escalates on the third failure
 # ---------------------------------------------------------------------------
 
 
@@ -307,10 +307,10 @@ def test_hh3_unknown_intent_increments_counter(mock_chat):
     assert result["escalate"] is False
 
 
-def test_hh3_second_unknown_escalates(mock_chat):
+def test_hh3_third_unknown_escalates(mock_chat):
     conv_id = _seed("zzzzzx")
     _run_graph(conv_id)
-    # second unknown message in the same conversation
+    # second unknown message offers the two paths and keeps the bot active
     with SessionLocal() as session:
         session.add(
             Message(
@@ -324,10 +324,27 @@ def test_hh3_second_unknown_escalates(mock_chat):
         )
         session.commit()
 
+    second = _run_graph(conv_id)
+    assert second["unknown_count"] == 2
+    assert second["escalate"] is False
+
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.intent3",
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="wwwwwe",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+
     result = _run_graph(conv_id)
-    assert result["unknown_count"] == 2
+    assert result["unknown_count"] == 3
     assert result["escalate"] is True
-    assert result["escalate_reason"] == "unknown_intent_twice"
+    assert result["escalate_reason"] == "unknown_intent_thrice"
 
 
 # ---------------------------------------------------------------------------

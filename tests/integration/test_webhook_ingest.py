@@ -359,12 +359,15 @@ def test_retry_storm_single_processing_pass(client, mock_openai_chat, mock_meta_
     assert _count_inbound() == 3  # dedup: 3 unique wamids, never 30
     assert all(r.status == MessageStatus.PROCESSED for r in rows)
     outbound = [r for r in rows if r.direction == MessageDirection.OUTBOUND]
-    # The first inbound answers (clarification); the SECOND unknown escalates
-    # (HH-3) and hands off to a human; the third inbound lands in `human`
-    # state and is persisted WITHOUT a bot reply (HH-5) — the human owns the
-    # channel from there. 2 outbound rows = clarification + handoff reply.
-    assert len(outbound) == 2
-    assert any("entend" in (m.text or "") for m in outbound)  # clarification
+    # Three unknown turns under D17: rephrase, then offer the two paths (the bot
+    # stays active), then derive. 3 outbound rows, one per failure. The three
+    # inbound rows are persisted before the sweep runs, so no turn here is the
+    # first contact and the greeting never applies.
+    assert len(outbound) == 3
+    assert any("entend" in (m.text or "") for m in outbound)  # failure 1: rephrase
+    assert any("coordinar una visita" in (m.text or "") for m in outbound)  # failure 2: offer
+    assert any("asesor" in (m.text or "") for m in outbound)  # failure 3: derive
+    assert any("coordinar una visita" in (m.text or "") for m in outbound)  # offer
     assert any("asesor" in (m.text or "") for m in outbound)  # handoff reply
 
 

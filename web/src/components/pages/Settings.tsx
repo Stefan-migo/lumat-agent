@@ -26,7 +26,7 @@ import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
-const EMPTY_MESSAGES = { greeting: "", greeting_short: "", cannot_answer: "", clarification: "", farewell: "", out_of_hours: "" };
+const EMPTY_MESSAGES = { greeting: "", greeting_short: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", farewell: "", out_of_hours: "" };
 const SHORT_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -57,6 +57,7 @@ const MESSAGE_TEMPLATES = [
   { id: "greeting_short", label: "Saludo corto", description: "Cuando el cliente ya contó qué necesita", icon: MessageCircle },
   { id: "cannot_answer", label: "Cuando no puede responder", description: "Derivación a un asesor", icon: Headset },
   { id: "clarification", label: "Aclaración", description: "Mensaje no entendido", icon: CircleHelp },
+  { id: "cannot_understand_offer", label: "Oferta tras segundo fallo", description: "Ofrece coordinar una visita o hablar con una persona", icon: Headset },
   { id: "farewell", label: "Despedida", description: "Cierre de conversación", icon: DoorOpen },
   { id: "out_of_hours", label: "Fuera de horario", description: "Atención no disponible", icon: Clock3 },
 ] as const;

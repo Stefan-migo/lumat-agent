@@ -129,18 +129,22 @@ def test_two_failures_split_by_an_understood_turn_do_not_escalate(mock_openai_ch
 
     assert _streak(conversation_id) == 1
     causes = [event.cause for event in _events("escalation")]
-    assert "handoff:unknown_intent_twice" not in causes
+    assert "handoff:unknown_intent_thrice" not in causes
 
 
-def test_two_consecutive_failures_still_escalate(mock_openai_chat):
+def test_three_consecutive_failures_still_escalate(mock_openai_chat):
+    """D17: the third consecutive failure derives; the second one only offers."""
     conversation_id = _start_conversation()
 
     _turn(conversation_id, "no entiendo nada de esto", "wamid.consec.1")
     _turn(conversation_id, "sigo sin decir nada claro", "wamid.consec.2")
+    assert _conversation_state(conversation_id) == ConvState.BOT
+
+    _turn(conversation_id, "y sigo sin decir nada claro", "wamid.consec.3")
 
     assert _conversation_state(conversation_id) == ConvState.HUMAN
     causes = [event.cause for event in _events("escalation")]
-    assert "handoff:unknown_intent_twice" in causes
+    assert "handoff:unknown_intent_thrice" in causes
 
 
 def test_a_technical_failure_is_not_a_comprehension_failure(mock_openai_chat, monkeypatch):

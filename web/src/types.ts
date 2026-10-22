@@ -511,6 +511,7 @@ export interface Settings {
     greeting_short: string;
     cannot_answer: string;
     clarification: string;
+    cannot_understand_offer: string;
     farewell: string;
     out_of_hours: string;
   };

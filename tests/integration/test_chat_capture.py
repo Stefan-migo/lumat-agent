@@ -45,6 +45,7 @@ from app.models import (  # noqa: E402
 )
 from app.services import kb as kb_service  # noqa: E402
 from app.services import settings as settings_service  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -680,9 +681,9 @@ def test_unknown_intent_never_reaches_the_cm4_refusal(mock_openai_chat, fake_emb
 
     ``unknown`` is the only intent that lands on the linear ``respond`` node, and it
     returns before the retrieval (``respond.py:121-128``): the CM-1 greeting answers the
-    first turn, and the second attempt escalates through handoff (HH-3). This is why the
-    refusal never fired in production, and why the misnamed triage test below could not
-    be read as evidence that it did.
+    first turn, and the second attempt offers the two paths (D17) instead of deriving.
+    This is why the refusal never fired in production, and why the misnamed triage test
+    below could not be read as evidence that it did.
     """
     conv_id = _start_conversation()
 
@@ -692,13 +693,16 @@ def test_unknown_intent_never_reaches_the_cm4_refusal(mock_openai_chat, fake_emb
     assert CANNOT_ANSWER_REPLY not in replies
     assert len(replies) == 1
 
-    # Turn 2 — the second unknown attempt escalates (HH-3), still not through CM-4.
+    # Turn 2 — the second unknown attempt offers the two paths (D17), still not
+    # through CM-4. The third failure would derive; that is covered by
+    # tests/integration/test_unknown_offer.py.
     replies = _turn(conv_id, "sigo sin encontrar lo que busco", "wamid.cm4lin2")
     assert CANNOT_ANSWER_REPLY not in replies
-    assert replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
-
+    assert replies[-1] == MESSAGE_DEFAULTS["cannot_understand_offer"]
+    # D17: the offer keeps the conversation in the bot; only the third failure
+    # derives, which tests/integration/test_unknown_offer.py covers.
     with SessionLocal() as session:
-        assert session.get(Conversation, conv_id).state.value == "human"
+        assert session.get(Conversation, conv_id).state.value == "bot"
 
 
 def test_cm6_no_unresolved_when_kb_hits(mock_openai_chat, fake_embedder):
