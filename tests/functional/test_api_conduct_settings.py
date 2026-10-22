@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.chat.nodes.capture import CAPTURE_FIELDS, CAPTURE_FIELD_LABELS
+from pathlib import Path
+
+from app.chat.nodes.capture import CAPTURE_FIELDS, CAPTURE_FIELD_LABELS, _ask_text, _field_questions
 from app.db import SessionLocal  # noqa: E402
 from app.models import Settings  # noqa: E402
 from app.services import settings as settings_service  # noqa: E402
@@ -60,7 +62,10 @@ def test_conduct_is_exposed_with_its_closed_options(admin):
     ]
     assert conduct["options"]["fields"][0]["label"] == CAPTURE_FIELD_LABELS["failure"]
     assert conduct["options"]["max_preguntas_por_mensaje"] == [1, 2]
-    assert conduct["options"]["derivaciones"] == list(settings_service.CONDUCT_DERIVACIONES)
+    # Only the rules with a reader: the other four gate nothing yet (L6).
+    assert conduct["options"]["derivaciones"] == list(
+        settings_service.CONDUCT_DERIVACIONES_READ
+    )
 
 
 def test_conduct_save_is_visible_in_the_settings_payload(admin):
@@ -151,3 +156,38 @@ def test_reply_texts_save_is_visible_in_the_settings_payload(admin):
     payload = _settings(admin)["reply_texts"]
     assert payload["texts"]["manage_kept"] == "De acuerdo, quedó igual."
     assert payload["customized"] is True
+
+
+def test_every_derivation_the_panel_renders_has_a_reader(admin):
+    """S10/S18: a checkbox the panel shows must be read by app code.
+
+    Four of the five rules T10 listed gate nothing yet, so they stay out of the
+    panel (same call as `redaccion`, L6) until they actually derive a case.
+    """
+    root = Path(__file__).resolve().parents[2]
+    code = "\n".join(
+        path.read_text()
+        for path in (root / "app").rglob("*.py")
+        if path.name != "settings.py"
+    )
+
+    exposed = _settings(admin)["conduct"]["options"]["derivaciones"]
+
+    assert exposed, "the panel must render at least one derivation rule"
+    assert [rule for rule in exposed if rule not in code] == []
+
+
+def test_a_legacy_slot_row_does_not_reach_the_client(admin):
+    """F6 narrows `capture.questions` to plain text. A row saved before that
+    (T7 accepted slots) must fall back to the shipped wording, not leak braces."""
+    questions = {field: f"¿{field}?" for field in settings_service.CHAT_CONDUCT_DEFAULTS["orden"]}
+    questions["failure"] = "{{nombre}}, cuéntame la falla."
+    with SessionLocal() as session:
+        session.add(Settings(key=settings_service.CAPTURE_QUESTIONS_KEY, value=dict(questions)))
+        session.commit()
+
+    payload = _settings(admin)["capture_questions"]["questions"]
+    assert payload["failure"] == dict(CAPTURE_FIELDS)["failure"]
+    assert payload["comuna"] == "¿comuna?"
+    with SessionLocal() as session:
+        assert "{{" not in _ask_text(["failure"], _field_questions(session))

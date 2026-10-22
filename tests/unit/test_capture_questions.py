@@ -79,3 +79,13 @@ def test_get_returns_an_empty_map_without_a_row():
     session.get.return_value = None
 
     assert get_capture_questions(session) == {}
+
+
+def test_get_drops_a_stored_text_with_slots():
+    """A row saved before F6 narrowed the contract must not reach the client."""
+    session = MagicMock()
+    session.get.return_value = MagicMock(
+        value={"failure": "{{nombre}}, cuéntame la falla.", "comuna": "¿En qué comuna estás?"}
+    )
+
+    assert get_capture_questions(session) == {"comuna": "¿En qué comuna estás?"}

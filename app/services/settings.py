@@ -74,6 +74,11 @@ CONDUCT_DERIVACIONES: tuple[str, ...] = (
     "servicio_sin_tarifa",
     "presupuesto_especial",
 )
+# S10/S18: the rules the derivation logic actually reads. T10 listed five and
+# T15 implemented `cobertura`; the other four gate nothing, so the panel renders
+# only the ones with a reader (same call as `redaccion`, L6). They stay in the
+# stored object so nothing is lost when the readers land.
+CONDUCT_DERIVACIONES_READ: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
     "redaccion": "llm",
@@ -766,11 +771,23 @@ def get_capture_questions(session: Session) -> dict[str, str]:
     value = get_setting(session, CAPTURE_QUESTIONS_KEY, default={})
     if not isinstance(value, dict):
         return {}
-    return {
+    kept = {
         field: text
         for field, text in value.items()
         if isinstance(field, str) and isinstance(text, str) and text.strip()
     }
+    # F6 rejected slots at write time. A row saved before that (T7 accepted
+    # them) would reach the client as literal braces, so it falls back to the
+    # shipped wording instead of being served.
+    with_slots = [
+        field for field, text in kept.items() if "{{" in text or "}}" in text
+    ]
+    if with_slots:
+        logger.warning(
+            "capture.questions has legacy slots for %s; using the shipped wording",
+            with_slots,
+        )
+    return {field: text for field, text in kept.items() if field not in with_slots}
 
 
 def validate_message_templates(templates: Any) -> list[dict]:
