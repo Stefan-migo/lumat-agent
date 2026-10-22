@@ -72,8 +72,8 @@ in the **allowed vocabulary** (pending below) so the bot can always fill it — 
 
 ### Slot vocabulary (resolved, validated on save)
 
-Owner-facing Spanish slots, all render-safe (the system always supplies them, `""` when
-unknown):
+Owner-facing Spanish slots. The system fills them from the conversation; a slot that
+resolves empty means the message is **not sent** (S9), never sent with a hole:
 
 | Slot | Source |
 |---|---|
@@ -83,9 +83,12 @@ unknown):
 | `{{equipo}}` | `captured["equipment"]` |
 | `{{problema}}` | `captured["failure"]` |
 | `{{disponibilidad}}` | `captured["availability"]` |
-| `{{visita}}` | `booking["label"]` (`""` when no booking) |
+| `{{visita}}` | `booking["label"]` (empty when no booking -> the message is skipped) |
 
-- A `captured` value of `"unknown"` renders as `""`.
+- A `captured` value of `"unknown"`, a missing value, or `{{visita}}` with no booking
+  resolves **empty**: `respond._render_template_reply` skips the preset and the turn falls
+  through to the normal answer path (KB -> `cannot_answer` -> handoff). S9 forbids sending
+  incomplete text ("Hola , atendemos de ."), so there is no `""`-filled render.
 - Save validation rejects any `{{slot}}` outside this vocabulary (prevents a runtime
   `KeyError` from strict `prompts.render`).
 - At send time only the slots present in the template text are passed (strict render).
@@ -251,7 +254,8 @@ Task shape may be refined after T0 — keep IDs stable.
   stays intact when nothing was picked (D9).
   `respond._slot_values` maps `{{nombre}}`, `{{comuna}}`, `{{direccion}}`, `{{equipo}}`,
   `{{problema}}`, `{{disponibilidad}}` to `captured[...]` and `{{visita}}` to
-  `booking["label"]`, rendering `"unknown"`/missing as `""`.
+  `booking["label"]`, rendering `"unknown"`/missing as `""`. **Superseded by T9 (S9):** an
+  empty slot now skips the preset instead of sending the text with a hole.
   A stale id (catalog changed) falls through to the normal path instead of crashing.
   Because owner text lives in settings, not under `agent/`, `prompts` gained
   `render_text(content, **vars)` + `placeholders(content)` (same strict `{{}}` rules) and
