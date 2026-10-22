@@ -149,7 +149,9 @@ def test_load_missing_key_falls_back_to_literal(tmp_path, monkeypatch, caplog):
     # Point the loader at an empty dir so every known key reports "missing".
     key = "personas/orchestrator.md"
     monkeypatch.setattr(prompts, "_AGENT_DIR", tmp_path)
-    prompts.load.cache_clear()
+    # The bundled-file read is the cached half; `load` is the override-aware
+    # wrapper (S12), so the cache lives in `_load_bundled`.
+    prompts._load_bundled.cache_clear()
 
     with caplog.at_level(logging.WARNING, logger="app.services.prompts"):
         result = prompts.load(key)
@@ -350,6 +352,25 @@ def test_respond_answer_from_kb_brief_mode_appends_brief_persona(respond_client)
         prompts.load("personas/orchestrator.md")
         + prompts.load("personas/orchestrator_brief.md")
         + "\nResponde con un tono cercano, amable y claro."
+    )
+
+
+def test_respond_answer_from_kb_uses_the_configured_persona(respond_client, monkeypatch):
+    # S12: a persona saved from the panel overrides the bundled file, per key.
+    monkeypatch.setattr(
+        _rn,
+        "get_persona_texts",
+        lambda session: {
+            "personas/orchestrator.md": "Eres Max, versión del panel.",
+            "personas/orchestrator_brief.md": "Responde en una línea.",
+        },
+    )
+    _rn._answer_from_kb("hola", "chunk", message_id=11, brief=True)
+    system = respond_client.captured[-1]["messages"][0]["content"]
+    assert system == (
+        "Eres Max, versión del panel."
+        "Responde en una línea."
+        "\nResponde con un tono cercano, amable y claro."
     )
 
 

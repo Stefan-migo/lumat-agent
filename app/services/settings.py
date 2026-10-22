@@ -32,9 +32,10 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Settings
+from app.models import AuditLog, Settings
 from app.services.audit import record_audit
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,26 @@ CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "max_preguntas_por_mensaje": 1,
     "derivaciones": list(CONDUCT_DERIVACIONES),
 }
+
+# S12: the editable persona. The bundled `agent/personas/*.md` files stay the
+# default (byte-coupled to `prompts.FALLBACKS`), so this key only holds the
+# owner's override: "restore default" is deleting the row, never writing a copy
+# of the shipped text. Both files are one unit — the brief is appended to the
+# persona by `respond`, and a persona without its brief is incoherent.
+PERSONA_TEXTS_KEY = "persona.texts"
+PERSONA_PROMPT_KEYS: tuple[str, ...] = (
+    "personas/orchestrator.md",
+    "personas/orchestrator_brief.md",
+)
+PERSONA_TEXT_MAX_CHARS = 8000
+
+# S13: the safety protocol the emergency node delivers. One key = one row = one
+# audited version, so version/diff/restore sees one state per save. The
+# deterministic gate (`emergency.keywords`) stays a separate key and the node
+# never needs these rows to fire.
+EMERGENCY_PROTOCOL_KEY = "emergency.protocol"
+EMERGENCY_PROTOCOL_LISTS: tuple[str, ...] = ("safety_instructions", "contacts")
+EMERGENCY_PROTOCOL_FIELDS: tuple[str, ...] = (*EMERGENCY_PROTOCOL_LISTS, "notify_message")
 
 # S8: the deterministic (no-LLM) replies of booking, cancellation, rescheduling,
 # handoff and the capture steps. The owner edits the wording, never the flow: the
@@ -339,10 +360,13 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     COVERAGE_COMMUNES_KEY: DEFAULT_COVERAGE_COMMUNES,
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
     "emergency.keywords": DEFAULT_EMERGENCY_KEYWORDS,
-    # EM-3: safety protocol content delivered by the emergency node (T4.2).
-    "emergency.safety_instructions": DEFAULT_SAFETY_INSTRUCTIONS,
-    "emergency.contacts": DEFAULT_EMERGENCY_CONTACTS,
-    "emergency.notify_message": DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
+    # S13: safety protocol content delivered by the emergency node (T4.2).
+    # Editable as one unit: `emergency.protocol` carries all three fields.
+    EMERGENCY_PROTOCOL_KEY: {
+        "safety_instructions": DEFAULT_SAFETY_INSTRUCTIONS,
+        "contacts": DEFAULT_EMERGENCY_CONTACTS,
+        "notify_message": DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
+    },
     # EM-4: owner/technician notification channel (T4.3) — WhatsApp template
     # recipient + email fallback SMTP config. Panel-editable via the KV surface.
     "notify.owner_email": DEFAULT_OWNER_EMAIL,
@@ -1032,3 +1056,166 @@ def validate_hours_schedule(schedule: Any) -> None:
             raise ValueError("hours.schedule times must use HH:MM")
         if open_time >= close_time:
             raise ValueError("hours.schedule open must be before close")
+
+
+# --- S12/S13: editable prompts and the version surface -----------------------
+#
+# Version history is the append-only audit trail every settings write already
+# produces (`settings.change` / `settings.reset` carry the full value in
+# `before`/`after`). No second table, no pointer: the KV row is the live state
+# and the audit log is the history of that state, so they cannot disagree.
+
+
+def _validate_persona_text(text: Any, field: str) -> str:
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError(f"persona.texts[{field!r}] must be non-empty text")
+    if len(text) > PERSONA_TEXT_MAX_CHARS:
+        raise ValueError(
+            f"persona.texts[{field!r}] exceeds {PERSONA_TEXT_MAX_CHARS} characters"
+        )
+    if "{{" in text or "}}" in text:
+        # Personas are loaded verbatim and never rendered, so ANY mustache would
+        # reach the model literally. Matching only `{{word}}` would leave
+        # `{{nombre del cliente}}`, `{{}}` or an unclosed `{{ nombre` through,
+        # which is the same contract break.
+        raise ValueError(
+            f"persona.texts[{field!r}] must not contain '{{{{' or '}}}}': personas are used verbatim"
+        )
+    return text
+
+
+def validate_persona_texts(value: Any) -> dict[str, str]:
+    """Validate the editable persona before persistence (S12).
+
+    Both prompt files are one unit: the brief is appended to the persona, so a
+    partial map would silently pair an edited persona with the shipped brief.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("persona.texts must be an object")
+    unknown = [key for key in value if key not in PERSONA_PROMPT_KEYS]
+    if unknown:
+        raise ValueError(f"persona.texts has unknown keys: {unknown}")
+    return {key: _validate_persona_text(value.get(key), key) for key in PERSONA_PROMPT_KEYS}
+
+
+def validate_emergency_protocol(value: Any) -> dict[str, Any]:
+    """Validate the editable safety protocol before persistence (S13)."""
+    if not isinstance(value, dict):
+        raise ValueError("emergency.protocol must be an object")
+    unknown = [field for field in value if field not in EMERGENCY_PROTOCOL_FIELDS]
+    if unknown:
+        raise ValueError(f"emergency.protocol has unknown fields: {unknown}")
+    protocol: dict[str, Any] = {}
+    for field in EMERGENCY_PROTOCOL_FIELDS:
+        raw = value.get(field)
+        if field in EMERGENCY_PROTOCOL_LISTS:
+            if not isinstance(raw, list) or not raw:
+                raise ValueError(f"emergency.protocol[{field!r}] must be a non-empty list")
+            if any(not isinstance(item, str) or not item.strip() for item in raw):
+                raise ValueError(
+                    f"emergency.protocol[{field!r}] items must be non-empty text"
+                )
+            protocol[field] = [item.strip() for item in raw]
+            continue
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValueError(f"emergency.protocol[{field!r}] must be non-empty text")
+        protocol[field] = raw.strip()
+    return protocol
+
+
+def get_persona_texts(session: Session) -> dict[str, str]:
+    """The stored persona override per prompt key; `{}` means "use the files".
+
+    A partial or malformed stored map is treated as unset: it can only come from
+    a manual DB edit, and a half-applied persona is worse than the shipped one.
+    """
+    stored = get_setting(session, PERSONA_TEXTS_KEY, default={})
+    if not isinstance(stored, dict):
+        return {}
+    texts = {key: stored.get(key) for key in PERSONA_PROMPT_KEYS}
+    if any(not isinstance(text, str) or not text.strip() for text in texts.values()):
+        return {}
+    return texts  # type: ignore[return-value]
+
+
+def get_emergency_protocol(session: Session) -> dict[str, Any]:
+    """The stored safety protocol, else the built-in defaults (S13).
+
+    The emergency node reads its content here, but it never gates on this row:
+    the determinism of the gate lives in `emergency_gate` + `emergency.keywords`.
+    """
+    stored = get_setting(session, EMERGENCY_PROTOCOL_KEY, default=None)
+    if isinstance(stored, dict):
+        try:
+            return validate_emergency_protocol(stored)
+        except ValueError:
+            logger.warning(
+                "emergency.protocol stored value is invalid; using the built-in protocol"
+            )
+    return {
+        "safety_instructions": DEFAULT_SAFETY_INSTRUCTIONS,
+        "contacts": DEFAULT_EMERGENCY_CONTACTS,
+        "notify_message": DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
+    }
+
+
+def delete_setting(session: Session, key: str, *, actor: str = "system") -> bool:
+    """Delete one KV row so the built-in default applies again, audited.
+
+    Deleting (instead of writing a copy of the shipped text) is what makes
+    "restore default" track future releases. The caller commits.
+    """
+    row = session.get(Settings, key)
+    if row is None:
+        return False
+    before = row.value
+    session.delete(row)
+    record_audit(
+        session,
+        actor=actor,
+        action="settings.reset",
+        entity="settings",
+        entity_id=key,
+        before={"value": before},
+    )
+    return True
+
+
+def setting_versions(session: Session, key: str) -> list[dict[str, Any]]:
+    """Every audited state of one setting, oldest first (version 1..N).
+
+    A reset state has `content=None` and means "no row: the built-in default".
+    """
+    entries = list(
+        session.scalars(
+            select(AuditLog)
+            .where(
+                AuditLog.entity == "settings",
+                AuditLog.entity_id == key,
+                AuditLog.action.in_(("settings.change", "settings.reset")),
+            )
+            .order_by(AuditLog.id.asc())
+        )
+    )
+    return [
+        {
+            "version": version,
+            "created_at": entry.created_at,
+            "actor": entry.actor,
+            "content": None if entry.after is None else entry.after.get("value"),
+        }
+        for version, entry in enumerate(entries, start=1)
+    ]
+
+
+def setting_version_content(session: Session, key: str, version: int) -> Any:
+    """Content of one version; version ``0`` is the built-in default (`None`).
+
+    Raises `KeyError` for a version that was never recorded.
+    """
+    if version == 0:
+        return None
+    for entry in setting_versions(session, key):
+        if entry["version"] == version:
+            return entry["content"]
+    raise KeyError(version)

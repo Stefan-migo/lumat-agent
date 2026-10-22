@@ -33,20 +33,21 @@ server-side (PDW-API-4): `require_admin_json` -> operador 403; unauthenticated
 
 from __future__ import annotations
 
+import difflib
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.chat.nodes.capture import CAPTURE_FIELD_ORDER
-from app.models import User
+from app.models import Settings, User
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services import costs, model_secrets, settings as settings_service, smtp
+from app.services import costs, model_secrets, prompts, settings as settings_service, smtp
 from app.services.deepseek_key import (
     InvalidApiKeyError,
     KeyValidationUnavailableError,
@@ -150,6 +151,27 @@ class SmtpPasswordBody(BaseModel):
     password: str
 
 
+class PersonaBody(BaseModel):
+    # `extra="forbid"`: an unknown prompt key must fail loudly, not be dropped
+    # with a 200 that looks like the write succeeded.
+    model_config = ConfigDict(extra="forbid")
+
+    orchestrator: str
+    orchestrator_brief: str
+
+
+class EmergencyProtocolBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    safety_instructions: list[str]
+    contacts: list[str]
+    notify_message: str
+
+
+class VersionRestoreBody(BaseModel):
+    version: int
+
+
 def _email_payload(session: Session) -> dict:
     """Current SMTP config + password status; the plaintext never leaves here."""
     return {
@@ -191,6 +213,72 @@ def _parse_email(body: EmailBody) -> dict[str, object]:
         "from_address": from_address,
         "user": body.user.strip(),
         "tls": body.tls,
+    }
+
+
+_VERSION_SCOPES = {
+    "persona": settings_service.PERSONA_TEXTS_KEY,
+    "emergency": settings_service.EMERGENCY_PROTOCOL_KEY,
+}
+
+
+def _persona_payload(session: Session) -> dict:
+    """Effective persona text (override or bundled file) + whether it is overridden."""
+    stored = settings_service.get_persona_texts(session)
+    return {
+        "orchestrator": stored.get("personas/orchestrator.md")
+        or prompts.load("personas/orchestrator.md"),
+        "orchestrator_brief": stored.get("personas/orchestrator_brief.md")
+        or prompts.load("personas/orchestrator_brief.md"),
+        "customized": bool(stored),
+    }
+
+
+def _emergency_payload(session: Session) -> dict:
+    """Effective safety protocol (override or built-in) + whether it is overridden."""
+    return {
+        **settings_service.get_emergency_protocol(session),
+        "customized": session.get(Settings, settings_service.EMERGENCY_PROTOCOL_KEY)
+        is not None,
+    }
+
+
+def _scope_key(scope: str) -> str:
+    key = _VERSION_SCOPES.get(scope)
+    if key is None:
+        raise HTTPException(status_code=404, detail=f"unknown version scope: {scope}")
+    return key
+
+
+# The persona is stored under its prompt path (that is what `prompts.load`
+# resolves) but exposed under a panel-friendly name: the API translates once,
+# here, so the panel never has to know the repo layout.
+_PERSONA_PUBLIC_KEYS = {
+    "orchestrator": "personas/orchestrator.md",
+    "orchestrator_brief": "personas/orchestrator_brief.md",
+}
+
+
+def _default_content(scope: str) -> dict:
+    """Version 0: what the build ships (the files / the built-in protocol)."""
+    if scope == "persona":
+        return {key: prompts.load(key) for key in settings_service.PERSONA_PROMPT_KEYS}
+    return settings_service.SETTINGS_DEFAULTS[settings_service.EMERGENCY_PROTOCOL_KEY]
+
+
+def _public_content(scope: str, content: Any) -> dict:
+    """A stored/default state in the same shape `GET /settings` exposes."""
+    resolved = content if isinstance(content, dict) else _default_content(scope)
+    if scope != "persona":
+        return dict(resolved)
+    return {public: resolved.get(key, "") for public, key in _PERSONA_PUBLIC_KEYS.items()}
+
+
+def _version_texts(scope: str, content: Any) -> dict[str, str]:
+    """One comparable string per field, so lists diff line by line."""
+    return {
+        field: "\n".join(value) if isinstance(value, list) else str(value)
+        for field, value in _public_content(scope, content).items()
     }
 
 
@@ -270,6 +358,8 @@ def settings_get(
             "schedule": settings_service.get_hours_schedule(session),
         },
         "tarifa": settings_service.get_tarifa_precios(session),
+        "persona": _persona_payload(session),
+        "emergency": _emergency_payload(session),
         "coverage": settings_service.get_coverage_communes(session),
         "service_durations": settings_service.get_service_durations(session),
         "conversation_limit": settings_service.get_setting(
@@ -562,6 +652,127 @@ def settings_tarifa(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     _save(session, settings_service.TARIFA_PRECIOS_KEY, precios, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/persona")
+def settings_persona(
+    body: PersonaBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """S12: the editable persona. Both files save as one versioned unit."""
+    try:
+        texts = settings_service.validate_persona_texts(
+            {
+                "personas/orchestrator.md": body.orchestrator,
+                "personas/orchestrator_brief.md": body.orchestrator_brief,
+            }
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.PERSONA_TEXTS_KEY, texts, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/emergency")
+def settings_emergency(
+    body: EmergencyProtocolBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """S13: the editable safety protocol, same version surface as the persona."""
+    try:
+        protocol = settings_service.validate_emergency_protocol(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    _save(session, settings_service.EMERGENCY_PROTOCOL_KEY, protocol, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.get("/settings/versions/{scope}")
+def settings_versions(
+    scope: str,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Oldest-first history of one scope; version 0 (the default) is implicit."""
+    key = _scope_key(scope)
+    return {
+        "versions": [
+            {
+                **entry,
+                "content": None
+                if entry["content"] is None
+                else _public_content(scope, entry["content"]),
+            }
+            for entry in settings_service.setting_versions(session, key)
+        ]
+    }
+
+
+@router.get("/settings/versions/{scope}/diff")
+def settings_version_diff(
+    scope: str,
+    from_version: int = Query(alias="from", ge=0),
+    to_version: int = Query(alias="to", ge=0),
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Unified diff per field between two versions (0 = the built-in default)."""
+    key = _scope_key(scope)
+    try:
+        before = settings_service.setting_version_content(session, key, from_version)
+        after = settings_service.setting_version_content(session, key, to_version)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"unknown version: {exc.args[0]}")
+    before_texts = _version_texts(scope, before)
+    after_texts = _version_texts(scope, after)
+    fields = dict.fromkeys([*before_texts, *after_texts])
+    return {
+        "diff": {
+            field: "\n".join(
+                difflib.unified_diff(
+                    before_texts.get(field, "").splitlines(),
+                    after_texts.get(field, "").splitlines(),
+                    fromfile=f"v{from_version}",
+                    tofile=f"v{to_version}",
+                    lineterm="",
+                )
+            )
+            for field in fields
+        }
+    }
+
+
+@router.post("/settings/versions/{scope}/restore")
+def settings_version_restore(
+    scope: str,
+    body: VersionRestoreBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Restore one version; version 0 deletes the row back to the built-in default."""
+    key = _scope_key(scope)
+    try:
+        content = settings_service.setting_version_content(session, key, body.version)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"unknown version: {body.version}")
+    if content is None:
+        settings_service.delete_setting(session, key, actor=current.username)
+    else:
+        try:
+            validated = (
+                settings_service.validate_persona_texts(content)
+                if scope == "persona"
+                else settings_service.validate_emergency_protocol(content)
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        _save(session, key, validated, current)
     session.commit()
     return {"ok": True}
 

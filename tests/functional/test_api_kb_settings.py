@@ -880,6 +880,8 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
         "model_api_key", "email", "tarifa", "coverage", "service_durations",
+        # S12/S13: the editable persona and safety protocol.
+        "persona", "emergency",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)

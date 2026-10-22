@@ -10,9 +10,10 @@ human). This node is the protocol, not the handoff.
 Strong hit (EM-3):
 - abandons capture (EM-2): the reply is the safety protocol, never the next
   capture question
-- delivers settings `emergency.safety_instructions` + `emergency.contacts` +
-  `emergency.notify_message` (approved safety steps, contacts, technician-
-  notified confirmation; the owner/technician notification fires below)
+- delivers settings `emergency.protocol` (approved safety steps, contacts and
+  the technician-notified confirmation; the owner/technician notification fires
+  below). The content is editable from the panel but is never the gate: a
+  strong hit fires from `emergency.keywords` before any of this is read.
 - flags the case row (emergency, status=escalado, escalated_at) through the
   cases service (T4.4)
 - conversation.state -> human through `set_conversation_state` (HH-1:
@@ -37,27 +38,17 @@ from app.services.audit import record_audit
 from app.services.cases import set_case_status, get_or_create_case
 from app.services.notify import send_emergency_notification
 from app.services.notifications import notify_admins
-from app.services.settings import (
-    DEFAULT_EMERGENCY_CONTACTS,
-    DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
-    DEFAULT_SAFETY_INSTRUCTIONS,
-    get_setting,
-)
+from app.services.settings import get_emergency_protocol
 
 logger = logging.getLogger(__name__)
 
 
 def _protocol_replies(session) -> list[str]:
     """EM-3: safety instructions + contacts + technician-notified blocks."""
-    instructions = get_setting(
-        session, "emergency.safety_instructions", default=DEFAULT_SAFETY_INSTRUCTIONS
-    )
-    contacts = get_setting(
-        session, "emergency.contacts", default=DEFAULT_EMERGENCY_CONTACTS
-    )
-    notify = get_setting(
-        session, "emergency.notify_message", default=DEFAULT_EMERGENCY_NOTIFY_MESSAGE
-    )
+    protocol = get_emergency_protocol(session)
+    instructions = protocol["safety_instructions"]
+    contacts = protocol["contacts"]
+    notify = protocol["notify_message"]
     safety_reply = "INSTRUCCIONES DE SEGURIDAD:\n" + "\n".join(
         f"- {step}" for step in instructions
     )
