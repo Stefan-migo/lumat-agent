@@ -132,8 +132,14 @@ def run_internal_conversation(
 
 
 def _flow_start(state: ConversationState) -> str:
-    """Skip classification for a greeting-only first turn; otherwise classify."""
-    if state.turn <= 1 and is_greeting_only(state):
+    """Skip classification for a greeting, on any turn; otherwise classify.
+
+    S1 (`odd/tasks/chatbot-backlog.md`): a greeting is never a comprehension
+    failure. Limiting the short-circuit to the first turn counted every later
+    "Hola" as `unknown_intent`, and two of those in a row hand the conversation
+    to a human.
+    """
+    if is_greeting_only(state):
         return END
     return "classify_intent"
 

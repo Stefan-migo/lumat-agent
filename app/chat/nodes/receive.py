@@ -1,4 +1,4 @@
-"""Receive node — first-contact open greeting (CM-1).
+"""Receive node — first-contact open greeting (CM-1) and greeting answers.
 
 Deterministic (no LLM): on the first turn the bot opens with the Lumat greeting.
 The greeting adapts to whether the customer already stated their need: a bare
@@ -9,6 +9,10 @@ identifies itself but drops the redundant "¿En qué te puedo ayudar?". Either w
 message. Media-only turns receive an acknowledgement that the file was saved as
 evidence. Other turns leave the answer to downstream nodes, so the flow resumes
 from stored state, never from scratch (CM-1 repeat).
+
+A greeting on any later turn is answered with the same configured greeting and
+never reaches classification: a saludo is not a comprehension failure (S1 of
+`odd/tasks/chatbot-backlog.md`).
 """
 
 from __future__ import annotations
@@ -23,19 +27,49 @@ from app.services.settings import get_message
 
 EVIDENCE_ACK = "Recibí tu archivo, lo guardé para el técnico."
 
-# Bare first-turn greetings (normalized: lower-case, accents stripped, every run
-# of non-alphanumerics collapsed to a single space).
-GREETING_TOKENS = frozenset(
+# Greeting words (normalized: lower-case, accents stripped, every run of
+# non-alphanumerics collapsed to a single space). Recognition is by word instead
+# of an exact whole-message match: production sent "Hola buenas tardes",
+# "hola como va?" and "Alo?" and each one was counted as `unknown_intent`.
+GREETING_WORDS = frozenset(
+    {"hola", "holi", "buenas", "buenos", "buen", "saludos", "hey", "alo"}
+)
+# Day parts and social filler that may ride along with a greeting word without
+# turning it into content. They never make a greeting on their own.
+GREETING_FILLERS = frozenset(
     {
-        "hola",
-        "buenas",
-        "hola buenas",
-        "buenos dias",
-        "buenas tardes",
-        "buenas noches",
-        "hey",
+        "dia",
+        "dias",
+        "tarde",
+        "tardes",
+        "noche",
+        "noches",
+        "que",
+        "tal",
+        "como",
+        "va",
+        "van",
+        "estas",
+        "esta",
+        "estan",
+        "andas",
+        "todo",
+        "bien",
+        "espero",
+        "disculpa",
+        "disculpe",
+        "perdon",
+        "oye",
+        "senor",
+        "senora",
+        "senorita",
+        "amigo",
+        "amiga",
     }
 )
+# A greeting is short by nature. The cap keeps a long message that happens to
+# open with one (`"hola " + rambling`) out of the greeting path.
+_MAX_GREETING_LENGTH = 40
 
 
 def _normalized_inbound(state: ConversationState) -> str:
@@ -50,8 +84,19 @@ def _normalized_inbound(state: ConversationState) -> str:
 
 
 def is_greeting_only(state: ConversationState) -> bool:
-    """True when the first turn is a bare greeting (no need stated)."""
-    return _normalized_inbound(state) in GREETING_TOKENS
+    """True when the message is only a greeting, whatever its variant.
+
+    Every word must be a greeting word or greeting filler, and at least one must
+    be a greeting word, so `"hola buenas tardes"` and `"hola como va?"` count
+    while `"hola mundo"` and `"buenas necesito una visita"` stay content.
+    """
+    text = _normalized_inbound(state)
+    if not text or len(text) > _MAX_GREETING_LENGTH:
+        return False
+    tokens = text.split()
+    if not any(token in GREETING_WORDS for token in tokens):
+        return False
+    return all(token in GREETING_WORDS or token in GREETING_FILLERS for token in tokens)
 
 
 def has_content(state: ConversationState) -> bool:
@@ -81,6 +126,11 @@ def receive(state: ConversationState) -> dict:
     if state.turn <= 1:
         with session_scope() as session:
             updates["first_turn_greeting"] = _first_turn_header(session, state)
+    elif is_greeting_only(state):
+        # S1: greeting the bot again is answered, not classified. The greeting
+        # never increments `unknown_intent` nor counts as an attempt.
+        with session_scope() as session:
+            updates["replies"] = [get_message(session, "greeting", GREETING_HEADER)]
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         updates["replies"] = [EVIDENCE_ACK]
