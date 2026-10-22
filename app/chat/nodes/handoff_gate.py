@@ -32,14 +32,9 @@ from __future__ import annotations
 
 import re
 
+from app.chat.human_request import is_human_request
 from app.chat.state import ConversationState
 from app.models import MessageType
-
-# Trigger 1: person-request expressions (accent-insensitive via IGNORECASE).
-_PERSONA_PATTERN = re.compile(
-    r"\bpersona\b|\bhumano\b|\boperador\b|hablar con alguien|asesor humano",
-    re.IGNORECASE,
-)
 
 # String values — the D2 state window stores `msg_type` as `m.msg_type.value`.
 MEDIA_EVIDENCE_TYPES: frozenset[str] = frozenset(
@@ -101,7 +96,7 @@ def evaluate_handoff(state: ConversationState) -> str | None:
     if message is None:
         return None
     text = message.get("text") or ""
-    if _PERSONA_PATTERN.search(text):
+    if is_human_request(text):
         return "persona"
     if _COMPLAINT_PATTERN.search(text):
         return "complaint"

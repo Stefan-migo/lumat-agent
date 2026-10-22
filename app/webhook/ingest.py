@@ -129,6 +129,8 @@ def normalize_message(raw: dict, value: dict) -> Optional[NormalizedMessage]:
     media_url: Optional[str] = None
     if raw_type == "text":
         text = (raw.get("text") or {}).get("body")
+    elif raw_type in {"system", "unsupported", "ephemeral", "request_welcome"}:
+        text = (raw.get(raw_type) or {}).get("body")
     elif raw_type in _MEDIA_TYPES:
         media_url = (raw.get(raw_type) or {}).get("url")
 
@@ -378,7 +380,10 @@ def process_message(session, message: Message) -> None:
         }:
             message.status = MessageStatus.PROCESSED  # HH-5: persisted, never retried
             return
-        if message.text or message.msg_type in MEDIA_EVIDENCE_TYPES:
+        # Meta onboarding text entered as customer content produced unknown_intent in production.
+        if message.msg_type is not MessageType.OTHER and (
+            message.text or message.msg_type in MEDIA_EVIDENCE_TYPES
+        ):
             run_conversation(session, message)
             deliver_outbound(session, message.conversation_id)
     message.status = MessageStatus.PROCESSED
