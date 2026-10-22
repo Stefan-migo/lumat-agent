@@ -31,6 +31,7 @@ from app.services.settings import (
     TARIFA_LABELS,
     get_hours_timezone,
     get_message,
+    get_persona_texts,
     get_message_templates,
     get_tarifa_precios,
     get_tone_directive,
@@ -168,8 +169,17 @@ def _answer_from_kb(
     client = openai_client()
     with session_scope() as session:
         tone_directive = get_tone_directive(session)
-    system = prompts.load("personas/orchestrator.md") + (
-        prompts.load("personas/orchestrator_brief.md") if brief else ""
+        # S12: one read per turn, same session as the tone directive.
+        persona = get_persona_texts(session)
+    system = prompts.load(
+        "personas/orchestrator.md", override=persona.get("personas/orchestrator.md")
+    ) + (
+        prompts.load(
+            "personas/orchestrator_brief.md",
+            override=persona.get("personas/orchestrator_brief.md"),
+        )
+        if brief
+        else ""
     ) + f"\n{tone_directive}"
     memory_block = f"\n<memory>{memory_context}</memory>" if memory_context else ""
     fecha, tarifario = _tarifario_context()

@@ -156,13 +156,25 @@ _SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
 @lru_cache(maxsize=32)
-def load(key: str) -> str:
-    """Return `agent/{key}` verbatim. Fallback to FALLBACKS[key] + warning."""
+def _load_bundled(key: str) -> str:
+    """`agent/{key}` verbatim, else the frozen literal + a warning."""
     path = _AGENT_DIR / key
     if path.is_file():
         return path.read_text(encoding="utf-8")
     logger.warning("prompt key %s missing under agent/, using fallback literal", key)
     return FALLBACKS[key]
+
+
+def load(key: str, override: str | None = None) -> str:
+    """Configured text (`override`), else `agent/{key}` verbatim, else the literal.
+
+    `override` is the panel-editable value (S12/S13). The bundled file stays the
+    default, which keeps `FALLBACKS[key] == agent/file` meaningful: that contract
+    proves the *shipped* prompt, not the owner's current one.
+    """
+    if override:
+        return override
+    return _load_bundled(key)
 
 
 def render(key: str, **vars) -> str:
