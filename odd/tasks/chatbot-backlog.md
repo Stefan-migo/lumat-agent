@@ -81,7 +81,7 @@ es una escritura en producción y la ejecuta el owner.
 | ID | Spec | Alcance | Ruta | Commit |
 |---|---|---|---|---|
 | T1 | S1–S5 | Crear este doc desde el reporte y archivar la sesión | inline | este commit |
-| T2 | S1 | `is_greeting_only` por variantes, en cualquier turno, sin sumar `unknown_intent` | inline, test-first | pendiente |
+| T2 | S1 | `is_greeting_only` por variantes, en cualquier turno, sin sumar `unknown_intent` | inline, test-first | `31f4b4e7` |
 | T3 | S2 | Detector único de pedido humano, contador consecutivo, errores técnicos fuera, filtro de plataforma | pendiente | pendiente |
 | T4 | S3 | Salida 3 + oferta en `kb_miss` + reset del contador + superficie de panel | pendiente | pendiente |
 | T5 | S4 | Recuperación única por turno y fidelidad del medidor | pendiente | pendiente |
@@ -134,3 +134,20 @@ producción) no se reabre.
 
 **L3 — base verificado (2026-10-23):** `main` = `7a15e54d`; `app/` y `web/src/` idénticos a
 `v2026.10.6`, que es lo que corre producción; harness `lumat-harness` vivo. S1 arranca sobre esa base.
+
+**L4 — S1 cerrado (2026-10-23), evidencia observada:**
+
+- RED: 22 tests fallando en `tests/unit/test_chat_greeting.py` y
+  `tests/integration/test_greeting_variants.py` (`"Hola buenas tardes"` → `classify_intent`; el turno
+  de saludo hacía una llamada al modelo, devolvía la aclaración y escribía `unknown_intent`).
+- GREEN: los dos archivos completos en verde (exit 0), y `uv run pytest tests/` completo en verde
+  (exit 0, 0 `FAILED`/`ERROR`) sobre la base de test del worktree (`lumat-test-lumat-agent-odd-chatbot-backlog`, puerto 6266).
+- Cambio: `GREETING_WORDS` + `GREETING_FILLERS` con tope de 40 caracteres reemplazan la lista exacta;
+  `_flow_start` corta en cualquier turno; un saludo en turno > 1 se responde con `messages.greeting`
+  (copy ya configurado, cero LLM) en vez de dejar el turno en silencio.
+- Despedidas: no se reimplementaron. `closure_gate` sigue ganando antes del saludo (regresión en
+  `test_greeting_variants.py::test_farewell_still_wins_before_the_greeting`).
+- Costo LLM del slice: cero (camino determinista).
+- No se corrió `scripts/chat_harness.py`: el harness monta el worktree principal y S1 no llama al
+  modelo; los tests de integración ejercitan la misma entrada (`run_conversation`). Para S2/S3 la
+  pasada por harness es obligatoria.
