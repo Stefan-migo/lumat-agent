@@ -1145,7 +1145,7 @@ def test_settings_update_limits_audited(client, make_user):
 
 
 def test_settings_update_negative_limit_400_json(client, make_user):
-    """Limit validation mirrors the Jinja _number guard (SS-3): >= 0."""
+    """Limit validation mirrors the Jinja _number guard (SS-3, S19): > 0."""
     make_user("adm", "adm-pass", role="admin")
     _login(client)
 

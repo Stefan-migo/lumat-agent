@@ -19,7 +19,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   reply-texts {"texts": {key: str}}        -> reply.texts (S8)
   conduct {"conduct": {orden, redaccion, max_preguntas_por_mensaje,
                        derivaciones}}      -> chat.conduct (validated, S10)
-  limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
+  limits {"conversation_limit": n, "daily_limit": n} (> 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 - POST /settings/message-templates -> validated additive message-template catalog
 - POST /settings/email -> SMTP connection settings (WU-E): host/port/from/user/tls
@@ -57,15 +57,39 @@ from app.services.deepseek_key import (
 router = APIRouter(tags=["panel-api-settings"])
 
 
-def _number(value: float, key: str, *, minimum: float = 0.0) -> float:
-    """Reject NaN/Inf/negative limit values loud and clear (SS-3 guard)."""
+def _number(
+    value: float, key: str, *, minimum: float = 0.0, positive: bool = False
+) -> float:
+    """Reject NaN/Inf/negative limit values loud and clear (SS-3 guard).
+
+    `positive=True` rejects 0 as well: for a spend limit, 0 is how the panel
+    would otherwise spell "no cap" (S19 — the cost gate can be adjusted, never
+    switched off).
+    """
     try:
         parsed = Decimal(str(value))
     except (InvalidOperation, ValueError):
         raise HTTPException(status_code=400, detail=f"{key} must be a number")
     if not parsed.is_finite() or parsed < Decimal(str(minimum)):
         raise HTTPException(status_code=400, detail=f"{key} must be >= {minimum}")
+    if positive and parsed == 0:
+        raise HTTPException(status_code=400, detail=f"{key} must be > 0")
     return float(parsed)
+
+
+def _keywords(body: "KeywordsBody") -> list[str]:
+    """S19: the emergency gate needs at least one non-blank trigger.
+
+    An empty (or all-blank) list compiles to a pattern that matches nothing, so
+    accepting it would switch the gate off from the panel.
+    """
+    keywords = [keyword.strip() for keyword in body.keywords]
+    if not keywords or any(not keyword for keyword in keywords):
+        raise HTTPException(
+            status_code=400,
+            detail="keywords must be a non-empty list of non-empty text",
+        )
+    return keywords
 
 
 class ScopeBody(BaseModel):
@@ -517,7 +541,7 @@ def settings_keywords(
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
-    _save(session, "emergency.keywords", [k.strip() for k in body.keywords], current)
+    _save(session, "emergency.keywords", _keywords(body), current)
     session.commit()
     return {"ok": True}
 
@@ -579,13 +603,13 @@ def settings_limits(
     _save(
         session,
         "cost.conversation_limit",
-        _number(body.conversation_limit, "conversation_limit"),
+        _number(body.conversation_limit, "conversation_limit", positive=True),
         current,
     )
     _save(
         session,
         "cost.daily_limit",
-        _number(body.daily_limit, "daily_limit"),
+        _number(body.daily_limit, "daily_limit", positive=True),
         current,
     )
     session.commit()
