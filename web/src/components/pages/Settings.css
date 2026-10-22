@@ -169,3 +169,13 @@
 .settings-tarifa__service { min-width: 0; margin: 0; padding: 0; border: 0; }
 .settings-tarifa__service legend { padding: 0; margin-bottom: var(--space-2); font-weight: var(--weight-semibold, 600); }
 .settings-tarifa__ranges { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-3); }
+
+/* S12/S13 — version history of the editable persona and emergency protocol. */
+.settings-version-history { margin-top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); }
+.settings-version-history__body { display: flex; flex-direction: column; gap: var(--space-3); }
+.settings-version-history__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.settings-version-history__entry { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.settings-version-history__meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; font-size: var(--text-sm); color: var(--corp-fg-muted); }
+.settings-version-history__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.settings-version-history__diff { margin: 0; padding: var(--space-3); max-height: 18rem; overflow: auto; white-space: pre-wrap; font-size: var(--text-xs); background: var(--surface-subtle); border-radius: var(--radius-md); }
+.settings-version-history__footer { display: flex; justify-content: flex-end; }

@@ -14,6 +14,8 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },
   coverage: ["Las Condes"], service_durations: {},
   conversation_limit: 4, daily_limit: 20, meta_cost: 0.05,
+  persona: { orchestrator: "Eres Max.", orchestrator_brief: "Sé breve.", customized: false },
+  emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });
@@ -24,7 +26,7 @@ describe("Settings", () => {
 
   it("renders every section and selects Agente by default", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Mensajes", "Horarios y avisos", "Tarifas", "Cobertura", "Costos", "Capacidades", "API key de modelos", "Correo"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Persona", "Mensajes", "Horarios y avisos", "Tarifas", "Cobertura", "Costos", "Capacidades", "API key de modelos", "Correo"]);
     expect(screen.getByRole("tab", { name: "Agente" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
   });
@@ -273,5 +275,39 @@ describe("Settings", () => {
     await waitFor(() => expect(screen.getByText("No hay herramientas que coincidan con la búsqueda.")).toBeInTheDocument());
     expect(screen.getByText("Disponible")).toBeInTheDocument();
     expect(screen.getByText("No disponible")).toBeInTheDocument();
+  });
+  it("saves the persona and its brief in one request", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Persona" }));
+
+    const persona = screen.getByLabelText("Texto de la persona");
+    expect(persona).toHaveValue("Eres Max.");
+    fireEvent.change(persona, { target: { value: "Eres Max, edición del panel." } });
+    await user.click(screen.getByRole("button", { name: "Guardar persona" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/persona", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ orchestrator: "Eres Max, edición del panel.", orchestrator_brief: "Sé breve." }),
+    })));
+  });
+
+  it("saves the emergency protocol with one item per line", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+
+    fireEvent.change(screen.getByLabelText("Instrucciones de seguridad"), { target: { value: "Corta el gas.\nVentila el lugar." } });
+    await user.click(screen.getByRole("button", { name: "Guardar protocolo" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/emergency", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        safety_instructions: ["Corta el gas.", "Ventila el lugar."],
+        contacts: ["Bomberos 132."],
+        notify_message: "Notificado.",
+      }),
+    })));
   });
 });

@@ -3,17 +3,19 @@ import { settings } from "./settings";
 
 /** Settings serializer keys from GET /settings in app/panel/api/routes/settings.py
  *  (R-PRD-PG-3): {scope_rules, keywords, tone, messages, hours, conversation_limit,
- *  daily_limit, meta_cost, snapshot, model_api_key, email}. */
+ *  daily_limit, meta_cost, snapshot, model_api_key, email, persona, emergency}. */
 const SETTINGS_KEYS = [
   "conversation_limit",
   "coverage",
   "daily_limit",
   "email",
+  "emergency",
   "hours",
   "keywords",
   "meta_cost",
   "messages",
   "model_api_key",
+  "persona",
   "scope_rules",
   "service_durations",
   "snapshot",

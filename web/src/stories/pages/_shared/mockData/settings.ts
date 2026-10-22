@@ -61,6 +61,23 @@ export const settings: Settings = {
     "Colina",
     "Huechuraba",
   ],
+  persona: {
+    orchestrator: "Eres Max, el asistente virtual de Lumat.",
+    orchestrator_brief: "Responde en una línea cuando el costo esté ajustado.",
+    customized: true,
+  },
+  emergency: {
+    safety_instructions: [
+      "Corta el suministro de gas solo si puedes hacerlo de forma segura.",
+      "Abre puertas y ventanas para ventilar el lugar.",
+    ],
+    contacts: [
+      "Emergencias: Bomberos 132 o Ambulancia 131.",
+      "Lumat: +56 9 1234 5678.",
+    ],
+    notify_message: "Un técnico de Lumat ha sido notificado y te contactará a la brevedad.",
+    customized: false,
+  },
   service_durations: { Calefont: 60, Caldera: 90 },
   conversation_limit: 1.5,
   daily_limit: 5.0,

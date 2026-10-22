@@ -527,6 +527,35 @@ export interface Settings {
   meta_cost: number;
   snapshot: SpendSnapshot;
   email: SmtpEmailSettings;
+  /** S12: effective persona text (override or bundled file) per prompt file. */
+  persona: {
+    orchestrator: string;
+    orchestrator_brief: string;
+    customized: boolean;
+  };
+  /** S13: effective safety protocol the emergency node delivers. */
+  emergency: {
+    safety_instructions: string[];
+    contacts: string[];
+    notify_message: string;
+    customized: boolean;
+  };
+}
+
+/** One audited state of an editable scope (S12/S13). `null` = built-in default. */
+export interface SettingsVersionEntry {
+  version: number;
+  created_at: string;
+  actor: string;
+  content: Record<string, unknown> | null;
+}
+
+export interface SettingsVersionsResponse {
+  versions: SettingsVersionEntry[];
+}
+
+export interface SettingsDiffResponse {
+  diff: Record<string, string>;
 }
 
 export interface ClientFichaResponse {
