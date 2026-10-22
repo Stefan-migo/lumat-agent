@@ -63,6 +63,10 @@ config migration is verified by what it leaves behind.
    `adopt` run stays idempotent.
 6. The project's own skills survived: `.agents/skills/` holds `component-adapter`,
    `design-agent-lead`, `panel-section-analysis` plus the two Rapsodia skills.
+7. The new runtime works end to end: `rapso context` in this project builds a 13.4 KB prelude from
+   Engram plus the Graphify graph in 2.1 s, and a real `gentle-shell --approve -p` session with an
+   aged prelude rewrote it (the `**Generated**` line advanced), which proves the installed
+   `.pi/extensions/rapsodia-context.ts` ran `rapso context` through the 1.1.0 CLI on PATH.
 
 ## Log
 
@@ -81,3 +85,6 @@ config migration is verified by what it leaves behind.
 - **L5** (not touched): `.planning/` keeps the GSD-era plan files and `openspec/` stays as a vestige
   of earlier construction decisions, per S1. `.codex/skills/frontend-design` belongs to another agent
   surface and is out of scope.
+- **L6** (delivery): branch pushed and PR #659 opened against `main`. The old OpenCode session
+  `2026-09-23-archify-eval` was archived (moved from `sessions/open/` to `sessions/archived/`);
+  `2026-09-29-clausulas-ip-reutilizacion` is still open and was left alone.
