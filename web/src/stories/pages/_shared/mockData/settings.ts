@@ -115,12 +115,13 @@ export const settings: Settings = {
     customized: false,
   },
   reply_texts: {
-    // Production returns all 19 keys; the story mirrors them so the grouped
-    // editor renders complete instead of 16 empty fields.
+    // Production returns all 20 keys; the story mirrors them so the grouped
+    // editor renders complete instead of 17 empty fields.
     texts: {
       booking_offer: "Tengo estos horarios disponibles para la visita técnica:\n{{opciones}}",
+      booking_no_more_today: "Para ese día no me quedan más horarios. Te propongo estos otros días:\n{{opciones}}",
       booking_unclear: "No me quedó claro el horario que prefieres. ¿Me lo repites?",
-      booking_confirmed: "Listo, quedó agendada para el {{fecha}}.",
+      booking_confirmed: "Tu visita técnica quedó confirmada para el {{fecha}} con {{tecnico}}.",
       manage_no_visits: "No veo visitas agendadas a tu nombre para {{accion}}.",
       manage_confirm_cancel: "¿Confirmas que quieres cancelar la visita del {{visita}}?",
       manage_select: "Tienes más de una visita. ¿Cuál quieres {{accion}}?\n{{opciones}}",
@@ -140,8 +141,9 @@ export const settings: Settings = {
     },
     slots: {
       booking_offer: ["opciones"],
+      booking_no_more_today: ["opciones"],
       booking_unclear: [],
-      booking_confirmed: ["fecha"],
+      booking_confirmed: ["fecha", "tecnico"],
       manage_no_visits: ["accion"],
       manage_confirm_cancel: ["visita"],
       manage_select: ["accion", "opciones"],

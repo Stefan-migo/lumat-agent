@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import Case, Conversation
+from app.models import Case, Conversation, User
 from app.services import scheduling
 from app.services import technician_schedule
 from app.services.settings import (
@@ -23,8 +23,25 @@ from app.services.settings import (
 
 OFFER_TTL = timedelta(minutes=30)
 MAX_INVALID_REPLIES = 1
+# S1 (chatbot-experiencia): "más horarios" pages through a frozen offer instead of
+# deriving. The universe is built once, when the offer is created, so a later page
+# never drifts with the clock and never depends on bookings made by someone else.
+PAGE_SIZE = 3
+UNIVERSE_LIMIT = 30
 SERVICE = "Visita técnica"
 DEFAULT_DURATION_MINUTES = 60
+
+# S1: asking for another time is a request this node can serve, not a failed
+# understanding. The booking node is deterministic and never asks the model, so the
+# vocabulary lives here; the list stays narrow on purpose, because anything it does
+# not match still gets the clarification and then a person.
+_MORE_SLOTS_MARKERS = (
+    "mas horario", "otros horario", "otro horario", "otra hora", "otras horas",
+    "mas opcion", "otras opciones", "siguientes horarios",
+    "otro dia", "otros dias", "otra fecha", "otras fechas",
+    "no puedo en esos", "no puedo en esas", "no me sirve", "no me sirven",
+    "ninguno me sirve", "ninguna me sirve",
+)
 
 
 def _fold(value: str) -> str:
@@ -46,15 +63,27 @@ def _persist_offer(session, state: ConversationState, offer: dict | None) -> Non
     conversation.captured_data = captured
 
 
-def _offer_text(slots: list[dict], texts: dict[str, str]) -> str:
-    return render_reply(
-        texts,
-        "booking_offer",
-        opciones="\n".join(
-            f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
-            for index, slot in enumerate(slots, 1)
-        ),
+def _options(slots: list[dict]) -> str:
+    return "\n".join(
+        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
+        for index, slot in enumerate(slots, 1)
     )
+
+
+def _offer_text(slots: list[dict], texts: dict[str, str]) -> str:
+    return render_reply(texts, "booking_offer", opciones=_options(slots))
+
+
+def _requests_more_slots(text: str) -> bool:
+    normalized = _fold(text)
+    return any(marker in normalized for marker in _MORE_SLOTS_MARKERS)
+
+
+def _slot_entries(assignments: list[tuple[int, date, time]]) -> list[dict]:
+    return [
+        {"technician_id": technician_id, "date": day.isoformat(), "time": clock.isoformat()}
+        for technician_id, day, clock in assignments
+    ]
 
 
 def _new_offer(
@@ -71,19 +100,42 @@ def _new_offer(
     duration = get_service_duration(session, case.service, default=DEFAULT_DURATION_MINUTES)
     technician_schedule.ensure_horizon(session, now)
     assignments = scheduling.open_slots_for_assignment(
-        session, now=now, days=7, duration_minutes=duration, limit=3,
+        session, now=now, days=7, duration_minutes=duration, limit=UNIVERSE_LIMIT,
         # S1: a visit offered for "right now" cannot be staffed.
         lead_minutes=get_booking_lead_minutes(session),
     )
     if not assignments:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}
-    slots = [
-        {"technician_id": technician_id, "date": day.isoformat(), "time": clock.isoformat()}
-        for technician_id, day, clock in assignments
-    ]
-    offer = {"slots": slots, "created_at": now.isoformat(), "attempts": attempts}
+    universe = _slot_entries(assignments)
+    slots = universe[:PAGE_SIZE]
+    offer = {
+        "slots": slots, "universe": universe, "shown": len(slots),
+        "created_at": now.isoformat(), "attempts": attempts,
+    }
     _persist_offer(session, state, offer)
     return {"next_step": "end", "replies": [_offer_text(slots, texts)]}
+
+
+def _more_slots(session, state: ConversationState, offer: dict, texts: dict[str, str]) -> dict:
+    """Serve the next page of the frozen offer, or escalate when nothing is left.
+
+    The page keeps the numbering the customer replies with, and when it no longer
+    falls on the same day the answered offer was for, the reply says so instead of
+    silently jumping to another day.
+    """
+    current = offer.get("slots") or []
+    shown = int(offer.get("shown", len(current)))
+    page = (offer.get("universe") or [])[shown:shown + PAGE_SIZE]
+    if not page:
+        _persist_offer(session, state, None)
+        return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}
+    offer = {**offer, "slots": page, "shown": shown + len(page), "attempts": 0}
+    _persist_offer(session, state, offer)
+    if current and date.fromisoformat(page[0]["date"]) > date.fromisoformat(current[-1]["date"]):
+        return {"next_step": "end", "replies": [
+            render_reply(texts, "booking_no_more_today", opciones=_options(page))
+        ]}
+    return {"next_step": "end", "replies": [_offer_text(page, texts)]}
 
 
 def _resolve(text: str, slots: list[dict]) -> int | None:
@@ -100,6 +152,17 @@ def _resolve(text: str, slots: list[dict]) -> int | None:
         }
     ]
     return matches[0] if len(matches) == 1 else None
+
+
+# S1 (chatbot-experiencia): the confirmation names the technician that will attend.
+# A technician without a loaded name must not leave a hole in the sentence.
+TEAM_FALLBACK = "nuestro equipo técnico"
+
+
+def _technician_name(session, technician_id: int) -> str:
+    technician = session.get(User, technician_id)
+    name = technician.name.strip() if technician and technician.name else ""
+    return name or TEAM_FALLBACK
 
 
 def booking(state: ConversationState) -> dict:
@@ -125,6 +188,8 @@ def booking(state: ConversationState) -> dict:
         slots = offer.get("slots") or []
         selected = _resolve(text, slots)
         if selected is None:
+            if _requests_more_slots(text):
+                return _more_slots(session, state, offer, texts)
             attempts = int(offer.get("attempts", 0))
             if attempts >= MAX_INVALID_REPLIES:
                 _persist_offer(session, state, None)
@@ -159,7 +224,12 @@ def booking(state: ConversationState) -> dict:
             return _new_offer(session, state, now, texts)
         _persist_offer(session, state, None)
         slot_label = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+        technician_name = _technician_name(session, appointment.technician_id)
         return {
             "next_step": "summary",
-            "replies": [render_reply(texts, "booking_confirmed", fecha=slot_label)],
+            "replies": [
+                render_reply(
+                    texts, "booking_confirmed", fecha=slot_label, tecnico=technician_name
+                )
+            ],
         }

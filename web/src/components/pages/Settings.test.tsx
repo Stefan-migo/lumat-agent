@@ -407,6 +407,22 @@ describe("Settings", () => {
     })));
   });
 
+  it("renders the exhausted-day notice inside the booking group", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await user.click(screen.getByRole("button", { name: /Agendar/ }));
+
+    const notice = screen.getByLabelText("Sin más horarios para ese día");
+    fireEvent.change(notice, { target: { value: "Sin más para ese día: {{opciones}}" } });
+    await user.click(screen.getByRole("button", { name: "Guardar respuestas del flujo" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
+      body: JSON.stringify({ texts: { booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual.", booking_no_more_today: "Sin más para ese día: {{opciones}}" } }),
+    })));
+  });
+
   it("adds a service duration and saves the map", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));

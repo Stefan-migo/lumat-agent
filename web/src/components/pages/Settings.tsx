@@ -70,7 +70,7 @@ const DERIVACION_LABELS: Record<string, string> = {
   presupuesto_especial: "Presupuesto especial",
 };
 const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
-  { title: "Agendar", keys: ["booking_offer", "booking_unclear", "booking_confirmed"] },
+  { title: "Agendar", keys: ["booking_offer", "booking_no_more_today", "booking_unclear", "booking_confirmed"] },
   { title: "Gestionar una visita", keys: [
     "manage_no_visits", "manage_confirm_cancel", "manage_select", "manage_slots_offer",
     "manage_expired", "manage_appointment_unclear", "manage_slots_unclear", "manage_kept",
@@ -82,6 +82,7 @@ const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
 ];
 const REPLY_TEXT_LABELS: Record<string, string> = {
   booking_offer: "Oferta de horarios",
+  booking_no_more_today: "Sin más horarios para ese día",
   booking_unclear: "No se entendió el horario pedido",
   booking_confirmed: "Visita agendada",
   manage_no_visits: "No tiene visitas",

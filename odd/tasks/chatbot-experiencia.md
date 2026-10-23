@@ -21,10 +21,17 @@ Alcance:
 - Anticipación mínima de **2 horas** (configurable), medida contra `now`.
 - "Más horarios" entrega los siguientes 3 de la misma oferta congelada; si no hay más para ese día, lo
   dice y ofrece otros días. No deriva por pedir otro horario.
+- **Aviso de día agotado** (texto aprobado, verbatim): `Para ese día no me quedan más horarios. Te
+  propongo estos otros días:` + `{{opciones}}` + `Responde con el número del horario que prefieres.`
+- Sólo cuando no queda ningún horario más se deriva, con `booking_unavailable` (el texto S4.5 llega en
+  T7).
 - Derivación de salvataje con el texto S4.5 sólo si no se logra agendar.
 - Asignación **round-robin por carga diaria**: entre los técnicos libres para el horario, gana quien
   tenga menos visitas agendadas ese día; empate → alterna por id.
 - La confirmación puede nombrar al técnico (`{{tecnico}}`), con fallback cuando `users.name` está vacío.
+- **Confirmación** (texto aprobado, verbatim): `Tu visita técnica quedó confirmada para el {{fecha}} con
+  {{tecnico}}.` — si el técnico no tiene nombre cargado, `{{tecnico}}` se completa con `nuestro equipo
+  técnico` para que la oración no quede coja.
 
 Riesgo: **item 1** (escribe citas en la agenda; un error agenda una visita real en un horario inválido)
 y **item 3** (cambia el contrato de `open_slots`, que tiene otros consumidores).
@@ -106,8 +113,8 @@ Riesgo: **item 3** (mueve superficies del panel que tienen tests y `tsc -b`).
 |---|---|---|---|---|
 | T1 | S1 | Grilla de 30 min + anticipación 2 h en `scheduling` | inline, test-first | `e934a261` |
 | T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | `d473ee74` |
-| T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | pendiente |
-| T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | pendiente |
+| T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | `ae02f872` |
+| T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | `50ed958b` |
 | T5 | S2 | Saludo con `{{nombre}}` y variante que pregunta el nombre | inline, test-first | pendiente |
 | T6 | S3 | Categoría `smalltalk` + rama + texto configurable | worker + inline, test-first | pendiente |
 | T7 | S4 | Textos por motivo de derivación (5) + panel | inline, test-first | pendiente |
@@ -206,3 +213,89 @@ commit (docs).
 - Límite de slice: con `d473ee74` la rama acumula 484 líneas autoradas, pasado el objetivo de ~400.
   No se parte la entrega porque D15 fija **un solo release** al final; los commits por task siguen
   siendo las unidades revisables (feat + docs por task).
+
+**L7 — copy de T3/T4 aprobado por el owner (2026-10-23), verbatim de las opciones elegidas:**
+
+> Para ese día no me quedan más horarios. Te propongo estos otros días:
+> {{opciones}}
+> Responde con el número del horario que prefieres.
+
+> Tu visita técnica quedó confirmada para el {{fecha}} con {{tecnico}}.
+>
+> Con técnico sin nombre cargado: "…con nuestro equipo técnico."
+
+El primero se implementa en T3; el segundo en T4 (la parte `{{tecnico}}`), y el salvataje de agenda
+reusa el motivo `booking_unavailable` cuyo texto S4.5 entra en T7.
+
+**L8 — T3 cerrado (2026-10-23), evidencia observada.** Commit `ae02f872` (código, tests y panel) +
+este commit (docs).
+
+- RED: los tres tests nuevos de `tests/integration/test_chat_booking.py` fallaban — página siguiente
+  el mismo día, día agotado con aviso, y sin horarios restantes. Antes, pedir otro horario daba
+  `booking_unclear` y después derivación.
+- GREEN: `tests/integration/test_chat_booking.py` → 12 tests, exit 0.
+- Panel: `npm run build` (tsc -b) exit 0 y `npm test` → 111 archivos / 1264 tests, exit 0, con un pin
+  nuevo de que el campo "Sin más horarios para ese día" se renderiza en el grupo Agendar y viaja al
+  endpoint `reply-texts` bajo su propia clave. La primera corrida del panel murió con el crash y se
+  repitió completa.
+- Suite backend, corrida 1: 2837 tests, **1 FAILED** —
+  `test_reply_texts.py::test_the_catalog_covers_booking_manage_handoff_and_capture`, porque el
+  catálogo de respuestas es cerrado y la clave nueva no estaba declarada. Se movió el pin (entrada
+  explícita) y se agregó un pin byte a byte del copy aprobado.
+- Suite backend, corrida 2: 2825 tests, 0 `FAILED`/`ERROR`, `PYTEST_EXIT=0`, 6m57s.
+- Diseño: la oferta se congela al crearse (universo de 30 candidatos guardado en `_booking_offer`);
+  "más horarios" sirve la página siguiente de 3 y reinicia la numeración y los intentos. Si la página
+  ya no cae en el día de la oferta respondida, se dice con el texto aprobado. Sin más candidatos →
+  `handoff` con `booking_unavailable`.
+- Detector: lista acotada de marcadores (`más horarios`, `otros horarios`, `otra hora`, `otros días`,
+  `no me sirve`, `no puedo en esos`, …). Falla cerrado: lo que no matchea sigue con la aclaración y
+  después la persona.
+- No se tocó la TTL de 30 minutos: la oferta congelada vence igual, y como la anticipación mínima
+  (2 h) es mayor que la TTL, ninguna página puede ofrecer un horario ya pasado.
+
+**L9 — T4 cerrado (2026-10-23), evidencia observada.** Commit `50ed958b` (código, tests y mock de
+stories) + este commit (docs).
+
+- Delegado a `gentle-ai-worker`, que se frenó primero por un falso bloqueo de Graph Check: corrió
+  `find graphify-out -maxdepth 2 -type f` y no atravesó el symlink a `../lumat-agent/graphify-out`.
+  El grafo estaba ahí (`graph.json` 15 MB, `GRAPH_REPORT.md` 208 KB); se le indicó `find -L` y siguió.
+  **Regla para próximos workers:** en este repo el check es `ls -la graphify-out/` o `find -L`.
+- RED (evidencia del worker): `tests/integration/test_chat_booking.py tests/unit/test_reply_texts.py`
+  → 6 fallos, `KeyError: 'tecnico'` en los tres caminos de confirmación, antes de implementar.
+- GREEN: los mismos dos archivos → 34 tests, exit 0. Re-corridos verdes después del refactor de
+  revisión (extraer `_technician_name()` y la constante `TEAM_FALLBACK` fuera de `booking()`, que ya
+  era larga).
+- Panel: `npm run build` exit 0 y `npm test` → 111 archivos / 1264 tests, exit 0.
+- Suite backend: 2828 tests, 0 `FAILED`/`ERROR`, `PYTEST_EXIT=0`, 8m41s.
+- Pins movidos: la expectativa de `booking_confirmed` pasa al texto aprobado y el vocabulario cerrado
+  de slots suma `tecnico` explícito. `EXPECTED_KEYS` no cambió.
+- Alcance respetado: nada de `handoff.py` ni de textos de derivación. El motivo `booking_unavailable`
+  ya existe desde T3/T4; su texto S4.5 entra en T7.
+- Deuda conocida para T8: el fallback `nuestro equipo técnico` vive en código como constante, no en
+  `settings`; si el owner quiere editarlo desde el panel, es una clave nueva y su slot.
+- Estado de la rama al cerrar T4: 8 commits, 832 líneas autoradas. T5–T8 quedan **bloqueados** por
+  pedido explícito del owner ("detente cuando termines T4. no comiences T5").
+
+**L10 — merge de `main` y corte en dos PRs (2026-10-23), evidencia observada:**
+
+- `origin/main` avanzó a `94e6921c` (6 commits: política de test tiers con `scripts/test.sh`, aislamiento
+  de `MEDIA_DIR` en `tests/conftest.py` y el fix del flake de `test_time_triggers`). Merge limpio en la
+  rama, sin conflictos: main tocó `AGENTS.md`, `scripts/`, `openspec/` y el harness de tests; esta
+  feature tocó `app/`, `web/src` y este doc.
+- Gates con la política **nueva** (no con la vieja "siempre la suite completa"):
+  `bash scripts/test.sh shape origin/main` → exit 0 (sin superficie de forma); `bash scripts/test.sh
+  full` → **2834 tests, 0 fallos, exit 0** (8m11s); panel `npm ci` → `build` exit 0 → `npm test` →
+  **111 archivos / 1264 tests, exit 0**.
+- Corte en dos slices encadenados, en vez de un PR de 819 líneas: **#668** `odd/chatbot-agenda` (T1–T2,
+  base `main`, 491 líneas con `size:exception` porque 208 son este doc) y **#669** `odd/chatbot-oferta`
+  (T3–T4, base `odd/chatbot-agenda`, 328 líneas).
+- Las ramas se **rearmaron por cherry-pick sobre el `main` actual** (`odd/chatbot-agenda` desde
+  `origin/main`, `odd/chatbot-oferta` encima) para que cada diff muestre sólo su slice y para cumplir
+  `strict` (rama al día) sin commits de merge en la cadena. Verificado: el árbol de `odd/chatbot-oferta`
+  es idéntico al de la rama previa al corte (`git diff` vacío), así que el `full` corre sobre el mismo
+  contenido que el tip de la cadena.
+- `odd/chatbot-agenda` verificado en su propio árbol: `bash scripts/test.sh quick` exit 0 y `db
+  tests/integration/test_scheduling.py` 20 tests exit 0.
+- `odd/chatbot-experiencia` queda como respaldo local, sin pushear. **Continuación de T5 en adelante:
+  desde `odd/chatbot-oferta`**, que después del merge de #668 se rebasa sobre `main` y pasa a ser la
+  rama de trabajo.

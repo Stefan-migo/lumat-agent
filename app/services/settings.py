@@ -119,7 +119,13 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     "booking_unclear": (
         "No pude identificar un único horario. Responde con el número de una opción."
     ),
-    "booking_confirmed": "Tu visita técnica quedó confirmada para el {{fecha}}.",
+    # S1 (chatbot-experiencia): the approved copy for a day the offer exhausted.
+    "booking_no_more_today": (
+        "Para ese día no me quedan más horarios. Te propongo estos otros días:\n"
+        "{{opciones}}\n"
+        "Responde con el número del horario que prefieres."
+    ),
+    "booking_confirmed": "Tu visita técnica quedó confirmada para el {{fecha}} con {{tecnico}}.",
     "manage_no_visits": "No tienes visitas próximas para {{accion}}.",
     "manage_confirm_cancel": (
         "Tienes una visita el {{visita}}. ¿Confirmas que quieres cancelarla? "
@@ -171,7 +177,8 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
 REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "booking_offer": frozenset({"opciones"}),
     "booking_unclear": frozenset(),
-    "booking_confirmed": frozenset({"fecha"}),
+    "booking_no_more_today": frozenset({"opciones"}),
+    "booking_confirmed": frozenset({"fecha", "tecnico"}),
     "manage_no_visits": frozenset({"accion"}),
     "manage_confirm_cancel": frozenset({"visita"}),
     "manage_select": frozenset({"accion", "opciones"}),
