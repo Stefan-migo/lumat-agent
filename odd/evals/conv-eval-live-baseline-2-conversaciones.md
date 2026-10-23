@@ -74,6 +74,7 @@ Estado final, gates y puntaje del juez al pie de cada caso.
 
 **2. cliente** `[scripted]` — me llamo carolina, atiendan cuando puedan
 > *bot:* Gracias, Carolina. La mantención de calefont tiene un valor de $50.000 e incluye limpieza, revisión de quemadores, encendido, filtros y evacuación de gases; dura entre 45 y 90 minutos. ¿Qué día y horario te acomoda para coordinar la visita en Ñuñoa?
+
 > *bot:* Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?
 
 **3. cliente** `[scripted]` — el calefont es junkers, tiro natural
@@ -152,7 +153,9 @@ Estado final, gates y puntaje del juez al pie de cada caso.
 
 **1. cliente** `[scripted]` — hola siento olor a gas en la cocina que hago
 > *bot:* INSTRUCCIONES DE SEGURIDAD: - Corta el suministro de gas solo si puedes hacerlo de forma segura. - Abre puertas y ventanas para ventilar el lugar. - No enciendas ni apagues luces, interruptores ni electrodomésticos. - Sal del lugar si el olor a gas es fuerte y avisa desde afuera. - No intentes reparar el equipo tú mismo.
+
 > *bot:* CONTACTOS DE EMERGENCIA: - Emergencias: Bomberos 132 o Ambulancia 131. - Distribuidor de gas: el número de emergencia está en tu boleta o medidor. - Lumat: +56 9 1234 5678.
+
 > *bot:* Un técnico de Lumat ha sido notificado y te contactará a la brevedad.
 
 **2. cliente** `[scripted]` — y cuanto sale que vengan a revisar?
