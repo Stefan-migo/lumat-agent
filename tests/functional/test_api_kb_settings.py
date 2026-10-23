@@ -893,6 +893,8 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     assert set(body["messages"]) == {
         "greeting",
         "greeting_short",
+        "greeting_name",
+        "greeting_short_name",
         "cannot_answer",
         "clarification",
         "cannot_understand_offer",
@@ -1017,6 +1019,8 @@ def test_settings_update_messages_audited(client, make_user):
     value = {
         "greeting": "Hola editado",
         "greeting_short": "Hola editado breve",
+        "greeting_name": "Hola Ana editado",
+        "greeting_short_name": "Hola Ana editado breve",
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
         "cannot_understand_offer": "¿Visita o persona?",

@@ -21,7 +21,8 @@ import re
 import unicodedata
 
 from app.chat.nodes.handoff_gate import is_media_evidence
-from app.chat.state import GREETING_HEADER, GREETING_SHORT_HEADER, ConversationState
+from app.chat.state import ConversationState
+from app.models import Customer
 from app.db import session_scope
 from app.services.settings import get_message
 
@@ -108,10 +109,23 @@ def has_content(state: ConversationState) -> bool:
     return bool(_normalized_inbound(state)) and not is_greeting_only(state)
 
 
+def _greeting(session, state: ConversationState, *, short: bool) -> str:
+    """The greeting for this customer: named when the name is known, asking otherwise.
+
+    The two variants are different sentences, not one text with a hole, so the
+    name selects a key instead of filling a slot in place: "Hola, . Soy Max…" is
+    not a greeting anybody wants to read.
+    """
+    key = "greeting_short" if short else "greeting"
+    customer = session.get(Customer, state.customer_id)
+    name = (customer.name or "").strip() if customer else ""
+    if not name:
+        return get_message(session, key)
+    return get_message(session, f"{key}_name").replace("{{nombre}}", name)
+
+
 def _first_turn_header(session, state: ConversationState) -> str:
-    key = "greeting_short" if has_content(state) else "greeting"
-    default = GREETING_SHORT_HEADER if key == "greeting_short" else GREETING_HEADER
-    return get_message(session, key, default)
+    return _greeting(session, state, short=has_content(state))
 
 
 def receive(state: ConversationState) -> dict:
@@ -130,7 +144,7 @@ def receive(state: ConversationState) -> dict:
         # S1: greeting the bot again is answered, not classified. The greeting
         # never increments `unknown_intent` nor counts as an attempt.
         with session_scope() as session:
-            updates["replies"] = [get_message(session, "greeting", GREETING_HEADER)]
+            updates["replies"] = [_greeting(session, state, short=False)]
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         updates["replies"] = [EVIDENCE_ACK]
