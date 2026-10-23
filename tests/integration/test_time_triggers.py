@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
+
+import pytest
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 
@@ -183,6 +185,37 @@ def test_weekly_summary_uses_iso_week_dedupe_key(migrated_db):
         assert event.dedupe_key == f"schedule:admin_weekly_summary:W{iso.year}-{iso.week:02d}"
 
 
+def _due_time(now: datetime) -> str:
+    """The HH:MM to store so the trigger is already due at `now`.
+
+    The due instant is rebuilt from TODAY's date plus the stored time
+    (`app/services/time_triggers.py:132`), so a time taken from one minute before
+    midnight would only become due almost 24 hours later. Measured: this test
+    failed in CI whenever it ran inside 00:00:00-00:00:59 UTC (2026-10-23T00:00:40Z).
+    """
+    scheduled = now - timedelta(minutes=1)
+    if scheduled.date() != now.date():
+        scheduled = now
+    return scheduled.strftime("%H:%M")
+
+
+@pytest.mark.parametrize(
+    "now",
+    [
+        datetime(2026, 10, 11, 0, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 10, 11, 0, 0, 40, tzinfo=timezone.utc),
+        datetime(2026, 10, 11, 0, 0, 59, tzinfo=timezone.utc),
+        datetime(2026, 10, 11, 12, 34, 56, tzinfo=timezone.utc),
+        datetime(2026, 10, 11, 23, 59, 30, tzinfo=timezone.utc),
+    ],
+)
+def test_the_scheduled_time_is_always_already_due_today(now):
+    """The midnight boundary is the bug this helper exists to avoid."""
+    hour, minute = map(int, _due_time(now).split(":"))
+    due = datetime.combine(now.date(), time(hour, minute), tzinfo=timezone.utc)
+    assert due <= now
+
+
 def test_worker_processes_daily_summary_for_admin(migrated_db):
     from app.ops.daily_summary import build_digest
     from app.ops.worker import run_cycle
@@ -191,8 +224,7 @@ def test_worker_processes_daily_summary_for_admin(migrated_db):
         set_setting(session, "notify.owner_whatsapp", "+15559990000")
         set_setting(session, "hours.timezone", "UTC")
         now = datetime.now(timezone.utc)
-        scheduled = now - timedelta(minutes=1)
-        installation = _schedule(session, "admin_daily_summary", time=scheduled.strftime("%H:%M"))
+        installation = _schedule(session, "admin_daily_summary", time=_due_time(now))
         installation.created_at = now - timedelta(days=1)
         session.commit()
         expected = build_digest(session, period="daily", now=now)
