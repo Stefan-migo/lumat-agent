@@ -690,3 +690,11 @@ def test_render_markdown_says_so_when_no_judge_measured_anything():
     markdown = ev.render_markdown(report_for([score_row("a", "simple", True, score=None)]))
     assert "Sin juez en esta corrida" in markdown
     assert "| grounding |" not in markdown
+
+
+def test_render_markdown_names_the_conversations_the_judge_could_not_score():
+    report = report_for([score_row("a", "simple", True, score=None)])
+    report["judge_failures"] = {"a": "no usable verdict after 2 attempts"}
+    markdown = ev.render_markdown(report)
+    assert "Sin veredicto del juez" in markdown
+    assert "no usable verdict after 2 attempts" in markdown

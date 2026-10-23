@@ -949,6 +949,12 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     else:
         lines.append("Sin juez en esta corrida: los gates deciden solos.")
 
+    judge_failures = report.get("judge_failures") or {}
+    if judge_failures:
+        lines += ["", "### Sin veredicto del juez", ""]
+        for scenario_id, reason in judge_failures.items():
+            lines.append(f"- `{scenario_id}`: {reason}")
+
     failed_rows = [row for row in report.get("runs") or () if not row.get("passed")]
     lines += ["", "## Escenarios que no pasan", ""]
     if not failed_rows:
@@ -1114,6 +1120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     tarifario = tarifario_text() if client is not None else ""
 
     runs: list[dict] = []
+    judge_failures: dict[str, str] = {}
     gate_details: dict[str, dict[str, str]] = {}
     observations: dict[str, dict] = {}
     scenarios = _select(corpus, args)
@@ -1149,21 +1156,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     tarifario=tarifario,
                     model=judge_model,
                 )
-            except conv_eval_judge.JudgeError as error:
-                # No verdict, no report: a partial score would read as a result.
+            except Exception as error:  # noqa: BLE001  one verdict must not kill the run
+                # Recorded as unmeasured, never as a score, and named in the
+                # report: a gate-only row with a judge attached would lie.
+                judge_failures[scenario.id] = str(error)
                 print(
-                    f"juez: {scenario.id} no produjo veredicto ({error}). "
-                    "No se escribe reporte.",
+                    f"  ! {scenario.id}: sin veredicto del juez ({error})",
                     file=sys.stderr,
+                    flush=True,
                 )
-                return 2
-            except Exception as error:  # noqa: BLE001  transport: name it and stop
-                print(
-                    f"juez: {scenario.id} no pudo consultar el modelo ({error}). "
-                    "No se escribe reporte.",
-                    file=sys.stderr,
-                )
-                return 2
 
         row = score_scenario(scenario, gates, verdict)
         runs.append(row)
@@ -1177,6 +1178,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "stamp": stamp,
         "runs": runs,
         "summary": summarize(runs),
+        "judge_failures": judge_failures,
         "gate_details": gate_details,
         "observations": observations,
     }
@@ -1197,7 +1199,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"reporte: {written[0]} · {written[1]}")
     if not is_citable(stamp):
         print("aviso: árbol sucio o KB sin sellar — esta corrida no es citable como baseline")
-    return 0 if summary["passed"] == summary["scenarios"] else 1
+    if judge_failures:
+        print(f"aviso: {len(judge_failures)} escenario(s) sin veredicto del juez: "
+              f"{', '.join(judge_failures)}")
+    if judge_failures or summary["passed"] != summary["scenarios"]:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

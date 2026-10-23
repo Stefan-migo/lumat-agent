@@ -154,3 +154,44 @@ def test_build_client_invents_a_session_when_none_is_given():
     second = judge.build_client(judge.JudgeCredentials("clave", "argument"))
     assert first.default_headers["x-opencode-session"]
     assert first.default_headers["x-opencode-session"] != second.default_headers["x-opencode-session"]
+
+
+# ---------------------------------------------------------------------------
+# Retry — a truncated answer is a transport accident, not a verdict
+# ---------------------------------------------------------------------------
+
+
+def fake_chat(responses):
+    calls = []
+
+    def _chat(client, messages, model=None):
+        calls.append(messages)
+        return responses[min(len(calls) - 1, len(responses) - 1)]
+
+    return _chat, calls
+
+
+def test_a_malformed_answer_is_retried_once(monkeypatch):
+    valid = (
+        '{"dimensions": {'
+        + ", ".join(f'"{name}": {{"score": 3, "evidence": "cita"}}' for name in judge.DIMENSIONS)
+        + '}, "hard_fail": false}'
+    )
+    chat, calls = fake_chat(["{\"dimensions\": {\"grounding\": {\"score\": 4", valid])
+    monkeypatch.setattr(judge, "_chat", chat)
+    verdict = judge.judge_conversation(
+        object(), transcript=[], scenario={"id": "x"}, kb_text="", tarifario=""
+    )
+    assert len(calls) == 2
+    assert verdict["dimensions"]["tone"]["score"] == 3
+
+
+def test_two_malformed_answers_raise_instead_of_guessing(monkeypatch):
+    chat, calls = fake_chat(["no es json", "tampoco"])
+    monkeypatch.setattr(judge, "_chat", chat)
+    with pytest.raises(judge.JudgeError) as raised:
+        judge.judge_conversation(
+            object(), transcript=[], scenario={"id": "x"}, kb_text="", tarifario=""
+        )
+    assert len(calls) == 2
+    assert "2 attempts" in str(raised.value)

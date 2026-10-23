@@ -333,16 +333,24 @@ def judge_conversation(
 
 {_render_transcript(transcript)}
 """
-    raw = _chat(
-        client,
-        [
-            {"role": "system", "content": _INSTRUCTIONS},
-            {"role": "user", "content": prompt},
-        ],
-        model=model,
-    )
-    payload = _parse_json(raw)
-    return validate_verdict(payload)
+    # A single malformed answer is a transport accident, not a verdict: the
+    # model occasionally truncates mid-string. One retry, then the scenario is
+    # reported as unmeasured — never guessed.
+    last: Exception | None = None
+    for _ in range(2):
+        raw = _chat(
+            client,
+            [
+                {"role": "system", "content": _INSTRUCTIONS},
+                {"role": "user", "content": prompt},
+            ],
+            model=model,
+        )
+        try:
+            return validate_verdict(_parse_json(raw))
+        except JudgeError as error:
+            last = error
+    raise JudgeError(f"no usable verdict after 2 attempts: {last}")
 
 
 def validate_verdict(payload: dict) -> dict:
