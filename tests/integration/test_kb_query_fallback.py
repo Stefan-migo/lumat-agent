@@ -19,6 +19,7 @@ local retrieval (no extra LLM call).
 import psycopg
 import pytest
 
+from app.chat.nodes import respond as respond_node
 from app.chat.state import ConversationState, get_or_create_conversation
 from app.chat.subgraphs import research_triage
 from app.db import SessionLocal
@@ -88,6 +89,18 @@ def _patch_retrieve(monkeypatch, hits: dict[str, list[dict]]) -> list[str]:
     return calls
 
 
+def _patch_answer(monkeypatch) -> dict:
+    """Capture the `<kb>` block the model would receive; never call the model."""
+    seen: dict = {}
+
+    def fake_answer(text, kb_text, **kwargs):
+        seen["kb_text"] = kb_text
+        return "respuesta anclada"
+
+    monkeypatch.setattr(respond_node, "_answer_from_kb", fake_answer)
+    return seen
+
+
 def test_a_raw_miss_falls_back_to_the_classified_service(monkeypatch):
     """The regression: polite filler made the raw query miss and derive to a human."""
     state = _state(intent="consulta", service=SERVICE)
@@ -123,3 +136,61 @@ def test_a_miss_without_a_fresh_classification_offers_paths(monkeypatch):
     assert result["next_step"] == "respond", result
     assert result.get("escalate") is not True
     assert "escalate_reason" not in result
+
+
+# ---------------------------------------------------------------------------
+# H04: one retrieval per turn — `respond` consumes the triage verdict
+# ---------------------------------------------------------------------------
+
+
+def test_respond_consumes_the_retrieval_the_triage_already_made(monkeypatch):
+    """The measured duplicate: `kb_check` retrieved, then `respond` retrieved again.
+
+    The second call re-runs the same embed + pgvector query against a database
+    that may have moved, so the chunks the model was grounded on were not the
+    chunks the routing decision was made on.
+    """
+    state = _state(intent="consulta", service=SERVICE)
+    calls = _patch_retrieve(monkeypatch, {RAW: [RETRIEVED]})
+    update = research_triage._kb_check(state)
+    state.retrieval = update["retrieval"]  # what the graph state merge does
+    seen = _patch_answer(monkeypatch)
+
+    result = respond_node.respond(state)
+
+    assert calls == [RAW]
+    assert seen["kb_text"] == f"1. {RETRIEVED['content']}"
+    assert result == {"replies": ["respuesta anclada"]}
+
+
+def test_a_recorded_miss_is_offered_without_a_second_retrieval(monkeypatch):
+    """A recorded empty result means "already retrieved and missed", not "not yet".
+
+    Re-retrieving here is what CM-6 would then log twice and what could turn a
+    miss into a hit behind the routing decision.
+    """
+    state = _state(intent="consulta", service=SERVICE)
+    state.triage_retry = research_triage.MAX_TRIAGE_RETRIES
+    calls = _patch_retrieve(monkeypatch, {})
+    update = research_triage._kb_check(state)
+    state.retrieval = update["retrieval"]
+    seen = _patch_answer(monkeypatch)
+
+    result = respond_node.respond(state)
+
+    assert calls == [RAW, SERVICE]
+    assert seen == {}
+    assert len(result["replies"]) == 1
+
+
+def test_a_turn_that_skipped_triage_still_retrieves_in_respond(monkeypatch):
+    """Guard: the direct `respond` path keeps its own retrieval (previous behaviour)."""
+    state = _state(intent="consulta", service=SERVICE)
+    calls = _patch_retrieve(monkeypatch, {RAW: [RETRIEVED]})
+    _patch_answer(monkeypatch)
+
+    result = respond_node.respond(state)
+
+    assert calls == [RAW]
+    assert state.retrieval is None
+    assert result == {"replies": ["respuesta anclada"]}

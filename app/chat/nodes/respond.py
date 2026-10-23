@@ -102,7 +102,7 @@ def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
 
 
-def retrieval_queries(state: ConversationState) -> list[str]:
+def turn_queries(text: str, *, intent: str | None, service: str | None) -> list[str]:
     """KB query strings for this turn, most conservative first (KB-2).
 
     The customer's text is tried first so every turn that already finds a chunk
@@ -115,15 +115,17 @@ def retrieval_queries(state: ConversationState) -> list[str]:
     asked about (garantía, plazo): "tienen garantia por la mantencion?" scores
     0.510 raw against 0.341 as `service`.
 
-    `state.case` is refreshed by `classify_intent` on every classified turn; an
-    `unknown` turn writes no case, so a `service` there belongs to an earlier
-    topic and must not steer this turn's retrieval.
+    `service` is the `case` value refreshed by `classify_intent` on every
+    classified turn; an `unknown` turn writes no case, so a `service` there
+    belongs to an earlier topic and must not steer this turn's retrieval. That is
+    why the caller passes the *turn's* intent and not "whatever the case says".
+
+    This is also what `scripts/kb_fidelity.py` calls, so the instrument cannot
+    re-declare the fallback and drift from it (S4/H01).
     """
-    text = _current_text(state)
     queries = [text] if text else []
-    if state.intent in (None, "unknown"):
+    if intent in (None, "unknown"):
         return queries
-    service = (getattr(state, "case", None) or {}).get("service")
     if isinstance(service, str):
         service = service.strip()
         if service and service.casefold() not in {query.casefold() for query in queries}:
@@ -131,14 +133,27 @@ def retrieval_queries(state: ConversationState) -> list[str]:
     return queries
 
 
-def retrieve_chunks(session, state: ConversationState) -> list[dict]:
-    """First non-empty KB retrieval across `retrieval_queries` (no LLM spend).
+def retrieval_queries(state: ConversationState) -> list[str]:
+    """`turn_queries` read off the conversation state."""
+    return turn_queries(
+        _current_text(state),
+        intent=state.intent,
+        service=(getattr(state, "case", None) or {}).get("service"),
+    )
+
+
+def retrieve_for_queries(session, queries: list[str]) -> list[dict]:
+    """The production KB retrieval — the only place its arguments are declared.
+
+    Every caller (the `respond` node, the `research_triage` guard and the fidelity
+    harness) goes through here, so `global_only` and the customer-audience filter
+    cannot be true on the answering path and false on the measuring one.
 
     A miss on the customer text costs one more local embed + pgvector query,
     never a model call: the fallback exists so a wording problem cannot become a
     human handoff while the KB holds the answer.
     """
-    for query in retrieval_queries(state):
+    for query in queries:
         chunks = kb.retrieve(
             session,
             query,
@@ -151,6 +166,11 @@ def retrieve_chunks(session, state: ConversationState) -> list[dict]:
         if chunks:
             return chunks
     return []
+
+
+def retrieve_chunks(session, state: ConversationState) -> list[dict]:
+    """First non-empty KB retrieval across the turn's queries (no LLM spend)."""
+    return retrieve_for_queries(session, retrieval_queries(state))
 
 
 def log_unresolved(session, message_id: int, context: str) -> None:
@@ -291,17 +311,23 @@ def respond(state: ConversationState) -> dict:
         return {"replies": [reply]}
 
     with session_scope() as session:
-        try:
-            chunks = retrieve_chunks(session, state)
-        except Exception as error:
-            # Unlike the panel this path records no evidence entry, so the log is
-            # the only record of the outage: keep the traceback.
-            logger.exception("Knowledge-base retrieval failed: %s", error)
-            return {
-                "replies": [KB_UNAVAILABLE_REPLY],
-                "escalate": True,
-                "escalate_reason": "kb_unavailable",
-            }
+        if state.retrieval is not None:
+            # S4/H04: `research_triage` already retrieved for this turn. Consume
+            # its verdict — including an empty one — instead of re-running the
+            # same embed + pgvector query against a database that may have moved.
+            chunks = state.retrieval
+        else:
+            try:
+                chunks = retrieve_chunks(session, state)
+            except Exception as error:
+                # Unlike the panel this path records no evidence entry, so the log is
+                # the only record of the outage: keep the traceback.
+                logger.exception("Knowledge-base retrieval failed: %s", error)
+                return {
+                    "replies": [KB_UNAVAILABLE_REPLY],
+                    "escalate": True,
+                    "escalate_reason": "kb_unavailable",
+                }
         if not chunks:
             # D18: offer both paths without deriving; CM-6 still records the miss.
             log_unresolved(

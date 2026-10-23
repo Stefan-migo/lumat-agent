@@ -204,6 +204,12 @@ class ConversationState:
     # AO-8: bounded KB retry counter consumed by the research_triage sub-graph
     # (≤1 retry, then handoff) — never grows unbounded in a single turn.
     triage_retry: int = 0
+    # S4/H04: the chunk set this turn's retrieval returned, recorded by the
+    # research_triage sub-graph and consumed by `respond` so the turn retrieves
+    # once instead of twice. `None` means "no retrieval yet" (a turn routed
+    # straight to `respond`); `[]` means "retrieved and missed". Rebuilt per
+    # message (D2), so it never leaks into the next turn.
+    retrieval: list[dict] | None = None
     window: list[dict] = field(default_factory=list)
     # accumulator: nodes append their replies (reducer merges, last-write-wins off)
     replies: Annotated[list, add] = field(default_factory=list)
