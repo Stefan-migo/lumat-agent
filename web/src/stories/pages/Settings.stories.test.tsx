@@ -117,14 +117,16 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(card).getByRole("button", { name: "Tono" })).toHaveTextContent("Cercano");
   });
 
-  it("renders the six editable standard messages", async () => {
+  it("renders the editable standard messages with their configured text", async () => {
     render(<SettingsView />);
     await selectSection("Mensajes");
     const card = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText("Menú de categorías automático")).toBeInTheDocument();
     const templates = [
-      ["greeting", "Saludo", settings.messages.greeting],
-      ["greeting_short", "Saludo corto", settings.messages.greeting_short],
+      ["greeting", "Saludo cuando falta el nombre", settings.messages.greeting],
+      ["greeting_name", "Saludo con nombre", settings.messages.greeting_name],
+      ["greeting_short", "Saludo corto cuando falta el nombre", settings.messages.greeting_short],
+      ["greeting_short_name", "Saludo corto con nombre", settings.messages.greeting_short_name],
       ["cannot_answer", "Cuando no puede responder", settings.messages.cannot_answer],
       ["clarification", "Aclaración", settings.messages.clarification],
       ["farewell", "Despedida", settings.messages.farewell],
@@ -354,7 +356,7 @@ describe("Settings API page", () => {
     render(<Settings />);
     await selectSection("Mensajes");
     const templates = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
-    const greetingTab = within(templates).getByRole("tab", { name: "Saludo" });
+    const greetingTab = within(templates).getByRole("tab", { name: "Saludo cuando falta el nombre" });
     const getEditor = (id: string) => {
       const panel = screen.getAllByRole("tabpanel").find((item) => item.getAttribute("aria-labelledby")?.includes(`trigger-${id}`));
       return within(panel!).getByLabelText("Texto del mensaje");
