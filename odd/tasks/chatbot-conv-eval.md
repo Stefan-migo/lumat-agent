@@ -236,3 +236,35 @@ Hallazgos de entorno, registrados y no corregidos acá (`app/` es non-goal):
 
 Calibración S9 abierta: `odd/evals/calibracion-s9.md` trae tres conversaciones (un 4,00, un 2,50 y un
 1,67) con el puntaje del juez plegado, para que el owner puntúe a mano sin verlo.
+
+### L8 — el instrumento mintió una vez, y eso valió más que el número (2026-10-23)
+
+El baseline scripted salió **5/14** con sello limpio (`aaa3e767`), y era **inválido**. La prueba:
+`complejo-agendar-calefont` es un escenario de 5 turnos y su conversación tenía **20 mensajes**. La
+corrida que mató el SIGTERM dejó sus filas en la base, y la repetición con el mismo `--run-tag` reusó
+los mismos clientes y replayó los turnos **encima de conversaciones que ya habían escalado a `human`**.
+De ahí los 4 `G1`, los 4 `G4` y los 10 `handoff:cobertura`: era la corrida anterior hablando.
+
+Consecuencia para el plan de comparar versiones del bot: un crash a mitad de corrida habría hecho
+concluir "empeoró" con datos que nunca midieron al bot. Tres arreglos, todos con test:
+
+1. **`079a1129` — un tag con clientes existentes se rechaza** (`exit 2`, stderr con la lista de
+   escenarios contaminados). Verificado corriéndolo.
+2. **`--reset` con guarda**: vacía solo estado de conversación (clientes, conversaciones, mensajes,
+   eventos, casos, memorias, visitas, notificaciones) y **solo** si `DATABASE_URL` coincide en
+   host:puerto con `TEST_ADMIN_DB_URL`. Verificado en las dos direcciones: con la base de test pasa,
+   con una base distinta se niega y la base queda intacta (49 conversaciones).
+3. **El .md es el registro completo**: el transcript sale del **log de mensajes** de la base, no de los
+   turnos, así que una respuesta que el grafo no devolvió también queda. Antes de truncar nada se
+   reconstruyeron desde la base los tres transcripts existentes: 75 mensajes (`live-baseline-2`),
+   110 (`baseline`, contaminado) y el de `baseline-2`.
+
+Primera repetición limpia (`baseline-2`, teléfonos frescos, sin reset): **6/14**, gates `G6`×3,
+`G9`×2, `G4`×2, `G1`×2, `G3`×1. Notablemente mejor que el contaminado, que es la confirmación del
+diagnóstico: `complejo-agendar-calefont` pasa (3,33) cuando la conversación no arrastra el estado de la
+corrida anterior.
+
+Pendiente de medir: el **piso de ruido**. Dos corridas idénticas sobre estado limpio (`clean-1` y
+`clean-2`, ambas con `--reset`) y el diff entre ellas: todo escenario que cambie de verde a rojo sin
+tocar una línea de código es ruido del instrumento, y ese número hay que descontarlo antes de
+atribuirle nada a las mejoras del otro worktree.
