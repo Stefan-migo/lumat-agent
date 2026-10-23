@@ -268,3 +268,34 @@ Pendiente de medir: el **piso de ruido**. Dos corridas idénticas sobre estado l
 `clean-2`, ambas con `--reset`) y el diff entre ellas: todo escenario que cambie de verde a rojo sin
 tocar una línea de código es ruido del instrumento, y ese número hay que descontarlo antes de
 atribuirle nada a las mejoras del otro worktree.
+
+### L9 — el piso de ruido del instrumento, medido (2026-10-23)
+
+Dos corridas idénticas, mismo código (`6cf76f59`), mismo corpus, **`--reset` antes de cada una** para
+que el estado inicial sea el mismo: `clean-1` y `clean-2`.
+
+| | clean-1 | clean-2 |
+|---|---|---|
+| Pasan | **5/14** | **6/14** |
+| Gates que fallan | G6×4, G9×3, G4×3, G1×3, G3×1 | G6×3, G9×2, G4×2, G1×2, G3×1 |
+
+**El piso de ruido es 1 escenario de 14 (~7%)**, más un gate suelto en un segundo escenario:
+
+- `complejo-agendar-calefont`: **falla → pasa**, con tres gates moviéndose juntos (G1, G4, G6). En
+  `clean-1` el bot escaló a `human`; en `clean-2` no. Un solo comportamiento distinto arrastra los
+  tres gates.
+- `complejo-fuera-de-cobertura-insiste`: G9 falla → pasa, sin cambiar el resultado final del escenario.
+- Delta de dimensiones entre corridas: entre **+0,14 y +0,36** en las seis, siempre a favor de la
+  segunda. Chico, pero del mismo orden que las diferencias que se quieren atribuir a una mejora.
+
+Causa: los gates son deterministas, pero **sus insumos no**. El clasificador y el extractor son
+llamadas al LLM, así que la misma frase puede clasificar distinto entre corridas y mover el estado, la
+escalación y el enrutamiento.
+
+Consecuencia operativa para el plan de comparar versiones del bot:
+
+1. Una diferencia de **1 escenario está dentro del ruido**: no autoriza decir "mejoró" ni "empeoró".
+2. Para atribuir algo a una versión hay que correr **N=3 por versión** y comparar la tasa, o exigir
+   que la diferencia supere el piso medido (≥2 escenarios, y que el gate movido sea el mismo).
+3. `complejo-agendar-calefont` es el escenario más inestable medido hasta ahora: es el primero a
+   repetir cuando aparezca una diferencia.
