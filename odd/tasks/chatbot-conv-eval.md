@@ -181,3 +181,15 @@ Decisión del owner tras la recuperación del worktree: el corpus queda con los 
 tiene, y S1/S3 se reescriben para describir lo que hay en vez de al revés. S3 deja de prometer
 `supercomplejo` de 9+ turnos: el tier mide la trampa, no el largo del guion. Si algún día importa medir
 persistencia en hilos largos, se agregan escenarios nuevos a ese tier en vez de alargar los actuales.
+
+### L6 — slice de recuperación y estrategia de entrega (2026-10-23)
+
+Tras el crash, los tres primeros commits recuperan lo que ya estaba escrito en disco como las
+unidades que este plan preveía, sin agregar comportamiento nuevo: `b21f5b4d` (este doc),
+`62166951` (`seed_kb_docs.py`, T1) y `580b8f2b` (`conv_eval_corpus.yaml`, T2). Slice acumulado
+medido: **796 líneas autoradas** en 3 commits.
+
+Estrategia de entrega, decidida acá porque el acumulado pasa la guía de ~400 líneas: **una sola
+rama y review commit por commit**. Si el owner prefiere PRs encadenados, el corte natural es
+(a) el instrumento que no corre todavía — doc, seed, corpus, juez y matemática de gates — y
+(b) el runner, el reporte y la primera corrida. La decisión de PR y merge sigue siendo del owner.
