@@ -730,3 +730,48 @@ def test_the_row_carries_the_judge_evidence_for_every_dimension():
     row = ev.score_scenario(scn, gates_of(scn, observation()), payload)
     assert row["evidence"]["tone"] == "contestó con un formulario"
     assert set(row["evidence"]) == set(ev.DIMENSIONS)
+
+
+# ---------------------------------------------------------------------------
+# Turn planning — who writes each turn is what makes the evaluator auditable
+# ---------------------------------------------------------------------------
+
+
+def test_without_live_the_plan_stops_at_the_scripted_turns():
+    assert ev.plan_turns(["a", "b"], 5, live=False) == [("scripted", "a"), ("scripted", "b")]
+
+
+def test_with_live_the_budget_is_filled_by_the_simulated_customer():
+    assert ev.plan_turns(["a"], 3, live=True) == [
+        ("scripted", "a"),
+        ("simulated", None),
+        ("simulated", None),
+    ]
+
+
+def test_a_budget_smaller_than_the_script_truncates_it():
+    assert ev.plan_turns(["a", "b", "c"], 2, live=False) == [("scripted", "a"), ("scripted", "b")]
+
+
+def test_render_transcripts_marks_who_wrote_every_turn():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    report = report_for([score_row(scenario.id, scenario.tier, True, score=4.0)])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola"],
+            "turns": [
+                {"text": scenario.turns[0], "replies": ["hola"], "intent": None},
+                {"text": "esto lo inventó el simulador", "replies": ["dale"], "intent": None,
+                 "origin": "simulated"},
+            ],
+        }
+    }
+    report["gate_details"] = {scenario.id: {"G1": "state=bot"}}
+    markdown = ev.render_transcripts(report, corpus)
+    assert "`[scripted]`" in markdown
+    assert "`[simulado]` — esto lo inventó el simulador" in markdown
+    assert scenario.id in markdown

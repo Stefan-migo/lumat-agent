@@ -100,6 +100,8 @@ __all__ = [
     "preflight",
     "previous_report",
     "render_markdown",
+    "render_transcripts",
+    "plan_turns",
     "report_paths",
     "run_scenario",
     "score_scenario",
@@ -662,6 +664,26 @@ def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dic
 # ---------------------------------------------------------------------------
 
 
+def plan_turns(
+    scripted: Sequence[str], budget: int, live: bool
+) -> list[tuple[str, str | None]]:
+    """Which turns the run will send, and who writes each one.
+
+    `scripted` turns come from the corpus verbatim; in `--live` the remaining
+    budget up to `budget` is filled by the simulated customer. Without `live`
+    the plan stops at the scripted length, whatever the budget says.
+    """
+    plan: list[tuple[str, str | None]] = []
+    for index in range(1, budget + 1):
+        if index <= len(scripted):
+            plan.append(("scripted", scripted[index - 1]))
+        elif live:
+            plan.append(("simulated", None))
+        else:
+            break
+    return plan
+
+
 def build_observation(snapshot: Mapping[str, Any], turns: Sequence[Mapping[str, Any]]) -> dict:
     """Turn a `chat_harness.inspect` snapshot plus the per-turn replies into the
     plain dict the gates read.
@@ -842,12 +864,13 @@ def run_scenario(
 
     budget = max_turns or scenario.max_turns
     turns: list[dict] = []
-    scripted = list(scenario.turns)
 
-    for index in range(1, budget + 1):
-        if index <= len(scripted):
-            text = scripted[index - 1]
-        elif live and judge_client is not None:
+    for index, (origin, scripted_text) in enumerate(
+        plan_turns(scenario.turns, budget, live), start=1
+    ):
+        if origin == "scripted":
+            text = scripted_text
+        else:
             simulated = conv_eval_judge.simulate_customer_turn(
                 judge_client,
                 persona=scenario.persona,
@@ -859,12 +882,14 @@ def run_scenario(
             if simulated["goal_reached"]:
                 break
             text = simulated["message"]
-        else:
-            break
 
         with session_scope() as session:
             replies = run_turn(session, conversation_id, text)
-        turns.append({"text": text, "replies": list(replies), "intent": None})
+        # `origin` is what makes the transcript reviewable: a simulated turn is
+        # the evaluator talking, and reading it is how the evaluator is judged.
+        turns.append(
+            {"text": text, "replies": list(replies), "intent": None, "origin": origin}
+        )
 
     with session_scope() as session:
         snapshot = inspect(session, conversation_id)
@@ -1031,6 +1056,60 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_transcripts(report: Mapping[str, Any], corpus: Corpus) -> str:
+    """Every conversation of the run, in order, saying who wrote each turn.
+
+    This is the artifact for auditing the *evaluator*: whether the simulated
+    customer pursues the goal, stops when served, and never writes as the bot.
+    """
+    stamp = report.get("stamp") or {}
+    observations = report.get("observations") or {}
+    rows = {row["scenario"]: row for row in report.get("runs") or ()}
+    details = report.get("gate_details") or {}
+    lines = [
+        f"# Conversaciones de la corrida `{stamp.get('run_tag', '?')}`",
+        "",
+        "`[scripted]` = turno textual del corpus · `[simulado]` = lo escribió el cliente simulado.",
+        "Estado final, gates y puntaje del juez al pie de cada caso.",
+        "",
+    ]
+    for scenario in corpus.scenarios:
+        observation = observations.get(scenario.id)
+        if observation is None:
+            continue
+        row = rows.get(scenario.id, {})
+        lines += [
+            f"## `{scenario.id}` [{scenario.tier}]",
+            "",
+            f"**persona:** {' '.join(scenario.persona.split())}",
+            f"**objetivo:** {' '.join(scenario.goal.split())}",
+            "",
+        ]
+        for position, turn in enumerate(observation.get("turns") or (), start=1):
+            origin = turn.get("origin") or (
+                "scripted" if position <= len(scenario.turns) else "simulado"
+            )
+            label = "scripted" if origin == "scripted" else "simulado"
+            lines.append(f"**{position}. cliente** `[{label}]` — {turn.get('text', '')}")
+            for reply in turn.get("replies") or ():
+                lines.append(f"> *bot:* {' '.join(str(reply).split())}")
+            lines.append("")
+        gates = details.get(scenario.id) or {}
+        failed = row.get("gates_failed") or []
+        gate_text = ", ".join(
+            f"{gate} ✗ ({gates.get(gate, '')})" if gate in failed else f"{gate} ✓"
+            for gate in sorted(gates)
+        ) or "—"
+        verdict = "sin juez" if row.get("score") is None else f"{row['score']:.2f}"
+        lines += [
+            f"**estado final:** `{observation.get('state')}` · **juez:** {verdict} · "
+            f"**hard fail:** {row.get('hard_fail', False)}",
+            f"**gates:** {gate_text}",
+            "",
+        ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def write_report(report: dict, out_dir: Path = _REPO_ROOT / "odd" / "evals") -> tuple[Path, Path]:
     """Write the JSON and the Markdown, creating `odd/evals` on first use."""
     import json
@@ -1039,6 +1118,10 @@ def write_report(report: dict, out_dir: Path = _REPO_ROOT / "odd" / "evals") -> 
     json_path, md_path = report_paths(out_dir, report["stamp"]["run_tag"])
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     md_path.write_text(render_markdown(report), encoding="utf-8")
+    transcript_path = out_dir / f"conv-eval-{report['stamp']['run_tag']}-conversaciones.md"
+    transcript_path.write_text(
+        render_transcripts(report, load_corpus()), encoding="utf-8"
+    )
     return json_path, md_path
 
 
