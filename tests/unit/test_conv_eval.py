@@ -698,3 +698,25 @@ def test_render_markdown_names_the_conversations_the_judge_could_not_score():
     markdown = ev.render_markdown(report)
     assert "Sin veredicto del juez" in markdown
     assert "no usable verdict after 2 attempts" in markdown
+
+
+def test_g9_sees_a_soft_kb_miss_that_production_never_records():
+    """Measured: the bot answered a KB question with the configured miss offer and
+    `conversation_events` held only `classified`. The gate must read the reply."""
+    scn = scenario(expect={"kb_answered": True})
+    obs = observation(
+        replies=["No tengo ese dato. ¿Prefieres que te tome los datos o que te atienda una persona?"],
+        miss_text="No tengo ese dato. ¿Prefieres que te tome los datos o que te atienda una persona?",
+    )
+    failed = gates_of(scn, obs)["G9"]
+    assert failed.ok is False
+    assert "kb_miss" in failed.detail
+
+
+def test_g9_passes_when_the_answer_came_from_the_kb():
+    scn = scenario(expect={"kb_answered": True})
+    obs = observation(
+        replies=["Sí, llegamos a Maipú. Te coordino con un asesor."],
+        miss_text="No tengo ese dato.",
+    )
+    assert gates_of(scn, obs)["G9"].ok is True

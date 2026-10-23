@@ -44,11 +44,21 @@ G5   causes_forbidden  an event cause matches one in `causes_forbidden`
 G6   must_include_any  no bot reply contains any of the anchors
 G7   must_not_include  a bot reply contains one of the forbidden anchors
 G8   reply_present     an inbound customer turn got no reply at all
-G9   kb_answered       the answer lives in the KB, yet the turn ended in kb_miss
+G9   kb_answered       the answer lives in the KB, yet the bot took the kb_miss path
 ===  ================  =======================================================
 
 Anchors are matched case- and accent-insensitively, as substrings: the bot says
 "la mantención" and the anchor is "mantenci" on purpose.
+
+G9 needs one word of warning. Production records `kb_miss` only when the miss
+*escalates* (`cause=handoff:kb_miss`), so a soft miss — the bot answering with
+the configured "no tengo ese dato, ¿coordinamos o te atiende una persona?"
+offer and staying in `bot` — leaves **no event at all**. Measured: the run
+answered a KB question with that offer and `conversation_events` held only
+`classified`. The gate therefore also fails when a reply contains the configured
+`messages.kb_miss_offer` text, which the runner reads from the database. The
+production gap is real and out of scope here (`app/` is a non-goal): this is the
+instrument reading the reply because the event does not exist.
 
 Usage
 -----
@@ -485,11 +495,15 @@ def evaluate_gates(
 
     if expect.get("kb_answered"):
         misses = [cause for cause in _causes(observation) if _normalise(cause).endswith("kb_miss")]
-        results["G9"] = _gate(
-            "G9",
-            not misses,
-            "la respuesta estaba en la KB y aun así hubo kb_miss",
-        )
+        offer = _normalise(str(observation.get("miss_text") or ""))
+        offered = bool(offer) and any(offer in reply for reply in normalised_replies)
+        detail = "la respuesta estaba en la KB y hubo kb_miss"
+        if offered and not misses:
+            detail = (
+                "la respuesta estaba en la KB y el bot respondió con la oferta de "
+                "kb_miss (producción no registra evento en ese camino)"
+            )
+        results["G9"] = _gate("G9", not misses and not offered, detail)
 
     return results
 
@@ -788,6 +802,19 @@ def tarifario_text() -> str:
         return build_tarifario_block(tarifa_vigente(get_tarifa_precios(session), date.today()))
 
 
+def miss_offer_text() -> str:
+    """The configured reply for a soft knowledge miss, read from the database.
+
+    Production records no event on that path (see the G9 note in the module
+    docstring), so the gate reads the text the bot would send.
+    """
+    from app.chat.nodes.respond import get_message
+    from app.db import session_scope
+
+    with session_scope() as session:
+        return get_message(session, "kb_miss_offer")
+
+
 def run_scenario(
     scenario: Scenario,
     *,
@@ -795,6 +822,7 @@ def run_scenario(
     judge_client: Any = None,
     live: bool = False,
     max_turns: int | None = None,
+    miss_text: str = "",
 ) -> dict:
     """Drive one scenario through the real brain and collect its observation."""
     import conv_eval_judge
@@ -835,6 +863,7 @@ def run_scenario(
         snapshot = inspect(session, conversation_id)
 
     observation = build_observation(snapshot, turns)
+    observation["miss_text"] = miss_text
     # The intent is recorded inside the run, so it is only visible afterwards:
     # attribute each classified intent to the turn that produced it.
     per_turn = iter(observation["intents"])
@@ -1116,6 +1145,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         live=args.live,
     ).as_dict()
 
+    miss_text = miss_offer_text()
     kb = kb_text() if client is not None else ""
     tarifario = tarifario_text() if client is not None else ""
 
@@ -1133,6 +1163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 judge_client=client,
                 live=args.live,
                 max_turns=args.max_turns,
+                miss_text=miss_text,
             )
         except Exception as error:  # noqa: BLE001  a dead scenario must not kill the run
             print(f"  ✗ {scenario.id}: la corrida falló: {error}", file=sys.stderr)
