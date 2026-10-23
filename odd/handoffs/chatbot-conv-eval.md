@@ -10,8 +10,8 @@ nada. Este archivo es el mapa para arrancar en una sesión nueva.
 |---|---|
 | Worktree | `/home/stefan/repos/lumat-agent-odd-chatbot-conv-eval` |
 | Branch | `odd/chatbot-conv-eval`, ya reescrita y limpia de JSON |
-| Backup de la historia anterior | `backup/pre-evals-cleanup` = `62b154e2` (rama con los JSON dentro) |
-| Base | `origin/main` `497875af`, mergeada en `c3782d0f`; el diff neto **solo agrega** |
+| Backup de la historia anterior | `backup/pre-evals-cleanup` = `62b154e2` (rama con los JSON dentro y con los commits que citan los sellos de los `.md`) |
+| Base | `origin/main` `497875af`, sobre el que la rama **se rebaseó** (sin merge commit); el diff neto **solo agrega** |
 | Tests | `bash scripts/test.sh full` → **exit 0** (sin fallos; 10m51s) · `bash scripts/test.sh shape origin/main` → **exit 0** |
 | Estado del árbol | limpio · **nada pusheado, ningún PR abierto** |
 
@@ -55,7 +55,7 @@ uv run python scripts/conv_eval.py --reset --run-tag t1               # estado l
 - Corrida `--live` (cliente simulado): 8/14, peor dimensión `conversational` 1,50.
 - **Ninguna corrida commiteada es citable como baseline.** `baseline-2`, `live-baseline-2`, `clean-1` y
   `clean-2` llevan `dirty: sí` por el defecto #7 (el sello contaba los reportes de la corrida
-  anterior), ya arreglado en `4e1446ae`. Los `.md` se dejan con su sello original: reescribirlo sería
+  anterior), ya arreglado en `dd5dcf91`. Los `.md` se dejan con su sello original: reescribirlo sería
   falsificar el reporte. **El primer run limpio posterior a ese arreglo es el primer baseline citable.**
 - `conv-eval-baseline.*` (la corrida contaminada de L8) **fue borrado**: era evidencia inválida.
 
@@ -73,7 +73,7 @@ uv run python scripts/conv_eval.py --reset --run-tag t1               # estado l
 7. **El sello medía los reportes, no el código**: `git_state()` corría `git status --porcelain` sobre
    todo el repo, así que los reportes que dejaba la corrida anterior marcaban `dirty: sí` la
    siguiente — y con los `.md` commiteados habría sido permanente. Ahora el sello excluye el
-   directorio de reporte (`4e1446ae`).
+   directorio de reporte (`dd5dcf91`).
 
 Transporte del juez: el gateway opencode-go exige header `x-opencode-session` estable + user-agent
 propio; sin eso devuelve `400 MissingSessionID`.
@@ -88,8 +88,11 @@ propio; sin eso devuelve `400 MissingSessionID`.
 
 ## Trabajo pendiente, en orden
 
-1. **Abrir los tres PRs encadenados.** Nada está pusheado: el push y la apertura son decisión del
-   owner. Las ramas de corte se arman desde la historia lineal existente, sin commits nuevos.
+1. **Abrir los tres PRs encadenados.** Las tres ramas de corte ya existen y nadie pusheó nada: el push
+   y la apertura son decisión del owner. Ramas: `odd/chatbot-conv-eval-pr1` (8 commits, base `main`),
+   `-pr2` (5 commits, base `-pr1`), `-pr3` (13 commits, base `-pr2`). Con `strict: true` en `main`, el
+   PR 1 puede necesitar un "Update branch" al mergear; el rebase de un slice es libre de conflictos
+   porque la rama solo agrega archivos.
 2. **Darle espacio al cliente simulado**: hoy `max_turns` cae en `len(turns)`, así que hay **4 turnos
    simulables en 14 escenarios**. Sin eso no se puede afirmar que el evaluador "maneja todos los
    escenarios" ni que el simulador actúa como cliente. Revisar también que no escriba como el bot.

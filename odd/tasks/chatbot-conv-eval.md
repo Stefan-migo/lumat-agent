@@ -118,13 +118,13 @@ juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no ver
 
 | # | Slice | Qué entrega | Commit |
 |---|---|---|---|
-| T1 | E0 | `scripts/seed_kb_docs.py` + preflight de KB | `62166951` (+`64ba173a`) |
-| T2 | E1 | `scripts/conv_eval_corpus.yaml` (14 escenarios) + validador | `580b8f2b` + `dcfe57aa` |
-| T3 | E2 | runner scripted sobre `run_conversation` | `b98719c8` |
-| T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `dcfe57aa` + `b98719c8` |
-| T5 | E4 | juez LLM por rúbrica con hard-fail caps | `d55a203d` (+`0bab2a53`) |
-| T6 | E5 | modo `--live` con cliente simulado | `b98719c8` (cableado; falta ejercitarlo) |
-| T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `baeac5d1` + `0e86898d` |
+| T1 | E0 | `scripts/seed_kb_docs.py` + preflight de KB | `3fabe88a` (+`20a40d17`) |
+| T2 | E1 | `scripts/conv_eval_corpus.yaml` (14 escenarios) + validador | `156a0884` + `aa870cc4` |
+| T3 | E2 | runner scripted sobre `run_conversation` | `e1f87914` |
+| T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `aa870cc4` + `e1f87914` |
+| T5 | E4 | juez LLM por rúbrica con hard-fail caps | `efffdf2c` (+`70b7c531`) |
+| T6 | E5 | modo `--live` con cliente simulado | `e1f87914` (cableado; falta ejercitarlo) |
+| T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `d585f384` + `01084054` |
 
 ## Log
 
@@ -185,8 +185,8 @@ persistencia en hilos largos, se agregan escenarios nuevos a ese tier en vez de 
 ### L6 — slice de recuperación y estrategia de entrega (2026-10-23)
 
 Tras el crash, los tres primeros commits recuperan lo que ya estaba escrito en disco como las
-unidades que este plan preveía, sin agregar comportamiento nuevo: `b21f5b4d` (este doc),
-`62166951` (`seed_kb_docs.py`, T1) y `580b8f2b` (`conv_eval_corpus.yaml`, T2). Slice acumulado
+unidades que este plan preveía, sin agregar comportamiento nuevo: `c1504067` (este doc),
+`3fabe88a` (`seed_kb_docs.py`, T1) y `156a0884` (`conv_eval_corpus.yaml`, T2). Slice acumulado
 medido: **796 líneas autoradas** en 3 commits.
 
 Estrategia de entrega, decidida acá porque el acumulado pasa la guía de ~400 líneas: **una sola
@@ -218,7 +218,7 @@ Cuatro defectos del instrumento aparecieron al usarlo, y quedaron corregidos con
    el escenario queda "sin veredicto" (nunca como puntaje) y la corrida sigue (`fb5220fe`).
 2. **`kb_miss` blando invisible**: producción registra `kb_miss` solo cuando escala. Una respuesta con
    la oferta de `kb_miss_offer` no deja evento, así que G9 daba verde falso sobre una pregunta que la
-   KB sí responde. G9 ahora lee el texto configurado (`8a3a0767`).
+   KB sí responde. G9 ahora lee el texto configurado (`1c5d2c46`).
 3. **Evidencia del juez perdida**: el reporte guardaba el puntaje y tiraba la cita por dimensión, que
    es justo lo que S9 calibra. Ahora viaja con la fila.
 4. **Sin visibilidad** de una corrida larga (stdout en buffer) → progreso por escenario con `flush`.
@@ -239,7 +239,7 @@ Calibración S9 abierta: `odd/evals/calibracion-s9.md` trae tres conversaciones 
 
 ### L8 — el instrumento mintió una vez, y eso valió más que el número (2026-10-23)
 
-El baseline scripted salió **5/14** con sello limpio (`baeac5d1`), y era **inválido**. La prueba:
+El baseline scripted salió **5/14** con sello limpio (`d585f384`), y era **inválido**. La prueba:
 `complejo-agendar-calefont` es un escenario de 5 turnos y su conversación tenía **20 mensajes**. La
 corrida que mató el SIGTERM dejó sus filas en la base, y la repetición con el mismo `--run-tag` reusó
 los mismos clientes y replayó los turnos **encima de conversaciones que ya habían escalado a `human`**.
@@ -248,7 +248,7 @@ De ahí los 4 `G1`, los 4 `G4` y los 10 `handoff:cobertura`: era la corrida ante
 Consecuencia para el plan de comparar versiones del bot: un crash a mitad de corrida habría hecho
 concluir "empeoró" con datos que nunca midieron al bot. Tres arreglos, todos con test:
 
-1. **`211774ea` — un tag con clientes existentes se rechaza** (`exit 2`, stderr con la lista de
+1. **`8e7f9a5d` — un tag con clientes existentes se rechaza** (`exit 2`, stderr con la lista de
    escenarios contaminados). Verificado corriéndolo.
 2. **`--reset` con guarda**: vacía solo estado de conversación (clientes, conversaciones, mensajes,
    eventos, casos, memorias, visitas, notificaciones) y **solo** si `DATABASE_URL` coincide en
@@ -271,7 +271,7 @@ atribuirle nada a las mejoras del otro worktree.
 
 ### L9 — el piso de ruido del instrumento, medido (2026-10-23)
 
-Dos corridas idénticas, mismo código (`940d02f3`), mismo corpus, **`--reset` antes de cada una** para
+Dos corridas idénticas, mismo código (`caf0109e`), mismo corpus, **`--reset` antes de cada una** para
 que el estado inicial sea el mismo: `clean-1` y `clean-2`.
 
 | | clean-1 | clean-2 |
@@ -311,13 +311,14 @@ instrumento: **una suite por worktree** — las corridas de `conv_eval.py` y `py
 de test derivada y se bloquean en el `TRUNCATE`, así que van serializadas.
 
 **Entrega: tres PRs encadenados, decidido.** Un PR de 25 commits no se revisa. El corte se midió sobre
-la rama ya limpia de JSON (L11) y cuenta líneas autoradas por commit:
+la rama ya limpia de JSON (L11); las líneas son las del diff de tres puntos, que es el que muestra el
+PR:
 
-| PR | Contenido | Commits | Líneas |
+| PR | Contenido | Commits | Diff |
 |---|---|---|---|
-| 1 · instrumento que todavía no corre | doc, seed de KB, corpus, juez, gates y scoring, con sus tests | 8, hasta `0bab2a53` | 2.577 |
-| 2 · runner y reporte | runner scripted, reporte JSON/MD, diff y sello, más los tres defectos que la primera corrida destapó | 5, hasta `8a25d57d` | 965 |
-| 3 · robustez y evidencia | transcripts, guarda de `--run-tag`, `--reset` admin, sello limpio, artefactos y docs | 12 + docs | 3.185 |
+| 1 · instrumento que todavía no corre | doc, seed de KB, corpus, juez, gates y scoring, con sus tests | 8, hasta `70b7c531` | 8 archivos, 2.575 |
+| 2 · runner y reporte | runner scripted, reporte JSON/MD, diff y sello, más los tres defectos que la primera corrida destapó | 5, hasta `9a7319f8` | 4 archivos, 951 (+17) |
+| 3 · robustez y evidencia | transcripts, guarda de `--run-tag`, `--reset` admin, sello limpio, artefactos y docs | 13 | 15 archivos, 2.154 (+21) |
 
 Ninguno de los tres entra en la guía de ~400 líneas, y no hay un corte más fino que no separe un
 script de sus tests: de las ~5,5k líneas del diff neto, ~2,2k son los tres scripts, ~1,2k sus tests,
@@ -327,12 +328,15 @@ medido, antes que romper la cohesión código↔test.
 **`odd/evals/`: decidido.** El `.md` — reporte y transcripción de conversaciones — es el registro
 permanente: con `--reset` la base se vacía, pero el transcript se reconstruye del log de mensajes. El
 JSON de 40–70 KB solo alimenta el diff contra la corrida anterior, así que **no se commitea** y queda
-ignorado por `.gitignore` (`2a670069`). `conv-eval-baseline.*` se borra: es la corrida contaminada de
+ignorado por `.gitignore` (`05bc719a`). `conv-eval-baseline.*` se borra: es la corrida contaminada de
 L8 y no debe viajar en el PR.
 
 `origin/main` volvió a avanzar mientras se armaba la entrega (`497875af`, PRs #668 y #669 del worktree
-`chatbot-oferta`), así que la rama se realineó otra vez antes de abrir nada. Con ese merge el diff
-neto contra `main` vuelve a ser **solo agregados**: 18 archivos nuevos y 4 líneas en `.gitignore`.
+`chatbot-oferta`), así que la rama se realineó otra vez antes de abrir nada — primero con un merge, y
+después con un **rebase sobre `origin/main`**. El rebase no es cosmético: con el merge adentro del
+tercer PR, su diff arrastraba 33 archivos con medio `main`; sin él, cada slice muestra solo lo suyo.
+El diff neto contra `main` son 20 archivos — 19 nuevos y `.gitignore` con 4 líneas —, 5.642
+inserciones y cero borrados.
 
 ### L11 — la evidencia se limpia, y el sello medía los reportes (2026-10-23)
 
@@ -347,7 +351,7 @@ el `.md` que había dejado la anterior. Como S8.6 hace no citable una corrida su
 corridas que se iban a commitear servía como baseline**, y commitear los `.md` —justo la política de
 L10— habría garantizado que ninguna futura tampoco: cada corrida reescribe archivos trackeados.
 
-Arreglado antes de commitear la evidencia (`4e1446ae`): el sello excluye el directorio de reporte,
+Arreglado antes de commitear la evidencia (`dd5dcf91`): el sello excluye el directorio de reporte,
 resuelto contra el árbol medido, así que un `--out-dir` fuera del repo no excluye nada. Cuatro tests lo
 fijan: un reporte sin trackear y un reporte commiteado que una corrida nueva reescribe dejan el árbol
 limpio; una edición en `app/` y un archivo sin trackear fuera del reporte lo siguen ensuciando. El
@@ -360,10 +364,13 @@ Sobre la evidencia, con las dos decisiones de L10 aplicadas:
   `odd/evals/` quedó **idéntico** al anterior, verificado con `git diff` contra el tip previo.
 - Se borró `conv-eval-baseline.*` (la corrida contaminada de L8). Quedan el reporte y la transcripción
   de `baseline-2`, `live-baseline-2` y las dos `clean-*`, más la planilla de calibración.
-- `odd/evals/*.json` quedó en `.gitignore` (`2a670069`), fuera del bloque administrado por rapso.
-- Los commits anteriores a `baeac5d1` **conservaron su SHA**, así que la tabla de Tasks sigue válida.
-  Los sellos que los `.md` imprimen apuntan a commits que la reescritura renombró, con el código bit a
-  bit igual: `aaa3e767`→`baeac5d1`, `3cd0406a`→`495bc481`, `079a1129`→`211774ea`,
-  `d22d549d`→`351b94da`, `886edad9`→`30ea7a63`, `5356dfd4`→`153ca884`, `8b4efc0e`→`7cb35117`,
-  `6cf76f59`→`940d02f3`, `e56c0942`→`0e86898d`. Los sellos originales se dejan como están:
-  reescribirlos sería falsificar el reporte.
+- `odd/evals/*.json` quedó en `.gitignore` (`05bc719a`), fuera del bloque administrado por rapso.
+- La historia se reescribió **dos veces**: primero para sacar los JSON, después un rebase sobre
+  `origin/main` para que cada PR encadenado muestre solo su slice (con el merge de main adentro del
+  tercer PR, su diff se llevaba medio `main`). La segunda reescritura cambió **todos** los SHA, así
+  que la tabla de Tasks cita los vigentes.
+- Los sellos que los `.md` ya commiteados imprimen (`3cd0406a`, `6cf76f59`, `fb5220fe`) apuntan a la
+  historia previa a las reescrituras, preservada en la rama local `backup/pre-evals-cleanup`. El
+  código medido es bit a bit el mismo: el árbol del tip no cambió en ninguna de las dos
+  reescrituras. Equivalencias vigentes: `3cd0406a`→`4a4df426`, `6cf76f59`→`caf0109e`,
+  `fb5220fe`→`de48307e`. Los sellos se dejan como están: reescribirlos sería falsificar el reporte.
