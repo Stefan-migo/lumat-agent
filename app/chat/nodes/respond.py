@@ -284,9 +284,11 @@ def respond(state: ConversationState) -> dict:
             # CM-1: avoid a clarification immediately after the first-contact
             # greeting; there is no prior bot instruction to clarify.
             return {}
+        message_key = "cannot_understand_offer" if state.unknown_count >= 2 else "clarification"
+        fallback = MESSAGE_DEFAULTS[message_key]
         with session_scope() as session:
-            clarification = get_message(session, "clarification", CLARIFICATION_REPLY)
-        return {"replies": [clarification]}
+            reply = get_message(session, message_key, fallback)
+        return {"replies": [reply]}
 
     with session_scope() as session:
         try:

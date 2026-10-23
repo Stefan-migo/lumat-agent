@@ -895,9 +895,14 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "greeting_short",
         "cannot_answer",
         "clarification",
+        "cannot_understand_offer",
         "farewell",
         "out_of_hours",
     }
+    assert body["messages"]["cannot_understand_offer"] == (
+        "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, "
+        "o que te atienda una persona?"
+    )
     assert body["hours"] == {"timezone": "America/Santiago", "schedule": []}
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
@@ -1013,6 +1018,7 @@ def test_settings_update_messages_audited(client, make_user):
         "greeting_short": "Hola editado breve",
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
+        "cannot_understand_offer": "¿Visita o persona?",
         "farewell": "Hasta luego",
         "out_of_hours": "Estamos cerrados",
     }
@@ -1029,6 +1035,9 @@ def test_settings_update_messages_audited(client, make_user):
         f"messages.{key}" for key in value
     }
     assert all(audit.actor == "adm" for audit in audits)
+    assert client.get("/panel/api/settings").json()["messages"]["cannot_understand_offer"] == (
+        "¿Visita o persona?"
+    )
 
 
 def test_settings_update_hours_audited(client, make_user):

@@ -7,8 +7,8 @@ LLM classification with SH-4 input-as-data:
   the conversation escalates and NO tool/LLM call happens (SH-4: "never
   execute")
 - LLM may also flag injection -> same escalation, no further action
-- unknown intent increments `unknown_count`; at 2 the conversation escalates
-  (HH-3 "Two failed comprehension attempts")
+- unknown intent increments `unknown_count`; at 3 the conversation escalates
+  (D17: third failure derives after offering paths on failure 2)
 - an SS-1 `always_escalate` scope rule for the classified category escalates
   (HH-3 trigger 5, T4.4 — evaluated here, where the category is known; the
   handoff gate owns the pre-LLM triggers)
@@ -266,8 +266,8 @@ def classify_intent(state: ConversationState) -> dict:
         return {
             "intent": "unknown",
             "unknown_count": unknown_count,
-            "escalate": unknown_count >= 2,
-            "escalate_reason": "unknown_intent_twice" if unknown_count >= 2 else None,
+            "escalate": unknown_count >= 3,
+            "escalate_reason": "unknown_intent_thrice" if unknown_count >= 3 else None,
             "extracted": _extracted(result),
             "template_id": result.get("template_id"),
         }

@@ -72,7 +72,7 @@ describe("Settings mock (settings.ts)", () => {
 
   it("pins the standard message keys", () => {
     expect(Object.keys(settings.messages).sort()).toEqual([
-      "cannot_answer", "clarification", "farewell", "greeting", "greeting_short", "out_of_hours",
+      "cannot_answer", "cannot_understand_offer", "clarification", "farewell", "greeting", "greeting_short", "out_of_hours",
     ]);
   });
 

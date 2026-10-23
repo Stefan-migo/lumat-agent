@@ -29,6 +29,8 @@ export const settings: Settings = {
     greeting_short: "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?",
     cannot_answer: "No puedo responder con seguridad a eso.",
     clarification: "¿Puedes elegir una opción del menú?",
+    cannot_understand_offer:
+      "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, o que te atienda una persona?",
     farewell: "Gracias por comunicarte con Lumat.",
     out_of_hours: "En este momento estamos fuera de horario.",
   },

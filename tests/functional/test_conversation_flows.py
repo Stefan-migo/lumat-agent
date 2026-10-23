@@ -2,7 +2,7 @@
 
 End-to-end through the REAL pipeline (signature gate -> persist -> background
 sweep -> LangGraph run -> outbound persist + Meta send mocked): first contact
-menu, repeat-contact resume, capture skip, 2-failure escalation, KB miss ->
+menu, repeat-contact resume, capture skip, 3-failure escalation, KB miss ->
 unresolved log. The B3/B4 graph behavior was unit-tested at node level in
 tests/integration/; these prove the same scenarios through the customer-facing
 entry point (TestClient + seeded DB).
@@ -212,23 +212,27 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
 
 
 # ---------------------------------------------------------------------------
-# HH-3 — two failed comprehension attempts escalate to a human
+# D17 — third failed comprehension attempt escalates to a human
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.spec("HH-3")
-def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
-    """Greeting-only is not classified; two later failures escalate.
-
-    The first-contact greeting is not classified. The next two unknowns reach
-    the 2-failure threshold: the handoff reply is sent (no LLM)
-    and the deriva bundle is created. The non-escalating clarification path for
-    a turn-2 unknown is covered by tests/integration/test_webhook_ingest.py
-    (retry-storm) and test_handoff.py.
-    """
+def test_hh3_three_failures_escalate(client, mock_openai_chat, mock_meta_send):
+    """Greeting-only is not classified; failures 1-3 clarify, offer, then derive."""
     post_message(client, "wamid.hh3.1", "hola")
     post_message(client, "wamid.hh3.2", "asdfghjkl")
-    post_message(client, "wamid.hh3.3", "qwertyuiop")  # 2nd unknown -> escalate
+    post_message(client, "wamid.hh3.3", "qwertyuiop")  # failure 2 -> offer
+
+    with SessionLocal() as session:
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+        second_failure_replies = _outbound_texts(session)
+
+    assert conversation.state == ConversationState.BOT  # D17: offer without leaving the bot
+    assert len(second_failure_replies) == 3
+    assert any("coordinar una visita" in r.lower() and "persona" in r.lower() for r in second_failure_replies)
+
+    post_message(client, "wamid.hh3.4", "zxcvbnm")  # failure 3 -> derive
 
     with SessionLocal() as session:
         customer = session.scalars(select(Customer)).one()
@@ -236,13 +240,13 @@ def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
         replies = _outbound_texts(session)
         cases = session.scalars(select(Case)).all()
 
-    assert len(replies) == 3
+    assert len(replies) == 4
     assert "Hola, soy el asistente virtual de Lumat." in replies[0]
     assert "asesor revisará tu caso" in replies[-1]  # handoff reply
     assert conversation.state == ConversationState.HUMAN  # HH-1 bot->human
     assert len(cases) == 1  # deriva bundle created (HH-2)
     assert cases[0].conversation_id == conversation.id
-    assert cases[0].bundle["escalate_reason"] == "unknown_intent_twice"
+    assert cases[0].bundle["escalate_reason"] == "unknown_intent_thrice"
 
 
 # ---------------------------------------------------------------------------

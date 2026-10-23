@@ -392,16 +392,19 @@ def test_persona_escalates_to_human_with_deriva_case(mock_openai_chat):
     )
 
 
-def test_two_unknown_intents_escalate_to_human(mock_openai_chat):
-    """HH-3 "Two failed comprehension attempts": 2x unknown -> handoff."""
+def test_three_unknown_intents_escalate_to_human(mock_openai_chat):
+    """D17: offer two paths on failure 2; hand off after failure 3."""
     conv_id = _start_conversation()
-    _turn(conv_id, "zzzzzx", "wamid.u1")  # first unknown -> clarification
-    replies = _turn(conv_id, "qqqqqw", "wamid.u2")  # second -> handoff
+    _turn(conv_id, "zzzzzx", "wamid.u1")  # failure 1 -> clarification
+    second_replies = _turn(conv_id, "qqqqqw", "wamid.u2")  # failure 2 -> offer
+    assert _conversation_state(conv_id) == "bot"
+    assert any("coordinar una visita" in r.lower() and "persona" in r.lower() for r in second_replies)
 
+    replies = _turn(conv_id, "wwwwwe", "wamid.u3")  # failure 3 -> handoff
     assert any("asesor" in r.lower() for r in replies)
     assert _conversation_state(conv_id) == "human"
     case = _case(conv_id)
-    assert case.bundle["escalate_reason"] == "unknown_intent_twice"
+    assert case.bundle["escalate_reason"] == "unknown_intent_thrice"
 
 
 def test_complaint_escalates_to_human(mock_openai_chat):
