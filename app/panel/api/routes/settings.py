@@ -109,6 +109,7 @@ class MessagesBody(BaseModel):
     greeting_short: str
     greeting_name: str
     greeting_short_name: str
+    smalltalk: str
     cannot_answer: str
     clarification: str
     cannot_understand_offer: str

@@ -215,6 +215,7 @@ MESSAGE_DEFAULTS: dict[str, str] = {
     "greeting_short": "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.",
     "greeting_name": "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?",
     "greeting_short_name": "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso.",
+    "smalltalk": "Con gusto. ¿En qué más te puedo ayudar?",
     "cannot_answer": (
         "Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat "
         "revisará tu consulta y te contactará."
@@ -1043,6 +1044,7 @@ ASSISTANT_WRITABLE_SETTINGS: frozenset[str] = frozenset(
         "messages.greeting_short",
         "messages.greeting_name",
         "messages.greeting_short_name",
+        "messages.smalltalk",
         "messages.farewell",
         "messages.clarification",
         "messages.cannot_answer",

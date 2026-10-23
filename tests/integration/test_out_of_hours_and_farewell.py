@@ -165,7 +165,7 @@ def test_non_farewell_messages_are_not_closed(text, mock_openai_chat):
     assert mock_openai_chat
 
 
-@pytest.mark.parametrize("text", ["gracias, chau", "eso fue todo gracias"])
+@pytest.mark.parametrize("text", ["chau", "eso fue todo"])
 def test_farewell_gets_farewell(text, mock_openai_chat):
     replies = _turn(_start_conversation(), text, f"wamid.farewell.{text[:3]}")
 
@@ -181,6 +181,6 @@ def test_closure_message_overrides_are_used(mock_openai_chat):
         settings.set_setting(session, "messages.out_of_hours", notice, actor="test")
         session.commit()
 
-    assert _turn(_start_conversation(), "gracias, chau", "wamid.override.1") == [farewell]
+    assert _turn(_start_conversation(), "chau", "wamid.override.1") == [farewell]
     _set_closed_hours()
     assert _turn(_start_conversation(), "hola", "wamid.override.2") == [notice]

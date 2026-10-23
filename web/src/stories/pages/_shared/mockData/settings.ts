@@ -29,6 +29,7 @@ export const settings: Settings = {
     greeting_short: "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.",
     greeting_name: "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?",
     greeting_short_name: "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso.",
+    smalltalk: "Con gusto. ¿En qué más te puedo ayudar?",
     cannot_answer: "No puedo responder con seguridad a eso.",
     clarification: "¿Puedes elegir una opción del menú?",
     cannot_understand_offer:

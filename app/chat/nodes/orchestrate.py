@@ -89,6 +89,10 @@ def _dispatch(
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+    if intent == "smalltalk":
+        # Courtesy is understood even during capture; never research, capture,
+        # or escalate it as a side effect of a pending field.
+        return {"next_step": "respond"}
     if mid_capture:
         if intent in RETRIEVAL_INTENTS or question:
             # Answer the deviation from KB, then resume the pending field (CI-2).

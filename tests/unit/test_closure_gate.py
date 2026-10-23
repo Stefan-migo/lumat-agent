@@ -11,26 +11,34 @@ from app.chat.nodes.closure_gate import CLOSING_TOKENS, is_farewell
         "adiós",
         "adios",
         "¡Adiós!",
-        "GRACIAS, CHAO",
-        "gracias, chau",
         "hasta luego",
         "nos vemos",
-        "muchas gracias",
-        "ok gracias",
-        "gracias",
-        "eso fue todo gracias",
-        "ok",
-        "listo",
         "bye",
         "chau!",
+        "eso fue todo",
     ],
 )
 def test_closing_tokens_are_farewells(phrase):
     assert is_farewell(phrase)
 
 
-def test_closing_vocabulary_is_flattened():
-    assert {"chao", "gracias", "ok", "listo"}.issubset(CLOSING_TOKENS)
+@pytest.mark.parametrize(
+    "phrase",
+    ["gracias", "muchas gracias", "ok", "listo", "perfecto", "dale", "ok gracias"],
+)
+def test_acknowledgements_are_not_farewells(phrase):
+    """S3 (chatbot-experiencia): courtesy belongs to the classifier, not the gate.
+
+    These used to close the conversation with a goodbye. Now the classifier
+    names them `smalltalk` and the bot answers with the courtesy reply, so the
+    gate must not swallow them first.
+    """
+    assert not is_farewell(phrase)
+
+
+def test_closing_vocabulary_is_flat_and_explicit():
+    assert {"chao", "adios", "hasta", "luego", "bye"}.issubset(CLOSING_TOKENS)
+    assert CLOSING_TOKENS.isdisjoint({"gracias", "ok", "listo", "perfecto", "dale"})
 
 
 @pytest.mark.parametrize(

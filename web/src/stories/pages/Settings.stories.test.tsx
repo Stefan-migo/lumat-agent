@@ -127,6 +127,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
       ["greeting_name", "Saludo con nombre", settings.messages.greeting_name],
       ["greeting_short", "Saludo corto cuando falta el nombre", settings.messages.greeting_short],
       ["greeting_short_name", "Saludo corto con nombre", settings.messages.greeting_short_name],
+      ["smalltalk", "Cortesía", settings.messages.smalltalk],
       ["cannot_answer", "Cuando no puede responder", settings.messages.cannot_answer],
       ["clarification", "Aclaración", settings.messages.clarification],
       ["farewell", "Despedida", settings.messages.farewell],

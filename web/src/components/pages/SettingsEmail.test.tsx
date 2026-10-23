@@ -8,7 +8,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   model_api_key: { configured: false, source: "none", masked: "" },
   email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
-  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visitamos o te atiende una persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
+  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", smalltalk: "Con gusto.", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visitamos o te atiende una persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
   tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },

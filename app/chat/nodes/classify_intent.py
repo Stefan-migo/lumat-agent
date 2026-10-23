@@ -246,6 +246,23 @@ def classify_intent(state: ConversationState) -> dict:
             "escalate_reason": "injection_detected",
         }
 
+    if result["intent"] == "smalltalk":
+        # Courtesy is an understood turn: it breaks the unknown streak, but it
+        # has no case category or configurable scope rule that may escalate it.
+        with session_scope() as session:
+            record_activity(
+                session,
+                state.conversation_id,
+                "classified",
+                cause="intent:smalltalk",
+                actor="bot",
+            )
+        return {
+            "intent": "smalltalk",
+            "extracted": _extracted(result),
+            "template_id": result.get("template_id"),
+        }
+
     if result["intent"] == "unknown":
         if mid_capture:
             # CM-2 field answers are not comprehension failures (HH-3).

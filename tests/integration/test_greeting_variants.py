@@ -110,7 +110,7 @@ def test_greeting_with_content_still_reaches_classification(mock_openai_chat):
 
 
 def test_farewell_still_wins_before_the_greeting(mock_openai_chat):
-    replies = _turn(_start_conversation(), "eso fue todo gracias", "wamid.s1.farewell.1")
+    replies = _turn(_start_conversation(), "eso fue todo", "wamid.s1.farewell.1")
 
     assert replies == [FAREWELL]
     assert mock_openai_chat == []
