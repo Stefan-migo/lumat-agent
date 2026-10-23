@@ -1,0 +1,621 @@
+"""Conversation evaluation for the Lumat chat brain (ODD: chatbot-conv-eval).
+
+Why this exists
+---------------
+The owner was writing a new conversation by hand every time the bot changed,
+which measures the owner's imagination, not the bot. This harness runs a
+**versioned corpus of customer conversations** against the real brain
+(`app.chat.graph.run_conversation`, through the same seam as
+`scripts/chat_harness.py`) and scores each one on two independent layers:
+
+1. **Deterministic gates** — what the bot *did*: final state, intents recorded,
+   events and their causes, whether every turn got a reply, whether the answers
+   stayed inside the KB. Free, reproducible, no model in the loop.
+2. **Rubric judge** — what the bot *said*, scored 0-4 per dimension with cited
+   evidence (`scripts/conv_eval_judge.py`, the only module here that calls an
+   LLM).
+
+A gate does not average with the judge: `score_scenario` caps the score at 0
+when any gate fails or the judge records a hard fail, so containment can never
+be bought with fluency (S4, S8.4).
+
+Split of responsibilities
+-------------------------
+This module must stay **importable, runnable and testable without a database,
+a model or a provider key**. The corpus schema, the gate math and the run diff
+are its model-free contract, pinned by `tests/unit/test_conv_eval.py`. Database
+access, the judge and the simulated customer are imported lazily inside the
+functions that need them, so `import conv_eval` costs nothing and fails nothing.
+
+The gates
+---------
+Each gate is evaluated only when the scenario declares it; a skipped gate is
+absent from the result and never counts as a pass. The one exception is G8,
+which is a structural invariant and always evaluated.
+
+===  ================  =======================================================
+ID   Name              Fails when
+===  ================  =======================================================
+G1   state             the final conversation state is not in `state_any`
+G2   intent            no turn classified into `intent_expected`
+G3   events_required   an event in `events_required` was never recorded
+G4   events_forbidden  an event in `events_forbidden` was recorded
+G5   causes_forbidden  an event cause matches one in `causes_forbidden`
+G6   must_include_any  no bot reply contains any of the anchors
+G7   must_not_include  a bot reply contains one of the forbidden anchors
+G8   reply_present     an inbound customer turn got no reply at all
+G9   kb_answered       the answer lives in the KB, yet the turn ended in kb_miss
+===  ================  =======================================================
+
+Anchors are matched case- and accent-insensitively, as substrings: the bot says
+"la mantención" and the anchor is "mantenci" on purpose.
+
+Usage
+-----
+    eval "$(bash infra/test-db.sh env)"
+    uv run python scripts/seed_kb_docs.py --apply      # once per stack
+    uv run python scripts/conv_eval.py --validate-only # corpus only, no DB
+    uv run python scripts/conv_eval.py --run-tag baseline
+    uv run python scripts/conv_eval.py --tier supercomplejo --no-judge
+"""
+
+from __future__ import annotations
+
+import hashlib
+import unicodedata
+from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Sequence
+
+__all__ = [
+    "CORPUS_PATH",
+    "DIMENSIONS",
+    "GATE_NAMES",
+    "Corpus",
+    "GateResult",
+    "Scenario",
+    "compare_runs",
+    "derive_phone",
+    "evaluate_gates",
+    "load_corpus",
+    "score_scenario",
+    "summarize",
+]
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+CORPUS_PATH = _REPO_ROOT / "scripts" / "conv_eval_corpus.yaml"
+
+TIERS = ("simple", "complejo", "supercomplejo")
+
+# The judged dimensions live in the judge module; duplicated here because this
+# module must not import it. `tests/unit/test_conv_eval.py` pins that the two
+# tuples agree, so they cannot drift apart silently.
+DIMENSIONS = ("grounding", "policy", "conversational", "escalation", "tone", "closure")
+
+GATE_NAMES = {
+    "G1": "state",
+    "G2": "intent",
+    "G3": "events_required",
+    "G4": "events_forbidden",
+    "G5": "causes_forbidden",
+    "G6": "must_include_any",
+    "G7": "must_not_include",
+    "G8": "reply_present",
+    "G9": "kb_answered",
+}
+
+_SCENARIO_KEYS = {
+    "id",
+    "tier",
+    "persona",
+    "goal",
+    "turns",
+    "max_turns",
+    "expect",
+    "hard_fails",
+    "notes",
+}
+_EXPECT_KEYS = {
+    "state_any",
+    "intent_expected",
+    "events_required",
+    "events_forbidden",
+    "causes_forbidden",
+    "must_include_any",
+    "must_not_include",
+    "kb_answered",
+}
+# `escalation` carries its reason as `handoff:<reason>` and `kb_miss` is one of
+# those reasons, never an event of its own (`app/chat/nodes/handoff.py:88`).
+_HANDOFF_PREFIX = "handoff:"
+_KNOWN_STATES = ("bot", "human", "closed")
+
+
+# ---------------------------------------------------------------------------
+# Corpus — the fixture is the instrument; a broken fixture is a silent wrong
+# answer, which is worse than no benchmark.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Scenario:
+    """One reproducible conversation: same turns, same phone, same cleanup."""
+
+    id: str
+    tier: str
+    persona: str
+    goal: str
+    turns: tuple[str, ...]
+    max_turns: int
+    expect: Mapping[str, Any]
+    hard_fails: tuple[str, ...] = ()
+    notes: str = ""
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class Corpus:
+    version: int
+    scenarios: tuple[Scenario, ...]
+    fingerprint: str
+
+    @property
+    def ids(self) -> tuple[str, ...]:
+        return tuple(scenario.id for scenario in self.scenarios)
+
+    def by_tier(self, tier: str | None = None) -> tuple[Scenario, ...]:
+        if tier is None:
+            return self.scenarios
+        return tuple(scenario for scenario in self.scenarios if scenario.tier == tier)
+
+
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
+
+
+def _string_list(value: Any, field_name: str, where: str) -> tuple[str, ...]:
+    _require(
+        isinstance(value, list) and all(isinstance(item, str) for item in value),
+        f"{where}: `{field_name}` must be a list of strings",
+    )
+    return tuple(value)
+
+
+def _build_scenario(entry: Any, index: int) -> Scenario:
+    where = f"conversation #{index + 1}"
+    _require(isinstance(entry, Mapping), f"{where}: must be a mapping")
+    _require("id" in entry, f"{where}: every scenario needs an `id`")
+    scenario_id = entry["id"]
+    _require(
+        isinstance(scenario_id, str) and scenario_id.strip() != "",
+        f"{where}: `id` must be a non-empty string",
+    )
+    where = f"conversation {scenario_id!r}"
+
+    unknown = set(entry) - _SCENARIO_KEYS
+    _require(not unknown, f"{where}: unknown keys {sorted(unknown)}")
+
+    tier = entry.get("tier")
+    _require(
+        tier in TIERS,
+        f"{where}: `tier` must be one of {list(TIERS)}, got {tier!r}",
+    )
+
+    turns = _string_list(entry.get("turns"), "turns", where)
+    _require(turns, f"{where}: `turns` must declare at least one customer message")
+
+    max_turns = entry.get("max_turns", len(turns))
+    _require(
+        isinstance(max_turns, int) and not isinstance(max_turns, bool),
+        f"{where}: `max_turns` must be an integer",
+    )
+    _require(
+        max_turns >= len(turns),
+        f"{where}: `max_turns` ({max_turns}) cannot be smaller than the "
+        f"{len(turns)} scripted turns",
+    )
+
+    persona = entry.get("persona") or ""
+    goal = entry.get("goal") or ""
+    _require(
+        isinstance(persona, str) and isinstance(goal, str),
+        f"{where}: `persona` and `goal` must be strings",
+    )
+    _require(
+        persona.strip() and goal.strip(),
+        f"{where}: `persona` and `goal` are required, `--live` replays them",
+    )
+
+    expect = entry.get("expect")
+    _require(isinstance(expect, Mapping), f"{where}: `expect` must be a mapping")
+    _require(expect, f"{where}: `expect` must declare at least one gate")
+    unknown = set(expect) - _EXPECT_KEYS
+    _require(
+        not unknown,
+        f"{where}: unknown expect keys {sorted(unknown)}; "
+        f"known ones are {sorted(_EXPECT_KEYS)}",
+    )
+    for key in ("state_any",):
+        if key in expect:
+            states = _string_list(expect[key], key, where)
+            _require(states, f"{where}: `{key}` must declare at least one state")
+            _require(
+                set(states) <= set(_KNOWN_STATES),
+                f"{where}: unknown state in `{key}`: "
+                f"{sorted(set(states) - set(_KNOWN_STATES))}",
+            )
+    for key in (
+        "intent_expected",
+        "events_required",
+        "events_forbidden",
+        "causes_forbidden",
+        "must_include_any",
+        "must_not_include",
+    ):
+        if key in expect:
+            values = _string_list(expect[key], key, where)
+            _require(values, f"{where}: `{key}` must declare at least one value")
+    if "kb_answered" in expect:
+        _require(
+            isinstance(expect["kb_answered"], bool),
+            f"{where}: `kb_answered` must be a boolean",
+        )
+
+    hard_fails = tuple(entry.get("hard_fails") or ())
+    _require(
+        all(isinstance(item, str) for item in hard_fails),
+        f"{where}: `hard_fails` must be a list of strings",
+    )
+
+    return Scenario(
+        id=scenario_id,
+        tier=tier,
+        persona=persona,
+        goal=goal,
+        turns=turns,
+        max_turns=max_turns,
+        expect=dict(expect),
+        hard_fails=hard_fails,
+        notes=str(entry.get("notes") or ""),
+        raw=dict(entry),
+    )
+
+
+def _fingerprint(version: int, scenarios: Sequence[Scenario]) -> str:
+    payload = "\n".join(
+        f"{scenario.id}|{scenario.tier}|{'~'.join(scenario.turns)}|{sorted(scenario.expect)}"
+        for scenario in scenarios
+    )
+    return hashlib.sha256(f"v{version}\n{payload}".encode("utf-8")).hexdigest()[:12]
+
+
+def load_corpus(path: Path = CORPUS_PATH) -> Corpus:
+    """Load and validate the corpus. Raises ValueError on any violation.
+
+    A silently wrong fixture produces a decision-grade report built on the wrong
+    question, so every structural problem is a refusal with the offending field
+    named.
+    """
+    import yaml
+
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    _require(isinstance(raw, Mapping), "corpus: the document must be a mapping")
+
+    version = raw.get("version")
+    _require(
+        version == 1,
+        f"corpus: `version` must be 1, got {version!r}",
+    )
+    _require("conversations" in raw, "corpus: missing the `conversations` section")
+    entries = raw["conversations"]
+    _require(
+        isinstance(entries, list),
+        "corpus: `conversations` must be a list of scenarios",
+    )
+    _require(entries, "corpus: `conversations` is empty")
+
+    scenarios = tuple(_build_scenario(entry, index) for index, entry in enumerate(entries))
+
+    ids = Counter(scenario.id for scenario in scenarios)
+    duplicates = sorted(name for name, count in ids.items() if count > 1)
+    _require(not duplicates, f"corpus: duplicate scenario ids {duplicates}")
+
+    return Corpus(version=version, scenarios=scenarios, fingerprint=_fingerprint(version, scenarios))
+
+
+# ---------------------------------------------------------------------------
+# Phone derivation — S8.2: a run must never inherit a customer from another run
+# ---------------------------------------------------------------------------
+
+
+def derive_phone(scenario_id: str, run_tag: str) -> str:
+    """Derive a stable E.164 phone from `(scenario_id, run_tag)`.
+
+    Deterministic on purpose: re-running the same tag reproduces the same
+    customer, a new tag lands on a fresh one. Nothing is ever deleted, so the
+    instrument cannot be poisoned by yesterday's memory (S8.2).
+    """
+    digest = hashlib.sha256(f"{scenario_id}:{run_tag}".encode("utf-8")).hexdigest()
+    digits = "".join(character for character in digest if character.isdigit())
+    return f"+569{digits[:8].ljust(8, '0')}"
+
+
+# ---------------------------------------------------------------------------
+# Gates — what the bot did, with no model in the loop
+# ---------------------------------------------------------------------------
+
+
+def _normalise(text: str) -> str:
+    """Case- and accent-insensitive form used by every anchor gate."""
+    decomposed = unicodedata.normalize("NFD", text.casefold())
+    return "".join(character for character in decomposed if not unicodedata.combining(character))
+
+
+@dataclass(frozen=True)
+class GateResult:
+    gate: str
+    name: str
+    ok: bool
+    detail: str = ""
+
+
+def _events(observation: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    return list(observation.get("events") or ())
+
+
+def _replies(observation: Mapping[str, Any]) -> list[str]:
+    return [str(reply) for reply in observation.get("replies") or ()]
+
+
+def _causes(observation: Mapping[str, Any]) -> list[str]:
+    return [str(event.get("cause") or "") for event in _events(observation)]
+
+
+def _gate(gate: str, ok: bool, detail: str = "") -> GateResult:
+    return GateResult(gate=gate, name=GATE_NAMES[gate], ok=ok, detail=detail)
+
+
+def evaluate_gates(
+    scenario: Scenario, observation: Mapping[str, Any]
+) -> dict[str, GateResult]:
+    """Evaluate the gates the scenario declares, against one observation.
+
+    `observation` is the runner's plain-dict transcript of the run:
+    `state`, `events` (`event`/`cause`), `intents`, `replies`, and `turns` with
+    the replies each inbound message produced.
+    """
+    expect = scenario.expect
+    results: dict[str, GateResult] = {}
+
+    if "state_any" in expect:
+        allowed = list(expect["state_any"])
+        state = str(observation.get("state"))
+        results["G1"] = _gate(
+            "G1",
+            state in allowed,
+            f"state={state}, esperado uno de: {', '.join(allowed)}",
+        )
+
+    if "intent_expected" in expect:
+        allowed = set(expect["intent_expected"])
+        seen = [str(intent) for intent in observation.get("intents") or ()]
+        hit = [intent for intent in seen if intent in allowed]
+        results["G2"] = _gate(
+            "G2",
+            bool(hit),
+            f"intents vistos {seen}, esperaba alguno de: {', '.join(sorted(allowed))}",
+        )
+
+    recorded = [str(event.get("event") or "") for event in _events(observation)]
+
+    if "events_required" in expect:
+        missing = [event for event in expect["events_required"] if event not in recorded]
+        results["G3"] = _gate(
+            "G3", not missing, f"nunca se registró: {', '.join(missing)}"
+        )
+
+    if "events_forbidden" in expect:
+        present = [event for event in expect["events_forbidden"] if event in recorded]
+        results["G4"] = _gate(
+            "G4", not present, f"se registró lo prohibido: {', '.join(present)}"
+        )
+
+    if "causes_forbidden" in expect:
+        causes = _causes(observation)
+        offences = [
+            cause
+            for cause in causes
+            for forbidden in expect["causes_forbidden"]
+            if _normalise(cause).endswith(_normalise(forbidden))
+            or _normalise(cause).endswith(_normalise(_HANDOFF_PREFIX + forbidden))
+        ]
+        results["G5"] = _gate(
+            "G5", not offences, f"causas prohibidas presentes: {', '.join(sorted(set(offences)))}"
+        )
+
+    replies = _replies(observation)
+    normalised_replies = [_normalise(reply) for reply in replies]
+
+    if "must_include_any" in expect:
+        anchors = list(expect["must_include_any"])
+        found = any(
+            _normalise(anchor) in reply
+            for anchor in anchors
+            for reply in normalised_replies
+        )
+        results["G6"] = _gate(
+            "G6",
+            found,
+            f"ninguna respuesta contiene: {', '.join(anchors)}",
+        )
+
+    if "must_not_include" in expect:
+        offenders = [
+            anchor
+            for anchor in expect["must_not_include"]
+            if any(_normalise(anchor) in reply for reply in normalised_replies)
+        ]
+        results["G7"] = _gate(
+            "G7", not offenders, f"apareció lo prohibido: {', '.join(offenders)}"
+        )
+
+    silent = [
+        position
+        for position, turn in enumerate(observation.get("turns") or (), start=1)
+        if not (turn.get("replies") or ())
+    ]
+    results["G8"] = _gate("G8", not silent, f"turnos sin respuesta: {silent}")
+
+    if expect.get("kb_answered"):
+        misses = [cause for cause in _causes(observation) if _normalise(cause).endswith("kb_miss")]
+        results["G9"] = _gate(
+            "G9",
+            not misses,
+            "la respuesta estaba en la KB y aun así hubo kb_miss",
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Scoring — S4: a failed gate is never compensated by a high judge score
+# ---------------------------------------------------------------------------
+
+
+def _dimension_mean(verdict: Mapping[str, Any] | None) -> float | None:
+    if not verdict:
+        return None
+    scores = [
+        float(verdict["dimensions"][name]["score"])
+        for name in DIMENSIONS
+        if name in (verdict.get("dimensions") or {})
+    ]
+    if not scores:
+        return None
+    return round(sum(scores) / len(scores), 3)
+
+
+def score_scenario(
+    scenario: Scenario,
+    gates: Mapping[str, GateResult],
+    verdict: Mapping[str, Any] | None,
+) -> dict:
+    """Combine the gates with the judge verdict into one row.
+
+    The gate layer wins: any failed gate, or a judge hard fail, caps the score
+    at 0. A perfect rubric cannot buy back a contained, inventing or unsafe run.
+    Without a verdict the gates alone decide and `score` is `None`, never 0 —
+    "not measured" and "measured as bad" are different facts.
+    """
+    failed = [gate for gate, result in gates.items() if not result.ok]
+    hard_fail = bool(verdict and verdict.get("hard_fail"))
+    mean = _dimension_mean(verdict)
+    capped = bool(failed) or hard_fail
+    return {
+        "scenario": scenario.id,
+        "tier": scenario.tier,
+        "passed": not capped,
+        "capped": capped,
+        "gates_failed": failed,
+        "score": 0.0 if capped else mean,
+        "dimensions": {
+            name: float(verdict["dimensions"][name]["score"])
+            for name in DIMENSIONS
+            if verdict and name in (verdict.get("dimensions") or {})
+        },
+        "hard_fail": hard_fail,
+        "hard_fail_reason": (verdict or {}).get("hard_fail_reason", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Report math — summarize and the diff against the previous run
+# ---------------------------------------------------------------------------
+
+
+def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
+    """Aggregate run rows: pass rate, gate failures and per-dimension means."""
+    gate_failures: Counter[str] = Counter()
+    by_tier: dict[str, dict[str, int]] = {}
+    totals: dict[str, list[float]] = {name: [] for name in DIMENSIONS}
+
+    for row in rows:
+        gate_failures.update(row.get("gates_failed") or ())
+        tier = str(row.get("tier"))
+        bucket = by_tier.setdefault(tier, {"scenarios": 0, "passed": 0})
+        bucket["scenarios"] += 1
+        if row.get("passed"):
+            bucket["passed"] += 1
+        for name, value in (row.get("dimensions") or {}).items():
+            if name in totals and value is not None:
+                totals[name].append(float(value))
+
+    dimensions = {
+        name: {
+            "mean": round(sum(values) / len(values), 3) if values else None,
+            "n": len(values),
+        }
+        for name, values in totals.items()
+    }
+    measured = {name: data["mean"] for name, data in dimensions.items() if data["n"]}
+    worst = min(measured, key=measured.get) if measured else None
+
+    return {
+        "scenarios": len(rows),
+        "passed": sum(1 for row in rows if row.get("passed")),
+        "gate_failures": dict(gate_failures.most_common()),
+        "dimensions": dimensions,
+        "worst_dimension": worst,
+        "by_tier": by_tier,
+    }
+
+
+def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dict:
+    """Diff a run against the previous one, scenario by scenario.
+
+    Two runs over different corpora are not comparable, and say so instead of
+    producing a diff that looks meaningful.
+    """
+    comparable = current.get("corpus_fingerprint") == previous.get("corpus_fingerprint")
+    current_rows = {row["scenario"]: row for row in current.get("runs") or ()}
+    previous_rows = {row["scenario"]: row for row in previous.get("runs") or ()}
+
+    regressions: list[str] = []
+    fixes: list[str] = []
+    gate_flips: list[dict] = []
+
+    for scenario_id, row in current_rows.items():
+        before = previous_rows.get(scenario_id)
+        if before is None:
+            continue
+        was, now = bool(before.get("passed")), bool(row.get("passed"))
+        if was and not now:
+            regressions.append(scenario_id)
+        elif now and not was:
+            fixes.append(scenario_id)
+        failed_before = set(before.get("gates_failed") or ())
+        failed_now = set(row.get("gates_failed") or ())
+        for gate in sorted(failed_before | failed_now):
+            if gate in failed_now and gate not in failed_before:
+                gate_flips.append({"scenario": scenario_id, "gate": gate, "from": True, "to": False})
+            elif gate in failed_before and gate not in failed_now:
+                gate_flips.append({"scenario": scenario_id, "gate": gate, "from": False, "to": True})
+
+    dimension_delta: dict[str, float] = {}
+    for name in DIMENSIONS:
+        now = [row["dimensions"][name] for row in current_rows.values() if name in (row.get("dimensions") or {})]
+        before = [row["dimensions"][name] for row in previous_rows.values() if name in (row.get("dimensions") or {})]
+        if now and before:
+            dimension_delta[name] = round(
+                sum(now) / len(now) - sum(before) / len(before), 3
+            )
+
+    return {
+        "comparable": comparable,
+        "regressions": regressions,
+        "fixes": fixes,
+        "gate_flips": gate_flips,
+        "dimension_delta": dimension_delta,
+    }
