@@ -29,6 +29,9 @@ Alcance:
 - Asignación **round-robin por carga diaria**: entre los técnicos libres para el horario, gana quien
   tenga menos visitas agendadas ese día; empate → alterna por id.
 - La confirmación puede nombrar al técnico (`{{tecnico}}`), con fallback cuando `users.name` está vacío.
+- **Confirmación** (texto aprobado, verbatim): `Tu visita técnica quedó confirmada para el {{fecha}} con
+  {{tecnico}}.` — si el técnico no tiene nombre cargado, `{{tecnico}}` se completa con `nuestro equipo
+  técnico` para que la oración no quede coja.
 
 Riesgo: **item 1** (escribe citas en la agenda; un error agenda una visita real en un horario inválido)
 y **item 3** (cambia el contrato de `open_slots`, que tiene otros consumidores).
@@ -111,7 +114,7 @@ Riesgo: **item 3** (mueve superficies del panel que tienen tests y `tsc -b`).
 | T1 | S1 | Grilla de 30 min + anticipación 2 h en `scheduling` | inline, test-first | `e934a261` |
 | T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | `d473ee74` |
 | T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | `ae02f872` |
-| T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | pendiente |
+| T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | `50ed958b` |
 | T5 | S2 | Saludo con `{{nombre}}` y variante que pregunta el nombre | inline, test-first | pendiente |
 | T6 | S3 | Categoría `smalltalk` + rama + texto configurable | worker + inline, test-first | pendiente |
 | T7 | S4 | Textos por motivo de derivación (5) + panel | inline, test-first | pendiente |
@@ -249,3 +252,26 @@ este commit (docs).
   después la persona.
 - No se tocó la TTL de 30 minutos: la oferta congelada vence igual, y como la anticipación mínima
   (2 h) es mayor que la TTL, ninguna página puede ofrecer un horario ya pasado.
+
+**L9 — T4 cerrado (2026-10-23), evidencia observada.** Commit `50ed958b` (código, tests y mock de
+stories) + este commit (docs).
+
+- Delegado a `gentle-ai-worker`, que se frenó primero por un falso bloqueo de Graph Check: corrió
+  `find graphify-out -maxdepth 2 -type f` y no atravesó el symlink a `../lumat-agent/graphify-out`.
+  El grafo estaba ahí (`graph.json` 15 MB, `GRAPH_REPORT.md` 208 KB); se le indicó `find -L` y siguió.
+  **Regla para próximos workers:** en este repo el check es `ls -la graphify-out/` o `find -L`.
+- RED (evidencia del worker): `tests/integration/test_chat_booking.py tests/unit/test_reply_texts.py`
+  → 6 fallos, `KeyError: 'tecnico'` en los tres caminos de confirmación, antes de implementar.
+- GREEN: los mismos dos archivos → 34 tests, exit 0. Re-corridos verdes después del refactor de
+  revisión (extraer `_technician_name()` y la constante `TEAM_FALLBACK` fuera de `booking()`, que ya
+  era larga).
+- Panel: `npm run build` exit 0 y `npm test` → 111 archivos / 1264 tests, exit 0.
+- Suite backend: 2828 tests, 0 `FAILED`/`ERROR`, `PYTEST_EXIT=0`, 8m41s.
+- Pins movidos: la expectativa de `booking_confirmed` pasa al texto aprobado y el vocabulario cerrado
+  de slots suma `tecnico` explícito. `EXPECTED_KEYS` no cambió.
+- Alcance respetado: nada de `handoff.py` ni de textos de derivación. El motivo `booking_unavailable`
+  ya existe desde T3/T4; su texto S4.5 entra en T7.
+- Deuda conocida para T8: el fallback `nuestro equipo técnico` vive en código como constante, no en
+  `settings`; si el owner quiere editarlo desde el panel, es una clave nueva y su slot.
+- Estado de la rama al cerrar T4: 8 commits, 832 líneas autoradas. T5–T8 quedan **bloqueados** por
+  pedido explícito del owner ("detente cuando termines T4. no comiences T5").
