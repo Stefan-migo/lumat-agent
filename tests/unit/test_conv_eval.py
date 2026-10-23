@@ -18,6 +18,7 @@ whole point of splitting `conv_eval.py` (model-free) from
 `conv_eval_judge.py` (everything that calls an LLM).
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -548,6 +549,71 @@ def test_a_dirty_tree_is_never_citable():
 
 def test_an_unsealed_kb_is_never_citable():
     assert ev.is_citable({"dirty": False, "kb_documents": 0}) is False
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _committed_repo(tmp_path: Path) -> Path:
+    """A throwaway git repo laid out like this one: code plus `odd/evals/`."""
+    repo = tmp_path / "repo"
+    (repo / "odd" / "evals").mkdir(parents=True)
+    (repo / "app").mkdir()
+    (repo / "app" / "code.py").write_text("x = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "base")
+    return repo
+
+
+def test_report_files_left_in_the_working_tree_do_not_dirty_it(tmp_path):
+    """A report is the instrument's own output, not an edit to the tree it measures."""
+    repo = _committed_repo(tmp_path)
+    (repo / "odd" / "evals" / "conv-eval-clean-1.md").write_text("reporte\n", encoding="utf-8")
+    (repo / "odd" / "evals" / "conv-eval-clean-1.json").write_text("{}\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is False
+
+
+def test_a_committed_report_overwritten_by_a_new_run_does_not_dirty_the_tree(tmp_path):
+    """Once the transcripts are committed, every later run rewrites them."""
+    repo = _committed_repo(tmp_path)
+    report = repo / "odd" / "evals" / "conv-eval-clean-1.md"
+    report.write_text("corrida anterior\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "anterior")
+    report.write_text("corrida nueva\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is False
+
+
+def test_an_edit_outside_the_report_still_dirties_the_tree(tmp_path):
+    repo = _committed_repo(tmp_path)
+    (repo / "app" / "code.py").write_text("x = 2\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is True
+
+
+def test_an_untracked_file_outside_the_report_still_dirties_the_tree(tmp_path):
+    repo = _committed_repo(tmp_path)
+    (repo / "app" / "extra.py").write_text("y = 1\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is True
 
 
 def report_for(rows, *, dirty=False, diff=None):

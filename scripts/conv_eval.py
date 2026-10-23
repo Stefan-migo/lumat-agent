@@ -768,16 +768,35 @@ class RunStamp:
         }
 
 
-def git_state(repo_root: Path = _REPO_ROOT) -> tuple[str, bool]:
-    """`(sha, dirty)` of the working tree the run happened on, or `("", False)`."""
+def git_state(
+    repo_root: Path = _REPO_ROOT, report_dir: Path | None = None
+) -> tuple[str, bool]:
+    """`(sha, dirty)` of the working tree the run measured, or `("", False)`.
+
+    The report the run writes is **excluded** from the dirtiness check. A run
+    writes its own `.json`, `.md` and transcript into `odd/evals/`; counting
+    those bytes as an edit to the tree would dirty every run from the inside and
+    no run could ever be a citable baseline, which is the whole point of S8.6.
+    """
     import subprocess
+
+    excluded = report_dir if report_dir is not None else repo_root / "odd" / "evals"
+    try:
+        relative = excluded.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        relative = None  # the report lives outside the measured tree: nothing to exclude
+    pathspec = ["--", "."] if relative is None else ["--", ".", f":(exclude){relative}"]
 
     try:
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, check=True
         ).stdout.strip()
         status = subprocess.run(
-            ["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True, check=True
+            ["git", "status", "--porcelain", *pathspec],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "", False
@@ -1358,7 +1377,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         judge_model = args.judge_model or conv_eval_judge.JUDGE_MODEL
 
-    head, dirty = git_state()
+    head, dirty = git_state(report_dir=args.out_dir)
     stamp = RunStamp(
         run_tag=args.run_tag,
         started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
