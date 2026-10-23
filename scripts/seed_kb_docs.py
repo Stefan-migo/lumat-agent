@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,27 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# `app.config.Settings` is fail-fast: five webhook/panel values are required even
+# though seeding the KB touches neither. Both repo-root scripts fill only the
+# unset ones with placeholders and never invent a credential. This has to run
+# BEFORE the `app.*` imports below — Settings is built at import time.
+_DEV_ONLY_SETTINGS = (
+    "APP_SECRET",
+    "VERIFY_TOKEN",
+    "META_ACCESS_TOKEN",
+    "META_PHONE_NUMBER_ID",
+    "PANEL_SESSION_SECRET",
+)
+
+
+def ensure_dev_env() -> None:
+    """Fill the non-secret settings the app demands when a real env is absent."""
+    for name in _DEV_ONLY_SETTINGS:
+        os.environ.setdefault(name, f"conv-eval-{name.lower()}")
+
+
+ensure_dev_env()
 
 from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
@@ -43,6 +65,7 @@ from app.services import kb  # noqa: E402
 __all__ = [
     "LocalDocument",
     "content_digest",
+    "ensure_dev_env",
     "inspect_kb",
     "local_documents",
     "main",
@@ -185,6 +208,7 @@ def seed(session: Session, documents: list[LocalDocument], force: bool = False) 
 
 
 def main(argv: list[str] | None = None) -> int:
+    ensure_dev_env()
     parser = argparse.ArgumentParser(
         description="Seed the customer-visible KB from docs/kb (idempotent)."
     )
