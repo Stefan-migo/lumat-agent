@@ -83,8 +83,8 @@ es una escritura en producción y la ejecuta el owner.
 | T1 | S1–S5 | Crear este doc desde el reporte y archivar la sesión | inline | este commit |
 | T2 | S1 | `is_greeting_only` por variantes, en cualquier turno, sin sumar `unknown_intent` | inline, test-first | `31f4b4e7` |
 | T3 | S2 | Detector único de pedido humano, contador consecutivo, errores técnicos fuera, filtro de plataforma | worker + inline, test-first | `9a2777b1` |
-| T4a | S3 | Salida 3 (D17): reformular, ofrecer y derivar, con la oferta editable en el panel | worker + inline, test-first | ver L6 |
-| T4b | S3 | `kb_miss` no terminal (D18): ofrece los dos caminos en vez de derivar | pendiente | pendiente |
+| T4a | S3 | Salida 3 (D17): reformular, ofrecer y derivar, con la oferta editable en el panel | worker + inline, test-first | `a82b4e8f` |
+| T4b | S3 | `kb_miss` no terminal (D18): ofrece los dos caminos en vez de derivar | worker + inline, test-first | `b1d77f46` |
 | T5 | S4 | Recuperación única por turno y fidelidad del medidor | pendiente | pendiente |
 | T6 | S5 | Cargar los 4 documentos `customer` y re-medir (owner, Risk item 5) | owner | pendiente |
 | T7 | — | Re-medir el desglose de handoffs con tráfico nuevo sobre `v2026.10.6` | lectura | pendiente |
@@ -192,3 +192,28 @@ Decisiones y límites de este slice:
 - **Verificación**: backend completo exit 0 · `npm test` 1263 verdes · `npm run build` exit 0.
 - Costo LLM del slice: cero en los fallos 1 y 2 (deterministas); la clasificación de cada turno es la
   única llamada, igual que antes.
+
+**L7 — S3b cerrado (2026-10-23), evidencia observada.** `kb_miss` no terminal (D18):
+
+- **RED**: `tests/integration/test_kb_miss_offer.py` falla al colectar (`KeyError: 'kb_miss_offer'`).
+- **GREEN**: oferta configurable `messages.kb_miss_offer` en las cuatro superficies; `respond` la usa
+  en la rama sin chunks y **no escala** (sigue registrando CM-6); `research_triage` conserva el retry
+  acotado de AO-8 y después delega en `respond` en vez de derivar, así el texto vive en un solo lugar
+  y queda **una** fila CM-6 por turno.
+- **Dos cambios de ruteo del worker, revertidos**: hacía que un mensaje con `?` en el primer turno con
+  `unknown` salteara la rama determinista, y que la oferta suprimiera el saludo fusionado de CM-1.
+  Eran para satisfacer un test mal escrito, no una decisión. Se revirtieron y el test se corrigió.
+- **El test estaba mal, no el código**: el doble de integración sólo clasifica `caldera`, `calefont`,
+  `calefaccion`, `visita`, precios, `persona` y `emergencia`; `¿atienden en Ñuñoa?` es `unknown` y
+  `caldera` va a captura (`CAPTURE_INTENTS`). El caso válido es un intent de `RETRIEVAL_INTENTS`
+  (`valores`) en el turno 2, con un saludo primero para que CM-1 no fusione el saludo con la oferta.
+- **S17 no se re-litiga**: el test sigue afirmando una sola respuesta por turno; lo que cambia es que
+  esa respuesta es la oferta. `messages.cannot_answer` **no** se borra: conserva lector como fallback
+  del LLM en `_answer_from_kb`.
+- **La suite completa encontró 8 pins en 5 archivos fuera de las superficies del worker**
+  (`test_api_kb_settings` ×2, `test_conversation_flows`, `injection_suite`, `test_chat_intent` ×2,
+  `test_chat_manage` ×2). Todos afirmaban el desenlace viejo; ninguno se debilitó: ahora afirman la
+  oferta, el estado `bot` y la causa de escalada ausente.
+- **Verificación**: backend completo exit 0 · `npm run build` exit 0 · `npm test` 1263 verdes.
+- Costo LLM del slice: cero en el miss (camino determinista); el único gasto es la clasificación del
+  turno, igual que antes.

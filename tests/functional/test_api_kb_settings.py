@@ -896,6 +896,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "cannot_answer",
         "clarification",
         "cannot_understand_offer",
+        "kb_miss_offer",
         "farewell",
         "out_of_hours",
     }
@@ -1019,6 +1020,7 @@ def test_settings_update_messages_audited(client, make_user):
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
         "cannot_understand_offer": "¿Visita o persona?",
+        "kb_miss_offer": "No tengo ese dato todavía",
         "farewell": "Hasta luego",
         "out_of_hours": "Estamos cerrados",
     }

@@ -512,6 +512,7 @@ export interface Settings {
     cannot_answer: string;
     clarification: string;
     cannot_understand_offer: string;
+    kb_miss_offer: string;
     farewell: string;
     out_of_hours: string;
   };

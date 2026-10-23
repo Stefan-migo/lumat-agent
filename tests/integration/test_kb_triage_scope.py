@@ -49,8 +49,8 @@ ADMIN_DB_URL = admin_database_url()
 
 # The mocked respond call echoes the <kb> block (`tests/integration/conftest.py:166-168`).
 GROUNDED_MARKER = "Segun el manual de Lumat"
-# `app/chat/nodes/handoff.py:40` — what a KB miss looks like to the customer.
-HANDOFF_REPLY = "Un asesor revisará tu caso y te contactará a la brevedad."
+# D18's configured default — what a customer sees when the KB has no answer.
+KB_MISS_OFFER = "No tengo ese dato. ¿Prefieres que te tome los datos para coordinar una visita, o que te atienda una persona?"
 
 # A phrase the mocked classifier maps to intent `valores`
 # (`tests/integration/conftest.py:135-136`), which routes through research_triage.
@@ -162,7 +162,7 @@ def test_valores_intent_reaches_the_kb_from_the_panel_upload_shape(mock_openai_c
     assert any(GROUNDED_MARKER in reply for reply in replies), (
         "the valores intent never reached the KB; replies=" + repr(replies)
     )
-    assert HANDOFF_REPLY not in replies
+    assert KB_MISS_OFFER not in replies
 
 
 def test_a_category_outside_the_old_scope_no_longer_hides_the_document(mock_openai_chat):
@@ -189,14 +189,15 @@ def test_customer_paths_exclude_project_documents(mock_openai_chat):
     conv_id = _start_conversation()
 
     triage_replies = _turn(conv_id, VALORES_QUERY, "wamid.project-only.triage")
-    # First turn: the handoff reply travels fused with the CM-1 greeting.
-    assert any(HANDOFF_REPLY in reply for reply in triage_replies)
+    # D18: project-only content stays hidden and the KB miss offers both paths.
+    assert triage_replies[-1].endswith(KB_MISS_OFFER)
     assert not any(GROUNDED_MARKER in reply for reply in triage_replies)
 
     with SessionLocal() as session:
         state = ConversationState.from_db(session, conv_id)
     response = respond_node.respond(state)
-    assert response.get("escalate_reason") == "kb_miss"
+    assert response["replies"] == [KB_MISS_OFFER]
+    assert "escalate" not in response
     assert not any(
         GROUNDED_MARKER in reply for reply in response.get("replies", [])
     )

@@ -7,6 +7,7 @@ are never both sent.
 """
 
 from app.chat.nodes.respond import respond
+from app.services.settings import MESSAGE_DEFAULTS
 from app.chat.state import ConversationState
 from app.db import SessionLocal
 from app.services import settings as settings_service
@@ -42,9 +43,10 @@ def test_s17_a_preset_is_the_only_reply_and_the_model_is_not_called(mock_openai_
     assert mock_openai_chat == []
 
 
-def test_s17_a_missed_kb_answers_once_and_escalates(mock_openai_chat):
+def test_s17_a_missed_kb_answers_once_and_offers(mock_openai_chat):
+    """S17: one reply per turn. D18: that reply offers instead of deriving."""
     result = respond(_state())
 
     assert len(result["replies"]) == 1
-    assert result["escalate"] is True
-    assert result["escalate_reason"] == "kb_miss"
+    assert result["replies"][0] == MESSAGE_DEFAULTS["kb_miss_offer"]
+    assert result.get("escalate") is not True

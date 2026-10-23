@@ -58,10 +58,10 @@ def _turn(conversation_id: int, text: str, wamid: str) -> list[str]:
         return replies
 
 
-def test_cannot_answer_override_is_used_on_a_kb_miss(mock_openai_chat, monkeypatch):
-    override = "No puedo resolverlo desde esta base; te contactaremos."
+def test_kb_miss_offer_override_is_used_on_a_kb_miss(mock_openai_chat, monkeypatch):
+    override = "No tengo ese dato; ¿visita o persona?"
     with SessionLocal() as session:
-        settings.set_setting(session, "messages.cannot_answer", override, actor="test")
+        settings.set_setting(session, "messages.kb_miss_offer", override, actor="test")
         session.commit()
 
     # Exercise the production respond node through the graph while keeping the

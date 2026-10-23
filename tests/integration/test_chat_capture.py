@@ -604,8 +604,8 @@ def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, fake_embedder):
     assert "15000" not in system  # KB content never in the system prompt
 
 
-def test_triage_kb_miss_hands_off_without_the_cm4_refusal(mock_openai_chat, fake_embedder):
-    """A KB-intent miss escalates through handoff (AO-8), not through CM-4's refusal.
+def test_triage_kb_miss_offers_paths_without_the_cm4_refusal(mock_openai_chat, fake_embedder):
+    """A KB-intent miss offers both paths (D18), not through CM-4's fallback.
 
     Renamed from ``test_cm4_kb_miss_cannot_answer_and_logs_unresolved``, which named the
     requirement whose text it asserts is ABSENT. That name is what made the traceability
@@ -616,15 +616,14 @@ def test_triage_kb_miss_hands_off_without_the_cm4_refusal(mock_openai_chat, fake
     conv_id = _start_conversation()
     replies = _turn(conv_id, "cuanto cuesta un grifo de cocina marca x", "wamid.miss0")
 
-    # H2 (PR 2, AO-8): the scoped research_triage miss hands off directly
-    # (it does NOT reach respond's canned CANNOT_ANSWER_REPLY); the last reply
-    # is the handoff message announcing human takeover.
+    # D18: the scoped miss reaches respond's configured offer, not a handoff.
     assert CANNOT_ANSWER_REPLY not in replies
-    # First turn: the handoff reply travels fused with the CM-1 greeting.
-    assert replies[-1].endswith("Un asesor revisará tu caso y te contactará a la brevedad.")
+    assert replies[-1].endswith(MESSAGE_DEFAULTS["kb_miss_offer"])
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "bot"
 
     # CM-6: question + context + timestamp logged (payload flag, no view); the
-    # research sub-graph preserves the unresolved log before handing off.
+    # respond owns the one CM-6 unresolved log for this miss.
     with session_scope() as session:
         unresolved = list_unresolved_questions(session)
     assert len(unresolved) == 1
@@ -633,11 +632,7 @@ def test_triage_kb_miss_hands_off_without_the_cm4_refusal(mock_openai_chat, fake
     assert unresolved[0].payload["unresolved_context"] == "intent=valores"
     assert unresolved[0].created_at is not None
 
-    # KB miss escalates by default; summary generated at escalation (CM-5)
-    with SessionLocal() as session:
-        conv = session.get(Conversation, conv_id)
-        assert conv.summary is not None
-        assert "resumen" in conv.summary.lower()
+    # D18 leaves the conversation with the bot; it does not run escalation summary.
 
 
 def test_cm4_guard_refuses_an_undeclared_intent_with_no_kb(mock_openai_chat, fake_embedder):
@@ -671,9 +666,9 @@ def test_cm4_guard_refuses_an_undeclared_intent_with_no_kb(mock_openai_chat, fak
         # No KB document is seeded, so the retrieval misses.
         result = respond_node(state)
 
-    assert result["replies"] == [CANNOT_ANSWER_REPLY]
-    assert result["escalate"] is True
-    assert result["escalate_reason"] == "kb_miss"
+    assert result["replies"] == [MESSAGE_DEFAULTS["kb_miss_offer"]]
+    assert "escalate" not in result
+    assert "escalate_reason" not in result
 
 
 def test_unknown_intent_never_reaches_the_cm4_refusal(mock_openai_chat, fake_embedder):
@@ -737,8 +732,8 @@ def test_customer_chat_cannot_ground_on_internal_kb_document(
     assert retrieve_calls
     assert all(call["audience"] is KbVisibility.CUSTOMER for call in retrieve_calls)
     assert all("<kb>" not in request["messages"][-1]["content"] for request in mock_openai_chat)
-    # First turn: the handoff reply travels fused with the CM-1 greeting.
-    assert replies[-1].endswith("Un asesor revisará tu caso y te contactará a la brevedad.")
+    # D18: internal-only content remains hidden and the bot offers both paths.
+    assert replies[-1].endswith(MESSAGE_DEFAULTS["kb_miss_offer"])
 
 
 def test_lumat_assistant_can_retrieve_internal_kb_document(fake_embedder):
