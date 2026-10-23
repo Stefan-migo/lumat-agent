@@ -202,6 +202,55 @@ def open_slots(
     return slots
 
 
+def _daily_loads(
+    session: Session,
+    *,
+    technician_ids: list[int],
+    zone: ZoneInfo,
+    now: datetime,
+    window_end: datetime,
+) -> dict[tuple[int, date], int]:
+    """Booked visits per technician and local day, inside the offered window.
+
+    Counted from the agenda itself, never from the offers this call is about to
+    build: an offer is not a visit until the customer takes it, and counting
+    offers would let one unanswered offer push the next one to somebody else.
+    """
+    day_start = now.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = session.execute(
+        select(Appointment.technician_id, Appointment.starts_at).where(
+            Appointment.status == AppointmentStatus.BOOKED,
+            Appointment.technician_id.in_(technician_ids),
+            Appointment.starts_at >= day_start.astimezone(timezone.utc),
+            Appointment.starts_at < window_end,
+        )
+    ).all()
+    loads: dict[tuple[int, date], int] = {}
+    for technician_id, starts_at in rows:
+        key = (technician_id, starts_at.astimezone(zone).date())
+        loads[key] = loads.get(key, 0) + 1
+    return loads
+
+
+def _least_loaded(
+    candidates: set[int], loads: dict[tuple[int, date], int], day: date, rotation: int
+) -> int:
+    """The candidate with the fewest visits that day; a tie alternates by id.
+
+    The rotation is what turns a tie into a round-robin instead of a rule that
+    always hands the slot to the lowest id, which is how one technician ended up
+    carrying every visit while the other stayed empty.
+    """
+    ordered = sorted(candidates)
+    lowest = min(loads.get((technician_id, day), 0) for technician_id in ordered)
+    tied = [
+        technician_id
+        for technician_id in ordered
+        if loads.get((technician_id, day), 0) == lowest
+    ]
+    return tied[rotation % len(tied)]
+
+
 def open_slots_for_assignment(
     session: Session,
     *,
@@ -211,13 +260,20 @@ def open_slots_for_assignment(
     limit: int = 3,
     lead_minutes: int = 0,
 ) -> list[tuple[int, date, time]]:
-    """Return deterministic slots assigned to the lowest-id available technician."""
+    """Return deterministic slots assigned by the day's load, not by id.
+
+    Every technician that can cover a slot is a candidate; among them the one
+    with the fewest visits already booked that local day wins, and a tie
+    alternates by id so two idle technicians share the offers instead of the
+    lowest id absorbing all of them.
+    """
     if now.tzinfo is None or now.utcoffset() is None or days <= 0 or limit <= 0:
         raise InvalidRange("now must be aware and days/limit must be positive")
 
     window_end = now.astimezone(timezone.utc) + timedelta(days=days)
     timezone_name = get_hours_timezone(session)
-    assigned: dict[tuple[date, time], int] = {}
+    zone = _zone(timezone_name)
+    candidates: dict[tuple[date, time], set[int]] = {}
     technicians = session.scalars(
         select(User).where(User.role == UserRole.TECNICO).order_by(User.id)
     ).all()
@@ -245,11 +301,20 @@ def open_slots_for_assignment(
                 now=now,
             )
             for local_date, local_time in slots:
-                key = (local_date, local_time)
-                assigned[key] = min(technician.id, assigned.get(key, technician.id))
+                candidates.setdefault((local_date, local_time), set()).add(technician.id)
 
-    ordered = sorted(assigned.items(), key=lambda item: item[0])
-    return [(technician_id, day, clock) for (day, clock), technician_id in ordered[:limit]]
+    loads = _daily_loads(
+        session,
+        technician_ids=[technician.id for technician in technicians],
+        zone=zone,
+        now=now,
+        window_end=window_end,
+    )
+    ordered = sorted(candidates.items(), key=lambda item: item[0])
+    return [
+        (_least_loaded(coverers, loads, day, rotation), day, clock)
+        for rotation, ((day, clock), coverers) in enumerate(ordered[:limit])
+    ]
 
 
 def book(session: Session, *, service: str, customer_id: int, case_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, actor: str) -> Appointment:

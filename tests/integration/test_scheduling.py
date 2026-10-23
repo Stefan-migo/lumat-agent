@@ -349,7 +349,7 @@ def test_reschedule_publishes_event_accepted_by_automation():
         assert evaluate_event(session, event) == [rule.id]
 
 
-def test_open_slots_for_assignment_uses_lowest_free_technician_and_never_mutates(monkeypatch):
+def test_open_slots_for_assignment_skips_the_busy_technician_and_never_mutates(monkeypatch):
     with SessionLocal() as session:
         lower = User(username="assignment-lower", password_hash="test", role="tecnico")
         higher = User(username="assignment-higher", password_hash="test", role="tecnico")
@@ -381,14 +381,85 @@ def test_open_slots_for_assignment_uses_lowest_free_technician_and_never_mutates
         )
 
         assert slots == [
-            # S1 (chatbot-experiencia): candidates step on the 30-minute grid, so the
-            # busy hour yields two candidates for the free technician and the
-            # lowest-id one wins as soon as it is free again.
+            # S1 (chatbot-experiencia): candidates step on the 30-minute grid, and the
+            # busy hour leaves the free technician as the only coverer of 10:00 and
+            # 10:30. At 11:00 both are free again and the day's load decides: the
+            # booked technician already carries one visit, so the free one wins.
             (higher.id, starts.date(), starts.time()),
+            (higher.id, starts.date(), (starts + timedelta(minutes=30)).time()),
+            (higher.id, starts.date(), (starts + timedelta(hours=1)).time()),
+        ]
+        assert {model: session.query(model).count() for model in before} == before
+
+
+def test_open_slots_for_assignment_alternates_between_equally_loaded_technicians(monkeypatch):
+    """S1 (chatbot-experiencia): a tie alternates by id instead of pinning the lowest.
+
+    Before this rule with two idle technicians every offer went to the lowest id,
+    so one technician carried the whole day while the other stayed empty.
+    """
+    with SessionLocal() as session:
+        lower = User(username="round-robin-lower", password_hash="test", role="tecnico")
+        higher = User(username="round-robin-higher", password_hash="test", role="tecnico")
+        session.add_all([lower, higher])
+        session.flush()
+        monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+        starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
+            minute=0, second=0, microsecond=0
+        )
+        for technician in (lower, higher):
+            scheduling.add_availability(
+                session, technician_id=technician.id,
+                starts_at=starts, ends_at=starts + timedelta(hours=3),
+            )
+
+        slots = scheduling.open_slots_for_assignment(
+            session, now=starts - timedelta(minutes=1), days=1, limit=3
+        )
+
+        assert slots == [
+            (lower.id, starts.date(), starts.time()),
             (higher.id, starts.date(), (starts + timedelta(minutes=30)).time()),
             (lower.id, starts.date(), (starts + timedelta(hours=1)).time()),
         ]
-        assert {model: session.query(model).count() for model in before} == before
+
+
+def test_open_slots_for_assignment_prefers_the_technician_with_fewer_visits_that_day(monkeypatch):
+    """S1 (chatbot-experiencia): the day's load outranks the id.
+
+    The loaded technician keeps the hours it is already busy in out of respect for
+    its agenda, and loses every hour both technicians can cover: assigning by id
+    alone here is what made one technician absorb an entire day of visits.
+    """
+    with SessionLocal() as session:
+        lower = User(username="load-lower", password_hash="test", role="tecnico")
+        higher = User(username="load-higher", password_hash="test", role="tecnico")
+        customer, case, _ = _linked_rows(session)
+        session.add_all([lower, higher])
+        session.flush()
+        monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+        starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
+            minute=0, second=0, microsecond=0
+        )
+        for technician in (lower, higher):
+            scheduling.add_availability(
+                session, technician_id=technician.id,
+                starts_at=starts, ends_at=starts + timedelta(hours=4),
+            )
+        for offset in (0, 2):
+            day = (starts + timedelta(hours=offset)).astimezone(timezone.utc)
+            scheduling.book(
+                session, service="test", customer_id=customer.id, case_id=case.id,
+                technician_id=lower.id, local_date=day.date(), local_time=day.time(),
+                timezone_name="UTC", duration_minutes=60, actor="test",
+            )
+        session.flush()
+
+        slots = scheduling.open_slots_for_assignment(
+            session, now=starts - timedelta(minutes=1), days=1, limit=3
+        )
+
+        assert [technician_id for technician_id, _, _ in slots] == [higher.id] * 3
 
 
 def test_open_slots_for_assignment_returns_empty_when_no_availability_rows(monkeypatch):
