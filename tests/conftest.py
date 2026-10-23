@@ -124,6 +124,23 @@ def _reset_rate_limiter():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _isolated_media_dir(tmp_path, monkeypatch):
+    """Point every test's uploads at a throwaway directory.
+
+    `media/` is a compose volume (see `.gitignore`): root-owned on a dev host, so
+    unwritable, and absent on a CI checkout, so a test that falls back to the
+    default `MEDIA_DIR="media"` fails locally with `PermissionError:
+    media/projects` while quietly creating a directory inside the checkout on
+    CI. Per-test `tmp_path` keeps the suite hermetic and stops unowned files
+    from leaking state between tests the way the truncated DB already does not.
+    """
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path / "media"))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def client() -> TestClient:
     """A TestClient over a freshly built app with the test environment."""

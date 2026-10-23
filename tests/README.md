@@ -9,14 +9,32 @@
 
 ## Running the suite
 
-The suites run against this worktree's isolated pgvector test database. Copy the
-test environment once in a fresh worktree, then use the helper for its lifecycle:
+Backend verification is tiered — the authoritative policy is `AGENTS.md` →
+"Test tiers" and its executable form is `scripts/test.sh`:
+
+```bash
+bash scripts/test.sh gate       # ~7s,  no DB: imports every test + app module
+bash scripts/test.sh unit       # ~14s, no DB: the cheap layer
+bash scripts/test.sh quick      # ~19s: gate + unit, the per-edit iteration gate
+bash scripts/test.sh focused tests/unit/test_routing_table.py   # the rule under RED/GREEN
+bash scripts/test.sh db tests/integration/test_settings.py      # DB layer you touched
+bash scripts/test.sh shape      # exit 3 -> a shape surface changed, full is mandatory
+bash scripts/test.sh full       # ~7min: closure, before a PR, after merging main
+```
+
+The database-backed tiers derive this worktree's isolated pgvector test database
+and export its environment themselves. Create it once in a fresh worktree:
 
 ```bash
 cp ../lumat-agent/infra/.env infra/.env
 infra/test-db.sh up
-eval "$(infra/test-db.sh env)"
-export DEEPSEEK_API_KEY=sk-test       # optional: tests/conftest.py forces this value before importing app
+```
+
+`export DEEPSEEK_API_KEY=sk-test` is unnecessary — `tests/conftest.py` forces that
+value before importing `app`. A bare pytest invocation still works; the tiers add
+the database environment and the policy, not a new runner:
+
+```bash
 .venv/bin/pytest tests/              # full suite
 .venv/bin/pytest -m "spec"           # only OpenSpec requirement scenarios
 .venv/bin/pytest tests/functional    # functional flows (T6.2)
@@ -36,6 +54,13 @@ with a message naming the fix instead of quietly connecting somewhere else.
 `tests/unit` needs no database credentials at all, because the admin URL is
 resolved inside the DB fixtures rather than at import.
 
+`MEDIA_DIR` is forced to a per-test temporary directory by an autouse fixture in
+`tests/conftest.py`. `media/` is a compose volume — root-owned on a dev host and
+absent on a CI checkout — so a test that falls back to the default
+`MEDIA_DIR="media"` fails locally with `PermissionError: media/projects` while
+silently creating a directory inside the checkout on CI. No test writes into the
+working tree; `tests/unit/test_test_media_isolation.py` pins that contract.
+
 `pyproject.toml` configures `pytest-timeout` (`timeout = 120`,
 `timeout_method = "thread"`), so a hung test is hard-exited with a
 MainThread stack dump after 120 seconds instead of hanging forever.
@@ -53,10 +78,10 @@ below is executable: `pytest -m spec` runs exactly the requirement scenarios.
 | Unit | `tests/unit/` | Pure assistant, routing, prompt, state, registry, and scheduling behavior | Python unit-test doubles; no test database |
 | Spec | `tests/spec/` | Specification tests for SDB, project, and memory contracts | Migrated test DB where required; local application services |
 
-The suite currently contains 16 unit, 45 integration, 23 functional, 1
-injection, and 6 spec `.py` files (including each layer's `conftest.py`, where
-present). These are the same counts used by `openspec/config.yaml` under
-`testing.notes`.
+The suite currently contains 64 unit, 94 integration, 43 functional, 5 spec, and
+1 injection `.py` file (including each layer's `conftest.py`, where present) and
+2822 collected tests (measured 2026-10-23, full suite ~413 s). These are the same
+counts used by `openspec/config.yaml` under `testing.notes`.
 
 ## Traceability: Spec requirement → Test file
 
