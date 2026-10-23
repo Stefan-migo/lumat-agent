@@ -52,7 +52,8 @@ Anchors are matched case- and accent-insensitively, as substrings: the bot says
 
 Usage
 -----
-    eval "$(bash infra/test-db.sh env)"
+    eval "$(bash infra/test-db.sh env)"                 # this worktree's test stack
+    export DEEPSEEK_API_KEY=...                        # the bot under test needs its key
     uv run python scripts/seed_kb_docs.py --apply      # once per stack
     uv run python scripts/conv_eval.py --validate-only # corpus only, no DB
     uv run python scripts/conv_eval.py --run-tag baseline
@@ -62,6 +63,7 @@ Usage
 from __future__ import annotations
 
 import hashlib
+import sys
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
@@ -74,13 +76,26 @@ __all__ = [
     "GATE_NAMES",
     "Corpus",
     "GateResult",
+    "PreflightError",
+    "RunStamp",
     "Scenario",
+    "build_observation",
     "compare_runs",
     "derive_phone",
     "evaluate_gates",
+    "git_state",
+    "is_citable",
     "load_corpus",
+    "main",
+    "preflight",
+    "previous_report",
+    "render_markdown",
+    "report_paths",
+    "run_scenario",
     "score_scenario",
     "summarize",
+    "transcript_of",
+    "write_report",
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -619,3 +634,571 @@ def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dic
         "gate_flips": gate_flips,
         "dimension_delta": dimension_delta,
     }
+
+
+# ---------------------------------------------------------------------------
+# Observation — production shapes in, gate inputs out
+# ---------------------------------------------------------------------------
+
+
+def build_observation(snapshot: Mapping[str, Any], turns: Sequence[Mapping[str, Any]]) -> dict:
+    """Turn a `chat_harness.inspect` snapshot plus the per-turn replies into the
+    plain dict the gates read.
+
+    The intent a turn classified into is not a column: production records it as
+    a `classified` event with cause `intent:<intent>`, or as `unknown_intent`
+    (`app/chat/nodes/classify_intent.py`). Anchors read the outbound messages,
+    which is the persisted truth, not the returned replies.
+    """
+    intents: list[str] = []
+    for event in snapshot.get("events") or ():
+        name = event.get("event")
+        cause = str(event.get("cause") or "")
+        if name == "classified" and cause:
+            intents.append(cause.removeprefix("intent:"))
+        elif name == "unknown_intent":
+            intents.append("unknown")
+    replies = [
+        str(message.get("text") or "")
+        for message in snapshot.get("messages") or ()
+        if message.get("direction") == "outbound" and message.get("text")
+    ]
+    return {
+        "state": snapshot.get("state"),
+        "events": [
+            {"event": event.get("event"), "cause": event.get("cause")}
+            for event in snapshot.get("events") or ()
+        ],
+        "intents": intents,
+        "replies": replies,
+        "turns": list(turns),
+    }
+
+
+def transcript_of(observation: Mapping[str, Any]) -> list[dict]:
+    """The judge's view: alternating customer and assistant lines, in order."""
+    transcript: list[dict] = []
+    for turn in observation.get("turns") or ():
+        transcript.append({"role": "customer", "text": str(turn.get("text") or "")})
+        for reply in turn.get("replies") or ():
+            transcript.append({"role": "assistant", "text": str(reply)})
+    return transcript
+
+
+# ---------------------------------------------------------------------------
+# Stamp — S8.6: a run over a dirty tree is not citable as a baseline
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RunStamp:
+    run_tag: str
+    started_at: str
+    head: str
+    dirty: bool
+    corpus_fingerprint: str
+    kb_fingerprint: str
+    kb_documents: int
+    judge_model: str | None
+    live: bool
+
+    def as_dict(self) -> dict:
+        return {
+            "run_tag": self.run_tag,
+            "started_at": self.started_at,
+            "head": self.head,
+            "dirty": self.dirty,
+            "corpus_fingerprint": self.corpus_fingerprint,
+            "kb_fingerprint": self.kb_fingerprint,
+            "kb_documents": self.kb_documents,
+            "judge_model": self.judge_model,
+            "live": self.live,
+        }
+
+
+def git_state(repo_root: Path = _REPO_ROOT) -> tuple[str, bool]:
+    """`(sha, dirty)` of the working tree the run happened on, or `("", False)`."""
+    import subprocess
+
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "", False
+    return head, bool(status)
+
+
+def is_citable(stamp: Mapping[str, Any]) -> bool:
+    """A baseline must stamp a clean tree and a KB that matches `docs/kb`."""
+    return not stamp.get("dirty") and bool(stamp.get("kb_documents"))
+
+
+# ---------------------------------------------------------------------------
+# Database side — imported lazily so this module stays model-free and DB-free
+# ---------------------------------------------------------------------------
+
+
+class PreflightError(RuntimeError):
+    """The database cannot answer, so the run would measure the KB, not the bot."""
+
+
+def preflight() -> dict:
+    """S8.1: refuse to run unless `docs/kb` and the customer KB agree."""
+    import seed_kb_docs
+    from app.db import session_scope
+
+    with session_scope() as session:
+        state = seed_kb_docs.inspect_kb(session)
+    if not state["consistent"]:
+        missing = ", ".join(state["missing"]) or "—"
+        drifted = ", ".join(state["drifted"]) or "—"
+        raise PreflightError(
+            "la KB de cliente no coincide con docs/kb "
+            f"(faltan: {missing}; drifted: {drifted}). "
+            "Corré `uv run python scripts/seed_kb_docs.py --apply` y volvé a intentar."
+        )
+    return state
+
+
+def kb_text() -> str:
+    """The customer KB exactly as the bot retrieves it, for the judge to ground on."""
+    import seed_kb_docs
+    from app.db import session_scope
+
+    with session_scope() as session:
+        documents = seed_kb_docs.customer_documents(session)
+        return "\n\n".join(
+            f"# {document.title}\n\n{document.content or ''}" for document in documents
+        )
+
+
+def tarifario_text() -> str:
+    """The prices in force today, rendered the way the prompt renders them."""
+    from datetime import date
+
+    from app.chat.nodes.respond import build_tarifario_block
+    from app.db import session_scope
+    from app.services.settings import get_tarifa_precios, tarifa_vigente
+
+    with session_scope() as session:
+        return build_tarifario_block(tarifa_vigente(get_tarifa_precios(session), date.today()))
+
+
+def run_scenario(
+    scenario: Scenario,
+    *,
+    run_tag: str,
+    judge_client: Any = None,
+    live: bool = False,
+    max_turns: int | None = None,
+) -> dict:
+    """Drive one scenario through the real brain and collect its observation."""
+    import conv_eval_judge
+    from app.db import session_scope
+    from chat_harness import ensure_conversation, inspect, run_turn
+
+    phone = derive_phone(scenario.id, run_tag)
+    with session_scope() as session:
+        conversation_id = ensure_conversation(session, phone)
+
+    budget = max_turns or scenario.max_turns
+    turns: list[dict] = []
+    scripted = list(scenario.turns)
+
+    for index in range(1, budget + 1):
+        if index <= len(scripted):
+            text = scripted[index - 1]
+        elif live and judge_client is not None:
+            simulated = conv_eval_judge.simulate_customer_turn(
+                judge_client,
+                persona=scenario.persona,
+                goal=scenario.goal,
+                transcript=transcript_of({"turns": turns}),
+                turn_index=index,
+                max_turns=budget,
+            )
+            if simulated["goal_reached"]:
+                break
+            text = simulated["message"]
+        else:
+            break
+
+        with session_scope() as session:
+            replies = run_turn(session, conversation_id, text)
+        turns.append({"text": text, "replies": list(replies), "intent": None})
+
+    with session_scope() as session:
+        snapshot = inspect(session, conversation_id)
+
+    observation = build_observation(snapshot, turns)
+    # The intent is recorded inside the run, so it is only visible afterwards:
+    # attribute each classified intent to the turn that produced it.
+    per_turn = iter(observation["intents"])
+    for turn in observation["turns"]:
+        turn["intent"] = next(per_turn, None)
+
+    return {
+        "scenario": scenario.id,
+        "phone": phone,
+        "conversation_id": conversation_id,
+        "observation": observation,
+    }
+
+
+def judge_row(
+    scenario: Scenario,
+    observation: Mapping[str, Any],
+    *,
+    client: Any,
+    kb: str,
+    tarifario: str,
+    model: str | None = None,
+) -> dict:
+    """Score the conversation with the rubric judge; raises if it cannot."""
+    import conv_eval_judge
+
+    kwargs = {"model": model} if model else {}
+    return conv_eval_judge.judge_conversation(
+        client,
+        transcript=transcript_of(observation),
+        scenario=dict(scenario.raw),
+        kb_text=kb,
+        tarifario=tarifario,
+        **kwargs,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Report — one JSON for the machine, one Markdown for the human, and a diff
+# ---------------------------------------------------------------------------
+
+
+def report_paths(out_dir: Path, run_tag: str) -> tuple[Path, Path]:
+    return out_dir / f"conv-eval-{run_tag}.json", out_dir / f"conv-eval-{run_tag}.md"
+
+
+def previous_report(out_dir: Path, current: Path) -> Path | None:
+    """The most recent other run in `out_dir`, or None when this is the first."""
+    candidates = sorted(
+        (path for path in out_dir.glob("conv-eval-*.json") if path != current),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def render_markdown(report: Mapping[str, Any]) -> str:
+    """Render one run for a human: what failed, why, and what moved."""
+    stamp = report.get("stamp") or {}
+    summary = report.get("summary") or {}
+    lines: list[str] = [
+        f"# Evaluación conversacional — `{stamp.get('run_tag', '?')}`",
+        "",
+        "Mide el **cerebro** del chat (`run_conversation`), no el canal: webhook, dedup, "
+        "ventana de 24 h y plantillas de Meta quedan fuera de alcance.",
+        "",
+        f"- Sello: `{stamp.get('head', '?')}` · árbol sucio: "
+        f"**{'sí' if stamp.get('dirty') else 'no'}** · corrida: "
+        f"{'cliente simulado (--live)' if stamp.get('live') else 'cliente scripted'}",
+        f"- Corpus: `{stamp.get('corpus_fingerprint', '?')}` · KB: "
+        f"`{stamp.get('kb_fingerprint', '?')}` ({stamp.get('kb_documents', 0)} documentos)",
+        f"- Juez: `{stamp.get('judge_model') or 'sin juez (solo gates)'}` · "
+        f"inicio: {stamp.get('started_at', '?')}",
+    ]
+    if not is_citable(stamp):
+        lines += [
+            "",
+            "> **No citable como baseline**: la corrida no selló un árbol limpio.",
+        ]
+
+    lines += [
+        "",
+        "## Resumen",
+        "",
+        f"- Escenarios: **{summary.get('scenarios', 0)}** · pasan: "
+        f"**{summary.get('passed', 0)}**",
+        f"- Peor dimensión: `{summary.get('worst_dimension') or '—'}`",
+        "",
+        "| Tier | Escenarios | Pasan |",
+        "| --- | --- | --- |",
+    ]
+    for tier, data in (summary.get("by_tier") or {}).items():
+        lines.append(f"| {tier} | {data['scenarios']} | {data['passed']} |")
+
+    failures = summary.get("gate_failures") or {}
+    lines += ["", "### Gates que fallaron", ""]
+    if failures:
+        lines += ["| Gate | Nombre | Veces |", "| --- | --- | --- |"]
+        for gate, count in failures.items():
+            lines.append(f"| {gate} | {GATE_NAMES.get(gate, '?')} | {count} |")
+    else:
+        lines.append("Ninguno.")
+
+    lines += ["", "### Dimensiones del juez", ""]
+    measured = {
+        name: data for name, data in (summary.get("dimensions") or {}).items() if data["n"]
+    }
+    if measured:
+        lines += ["| Dimensión | Media | n |", "| --- | --- | --- |"]
+        for name, data in measured.items():
+            lines.append(f"| {name} | {data['mean']:.2f} | {data['n']} |")
+    else:
+        lines.append("Sin juez en esta corrida: los gates deciden solos.")
+
+    failed_rows = [row for row in report.get("runs") or () if not row.get("passed")]
+    lines += ["", "## Escenarios que no pasan", ""]
+    if not failed_rows:
+        lines.append("Ninguno.")
+    for row in failed_rows:
+        lines.append(f"### `{row['scenario']}` ({row['tier']})")
+        if row.get("gates_failed"):
+            for gate in row["gates_failed"]:
+                detail = ((report.get("gate_details") or {}).get(row["scenario"]) or {}).get(gate, "")
+                lines.append(f"- **{gate} · {GATE_NAMES.get(gate, '?')}**: {detail}")
+        if row.get("hard_fail"):
+            lines.append(f"- **hard fail del juez**: {row.get('hard_fail_reason') or 'sin motivo'}")
+        if row.get("score") is not None:
+            lines.append(f"- puntaje: {row['score']:.2f} (capeado a 0 por el gate)")
+        lines.append("")
+
+    diff = report.get("diff")
+    lines += ["", "## Contra la corrida anterior", ""]
+    if not diff:
+        lines.append("Sin corrida previa: esta es la línea base.")
+    elif not diff.get("comparable"):
+        lines.append("**No comparable**: el corpus cambió entre las dos corridas.")
+    else:
+        lines.append(f"- Regresiones: {', '.join(diff['regressions']) or 'ninguna'}")
+        lines.append(f"- Arreglos: {', '.join(diff['fixes']) or 'ninguno'}")
+        if diff.get("gate_flips"):
+            flips = ", ".join(
+                f"{flip['scenario']}/{flip['gate']} {'pasó a fallar' if flip['from'] else 'se arregló'}"
+                for flip in diff["gate_flips"]
+            )
+            lines.append(f"- Gates que se movieron: {flips}")
+        if diff.get("dimension_delta"):
+            deltas = ", ".join(
+                f"{name} {value:+.2f}" for name, value in diff["dimension_delta"].items()
+            )
+            lines.append(f"- Delta por dimensión: {deltas}")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_report(report: dict, out_dir: Path = _REPO_ROOT / "odd" / "evals") -> tuple[Path, Path]:
+    """Write the JSON and the Markdown, creating `odd/evals` on first use."""
+    import json
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path, md_path = report_paths(out_dir, report["stamp"]["run_tag"])
+    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    md_path.write_text(render_markdown(report), encoding="utf-8")
+    return json_path, md_path
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def _parse_args(argv: Sequence[str] | None) -> Any:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Evaluate the Lumat chat brain against the versioned conversation corpus."
+    )
+    parser.add_argument("--corpus", type=Path, default=CORPUS_PATH, help="Corpus YAML.")
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate the corpus and exit. No database, no model.",
+    )
+    parser.add_argument("--run-tag", default="local", help="Names the run and derives the phone.")
+    parser.add_argument("--tier", choices=list(TIERS), default=None, help="Only this tier.")
+    parser.add_argument(
+        "--only", action="append", default=None, metavar="ID", help="Only this scenario (repeatable)."
+    )
+    parser.add_argument(
+        "--max-turns", type=int, default=None, help="Override the per-scenario turn budget."
+    )
+    parser.add_argument("--no-judge", action="store_true", help="Gates only: no LLM, no key needed.")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Continue past the scripted turns with a simulated customer.",
+    )
+    parser.add_argument("--judge-model", default=None, help="Override the judge model id.")
+    parser.add_argument("--out-dir", type=Path, default=_REPO_ROOT / "odd" / "evals")
+    parser.add_argument("--quiet", action="store_true", help="Only the summary lines.")
+    return parser.parse_args(argv)
+
+
+def _select(corpus: Corpus, args: Any) -> list[Scenario]:
+    scenarios = list(corpus.by_tier(args.tier))
+    if args.only:
+        wanted = set(args.only)
+        unknown = wanted - set(corpus.ids)
+        _require(not unknown, f"--only: unknown scenario ids {sorted(unknown)}")
+        scenarios = [scenario for scenario in scenarios if scenario.id in wanted]
+    _require(bool(scenarios), "no scenario selected")
+    return scenarios
+
+
+def _validate_only(corpus: Corpus) -> int:
+    tiers = Counter(scenario.tier for scenario in corpus.scenarios)
+    detail = " · ".join(f"{tier} {tiers[tier]}" for tier in TIERS if tiers[tier])
+    print(
+        f"corpus válido: {len(corpus.scenarios)} escenarios ({detail}) · "
+        f"fingerprint {corpus.fingerprint}"
+    )
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    import json
+    from datetime import datetime, timezone
+
+    args = _parse_args(argv)
+
+    try:
+        corpus = load_corpus(args.corpus)
+    except ValueError as error:
+        print(f"corpus inválido: {error}", file=sys.stderr)
+        return 2
+    if args.validate_only:
+        return _validate_only(corpus)
+
+    import seed_kb_docs
+
+    seed_kb_docs.ensure_dev_env()
+    try:
+        kb_state = preflight()
+    except PreflightError as error:
+        print(f"preflight: {error}", file=sys.stderr)
+        return 2
+
+    import conv_eval_judge
+
+    client = None
+    judge_model = None
+    if not args.no_judge:
+        try:
+            credentials = conv_eval_judge.resolve_credentials()
+        except conv_eval_judge.JudgeKeyUnavailable as error:
+            print(f"juez: {error}", file=sys.stderr)
+            return 2
+        print(f"juez: {credentials.source}")
+        client = conv_eval_judge.build_client(
+            credentials, session_id=f"conv-eval-{args.run_tag}"
+        )
+        judge_model = args.judge_model or conv_eval_judge.JUDGE_MODEL
+
+    head, dirty = git_state()
+    stamp = RunStamp(
+        run_tag=args.run_tag,
+        started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        head=head,
+        dirty=dirty,
+        corpus_fingerprint=corpus.fingerprint,
+        kb_fingerprint=kb_state["fingerprint"],
+        kb_documents=kb_state["documents"],
+        judge_model=judge_model,
+        live=args.live,
+    ).as_dict()
+
+    kb = kb_text() if client is not None else ""
+    tarifario = tarifario_text() if client is not None else ""
+
+    runs: list[dict] = []
+    gate_details: dict[str, dict[str, str]] = {}
+    observations: dict[str, dict] = {}
+    scenarios = _select(corpus, args)
+
+    for scenario in scenarios:
+        try:
+            result = run_scenario(
+                scenario,
+                run_tag=args.run_tag,
+                judge_client=client,
+                live=args.live,
+                max_turns=args.max_turns,
+            )
+        except Exception as error:  # noqa: BLE001  a dead scenario must not kill the run
+            print(f"  ✗ {scenario.id}: la corrida falló: {error}", file=sys.stderr)
+            return 2
+
+        observation = result["observation"]
+        gates = evaluate_gates(scenario, observation)
+        gate_details[scenario.id] = {
+            gate: gate_result.detail for gate, gate_result in gates.items()
+        }
+        observations[scenario.id] = observation
+
+        verdict = None
+        if client is not None:
+            try:
+                verdict = judge_row(
+                    scenario,
+                    observation,
+                    client=client,
+                    kb=kb,
+                    tarifario=tarifario,
+                    model=judge_model,
+                )
+            except conv_eval_judge.JudgeError as error:
+                # No verdict, no report: a partial score would read as a result.
+                print(
+                    f"juez: {scenario.id} no produjo veredicto ({error}). "
+                    "No se escribe reporte.",
+                    file=sys.stderr,
+                )
+                return 2
+            except Exception as error:  # noqa: BLE001  transport: name it and stop
+                print(
+                    f"juez: {scenario.id} no pudo consultar el modelo ({error}). "
+                    "No se escribe reporte.",
+                    file=sys.stderr,
+                )
+                return 2
+
+        row = score_scenario(scenario, gates, verdict)
+        runs.append(row)
+        if not args.quiet:
+            mark = "✓" if row["passed"] else "✗"
+            failed = f" · fallan {', '.join(row['gates_failed'])}" if row["gates_failed"] else ""
+            score = f" · {row['score']:.2f}" if row["score"] is not None else ""
+            print(f"  {mark} {scenario.id}{score}{failed}")
+
+    report = {
+        "stamp": stamp,
+        "runs": runs,
+        "summary": summarize(runs),
+        "gate_details": gate_details,
+        "observations": observations,
+    }
+
+    json_path, _ = report_paths(args.out_dir, args.run_tag)
+    previous_path = previous_report(args.out_dir, json_path)
+    if previous_path is not None:
+        report["diff"] = compare_runs(report, json.loads(previous_path.read_text(encoding="utf-8")))
+        report["previous"] = previous_path.name
+
+    written = write_report(report, args.out_dir)
+    summary = report["summary"]
+    print(
+        f"\n{summary['passed']}/{summary['scenarios']} escenarios pasan · "
+        f"gates: {summary['gate_failures'] or 'ninguno'} · "
+        f"peor dimensión: {summary['worst_dimension'] or '—'}"
+    )
+    print(f"reporte: {written[0]} · {written[1]}")
+    if not is_citable(stamp):
+        print("aviso: árbol sucio o KB sin sellar — esta corrida no es citable como baseline")
+    return 0 if summary["passed"] == summary["scenarios"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

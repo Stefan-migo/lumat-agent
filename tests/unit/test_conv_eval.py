@@ -473,3 +473,220 @@ def test_dimensions_match_the_judge_module():
     import conv_eval_judge as judge  # noqa: PLC0415
 
     assert ev.DIMENSIONS == judge.DIMENSIONS
+
+
+# ---------------------------------------------------------------------------
+# Observation — production event shapes in, gate inputs out
+# ---------------------------------------------------------------------------
+
+
+def snapshot(**overrides):
+    base = {
+        "state": "bot",
+        "events": [
+            {"event": "state_change", "cause": "bot->bot: receive", "actor": "system"},
+            {"event": "classified", "cause": "intent:precio", "actor": "rule"},
+            {"event": "unknown_intent", "cause": "intent:unknown", "actor": "rule"},
+        ],
+        "messages": [
+            {"direction": "inbound", "text": "cuanto sale?", "status": "received"},
+            {"direction": "outbound", "text": "La mantención sale $50.000", "status": "sent"},
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_build_observation_maps_classified_events_to_intents():
+    observation = ev.build_observation(snapshot(), [{"text": "cuanto sale?", "replies": ["$50.000"]}])
+    assert observation["intents"] == ["precio", "unknown"]
+
+
+def test_build_observation_reads_replies_from_outbound_messages_only():
+    observation = ev.build_observation(snapshot(), [])
+    assert observation["replies"] == ["La mantención sale $50.000"]
+
+
+def test_build_observation_keeps_the_events_for_the_gate_layer():
+    observation = ev.build_observation(snapshot(), [])
+    assert {"event": "classified", "cause": "intent:precio"} in observation["events"]
+
+
+def test_build_observation_carries_the_turns_through():
+    turns = [{"text": "hola", "replies": ["hola"], "intent": None}]
+    assert ev.build_observation(snapshot(), turns)["turns"] == turns
+
+
+def test_transcript_of_alternates_customer_and_assistant():
+    observation = {
+        "turns": [
+            {"text": "hola", "replies": ["Hola, soy Max"], "intent": None},
+            {"text": "precio?", "replies": ["$50.000", "¿coordino?"], "intent": None},
+        ]
+    }
+    assert ev.transcript_of(observation) == [
+        {"role": "customer", "text": "hola"},
+        {"role": "assistant", "text": "Hola, soy Max"},
+        {"role": "customer", "text": "precio?"},
+        {"role": "assistant", "text": "$50.000"},
+        {"role": "assistant", "text": "¿coordino?"},
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Stamp and report rendering
+# ---------------------------------------------------------------------------
+
+
+def test_a_clean_tree_with_a_sealed_kb_is_citable():
+    assert ev.is_citable({"dirty": False, "kb_documents": 4}) is True
+
+
+def test_a_dirty_tree_is_never_citable():
+    assert ev.is_citable({"dirty": True, "kb_documents": 4}) is False
+
+
+def test_an_unsealed_kb_is_never_citable():
+    assert ev.is_citable({"dirty": False, "kb_documents": 0}) is False
+
+
+def report_for(rows, *, dirty=False, diff=None):
+    return {
+        "stamp": {
+            "run_tag": "baseline",
+            "started_at": "2026-10-23T12:00:00+00:00",
+            "head": "e354f563",
+            "dirty": dirty,
+            "corpus_fingerprint": "f903619e78bc",
+            "kb_fingerprint": "abc123",
+            "kb_documents": 4,
+            "judge_model": "deepseek-v4.1-flash",
+            "live": False,
+        },
+        "runs": rows,
+        "summary": ev.summarize(rows),
+        "gate_details": {row["scenario"]: {"G4": "se registró lo prohibido: unknown_intent"} for row in rows},
+        "diff": diff,
+    }
+
+
+def test_render_markdown_declares_that_it_measures_the_brain_not_the_channel():
+    markdown = ev.render_markdown(report_for([score_row("a", "simple", True, score=4.0)]))
+    assert "cerebro" in markdown
+    assert "webhook" in markdown
+    assert "`baseline`" in markdown
+
+
+def test_render_markdown_warns_that_a_dirty_run_is_not_a_baseline():
+    markdown = ev.render_markdown(
+        report_for([score_row("a", "simple", True, score=4.0)], dirty=True)
+    )
+    assert "No citable como baseline" in markdown
+
+
+def test_render_markdown_lists_each_failed_gate_with_its_detail():
+    markdown = ev.render_markdown(
+        report_for([score_row("a", "simple", False, ["G4"], score=0.0)])
+    )
+    assert "G4 · events_forbidden" in markdown
+    assert "se registró lo prohibido: unknown_intent" in markdown
+
+
+def test_render_markdown_says_so_when_there_is_no_previous_run():
+    markdown = ev.render_markdown(report_for([score_row("a", "simple", True, score=4.0)]))
+    assert "Sin corrida previa" in markdown
+
+
+def test_render_markdown_reports_regressions_from_the_diff():
+    diff = {"comparable": True, "regressions": ["a"], "fixes": [], "gate_flips": [], "dimension_delta": {}}
+    markdown = ev.render_markdown(
+        report_for([score_row("a", "simple", True, score=4.0)], diff=diff)
+    )
+    assert "Regresiones: a" in markdown
+
+
+def test_render_markdown_refuses_to_diff_two_different_corpora():
+    diff = {"comparable": False, "regressions": [], "fixes": [], "gate_flips": [], "dimension_delta": {}}
+    markdown = ev.render_markdown(report_for([], diff=diff))
+    assert "No comparable" in markdown
+
+
+def test_report_paths_are_tagged_and_sit_side_by_side(tmp_path):
+    json_path, md_path = ev.report_paths(tmp_path, "baseline")
+    assert json_path.name == "conv-eval-baseline.json"
+    assert md_path.name == "conv-eval-baseline.md"
+
+
+def test_previous_report_is_the_newest_other_run(tmp_path):
+    import os
+
+    current = tmp_path / "conv-eval-baseline.json"
+    older = tmp_path / "conv-eval-older.json"
+    newer = tmp_path / "conv-eval-newer.json"
+    for path in (current, older, newer):
+        path.write_text("{}", encoding="utf-8")
+    os.utime(current, (1000, 1000))
+    os.utime(older, (2000, 2000))
+    os.utime(newer, (3000, 3000))
+    assert ev.previous_report(tmp_path, current) == newer
+
+
+def test_previous_report_is_none_for_the_first_run(tmp_path):
+    current = tmp_path / "conv-eval-baseline.json"
+    current.write_text("{}", encoding="utf-8")
+    assert ev.previous_report(tmp_path, current) is None
+
+
+def test_write_report_writes_both_files(tmp_path):
+    report = report_for([score_row("a", "simple", True, score=4.0)])
+    json_path, md_path = ev.write_report(report, tmp_path)
+    assert json_path.exists() and md_path.exists()
+    assert "Evaluación conversacional" in md_path.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# CLI — the validator mode is the one path that needs neither DB nor model
+# ---------------------------------------------------------------------------
+
+
+def test_validate_only_accepts_the_shipped_corpus(capsys):
+    assert ev.main(["--validate-only"]) == 0
+    captured = capsys.readouterr()
+    assert "14" in captured.out
+    assert "supercomplejo 5" in captured.out
+    assert captured.err == ""
+
+
+def test_validate_only_refuses_a_broken_corpus(tmp_path, capsys):
+    path = write_corpus(tmp_path, MINIMAL.replace("tier: simple", "tier: facil"))
+    assert ev.main(["--validate-only", "--corpus", str(path)]) == 2
+    captured = capsys.readouterr()
+    assert "tier" in captured.err
+    assert captured.out == ""
+
+
+def test_selection_filters_by_tier_and_by_id(corpus):
+    import argparse
+
+    by_tier = ev._select(corpus, argparse.Namespace(tier="supercomplejo", only=None))
+    assert {scn.tier for scn in by_tier} == {"supercomplejo"}
+    assert len(by_tier) == 5
+
+    by_id = ev._select(
+        corpus, argparse.Namespace(tier=None, only=["simple-saludo-variante"])
+    )
+    assert [scn.id for scn in by_id] == ["simple-saludo-variante"]
+
+
+def test_selection_refuses_an_unknown_scenario_id(corpus):
+    import argparse
+
+    with pytest.raises(ValueError) as raised:
+        ev._select(corpus, argparse.Namespace(tier=None, only=["no-existe"]))
+    assert "no-existe" in str(raised.value)
+
+
+def test_render_markdown_says_so_when_no_judge_measured_anything():
+    markdown = ev.render_markdown(report_for([score_row("a", "simple", True, score=None)]))
+    assert "Sin juez en esta corrida" in markdown
+    assert "| grounding |" not in markdown
