@@ -775,3 +775,17 @@ def test_render_transcripts_marks_who_wrote_every_turn():
     assert "`[scripted]`" in markdown
     assert "`[simulado]` — esto lo inventó el simulador" in markdown
     assert scenario.id in markdown
+
+
+def test_a_reused_tag_with_existing_customers_is_refused():
+    """Measured: a killed run left its rows, and the next run with the same tag
+    stacked on top of conversations that had already escalated. The report said
+    5/14 and every red belonged to the previous run."""
+    error = ev.contamination_error(["complejo-agendar-calefont", "simple-despedida"])
+    assert error is not None
+    assert "complejo-agendar-calefont" in error
+    assert "tag nuevo" in error
+
+
+def test_a_fresh_tag_passes_the_contamination_check():
+    assert ev.contamination_error([]) is None

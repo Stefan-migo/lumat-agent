@@ -91,6 +91,7 @@ __all__ = [
     "Scenario",
     "build_observation",
     "compare_runs",
+    "contamination_error",
     "derive_phone",
     "evaluate_gates",
     "git_state",
@@ -844,6 +845,38 @@ def miss_offer_text() -> str:
         return get_message(session, "kb_miss_offer")
 
 
+def contamination_error(existing: Sequence[str]) -> str | None:
+    """Refuse a tag that already has customers: a re-run would stack on top.
+
+    Measured the hard way: a run killed mid-flight left its rows behind, and the
+    next run with the same tag replayed its turns onto conversations that had
+    already escalated. The report said 5/14 and every one of those reds was the
+    previous run talking, not the bot.
+    """
+    if not existing:
+        return None
+    return (
+        f"--run-tag ya tiene conversaciones para {len(existing)} escenario(s): "
+        f"{', '.join(existing)}. Usá un tag nuevo; el mismo tag reusa el cliente por diseño "
+        "y una corrida anterior quedaría apilada debajo."
+    )
+
+
+def existing_conversations(scenarios: Sequence[Scenario], run_tag: str) -> list[str]:
+    """Scenario ids whose derived phone already exists in the database."""
+    from sqlalchemy import select
+
+    from app.db import session_scope
+    from app.models import Customer
+
+    phones = {derive_phone(scenario.id, run_tag): scenario.id for scenario in scenarios}
+    with session_scope() as session:
+        found = session.scalars(
+            select(Customer.phone_e164).where(Customer.phone_e164.in_(list(phones)))
+        ).all()
+    return sorted(phones[phone] for phone in found if phone in phones)
+
+
 def run_scenario(
     scenario: Scenario,
     *,
@@ -1200,6 +1233,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     import seed_kb_docs
 
     seed_kb_docs.ensure_dev_env()
+
+    scenarios = _select(corpus, args)
+    contaminated = contamination_error(existing_conversations(scenarios, args.run_tag))
+    if contaminated:
+        print(contaminated, file=sys.stderr)
+        return 2
+
     try:
         kb_state = preflight()
     except PreflightError as error:
@@ -1243,8 +1283,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     judge_failures: dict[str, str] = {}
     gate_details: dict[str, dict[str, str]] = {}
     observations: dict[str, dict] = {}
-    scenarios = _select(corpus, args)
-
     for scenario in scenarios:
         try:
             result = run_scenario(
