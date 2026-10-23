@@ -336,6 +336,8 @@ def test_respond_model_call_receives_conversation_and_booking(respond_client):
         cost_mode="normal",
         memory_context="",
         template_id=None,
+        # S4: the turn reached `respond` without a prior retrieval.
+        retrieval=None,
     )
     with mock.patch.object(_rn.kb, "retrieve", return_value=[{"content": "chunk"}]):
         _rn.respond(state)
@@ -404,6 +406,9 @@ def _respond_state(**overrides):
         turn=3,
         cost_mode="normal",
         memory_context="",
+        # S4: "nobody retrieved yet" — the same value `from_db` leaves in a turn
+        # that was routed straight to `respond`.
+        retrieval=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)

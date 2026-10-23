@@ -27,6 +27,9 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import kb_fidelity as fid  # noqa: E402
 
+from app.chat.nodes import respond as _respond  # noqa: E402
+from app.chat.state import ConversationState  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Number normalization — the load-bearing half of the triage core
@@ -308,3 +311,60 @@ def test_summarize_separates_handoffs_by_layer():
 
 def test_summarize_handoff_reasons_is_empty_without_escalations():
     assert fid.summarize(_ROWS)["handoff_reasons"] == {}
+
+
+# ---------------------------------------------------------------------------
+# Retrieval fidelity — the instrument must measure the call production makes
+# ---------------------------------------------------------------------------
+
+RAW = "me dieron tu contacto para una mantencion de caldera"
+SERVICE = "mantención de caldera"
+CHUNK = {
+    "document_id": 1,
+    "version": 1,
+    "chunk_index": 1,
+    "content": "Mantención de caldera: inspección, limpieza y purgado.",
+    "source_meta": None,
+    "similarity": 0.61,
+}
+
+
+def _recording_retrieve(monkeypatch, hit: str) -> list[tuple[str, dict]]:
+    """Record every retrieval call; only the `hit` query returns a chunk."""
+    calls: list[tuple[str, dict]] = []
+
+    def fake_retrieve(session, query, **kwargs):
+        calls.append((query, kwargs))
+        return [CHUNK] if query == hit else []
+
+    monkeypatch.setattr(_respond.kb, "retrieve", fake_retrieve)
+    return calls
+
+
+def test_the_instrument_makes_the_retrieval_production_makes(monkeypatch):
+    """H01: `_retrieved_chunks` used to re-declare the call and drift from it.
+
+    Two drifts were measured: no `global_only` (so project documents entered the
+    chunk set production never saw) and no `service` fallback (so a miss caused
+    by polite filler was reported as a KB failure production had rescued). Both
+    are pinned here as one contract: same queries, same arguments.
+    """
+    calls = _recording_retrieve(monkeypatch, hit=SERVICE)
+    state = ConversationState(
+        customer_id=1,
+        conversation_id=1,
+        phone="+56900000000",
+        intent="consulta",
+        case={"service": SERVICE},
+        window=[{"id": 1, "text": RAW}],
+    )
+
+    production = _respond.retrieve_chunks(None, state)
+    production_calls = list(calls)
+    calls.clear()
+    instrument = fid._retrieved_chunks(None, RAW, intent="consulta", service=SERVICE)
+
+    assert instrument == production
+    assert calls == production_calls
+    assert [query for query, _ in calls] == [RAW, SERVICE]
+    assert all(kwargs["global_only"] is True for _, kwargs in calls)
