@@ -34,10 +34,12 @@ discarded, so the outcome is classified from the reply text plus the persisted
 state — the same discipline `scripts/chat_harness.py:118-127` follows.
 
 The chunk set is **re-derived**, not captured: retrieval is deterministic for a
-fixed database state and query, so re-running `kb.retrieve` with the arguments the
-production path uses yields the same chunks. When a turn was handed off before
-`respond` was reached, **no chunk reached the model at all**, and the report says so
-instead of inventing one.
+fixed database state and query, so calling the production helper
+(`app/chat/nodes/respond.py`) with this turn's text and classified `service`
+yields the same chunks. It is that helper, not a copy of its arguments — the copy
+drifted (no `global_only`, no `service` fallback) and measured a retrieval the
+customer never got. Only `answered` turns are scored for grounding, so a turn
+that never reached `respond` is never credited with chunks it did not receive.
 
 Usage
 -----
@@ -313,21 +315,42 @@ def summarize(rows: Sequence[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _retrieved_chunks(session, text: str) -> list[dict]:
-    """Re-derive the chunk set `respond` fed to the model.
+def _retrieved_chunks(
+    session, text: str, *, intent: str | None, service: str | None
+) -> list[dict]:
+    """The chunk set `respond` feeds the model for this turn.
 
-    The arguments are copied from `app/chat/nodes/respond.py:131-138` verbatim, so
-    this reproduces the production call rather than approximating it.
+    Delegated to the production helper instead of restating its arguments: the
+    copy drifted twice — it dropped `global_only`, so project documents entered
+    the measured set, and it dropped the `service` fallback, so a miss production
+    rescued was reported as a KB failure (S4/H01).
     """
-    from app.models import KbVisibility
-    from app.services import kb
+    from app.chat.nodes import respond as respond_node
 
-    return kb.retrieve(
-        session,
-        text,
-        top_k=kb.DEFAULT_TOP_K,
-        min_sim=kb.DEFAULT_MIN_SIM,
-        audience=KbVisibility.CUSTOMER,
+    return respond_node.retrieve_for_queries(
+        session, respond_node.turn_queries(text, intent=intent, service=service)
+    )
+
+
+def _case_service(session, conversation_id: int) -> str | None:
+    """`case.service` as `classify_intent` persisted it for this conversation.
+
+    `_store_classification` writes that value in the same turn it lands in
+    `state.case`, so reading it after the turn reproduces the exact fallback query
+    production used. Read-only on purpose: the instrument must not create a case
+    for a turn that never classified (`get_or_create_case` would).
+    """
+    from sqlalchemy import select
+
+    from app.models import Case
+
+    # The latest case, exactly like `get_or_create_case` (app/services/cases.py):
+    # a second read order would be one more way for the instrument to drift.
+    return session.scalar(
+        select(Case.service)
+        .where(Case.conversation_id == conversation_id)
+        .order_by(Case.id.desc())
+        .limit(1)
     )
 
 
@@ -375,9 +398,15 @@ def run_query(session, query, phone: str) -> dict:
 
     conversation_id = ch.ensure_conversation(session, phone)
     replies = ch.run_turn(session, conversation_id, query.text)
-    chunks = _retrieved_chunks(session, query.text)
 
     events = _conversation_events(session, conversation_id)
+    intent = _intent(events)
+    chunks = _retrieved_chunks(
+        session,
+        query.text,
+        intent=intent,
+        service=_case_service(session, conversation_id),
+    )
     outcome = classify_outcome(replies, events)
     answer = terminal_reply(replies) or ""
     chunk_texts = [chunk["content"] for chunk in chunks]
@@ -394,7 +423,7 @@ def run_query(session, query, phone: str) -> dict:
         "conversation_id": conversation_id,
         "greeting_emitted": greeting_emitted(replies),
         "outcome": outcome,
-        "intent": _intent(events),
+        "intent": intent,
         "escalate_reason": _escalate_reason(events),
         "reply": answer,
         "replies": list(replies),

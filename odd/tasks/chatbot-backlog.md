@@ -85,7 +85,7 @@ es una escritura en producción y la ejecuta el owner.
 | T3 | S2 | Detector único de pedido humano, contador consecutivo, errores técnicos fuera, filtro de plataforma | worker + inline, test-first | `9a2777b1` |
 | T4a | S3 | Salida 3 (D17): reformular, ofrecer y derivar, con la oferta editable en el panel | worker + inline, test-first | `a82b4e8f` |
 | T4b | S3 | `kb_miss` no terminal (D18): ofrece los dos caminos en vez de derivar | worker + inline, test-first | `b1d77f46` |
-| T5 | S4 | Recuperación única por turno y fidelidad del medidor | pendiente | pendiente |
+| T5 | S4 | Recuperación única por turno y fidelidad del medidor | inline, test-first | `9f0d7be8` |
 | T6 | S5 | Cargar los 4 documentos `customer` y re-medir (owner, Risk item 5) | owner | pendiente |
 | T7 | — | Re-medir el desglose de handoffs con tráfico nuevo sobre `v2026.10.6` | lectura | pendiente |
 
@@ -217,3 +217,46 @@ Decisiones y límites de este slice:
 - **Verificación**: backend completo exit 0 · `npm run build` exit 0 · `npm test` 1263 verdes.
 - Costo LLM del slice: cero en el miss (camino determinista); el único gasto es la clasificación del
   turno, igual que antes.
+
+**L8 — S4 cerrado (2026-10-23), evidencia observada.** Recuperación única por turno y fidelidad del
+medidor (commit `9f0d7be8`):
+
+- **RED**: 4 fallos, los cuatro por el camino viejo, no por el test. `test_kb_fidelity.py::test_the_instrument_makes_the_retrieval_production_makes`
+  (`TypeError: _retrieved_chunks() got an unexpected keyword argument 'intent'`),
+  `test_respond_consumes_the_retrieval_the_triage_already_made` y `test_a_recorded_miss_is_offered_without_a_second_retrieval`
+  (`KeyError: 'retrieval'` en el update de `_kb_check`), y `test_a_turn_that_skipped_triage_still_retrieves_in_respond`
+  (`AttributeError: 'ConversationState' object has no attribute 'retrieval'`).
+- **Una recuperación por turno (H04)**: `ConversationState.retrieval` (`list[dict] | None`) viaja en el
+  estado del turno. `None` = nadie recuperó todavía (turno ruteado directo a `respond`); `[]` = recuperó y
+  falló. `research_triage._kb_check` lo escribe en sus tres salidas (hit, miss con retry, miss final) y
+  `respond` lo consume — vacío incluido — así que ya no vuelve a embeber ni a consultar pgvector. `from_db`
+  lo deja en `None`, así que no se arrastra al turno siguiente (D2, sin checkpointer).
+- **AO-8 intacto**: el retry acotado sigue haciendo su propio intento en un miss (misma consulta, mismo
+  resultado, es la duplicación que el diseño ya tenía). Lo que desaparece es la re-recuperación de
+  `respond`, que es la que H04 midió. Conteo: un hit cuesta una recuperación; un miss, las dos del retry
+  acotado y ninguna más.
+- **Fidelidad del medidor (H01)**: la recuperación tiene una sola definición,
+  `respond.retrieve_for_queries` (ahí viven `top_k`, `min_sim`, `audience=CUSTOMER` y `global_only=True`),
+  y el fallback a `service` vive en `respond.turn_queries(text, intent, service)`. `scripts/kb_fidelity.py`
+  delega en las dos: no copia argumentos, así que no puede volver a desincronizarse. El `service` del
+  fallback se lee del `case` persistido con el mismo orden que `get_or_create_case` (último `id`), y sólo
+  cuando el turno clasificó — un `unknown` no dispara el fallback, igual que en producción.
+- **El pin que movió la suite**: `tests/unit/test_prompts.py` construye dos dobles con `SimpleNamespace`
+  (el helper `_respond_state` y uno inline). Los dos necesitaban `retrieval=None`. No se debilitó ninguno:
+  el doble ahora refleja el campo nuevo, que es lo que `from_db` deja en el camino directo a `respond`.
+- **Verificación**: focales (`test_kb_fidelity.py` + `test_kb_query_fallback.py`) 44 verdes · suite backend
+  completa exit 0 (2817 tests) · harness real con `deepseek-flash` sobre dos conversaciones nuevas: saludo
+  determinista, respuesta anclada en el chunk de precios ($80.000) y oferta de coordinar la visita. Sin
+  `npm`/`web/`: el slice no toca el panel.
+- **Ruido del entorno, no del code**: las corridas 1–3 de la suite murieron en timeouts de 120 s dentro de
+  `psycopg.connect` y de `seed_dev.py` con el host a load ~107 (checkpoint de Postgres de 90 s con 65k syncs).
+  La corrida válida es la 5, con `--timeout=300`; la 2 falló de verdad por los tres `AttributeError` del
+  doble de `test_prompts.py`, que se corrigieron. Regla para la próxima: ante un timeout de suite, mirar
+  primero la carga del host y el `docker logs` del contenedor de test antes de tocar el código.
+- **Límite honesto que queda anotado (no es de este slice)**: `kb_fidelity` re-deriva el chunk set con el
+  helper de producción; en un turno que se derivó antes de llegar a `respond` el reporte sigue mostrando
+  el chunk set que ese helper devuelve para el texto (no "ninguno"), aunque sólo los turnos `answered` se
+  puntúan por grounding. Cerrarlo del todo requiere un sink de sólo lectura en el grafo, que el owner
+  descartó para S4 (decisión del 2026-10-23) a favor de la función compartida.
+- Costo LLM del slice: **cero**. Elimina consultas locales de embed/pgvector por turno; no agrega ni
+  quita llamadas al modelo.

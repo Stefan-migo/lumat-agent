@@ -17,6 +17,9 @@ Flow:
 
 Reuse contract:
 - ``respond`` and ``handoff`` are the EXISTING nodes, invoked unchanged.
+- The retrieval verdict travels in ``state.retrieval`` (a list, empty on a miss),
+  so ``respond`` consumes it instead of retrieving a second time for the same
+  turn (S4/H04). ``None`` there means "nobody retrieved yet".
 - AO-6 whitelist: before the service call the sub-agent's ``tools_whitelist``
   is checked for ``kb.retrieve`` (assert-in-dispatch); a non-whitelisted call
   is logged and handed off.
@@ -86,15 +89,16 @@ def _kb_check(state: ConversationState) -> dict:
                 actor="bot",
             )
     if chunks:
-        # Scoped hit — delegate the grounded answer to the reused respond node.
-        return {"next_step": "respond"}
+        # Scoped hit — delegate the grounded answer to the reused respond node,
+        # handing it the chunks this turn was routed on.
+        return {"next_step": "respond", "retrieval": chunks}
 
     # Scoped miss. Bounded retry (AO-8): one more attempt, then D18's offer.
     if state.triage_retry >= MAX_TRIAGE_RETRIES:
         # CM-6: let respond log the unresolved question exactly once when it
         # delivers the offer; logging here as well would duplicate the record.
-        return {"next_step": "respond"}
-    return {"next_step": "retry", "triage_retry": state.triage_retry + 1}
+        return {"next_step": "respond", "retrieval": []}
+    return {"next_step": "retry", "triage_retry": state.triage_retry + 1, "retrieval": []}
 
 
 def _sub_whitelist() -> tuple[str, ...] | None:
