@@ -21,6 +21,10 @@ Alcance:
 - Anticipación mínima de **2 horas** (configurable), medida contra `now`.
 - "Más horarios" entrega los siguientes 3 de la misma oferta congelada; si no hay más para ese día, lo
   dice y ofrece otros días. No deriva por pedir otro horario.
+- **Aviso de día agotado** (texto aprobado, verbatim): `Para ese día no me quedan más horarios. Te
+  propongo estos otros días:` + `{{opciones}}` + `Responde con el número del horario que prefieres.`
+- Sólo cuando no queda ningún horario más se deriva, con `booking_unavailable` (el texto S4.5 llega en
+  T7).
 - Derivación de salvataje con el texto S4.5 sólo si no se logra agendar.
 - Asignación **round-robin por carga diaria**: entre los técnicos libres para el horario, gana quien
   tenga menos visitas agendadas ese día; empate → alterna por id.
@@ -106,7 +110,7 @@ Riesgo: **item 3** (mueve superficies del panel que tienen tests y `tsc -b`).
 |---|---|---|---|---|
 | T1 | S1 | Grilla de 30 min + anticipación 2 h en `scheduling` | inline, test-first | `e934a261` |
 | T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | `d473ee74` |
-| T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | pendiente |
+| T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | `ae02f872` |
 | T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | pendiente |
 | T5 | S2 | Saludo con `{{nombre}}` y variante que pregunta el nombre | inline, test-first | pendiente |
 | T6 | S3 | Categoría `smalltalk` + rama + texto configurable | worker + inline, test-first | pendiente |
@@ -206,3 +210,42 @@ commit (docs).
 - Límite de slice: con `d473ee74` la rama acumula 484 líneas autoradas, pasado el objetivo de ~400.
   No se parte la entrega porque D15 fija **un solo release** al final; los commits por task siguen
   siendo las unidades revisables (feat + docs por task).
+
+**L7 — copy de T3/T4 aprobado por el owner (2026-10-23), verbatim de las opciones elegidas:**
+
+> Para ese día no me quedan más horarios. Te propongo estos otros días:
+> {{opciones}}
+> Responde con el número del horario que prefieres.
+
+> Tu visita técnica quedó confirmada para el {{fecha}} con {{tecnico}}.
+>
+> Con técnico sin nombre cargado: "…con nuestro equipo técnico."
+
+El primero se implementa en T3; el segundo en T4 (la parte `{{tecnico}}`), y el salvataje de agenda
+reusa el motivo `booking_unavailable` cuyo texto S4.5 entra en T7.
+
+**L8 — T3 cerrado (2026-10-23), evidencia observada.** Commit `ae02f872` (código, tests y panel) +
+este commit (docs).
+
+- RED: los tres tests nuevos de `tests/integration/test_chat_booking.py` fallaban — página siguiente
+  el mismo día, día agotado con aviso, y sin horarios restantes. Antes, pedir otro horario daba
+  `booking_unclear` y después derivación.
+- GREEN: `tests/integration/test_chat_booking.py` → 12 tests, exit 0.
+- Panel: `npm run build` (tsc -b) exit 0 y `npm test` → 111 archivos / 1264 tests, exit 0, con un pin
+  nuevo de que el campo "Sin más horarios para ese día" se renderiza en el grupo Agendar y viaja al
+  endpoint `reply-texts` bajo su propia clave. La primera corrida del panel murió con el crash y se
+  repitió completa.
+- Suite backend, corrida 1: 2837 tests, **1 FAILED** —
+  `test_reply_texts.py::test_the_catalog_covers_booking_manage_handoff_and_capture`, porque el
+  catálogo de respuestas es cerrado y la clave nueva no estaba declarada. Se movió el pin (entrada
+  explícita) y se agregó un pin byte a byte del copy aprobado.
+- Suite backend, corrida 2: 2825 tests, 0 `FAILED`/`ERROR`, `PYTEST_EXIT=0`, 6m57s.
+- Diseño: la oferta se congela al crearse (universo de 30 candidatos guardado en `_booking_offer`);
+  "más horarios" sirve la página siguiente de 3 y reinicia la numeración y los intentos. Si la página
+  ya no cae en el día de la oferta respondida, se dice con el texto aprobado. Sin más candidatos →
+  `handoff` con `booking_unavailable`.
+- Detector: lista acotada de marcadores (`más horarios`, `otros horarios`, `otra hora`, `otros días`,
+  `no me sirve`, `no puedo en esos`, …). Falla cerrado: lo que no matchea sigue con la aclaración y
+  después la persona.
+- No se tocó la TTL de 30 minutos: la oferta congelada vence igual, y como la anticipación mínima
+  (2 h) es mayor que la TTL, ninguna página puede ofrecer un horario ya pasado.
