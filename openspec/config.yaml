@@ -26,9 +26,12 @@ rules:
     guidelines:
       - Follow existing code patterns
     tdd: true
-    test_command: "uv run pytest tests/"
+    # Tiered verification policy: AGENTS.md -> "Test tiers", executed by
+    # scripts/test.sh. Iteration is the cheap gate; the full suite is the
+    # closure gate (verify.test_command) and stays authoritative.
+    test_command: "bash scripts/test.sh quick"
   verify:
-    test_command: "uv run pytest tests/"
+    test_command: "bash scripts/test.sh full"
     build_command: "cd web && npm run build"
     coverage_threshold: 0
   archive:
@@ -47,4 +50,4 @@ testing:
     linter: false
     type_checker: false
     formatter: false
-  notes: "Measured suites: 16 unit, 45 integration, 23 functional, 1 injection, and 6 spec Python files; 77 Vitest files under web/src; 1 Playwright spec under web/playwright. No linter, type checker, or formatter is configured in pyproject.toml or web/; npm run build type-checks through tsc -b only."
+  notes: "Measured 2026-10-23: 2822 collected tests across 64 unit, 94 integration, 43 functional, 5 spec, and 1 injection Python files; 111 Vitest files under web/src; 2 Playwright specs under web/playwright. Tiered verification (AGENTS.md -> 'Test tiers', scripts/test.sh): gate ~7s / unit ~14s / quick ~19s / full ~413s. No linter, type checker, or formatter is configured in pyproject.toml or web/; npm run build type-checks through tsc -b only."

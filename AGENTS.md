@@ -69,6 +69,68 @@ analysis, decisions, brainstorming, or pre-ODD work.
 - **Protocol**: session-init → discuss (auto-capture decisions/tradeoffs/risks to Engram) →
   session-close (consolidated report that seeds `odd/tasks/<feature>.md`)
 
+## Test tiers (MANDATORY)
+
+Backend verification is tiered instead of "always the full suite". `scripts/test.sh` is the
+executable form of this policy; the costs below are measured on this repository (2026-10-23,
+2822 collected tests).
+
+| Tier | Command | Cost | What it catches |
+|---|---|---|---|
+| T0 gate | `bash scripts/test.sh gate` | ~7 s, no DB | broken import / collection: `--collect-only` imports every test and app module |
+| T1 unit | `bash scripts/test.sh unit` | ~14 s, no DB | the contract of prompts, registry, routing, settings parsing |
+| T0+T1 | `bash scripts/test.sh quick` | ~19 s | what an edit iteration must pass |
+| T2 layer | `bash scripts/test.sh db tests/integration/<file>.py …` | per file | the database-backed behaviour you touched |
+| T3 full | `bash scripts/test.sh full` | ~7 min | seams, cross-cutting shape drift, everything else |
+
+Iterate with `quick` plus the focused test of the rule under RED/GREEN. Run `full` **only** at these
+boundaries:
+
+1. feature closure;
+2. before opening a PR;
+3. after merging `origin/main` into the branch;
+4. whenever `bash scripts/test.sh shape` exits **3**.
+
+One suite at a time per worktree: each worktree derives its own test database, and two concurrent
+runs against the same one deadlock on the per-test `TRUNCATE`.
+
+### Why `full` is not optional at those boundaries
+
+Two documented escapes justify the rule, and both are cheap to cover without paying 7 minutes per
+work unit:
+
+- `odd/tasks/asistente-sdb.md` — a `NameError` from Slice 4 escaped a subset. Covered by T0, at ~7 s.
+- Engram `odd/asistente-skills/tasks` — targeted runs missed two integration tests whose doubles
+  needed the new `skills` shape. Covered by the shape rule below.
+
+### Shape surfaces — `full` becomes mandatory
+
+A shape change invalidates every targeted selection, so `scripts/test.sh shape` answers the question
+mechanically instead of by memory. Its list lives in `scripts/test.sh`; keep both in step:
+
+`app/models.py`, `app/config.py`, `app/panel/api/serializers.py`, `app/services/project_config.py`,
+`tests/conftest.py`, `tests/*/conftest.py`, `tests/_testdb.py`, `tests/webhook_helpers.py`,
+`agent/registry.yaml`, `agent/prompts/*`, `agent/personas/*`, `db/migrations/*`.
+
+They are shape surfaces because the graph says so: `make_user()` (378 edges), `User` (199),
+`Customer` (126), `Conversation` (124), `Project` (115) and `record_audit()` (113) are the god nodes
+— that is `app/models.py` plus the harness fixture almost every suite imports.
+
+For a committed range use a base ref: `bash scripts/test.sh shape origin/main`.
+
+### What the tiers do not replace
+
+- **TDD discipline.** RED before GREEN on the rule being implemented; the tier only decides how wide
+  the verification sweep is.
+- **The frontend gate.** If `web/` is touched: `npm ci` -> `npm run build` (tsc -b) -> `npm test`.
+  `tsc -b` lives only inside `build`, and a green Vitest suite does not prove the tree type-checks.
+- **`full` in CI.** `.github/workflows/tests.yml` runs the whole suite on every PR and every push to
+  `main`. That is the authoritative gate and it stays.
+- **The pre-merge integration check below.** Unchanged.
+
+Never test with a lowered ceiling: the 120 s `pytest-timeout` and `timeout_method = "thread"` are the
+diagnosis for the stall family documented in `odd/tasks/suite-truncate-stall.md`.
+
 <!-- rapso:start -->
 ## ODD Worktrees
 
@@ -78,9 +140,11 @@ During ODD's `Classify` step, substantial work means two or more meaningful impl
 ```
 Step 1: GRAPH CHECK — query_graph before editing
 Step 2: ATOMIC COMMIT — one concern per commit, <=5 files
-Step 3: VERIFY — this project's gates: backend `uv run pytest tests/` (needs the pgvector Postgres),
-        panel `npm ci` -> `npm run build` (tsc -b) -> `npm test`. Report the exact command and its
-        real output; never infer a pass from intent
+Step 3: VERIFY — this project's gates are tiered (see "Test tiers" ABOVE this block, which is the
+        authoritative copy): backend `bash scripts/test.sh quick` per change, `bash scripts/test.sh
+        full` at the boundaries it names (needs the pgvector Postgres); panel `npm ci` -> `npm run
+        build` (tsc -b) -> `npm test`. Report the exact command and its real output; never infer a
+        pass from intent
 Step 4: SPEC CHECK — the specs in odd/tasks/<feature>.md; /sdd-verify is retired
 Step 5: FINALIZE — mem_save + `rapso close --message "<summary>"`
 ```
