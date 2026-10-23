@@ -241,3 +241,82 @@ def test_weekly_schedule_alone_produces_chat_slot_offer(mock_openai_chat):
     assert any("1." in reply for reply in replies)
     with SessionLocal() as session:
         assert session.query(TechnicianAvailability).filter_by(technician_id=tech_id).count() > 0
+
+
+def _aligned_start(now, days=2):
+    return (now + timedelta(days=days)).replace(minute=0, second=0, microsecond=0)
+
+
+def test_asking_for_more_slots_offers_the_next_page_on_the_same_day(mock_openai_chat):
+    """S1 (chatbot-experiencia): "más horarios" pages through the frozen offer.
+
+    Asking for another time is a request the bot can serve, not a failed
+    understanding: before this the second message got a clarification and the
+    third one handed the customer to a person with the agenda wide open.
+    """
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        _available_slot(session, tech_id, datetime.now(timezone.utc))  # five grid slots
+        session.commit()
+
+    first = _invoke(conv_id, _add_message(conv_id, "si", "wamid.more.ask"))
+    assert any("3." in reply for reply in first)
+
+    second = _invoke(conv_id, _add_message(conv_id, "más horarios", "wamid.more.next"))
+
+    assert len(second) == 1
+    assert "1." in second[0] and "2." in second[0]
+    assert "3." not in second[0]  # the page carries the two slots left that day
+    assert "asesor" not in second[0].lower()
+    with SessionLocal() as session:
+        assert session.query(Appointment).count() == 0
+
+
+def test_asking_for_more_slots_says_the_day_is_exhausted_and_offers_other_days(
+    mock_openai_chat,
+):
+    """S1: when that day has nothing left, say it instead of repeating three slots."""
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        starts = _aligned_start(datetime.now(timezone.utc))
+        scheduling.add_availability(
+            session, technician_id=tech_id, starts_at=starts,
+            ends_at=starts + timedelta(hours=2),  # exactly three grid slots
+        )
+        tomorrow = starts + timedelta(days=1)
+        scheduling.add_availability(
+            session, technician_id=tech_id, starts_at=tomorrow,
+            ends_at=tomorrow + timedelta(hours=2),
+        )
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.exhausted.ask"))
+    second = _invoke(
+        conv_id, _add_message(conv_id, "no puedo en esos horarios", "wamid.exhausted.next")
+    )
+
+    assert len(second) == 1
+    assert second[0].startswith("Para ese día no me quedan más horarios.")
+    assert "1." in second[0]
+    assert "asesor" not in second[0].lower()
+
+
+def test_asking_for_more_slots_without_any_left_hands_off(mock_openai_chat):
+    """S1: only when there is nothing left to offer does the bot escalate."""
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        starts = _aligned_start(datetime.now(timezone.utc))
+        scheduling.add_availability(
+            session, technician_id=tech_id, starts_at=starts,
+            ends_at=starts + timedelta(hours=2),  # the whole offer fits in one page
+        )
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.nomoreslot.ask"))
+    second = _invoke(
+        conv_id, _add_message(conv_id, "hay otros horarios?", "wamid.nomoreslot.next")
+    )
+
+    assert any("asesor" in reply.lower() for reply in second)
+    with SessionLocal() as session:
+        assert session.query(Appointment).count() == 0

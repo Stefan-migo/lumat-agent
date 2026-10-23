@@ -26,6 +26,7 @@ from app.services.settings import (
 
 EXPECTED_KEYS = {
     "booking_offer",
+    "booking_no_more_today",
     "booking_unclear",
     "booking_confirmed",
     "manage_no_visits",
@@ -64,6 +65,13 @@ def test_the_defaults_keep_the_current_wording():
     )
     assert REPLY_TEXT_DEFAULTS["booking_confirmed"] == (
         "Tu visita técnica quedó confirmada para el {{fecha}}."
+    )
+    # S1 (chatbot-experiencia): the owner approved this wording verbatim; the pin
+    # keeps a refactor from quietly rewording what the customer reads.
+    assert REPLY_TEXT_DEFAULTS["booking_no_more_today"] == (
+        "Para ese día no me quedan más horarios. Te propongo estos otros días:\n"
+        "{{opciones}}\n"
+        "Responde con el número del horario que prefieres."
     )
     assert REPLY_TEXT_DEFAULTS["manage_cancelled"] == (
         "Tu visita del {{visita}} quedó cancelada."
