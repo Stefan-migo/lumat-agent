@@ -275,3 +275,27 @@ stories) + este commit (docs).
   `settings`; si el owner quiere editarlo desde el panel, es una clave nueva y su slot.
 - Estado de la rama al cerrar T4: 8 commits, 832 líneas autoradas. T5–T8 quedan **bloqueados** por
   pedido explícito del owner ("detente cuando termines T4. no comiences T5").
+
+**L10 — merge de `main` y corte en dos PRs (2026-10-23), evidencia observada:**
+
+- `origin/main` avanzó a `94e6921c` (6 commits: política de test tiers con `scripts/test.sh`, aislamiento
+  de `MEDIA_DIR` en `tests/conftest.py` y el fix del flake de `test_time_triggers`). Merge limpio en la
+  rama, sin conflictos: main tocó `AGENTS.md`, `scripts/`, `openspec/` y el harness de tests; esta
+  feature tocó `app/`, `web/src` y este doc.
+- Gates con la política **nueva** (no con la vieja "siempre la suite completa"):
+  `bash scripts/test.sh shape origin/main` → exit 0 (sin superficie de forma); `bash scripts/test.sh
+  full` → **2834 tests, 0 fallos, exit 0** (8m11s); panel `npm ci` → `build` exit 0 → `npm test` →
+  **111 archivos / 1264 tests, exit 0**.
+- Corte en dos slices encadenados, en vez de un PR de 819 líneas: **#668** `odd/chatbot-agenda` (T1–T2,
+  base `main`, 491 líneas con `size:exception` porque 208 son este doc) y **#669** `odd/chatbot-oferta`
+  (T3–T4, base `odd/chatbot-agenda`, 328 líneas).
+- Las ramas se **rearmaron por cherry-pick sobre el `main` actual** (`odd/chatbot-agenda` desde
+  `origin/main`, `odd/chatbot-oferta` encima) para que cada diff muestre sólo su slice y para cumplir
+  `strict` (rama al día) sin commits de merge en la cadena. Verificado: el árbol de `odd/chatbot-oferta`
+  es idéntico al de la rama previa al corte (`git diff` vacío), así que el `full` corre sobre el mismo
+  contenido que el tip de la cadena.
+- `odd/chatbot-agenda` verificado en su propio árbol: `bash scripts/test.sh quick` exit 0 y `db
+  tests/integration/test_scheduling.py` 20 tests exit 0.
+- `odd/chatbot-experiencia` queda como respaldo local, sin pushear. **Continuación de T5 en adelante:
+  desde `odd/chatbot-oferta`**, que después del merge de #668 se rebasa sobre `main` y pasa a ser la
+  rama de trabajo.
