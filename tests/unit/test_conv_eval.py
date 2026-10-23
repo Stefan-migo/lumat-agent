@@ -789,3 +789,80 @@ def test_a_reused_tag_with_existing_customers_is_refused():
 
 def test_a_fresh_tag_passes_the_contamination_check():
     assert ev.contamination_error([]) is None
+
+
+# ---------------------------------------------------------------------------
+# The Markdown transcript is the permanent record once --reset wipes the rows
+# ---------------------------------------------------------------------------
+
+
+def test_the_transcript_renders_every_message_of_the_log_in_order():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    report = report_for([score_row(scenario.id, scenario.tier, True, score=4.0)])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola", "un aviso extra"],
+            "turns": [{"text": scenario.turns[0], "replies": ["hola"], "intent": None}],
+            "messages": [
+                {"direction": "inbound", "text": scenario.turns[0]},
+                {"direction": "outbound", "text": "hola"},
+                {"direction": "outbound", "text": "un aviso extra"},
+            ],
+        }
+    }
+    report["gate_details"] = {scenario.id: {}}
+    markdown = ev.render_transcripts(report, corpus)
+    # the extra outbound message is not in `turns`, and must still be recorded
+    assert "un aviso extra" in markdown
+    assert markdown.index("hola") < markdown.index("un aviso extra")
+
+
+def test_the_transcript_falls_back_to_turns_for_older_reports():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    report = report_for([score_row(scenario.id, scenario.tier, True, score=4.0)])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola"],
+            "turns": [{"text": scenario.turns[0], "replies": ["hola"], "intent": None}],
+        }
+    }
+    report["gate_details"] = {scenario.id: {}}
+    assert "hola" in ev.render_transcripts(report, corpus)
+
+
+# ---------------------------------------------------------------------------
+# Reset — truncating must be impossible outside the derived test database
+# ---------------------------------------------------------------------------
+
+
+def test_reset_is_refused_without_the_test_database_marker():
+    refused = ev.reset_guard("postgresql+psycopg://app:app@localhost:5893/lumat", None)
+    assert refused is not None
+    assert "TEST_ADMIN_DB_URL" in refused
+
+
+def test_reset_is_refused_when_the_target_is_a_different_database():
+    refused = ev.reset_guard(
+        "postgresql+psycopg://app:app@localhost:5432/lumat",
+        "postgresql://lumat:lumat@localhost:5893/lumat",
+    )
+    assert refused is not None
+    assert "5893" in refused
+
+
+def test_reset_is_allowed_on_the_derived_test_database():
+    assert (
+        ev.reset_guard(
+            "postgresql+psycopg://app:app@localhost:5893/lumat",
+            "postgresql://lumat:lumat@localhost:5893/lumat",
+        )
+        is None
+    )

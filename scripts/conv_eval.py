@@ -92,6 +92,8 @@ __all__ = [
     "build_observation",
     "compare_runs",
     "contamination_error",
+    "reset_business_state",
+    "reset_guard",
     "derive_phone",
     "evaluate_gates",
     "git_state",
@@ -709,6 +711,12 @@ def build_observation(snapshot: Mapping[str, Any], turns: Sequence[Mapping[str, 
     ]
     return {
         "state": snapshot.get("state"),
+        # The complete ordered log, straight from the database: the Markdown
+        # transcript is the permanent record once `--reset` wipes the rows.
+        "messages": [
+            {"direction": message.get("direction"), "text": message.get("text")}
+            for message in snapshot.get("messages") or ()
+        ],
         "events": [
             {"event": event.get("event"), "cause": event.get("cause")}
             for event in snapshot.get("events") or ()
@@ -843,6 +851,53 @@ def miss_offer_text() -> str:
 
     with session_scope() as session:
         return get_message(session, "kb_miss_offer")
+
+
+# Conversation state only: the KB, the tariff, the message catalog, the users and
+# the technicians are configuration and must survive a reset, or the next run
+# would measure an empty knowledge base.
+_RESET_TABLES = (
+    "notification_attempts, notification_operations, appointment_history, appointments, "
+    "technician_availability, audit_log, conversation_events, automation_executions, "
+    "domain_events, memories, memory_relations, memory_observations, cases, "
+    "internal_chat_messages, internal_chat_threads, messages, conversations, "
+    "customer_notes, customers"
+)
+
+
+def reset_guard(database_url: str | None, test_admin_url: str | None) -> str | None:
+    """Refuse `--reset` unless the target is provably the derived test database.
+
+    The instrument truncates tables. A typo in `DATABASE_URL` must not be able to
+    empty a real database, so the only accepted target is the one whose host and
+    port match `TEST_ADMIN_DB_URL` — which only `infra/test-db.sh env` exports.
+    """
+    if not test_admin_url:
+        return (
+            "--reset exige TEST_ADMIN_DB_URL (exportalo con `eval \"$(bash infra/test-db.sh env)\"`): "
+            "sin eso no hay forma de probar que la base es la de test."
+        )
+    from urllib.parse import urlsplit
+
+    target = urlsplit(database_url or "")
+    admin = urlsplit(test_admin_url)
+    if (target.hostname, target.port) != (admin.hostname, admin.port):
+        return (
+            f"--reset se niega: DATABASE_URL apunta a {target.hostname}:{target.port} y la base de "
+            f"test derivada es {admin.hostname}:{admin.port}."
+        )
+    return None
+
+
+def reset_business_state() -> list[str]:
+    """Empty the conversation state so every run starts from the same place."""
+    from sqlalchemy import text
+
+    from app.db import session_scope
+
+    with session_scope() as session:
+        session.execute(text(f"TRUNCATE {_RESET_TABLES}"))
+    return [name.strip() for name in _RESET_TABLES.split(",")]
 
 
 def contamination_error(existing: Sequence[str]) -> str | None:
@@ -1118,15 +1173,29 @@ def render_transcripts(report: Mapping[str, Any], corpus: Corpus) -> str:
             f"**objetivo:** {' '.join(scenario.goal.split())}",
             "",
         ]
-        for position, turn in enumerate(observation.get("turns") or (), start=1):
-            origin = turn.get("origin") or (
-                "scripted" if position <= len(scenario.turns) else "simulado"
-            )
-            label = "scripted" if origin == "scripted" else "simulado"
-            lines.append(f"**{position}. cliente** `[{label}]` — {turn.get('text', '')}")
-            for reply in turn.get("replies") or ():
-                lines.append(f"> *bot:* {' '.join(str(reply).split())}")
-            lines.append("")
+        origins = [
+            turn.get("origin")
+            or ("scripted" if position <= len(scenario.turns) else "simulado")
+            for position, turn in enumerate(observation.get("turns") or (), start=1)
+        ]
+        messages = observation.get("messages") or [
+            {"direction": direction, "text": text}
+            for turn in observation.get("turns") or ()
+            for direction, text in [("inbound", turn.get("text"))]
+            + [("outbound", reply) for reply in turn.get("replies") or ()]
+        ]
+        inbound_index = 0
+        position = 0
+        for message in messages:
+            if message.get("direction") == "inbound":
+                position += 1
+                origin = origins[inbound_index] if inbound_index < len(origins) else "scripted"
+                inbound_index += 1
+                label = "scripted" if origin == "scripted" else "simulado"
+                lines.append(f"**{position}. cliente** `[{label}]` — {message.get('text') or ''}")
+            else:
+                lines.append(f"> *bot:* {' '.join(str(message.get('text') or '').split())}")
+                lines.append("")
         gates = details.get(scenario.id) or {}
         failed = row.get("gates_failed") or []
         gate_text = ", ".join(
@@ -1192,6 +1261,12 @@ def _parse_args(argv: Sequence[str] | None) -> Any:
     parser.add_argument("--judge-model", default=None, help="Override the judge model id.")
     parser.add_argument("--out-dir", type=Path, default=_REPO_ROOT / "odd" / "evals")
     parser.add_argument("--quiet", action="store_true", help="Only the summary lines.")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Empty the conversation state first, so the run is comparable. "
+        "Only accepted against the derived test database.",
+    )
     return parser.parse_args(argv)
 
 
@@ -1239,6 +1314,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if contaminated:
         print(contaminated, file=sys.stderr)
         return 2
+
+    if args.reset:
+        import os
+
+        refused = reset_guard(os.environ.get("DATABASE_URL"), os.environ.get("TEST_ADMIN_DB_URL"))
+        if refused:
+            print(refused, file=sys.stderr)
+            return 2
+        cleared = reset_business_state()
+        print(f"reset: {len(cleared)} tablas de conversación vaciadas", flush=True)
 
     try:
         kb_state = preflight()
