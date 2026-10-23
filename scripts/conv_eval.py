@@ -857,11 +857,12 @@ def miss_offer_text() -> str:
 # the technicians are configuration and must survive a reset, or the next run
 # would measure an empty knowledge base.
 _RESET_TABLES = (
-    "notification_attempts, notification_operations, appointment_history, appointments, "
-    "technician_availability, audit_log, conversation_events, automation_executions, "
-    "domain_events, memories, memory_relations, memory_observations, cases, "
-    "internal_chat_messages, internal_chat_threads, messages, conversations, "
-    "customer_notes, customers"
+    "appointment_calendar_sync, appointment_history, appointments, assistant_artifacts, "
+    "assistant_attachments, notification_attempts, notification_operations, "
+    "panel_notifications, technician_availability, audit_log, conversation_events, "
+    "automation_executions, customer_equipment, domain_events, memories, memory_relations, "
+    "memory_observations, cases, internal_chat_messages, internal_chat_threads, messages, "
+    "conversations, customer_notes, customers"
 )
 
 
@@ -889,14 +890,24 @@ def reset_guard(database_url: str | None, test_admin_url: str | None) -> str | N
     return None
 
 
-def reset_business_state() -> list[str]:
-    """Empty the conversation state so every run starts from the same place."""
-    from sqlalchemy import text
+def reset_business_state(admin_url: str | None = None) -> list[str]:
+    """Empty the conversation state so every run starts from the same place.
 
-    from app.db import session_scope
+    Runs on the **admin** connection: the `app` role is least-privilege by
+    design (SH-2/SH-5) and has no TRUNCATE. `RESTART IDENTITY` makes ids start
+    at 1 again, so two runs are comparable row by row. No `CASCADE`: if a table
+    outside this list points at one of them, the reset fails loudly instead of
+    quietly emptying configuration.
+    """
+    import os
 
-    with session_scope() as session:
-        session.execute(text(f"TRUNCATE {_RESET_TABLES}"))
+    import psycopg
+
+    url = admin_url or os.environ.get("TEST_ADMIN_DB_URL")
+    if not url:
+        raise PreflightError("--reset necesita TEST_ADMIN_DB_URL para la conexión admin")
+    with psycopg.connect(url, autocommit=True) as connection:
+        connection.execute(f"TRUNCATE {_RESET_TABLES} RESTART IDENTITY")
     return [name.strip() for name in _RESET_TABLES.split(",")]
 
 
