@@ -720,3 +720,13 @@ def test_g9_passes_when_the_answer_came_from_the_kb():
         miss_text="No tengo ese dato.",
     )
     assert gates_of(scn, obs)["G9"].ok is True
+
+
+def test_the_row_carries_the_judge_evidence_for_every_dimension():
+    """S9 calibrates against the cited evidence: a score without it is not reviewable."""
+    scn = scenario(expect={"state_any": ["bot"]})
+    payload = verdict()
+    payload["dimensions"]["tone"] = {"score": 2, "evidence": "contestó con un formulario"}
+    row = ev.score_scenario(scn, gates_of(scn, observation()), payload)
+    assert row["evidence"]["tone"] == "contestó con un formulario"
+    assert set(row["evidence"]) == set(ev.DIMENSIONS)

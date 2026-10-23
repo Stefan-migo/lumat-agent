@@ -554,6 +554,13 @@ def score_scenario(
             for name in DIMENSIONS
             if verdict and name in (verdict.get("dimensions") or {})
         },
+        # S7: a score without its cited evidence is not reviewable, and S9
+        # calibrates against exactly that evidence. It travels with the row.
+        "evidence": {
+            name: str(verdict["dimensions"][name].get("evidence") or "")
+            for name in DIMENSIONS
+            if verdict and name in (verdict.get("dimensions") or {})
+        },
         "hard_fail": hard_fail,
         "hard_fail_reason": (verdict or {}).get("hard_fail_reason", ""),
     }
