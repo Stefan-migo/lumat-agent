@@ -134,3 +134,23 @@ def test_an_empty_key_in_the_auth_file_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(judge, "SHELL_AUTH_PATH", auth)
     with pytest.raises(judge.JudgeKeyUnavailable):
         judge.resolve_credentials()
+
+
+# ---------------------------------------------------------------------------
+# Transport — the gateway refuses a request that does not identify its session
+# ---------------------------------------------------------------------------
+
+
+def test_build_client_sends_a_stable_session_and_names_itself():
+    client = judge.build_client(
+        judge.JudgeCredentials("clave", "argument"), session_id="conv-eval-smoke"
+    )
+    assert client.default_headers["x-opencode-session"] == "conv-eval-smoke"
+    assert client.default_headers["user-agent"] == "lumat-conv-eval/1.0"
+
+
+def test_build_client_invents_a_session_when_none_is_given():
+    first = judge.build_client(judge.JudgeCredentials("clave", "argument"))
+    second = judge.build_client(judge.JudgeCredentials("clave", "argument"))
+    assert first.default_headers["x-opencode-session"]
+    assert first.default_headers["x-opencode-session"] != second.default_headers["x-opencode-session"]

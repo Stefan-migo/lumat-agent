@@ -42,6 +42,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 from openai import OpenAI
@@ -225,11 +226,26 @@ def resolve_credentials(explicit: str | None = None) -> JudgeCredentials:
     return JudgeCredentials(key, f"{SHELL_AUTH_PATH} (opencode-go)")
 
 
-def build_client(credentials: JudgeCredentials) -> OpenAI:
-    """Return a chat-completions client for the opencode-go gateway."""
+USER_AGENT = "lumat-conv-eval/1.0"
+
+
+def build_client(credentials: JudgeCredentials, session_id: str | None = None) -> OpenAI:
+    """Return a chat-completions client for the opencode-go gateway.
+
+    The gateway refuses a request that does not identify its session: it needs a
+    **stable** `x-opencode-session` per conversation for routing and prompt
+    caching, and a client that names itself instead of a bare SDK
+    (https://opencode.ai/docs/go/#where-can-i-use-it). Both are sent on every
+    request from the same client, so one client is one judge session.
+    """
     return OpenAI(
         api_key=credentials.api_key,
         base_url=JUDGE_BASE_URL,
+        timeout=JUDGE_TIMEOUT_SECONDS,
+        default_headers={
+            "x-opencode-session": session_id or f"lumat-conv-eval-{uuid4().hex}",
+            "user-agent": USER_AGENT,
+        },
         http_client=httpx.Client(timeout=JUDGE_TIMEOUT_SECONDS),
     )
 
