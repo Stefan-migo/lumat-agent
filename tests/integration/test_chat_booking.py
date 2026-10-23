@@ -138,6 +138,53 @@ def test_chat_booking_uses_configured_service_duration(
         assert appointment.duration_minutes == expected_duration
 
 
+def test_booking_confirmation_names_the_selected_technician(mock_openai_chat):
+    conv_id, customer_id, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        session.get(User, tech_id).name = "Camila Rojas"
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.booking.named.ask"))
+    confirmation = _invoke(
+        conv_id, _add_message(conv_id, "1", "wamid.booking.named.confirm")
+    )
+
+    with SessionLocal() as session:
+        appointment = session.scalar(
+            select(Appointment).where(Appointment.customer_id == customer_id)
+        )
+        fecha = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+    assert confirmation == [
+        f"Tu visita técnica quedó confirmada para el {fecha} con Camila Rojas."
+    ]
+
+
+@pytest.mark.parametrize("technician_name", [None, "   "], ids=["unset", "blank"])
+def test_booking_confirmation_uses_team_fallback_when_technician_has_no_name(
+    mock_openai_chat, technician_name
+):
+    conv_id, customer_id, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        session.get(User, tech_id).name = technician_name
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.booking.unnamed.ask"))
+    confirmation = _invoke(
+        conv_id, _add_message(conv_id, "1", "wamid.booking.unnamed.confirm")
+    )
+
+    with SessionLocal() as session:
+        appointment = session.scalar(
+            select(Appointment).where(Appointment.customer_id == customer_id)
+        )
+        fecha = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+    assert confirmation == [
+        f"Tu visita técnica quedó confirmada para el {fecha} con nuestro equipo técnico."
+    ]
+
+
 def test_configured_booking_texts_render_their_slots(mock_openai_chat):
     with SessionLocal() as session:
         set_setting(

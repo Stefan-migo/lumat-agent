@@ -64,7 +64,7 @@ def test_the_defaults_keep_the_current_wording():
         "Responde con el número del horario que prefieres."
     )
     assert REPLY_TEXT_DEFAULTS["booking_confirmed"] == (
-        "Tu visita técnica quedó confirmada para el {{fecha}}."
+        "Tu visita técnica quedó confirmada para el {{fecha}} con {{tecnico}}."
     )
     # S1 (chatbot-experiencia): the owner approved this wording verbatim; the pin
     # keeps a refactor from quietly rewording what the customer reads.
@@ -87,7 +87,9 @@ def test_every_default_slot_is_whitelisted_for_its_key():
 
 
 def test_the_slot_vocabulary_is_closed():
-    assert set().union(*REPLY_TEXT_SLOTS.values()) == {"opciones", "fecha", "visita", "accion"}
+    assert set().union(*REPLY_TEXT_SLOTS.values()) == {
+        "opciones", "fecha", "visita", "accion", "tecnico"
+    }
 
 
 def test_validate_accepts_a_complete_map():

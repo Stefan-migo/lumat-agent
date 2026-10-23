@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import Case, Conversation
+from app.models import Case, Conversation, User
 from app.services import scheduling
 from app.services import technician_schedule
 from app.services.settings import (
@@ -154,6 +154,17 @@ def _resolve(text: str, slots: list[dict]) -> int | None:
     return matches[0] if len(matches) == 1 else None
 
 
+# S1 (chatbot-experiencia): the confirmation names the technician that will attend.
+# A technician without a loaded name must not leave a hole in the sentence.
+TEAM_FALLBACK = "nuestro equipo técnico"
+
+
+def _technician_name(session, technician_id: int) -> str:
+    technician = session.get(User, technician_id)
+    name = technician.name.strip() if technician and technician.name else ""
+    return name or TEAM_FALLBACK
+
+
 def booking(state: ConversationState) -> dict:
     """Offer frozen slots or commit exactly one customer-selected slot."""
     message = state.window[-1] if state.window else {}
@@ -213,7 +224,12 @@ def booking(state: ConversationState) -> dict:
             return _new_offer(session, state, now, texts)
         _persist_offer(session, state, None)
         slot_label = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+        technician_name = _technician_name(session, appointment.technician_id)
         return {
             "next_step": "summary",
-            "replies": [render_reply(texts, "booking_confirmed", fecha=slot_label)],
+            "replies": [
+                render_reply(
+                    texts, "booking_confirmed", fecha=slot_label, tecnico=technician_name
+                )
+            ],
         }
