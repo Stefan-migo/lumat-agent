@@ -1171,7 +1171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             mark = "✓" if row["passed"] else "✗"
             failed = f" · fallan {', '.join(row['gates_failed'])}" if row["gates_failed"] else ""
             score = f" · {row['score']:.2f}" if row["score"] is not None else ""
-            print(f"  {mark} {scenario.id}{score}{failed}")
+            print(f"  {mark} {scenario.id}{score}{failed}", flush=True)
 
     report = {
         "stamp": stamp,
