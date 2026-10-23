@@ -8,7 +8,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   model_api_key: { configured: false, source: "none", masked: "" },
   email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
-  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", farewell: "Chao", out_of_hours: "Cerrado" },
+  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
   tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },
@@ -186,7 +186,7 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Vista previa" }).closest("section")?.querySelector(".message-preview__bubble")).toHaveTextContent("¿Me puedes indicar tu comuna?");
   });
 
-  it("edits the short greeting and saves all seven messages", async () => {
+  it("edits the short greeting and saves all eight messages", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
@@ -202,7 +202,7 @@ describe("Settings", () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/messages", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ greeting: "Hola", greeting_short: "Hola, cuéntame", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", farewell: "Chao", out_of_hours: "Cerrado" }),
+      body: JSON.stringify({ greeting: "Hola", greeting_short: "Hola, cuéntame", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" }),
     })));
   });
 

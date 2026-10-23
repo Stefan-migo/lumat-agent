@@ -252,5 +252,5 @@ def test_sh4_normal_message_not_treated_as_injection(
         audit = _injection_audit(session, conversation_id)
 
     # no false positive: not escalated, not audited as injection
-    assert conversation.state == ConversationState.HUMAN  # KB miss escalation
+    assert conversation.state == ConversationState.BOT  # D18: the KB miss offers
     assert audit is None

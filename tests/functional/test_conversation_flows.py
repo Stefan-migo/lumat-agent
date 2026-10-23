@@ -256,7 +256,7 @@ def test_hh3_three_failures_escalate(client, mock_openai_chat, mock_meta_send):
 
 @pytest.mark.spec("CM-4")
 @pytest.mark.spec("CM-6")
-def test_cm6_kb_miss_logs_unresolved_and_escalates(
+def test_cm6_kb_miss_logs_unresolved_and_offers(
     client, mock_openai_chat, fake_embedder, mock_meta_send
 ):
     """Empty KB -> scoped research_triage miss -> handoff (H2/AO-8: a sub-agent
@@ -277,10 +277,10 @@ def test_cm6_kb_miss_logs_unresolved_and_escalates(
             )
         ).one()
 
-    # H2 (PR 2, AO-8): the scoped research miss hands off directly (the reply
-    # is the handoff message, not respond's canned cannot-answer).
-    assert replies[1] == HANDOFF_REPLY
-    assert conversation.state == ConversationState.HUMAN  # default escalation
+    # D18: the scoped research miss offers the two paths and stays in the bot
+    # (it no longer derives on the first turn); CM-6 still records the question.
+    assert replies[1] == MESSAGE_DEFAULTS["kb_miss_offer"]
+    assert conversation.state == ConversationState.BOT
     # CM-6: question + context logged on the inbound message payload
     assert (inbound.payload or {}).get("unresolved") is True
     assert (inbound.payload or {}).get("unresolved_context") == "intent=valores"

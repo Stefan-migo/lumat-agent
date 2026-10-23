@@ -111,7 +111,7 @@ def test_a_raw_hit_answers_as_before_and_costs_one_retrieval(monkeypatch):
     assert result["next_step"] == "respond", result
 
 
-def test_a_miss_without_a_fresh_classification_still_hands_off(monkeypatch):
+def test_a_miss_without_a_fresh_classification_offers_paths(monkeypatch):
     """Guard: `unknown` writes no case, so its `service` is stale and must not be used."""
     state = _state(intent="unknown", service=SERVICE)
     state.triage_retry = research_triage.MAX_TRIAGE_RETRIES
@@ -120,6 +120,6 @@ def test_a_miss_without_a_fresh_classification_still_hands_off(monkeypatch):
     result = research_triage._kb_check(state)
 
     assert calls == [RAW]
-    assert result["next_step"] == "handoff", result
-    assert result["escalate"] is True
-    assert result["escalate_reason"] == "kb_miss"
+    assert result["next_step"] == "respond", result
+    assert result.get("escalate") is not True
+    assert "escalate_reason" not in result

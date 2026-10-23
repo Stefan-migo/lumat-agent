@@ -223,6 +223,10 @@ MESSAGE_DEFAULTS: dict[str, str] = {
         "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, "
         "o que te atienda una persona?"
     ),
+    "kb_miss_offer": (
+        "No tengo ese dato. ¿Prefieres que te tome los datos para coordinar una visita, "
+        "o que te atienda una persona?"
+    ),
     "farewell": "¡Gracias por escribirnos! Que tengas buen día.",
     "out_of_hours": (
         "Estamos fuera de nuestro horario de atención. Te responderemos cuando "
@@ -402,6 +406,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
     "messages.clarification": MESSAGE_DEFAULTS["clarification"],
     "messages.cannot_understand_offer": MESSAGE_DEFAULTS["cannot_understand_offer"],
+    "messages.kb_miss_offer": MESSAGE_DEFAULTS["kb_miss_offer"],
     "messages.farewell": MESSAGE_DEFAULTS["farewell"],
     "messages.out_of_hours": MESSAGE_DEFAULTS["out_of_hours"],
     MESSAGE_TEMPLATES_KEY: [],

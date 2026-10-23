@@ -303,17 +303,13 @@ def respond(state: ConversationState) -> dict:
                 "escalate_reason": "kb_unavailable",
             }
         if not chunks:
-            # CM-4: cannot answer reliably + CM-6 log + default escalation.
+            # D18: offer both paths without deriving; CM-6 still records the miss.
             log_unresolved(
                 session,
                 message_id=state.window[-1]["id"],
                 context=f"intent={state.intent}",
             )
-            return {
-                "replies": [get_message(session, "cannot_answer", CANNOT_ANSWER_REPLY)],
-                "escalate": True,
-                "escalate_reason": "kb_miss",
-            }
+            return {"replies": [get_message(session, "kb_miss_offer")]}
         kb_text = "\n".join(f"{i + 1}. {c['content']}" for i, c in enumerate(chunks))
 
     answer = _answer_from_kb(

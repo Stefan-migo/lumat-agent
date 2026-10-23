@@ -34,7 +34,8 @@ from app.models import (  # noqa: E402
     MessageStatus,
     MessageType,
 )
-from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services.customers import get_or_create_customer
+from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from app.services.cases import list_open_cases  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -395,11 +396,11 @@ def test_route_informational_question_about_an_appliance_reaches_the_kb(mock_cha
         ("la garantia cubre algo?", "postventa"),
     ],
 )
-def test_route_retrieval_path_research_miss_handoff_ends(mock_chat, fake_embedder, text, intent):
+def test_route_retrieval_path_research_miss_offers_and_ends(mock_chat, fake_embedder, text, intent):
     # H2 (AO-3/AO-8): a KB retail intent (valores OR postventa, RETRIEVAL_INTENTS)
     # dispatches to the research_triage sub-graph. With no KB content seeded the
-    # scoped retrieve misses -> bounded retry (≤1) -> handoff, and the turn
-    # TERMINATES (the graph reaches END): the handoff reply is emitted, no loop.
+    # scoped retrieve misses -> bounded retry (≤1) -> respond, which offers the
+    # two paths (D18) and TERMINATES: no loop and no escalation.
     from app.chat.nodes.handoff import HANDOFF_REPLY
 
     conv_id = _seed(text)
@@ -408,21 +409,18 @@ def test_route_retrieval_path_research_miss_handoff_ends(mock_chat, fake_embedde
     # AO-3: dispatched to the research sub-graph, not the linear respond path.
     assert result["intent"] == intent
     assert result["active_sub_agent"] == "research_triage"
-    # AO-8: miss -> exactly one retry consumed (bounded ≤1) -> handoff.
+    # AO-8: miss -> exactly one retry consumed (bounded ≤1) -> respond.
     assert result["triage_retry"] == 1
-    assert result["escalate"] is True
-    assert result["escalate_reason"] == "kb_miss"
-    # The kb_check terminal decision was "handoff" (not "retry"), so the
-    # sub-graph reached its terminal node and the graph hit END: no miss/retry
-    # loop kept the turn alive after the bounded retry.
-    assert result["next_step"] == "handoff"
-    # The turn terminated via the handoff reply (handoff -> END edge). On first
-    # contact the receive node also emits the greeting menu, so the terminal
-    # handoff reply is present among the accumulated replies.
-    assert HANDOFF_REPLY in result["replies"]
+    assert result.get("escalate") is not True
+    # D18: the terminal decision is the offer, so the sub-graph reached its
+    # terminal node and the graph hit END: no miss/retry loop kept the turn alive.
+    assert result["next_step"] == "respond"
+    assert result["replies"] == [MESSAGE_DEFAULTS["kb_miss_offer"]]
+    # The turn terminated with the offer and no handoff reply (D18).
+    assert HANDOFF_REPLY not in result["replies"]
 
     # CM-6: the unresolved retail question was logged on the inbound message
-    # before handing off (respond.log_unresolved path preserved).
+    # when respond delivered the offer (log_unresolved path preserved).
     with SessionLocal() as session:
         msg = session.scalars(
             select(Message).where(Message.wamid == "wamid.intent")

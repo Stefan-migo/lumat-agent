@@ -13,7 +13,12 @@ from app.models import (
 )
 from app.services import scheduling
 from app.services.customers import get_or_create_customer
-from app.services.settings import REPLY_TEXT_DEFAULTS, REPLY_TEXTS_KEY, set_setting
+from app.services.settings import (
+    MESSAGE_DEFAULTS,
+    REPLY_TEXT_DEFAULTS,
+    REPLY_TEXTS_KEY,
+    set_setting,
+)
 from _testdb import admin_database_url
 
 
@@ -290,7 +295,8 @@ def test_preset_answer_with_an_empty_slot_is_not_sent(mock_openai_chat, monkeypa
 
     assert not any("atendemos de" in reply.lower() for reply in replies)
     assert all("{{" not in reply for reply in replies)
-    assert replies[0] == CANNOT_ANSWER_REPLY
+    # D18: the miss that follows the unusable preset offers the two paths.
+    assert replies[0] == MESSAGE_DEFAULTS["kb_miss_offer"]
 
 
 def test_ambiguous_confirmation_hands_off_without_cancelling(mock_openai_chat, monkeypatch):

@@ -89,21 +89,11 @@ def _kb_check(state: ConversationState) -> dict:
         # Scoped hit — delegate the grounded answer to the reused respond node.
         return {"next_step": "respond"}
 
-    # Scoped miss. Bounded retry (AO-8): one more attempt, then handoff.
+    # Scoped miss. Bounded retry (AO-8): one more attempt, then D18's offer.
     if state.triage_retry >= MAX_TRIAGE_RETRIES:
-        # Preserve CM-6: log the unresolved question before handing off (the
-        # research miss never reaches respond's own log_unresolved).
-        message_id = state.window[-1]["id"] if state.window else None
-        if message_id is not None:
-            with session_scope() as session:
-                respond_node.log_unresolved(
-                    session, message_id=message_id, context=f"intent={state.intent}"
-                )
-        return {
-            "next_step": "handoff",
-            "escalate": True,
-            "escalate_reason": "kb_miss",
-        }
+        # CM-6: let respond log the unresolved question exactly once when it
+        # delivers the offer; logging here as well would duplicate the record.
+        return {"next_step": "respond"}
     return {"next_step": "retry", "triage_retry": state.triage_retry + 1}
 
 

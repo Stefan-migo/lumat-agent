@@ -110,6 +110,7 @@ class MessagesBody(BaseModel):
     cannot_answer: str
     clarification: str
     cannot_understand_offer: str
+    kb_miss_offer: str
     farewell: str
     out_of_hours: str
 
