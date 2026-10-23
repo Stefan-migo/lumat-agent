@@ -118,13 +118,13 @@ juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no ver
 
 | # | Slice | Qué entrega | Commit |
 |---|---|---|---|
-| T1 | E0 | `scripts/seed_kb_docs.py` + preflight de KB | `feat(conv-eval): seed customer KB and refuse to run without it` |
-| T2 | E1 | `scripts/conv_eval_corpus.yaml` (13 escenarios) + validador | `feat(conv-eval): conversation corpus with three difficulty tiers` |
-| T3 | E2 | runner scripted sobre `run_conversation` | `feat(conv-eval): run scripted conversations against the real brain` |
-| T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `feat(conv-eval): deterministic gates, report and run diff` |
-| T5 | E4 | juez LLM por rúbrica con hard-fail caps | `feat(conv-eval): rubric judge with evidence and hard-fail caps` |
-| T6 | E5 | modo `--live` con cliente simulado | `feat(conv-eval): simulated customer mode` |
-| T7 | — | corrida baseline sobre `e354f563` | `docs(conv-eval): baseline report on main` |
+| T1 | E0 | `scripts/seed_kb_docs.py` + preflight de KB | `3fabe88a` (+`20a40d17`) |
+| T2 | E1 | `scripts/conv_eval_corpus.yaml` (14 escenarios) + validador | `156a0884` + `aa870cc4` |
+| T3 | E2 | runner scripted sobre `run_conversation` | `e1f87914` |
+| T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `aa870cc4` + `e1f87914` |
+| T5 | E4 | juez LLM por rúbrica con hard-fail caps | `efffdf2c` (+`70b7c531`) |
+| T6 | E5 | modo `--live` con cliente simulado | `e1f87914` (cableado; falta ejercitarlo) |
+| T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `d585f384` + `01084054` |
 
 ## Log
 
@@ -185,11 +185,192 @@ persistencia en hilos largos, se agregan escenarios nuevos a ese tier en vez de 
 ### L6 — slice de recuperación y estrategia de entrega (2026-10-23)
 
 Tras el crash, los tres primeros commits recuperan lo que ya estaba escrito en disco como las
-unidades que este plan preveía, sin agregar comportamiento nuevo: `b21f5b4d` (este doc),
-`62166951` (`seed_kb_docs.py`, T1) y `580b8f2b` (`conv_eval_corpus.yaml`, T2). Slice acumulado
+unidades que este plan preveía, sin agregar comportamiento nuevo: `c1504067` (este doc),
+`3fabe88a` (`seed_kb_docs.py`, T1) y `156a0884` (`conv_eval_corpus.yaml`, T2). Slice acumulado
 medido: **796 líneas autoradas** en 3 commits.
 
 Estrategia de entrega, decidida acá porque el acumulado pasa la guía de ~400 líneas: **una sola
 rama y review commit por commit**. Si el owner prefiere PRs encadenados, el corte natural es
 (a) el instrumento que no corre todavía — doc, seed, corpus, juez y matemática de gates — y
 (b) el runner, el reporte y la primera corrida. La decisión de PR y merge sigue siendo del owner.
+
+### L7 — primera corrida real (`--live`, 2026-10-23) y lo que rompió
+
+Corrida completa sobre los 14 escenarios con cliente simulado y juez: **8/14 pasan**. Gates que
+fallaron: `G6`×3, `G4`×1, `G3`×1, `G1`×1. Dimensiones del juez (media): grounding 2,71 · policy 3,07 ·
+conversational **1,50** · escalation 2,29 · tone 2,71 · closure 2,07. Por tier: simple 3/5,
+complejo 2/4, supercomplejo 3/5. Reporte en `odd/evals/conv-eval-live-baseline-2.{json,md}`.
+
+Los seis rojos, con la razón medida:
+
+| Escenario | Qué pasó |
+|---|---|
+| `simple-horario-sabado` | G6: ignoró la pregunta del sábado y se fue por el camino de diagnóstico ("¿no enciende, no calienta…?"). |
+| `simple-despedida` | G4 + hard fail: contó la despedida como `unknown_intent` y contestó con una pregunta comercial. |
+| `complejo-dos-temas` | G6 + hard fail: perdió el referente del servicio y nunca respondió la garantía del lavado de red. |
+| `complejo-no-quiere-email` | hard fail: insistió con el correo que el cliente rechazó, sin pedir el teléfono que sí ofreció. |
+| `super-emergencia-gas` | G3: nunca registró el evento `escalation`, aunque el protocolo de emergencia sí se disparó. |
+| `super-burst-contradiccion` | G1 + G6: terminó en `human` (el corpus espera `bot`) y nunca nombró la caldera corregida. |
+
+Cuatro defectos del instrumento aparecieron al usarlo, y quedaron corregidos con test:
+
+1. **Veredicto truncado** del juez abortaba la corrida entera → un reintento y, si vuelve a fallar,
+   el escenario queda "sin veredicto" (nunca como puntaje) y la corrida sigue (`fb5220fe`).
+2. **`kb_miss` blando invisible**: producción registra `kb_miss` solo cuando escala. Una respuesta con
+   la oferta de `kb_miss_offer` no deja evento, así que G9 daba verde falso sobre una pregunta que la
+   KB sí responde. G9 ahora lee el texto configurado (`1c5d2c46`).
+3. **Evidencia del juez perdida**: el reporte guardaba el puntaje y tiraba la cita por dimensión, que
+   es justo lo que S9 calibra. Ahora viaja con la fila.
+4. **Sin visibilidad** de una corrida larga (stdout en buffer) → progreso por escenario con `flush`.
+
+Hallazgos de entorno, registrados y no corregidos acá (`app/` es non-goal):
+
+- La emergencia dispara la notificación real: Meta responde 401 con los placeholders del entorno y el
+  fallback de email revienta contra el SMTP ausente. El cerebro lo absorbe y sigue, pero
+  `_send_email_fallback` **puede lanzar** pese al contrato documentado "never raises"
+  (`app/chat/nodes/emergency.py:94`). Follow-up para `app/`, no para este instrumento.
+- Reusar un `--run-tag` reusa el mismo cliente por diseño (S8.2), así que una corrida interrumpida
+  necesita tag nuevo o mide la memoria de la anterior.
+- Esta corrida selló `dirty: true` (un commit se cruzó con el arranque), así que **no es citable como
+  baseline**: el baseline citable es una corrida nueva sobre árbol limpio.
+
+Calibración S9 abierta: `odd/evals/calibracion-s9.md` trae tres conversaciones (un 4,00, un 2,50 y un
+1,67) con el puntaje del juez plegado, para que el owner puntúe a mano sin verlo.
+
+### L8 — el instrumento mintió una vez, y eso valió más que el número (2026-10-23)
+
+El baseline scripted salió **5/14** con sello limpio (`d585f384`), y era **inválido**. La prueba:
+`complejo-agendar-calefont` es un escenario de 5 turnos y su conversación tenía **20 mensajes**. La
+corrida que mató el SIGTERM dejó sus filas en la base, y la repetición con el mismo `--run-tag` reusó
+los mismos clientes y replayó los turnos **encima de conversaciones que ya habían escalado a `human`**.
+De ahí los 4 `G1`, los 4 `G4` y los 10 `handoff:cobertura`: era la corrida anterior hablando.
+
+Consecuencia para el plan de comparar versiones del bot: un crash a mitad de corrida habría hecho
+concluir "empeoró" con datos que nunca midieron al bot. Tres arreglos, todos con test:
+
+1. **`8e7f9a5d` — un tag con clientes existentes se rechaza** (`exit 2`, stderr con la lista de
+   escenarios contaminados). Verificado corriéndolo.
+2. **`--reset` con guarda**: vacía solo estado de conversación (clientes, conversaciones, mensajes,
+   eventos, casos, memorias, visitas, notificaciones) y **solo** si `DATABASE_URL` coincide en
+   host:puerto con `TEST_ADMIN_DB_URL`. Verificado en las dos direcciones: con la base de test pasa,
+   con una base distinta se niega y la base queda intacta (49 conversaciones).
+3. **El .md es el registro completo**: el transcript sale del **log de mensajes** de la base, no de los
+   turnos, así que una respuesta que el grafo no devolvió también queda. Antes de truncar nada se
+   reconstruyeron desde la base los tres transcripts existentes: 75 mensajes (`live-baseline-2`),
+   110 (`baseline`, contaminado) y el de `baseline-2`.
+
+Primera repetición limpia (`baseline-2`, teléfonos frescos, sin reset): **6/14**, gates `G6`×3,
+`G9`×2, `G4`×2, `G1`×2, `G3`×1. Notablemente mejor que el contaminado, que es la confirmación del
+diagnóstico: `complejo-agendar-calefont` pasa (3,33) cuando la conversación no arrastra el estado de la
+corrida anterior.
+
+Pendiente de medir: el **piso de ruido**. Dos corridas idénticas sobre estado limpio (`clean-1` y
+`clean-2`, ambas con `--reset`) y el diff entre ellas: todo escenario que cambie de verde a rojo sin
+tocar una línea de código es ruido del instrumento, y ese número hay que descontarlo antes de
+atribuirle nada a las mejoras del otro worktree.
+
+### L9 — el piso de ruido del instrumento, medido (2026-10-23)
+
+Dos corridas idénticas, mismo código (`caf0109e`), mismo corpus, **`--reset` antes de cada una** para
+que el estado inicial sea el mismo: `clean-1` y `clean-2`.
+
+| | clean-1 | clean-2 |
+|---|---|---|
+| Pasan | **5/14** | **6/14** |
+| Gates que fallan | G6×4, G9×3, G4×3, G1×3, G3×1 | G6×3, G9×2, G4×2, G1×2, G3×1 |
+
+**El piso de ruido es 1 escenario de 14 (~7%)**, más un gate suelto en un segundo escenario:
+
+- `complejo-agendar-calefont`: **falla → pasa**, con tres gates moviéndose juntos (G1, G4, G6). En
+  `clean-1` el bot escaló a `human`; en `clean-2` no. Un solo comportamiento distinto arrastra los
+  tres gates.
+- `complejo-fuera-de-cobertura-insiste`: G9 falla → pasa, sin cambiar el resultado final del escenario.
+- Delta de dimensiones entre corridas: entre **+0,14 y +0,36** en las seis, siempre a favor de la
+  segunda. Chico, pero del mismo orden que las diferencias que se quieren atribuir a una mejora.
+
+Causa: los gates son deterministas, pero **sus insumos no**. El clasificador y el extractor son
+llamadas al LLM, así que la misma frase puede clasificar distinto entre corridas y mover el estado, la
+escalación y el enrutamiento.
+
+Consecuencia operativa para el plan de comparar versiones del bot:
+
+1. Una diferencia de **1 escenario está dentro del ruido**: no autoriza decir "mejoró" ni "empeoró".
+2. Para atribuir algo a una versión hay que correr **N=3 por versión** y comparar la tasa, o exigir
+   que la diferencia supere el piso medido (≥2 escenarios, y que el gate movido sea el mismo).
+3. `complejo-agendar-calefont` es el escenario más inestable medido hasta ahora: es el primero a
+   repetir cuando aparezca una diferencia.
+
+### L10 — alineación con main, corte de entrega y política de `odd/evals` (2026-10-23)
+
+`origin/main` entró a la rama sin conflictos (`606138ca`, sobre `94e6921c`): la rama **solo agrega
+archivos**, no modifica ninguno existente. Entraron la política de tiers (`AGENTS.md` → "Test tiers"),
+`scripts/test.sh`, `openspec/config.yaml` y el aislamiento de `MEDIA_DIR` en `tests/conftest.py`.
+Verificación de ese merge: `bash scripts/test.sh full` → **exit 0** y
+`bash scripts/test.sh shape origin/main` → **exit 0**. Regla operativa nueva que afecta a este
+instrumento: **una suite por worktree** — las corridas de `conv_eval.py` y `pytest` comparten la base
+de test derivada y se bloquean en el `TRUNCATE`, así que van serializadas.
+
+**Entrega: tres PRs encadenados, decidido.** Un PR de 25 commits no se revisa. El corte se midió sobre
+la rama ya limpia de JSON (L11); las líneas son las del diff de tres puntos, que es el que muestra el
+PR:
+
+| PR | Contenido | Commits | Diff |
+|---|---|---|---|
+| 1 · instrumento que todavía no corre | doc, seed de KB, corpus, juez, gates y scoring, con sus tests | 8, hasta `70b7c531` | 8 archivos, 2.575 |
+| 2 · runner y reporte | runner scripted, reporte JSON/MD, diff y sello, más los tres defectos que la primera corrida destapó | 5, hasta `9a7319f8` | 4 archivos, 951 (+17) |
+| 3 · robustez y evidencia | transcripts, guarda de `--run-tag`, `--reset` admin, sello limpio, artefactos y docs | 13 | 15 archivos, 2.154 (+21) |
+
+Ninguno de los tres entra en la guía de ~400 líneas, y no hay un corte más fino que no separe un
+script de sus tests: de las ~5,5k líneas del diff neto, ~2,2k son los tres scripts, ~1,2k sus tests,
+370 el corpus y ~1,3k la evidencia Markdown. Se entrega este corte con `size:exception` y el número
+medido, antes que romper la cohesión código↔test.
+
+**`odd/evals/`: decidido.** El `.md` — reporte y transcripción de conversaciones — es el registro
+permanente: con `--reset` la base se vacía, pero el transcript se reconstruye del log de mensajes. El
+JSON de 40–70 KB solo alimenta el diff contra la corrida anterior, así que **no se commitea** y queda
+ignorado por `.gitignore` (`05bc719a`). `conv-eval-baseline.*` se borra: es la corrida contaminada de
+L8 y no debe viajar en el PR.
+
+`origin/main` volvió a avanzar mientras se armaba la entrega (`497875af`, PRs #668 y #669 del worktree
+`chatbot-oferta`), así que la rama se realineó otra vez antes de abrir nada — primero con un merge, y
+después con un **rebase sobre `origin/main`**. El rebase no es cosmético: con el merge adentro del
+tercer PR, su diff arrastraba 33 archivos con medio `main`; sin él, cada slice muestra solo lo suyo.
+El diff neto contra `main` son 20 archivos — 19 nuevos y `.gitignore` con 4 líneas —, 5.642
+inserciones y cero borrados.
+
+### L11 — la evidencia se limpia, y el sello medía los reportes (2026-10-23)
+
+Aplicar la política de `odd/evals` de L10 destapó un séptimo defecto, y era el que invalidaba la
+evidencia que se estaba por entregar: **el sello medía los reportes, no el código**.
+
+`git_state()` decidía `dirty` con un `git status --porcelain` sobre todo el repo. El sello se toma
+*antes* de escribir el reporte, así que una corrida no se ensuciaba a sí misma: la ensuciaba **la
+corrida anterior**. Medido en los reportes ya commiteados: `baseline`, la primera del día, selló
+`dirty: no`; `baseline-2`, `live-baseline-2`, `clean-1` y `clean-2` sellaron `dirty: sí` por el JSON y
+el `.md` que había dejado la anterior. Como S8.6 hace no citable una corrida sucia, **ninguna de las
+corridas que se iban a commitear servía como baseline**, y commitear los `.md` —justo la política de
+L10— habría garantizado que ninguna futura tampoco: cada corrida reescribe archivos trackeados.
+
+Arreglado antes de commitear la evidencia (`dd5dcf91`): el sello excluye el directorio de reporte,
+resuelto contra el árbol medido, así que un `--out-dir` fuera del repo no excluye nada. Cuatro tests lo
+fijan: un reporte sin trackear y un reporte commiteado que una corrida nueva reescribe dejan el árbol
+limpio; una edición en `app/` y un archivo sin trackear fuera del reporte lo siguen ensuciando. El
+primer run posterior a este arreglo es el primer baseline citable.
+
+Sobre la evidencia, con las dos decisiones de L10 aplicadas:
+
+- Se reescribió la historia de la rama (nada estaba pusheado) para que los JSON **nunca entren**:
+  salieron 7.358 líneas de `odd/evals/` de los cuatro commits que los agregaban. El árbol fuera de
+  `odd/evals/` quedó **idéntico** al anterior, verificado con `git diff` contra el tip previo.
+- Se borró `conv-eval-baseline.*` (la corrida contaminada de L8). Quedan el reporte y la transcripción
+  de `baseline-2`, `live-baseline-2` y las dos `clean-*`, más la planilla de calibración.
+- `odd/evals/*.json` quedó en `.gitignore` (`05bc719a`), fuera del bloque administrado por rapso.
+- La historia se reescribió **dos veces**: primero para sacar los JSON, después un rebase sobre
+  `origin/main` para que cada PR encadenado muestre solo su slice (con el merge de main adentro del
+  tercer PR, su diff se llevaba medio `main`). La segunda reescritura cambió **todos** los SHA, así
+  que la tabla de Tasks cita los vigentes.
+- Los sellos que los `.md` ya commiteados imprimen (`3cd0406a`, `6cf76f59`, `fb5220fe`) apuntan a la
+  historia previa a las reescrituras, preservada en la rama local `backup/pre-evals-cleanup`. El
+  código medido es bit a bit el mismo: el árbol del tip no cambió en ninguna de las dos
+  reescrituras. Equivalencias vigentes: `3cd0406a`→`4a4df426`, `6cf76f59`→`caf0109e`,
+  `fb5220fe`→`de48307e`. Los sellos se dejan como están: reescribirlos sería falsificar el reporte.

@@ -91,6 +91,9 @@ __all__ = [
     "Scenario",
     "build_observation",
     "compare_runs",
+    "contamination_error",
+    "reset_business_state",
+    "reset_guard",
     "derive_phone",
     "evaluate_gates",
     "git_state",
@@ -100,6 +103,8 @@ __all__ = [
     "preflight",
     "previous_report",
     "render_markdown",
+    "render_transcripts",
+    "plan_turns",
     "report_paths",
     "run_scenario",
     "score_scenario",
@@ -662,6 +667,26 @@ def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dic
 # ---------------------------------------------------------------------------
 
 
+def plan_turns(
+    scripted: Sequence[str], budget: int, live: bool
+) -> list[tuple[str, str | None]]:
+    """Which turns the run will send, and who writes each one.
+
+    `scripted` turns come from the corpus verbatim; in `--live` the remaining
+    budget up to `budget` is filled by the simulated customer. Without `live`
+    the plan stops at the scripted length, whatever the budget says.
+    """
+    plan: list[tuple[str, str | None]] = []
+    for index in range(1, budget + 1):
+        if index <= len(scripted):
+            plan.append(("scripted", scripted[index - 1]))
+        elif live:
+            plan.append(("simulated", None))
+        else:
+            break
+    return plan
+
+
 def build_observation(snapshot: Mapping[str, Any], turns: Sequence[Mapping[str, Any]]) -> dict:
     """Turn a `chat_harness.inspect` snapshot plus the per-turn replies into the
     plain dict the gates read.
@@ -686,6 +711,12 @@ def build_observation(snapshot: Mapping[str, Any], turns: Sequence[Mapping[str, 
     ]
     return {
         "state": snapshot.get("state"),
+        # The complete ordered log, straight from the database: the Markdown
+        # transcript is the permanent record once `--reset` wipes the rows.
+        "messages": [
+            {"direction": message.get("direction"), "text": message.get("text")}
+            for message in snapshot.get("messages") or ()
+        ],
         "events": [
             {"event": event.get("event"), "cause": event.get("cause")}
             for event in snapshot.get("events") or ()
@@ -737,16 +768,35 @@ class RunStamp:
         }
 
 
-def git_state(repo_root: Path = _REPO_ROOT) -> tuple[str, bool]:
-    """`(sha, dirty)` of the working tree the run happened on, or `("", False)`."""
+def git_state(
+    repo_root: Path = _REPO_ROOT, report_dir: Path | None = None
+) -> tuple[str, bool]:
+    """`(sha, dirty)` of the working tree the run measured, or `("", False)`.
+
+    The report the run writes is **excluded** from the dirtiness check. A run
+    writes its own `.json`, `.md` and transcript into `odd/evals/`; counting
+    those bytes as an edit to the tree would dirty every run from the inside and
+    no run could ever be a citable baseline, which is the whole point of S8.6.
+    """
     import subprocess
+
+    excluded = report_dir if report_dir is not None else repo_root / "odd" / "evals"
+    try:
+        relative = excluded.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        relative = None  # the report lives outside the measured tree: nothing to exclude
+    pathspec = ["--", "."] if relative is None else ["--", ".", f":(exclude){relative}"]
 
     try:
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, check=True
         ).stdout.strip()
         status = subprocess.run(
-            ["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True, check=True
+            ["git", "status", "--porcelain", *pathspec],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "", False
@@ -822,6 +872,96 @@ def miss_offer_text() -> str:
         return get_message(session, "kb_miss_offer")
 
 
+# Conversation state only: the KB, the tariff, the message catalog, the users and
+# the technicians are configuration and must survive a reset, or the next run
+# would measure an empty knowledge base.
+_RESET_TABLES = (
+    "appointment_calendar_sync, appointment_history, appointments, assistant_artifacts, "
+    "assistant_attachments, notification_attempts, notification_operations, "
+    "panel_notifications, technician_availability, audit_log, conversation_events, "
+    "automation_executions, customer_equipment, domain_events, memories, memory_relations, "
+    "memory_observations, cases, internal_chat_messages, internal_chat_threads, messages, "
+    "conversations, customer_notes, customers"
+)
+
+
+def reset_guard(database_url: str | None, test_admin_url: str | None) -> str | None:
+    """Refuse `--reset` unless the target is provably the derived test database.
+
+    The instrument truncates tables. A typo in `DATABASE_URL` must not be able to
+    empty a real database, so the only accepted target is the one whose host and
+    port match `TEST_ADMIN_DB_URL` — which only `infra/test-db.sh env` exports.
+    """
+    if not test_admin_url:
+        return (
+            "--reset exige TEST_ADMIN_DB_URL (exportalo con `eval \"$(bash infra/test-db.sh env)\"`): "
+            "sin eso no hay forma de probar que la base es la de test."
+        )
+    from urllib.parse import urlsplit
+
+    target = urlsplit(database_url or "")
+    admin = urlsplit(test_admin_url)
+    if (target.hostname, target.port) != (admin.hostname, admin.port):
+        return (
+            f"--reset se niega: DATABASE_URL apunta a {target.hostname}:{target.port} y la base de "
+            f"test derivada es {admin.hostname}:{admin.port}."
+        )
+    return None
+
+
+def reset_business_state(admin_url: str | None = None) -> list[str]:
+    """Empty the conversation state so every run starts from the same place.
+
+    Runs on the **admin** connection: the `app` role is least-privilege by
+    design (SH-2/SH-5) and has no TRUNCATE. `RESTART IDENTITY` makes ids start
+    at 1 again, so two runs are comparable row by row. No `CASCADE`: if a table
+    outside this list points at one of them, the reset fails loudly instead of
+    quietly emptying configuration.
+    """
+    import os
+
+    import psycopg
+
+    url = admin_url or os.environ.get("TEST_ADMIN_DB_URL")
+    if not url:
+        raise PreflightError("--reset necesita TEST_ADMIN_DB_URL para la conexión admin")
+    with psycopg.connect(url, autocommit=True) as connection:
+        connection.execute(f"TRUNCATE {_RESET_TABLES} RESTART IDENTITY")
+    return [name.strip() for name in _RESET_TABLES.split(",")]
+
+
+def contamination_error(existing: Sequence[str]) -> str | None:
+    """Refuse a tag that already has customers: a re-run would stack on top.
+
+    Measured the hard way: a run killed mid-flight left its rows behind, and the
+    next run with the same tag replayed its turns onto conversations that had
+    already escalated. The report said 5/14 and every one of those reds was the
+    previous run talking, not the bot.
+    """
+    if not existing:
+        return None
+    return (
+        f"--run-tag ya tiene conversaciones para {len(existing)} escenario(s): "
+        f"{', '.join(existing)}. Usá un tag nuevo; el mismo tag reusa el cliente por diseño "
+        "y una corrida anterior quedaría apilada debajo."
+    )
+
+
+def existing_conversations(scenarios: Sequence[Scenario], run_tag: str) -> list[str]:
+    """Scenario ids whose derived phone already exists in the database."""
+    from sqlalchemy import select
+
+    from app.db import session_scope
+    from app.models import Customer
+
+    phones = {derive_phone(scenario.id, run_tag): scenario.id for scenario in scenarios}
+    with session_scope() as session:
+        found = session.scalars(
+            select(Customer.phone_e164).where(Customer.phone_e164.in_(list(phones)))
+        ).all()
+    return sorted(phones[phone] for phone in found if phone in phones)
+
+
 def run_scenario(
     scenario: Scenario,
     *,
@@ -842,12 +982,13 @@ def run_scenario(
 
     budget = max_turns or scenario.max_turns
     turns: list[dict] = []
-    scripted = list(scenario.turns)
 
-    for index in range(1, budget + 1):
-        if index <= len(scripted):
-            text = scripted[index - 1]
-        elif live and judge_client is not None:
+    for index, (origin, scripted_text) in enumerate(
+        plan_turns(scenario.turns, budget, live), start=1
+    ):
+        if origin == "scripted":
+            text = scripted_text
+        else:
             simulated = conv_eval_judge.simulate_customer_turn(
                 judge_client,
                 persona=scenario.persona,
@@ -859,12 +1000,14 @@ def run_scenario(
             if simulated["goal_reached"]:
                 break
             text = simulated["message"]
-        else:
-            break
 
         with session_scope() as session:
             replies = run_turn(session, conversation_id, text)
-        turns.append({"text": text, "replies": list(replies), "intent": None})
+        # `origin` is what makes the transcript reviewable: a simulated turn is
+        # the evaluator talking, and reading it is how the evaluator is judged.
+        turns.append(
+            {"text": text, "replies": list(replies), "intent": None, "origin": origin}
+        )
 
     with session_scope() as session:
         snapshot = inspect(session, conversation_id)
@@ -1031,6 +1174,74 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_transcripts(report: Mapping[str, Any], corpus: Corpus) -> str:
+    """Every conversation of the run, in order, saying who wrote each turn.
+
+    This is the artifact for auditing the *evaluator*: whether the simulated
+    customer pursues the goal, stops when served, and never writes as the bot.
+    """
+    stamp = report.get("stamp") or {}
+    observations = report.get("observations") or {}
+    rows = {row["scenario"]: row for row in report.get("runs") or ()}
+    details = report.get("gate_details") or {}
+    lines = [
+        f"# Conversaciones de la corrida `{stamp.get('run_tag', '?')}`",
+        "",
+        "`[scripted]` = turno textual del corpus · `[simulado]` = lo escribió el cliente simulado.",
+        "Estado final, gates y puntaje del juez al pie de cada caso.",
+        "",
+    ]
+    for scenario in corpus.scenarios:
+        observation = observations.get(scenario.id)
+        if observation is None:
+            continue
+        row = rows.get(scenario.id, {})
+        lines += [
+            f"## `{scenario.id}` [{scenario.tier}]",
+            "",
+            f"**persona:** {' '.join(scenario.persona.split())}",
+            f"**objetivo:** {' '.join(scenario.goal.split())}",
+            "",
+        ]
+        origins = [
+            turn.get("origin")
+            or ("scripted" if position <= len(scenario.turns) else "simulado")
+            for position, turn in enumerate(observation.get("turns") or (), start=1)
+        ]
+        messages = observation.get("messages") or [
+            {"direction": direction, "text": text}
+            for turn in observation.get("turns") or ()
+            for direction, text in [("inbound", turn.get("text"))]
+            + [("outbound", reply) for reply in turn.get("replies") or ()]
+        ]
+        inbound_index = 0
+        position = 0
+        for message in messages:
+            if message.get("direction") == "inbound":
+                position += 1
+                origin = origins[inbound_index] if inbound_index < len(origins) else "scripted"
+                inbound_index += 1
+                label = "scripted" if origin == "scripted" else "simulado"
+                lines.append(f"**{position}. cliente** `[{label}]` — {message.get('text') or ''}")
+            else:
+                lines.append(f"> *bot:* {' '.join(str(message.get('text') or '').split())}")
+                lines.append("")
+        gates = details.get(scenario.id) or {}
+        failed = row.get("gates_failed") or []
+        gate_text = ", ".join(
+            f"{gate} ✗ ({gates.get(gate, '')})" if gate in failed else f"{gate} ✓"
+            for gate in sorted(gates)
+        ) or "—"
+        verdict = "sin juez" if row.get("score") is None else f"{row['score']:.2f}"
+        lines += [
+            f"**estado final:** `{observation.get('state')}` · **juez:** {verdict} · "
+            f"**hard fail:** {row.get('hard_fail', False)}",
+            f"**gates:** {gate_text}",
+            "",
+        ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def write_report(report: dict, out_dir: Path = _REPO_ROOT / "odd" / "evals") -> tuple[Path, Path]:
     """Write the JSON and the Markdown, creating `odd/evals` on first use."""
     import json
@@ -1039,6 +1250,10 @@ def write_report(report: dict, out_dir: Path = _REPO_ROOT / "odd" / "evals") -> 
     json_path, md_path = report_paths(out_dir, report["stamp"]["run_tag"])
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     md_path.write_text(render_markdown(report), encoding="utf-8")
+    transcript_path = out_dir / f"conv-eval-{report['stamp']['run_tag']}-conversaciones.md"
+    transcript_path.write_text(
+        render_transcripts(report, load_corpus()), encoding="utf-8"
+    )
     return json_path, md_path
 
 
@@ -1076,6 +1291,12 @@ def _parse_args(argv: Sequence[str] | None) -> Any:
     parser.add_argument("--judge-model", default=None, help="Override the judge model id.")
     parser.add_argument("--out-dir", type=Path, default=_REPO_ROOT / "odd" / "evals")
     parser.add_argument("--quiet", action="store_true", help="Only the summary lines.")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Empty the conversation state first, so the run is comparable. "
+        "Only accepted against the derived test database.",
+    )
     return parser.parse_args(argv)
 
 
@@ -1117,6 +1338,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     import seed_kb_docs
 
     seed_kb_docs.ensure_dev_env()
+
+    scenarios = _select(corpus, args)
+    contaminated = contamination_error(existing_conversations(scenarios, args.run_tag))
+    if contaminated:
+        print(contaminated, file=sys.stderr)
+        return 2
+
+    if args.reset:
+        import os
+
+        refused = reset_guard(os.environ.get("DATABASE_URL"), os.environ.get("TEST_ADMIN_DB_URL"))
+        if refused:
+            print(refused, file=sys.stderr)
+            return 2
+        cleared = reset_business_state()
+        print(f"reset: {len(cleared)} tablas de conversación vaciadas", flush=True)
+
     try:
         kb_state = preflight()
     except PreflightError as error:
@@ -1139,7 +1377,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         judge_model = args.judge_model or conv_eval_judge.JUDGE_MODEL
 
-    head, dirty = git_state()
+    head, dirty = git_state(report_dir=args.out_dir)
     stamp = RunStamp(
         run_tag=args.run_tag,
         started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -1160,8 +1398,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     judge_failures: dict[str, str] = {}
     gate_details: dict[str, dict[str, str]] = {}
     observations: dict[str, dict] = {}
-    scenarios = _select(corpus, args)
-
     for scenario in scenarios:
         try:
             result = run_scenario(

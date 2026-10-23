@@ -18,6 +18,7 @@ whole point of splitting `conv_eval.py` (model-free) from
 `conv_eval_judge.py` (everything that calls an LLM).
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -550,6 +551,71 @@ def test_an_unsealed_kb_is_never_citable():
     assert ev.is_citable({"dirty": False, "kb_documents": 0}) is False
 
 
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _committed_repo(tmp_path: Path) -> Path:
+    """A throwaway git repo laid out like this one: code plus `odd/evals/`."""
+    repo = tmp_path / "repo"
+    (repo / "odd" / "evals").mkdir(parents=True)
+    (repo / "app").mkdir()
+    (repo / "app" / "code.py").write_text("x = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "base")
+    return repo
+
+
+def test_report_files_left_in_the_working_tree_do_not_dirty_it(tmp_path):
+    """A report is the instrument's own output, not an edit to the tree it measures."""
+    repo = _committed_repo(tmp_path)
+    (repo / "odd" / "evals" / "conv-eval-clean-1.md").write_text("reporte\n", encoding="utf-8")
+    (repo / "odd" / "evals" / "conv-eval-clean-1.json").write_text("{}\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is False
+
+
+def test_a_committed_report_overwritten_by_a_new_run_does_not_dirty_the_tree(tmp_path):
+    """Once the transcripts are committed, every later run rewrites them."""
+    repo = _committed_repo(tmp_path)
+    report = repo / "odd" / "evals" / "conv-eval-clean-1.md"
+    report.write_text("corrida anterior\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "anterior")
+    report.write_text("corrida nueva\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is False
+
+
+def test_an_edit_outside_the_report_still_dirties_the_tree(tmp_path):
+    repo = _committed_repo(tmp_path)
+    (repo / "app" / "code.py").write_text("x = 2\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is True
+
+
+def test_an_untracked_file_outside_the_report_still_dirties_the_tree(tmp_path):
+    repo = _committed_repo(tmp_path)
+    (repo / "app" / "extra.py").write_text("y = 1\n", encoding="utf-8")
+
+    _, dirty = ev.git_state(repo)
+
+    assert dirty is True
+
+
 def report_for(rows, *, dirty=False, diff=None):
     return {
         "stamp": {
@@ -730,3 +796,139 @@ def test_the_row_carries_the_judge_evidence_for_every_dimension():
     row = ev.score_scenario(scn, gates_of(scn, observation()), payload)
     assert row["evidence"]["tone"] == "contestó con un formulario"
     assert set(row["evidence"]) == set(ev.DIMENSIONS)
+
+
+# ---------------------------------------------------------------------------
+# Turn planning — who writes each turn is what makes the evaluator auditable
+# ---------------------------------------------------------------------------
+
+
+def test_without_live_the_plan_stops_at_the_scripted_turns():
+    assert ev.plan_turns(["a", "b"], 5, live=False) == [("scripted", "a"), ("scripted", "b")]
+
+
+def test_with_live_the_budget_is_filled_by_the_simulated_customer():
+    assert ev.plan_turns(["a"], 3, live=True) == [
+        ("scripted", "a"),
+        ("simulated", None),
+        ("simulated", None),
+    ]
+
+
+def test_a_budget_smaller_than_the_script_truncates_it():
+    assert ev.plan_turns(["a", "b", "c"], 2, live=False) == [("scripted", "a"), ("scripted", "b")]
+
+
+def test_render_transcripts_marks_who_wrote_every_turn():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    report = report_for([score_row(scenario.id, scenario.tier, True, score=4.0)])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola"],
+            "turns": [
+                {"text": scenario.turns[0], "replies": ["hola"], "intent": None},
+                {"text": "esto lo inventó el simulador", "replies": ["dale"], "intent": None,
+                 "origin": "simulated"},
+            ],
+        }
+    }
+    report["gate_details"] = {scenario.id: {"G1": "state=bot"}}
+    markdown = ev.render_transcripts(report, corpus)
+    assert "`[scripted]`" in markdown
+    assert "`[simulado]` — esto lo inventó el simulador" in markdown
+    assert scenario.id in markdown
+
+
+def test_a_reused_tag_with_existing_customers_is_refused():
+    """Measured: a killed run left its rows, and the next run with the same tag
+    stacked on top of conversations that had already escalated. The report said
+    5/14 and every red belonged to the previous run."""
+    error = ev.contamination_error(["complejo-agendar-calefont", "simple-despedida"])
+    assert error is not None
+    assert "complejo-agendar-calefont" in error
+    assert "tag nuevo" in error
+
+
+def test_a_fresh_tag_passes_the_contamination_check():
+    assert ev.contamination_error([]) is None
+
+
+# ---------------------------------------------------------------------------
+# The Markdown transcript is the permanent record once --reset wipes the rows
+# ---------------------------------------------------------------------------
+
+
+def test_the_transcript_renders_every_message_of_the_log_in_order():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    report = report_for([score_row(scenario.id, scenario.tier, True, score=4.0)])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola", "un aviso extra"],
+            "turns": [{"text": scenario.turns[0], "replies": ["hola"], "intent": None}],
+            "messages": [
+                {"direction": "inbound", "text": scenario.turns[0]},
+                {"direction": "outbound", "text": "hola"},
+                {"direction": "outbound", "text": "un aviso extra"},
+            ],
+        }
+    }
+    report["gate_details"] = {scenario.id: {}}
+    markdown = ev.render_transcripts(report, corpus)
+    # the extra outbound message is not in `turns`, and must still be recorded
+    assert "un aviso extra" in markdown
+    assert markdown.index("hola") < markdown.index("un aviso extra")
+
+
+def test_the_transcript_falls_back_to_turns_for_older_reports():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    report = report_for([score_row(scenario.id, scenario.tier, True, score=4.0)])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola"],
+            "turns": [{"text": scenario.turns[0], "replies": ["hola"], "intent": None}],
+        }
+    }
+    report["gate_details"] = {scenario.id: {}}
+    assert "hola" in ev.render_transcripts(report, corpus)
+
+
+# ---------------------------------------------------------------------------
+# Reset — truncating must be impossible outside the derived test database
+# ---------------------------------------------------------------------------
+
+
+def test_reset_is_refused_without_the_test_database_marker():
+    refused = ev.reset_guard("postgresql+psycopg://app:app@localhost:5893/lumat", None)
+    assert refused is not None
+    assert "TEST_ADMIN_DB_URL" in refused
+
+
+def test_reset_is_refused_when_the_target_is_a_different_database():
+    refused = ev.reset_guard(
+        "postgresql+psycopg://app:app@localhost:5432/lumat",
+        "postgresql://lumat:lumat@localhost:5893/lumat",
+    )
+    assert refused is not None
+    assert "5893" in refused
+
+
+def test_reset_is_allowed_on_the_derived_test_database():
+    assert (
+        ev.reset_guard(
+            "postgresql+psycopg://app:app@localhost:5893/lumat",
+            "postgresql://lumat:lumat@localhost:5893/lumat",
+        )
+        is None
+    )
