@@ -124,7 +124,7 @@ juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no ver
 | T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `dcfe57aa` + `b98719c8` |
 | T5 | E4 | juez LLM por rúbrica con hard-fail caps | `d55a203d` (+`0bab2a53`) |
 | T6 | E5 | modo `--live` con cliente simulado | `b98719c8` (cableado; falta ejercitarlo) |
-| T7 | — | corrida baseline sobre `e354f563` | pendiente de la corrida |
+| T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `baeac5d1` + `0e86898d` |
 
 ## Log
 
@@ -239,7 +239,7 @@ Calibración S9 abierta: `odd/evals/calibracion-s9.md` trae tres conversaciones 
 
 ### L8 — el instrumento mintió una vez, y eso valió más que el número (2026-10-23)
 
-El baseline scripted salió **5/14** con sello limpio (`aaa3e767`), y era **inválido**. La prueba:
+El baseline scripted salió **5/14** con sello limpio (`baeac5d1`), y era **inválido**. La prueba:
 `complejo-agendar-calefont` es un escenario de 5 turnos y su conversación tenía **20 mensajes**. La
 corrida que mató el SIGTERM dejó sus filas en la base, y la repetición con el mismo `--run-tag` reusó
 los mismos clientes y replayó los turnos **encima de conversaciones que ya habían escalado a `human`**.
@@ -248,7 +248,7 @@ De ahí los 4 `G1`, los 4 `G4` y los 10 `handoff:cobertura`: era la corrida ante
 Consecuencia para el plan de comparar versiones del bot: un crash a mitad de corrida habría hecho
 concluir "empeoró" con datos que nunca midieron al bot. Tres arreglos, todos con test:
 
-1. **`079a1129` — un tag con clientes existentes se rechaza** (`exit 2`, stderr con la lista de
+1. **`211774ea` — un tag con clientes existentes se rechaza** (`exit 2`, stderr con la lista de
    escenarios contaminados). Verificado corriéndolo.
 2. **`--reset` con guarda**: vacía solo estado de conversación (clientes, conversaciones, mensajes,
    eventos, casos, memorias, visitas, notificaciones) y **solo** si `DATABASE_URL` coincide en
@@ -271,7 +271,7 @@ atribuirle nada a las mejoras del otro worktree.
 
 ### L9 — el piso de ruido del instrumento, medido (2026-10-23)
 
-Dos corridas idénticas, mismo código (`6cf76f59`), mismo corpus, **`--reset` antes de cada una** para
+Dos corridas idénticas, mismo código (`940d02f3`), mismo corpus, **`--reset` antes de cada una** para
 que el estado inicial sea el mismo: `clean-1` y `clean-2`.
 
 | | clean-1 | clean-2 |
@@ -299,3 +299,71 @@ Consecuencia operativa para el plan de comparar versiones del bot:
    que la diferencia supere el piso medido (≥2 escenarios, y que el gate movido sea el mismo).
 3. `complejo-agendar-calefont` es el escenario más inestable medido hasta ahora: es el primero a
    repetir cuando aparezca una diferencia.
+
+### L10 — alineación con main, corte de entrega y política de `odd/evals` (2026-10-23)
+
+`origin/main` entró a la rama sin conflictos (`606138ca`, sobre `94e6921c`): la rama **solo agrega
+archivos**, no modifica ninguno existente. Entraron la política de tiers (`AGENTS.md` → "Test tiers"),
+`scripts/test.sh`, `openspec/config.yaml` y el aislamiento de `MEDIA_DIR` en `tests/conftest.py`.
+Verificación de ese merge: `bash scripts/test.sh full` → **exit 0** y
+`bash scripts/test.sh shape origin/main` → **exit 0**. Regla operativa nueva que afecta a este
+instrumento: **una suite por worktree** — las corridas de `conv_eval.py` y `pytest` comparten la base
+de test derivada y se bloquean en el `TRUNCATE`, así que van serializadas.
+
+**Entrega: tres PRs encadenados, decidido.** Un PR de 25 commits no se revisa. El corte se midió sobre
+la rama ya limpia de JSON (L11) y cuenta líneas autoradas por commit:
+
+| PR | Contenido | Commits | Líneas |
+|---|---|---|---|
+| 1 · instrumento que todavía no corre | doc, seed de KB, corpus, juez, gates y scoring, con sus tests | 8, hasta `0bab2a53` | 2.577 |
+| 2 · runner y reporte | runner scripted, reporte JSON/MD, diff y sello, más los tres defectos que la primera corrida destapó | 5, hasta `8a25d57d` | 965 |
+| 3 · robustez y evidencia | transcripts, guarda de `--run-tag`, `--reset` admin, sello limpio, artefactos y docs | 12 + docs | 3.185 |
+
+Ninguno de los tres entra en la guía de ~400 líneas, y no hay un corte más fino que no separe un
+script de sus tests: de las ~5,5k líneas del diff neto, ~2,2k son los tres scripts, ~1,2k sus tests,
+370 el corpus y ~1,3k la evidencia Markdown. Se entrega este corte con `size:exception` y el número
+medido, antes que romper la cohesión código↔test.
+
+**`odd/evals/`: decidido.** El `.md` — reporte y transcripción de conversaciones — es el registro
+permanente: con `--reset` la base se vacía, pero el transcript se reconstruye del log de mensajes. El
+JSON de 40–70 KB solo alimenta el diff contra la corrida anterior, así que **no se commitea** y queda
+ignorado por `.gitignore` (`2a670069`). `conv-eval-baseline.*` se borra: es la corrida contaminada de
+L8 y no debe viajar en el PR.
+
+`origin/main` volvió a avanzar mientras se armaba la entrega (`497875af`, PRs #668 y #669 del worktree
+`chatbot-oferta`), así que la rama se realineó otra vez antes de abrir nada. Con ese merge el diff
+neto contra `main` vuelve a ser **solo agregados**: 18 archivos nuevos y 4 líneas en `.gitignore`.
+
+### L11 — la evidencia se limpia, y el sello medía los reportes (2026-10-23)
+
+Aplicar la política de `odd/evals` de L10 destapó un séptimo defecto, y era el que invalidaba la
+evidencia que se estaba por entregar: **el sello medía los reportes, no el código**.
+
+`git_state()` decidía `dirty` con un `git status --porcelain` sobre todo el repo. El sello se toma
+*antes* de escribir el reporte, así que una corrida no se ensuciaba a sí misma: la ensuciaba **la
+corrida anterior**. Medido en los reportes ya commiteados: `baseline`, la primera del día, selló
+`dirty: no`; `baseline-2`, `live-baseline-2`, `clean-1` y `clean-2` sellaron `dirty: sí` por el JSON y
+el `.md` que había dejado la anterior. Como S8.6 hace no citable una corrida sucia, **ninguna de las
+corridas que se iban a commitear servía como baseline**, y commitear los `.md` —justo la política de
+L10— habría garantizado que ninguna futura tampoco: cada corrida reescribe archivos trackeados.
+
+Arreglado antes de commitear la evidencia (`4e1446ae`): el sello excluye el directorio de reporte,
+resuelto contra el árbol medido, así que un `--out-dir` fuera del repo no excluye nada. Cuatro tests lo
+fijan: un reporte sin trackear y un reporte commiteado que una corrida nueva reescribe dejan el árbol
+limpio; una edición en `app/` y un archivo sin trackear fuera del reporte lo siguen ensuciando. El
+primer run posterior a este arreglo es el primer baseline citable.
+
+Sobre la evidencia, con las dos decisiones de L10 aplicadas:
+
+- Se reescribió la historia de la rama (nada estaba pusheado) para que los JSON **nunca entren**:
+  salieron 7.358 líneas de `odd/evals/` de los cuatro commits que los agregaban. El árbol fuera de
+  `odd/evals/` quedó **idéntico** al anterior, verificado con `git diff` contra el tip previo.
+- Se borró `conv-eval-baseline.*` (la corrida contaminada de L8). Quedan el reporte y la transcripción
+  de `baseline-2`, `live-baseline-2` y las dos `clean-*`, más la planilla de calibración.
+- `odd/evals/*.json` quedó en `.gitignore` (`2a670069`), fuera del bloque administrado por rapso.
+- Los commits anteriores a `baeac5d1` **conservaron su SHA**, así que la tabla de Tasks sigue válida.
+  Los sellos que los `.md` imprimen apuntan a commits que la reescritura renombró, con el código bit a
+  bit igual: `aaa3e767`→`baeac5d1`, `3cd0406a`→`495bc481`, `079a1129`→`211774ea`,
+  `d22d549d`→`351b94da`, `886edad9`→`30ea7a63`, `5356dfd4`→`153ca884`, `8b4efc0e`→`7cb35117`,
+  `6cf76f59`→`940d02f3`, `e56c0942`→`0e86898d`. Los sellos originales se dejan como están:
+  reescribirlos sería falsificar el reporte.
