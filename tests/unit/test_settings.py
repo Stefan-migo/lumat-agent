@@ -88,11 +88,20 @@ def test_validate_message_templates_rejects_invalid_lists(templates):
         validate_message_templates(templates)
 
 
+def test_greeting_defaults_match_the_approved_variants_byte_for_byte():
+    assert MESSAGE_DEFAULTS["greeting"] == "Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar."
+    assert MESSAGE_DEFAULTS["greeting_name"] == "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?"
+    assert MESSAGE_DEFAULTS["greeting_short"] == "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso."
+    assert MESSAGE_DEFAULTS["greeting_short_name"] == "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso."
+
+
 def test_assistant_writable_settings_is_the_curated_allowlist():
     assert ASSISTANT_WRITABLE_SETTINGS == frozenset({
         "tone.style",
         "messages.greeting",
         "messages.greeting_short",
+        "messages.greeting_name",
+        "messages.greeting_short_name",
         "messages.farewell",
         "messages.clarification",
         "messages.cannot_answer",
@@ -109,6 +118,8 @@ def test_assistant_writable_settings_is_the_curated_allowlist():
         ("tone.style", "cercano"),
         ("messages.greeting", "Hola, soy Lumat."),
         ("messages.greeting_short", "Hola!"),
+        ("messages.greeting_name", "Hola, {{nombre}}."),
+        ("messages.greeting_short_name", "Hola, {{nombre}}."),
         ("messages.out_of_hours", "Estamos cerrados."),
         ("hours.timezone", "America/Santiago"),
         ("hours.timezone", "UTC"),
@@ -128,6 +139,8 @@ def test_validate_assistant_setting_accepts_valid_values(key, value):
         ("messages.greeting", ""),
         ("messages.greeting", "   "),
         ("messages.greeting", 123),
+        ("messages.greeting_name", "Hola, {{otro}}."),
+        ("messages.cannot_answer", "Hola, {{nombre}}."),
         ("hours.timezone", "Marte/Crater"),
         ("hours.timezone", ""),
         ("hours.schedule", "not-a-list"),

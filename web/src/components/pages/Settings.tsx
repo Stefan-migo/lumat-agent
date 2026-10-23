@@ -26,7 +26,7 @@ import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
-const EMPTY_MESSAGES = { greeting: "", greeting_short: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
+const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
 const SHORT_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -53,8 +53,10 @@ const SECTIONS = [
   { id: "email", label: "Correo" },
 ];
 const MESSAGE_TEMPLATES = [
-  { id: "greeting", label: "Saludo", description: "Inicio de conversación", icon: MessageCircle },
-  { id: "greeting_short", label: "Saludo corto", description: "Cuando el cliente ya contó qué necesita", icon: MessageCircle },
+  { id: "greeting", label: "Saludo cuando falta el nombre", description: "Inicio de conversación; pregunta el nombre del cliente", icon: MessageCircle },
+  { id: "greeting_name", label: "Saludo con nombre", description: "Inicio de conversación cuando el nombre ya está cargado", icon: MessageCircle },
+  { id: "greeting_short", label: "Saludo corto cuando falta el nombre", description: "Cuando el cliente ya contó qué necesita; pregunta su nombre", icon: MessageCircle },
+  { id: "greeting_short_name", label: "Saludo corto con nombre", description: "Cuando el cliente ya contó qué necesita y su nombre está cargado", icon: MessageCircle },
   { id: "cannot_answer", label: "Cuando no puede responder", description: "Derivación a un asesor", icon: Headset },
   { id: "clarification", label: "Aclaración", description: "Mensaje no entendido", icon: CircleHelp },
   { id: "cannot_understand_offer", label: "Oferta tras segundo fallo", description: "Ofrece coordinar una visita o hablar con una persona", icon: Headset },
@@ -120,7 +122,7 @@ const SCHEDULE_NOTE = "Completa los días y las horas para guardar.";
 function draftsFrom(data?: SettingsData | null): Drafts {
   return {
     scope: data ? Object.entries(data.scope_rules).sort(([a], [b]) => a.localeCompare(b)).map(([category, mode]) => `${category}=${mode}`).join("\n") : "",
-    keywords: data?.keywords.join("\n") ?? "", tone: data?.tone ?? "", messages: data?.messages ?? EMPTY_MESSAGES,
+    keywords: data?.keywords.join("\n") ?? "", tone: data?.tone ?? "", messages: { ...EMPTY_MESSAGES, ...data?.messages },
     templates: data?.templates ?? [],
     hours: data?.hours ?? { timezone: "America/Santiago", schedule: [] },
     tarifa: data?.tarifa ?? EMPTY_TARIFA,

@@ -27,6 +27,7 @@ from chat_harness import ensure_conversation, inspect, run_turn  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import Case, Conversation, ConversationState, Customer  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
@@ -124,7 +125,7 @@ def test_first_turn_greeting_only_does_not_classify(mock_openai_chat):
         replies = run_turn(session, conversation_id, "hola")
         session.commit()
 
-    assert replies == ["Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"]
+    assert replies == [MESSAGE_DEFAULTS["greeting"]]
     assert mock_openai_chat == []
 
     with SessionLocal() as session:
