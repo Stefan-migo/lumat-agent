@@ -381,8 +381,12 @@ def test_open_slots_for_assignment_uses_lowest_free_technician_and_never_mutates
         )
 
         assert slots == [
+            # S1 (chatbot-experiencia): candidates step on the 30-minute grid, so the
+            # busy hour yields two candidates for the free technician and the
+            # lowest-id one wins as soon as it is free again.
             (higher.id, starts.date(), starts.time()),
-            (lower.id, (starts + timedelta(hours=1)).date(), (starts + timedelta(hours=1)).time()),
+            (higher.id, starts.date(), (starts + timedelta(minutes=30)).time()),
+            (lower.id, starts.date(), (starts + timedelta(hours=1)).time()),
         ]
         assert {model: session.query(model).count() for model in before} == before
 
