@@ -49,8 +49,20 @@ Textos (verbatim, aprobados):
 - **Saludo corto sin nombre:** `Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.`
 
 Alcance: `customers.name` resuelve el slot; sin nombre se usa la variante que pregunta. El grupo de
-saludo acepta `{{nombre}}` (hoy lo rechaza). El saludo corto **no** necesita una segunda respuesta:
-`run_conversation` lo fusiona con la primera pregunta del turno (CM-1).
+saludo acepta `{{nombre}}`. El saludo corto **no** necesita una segunda respuesta: `run_conversation` lo
+fusiona con la primera pregunta del turno (CM-1).
+
+Los cuatro textos aprobados no son una plantilla con un hueco: cuando falta el nombre **cambia la
+oración** (pregunta el nombre y no repite "¿En qué te puedo ayudar?"). Por eso son cuatro claves:
+`messages.greeting`, `messages.greeting_name`, `messages.greeting_short` y
+`messages.greeting_short_name`. El bot pasa a llamarse **Max** en el saludo por decisión del owner.
+
+Corrección de mecanismo (medida en T5): el rechazo de llaves no estaba en el panel ni en el guardado
+de `messages.*`, sino en `validate_assistant_setting()` —la lista curada de claves que el asistente
+puede escribir—. El cambio acota el slot `{{nombre}}` a las dos claves con nombre y rechaza llaves en
+las demás claves de mensaje que escribe el asistente. **Brecha conocida, para T8:** la ruta del panel
+(`POST /settings/messages`) no valida llaves, así que un `{{nombre}}` guardado desde el panel en otra
+clave llegaría literal al cliente.
 
 Riesgo: **item 3** (el grupo de mensajes fijos gana un slot; cambia el contrato de validación del panel).
 
@@ -299,3 +311,38 @@ stories) + este commit (docs).
 - `odd/chatbot-experiencia` queda como respaldo local, sin pushear. **Continuación de T5 en adelante:
   desde `odd/chatbot-oferta`**, que después del merge de #668 se rebasa sobre `main` y pasa a ser la
   rama de trabajo.
+
+**L11 — T5 cerrado (2026-10-23), evidencia observada.** Commit `0b2b9e09` (código, tests y panel) +
+este commit (docs). Rama rearmada desde `main` (`497875af`) después de mergear #668 y #669.
+
+- Delegado a `gentle-ai-worker`, que se frenó dos veces por autorización: pidió `web/src/types.ts`
+  (correcto: `Settings.messages` no compilaba sin las claves nuevas) y después se detuvo por una
+  contradicción mía —dije "esta lista reemplaza la anterior" y me olvidé `types.ts` en ella—. Un writer
+  que frena ante una autorización ambigua es preferible a uno que adivina.
+- RED inicial (worker): 10 fallos en
+  `test_settings.py` + los cuatro archivos de saludo/configuración. GREEN del worker: 141 tests.
+- La escalera de gates encontró cuatro cosas que `focused` no ve, y por eso no se salteó ningún nivel:
+  1. `quick` → `test_assistant_delegation::test_panel_planner_catalog_matches_pre_delegation_bytes`,
+     porque `settings.update` publica la lista de claves escribibles. Se probó que el catálogo cambia
+     **sólo** por las dos claves nuevas (quitar ambas reproduce el hash viejo) antes de moverlo:
+     `c73d185d…` → `48e5af3c…`.
+  2. `npm test` completo → tres pins de stories/mock del panel (etiquetas renombradas y el set de
+     claves del mock de 8 a 10).
+  3. `full` → cinco pins de copy viejo en `test_api_kb_settings`, `test_conversation_flows`,
+     `test_chat_harness`, `test_chat_state` y `test_first_turn_greeting`.
+  4. `full` → **un defecto real, no un pin**: `test_settings_update_messages_audited` devolvía **422**
+     porque `MessagesBody` exige las dos claves nuevas. Se mantuvo el body requerido (el panel siempre
+     manda el mapa completo, igual que en `reply.texts`) y se actualizó el payload del test. Tomarlo
+     como "test viejo" habría dejado el panel sin poder guardar mensajes.
+- GREEN final: `quick` exit 0; `focused` de los cinco archivos de pins → 111 tests, exit 0; panel
+  `npm run build` exit 0 y `npm test` → 111 archivos / **1265 tests**, exit 0; `full` → **2846 tests,
+  0 fallos**, exit 0, 5m43s.
+- Contrato: `MessagesBody` gana dos campos requeridos; `ASSISTANT_WRITABLE_SETTINGS` gana
+  `messages.greeting_name` y `messages.greeting_short_name`; `validate_assistant_setting()` acota
+  `{{nombre}}` a esas dos claves y rechaza llaves en las demás claves de mensaje que escribe el
+  asistente. `Settings.messages` en `web/src/types.ts` exige las diez claves (se descartó dejarlas
+  opcionales: la API las devuelve siempre).
+- Deuda registrada: el camino del panel (`POST /settings/messages`) no valida llaves — va a T8.
+- Duplicado conocido, no podado: el caso "saludo sin contenido" de `test_first_turn_greeting.py` se
+  solapa con `test_greeting_variants.py`. Se dejó anotado: podar tests es una decisión aparte, no un
+  efecto colateral de mover pins.
