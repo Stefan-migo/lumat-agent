@@ -297,6 +297,12 @@ DEFAULT_LLM_RATES = {
 }
 
 SERVICE_DURATIONS_KEY = "booking.service_durations"
+# S1 (chatbot-experiencia): minutes of lead time before the first offered slot.
+# Two hours is the owner's decision: the office has to be told and the
+# technician has to get there, so a visit offered for "right now" is not real.
+BOOKING_LEAD_MINUTES_KEY = "booking.lead_minutes"
+BOOKING_LEAD_MINUTES_DEFAULT = 120
+BOOKING_LEAD_MINUTES_MAX = 24 * 60
 # A visit cannot reserve more than a day; anything longer is a typo, not intent.
 MAX_SERVICE_DURATION_MINUTES = 1440
 
@@ -366,8 +372,9 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "cost.llm_rates": DEFAULT_LLM_RATES,
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
-    SERVICE_DURATIONS_KEY: {},
-    # S1: the commercial tariff, resolved by date before the prompt sees it.
+    SERVICE_DURATIONS_KEY: {},    # S1: the commercial tariff, resolved by date before the prompt sees it.
+    # S1 (chatbot-experiencia): lead time before the first offered slot.
+    BOOKING_LEAD_MINUTES_KEY: BOOKING_LEAD_MINUTES_DEFAULT,
     TARIFA_PRECIOS_KEY: DEFAULT_TARIFA_PRECIOS,
     # S3: service coverage, matched without accents or case.
     COVERAGE_COMMUNES_KEY: DEFAULT_COVERAGE_COMMUNES,
@@ -492,6 +499,23 @@ def get_service_duration(
                 return duration
             return default
     return default
+
+
+def get_booking_lead_minutes(session: Session) -> int:
+    """Minutes of lead time before the first offered slot (decided: 120).
+
+    A malformed stored value falls back to the default instead of blocking
+    booking: this number guards the schedule, so it must never become the reason
+    a customer cannot get a visit.
+    """
+    value = get_setting(
+        session, BOOKING_LEAD_MINUTES_KEY, default=BOOKING_LEAD_MINUTES_DEFAULT
+    )
+    if isinstance(value, bool) or not isinstance(value, int):
+        return BOOKING_LEAD_MINUTES_DEFAULT
+    if value < 0 or value > BOOKING_LEAD_MINUTES_MAX:
+        return BOOKING_LEAD_MINUTES_DEFAULT
+    return value
 
 
 def normalize_comuna(value: str) -> str:

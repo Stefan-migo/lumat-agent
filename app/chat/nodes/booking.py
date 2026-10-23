@@ -14,7 +14,12 @@ from app.db import session_scope
 from app.models import Case, Conversation
 from app.services import scheduling
 from app.services import technician_schedule
-from app.services.settings import get_hours_timezone, get_reply_texts, get_service_duration
+from app.services.settings import (
+    get_booking_lead_minutes,
+    get_hours_timezone,
+    get_reply_texts,
+    get_service_duration,
+)
 
 OFFER_TTL = timedelta(minutes=30)
 MAX_INVALID_REPLIES = 1
@@ -66,7 +71,9 @@ def _new_offer(
     duration = get_service_duration(session, case.service, default=DEFAULT_DURATION_MINUTES)
     technician_schedule.ensure_horizon(session, now)
     assignments = scheduling.open_slots_for_assignment(
-        session, now=now, days=7, duration_minutes=duration, limit=3
+        session, now=now, days=7, duration_minutes=duration, limit=3,
+        # S1: a visit offered for "right now" cannot be staffed.
+        lead_minutes=get_booking_lead_minutes(session),
     )
     if not assignments:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}

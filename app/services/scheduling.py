@@ -116,6 +116,27 @@ def _validate_interval(session: Session, *, customer_id: int | None, technician_
         raise AppointmentConflict("technician or customer has an overlapping booking")
 
 
+# S1 (chatbot-experiencia): offered starts sit on a half-hour grid. Before this
+# the first candidate was the window start itself, so a customer who wrote at
+# 10:04 was offered 10:04, 11:04 and 12:04 and the appointment was stored at
+# 10:04:32 — a time nobody reads as a slot, on a visit nobody could staff.
+SLOT_GRID_MINUTES = 30
+
+
+def _align_to_grid(moment: datetime, grid_minutes: int) -> datetime:
+    """Round ``moment`` up to the next ``grid_minutes`` boundary, seconds dropped.
+
+    Alignment happens in UTC, which is the same instant grid as Chilean local
+    time: the offset is a whole number of hours, so a 30-minute grid lines up
+    either way.
+    """
+    truncated = moment.replace(second=0, microsecond=0)
+    remainder = truncated.minute % grid_minutes
+    if not remainder:
+        return truncated
+    return truncated + timedelta(minutes=grid_minutes - remainder)
+
+
 def _candidate_starts(window_start: datetime, window_end: datetime, duration_minutes: int, step_minutes: int, now: datetime):
     step = timedelta(minutes=step_minutes)
     duration = timedelta(minutes=duration_minutes)
@@ -136,23 +157,36 @@ def open_slots(
     timezone_name: str,
     limit: int = 5,
     step_minutes: int | None = None,
+    lead_minutes: int = 0,
+    grid_minutes: int = SLOT_GRID_MINUTES,
+    now: datetime | None = None,
 ) -> list[tuple[date, time]]:
-    """Return up to ``limit`` currently bookable local start times in a UTC window."""
+    """Return up to ``limit`` bookable local start times in a UTC window.
+
+    Candidates sit on a ``grid_minutes`` grid and start no earlier than
+    ``lead_minutes`` from ``now`` (the real clock when the caller does not pin
+    it). The lead time is not decoration: a visit offered for "right now" cannot
+    be staffed — the office has to be told and the technician has to arrive.
+    """
     if (window_start.tzinfo is None or window_start.utcoffset() is None
             or window_end.tzinfo is None or window_end.utcoffset() is None
             or window_start >= window_end):
         raise InvalidRange("window must be timezone-aware and ordered")
     if duration_minutes <= 0:
         raise ValueError("duration must be positive")
-    step_minutes = duration_minutes if step_minutes is None else step_minutes
+    if grid_minutes <= 0:
+        raise ValueError("grid must be positive")
+    if lead_minutes < 0:
+        raise ValueError("lead must not be negative")
+    step_minutes = grid_minutes if step_minutes is None else step_minutes
     if step_minutes <= 0 or limit <= 0:
         raise ValueError("step and limit must be positive")
     zone = _zone(timezone_name)
-    start_utc = window_start.astimezone(timezone.utc)
+    start_utc = _align_to_grid(window_start.astimezone(timezone.utc), grid_minutes)
     end_utc = window_end.astimezone(timezone.utc)
-    now = datetime.now(timezone.utc)
+    earliest = (now or datetime.now(timezone.utc)) + timedelta(minutes=lead_minutes)
     slots: list[tuple[date, time]] = []
-    for starts in _candidate_starts(start_utc, end_utc, duration_minutes, step_minutes, now):
+    for starts in _candidate_starts(start_utc, end_utc, duration_minutes, step_minutes, earliest):
         local = starts.astimezone(zone)
         local_date, local_time = local.date(), local.timetz().replace(tzinfo=None)
         try:
@@ -168,6 +202,55 @@ def open_slots(
     return slots
 
 
+def _daily_loads(
+    session: Session,
+    *,
+    technician_ids: list[int],
+    zone: ZoneInfo,
+    now: datetime,
+    window_end: datetime,
+) -> dict[tuple[int, date], int]:
+    """Booked visits per technician and local day, inside the offered window.
+
+    Counted from the agenda itself, never from the offers this call is about to
+    build: an offer is not a visit until the customer takes it, and counting
+    offers would let one unanswered offer push the next one to somebody else.
+    """
+    day_start = now.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = session.execute(
+        select(Appointment.technician_id, Appointment.starts_at).where(
+            Appointment.status == AppointmentStatus.BOOKED,
+            Appointment.technician_id.in_(technician_ids),
+            Appointment.starts_at >= day_start.astimezone(timezone.utc),
+            Appointment.starts_at < window_end,
+        )
+    ).all()
+    loads: dict[tuple[int, date], int] = {}
+    for technician_id, starts_at in rows:
+        key = (technician_id, starts_at.astimezone(zone).date())
+        loads[key] = loads.get(key, 0) + 1
+    return loads
+
+
+def _least_loaded(
+    candidates: set[int], loads: dict[tuple[int, date], int], day: date, rotation: int
+) -> int:
+    """The candidate with the fewest visits that day; a tie alternates by id.
+
+    The rotation is what turns a tie into a round-robin instead of a rule that
+    always hands the slot to the lowest id, which is how one technician ended up
+    carrying every visit while the other stayed empty.
+    """
+    ordered = sorted(candidates)
+    lowest = min(loads.get((technician_id, day), 0) for technician_id in ordered)
+    tied = [
+        technician_id
+        for technician_id in ordered
+        if loads.get((technician_id, day), 0) == lowest
+    ]
+    return tied[rotation % len(tied)]
+
+
 def open_slots_for_assignment(
     session: Session,
     *,
@@ -175,14 +258,22 @@ def open_slots_for_assignment(
     days: int = 7,
     duration_minutes: int = 60,
     limit: int = 3,
+    lead_minutes: int = 0,
 ) -> list[tuple[int, date, time]]:
-    """Return deterministic slots assigned to the lowest-id available technician."""
+    """Return deterministic slots assigned by the day's load, not by id.
+
+    Every technician that can cover a slot is a candidate; among them the one
+    with the fewest visits already booked that local day wins, and a tie
+    alternates by id so two idle technicians share the offers instead of the
+    lowest id absorbing all of them.
+    """
     if now.tzinfo is None or now.utcoffset() is None or days <= 0 or limit <= 0:
         raise InvalidRange("now must be aware and days/limit must be positive")
 
     window_end = now.astimezone(timezone.utc) + timedelta(days=days)
     timezone_name = get_hours_timezone(session)
-    assigned: dict[tuple[date, time], int] = {}
+    zone = _zone(timezone_name)
+    candidates: dict[tuple[date, time], set[int]] = {}
     technicians = session.scalars(
         select(User).where(User.role == UserRole.TECNICO).order_by(User.id)
     ).all()
@@ -206,13 +297,24 @@ def open_slots_for_assignment(
                 duration_minutes=duration_minutes,
                 timezone_name=timezone_name,
                 limit=limit,
+                lead_minutes=lead_minutes,
+                now=now,
             )
             for local_date, local_time in slots:
-                key = (local_date, local_time)
-                assigned[key] = min(technician.id, assigned.get(key, technician.id))
+                candidates.setdefault((local_date, local_time), set()).add(technician.id)
 
-    ordered = sorted(assigned.items(), key=lambda item: item[0])
-    return [(technician_id, day, clock) for (day, clock), technician_id in ordered[:limit]]
+    loads = _daily_loads(
+        session,
+        technician_ids=[technician.id for technician in technicians],
+        zone=zone,
+        now=now,
+        window_end=window_end,
+    )
+    ordered = sorted(candidates.items(), key=lambda item: item[0])
+    return [
+        (_least_loaded(coverers, loads, day, rotation), day, clock)
+        for rotation, ((day, clock), coverers) in enumerate(ordered[:limit])
+    ]
 
 
 def book(session: Session, *, service: str, customer_id: int, case_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, actor: str) -> Appointment:

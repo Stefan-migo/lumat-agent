@@ -70,7 +70,8 @@ def test_open_slots_rejects_naive_or_reversed_window(start, end):
                    duration_minutes=30, timezone_name="UTC")
 
 
-def test_open_slots_defaults_step_to_duration_and_respects_limit(monkeypatch):
+def test_open_slots_defaults_the_step_to_the_grid_and_respects_limit(monkeypatch):
+    """S1: the default step is the 30-minute grid, no longer the service duration."""
     class EmptySession:
         def scalar(self, statement):
             return None
@@ -117,3 +118,59 @@ class _FixedDateTime(datetime):
     @classmethod
     def now(cls, tz=None):
         return cls(2026, 4, 1, 0, 0, tzinfo=timezone.utc)
+
+class _NowAtNoonish(datetime):
+    """`now` pinned at 12:04:29 UTC — the minute/second offset that used to leak."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 4, 1, 12, 4, 29, tzinfo=timezone.utc)
+
+
+class _EmptySession:
+    def scalar(self, statement):
+        return None
+
+
+def test_open_slots_aligns_candidates_to_the_half_hour_grid(monkeypatch):
+    """The offered slot inherited `now`'s minutes and seconds (10:04, 11:04, 12:04).
+
+    A visit is offered on a grid, so a technician and a customer can read the same
+    time and the appointment is not stored at 10:04:32.
+    """
+    monkeypatch.setattr("app.services.scheduling.datetime", _NowAtNoonish)
+    window_start = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+
+    slots = open_slots(
+        _EmptySession(), technician_id=1, window_start=window_start,
+        window_end=window_start + timedelta(hours=6), duration_minutes=60,
+        timezone_name="UTC", limit=3,
+    )
+
+    assert slots == [
+        (date(2026, 4, 1), time(12, 30)),
+        (date(2026, 4, 1), time(13, 0)),
+        (date(2026, 4, 1), time(13, 30)),
+    ]
+
+
+def test_open_slots_honours_the_lead_time(monkeypatch):
+    """Two hours of lead: the team has to be told and the technician has to arrive."""
+    monkeypatch.setattr("app.services.scheduling.datetime", _NowAtNoonish)
+    window_start = datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc)
+
+    slots = open_slots(
+        _EmptySession(), technician_id=1, window_start=window_start,
+        window_end=window_start + timedelta(hours=8), duration_minutes=60,
+        timezone_name="UTC", limit=2, lead_minutes=120,
+    )
+
+    assert slots == [
+        (date(2026, 4, 1), time(14, 30)),
+        (date(2026, 4, 1), time(15, 0)),
+    ]
+
+
+def test_the_booking_lead_defaults_to_two_hours():
+    """`booking.lead_minutes` is registered with the decided default (120)."""
+    assert SETTINGS_DEFAULTS["booking.lead_minutes"] == 120
