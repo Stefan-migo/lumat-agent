@@ -105,7 +105,7 @@ Riesgo: **item 3** (mueve superficies del panel que tienen tests y `tsc -b`).
 | ID | Spec | Alcance | Ruta | Commit |
 |---|---|---|---|---|
 | T1 | S1 | Grilla de 30 min + anticipación 2 h en `scheduling` | inline, test-first | `e934a261` |
-| T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | pendiente |
+| T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | `d473ee74` |
 | T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | pendiente |
 | T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | pendiente |
 | T5 | S2 | Saludo con `{{nombre}}` y variante que pregunta el nombre | inline, test-first | pendiente |
@@ -181,3 +181,28 @@ primera pregunta del turno (CM-1). Texto 5: "Luamt" se corrige a "Lumat" (typo c
   servicio).
 - Pendiente de T8 (S5): `booking.lead_minutes` existe en `settings` pero todavía no se expone en el
   panel.
+
+**L6 — T2 cerrado (2026-10-23), evidencia observada.** Commit `d473ee74` (código + tests) + este
+commit (docs).
+
+- RED: los dos tests nuevos fallaban con la regla vieja —
+  `test_open_slots_for_assignment_alternates_between_equally_loaded_technicians` (esperaba
+  `[lower, higher, lower]`, daba `[lower, lower, lower]`) y
+  `test_open_slots_for_assignment_prefers_the_technician_with_fewer_visits_that_day` (esperaba los
+  tres slots al técnico libre, el último caía al técnico cargado).
+- GREEN: `uv run pytest tests/integration/test_scheduling.py tests/unit/test_scheduling_unit.py
+  tests/integration/test_technician_schedule.py` → 38 tests, exit 0.
+- Suite completa: `uv run pytest tests/ -q --timeout=300` → 2822 tests, 0 `FAILED`/`ERROR`,
+  `PYTEST_EXIT=0`, 5m52s. Incluye los dos consumidores de la función (`booking.py` y el reschedule de
+  `manage.py`), así que la regresión sobre ellos queda cubierta por la corrida, no por inspección.
+- Regla: cada slot lo cubren **todos** los técnicos que pueden atenderlo; gana el que tenga menos
+  visitas `BOOKED` ese día local; empate → alterna por id con una rotación por slot asignado. La carga
+  se cuenta desde la agenda y no desde las ofertas de la misma llamada, porque una oferta no es una
+  visita hasta que el cliente la toma.
+- Pin movido: `test_open_slots_for_assignment_uses_lowest_free_technician_and_never_mutates` →
+  `..._skips_the_busy_technician_and_never_mutates`. El pin que importa (un técnico con una visita
+  10:00–11:00 no se ofrece en esa hora) sigue vivo y en verde; sólo cambió la expectativa de las 11:00.
+- Sin migración y sin cambio de contratos de panel: la firma de `open_slots_for_assignment` no cambió.
+- Límite de slice: con `d473ee74` la rama acumula 484 líneas autoradas, pasado el objetivo de ~400.
+  No se parte la entrega porque D15 fija **un solo release** al final; los commits por task siguen
+  siendo las unidades revisables (feat + docs por task).
