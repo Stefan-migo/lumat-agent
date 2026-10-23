@@ -37,6 +37,7 @@ from app.models import (  # noqa: E402
     UserRole,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from app.services import memory as memory_service  # noqa: E402
 from app.models import MemoryType  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -114,7 +115,7 @@ def test_cm1_first_contact_open_greeting_is_only_reply(mock_openai_chat):
         replies = run_conversation(session, message)
         session.commit()
 
-    assert replies == ["Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"]
+    assert replies == [MESSAGE_DEFAULTS["greeting"]]
     assert "Elige una opción" not in replies[0]
     assert "1." not in replies[0]
 

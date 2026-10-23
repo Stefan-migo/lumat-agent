@@ -509,6 +509,8 @@ export interface Settings {
   messages: {
     greeting: string;
     greeting_short: string;
+    greeting_name: string;
+    greeting_short_name: string;
     cannot_answer: string;
     clarification: string;
     cannot_understand_offer: string;

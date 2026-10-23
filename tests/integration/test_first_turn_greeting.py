@@ -27,7 +27,7 @@ ADMIN_DB_URL = admin_database_url()
 PHONE = "+56912345678"
 FULL_GREETING = MESSAGE_DEFAULTS["greeting"]
 SHORT_GREETING = MESSAGE_DEFAULTS["greeting_short"]
-ASK = "¿En qué te puedo ayudar?"
+REDUNDANT_HELP_QUESTION = "¿En qué te puedo ayudar?"
 
 
 @pytest.fixture(autouse=True)
@@ -81,8 +81,8 @@ def test_s2_greeting_with_content_is_one_short_greeting_and_does_not_ask_again(
 
     assert len(replies) == 1
     assert replies[0].startswith(SHORT_GREETING + "\n\n")
-    assert "soy el asistente virtual de Lumat" in replies[0]
-    assert ASK not in replies[0]
+    assert "Hola, soy Max, de Lumat." in replies[0]
+    assert REDUNDANT_HELP_QUESTION not in replies[0]
     assert "Cuéntame qué pasa con el equipo" in replies[0]
 
 
@@ -93,4 +93,4 @@ def test_s2_content_without_a_greeting_is_one_short_greeting_and_does_not_ask_ag
 
     assert len(replies) == 1
     assert replies[0].startswith(SHORT_GREETING + "\n\n")
-    assert ASK not in replies[0]
+    assert REDUNDANT_HELP_QUESTION not in replies[0]

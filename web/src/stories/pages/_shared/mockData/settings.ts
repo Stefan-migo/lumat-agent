@@ -25,8 +25,10 @@ export const settings: Settings = {
   keywords: ["fuga", "corte", "emergencia", "gas", "medidor"],
   tone: "cercano",
   messages: {
-    greeting: "Hola, soy el asistente virtual de Lumat.",
-    greeting_short: "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?",
+    greeting: "Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar.",
+    greeting_short: "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.",
+    greeting_name: "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?",
+    greeting_short_name: "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso.",
     cannot_answer: "No puedo responder con seguridad a eso.",
     clarification: "¿Puedes elegir una opción del menú?",
     cannot_understand_offer:

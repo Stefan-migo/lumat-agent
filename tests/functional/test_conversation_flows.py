@@ -241,7 +241,7 @@ def test_hh3_three_failures_escalate(client, mock_openai_chat, mock_meta_send):
         cases = session.scalars(select(Case)).all()
 
     assert len(replies) == 4
-    assert "Hola, soy el asistente virtual de Lumat." in replies[0]
+    assert "Hola, soy Max, el asistente virtual de Lumat." in replies[0]
     assert "asesor revisará tu caso" in replies[-1]  # handoff reply
     assert conversation.state == ConversationState.HUMAN  # HH-1 bot->human
     assert len(cases) == 1  # deriva bundle created (HH-2)

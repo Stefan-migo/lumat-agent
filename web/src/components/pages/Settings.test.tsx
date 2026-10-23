@@ -8,7 +8,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   model_api_key: { configured: false, source: "none", masked: "" },
   email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
-  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
+  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
   tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },
@@ -186,12 +186,22 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Vista previa" }).closest("section")?.querySelector(".message-preview__bubble")).toHaveTextContent("¿Me puedes indicar tu comuna?");
   });
 
-  it("edits the short greeting and saves all eight messages", async () => {
+  it("labels each greeting according to whether the name is available", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    expect(screen.getByRole("tab", { name: "Saludo cuando falta el nombre" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Saludo con nombre" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Saludo corto cuando falta el nombre" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Saludo corto con nombre" })).toBeInTheDocument();
+  });
+
+  it("edits the short greeting and saves all ten messages", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await user.click(screen.getByRole("tab", { name: "Mensajes" }));
-    await user.click(screen.getByRole("tab", { name: "Saludo corto" }));
+    await user.click(screen.getByRole("tab", { name: "Saludo corto cuando falta el nombre" }));
 
     const panel = screen.getAllByRole("tabpanel").find((each) => each.getAttribute("aria-labelledby")?.includes("trigger-greeting_short"));
     const textarea = within(panel!).getByLabelText("Texto del mensaje");
@@ -202,7 +212,7 @@ describe("Settings", () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/messages", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ greeting: "Hola", greeting_short: "Hola, cuéntame", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" }),
+      body: JSON.stringify({ greeting: "Hola", greeting_short: "Hola, cuéntame", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" }),
     })));
   });
 
@@ -211,8 +221,8 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await user.click(screen.getByRole("tab", { name: "Mensajes" }));
     const selector = screen.getByRole("button", { name: "Plantilla" });
-    expect(selector).toHaveTextContent("Saludo");
-    expect(screen.getByText("Inicio de conversación", { selector: ".settings-messages__mobile-selector p" })).toBeInTheDocument();
+    expect(selector).toHaveTextContent("Saludo cuando falta el nombre");
+    expect(screen.getByText("Inicio de conversación; pregunta el nombre del cliente", { selector: ".settings-messages__mobile-selector p" })).toBeInTheDocument();
     await user.click(selector);
     await user.click(screen.getByRole("menuitem", { name: "Despedida" }));
     expect(selector).toHaveTextContent("Despedida");

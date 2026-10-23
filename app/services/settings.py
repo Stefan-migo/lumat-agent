@@ -211,12 +211,10 @@ TONE_DIRECTIVES: dict[str, str] = {
 DEFAULT_TONE_STYLE = "cercano"
 
 MESSAGE_DEFAULTS: dict[str, str] = {
-    "greeting": (
-        "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?\n¿En qué te puedo ayudar?"
-    ),
-    # First turn where the customer already stated their need: identifies itself
-    # (CM-1) without re-asking "¿En qué te puedo ayudar?".
-    "greeting_short": "Hola, soy el asistente virtual de Lumat. ¿Cómo estás?",
+    "greeting": "Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar.",
+    "greeting_short": "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.",
+    "greeting_name": "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?",
+    "greeting_short_name": "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso.",
     "cannot_answer": (
         "Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat "
         "revisará tu consulta y te contactará."
@@ -417,6 +415,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "tone.style": DEFAULT_TONE_STYLE,
     "messages.greeting": MESSAGE_DEFAULTS["greeting"],
     "messages.greeting_short": MESSAGE_DEFAULTS["greeting_short"],
+    "messages.greeting_name": MESSAGE_DEFAULTS["greeting_name"],
+    "messages.greeting_short_name": MESSAGE_DEFAULTS["greeting_short_name"],
     "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
     "messages.clarification": MESSAGE_DEFAULTS["clarification"],
     "messages.cannot_understand_offer": MESSAGE_DEFAULTS["cannot_understand_offer"],
@@ -1041,6 +1041,8 @@ ASSISTANT_WRITABLE_SETTINGS: frozenset[str] = frozenset(
         "tone.style",
         "messages.greeting",
         "messages.greeting_short",
+        "messages.greeting_name",
+        "messages.greeting_short_name",
         "messages.farewell",
         "messages.clarification",
         "messages.cannot_answer",
@@ -1075,6 +1077,12 @@ def validate_assistant_setting(key: str, value: Any) -> None:
     elif key in _ASSISTANT_MESSAGE_KEYS:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{key} must be a non-empty string")
+        if key not in {"messages.greeting_name", "messages.greeting_short_name"} and ("{{" in value or "}}" in value):
+            raise ValueError(f"{key} must not contain '{{{{' or '}}}}'")
+        if key in {"messages.greeting_name", "messages.greeting_short_name"}:
+            slots = set(_MESSAGE_TEMPLATE_SLOT_RE.findall(value))
+            if slots - {"nombre"} or value.count("{{") != value.count("}}"):
+                raise ValueError(f"{key} only supports the {{nombre}} slot")
         if len(value) > ASSISTANT_MESSAGE_MAX_LENGTH:
             raise ValueError(f"{key} must be at most {ASSISTANT_MESSAGE_MAX_LENGTH} characters")
     elif key == "hours.timezone":
