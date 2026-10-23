@@ -118,13 +118,13 @@ juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no ver
 
 | # | Slice | Qué entrega | Commit |
 |---|---|---|---|
-| T1 | E0 | `scripts/seed_kb_docs.py` + preflight de KB | `feat(conv-eval): seed customer KB and refuse to run without it` |
-| T2 | E1 | `scripts/conv_eval_corpus.yaml` (13 escenarios) + validador | `feat(conv-eval): conversation corpus with three difficulty tiers` |
-| T3 | E2 | runner scripted sobre `run_conversation` | `feat(conv-eval): run scripted conversations against the real brain` |
-| T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `feat(conv-eval): deterministic gates, report and run diff` |
-| T5 | E4 | juez LLM por rúbrica con hard-fail caps | `feat(conv-eval): rubric judge with evidence and hard-fail caps` |
-| T6 | E5 | modo `--live` con cliente simulado | `feat(conv-eval): simulated customer mode` |
-| T7 | — | corrida baseline sobre `e354f563` | `docs(conv-eval): baseline report on main` |
+| T1 | E0 | `scripts/seed_kb_docs.py` + preflight de KB | `62166951` (+`64ba173a`) |
+| T2 | E1 | `scripts/conv_eval_corpus.yaml` (14 escenarios) + validador | `580b8f2b` + `dcfe57aa` |
+| T3 | E2 | runner scripted sobre `run_conversation` | `b98719c8` |
+| T4 | E3 | gates deterministas + reporte JSON/MD + diff + sello | `dcfe57aa` + `b98719c8` |
+| T5 | E4 | juez LLM por rúbrica con hard-fail caps | `d55a203d` (+`0bab2a53`) |
+| T6 | E5 | modo `--live` con cliente simulado | `b98719c8` (cableado; falta ejercitarlo) |
+| T7 | — | corrida baseline sobre `e354f563` | pendiente de la corrida |
 
 ## Log
 
@@ -193,3 +193,46 @@ Estrategia de entrega, decidida acá porque el acumulado pasa la guía de ~400 l
 rama y review commit por commit**. Si el owner prefiere PRs encadenados, el corte natural es
 (a) el instrumento que no corre todavía — doc, seed, corpus, juez y matemática de gates — y
 (b) el runner, el reporte y la primera corrida. La decisión de PR y merge sigue siendo del owner.
+
+### L7 — primera corrida real (`--live`, 2026-10-23) y lo que rompió
+
+Corrida completa sobre los 14 escenarios con cliente simulado y juez: **8/14 pasan**. Gates que
+fallaron: `G6`×3, `G4`×1, `G3`×1, `G1`×1. Dimensiones del juez (media): grounding 2,71 · policy 3,07 ·
+conversational **1,50** · escalation 2,29 · tone 2,71 · closure 2,07. Por tier: simple 3/5,
+complejo 2/4, supercomplejo 3/5. Reporte en `odd/evals/conv-eval-live-baseline-2.{json,md}`.
+
+Los seis rojos, con la razón medida:
+
+| Escenario | Qué pasó |
+|---|---|
+| `simple-horario-sabado` | G6: ignoró la pregunta del sábado y se fue por el camino de diagnóstico ("¿no enciende, no calienta…?"). |
+| `simple-despedida` | G4 + hard fail: contó la despedida como `unknown_intent` y contestó con una pregunta comercial. |
+| `complejo-dos-temas` | G6 + hard fail: perdió el referente del servicio y nunca respondió la garantía del lavado de red. |
+| `complejo-no-quiere-email` | hard fail: insistió con el correo que el cliente rechazó, sin pedir el teléfono que sí ofreció. |
+| `super-emergencia-gas` | G3: nunca registró el evento `escalation`, aunque el protocolo de emergencia sí se disparó. |
+| `super-burst-contradiccion` | G1 + G6: terminó en `human` (el corpus espera `bot`) y nunca nombró la caldera corregida. |
+
+Cuatro defectos del instrumento aparecieron al usarlo, y quedaron corregidos con test:
+
+1. **Veredicto truncado** del juez abortaba la corrida entera → un reintento y, si vuelve a fallar,
+   el escenario queda "sin veredicto" (nunca como puntaje) y la corrida sigue (`fb5220fe`).
+2. **`kb_miss` blando invisible**: producción registra `kb_miss` solo cuando escala. Una respuesta con
+   la oferta de `kb_miss_offer` no deja evento, así que G9 daba verde falso sobre una pregunta que la
+   KB sí responde. G9 ahora lee el texto configurado (`8a3a0767`).
+3. **Evidencia del juez perdida**: el reporte guardaba el puntaje y tiraba la cita por dimensión, que
+   es justo lo que S9 calibra. Ahora viaja con la fila.
+4. **Sin visibilidad** de una corrida larga (stdout en buffer) → progreso por escenario con `flush`.
+
+Hallazgos de entorno, registrados y no corregidos acá (`app/` es non-goal):
+
+- La emergencia dispara la notificación real: Meta responde 401 con los placeholders del entorno y el
+  fallback de email revienta contra el SMTP ausente. El cerebro lo absorbe y sigue, pero
+  `_send_email_fallback` **puede lanzar** pese al contrato documentado "never raises"
+  (`app/chat/nodes/emergency.py:94`). Follow-up para `app/`, no para este instrumento.
+- Reusar un `--run-tag` reusa el mismo cliente por diseño (S8.2), así que una corrida interrumpida
+  necesita tag nuevo o mide la memoria de la anterior.
+- Esta corrida selló `dirty: true` (un commit se cruzó con el arranque), así que **no es citable como
+  baseline**: el baseline citable es una corrida nueva sobre árbol limpio.
+
+Calibración S9 abierta: `odd/evals/calibracion-s9.md` trae tres conversaciones (un 4,00, un 2,50 y un
+1,67) con el puntaje del juez plegado, para que el owner puntúe a mano sin verlo.
