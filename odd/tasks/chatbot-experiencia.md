@@ -104,7 +104,7 @@ Riesgo: **item 3** (mueve superficies del panel que tienen tests y `tsc -b`).
 
 | ID | Spec | Alcance | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | S1 | Grilla de 30 min + anticipación 2 h en `scheduling` | inline, test-first | pendiente |
+| T1 | S1 | Grilla de 30 min + anticipación 2 h en `scheduling` | inline, test-first | `e934a261` |
 | T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | pendiente |
 | T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | pendiente |
 | T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | pendiente |
@@ -157,3 +157,27 @@ primera pregunta del turno (CM-1). Texto 5: "Luamt" se corrige a "Lumat" (typo c
 >
 > que es mover la configuracion de los horarios de los tecnicos a la seccion de configuracion. quiero
 > centralizar toda la configuracion en la seccion cofiguracion
+
+**L5 — T1 cerrado (2026-10-23), evidencia observada.** Commit `e934a261` (código) + este commit
+(docs, el papeleo que el crash dejó a medias).
+
+- Cambio: `open_slots` alinea los candidatos a una grilla de 30 minutos, descarta los segundos y
+  rechaza lo que esté a menos de `lead_minutes` de `now`; `booking` pasa `booking.lead_minutes`
+  (default 120, en `settings`). `open_slots` acepta `now` del caller para que el camino de asignación
+  sea testeable en vez de leer el reloj a espaldas del test.
+- Focales: `uv run pytest tests/unit/test_scheduling_unit.py tests/integration/test_scheduling.py` →
+  32 tests, exit 0.
+- Suite completa: `uv run pytest tests/ -q --timeout=300` → 2820 tests, 0 `FAILED`/`ERROR`,
+  `PYTEST_EXIT=0`, 6m20s, sobre la base de test del worktree
+  (`lumat-test-lumat-agent-odd-chatbot-experiencia-db-test-1`). Esa corrida excluyó con `-k` los dos
+  tests RED de T2 que ya estaban escritos, para que la evidencia corresponda al árbol de `e934a261`.
+- Primera corrida descartada: la lancé con `| tail -40`, que se comió el resumen y el exit code real
+  (devolvió el de `tail`), y mostró un `pytest-timeout` en
+  `tests/functional/test_seed_dev.py` (subprocess de `seed_dev.py`) con el host en carga ~4 y 15 GB
+  de RAM casi llenos. Repetida con captura completa: limpia. Es el artefacto de carga del host ya
+  anotado, no un fallo del slice; queda registrado porque un timeout también es evidencia.
+- Pins movidos, no debilitados: el test de asignación ahora espera los tres candidatos de la grilla,
+  y el test del paso por defecto se renombró (el paso por defecto es la grilla, ya no la duración del
+  servicio).
+- Pendiente de T8 (S5): `booking.lead_minutes` existe en `settings` pero todavía no se expone en el
+  panel.
