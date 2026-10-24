@@ -45,7 +45,7 @@ from app.models import (  # noqa: E402
 )
 from app.services import kb as kb_service  # noqa: E402
 from app.services import settings as settings_service  # noqa: E402
-from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS, REPLY_TEXT_DEFAULTS  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -389,7 +389,8 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     assert captured["consent"] == "si"
     assert "_pending" not in captured  # capture finished
     # No technician schedule is configured: the completed request is handed off.
-    assert last_replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
+    # S4.5: a booking that finds no slot tells the customer an advisor calls.
+    assert last_replies[-1] == REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]
 
     # CR-6: consent + captured data stored on the customer ficha
     customer = _customer()
@@ -888,7 +889,7 @@ def test_s15_a_covered_comuna_keeps_the_capture_going(mock_openai_chat):
 
 
 def test_s15_the_coverage_rule_can_be_turned_off(mock_openai_chat):
-    _configure_conduct(derivaciones=["garantia"])
+    _configure_conduct(derivaciones=[])
     conv_id = _start_conversation()
 
     _walk_to_comuna(conv_id)

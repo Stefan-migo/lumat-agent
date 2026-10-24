@@ -40,6 +40,7 @@ from app.models import (
     MessageType,
 )
 from app.services.customers import get_or_create_customer
+from app.services.settings import REPLY_TEXT_DEFAULTS
 from _testdb import admin_database_url
 
 ADMIN_DB_URL = admin_database_url()
@@ -277,7 +278,7 @@ def test_t06_explicit_human_request_derives_with_a_real_case(chat):
 
     reply = _turn(conv, "Quiero hablar con una persona", "w1")[-1]
 
-    assert HANDOFF_REPLY in reply or "asesor" in reply.lower()
+    assert REPLY_TEXT_DEFAULTS["handoff_persona"] in reply
     with SessionLocal() as session:
         case = session.scalars(
             select(Case).where(Case.conversation_id == conv)

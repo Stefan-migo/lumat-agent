@@ -375,7 +375,7 @@ def test_persona_escalates_to_human_with_deriva_case(mock_openai_chat):
     conv_id = _start_conversation()
     replies = _turn(conv_id, "quiero hablar con una persona", "wamid.p1")
 
-    assert any("asesor" in r.lower() for r in replies)
+    assert replies[-1] == REPLY_TEXT_DEFAULTS["handoff_persona"]
     assert _conversation_state(conv_id) == "human"  # HH-1: bot -> human
 
     case = _case(conv_id)
@@ -401,7 +401,7 @@ def test_three_unknown_intents_escalate_to_human(mock_openai_chat):
     assert any("coordinar una visita" in r.lower() and "persona" in r.lower() for r in second_replies)
 
     replies = _turn(conv_id, "wwwwwe", "wamid.u3")  # failure 3 -> handoff
-    assert any("asesor" in r.lower() for r in replies)
+    assert replies[-1] == REPLY_TEXT_DEFAULTS["handoff_unknown_intent_thrice"]
     assert _conversation_state(conv_id) == "human"
     case = _case(conv_id)
     assert case.bundle["escalate_reason"] == "unknown_intent_thrice"
@@ -512,7 +512,7 @@ def test_handoff_summary_failure_uses_deterministic_fallback(monkeypatch):
 
     replies = _turn(conv_id, "quiero hablar con una persona", "wamid.failure")
 
-    assert replies == ["Un asesor revisará tu caso y te contactará a la brevedad."]
+    assert replies == [REPLY_TEXT_DEFAULTS["handoff_persona"]]
     assert _conversation_state(conv_id) == "human"
     with SessionLocal() as session:
         case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
@@ -521,6 +521,7 @@ def test_handoff_summary_failure_uses_deterministic_fallback(monkeypatch):
 
 
 def test_configured_handoff_reply_is_used(monkeypatch):
+    """S4: the owner's text for this reason wins over the shipped default."""
     monkeypatch.setattr(
         "app.chat.nodes.handoff.generate_summary",
         lambda state, customer: "resumen",
@@ -530,7 +531,7 @@ def test_configured_handoff_reply_is_used(monkeypatch):
         set_setting(
             session,
             REPLY_TEXTS_KEY,
-            {**REPLY_TEXT_DEFAULTS, "handoff": custom},
+            {**REPLY_TEXT_DEFAULTS, "handoff_persona": custom},
             actor="test",
         )
         session.commit()
@@ -607,7 +608,8 @@ def test_hh5_human_state_persists_without_bot_reply(mock_openai_chat):
                 )
             )
         )
-    assert all("asesor" in (m.text or "") for m in outbound)  # only the handoff reply
+    # only the handoff reply, and it is the one for a person request (S4)
+    assert [m.text for m in outbound] == [REPLY_TEXT_DEFAULTS["handoff_persona"]]
     assert len(mock_openai_chat) == calls_before
 
 

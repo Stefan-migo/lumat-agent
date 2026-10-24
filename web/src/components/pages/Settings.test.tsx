@@ -433,6 +433,59 @@ describe("Settings", () => {
     })));
   });
 
+  describe("derivaciones (S4)", () => {
+    const derivations = {
+      handoff_cobertura: "Sin cobertura en {{comuna}}.",
+      handoff_persona: "Te paso con una persona del equipo.",
+      handoff_unknown_intent_thrice: "Te dejo con una persona del equipo.",
+      handoff_campo_sin_respuesta: "Un asesor te contacta para coordinar.",
+      handoff_booking_unavailable: "No hay horarios: un asesor te contacta.",
+    };
+    const withDerivations = () => settings({
+      reply_texts: { texts: derivations, slots: { handoff_cobertura: ["comuna"] }, customized: false },
+    });
+
+    it("renders the five cases the customer reads a text for", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
+      await user.click(screen.getByRole("tab", { name: "Conducta" }));
+
+      expect(screen.getByRole("heading", { name: "Derivaciones" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Comuna sin cobertura")).toHaveValue("Sin cobertura en {{comuna}}.");
+      expect(screen.getByLabelText("Pide hablar con una persona")).toHaveValue("Te paso con una persona del equipo.");
+      expect(screen.getByLabelText("Tres mensajes sin entender")).toHaveValue("Te dejo con una persona del equipo.");
+      expect(screen.getByLabelText("Un dato no se logró tomar")).toHaveValue("Un asesor te contacta para coordinar.");
+      expect(screen.getByLabelText("No hay horarios para agendar")).toHaveValue("No hay horarios: un asesor te contacta.");
+      // the only slot of the group is named next to its case
+      expect(screen.getByText("{{comuna}}")).toBeInTheDocument();
+    });
+
+    it("saves an edited derivation text with the whole reply map", async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+      render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
+      await user.click(screen.getByRole("tab", { name: "Conducta" }));
+
+      fireEvent.change(screen.getByLabelText("Pide hablar con una persona"), { target: { value: "Ahora te escribe alguien del equipo." } });
+      await user.click(screen.getByRole("button", { name: "Guardar derivaciones" }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
+        body: JSON.stringify({ texts: { ...derivations, handoff_persona: "Ahora te escribe alguien del equipo." } }),
+      })));
+    });
+
+    it("renders only the derivation rule that has a reader", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await user.click(screen.getByRole("tab", { name: "Conducta" }));
+
+      const rules = screen.getByRole("group", { name: "Derivar a una persona cuando" });
+
+      expect(within(rules).getAllByRole("checkbox")).toHaveLength(1);
+      expect(within(rules).getByRole("checkbox", { name: "Comuna fuera de cobertura" })).toBeChecked();
+    });
+  });
+
   it("adds a service duration and saves the map", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));

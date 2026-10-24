@@ -44,6 +44,7 @@ from app.models import (  # noqa: E402
     MessageStatus,
     MessageType,
 )
+from app.services.settings import REPLY_TEXT_DEFAULTS  # noqa: E402
 from app.webhook import ingest  # noqa: E402
 from app.webhook import router as router_module  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -366,9 +367,15 @@ def test_retry_storm_single_processing_pass(client, mock_openai_chat, mock_meta_
     assert len(outbound) == 3
     assert any("entend" in (m.text or "") for m in outbound)  # failure 1: rephrase
     assert any("coordinar una visita" in (m.text or "") for m in outbound)  # failure 2: offer
-    assert any("asesor" in (m.text or "") for m in outbound)  # failure 3: derive
+    assert any(
+        REPLY_TEXT_DEFAULTS["handoff_unknown_intent_thrice"] in (m.text or "")
+        for m in outbound
+    )  # failure 3: derive
     assert any("coordinar una visita" in (m.text or "") for m in outbound)  # offer
-    assert any("asesor" in (m.text or "") for m in outbound)  # handoff reply
+    assert sum(
+        REPLY_TEXT_DEFAULTS["handoff_unknown_intent_thrice"] in (m.text or "")
+        for m in outbound
+    ) == 1  # handoff reply answered exactly once
 
 
 # ---------------------------------------------------------------------------
