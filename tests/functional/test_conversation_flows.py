@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY  # noqa: E402
-from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS, REPLY_TEXT_DEFAULTS  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
@@ -242,7 +242,7 @@ def test_hh3_three_failures_escalate(client, mock_openai_chat, mock_meta_send):
 
     assert len(replies) == 4
     assert "Hola, soy Max, el asistente virtual de Lumat." in replies[0]
-    assert "asesor revisará tu caso" in replies[-1]  # handoff reply
+    assert replies[-1] == REPLY_TEXT_DEFAULTS["handoff_unknown_intent_thrice"]  # S4
     assert conversation.state == ConversationState.HUMAN  # HH-1 bot->human
     assert len(cases) == 1  # deriva bundle created (HH-2)
     assert cases[0].conversation_id == conversation.id

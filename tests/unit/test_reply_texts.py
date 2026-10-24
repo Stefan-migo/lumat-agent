@@ -43,6 +43,11 @@ EXPECTED_KEYS = {
     "manage_cancel_unavailable",
     "manage_cancelled",
     "handoff",
+    "handoff_cobertura",
+    "handoff_persona",
+    "handoff_unknown_intent_thrice",
+    "handoff_campo_sin_respuesta",
+    "handoff_booking_unavailable",
     "capture_evidence",
     "capture_consent",
 }
@@ -88,8 +93,20 @@ def test_every_default_slot_is_whitelisted_for_its_key():
 
 def test_the_slot_vocabulary_is_closed():
     assert set().union(*REPLY_TEXT_SLOTS.values()) == {
-        "opciones", "fecha", "visita", "accion", "tecnico"
+        "opciones", "fecha", "visita", "accion", "tecnico", "comuna"
     }
+
+
+def test_only_the_coverage_derivation_takes_a_slot():
+    """S4: one derivation text names the comuna; the other four are plain."""
+    assert REPLY_TEXT_SLOTS["handoff_cobertura"] == frozenset({"comuna"})
+    for key in (
+        "handoff_persona",
+        "handoff_unknown_intent_thrice",
+        "handoff_campo_sin_respuesta",
+        "handoff_booking_unavailable",
+    ):
+        assert REPLY_TEXT_SLOTS[key] == frozenset(), key
 
 
 def test_validate_accepts_a_complete_map():
@@ -123,6 +140,10 @@ def test_validate_accepts_a_text_that_drops_its_slot():
         pytest.param(
             {**REPLY_TEXT_DEFAULTS, "booking_confirmed": "Confirmado {{telefono}}."},
             id="unknown-slot",
+        ),
+        pytest.param(
+            {**REPLY_TEXT_DEFAULTS, "handoff_persona": "Te paso con {{comuna}}."},
+            id="comuna-not-allowed-for-the-key",
         ),
     ],
 )

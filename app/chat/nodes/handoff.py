@@ -30,6 +30,7 @@ from app.models import (
     ConversationState as ConversationStateEnum,
     Customer,
 )
+from app.services import prompts
 from app.services.audit import record_audit
 from app.services.cases import create_handoff_case
 from app.services.realtime import record_activity
@@ -37,14 +38,47 @@ from app.services.settings import REPLY_TEXT_DEFAULTS, get_reply_texts
 
 logger = logging.getLogger(__name__)
 
-# The shipped handoff wording. The node answers with the configured `handoff`
-# text from settings; this alias is the default the tests assert.
+# The shipped generic handoff wording, used by every reason that has no text of
+# its own (and as the fallback when a derivation text cannot be filled). This
+# alias is the default the tests assert.
 HANDOFF_REPLY = REPLY_TEXT_DEFAULTS["handoff"]
+
+# S4: the five escalation reasons whose wording the customer reads. Every other
+# reason (injection, emergency, cost limits, KB misses, unclear bookings…) keeps
+# the generic `handoff` text, so a reason added later never ships copy nobody
+# reviewed. The keys are `reply.texts` entries, editable from the panel.
+DERIVATION_REPLY_KEYS: dict[str, str] = {
+    "cobertura": "handoff_cobertura",
+    "persona": "handoff_persona",
+    "unknown_intent_thrice": "handoff_unknown_intent_thrice",
+    "campo_sin_respuesta": "handoff_campo_sin_respuesta",
+    "booking_unavailable": "handoff_booking_unavailable",
+}
 
 
 def _escalate_reason(state: ConversationState) -> str:
     """Label the escalation: post-classification reason > gate trigger."""
     return state.escalate_reason or state.handoff_reason or "handoff"
+
+
+def derivation_reply(
+    texts: dict[str, str], reason: str, captured: dict | None = None
+) -> str:
+    """The text the customer reads for this escalation reason (S4).
+
+    Only the slot the chosen text declares is filled, and the coverage text falls
+    back to the generic one when the captured comuna is missing: `render_text` is
+    strict, so an unfilled `{{comuna}}` would otherwise reach the customer as
+    literal braces or break the escalation.
+    """
+    key = DERIVATION_REPLY_KEYS.get(reason, "handoff")
+    values: dict[str, str] = {}
+    if "comuna" in prompts.placeholders(texts[key]):
+        comuna = (captured or {}).get("comuna")
+        if not comuna or comuna == "unknown":
+            return render_reply(texts, "handoff")
+        values["comuna"] = comuna
+    return render_reply(texts, key, **values)
 
 
 def handoff(state: ConversationState) -> dict:
@@ -69,7 +103,9 @@ def handoff(state: ConversationState) -> dict:
             summary_text = compose_fallback_summary(state)
 
     with session_scope() as session:
-        handoff_reply = render_reply(get_reply_texts(session), "handoff")
+        handoff_reply = derivation_reply(
+            get_reply_texts(session), reason, state.captured
+        )
         conversation = session.get(Conversation, state.conversation_id)
         case = create_handoff_case(
             session, state, summary_text=summary_text, reason=reason

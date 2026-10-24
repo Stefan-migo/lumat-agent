@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from app.chat.nodes.handoff import HANDOFF_REPLY
+from app.services.settings import REPLY_TEXT_DEFAULTS
 from app.db import SessionLocal
 from app.models import (
     Appointment, Conversation, ConversationState, Customer, Message,
@@ -177,7 +178,7 @@ def test_escalation_thread_keeps_emergency_deterministic_and_person_request_huma
         sender="56922223333",
     )
     with SessionLocal() as session:
-        assert _outbound_texts(session)[-1] == HANDOFF_REPLY
+        assert _outbound_texts(session)[-1] == REPLY_TEXT_DEFAULTS["handoff_persona"]
         conversation = session.scalars(
             select(Conversation).join(Customer).where(Customer.phone_e164 == "+56922223333")
         ).one()
