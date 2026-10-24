@@ -118,8 +118,8 @@ export const settings: Settings = {
     customized: false,
   },
   reply_texts: {
-    // Production returns all 20 keys; the story mirrors them so the grouped
-    // editor renders complete instead of 17 empty fields.
+    // Production returns all 25 keys; the story mirrors them so the grouped
+    // editor and the Derivaciones card render complete instead of empty fields.
     texts: {
       booking_offer: "Tengo estos horarios disponibles para la visita técnica:\n{{opciones}}",
       booking_no_more_today: "Para ese día no me quedan más horarios. Te propongo estos otros días:\n{{opciones}}",
@@ -139,6 +139,11 @@ export const settings: Settings = {
       manage_cancel_unavailable: "No puedo cancelar esa visita desde acá.",
       manage_cancelled: "Tu visita del {{visita}} quedó cancelada.",
       handoff: "Te derivo con un asesor de Lumat para seguir con tu caso.",
+      handoff_cobertura: "Todavía no tenemos visitas técnicas en {{comuna}}, un asesor de Lumat se contactará contigo para ayudarte a la brevedad.",
+      handoff_persona: "Listo, te paso con una persona del equipo. En cuanto esté disponible te escribe por acá.",
+      handoff_unknown_intent_thrice: "No quiero seguir dándote vueltas con esto. Te dejo con una persona del equipo para que te ayude directamente.",
+      handoff_campo_sin_respuesta: "Veo que esa pregunta no te acomoda. Un asesor de Lumat te contacta para terminar de coordinar los datos.",
+      handoff_booking_unavailable: "No encontré un horario que nos sirva en la agenda, así que no te voy a dejar esperando: un asesor de Lumat te contacta para coordinar la visita directamente.",
       capture_evidence: "Si puedes, mándame una foto del equipo o del código de error.",
       capture_consent: "¿Te parece si coordinamos una visita técnica?",
     },
@@ -161,6 +166,11 @@ export const settings: Settings = {
       manage_cancel_unavailable: [],
       manage_cancelled: ["visita"],
       handoff: [],
+      handoff_cobertura: ["comuna"],
+      handoff_persona: [],
+      handoff_unknown_intent_thrice: [],
+      handoff_campo_sin_respuesta: [],
+      handoff_booking_unavailable: [],
       capture_evidence: [],
       capture_consent: [],
     },

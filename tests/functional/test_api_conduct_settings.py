@@ -62,9 +62,9 @@ def test_conduct_is_exposed_with_its_closed_options(admin):
     ]
     assert conduct["options"]["fields"][0]["label"] == CAPTURE_FIELD_LABELS["failure"]
     assert conduct["options"]["max_preguntas_por_mensaje"] == [1, 2]
-    # Only the rules with a reader: the other four gate nothing yet (L6).
+    # S4: the closed list is exactly the rules with a reader.
     assert conduct["options"]["derivaciones"] == list(
-        settings_service.CONDUCT_DERIVACIONES_READ
+        settings_service.CONDUCT_DERIVACIONES
     )
 
 
@@ -161,8 +161,9 @@ def test_reply_texts_save_is_visible_in_the_settings_payload(admin):
 def test_every_derivation_the_panel_renders_has_a_reader(admin):
     """S10/S18: a checkbox the panel shows must be read by app code.
 
-    Four of the five rules T10 listed gate nothing yet, so they stay out of the
-    panel (same call as `redaccion`, L6) until they actually derive a case.
+    T10 listed five rules and only `cobertura` gated anything; S4 removed the
+    other four from the closed list instead of keeping them as switches with no
+    effect. This guard fails if the panel ever renders a rule the code ignores.
     """
     root = Path(__file__).resolve().parents[2]
     code = "\n".join(

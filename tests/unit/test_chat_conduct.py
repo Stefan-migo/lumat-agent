@@ -44,14 +44,13 @@ def test_the_defaults_are_the_closed_enum_values():
     assert CHAT_CONDUCT_DEFAULTS["derivaciones"] == list(CONDUCT_DERIVACIONES)
 
 
-def test_the_closed_derivation_list_is_the_five_rules():
-    assert set(CONDUCT_DERIVACIONES) == {
-        "cobertura",
-        "pedido_explicito",
-        "garantia",
-        "servicio_sin_tarifa",
-        "presupuesto_especial",
-    }
+def test_the_closed_derivation_list_keeps_only_the_rule_with_a_reader():
+    """S4: the four rules that gated nothing are out of the stored object.
+
+    They were dead configuration: `chat.conduct.derivaciones` is the closed list
+    of rules the derivation logic reads, and `cobertura` is the only one.
+    """
+    assert CONDUCT_DERIVACIONES == ("cobertura",)
 
 
 def test_validate_accepts_a_complete_conduct_object():
@@ -97,6 +96,13 @@ def test_validate_accepts_a_single_active_derivation():
     assert validate_conduct(value, FIELDS)["derivaciones"] == ["cobertura"]
 
 
+def test_validate_accepts_no_active_derivation():
+    """With one rule left, an empty list is how the owner turns it off (S15)."""
+    value = {**VALID, "derivaciones": []}
+
+    assert validate_conduct(value, FIELDS)["derivaciones"] == []
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -122,7 +128,6 @@ def test_validate_accepts_a_single_active_derivation():
         pytest.param({**VALID, "max_preguntas_por_mensaje": 0}, id="max-zero"),
         pytest.param({**VALID, "max_preguntas_por_mensaje": "1"}, id="max-not-an-int"),
         pytest.param({**VALID, "max_preguntas_por_mensaje": True}, id="max-is-a-bool"),
-        pytest.param({**VALID, "derivaciones": []}, id="no-derivation-reachable"),
         pytest.param({**VALID, "derivaciones": "cobertura"}, id="derivaciones-not-a-list"),
         pytest.param({**VALID, "derivaciones": ["cobertura", "inventada"]}, id="unknown-derivation"),
     ],
@@ -137,6 +142,30 @@ def test_get_returns_the_defaults_without_a_row():
     session.get.return_value = None
 
     assert get_conduct(session) == CHAT_CONDUCT_DEFAULTS
+
+
+def test_get_drops_a_stored_rule_without_a_reader():
+    """A row saved while the four phantom rules were accepted keeps loading.
+
+    Without the filter the panel would render a rule it cannot validate, and the
+    next save of the conduct card would answer 422.
+    """
+    session = MagicMock()
+    row = MagicMock()
+    row.value = {"derivaciones": ["cobertura", "garantia", "pedido_explicito"]}
+    session.get.return_value = row
+
+    assert get_conduct(session)["derivaciones"] == ["cobertura"]
+
+
+def test_a_stored_row_without_a_rule_with_a_reader_reads_as_no_derivation():
+    """A row whose rules were all phantom meant "cobertura off": keep it off."""
+    session = MagicMock()
+    row = MagicMock()
+    row.value = {"derivaciones": ["garantia"]}
+    session.get.return_value = row
+
+    assert get_conduct(session)["derivaciones"] == []
 
 
 def test_get_falls_back_per_key_on_a_partial_row():

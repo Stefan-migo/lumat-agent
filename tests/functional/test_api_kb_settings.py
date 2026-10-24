@@ -1432,7 +1432,7 @@ _CONDUCT = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
     "redaccion": "plantilla",
     "max_preguntas_por_mensaje": 2,
-    "derivaciones": ["cobertura", "garantia"],
+    "derivaciones": ["cobertura"],
 }
 
 

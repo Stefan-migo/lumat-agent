@@ -64,21 +64,12 @@ CAPTURE_QUESTIONS_KEY = "capture.questions"
 CHAT_CONDUCT_KEY = "chat.conduct"
 CONDUCT_REDACCIONES: tuple[str, ...] = ("llm", "plantilla")
 CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
-# The closed list of derivation rules (S10). All five are active by default:
-# deactivating one silently drops the case it covers, and S15 requires the
-# out-of-coverage case to reach an advisor without any panel change.
-CONDUCT_DERIVACIONES: tuple[str, ...] = (
-    "cobertura",
-    "pedido_explicito",
-    "garantia",
-    "servicio_sin_tarifa",
-    "presupuesto_especial",
-)
-# S10/S18: the rules the derivation logic actually reads. T10 listed five and
-# T15 implemented `cobertura`; the other four gate nothing, so the panel renders
-# only the ones with a reader (same call as `redaccion`, L6). They stay in the
-# stored object so nothing is lost when the readers land.
-CONDUCT_DERIVACIONES_READ: tuple[str, ...] = ("cobertura",)
+# The closed list of derivation rules (S10): exactly the ones the derivation
+# logic reads. T10 listed five and T15 implemented `cobertura`; S4 removed the
+# other four, which gated nothing and were dead configuration the panel could
+# neither explain nor save back. `get_conduct` filters a stored row down to this
+# list, so a row saved while they were accepted keeps loading.
+CONDUCT_DERIVACIONES: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
     "redaccion": "llm",
@@ -164,6 +155,29 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     ),
     "manage_cancelled": "Tu visita del {{visita}} quedó cancelada.",
     "handoff": "Un asesor revisará tu caso y te contactará a la brevedad.",
+    # S4 (chatbot-experiencia): one approved text per derivation reason the
+    # customer reads. The remaining reasons keep `handoff` above.
+    "handoff_cobertura": (
+        "Todavía no tenemos visitas técnicas en {{comuna}}, un asesor de Lumat se "
+        "contactará contigo para ayudarte a la brevedad."
+    ),
+    "handoff_persona": (
+        "Listo, te paso con una persona del equipo. En cuanto esté disponible te "
+        "escribe por acá."
+    ),
+    "handoff_unknown_intent_thrice": (
+        "No quiero seguir dándote vueltas con esto. Te dejo con una persona del "
+        "equipo para que te ayude directamente."
+    ),
+    "handoff_campo_sin_respuesta": (
+        "Veo que esa pregunta no te acomoda. Un asesor de Lumat te contacta para "
+        "terminar de coordinar los datos."
+    ),
+    "handoff_booking_unavailable": (
+        "No encontré un horario que nos sirva en la agenda, así que no te voy a "
+        "dejar esperando: un asesor de Lumat te contacta para coordinar la visita "
+        "directamente."
+    ),
     "capture_evidence": "¿Tienes algo más para pasarle al técnico? (una foto, un audio…)",
     "capture_consent": (
         "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
@@ -173,7 +187,8 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
 # S8: the slots each reply may use. The owner can drop a slot from a text, never
 # add one the call site does not fill: an unfilled `{{fecha}}` would reach the
 # customer. `opciones` is the numbered list, `accion` the verb (cancelar /
-# reagendar), `fecha` the appointment datetime and `visita` its full label.
+# reagendar), `fecha` the appointment datetime, `visita` its full label and
+# `comuna` the captured commune of a coverage derivation (S4).
 REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "booking_offer": frozenset({"opciones"}),
     "booking_unclear": frozenset(),
@@ -193,6 +208,11 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "manage_cancel_unavailable": frozenset(),
     "manage_cancelled": frozenset({"visita"}),
     "handoff": frozenset(),
+    "handoff_cobertura": frozenset({"comuna"}),
+    "handoff_persona": frozenset(),
+    "handoff_unknown_intent_thrice": frozenset(),
+    "handoff_campo_sin_respuesta": frozenset(),
+    "handoff_booking_unavailable": frozenset(),
     "capture_evidence": frozenset(),
     "capture_consent": frozenset(),
 }
@@ -1008,8 +1028,8 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
         )
 
     derivaciones = value["derivaciones"]
-    if not isinstance(derivaciones, list) or not derivaciones:
-        raise ValueError("chat.conduct.derivaciones must be a non-empty list of rules")
+    if not isinstance(derivaciones, list):
+        raise ValueError("chat.conduct.derivaciones must be a list of rules")
     unknown_rules = [rule for rule in derivaciones if rule not in CONDUCT_DERIVACIONES]
     if unknown_rules:
         raise ValueError(f"chat.conduct.derivaciones has unknown rules: {unknown_rules}")
@@ -1023,14 +1043,27 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
 
 
 def get_conduct(session: Session) -> dict[str, Any]:
-    """Configured conduct, falling back per key to the shipped default (S10)."""
+    """Configured conduct, falling back per key to the shipped default (S10).
+
+    S4: `derivaciones` is filtered down to the closed list of rules the logic
+    reads. A row saved while the four phantom rules were still accepted keeps
+    loading, and the panel never receives a rule it cannot save back. An empty
+    list is a real value — the owner turned every derivation off — so it is not
+    replaced by the default; only a missing or malformed value falls back.
+    """
     stored = get_setting(session, CHAT_CONDUCT_KEY, default={})
     if not isinstance(stored, dict):
         stored = {}
-    return {
+    conduct = {
         key: stored.get(key) or (list(default) if isinstance(default, list) else default)
         for key, default in CHAT_CONDUCT_DEFAULTS.items()
     }
+    rules = stored.get("derivaciones")
+    if isinstance(rules, list):
+        conduct["derivaciones"] = [
+            rule for rule in rules if rule in CONDUCT_DERIVACIONES
+        ]
+    return conduct
 
 
 # Frente 2 unit 3: the exact setting keys the panel assistant may PROPOSE for a

@@ -262,7 +262,7 @@ def _conduct_payload(session: Session) -> dict:
                 for field in CAPTURE_FIELD_ORDER
             ],
             "max_preguntas_por_mensaje": list(settings_service.CONDUCT_MAX_PREGUNTAS),
-            "derivaciones": list(settings_service.CONDUCT_DERIVACIONES_READ),
+            "derivaciones": list(settings_service.CONDUCT_DERIVACIONES),
         },
     }
 

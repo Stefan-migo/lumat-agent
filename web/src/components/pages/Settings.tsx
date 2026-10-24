@@ -67,11 +67,40 @@ const MESSAGE_TEMPLATES = [
 ] as const;
 const DERIVACION_LABELS: Record<string, string> = {
   cobertura: "Comuna fuera de cobertura",
-  pedido_explicito: "El cliente pide hablar con una persona",
-  garantia: "Consulta de garantía",
-  servicio_sin_tarifa: "Servicio sin tarifa publicada",
-  presupuesto_especial: "Presupuesto especial",
 };
+/**
+ * S4: the five derivations whose wording the customer reads. Every other
+ * reason (inyección, emergencia, límites de costo, KB) reuses the generic
+ * "Derivación a un asesor" text from Respuestas del flujo, so the panel never
+ * offers copy nobody reviewed.
+ */
+const DERIVACION_CASES: Array<{ key: string; label: string; when: string }> = [
+  {
+    key: "handoff_cobertura",
+    label: "Comuna sin cobertura",
+    when: "Pide una visita en una comuna donde todavía no se atiende. Usa el dato de la comuna.",
+  },
+  {
+    key: "handoff_persona",
+    label: "Pide hablar con una persona",
+    when: "Dice que quiere hablar con alguien del equipo.",
+  },
+  {
+    key: "handoff_unknown_intent_thrice",
+    label: "Tres mensajes sin entender",
+    when: "Tres mensajes seguidos y no se logra entender qué necesita.",
+  },
+  {
+    key: "handoff_campo_sin_respuesta",
+    label: "Un dato no se logró tomar",
+    when: "Se preguntó dos veces el mismo dato y el cliente no lo respondió.",
+  },
+  {
+    key: "handoff_booking_unavailable",
+    label: "No hay horarios para agendar",
+    when: "Se intentó agendar la visita y no quedó ningún horario disponible.",
+  },
+];
 const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: "Agendar", keys: ["booking_offer", "booking_no_more_today", "booking_unclear", "booking_confirmed"] },
   { title: "Gestionar una visita", keys: [
@@ -620,12 +649,25 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               </label>)}
             </fieldset>
             <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
-            <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente mensaje.")}<Button disabled={saving("conduct") || !draft.conduct.orden.length || !draft.conduct.derivaciones.length} onClick={() => void saveConduct()}>Guardar conducta</Button></div>
+            <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente mensaje.")}<Button disabled={saving("conduct") || !draft.conduct.orden.length} onClick={() => void saveConduct()}>Guardar conducta</Button></div>
           </Card>
           <Card title="Preguntas de captura" description="El texto exacto que recibe el cliente para cada dato. Se envía tal cual: sin llaves.">
             <p className="settings-agent__helper">El orden lo define la tarjeta de arriba. Guarda el orden antes de editar los textos.</p>
             {Object.entries(draft.captureQuestions).map(([field, text]) => <Textarea key={field} label={data.conduct.options.fields.find((each) => each.value === field)?.label ?? field} rows={2} value={text} onChange={(event) => update("captureQuestions", { ...draft.captureQuestions, [field]: event.target.value })} />)}
             <div className="settings-agent__footer">{footer("El cliente recibe este texto literal.")}<Button disabled={saving("captureQuestions") || Object.values(draft.captureQuestions).some((value) => !value.trim() || value.includes("{{") || value.includes("}}"))} onClick={() => void saveCaptureQuestions()}>Guardar preguntas</Button></div>
+          </Card>
+          <Card title="Derivaciones" description="Los cinco casos en que el bot pasa la conversación a una persona y el texto que el cliente lee en cada uno.">
+            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>, en la sección Mensajes. Estos cinco son los únicos que se pueden editar acá.</p>
+            <div className="settings-messages__reply-group">
+              {DERIVACION_CASES.map(({ key, label, when }) => {
+                const slots = data.reply_texts?.slots?.[key] ?? [];
+                return <div className="settings-messages__reply" key={key}>
+                  <Textarea label={label} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
+                  <p className="settings-agent__helper">{when}{slots.length ? <> Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></> : null}</p>
+                </div>;
+              })}
+            </div>
+            <div className="settings-agent__footer">{footer("El cliente recibe este texto tal cual.")}<Button disabled={saving("replyTexts") || DERIVACION_CASES.some(({ key }) => !(draft.replyTexts[key] ?? "").trim())} onClick={() => void saveReplyTexts()}>Guardar derivaciones</Button></div>
           </Card>
         </> : null}
         {active === "messages" ? <>
