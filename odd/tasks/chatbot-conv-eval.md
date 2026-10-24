@@ -63,7 +63,10 @@ harness, `run_conversation`.
 
 > "1. si doy mi consentimiento. 2. si para el cliente simulado y el juez esta perfecto."
 
-- Cliente: **scripted en YAML por defecto**, simulado por LLM con `--live`.
+- Cliente: **scripted en YAML por defecto**, simulado por LLM con `--live`. Los turnos scripted son
+  la **apertura**: en `--live` el simulador tiene además `SIMULATED_TURNS` turnos de margen, salvo que
+  el escenario declare un techo (`max_turns`), y para en cuanto reporta `goal_reached` (mecanismo y
+  medición en L12).
 - Corpus: lo escribe el agente desde la KB y el tarifario; **el owner corrige** antes de usarlo como
   línea base.
 - Evaluación: **gates deterministas + juez LLM** por rúbrica 0–4 por dimensión.
@@ -125,6 +128,7 @@ juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no ver
 | T5 | E4 | juez LLM por rúbrica con hard-fail caps | `efffdf2c` (+`70b7c531`) |
 | T6 | E5 | modo `--live` con cliente simulado | `e1f87914` (cableado; falta ejercitarlo) |
 | T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `d585f384` + `01084054` |
+| T8 | E5 | presupuesto de turnos del cliente simulado: margen por defecto, techo declarado y la excepción deliberada | este PR |
 
 ## Log
 
@@ -374,3 +378,39 @@ Sobre la evidencia, con las dos decisiones de L10 aplicadas:
   código medido es bit a bit el mismo: el árbol del tip no cambió en ninguna de las dos
   reescrituras. Equivalencias vigentes: `3cd0406a`→`4a4df426`, `6cf76f59`→`caf0109e`,
   `fb5220fe`→`de48307e`. Los sellos se dejan como están: reescribirlos sería falsificar el reporte.
+
+### L12 — el cliente simulado vuelve a tener turnos (2026-10-23)
+
+> "ok puedes hacerte cargo de 1."
+
+En el cierre de la entrega ese "1" era el trabajo pendiente #2: darle espacio al cliente simulado, que
+sin turnos no actúa como cliente.
+
+El defecto cabía en una línea. `max_turns` se resolvía en el parser como
+`entry.get("max_turns", len(turns))`, y `plan_turns` llena el presupuesto primero con los turnos
+scripted y solo después, bajo `--live`, con turnos simulados. Con el presupuesto igual al largo del
+guion, la rama simulada era **inalcanzable**: 10 de los 14 escenarios no dejaban hablar al simulador ni
+una vez (9 por el default y el saludo), y los otros 4 declaraban `turns + 1`, o sea exactamente un
+turno. La planilla S9 lo dejaba ver: en `super-enojo-reclamo` el único turno con la amenaza de reseña lo
+escribió el LLM, porque ese escenario era uno de los cuatro con techo declarado.
+
+Arreglo (`resolve_budget`, T8): manda el `--max-turns` explícito; después el techo que declare el
+escenario; si no declara nada, un run scripted corta en su guion y uno `--live` suma
+`SIMULATED_TURNS = 3`. Es un **techo, no un objetivo** — el simulador reporta `goal_reached` y la
+corrida termina ahí, así que el margen no alarga un escenario corto.
+
+Consecuencias medidas, y deliberadas:
+
+- **13 de 14 escenarios planean 3 turnos simulados.** `simple-saludo-variante` queda en 0 con techo
+  declarado 1: su objetivo se cumple en el saludo y seguir midiendo persistencia es lo que S3 y L5
+  dejaron fuera del corpus. Es la única excepción y un test la nombra.
+- **Las corridas scripted no cambian en nada**: `plan_turns` corta en el guion y un test fija el plan
+  exacto de los 14. El margen existe solo en `--live`.
+- Se sacaron los cuatro `max_turns: turns + 1` que quedaban: eran el parche del default viejo y, con
+  el arreglo, dejaban a esos escenarios con **menos** margen que los que no declaraban nada.
+- El `corpus_fingerprint` cambia, y `compare_runs` ya marca no comparable un diff contra otro corpus:
+  `live-baseline-2` no se puede comparar contra una corrida nueva, y el reporte lo dice.
+
+El otro punto del pendiente —"que no escriba como el bot"— ya estaba cubierto por construcción:
+`_SIMULATOR_INSTRUCTIONS` abre con "You are NOT the assistant and you never write as one". No tenía
+test; ahora tiene dos, que fijan ese guard y el corte por `goal_reached`.
