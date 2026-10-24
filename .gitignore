@@ -52,3 +52,7 @@ refs/current/
 .ruff_cache/
 .mypy_cache/
 # rapso:end
+
+# Conversation-eval runs: the transcripts and the Markdown report are the permanent
+# record, the 40-70 KB JSON is only the input for the diff against the previous run.
+odd/evals/*.json
