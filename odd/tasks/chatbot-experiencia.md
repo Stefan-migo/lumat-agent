@@ -346,3 +346,33 @@ este commit (docs). Rama rearmada desde `main` (`497875af`) después de mergear 
 - Duplicado conocido, no podado: el caso "saludo sin contenido" de `test_first_turn_greeting.py` se
   solapa con `test_greeting_variants.py`. Se dejó anotado: podar tests es una decisión aparte, no un
   efecto colateral de mover pins.
+
+**L12 — decisión del owner sobre los acuses (2026-10-23), verbatim de la opción elegida:**
+
+> Completar S3 ahora: acuses fuera, despedida sólo explícita. La despedida queda sólo para cierres
+> explícitos (chao, adiós, hasta luego). "Gracias" pasa a recibir el texto de cortesía. Costo: si el
+> cliente se despide con un "gracias" final, el bot le pregunta si necesita algo más en vez de cerrar.
+
+**L13 — T6 cerrado (2026-10-23), evidencia observada.** Commit `702f8a8e` (código, tests y panel) +
+este commit (docs).
+
+- RED: `test_smalltalk.py` fallaba con la oferta de KB-miss en vez del texto de cortesía. Además se
+  observó que un `gracias` pelado tomaba la despedida del `closure_gate` **antes** de clasificarse.
+- GREEN: `quick` exit 0; `focused` de smalltalk/intent/unknown-streak/settings/persona → 130 tests;
+  panel `npm run build` exit 0 y `npm test` → 111 archivos / 1265 tests; `full` → **2852 tests,
+  0 fallos**, exit 0 (7m8s), corrida propia después del cambio del gate.
+- Diseño: `smalltalk` en la persona del clasificador (con `unknown` redefinido como incomprensión
+  real); `classify_intent` registra `classified/intent:smalltalk`, **no** toca `unknown_count` ni las
+  scope-rules; `orchestrate` rutea explícito a `respond` también en captura; `respond` responde con
+  `messages.smalltalk` antes de templates, aclaración y KB.
+- `_SOCIAL_ONLY` **no** se extendió, como manda la spec: el vocabulario lo pone el clasificador.
+- `closure_gate`: `CLOSING_TOKENS` queda sólo con cierres explícitos (`adios`, `bye`, `chao`, `chau`,
+  `hasta`, `luego`, `nos`, `pronto`, `vemos`) y "eso fue todo" gana su propio camino (frase matcheada
+  sin tokens restantes = despedida), porque dependía del agradecimiento que la seguía.
+- Pins movidos: hash del catálogo del planner (`721dfa2b…`, probado quitando sólo la clave nueva),
+  catálogo de mensajes del panel de 10 a 11, `MessagesBody` con la clave requerida, fixtures y pins de
+  stories/mock.
+- Decisión de empaquetado: un solo commit aunque el cambio tenga dos mitades (cortesía + gate), porque
+  los tests de acuses dependen del gate y un commit intermedio quedaría con la suite en rojo.
+- Consecuencia declarada y aceptada por el owner: un "gracias" final ya no cierra la conversación; el
+  bot ofrece seguir. Es el precio de no usar una lista determinista para decidir cuándo terminar.

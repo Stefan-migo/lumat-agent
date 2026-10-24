@@ -44,10 +44,11 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
     # read_project_file offset/limit paging fields, the T3/T4 appointment
     # recipes (appointment_reminder, appointment_followup,
     # appointment_followup_no_show) in automation.create_rule's recipe list, and
-    # the two named greeting keys messages.greeting_name and
-    # messages.greeting_short_name in settings.update's valid-key list.
+    # the named greeting keys plus messages.smalltalk in settings.update's
+    # valid-key list. Removing only messages.smalltalk reproduces the prior
+    # catalog hash; the new pinned hash is the one-key extension.
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "48e5af3c7dabcb995fc45bef1cca6f7b11aedd5e2d85403c42c9f8c2f949a51c"
+        "721dfa2bf61f3b9d23a7d474146cd60e9da7b16a1e6dbaaa39ae60fe431f2f6a"
     )
 
 

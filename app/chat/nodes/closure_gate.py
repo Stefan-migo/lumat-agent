@@ -18,13 +18,13 @@ from app.db import session_scope
 
 
 CLOSING_TOKENS = frozenset({
-    # Explicit closures.
+    # Explicit closures only. Acknowledgements used to live here too ("gracias",
+    # "ok", "listo", "perfecto"...) because a bare one reached classification,
+    # incremented the unknown-intent count and could be answered with the menu
+    # clarification. That reason is gone: courtesy now has its own classifier
+    # category and its own configurable reply (S3), so the gate stops answering
+    # "ok" to an instruction with a goodbye.
     "adios", "bye", "chao", "chau", "hasta", "luego", "nos", "pronto", "vemos",
-    # Thanks and acknowledgements that end an exchange in practice. Measured: a
-    # bare "gracias" or "ok" otherwise reaches classification, increments an
-    # unknown-intent count, and can be answered with the menu clarification.
-    "gracias", "muchas", "mucho", "ok", "bueno", "dale", "listo", "perfecto",
-    "genial", "excelente", "ya", "nada", "bien",
 })
 _CLOSING_PHRASES = ("eso fue todo",)
 _WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
@@ -45,14 +45,22 @@ def _fold(text: str) -> str:
 
 
 def is_farewell(text: str) -> bool:
-    """Return whether text is only a short customer closing or thanks formula."""
+    """Return whether text is only a short customer closing formula."""
     folded = _fold(text).strip()
     if not folded or len(folded) > 40 or "?" in folded:
         return False
+    matched_phrase = False
     for phrase in _CLOSING_PHRASES:
-        folded = re.sub(rf"\b{re.escape(phrase)}\b", " ", folded)
+        if re.search(rf"\b{re.escape(phrase)}\b", folded):
+            matched_phrase = True
+            folded = re.sub(rf"\b{re.escape(phrase)}\b", " ", folded)
     tokens = _WORD_PATTERN.findall(folded)
-    return bool(tokens) and all(token in CLOSING_TOKENS for token in tokens)
+    if not tokens:
+        # A bare "eso fue todo" is a closing on its own; it used to ride on the
+        # acknowledgement that followed it, and acknowledgements are no longer
+        # closing tokens (S3).
+        return matched_phrase
+    return all(token in CLOSING_TOKENS for token in tokens)
 
 
 def closure_gate(state: ConversationState) -> dict:

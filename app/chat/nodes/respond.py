@@ -292,6 +292,11 @@ def respond(state: ConversationState) -> dict:
     if not text:
         return {}
 
+    if state.intent == "smalltalk":
+        with session_scope() as session:
+            reply = get_message(session, "smalltalk", MESSAGE_DEFAULTS["smalltalk"])
+        return {"replies": [reply]}
+
     # T5/D13: a preset message the classifier picked answers this turn, ahead of
     # the clarification and KB paths.
     template_reply = _render_template_reply(state)

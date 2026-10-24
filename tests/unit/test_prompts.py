@@ -496,6 +496,22 @@ def test_respond_missing_template_falls_back_to_kb(monkeypatch):
     assert answered == [1]
 
 
+def test_respond_smalltalk_uses_configured_message_before_templates_and_kb(monkeypatch):
+    looked_up = []
+    retrieved = []
+    monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(
+        _rn, "get_message", lambda session, key, fallback=None: looked_up.append(key) or "Courtesy override"
+    )
+    monkeypatch.setattr(_rn.kb, "retrieve", lambda *args, **kwargs: retrieved.append(1))
+
+    result = _rn.respond(_respond_state(intent="smalltalk", template_id="preset"))
+
+    assert result == {"replies": ["Courtesy override"]}
+    assert looked_up == ["smalltalk"]
+    assert retrieved == []
+
+
 def test_respond_unknown_intent_renders_picked_template(monkeypatch):
     # A picked preset answers even an unknown-intent turn (before clarification).
     monkeypatch.setattr(_rn, "session_scope", _noop_session_scope)

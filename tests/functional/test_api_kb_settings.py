@@ -895,6 +895,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "greeting_short",
         "greeting_name",
         "greeting_short_name",
+        "smalltalk",
         "cannot_answer",
         "clarification",
         "cannot_understand_offer",
@@ -902,6 +903,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "farewell",
         "out_of_hours",
     }
+    assert body["messages"]["smalltalk"] == "Con gusto. ¿En qué más te puedo ayudar?"
     assert body["messages"]["cannot_understand_offer"] == (
         "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, "
         "o que te atienda una persona?"
@@ -1021,6 +1023,7 @@ def test_settings_update_messages_audited(client, make_user):
         "greeting_short": "Hola editado breve",
         "greeting_name": "Hola Ana editado",
         "greeting_short_name": "Hola Ana editado breve",
+        "smalltalk": "Con gusto, editado.",
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
         "cannot_understand_offer": "¿Visita o persona?",

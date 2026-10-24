@@ -92,6 +92,15 @@ def test_load_prefers_the_configured_override():
     assert prompts.load(_ORCHESTRATOR, override="Eres Max editado.") == "Eres Max editado."
 
 
+def test_classifier_persona_distinguishes_courtesy_from_real_incomprehension():
+    persona = prompts.load("personas/classify.md")
+
+    assert "smalltalk" in persona
+    assert "agradecimientos" in persona
+    assert "no logro entender qué necesita" in persona
+    assert "No uses unknown para decir que el mensaje no es uno de mis temas." in persona
+
+
 def test_load_without_override_still_reads_the_bundled_file():
     assert prompts.load(_ORCHESTRATOR) == prompts.FALLBACKS[_ORCHESTRATOR]
 

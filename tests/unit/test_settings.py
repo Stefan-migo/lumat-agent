@@ -88,6 +88,10 @@ def test_validate_message_templates_rejects_invalid_lists(templates):
         validate_message_templates(templates)
 
 
+def test_smalltalk_default_matches_the_approved_copy_byte_for_byte():
+    assert MESSAGE_DEFAULTS["smalltalk"] == "Con gusto. ¿En qué más te puedo ayudar?"
+
+
 def test_greeting_defaults_match_the_approved_variants_byte_for_byte():
     assert MESSAGE_DEFAULTS["greeting"] == "Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar."
     assert MESSAGE_DEFAULTS["greeting_name"] == "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?"
@@ -102,6 +106,7 @@ def test_assistant_writable_settings_is_the_curated_allowlist():
         "messages.greeting_short",
         "messages.greeting_name",
         "messages.greeting_short_name",
+        "messages.smalltalk",
         "messages.farewell",
         "messages.clarification",
         "messages.cannot_answer",
@@ -120,6 +125,7 @@ def test_assistant_writable_settings_is_the_curated_allowlist():
         ("messages.greeting_short", "Hola!"),
         ("messages.greeting_name", "Hola, {{nombre}}."),
         ("messages.greeting_short_name", "Hola, {{nombre}}."),
+        ("messages.smalltalk", "Con gusto."),
         ("messages.out_of_hours", "Estamos cerrados."),
         ("hours.timezone", "America/Santiago"),
         ("hours.timezone", "UTC"),
