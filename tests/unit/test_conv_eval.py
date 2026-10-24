@@ -109,11 +109,40 @@ def test_shipped_corpus_declares_an_expectation_per_scenario(corpus):
         assert scn.persona and scn.goal, f"{scn.id} cannot be replayed by --live"
 
 
-def test_max_turns_defaults_to_the_scripted_length(corpus):
+def test_a_live_run_gives_the_simulated_customer_room(corpus):
+    """The scripted turns are the opening of the conversation, not all of it."""
     for scn in corpus.scenarios:
-        assert scn.max_turns >= len(scn.turns)
-        if "max_turns" not in scn.raw:
-            assert scn.max_turns == len(scn.turns)
+        budget = ev.resolve_budget(scn, live=True)
+        assert budget >= len(scn.turns)
+        if scn.max_turns is None:
+            assert budget == len(scn.turns) + ev.SIMULATED_TURNS
+        else:
+            assert budget == scn.max_turns
+
+
+def test_a_scripted_run_keeps_its_exact_script(corpus):
+    """The live headroom must never change what a scripted run measures."""
+    for scn in corpus.scenarios:
+        plan = ev.plan_turns(scn.turns, ev.resolve_budget(scn, live=False), live=False)
+        assert plan == [("scripted", text) for text in scn.turns], scn.id
+
+
+def test_an_explicit_budget_wins_over_the_scenario(corpus):
+    scn = corpus.scenarios[0]
+    assert ev.resolve_budget(scn, live=True, override=9) == 9
+    assert ev.resolve_budget(scn, live=False, override=9) == 9
+
+
+def test_a_live_plan_reaches_the_simulated_customer(corpus):
+    """Pins the defect this fixes: nine of fourteen scenarios never let it speak."""
+    silent = []
+    for scn in corpus.scenarios:
+        plan = ev.plan_turns(scn.turns, ev.resolve_budget(scn, live=True), live=True)
+        if not any(origin == "simulated" for origin, _text in plan):
+            silent.append(scn.id)
+    # The greeting scenario sets its goal at the first turn on purpose: a second
+    # message would measure something the corpus decided not to measure (S3, L5).
+    assert silent == ["simple-saludo-variante"], silent
 
 
 MINIMAL = """

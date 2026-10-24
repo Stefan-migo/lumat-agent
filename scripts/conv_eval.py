@@ -177,7 +177,7 @@ class Scenario:
     persona: str
     goal: str
     turns: tuple[str, ...]
-    max_turns: int
+    max_turns: int | None
     expect: Mapping[str, Any]
     hard_fails: tuple[str, ...] = ()
     notes: str = ""
@@ -236,16 +236,17 @@ def _build_scenario(entry: Any, index: int) -> Scenario:
     turns = _string_list(entry.get("turns"), "turns", where)
     _require(turns, f"{where}: `turns` must declare at least one customer message")
 
-    max_turns = entry.get("max_turns", len(turns))
-    _require(
-        isinstance(max_turns, int) and not isinstance(max_turns, bool),
-        f"{where}: `max_turns` must be an integer",
-    )
-    _require(
-        max_turns >= len(turns),
-        f"{where}: `max_turns` ({max_turns}) cannot be smaller than the "
-        f"{len(turns)} scripted turns",
-    )
+    max_turns = entry.get("max_turns")
+    if max_turns is not None:
+        _require(
+            isinstance(max_turns, int) and not isinstance(max_turns, bool),
+            f"{where}: `max_turns` must be an integer",
+        )
+        _require(
+            max_turns >= len(turns),
+            f"{where}: `max_turns` ({max_turns}) cannot be smaller than the "
+            f"{len(turns)} scripted turns",
+        )
 
     persona = entry.get("persona") or ""
     goal = entry.get("goal") or ""
@@ -667,6 +668,32 @@ def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dic
 # ---------------------------------------------------------------------------
 
 
+SIMULATED_TURNS = 3
+"""Turns the simulated customer may add after the scripted opening in `--live`.
+
+The scripted turns are the opening of a conversation, not all of it: a live run
+that stops there never lets the simulated customer act like a customer. This is
+a ceiling, not a target — the simulator reports `goal_reached` and the run ends
+as soon as it does, so a generous ceiling costs nothing on a short scenario.
+"""
+
+
+def resolve_budget(
+    scenario: Scenario, *, live: bool = False, override: int | None = None
+) -> int:
+    """How many inbound turns this scenario may have on this run.
+
+    A declared `max_turns` is the author's ceiling for that scenario and wins. An
+    explicit override (`--max-turns`) wins over everything. Otherwise a scripted
+    run stops at its script, and a live run gets room for the simulated customer.
+    """
+    if override:
+        return override
+    if scenario.max_turns is not None:
+        return scenario.max_turns
+    return len(scenario.turns) + (SIMULATED_TURNS if live else 0)
+
+
 def plan_turns(
     scripted: Sequence[str], budget: int, live: bool
 ) -> list[tuple[str, str | None]]:
@@ -980,7 +1007,7 @@ def run_scenario(
     with session_scope() as session:
         conversation_id = ensure_conversation(session, phone)
 
-    budget = max_turns or scenario.max_turns
+    budget = resolve_budget(scenario, live=live, override=max_turns)
     turns: list[dict] = []
 
     for index, (origin, scripted_text) in enumerate(
