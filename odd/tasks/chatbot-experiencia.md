@@ -127,9 +127,9 @@ Riesgo: **item 3** (mueve superficies del panel que tienen tests y `tsc -b`).
 | T2 | S1 | Round-robin por carga diaria en la asignación | inline, test-first | `d473ee74` |
 | T3 | S1 | "Más horarios" paginado + aviso "no hay más para ese día" + otros días | inline, test-first | `ae02f872` |
 | T4 | S1 | Salvataje de agenda y `{{tecnico}}` en la confirmación | inline, test-first | `50ed958b` |
-| T5 | S2 | Saludo con `{{nombre}}` y variante que pregunta el nombre | inline, test-first | pendiente |
-| T6 | S3 | Categoría `smalltalk` + rama + texto configurable | worker + inline, test-first | pendiente |
-| T7 | S4 | Textos por motivo de derivación (5) + panel | inline, test-first | pendiente |
+| T5 | S2 | Saludo con `{{nombre}}` y variante que pregunta el nombre | inline, test-first | `0b2b9e09` (#670) |
+| T6 | S3 | Categoría `smalltalk` + rama + texto configurable | worker + inline, test-first | `702f8a8e` (#674) |
+| T7 | S4 | Textos por motivo de derivación (5) + panel | inline, test-first | `381e0b1f` |
 | T8 | S5 | UX de respuestas prediseñadas + horarios de técnicos a Configuración | worker + inline, test-first | pendiente |
 
 ## Log
@@ -376,3 +376,64 @@ este commit (docs).
   los tests de acuses dependen del gate y un commit intermedio quedaría con la suite en rojo.
 - Consecuencia declarada y aceptada por el owner: un "gracias" final ya no cierra la conversación; el
   bot ofrece seguir. Es el precio de no usar una lista determinista para decidir cuándo terminar.
+
+**L14 — T7 cerrado (2026-10-24), evidencia observada.** Commit `381e0b1f` (código, tests y panel) +
+este commit (docs). Rama `odd/chatbot-derivaciones`, rebasada sobre `main` = `c47f9fee` (#674).
+
+- Mapa implementado, medido en el código y no supuesto: `cobertura` → S4.1 (`capture.py:349`), `persona`
+  → S4.2 (`orchestrate.py:77`), `unknown_intent_thrice` → S4.3 (`classify_intent.py:287`),
+  `campo_sin_respuesta` → S4.4 (`capture.py:364`), `booking_unavailable` → S4.5 (`booking.py:108,131`).
+- **Diseño: los cinco textos viven en `reply.texts`, no en `messages.*`.** `handoff` ya estaba ahí,
+  `REPLY_TEXT_SLOTS` acota los slots por clave y el panel ya tenía el editor genérico. Sólo
+  `handoff_cobertura` declara `{{comuna}}`; `derivation_reply(texts, reason, captured)` es la seam pura:
+  elige la clave por motivo, rellena sólo el slot declarado y, si la comuna falta o es `unknown`, cae
+  al texto genérico — con `render_text` estricto, un slot sin llenar llegaría al cliente como llaves o
+  rompería la derivación entera.
+- Un test paramétrico fija que inyección, emergencia, límites de costo, KB y reservas ambiguas siguen
+  con el genérico: un motivo nuevo no estrena copy sin revisar.
+- **Las cuatro reglas sin lector se fueron del objeto almacenado, no sólo del render.**
+  `CONDUCT_DERIVACIONES` queda `("cobertura",)` y desaparece `CONDUCT_DERIVACIONES_READ` (T18 las había
+  dejado guardadas y ocultas). `get_conduct()` filtra la fila guardada para que una fila vieja siga
+  cargando.
+- **Consecuencia que no era obvia y que la lista cerrada obligó a resolver:** con una sola regla,
+  apagar la cobertura sólo se puede expresar con `derivaciones: []`, y `validate_conduct` la rechazaba
+  por "non-empty". Se permitió la lista vacía y `get_conduct` dejó de sustituirla por el default: un
+  `[]` guardado es "cobertura apagada", no "sin configurar". Sin eso,
+  `test_s15_the_coverage_rule_can_be_turned_off` perdía la única forma de apagar la regla que S15
+  documenta.
+- Panel: sección **Derivaciones** en Conducta con los cinco casos (etiqueta, cuándo, texto y el dato que
+  acepta), guardando por `/settings/reply-texts`; `DERIVACION_LABELS` pierde las cuatro etiquetas muertas
+  y el botón "Guardar conducta" deja de exigir una regla activa.
+- RED observado en las tres capas. Unit: import error de la seam (`DERIVATION_REPLY_KEYS` no existía) y
+  6 pins viejos en `test_reply_texts.py` + `test_chat_conduct.py`. Capa DB: 9 fallos, todos pins de texto
+  (`test_handoff.py` ×3, `test_golden_threads.py`, `test_conversation_flows.py`, `test_chat_capture.py`
+  y el de cobertura apagada). Panel: stasheé `Settings.tsx` y los dos tests nuevos fallaron por no
+  encontrar la tarjeta; el tercero pasó y está bien — fija que el panel ya no ofrece reglas sin lector.
+- **La escalera de gates otra vez justificó cada nivel.** `db` (T2) cazó los 6 pins de integración y el
+  de la regla apagada. `full` cazó los 4 que ni `quick` ni `db` ven: `_CONDUCT` con `garantia` (400 en
+  `test_settings_update_conduct_audited` y `test_capture_questions_follow_the_configured_order`),
+  `test_t06` y `test_retry_storm` esperando la palabra "asesor". Ninguno era defecto; los cuatro eran
+  expectativas de texto viejo. Los movió `gentle-ai-worker` y verifiqué el diff.
+- VERDE: `quick` exit 0; la capa `db` de los tres archivos que movió el worker →
+  `tests/functional/test_api_kb_settings.py` + `tests/integration/test_chatbot_cerebro_qa.py` +
+  `tests/integration/test_webhook_ingest.py` = 126 tests exit 0; panel `npm run build` exit 0 y
+  `npm test` → **111 archivos / 1268 tests, exit 0**; `scripts/test.sh full` → **exit 0, 6m8s, 0 líneas
+  `FAILED`/`ERROR`**.
+- Dos lecciones de higiene de evidencia, para no volver a pagarlas:
+  1. `npm test | tail` devuelve el exit code de `tail`: la primera corrida del panel reportó "exit 0"
+     con un test en rojo. Es la misma trampa que L5 ya tenía anotada. Desde acá: salida a archivo y leer
+     el código real.
+  2. Esa misma corrida y su repetición fallaron en `AgentChat.test.tsx` con `load average ~11`, porque
+     **otro worktree (`conv-eval`) estaba corriendo su propio `full`**. El archivo pasa 75/75 aislado y
+     la suite completa pasó 1268/1268 con el host ocioso: era carga, no defecto. Una corrida de pytest
+     por worktree no alcanza si otro agente corre en otro worktree del mismo repo: el recurso compartido
+     es el host.
+  3. Observado de paso: las capas `db` y `full` de `scripts/test.sh` **no imprimen el resumen de pytest**
+     (`with_test_db` no propaga esa última línea), así que de ahí se obtiene código de salida y lista de
+     fallos, no el conteo. Verificado con `db tests/unit/test_reply_texts.py`.
+- Decisión de empaquetado: **un solo commit y un PR con `size:exception`** (441 líneas autoradas en el
+  slice). No se parte porque los cinco textos, los pins y la tarjeta del panel son un mismo
+  comportamiento: S4 pide el texto *y* su superficie de edición, y la lista cerrada que se aprieta es la
+  misma que la tarjeta lee. Un corte intermedio dejaría el panel sin los cinco casos que la spec exige.
+- Riesgo del slice: **item 3** (cambia lo que el cliente recibe en toda derivación y el contrato de
+  `reply.texts` y `chat.conduct`). Sin migración: la lectura filtra, ningún dato se reescribe.
