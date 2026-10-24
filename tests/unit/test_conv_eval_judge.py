@@ -195,3 +195,44 @@ def test_two_malformed_answers_raise_instead_of_guessing(monkeypatch):
         )
     assert len(calls) == 2
     assert "2 attempts" in str(raised.value)
+
+
+# ---------------------------------------------------------------------------
+# Simulated customer — it plays the customer and never the assistant
+# ---------------------------------------------------------------------------
+
+
+def test_the_simulator_is_told_it_is_not_the_assistant(monkeypatch):
+    chat, calls = fake_chat(['{"message": "hola necesito ayuda", "goal_reached": false}'])
+    monkeypatch.setattr(judge, "_chat", chat)
+
+    judge.simulate_customer_turn(
+        object(),
+        persona="Cliente enojado, escribe en mayúsculas",
+        goal="Que alguien se haga cargo del reclamo",
+        transcript=[{"role": "customer", "text": "hola"}],
+        turn_index=2,
+        max_turns=5,
+    )
+
+    system = calls[0][0]["content"]
+    assert "NOT the assistant" in system
+    assert "never write as one" in system
+    assert "Never narrate actions" in system
+
+
+def test_the_simulator_stops_when_the_goal_is_reached(monkeypatch):
+    chat, _calls = fake_chat(['{"message": "", "goal_reached": true}'])
+    monkeypatch.setattr(judge, "_chat", chat)
+
+    simulated = judge.simulate_customer_turn(
+        object(),
+        persona="cliente",
+        goal="saludar",
+        transcript=[{"role": "customer", "text": "hola"}],
+        turn_index=2,
+        max_turns=5,
+    )
+
+    assert simulated["goal_reached"] is True
+    assert simulated["message"] == ""

@@ -13,8 +13,11 @@
 #   persona     who the customer is and how they write (also used by --live)
 #   goal        what the customer wants to achieve (also used by --live)
 #   turns       the scripted customer messages, verbatim, one per inbound message
-#   max_turns   upper bound of inbound turns (defaults to len(turns); --live uses
-#               it as the simulation budget)
+#   max_turns   ceiling of inbound turns for this scenario. Omitted (the normal
+#               case) = the scripted length on a scripted run, plus the simulated
+#               headroom on --live (SIMULATED_TURNS in scripts/conv_eval.py).
+#               Declare it only to pin a deliberate ceiling, never to make room for
+#               --live: that room is what the default now gives.
 #   expect      the deterministic expectations (E3 gates):
 #     state_any            acceptable final conversation states; omitted = any
 #     intent_expected      at least one turn must classify into one of these
@@ -50,6 +53,8 @@ conversations:
       Saludar y esperar a que el asistente se presente y pregunte en qué puede ayudar.
     turns:
       - "hola buenas tardes"
+    # The goal is met by the greeting itself: a second message would measure
+    # persistence in long threads, which S3 and L5 keep out of this corpus.
     max_turns: 1
     expect:
       state_any: [bot]
@@ -164,7 +169,6 @@ conversations:
       - "el calefont es junkers, tiro natural"
       - "si, me sirve cualquier dia en la mañana"
       - "carolina.p@gmail.com"
-    max_turns: 6
     expect:
       state_any: [bot]
       events_forbidden: [escalation, unknown_intent]
@@ -212,7 +216,6 @@ conversations:
       - "me llamo jorge, vivo en la reina"
       - "no te voy a dar mi correo, con el telefono basta"
       - "si, cualquier dia despues de las 6"
-    max_turns: 5
     expect:
       state_any: [bot]
       events_forbidden: [escalation, unknown_intent]
@@ -287,7 +290,6 @@ conversations:
       - "ES UNA VERGUENZA PAGUE LA MANTENCION Y EL CALEFONT SIGUE FALLANDO"
       - "vino un tecnico la semana pasada y quedo igual, perdi la plata"
       - "quiero hablar con una persona ahora"
-    max_turns: 4
     expect:
       state_any: [human]
       events_required: [escalation]
@@ -334,7 +336,6 @@ conversations:
       - "necesito arreglar un calefont"
       - "no era calefont, es una caldera, y estoy en providencia"
       - "cuanto sale y cuando pueden venir"
-    max_turns: 5
     expect:
       state_any: [bot]
       events_forbidden: [unknown_intent]
