@@ -754,6 +754,20 @@ def build_observation(snapshot: Mapping[str, Any], turns: Sequence[Mapping[str, 
     }
 
 
+def facts_of(observation: Mapping[str, Any]) -> dict:
+    """What the database recorded, for the judge to cite instead of inferring.
+
+    `escalation` used to be scored from the prose alone, and both calibration
+    disagreements were inversions against these facts: a recorded hand-off read
+    as a missing one, and a conversion that never escalated read as a partial
+    one (S9, L13).
+    """
+    return {
+        "final_state": observation.get("state"),
+        "events": list(observation.get("events") or ()),
+    }
+
+
 def transcript_of(observation: Mapping[str, Any]) -> list[dict]:
     """The judge's view: alternating customer and assistant lines, in order."""
     transcript: list[dict] = []
@@ -1072,6 +1086,7 @@ def judge_row(
         client,
         transcript=transcript_of(observation),
         scenario=dict(scenario.raw),
+        facts=facts_of(observation),
         kb_text=kb,
         tarifario=tarifario,
         **kwargs,

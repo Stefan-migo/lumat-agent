@@ -236,3 +236,107 @@ def test_the_simulator_stops_when_the_goal_is_reached(monkeypatch):
 
     assert simulated["goal_reached"] is True
     assert simulated["message"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Persisted facts — the judge may not contradict what the database recorded
+# ---------------------------------------------------------------------------
+
+
+def _flat(text):
+    """The prompt is prose: assert the contract, not its line wrapping."""
+    return " ".join(text.replace("`", "").split())
+
+
+def _judge(monkeypatch, reply=None):
+    reply = reply or (
+        '{"dimensions": {'
+        + ", ".join(f'"{n}": {{"score": 3, "evidence": "cita"}}' for n in judge.DIMENSIONS)
+        + '}, "hard_fail": false}'
+    )
+    chat, calls = fake_chat([reply])
+    monkeypatch.setattr(judge, "_chat", chat)
+    return calls
+
+
+def test_the_judge_receives_the_persisted_facts(monkeypatch):
+    calls = _judge(monkeypatch)
+    judge.judge_conversation(
+        object(),
+        transcript=[{"role": "customer", "text": "quiero hablar con una persona"}],
+        scenario={"id": "x"},
+        kb_text="",
+        tarifario="",
+        facts={
+            "final_state": "human",
+            "events": [
+                {"event": "classified", "cause": "intent:postventa"},
+                {"event": "escalation", "cause": "handoff:persona"},
+            ],
+        },
+    )
+
+    prompt = calls[0][1]["content"]
+    assert "Persisted facts" in prompt
+    assert "final state: `human`" in prompt
+    assert "escalation (handoff:persona)" in prompt
+
+
+def test_the_judge_is_told_a_recorded_hand_off_did_happen(monkeypatch):
+    calls = _judge(monkeypatch)
+    judge.judge_conversation(
+        object(),
+        transcript=[{"role": "customer", "text": "hola"}],
+        scenario={"id": "x"},
+        kb_text="",
+        tarifario="",
+        facts={"final_state": "human", "events": [{"event": "escalation", "cause": "handoff:persona"}]},
+    )
+
+    instructions = _flat(calls[0][0]["content"])
+    assert "never claim the hand-off did not happen" in instructions
+
+
+def test_a_run_without_facts_still_judges(monkeypatch):
+    calls = _judge(monkeypatch)
+    verdict = judge.judge_conversation(
+        object(), transcript=[], scenario={"id": "x"}, kb_text="", tarifario=""
+    )
+
+    assert verdict["hard_fail"] is False
+    assert "Persisted facts" not in calls[0][1]["content"]
+
+
+def test_a_declared_hard_fail_must_be_reported_not_weighed(monkeypatch):
+    calls = _judge(monkeypatch)
+    judge.judge_conversation(
+        object(),
+        transcript=[{"role": "customer", "text": "hola"}],
+        scenario={"id": "x", "hard_fails": ["Seguir vendiendo un servicio"]},
+        kb_text="",
+        tarifario="",
+    )
+
+    prompt = _flat(calls[0][0]["content"])
+    assert "set hard_fail true" in prompt
+    assert "caps the case at 0" in prompt
+
+
+def test_the_policy_rubric_covers_a_complaint(monkeypatch):
+    calls = _judge(monkeypatch)
+    judge.judge_conversation(
+        object(), transcript=[], scenario={"id": "x"}, kb_text="", tarifario=""
+    )
+
+    prompt = calls[0][1]["content"]
+    assert "complaint" in prompt
+    assert "already described" in prompt
+
+
+def test_the_escalation_rubric_defers_to_the_facts(monkeypatch):
+    calls = _judge(monkeypatch)
+    judge.judge_conversation(
+        object(), transcript=[], scenario={"id": "x"}, kb_text="", tarifario=""
+    )
+
+    assert "recorded" in calls[0][1]["content"]

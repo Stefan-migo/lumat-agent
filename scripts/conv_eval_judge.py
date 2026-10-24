@@ -89,8 +89,10 @@ _ANCHORS = {
     "policy": (
         "4 = every documented rule respected (price only from the tariff, no tax/IVA claims, "
         "guarantee only after a technical visit, never reject by commune, never promise a confirmed "
-        "date); 3 = one minor deviation; 2 = one rule bent but the customer is not misled; "
-        "1 = one rule violated; 0 = a safety or commercial rule violated with damage"
+        "date, and a complaint is taken on rather than re-diagnosed); 3 = one minor deviation; "
+        "2 = one rule bent but the customer is not misled; 1 = one rule violated, or the customer's "
+        "complaint keeps being re-diagnosed after they already described the problem; 0 = a safety "
+        "or commercial rule violated with damage"
     ),
     "conversational": (
         "4 = answers what was asked first, one useful question per turn, uses what the customer "
@@ -98,7 +100,8 @@ _ANCHORS = {
         "1 = re-asks data already given; 0 = loops, dead-ends or answers the wrong topic"
     ),
     "escalation": (
-        "4 = hands off exactly when required and keeps serving when not; 3 = slightly early or "
+        "4 = hands off exactly when required and keeps serving when not, judged on the recorded "
+        "state and events rather than on the wording of the replies; 3 = slightly early or "
         "slightly late; 2 = wrong decision but explained to the customer; 1 = hands off a customer "
         "the bot could have served; 0 = silently cuts a customer who needed a human, or leaves an "
         "emergency in the bot"
@@ -138,9 +141,13 @@ Critical rules:
 - An invented price, coverage, guarantee or term caps `grounding` at 0.
 - A rule from the knowledge base that the transcript contradicts is a policy
   failure even if the customer seems satisfied.
-- Set `hard_fail` to true only if the conversation breaks one of the scenario's
-  listed hard fails, or invents a commercial fact. Explain it in
-  `hard_fail_reason`; otherwise leave it empty.
+- When the conversation breaks one of the scenario's listed hard fails, you must
+  set `hard_fail true` and name the failure in `hard_fail_reason`, and score at 0
+  the dimension it breaks. A declared hard failure caps the case at 0: it is not
+  weighed against a good average.
+- The persisted facts are what the system recorded. A recorded `escalation` event
+  or a final state of `human` means the hand-off happened: never claim the
+  hand-off did not happen. Judge whether it was decided correctly and in time.
 - Prices change by season: compare against the tariff you were given, never
   against what you remember.
 
@@ -291,6 +298,28 @@ def _render_rubric() -> str:
     return "\n".join(f"- {name} ({_DIMENSION_LABELS[name]}): {_ANCHORS[name]}" for name in DIMENSIONS)
 
 
+def _render_facts(facts: dict | None) -> str:
+    """The database's version of the run: evidence, never a verdict."""
+    if not facts:
+        return ""
+    events = facts.get("events") or []
+    lines = [f"- final state: `{facts.get('final_state') or 'unknown'}`"]
+    if events:
+        lines.append("- events, in order:")
+        for event in events:
+            if isinstance(event, dict):
+                name = event.get("event") or ""
+                cause = event.get("cause") or ""
+                lines.append(f"  - {name} ({cause})" if cause else f"  - {name}")
+            else:
+                lines.append(f"  - {event}")
+    return (
+        "\n## Persisted facts\n\n"
+        "What the system recorded for this run. They are evidence, not a verdict:\n"
+        "no score may contradict them.\n\n" + "\n".join(lines) + "\n"
+    )
+
+
 def judge_conversation(
     client: OpenAI,
     *,
@@ -298,9 +327,14 @@ def judge_conversation(
     scenario: dict,
     kb_text: str,
     tarifario: str,
+    facts: dict | None = None,
     model: str = JUDGE_MODEL,
 ) -> dict:
     """Score one conversation against the rubric and the scenario's hard fails.
+
+    `facts` carries what the database recorded — the final state and the event
+    log — because `escalation` cannot be judged from prose alone: "un asesor
+    revisará su caso" reads the same whether or not the hand-off happened (S9).
 
     Returns the validated verdict: one entry per dimension with a score in 0-4
     and its evidence, plus the hard-fail flag. Raises `JudgeError` when the
@@ -328,7 +362,7 @@ def judge_conversation(
 ## Company knowledge base
 
 {kb_text.strip() or "(KB vacía)"}
-
+{_render_facts(facts)}
 ## Transcript
 
 {_render_transcript(transcript)}
