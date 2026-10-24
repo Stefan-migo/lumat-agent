@@ -31,12 +31,12 @@ Estado final `bot` · eventos: `classified` (intent:valores), `kb_retrieved` (ch
 
 | Dimensión | 0–4 | Por qué |
 | --- | --- | --- |
-| grounding | | |
-| policy | | |
-| conversational | | |
-| escalation | | |
-| tone | | |
-| closure | | |
+| grounding | 4 | respondio bien la informacion de la KB |
+| policy | 4 | no agrego nada, dijo la informacion correcta, valores, duracion, que incluye, que no incluye, e hizo una pregunta de seguimiento .  |
+| conversational | 4 | no comete errores, entiende el turno no repite, ni pierde el hilo |
+| escalation | 4 | no hay escalacion, asi que no aplica. |
+| tone | 4 | tono correcto |
+| closure | 4 | esta correcto por que da toda la infomracion que solicita el cliente y cierra con una pregunta para dirigir la conversacion. |
 
 ### Puntaje del juez (abrir después de puntuar)
 
@@ -82,12 +82,12 @@ Estado final `bot` · eventos: `classified` (intent:solicitar_visita), `classifi
 
 | Dimensión | 0–4 | Por qué |
 | --- | --- | --- |
-| grounding | | |
-| policy | | |
-| conversational | | |
-| escalation | | |
-| tone | | |
-| closure | | |
+| grounding | 4 | todo lo dicho esta respaldado por KB y/o mensajes preestablecidos |
+| policy | 4 | no promete nada mas |
+| conversational | 1 | aqui hay algo grande. necesitamos que cuando repita una pregunta la reformule. ya que si la pregunta tal cual como la hizo antes suena super robotico. en esta conversacion tiene que repetir dos preguntas. "Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?" y "¿Qué días y horarios te acomodan para la visita?". la segunda esta levemente reformulada, pero sigue sonando igual. el resto tiene coherencia y funciona bien |
+| escalation | 4 | no hay motivo de escalacion y no escala eso esat bien |
+| tone | 3 | correcto, pero con los detalles de repeticion |
+| closure | 1 | aqui llego solo hasta la autorizacion, no termino de realizar la agenda. no se si esta correcto eso |
 
 ### Puntaje del juez (abrir después de puntuar)
 
@@ -126,12 +126,12 @@ Estado final `human` · eventos: `classified` (intent:postventa), `kb_retrieved`
 
 | Dimensión | 0–4 | Por qué |
 | --- | --- | --- |
-| grounding | | |
-| policy | | |
-| conversational | | |
-| escalation | | |
-| tone | | |
-| closure | | |
+| grounding | 3 | consulto a la kb. y tuvo los retrievals. pero no explico las garantias. debio explicar que existen garantias que podia solucionarse el problema |
+| policy | 1 | sigue preguntando que le pasa al calefont. si lo supiera no llamaria a un tecnico. esto esta muy mal, deberia intentar solucionar, si es un reclamo grande, deberia desde ya dar la opcion de pasar a un asesor. o agendar otra visita |
+| conversational | 2 | Repetitivo. repite una pregunta sin sentido. solo hace que el cliente se enoje mas |
+| escalation | 4 | escalo correctamente. pero paso 2 veces el mismo mensaje |
+| tone | 3 | podria ser mas empatico con el cliente |
+| closure | 2 | solo deriva con un asesor no se despide. |
 
 ### Puntaje del juez (abrir después de puntuar)
 
@@ -147,4 +147,5 @@ promedio **1.667** · hard fail: **False**
 - **closure 1.0**
 
 </details>
+
 
