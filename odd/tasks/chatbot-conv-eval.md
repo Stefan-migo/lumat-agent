@@ -106,7 +106,9 @@ No se asegura por disciplina, se asegura por construcción:
 ### S9 · Calibración del juez
 
 Antes de usar los puntajes para decidir, el owner puntúa 3 conversaciones a mano y se compara. Si el
-juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no veredicto.
+juez discrepa sistemáticamente, se ajusta la rúbrica; el juez es apoyo, no veredicto. **Primera
+calibración hecha: ver L13** — dos dimensiones se corrigieron por defecto (insumo faltante y ancla
+ausente), no por corrimiento de escala.
 
 ## Non-goals
 
@@ -414,3 +416,51 @@ Consecuencias medidas, y deliberadas:
 El otro punto del pendiente —"que no escriba como el bot"— ya estaba cubierto por construcción:
 `_SIMULATOR_INSTRUCTIONS` abre con "You are NOT the assistant and you never write as one". No tenía
 test; ahora tiene dos, que fijan ese guard y el corte por `goal_reached`.
+
+### L13 — la calibración, hecha: dos dimensiones no eran offset, eran dos defectos (2026-10-23)
+
+> "ya los puntajes esta hechos 'odd/evals/calibracion-s9.md'"
+
+El owner puntuó las tres conversaciones a mano antes de abrir el puntaje del juez. Cada celda es
+`owner / juez`:
+
+| Dimensión | simple | complejo | super | Owner | Juez | Delta |
+|---|---|---|---|---|---|---|
+| grounding | 4/4 | 4/4 | 3/3 | 11 | 11 | **0** |
+| policy | 4/4 | 4/4 | **1/4** | 9 | 12 | **−3** |
+| conversational | 4/4 | 1/1 | 2/0 | 7 | 5 | +2 |
+| escalation | 4/4 | 4/2 | **4/0** | 12 | 6 | **+6** |
+| tone | 4/4 | 3/3 | 3/2 | 10 | 9 | +1 |
+| closure | 4/4 | 1/1 | 2/1 | 7 | 6 | +1 |
+
+12 de las 18 celdas son exactas. `grounding` coincide en las tres; `tone` y `closure` desvían ±1 una
+vez cada una, y `conversational` discrepa solo en el caso super, donde **los dos ven la misma
+repetición** y difieren en cuánto castigarla. Eso es un juez usable.
+
+Las dos restantes son **inversiones**, no ruido, y tienen causas distintas:
+
+1. **`escalation` (+6): el juez no tenía los datos.** `judge_conversation` recibía rúbrica, persona,
+  goal, `hard_fails`, tarifario, KB y el texto de la conversación — nunca el estado final ni los
+  eventos. En el caso super la corrida terminó en `human` con **dos** eventos `escalation` y el juez
+  puntuó **0**, porque "Un asesor revisará su caso y te contactará a la brevedad" leído como prosa es
+  una promesa ambigua; en el complejo, que **no** debía escalar y no escaló, puntuó 2. Le pedíamos
+  juzgar un hecho que no podía ver.
+2. **`policy` (−3): la rúbrica no cubría reclamos.** Acá los `hard_fails` del escenario **sí** llegaban,
+  incluido "Seguir vendiendo un servicio en vez de hacerse cargo del reclamo", y aun así el juez puso
+  4 con `hard fail: False`. Las anclas hablaban de precio, IVA, garantía, comuna y fecha; nada sobre
+  hacerse cargo de un reclamo ni sobre insistir con el diagnóstico a alguien que ya lo describió.
+
+Correcciones (decisión del owner: las dos):
+
+- **Los hechos persistidos van al juez** (`facts_of` + `_render_facts`): estado final y log de eventos
+  como **evidencia**, no como veredicto, con la regla explícita de que un `escalation` registrado o un
+  estado `human` significa que el traspaso ocurrió y no se puede afirmar lo contrario. Es la misma
+  regla que ya se aplicó a G9 cuando leía el evento en vez del texto.
+- **Ancla de reclamo en `policy`** y una regla explícita: un `hard_fail` declarado por el escenario
+  obliga a `hard_fail true` y a puntuar 0 la dimensión que rompe, porque `score_scenario` ya capa el
+  caso a 0 con ese flag. El miss más caro de la calibración era justamente un hard fail no reportado.
+
+Pendiente de medir: la corrección está fijada por tests del prompt, pero **no se volvieron a juzgar
+las tres conversaciones con la rúbrica nueva**. Ese re-juzgue es el paso siguiente y necesita la clave
+del proveedor; hasta que se haga, la calibración dice "el juez viejo fallaba en dos dimensiones", no
+"el juez nuevo está calibrado".
