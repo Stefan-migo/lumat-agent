@@ -160,6 +160,11 @@ class MetaBody(BaseModel):
     service_message_cost: float
 
 
+class BookingLeadBody(BaseModel):
+    # `Any` preserves booleans/floats so the route can reject rather than coerce.
+    hours: Any
+
+
 class ModelApiKeyBody(BaseModel):
     api_key: str
 
@@ -435,6 +440,10 @@ def settings_get(
         "emergency": _emergency_payload(session),
         "coverage": settings_service.get_coverage_communes(session),
         "service_durations": settings_service.get_service_durations(session),
+        "booking": {
+            # Round up partial hours so the UI never understates stored lead time.
+            "lead_hours": (settings_service.get_booking_lead_minutes(session) + 59) // 60,
+        },
         "conversation_limit": settings_service.get_setting(
             session, "cost.conversation_limit", default=1.50
         ),
@@ -568,8 +577,26 @@ def settings_messages(
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
-    for key, value in body.model_dump().items():
+    try:
+        messages = settings_service.validate_fixed_messages(body.model_dump())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    for key, value in messages.items():
         _save(session, f"messages.{key}", value, current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/booking-lead")
+def settings_booking_lead(
+    body: BookingLeadBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    hours = body.hours
+    if isinstance(hours, bool) or not isinstance(hours, int) or not 1 <= hours <= 48:
+        raise HTTPException(status_code=400, detail="hours must be an integer between 1 and 48")
+    _save(session, settings_service.BOOKING_LEAD_MINUTES_KEY, hours * 60, current)
     session.commit()
     return {"ok": True}
 
