@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
+import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, fetchTechnicians, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { AssistantCapabilities, Settings as SettingsData, SmtpEmailSettings } from "../../types";
+import type { AssistantCapabilities, Settings as SettingsData, SmtpEmailSettings, UserRef } from "../../types";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Accordion } from "../primitives/Accordion";
@@ -18,6 +18,7 @@ import { Textarea } from "../primitives/Textarea";
 import { MessagePreview } from "../primitives/MessagePreview";
 import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
+import { TechnicianScheduleEditor } from "../shared/TechnicianScheduleEditor";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
@@ -137,7 +138,7 @@ const REPLY_TEXT_LABELS: Record<string, string> = {
 type HoursData = SettingsData["hours"];
 type Drafts = {
   scope: string; keywords: string; tone: string; messages: SettingsData["messages"]; templates: SettingsData["templates"]; hours: HoursData; tarifa: SettingsData["tarifa"]; coverage: string;
-  conversationLimit: string; dailyLimit: string; metaCost: string;
+  conversationLimit: string; dailyLimit: string; metaCost: string; leadHours: string;
   persona: { orchestrator: string; orchestrator_brief: string };
   emergencyProtocol: { safety_instructions: string; contacts: string; notify_message: string };
   conduct: { orden: string[]; redaccion: string; max_preguntas_por_mensaje: number; derivaciones: string[] };
@@ -157,7 +158,7 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     hours: data?.hours ?? { timezone: "America/Santiago", schedule: [] },
     tarifa: data?.tarifa ?? EMPTY_TARIFA,
     coverage: (data?.coverage ?? []).join("\n"),
-    conversationLimit: String(data?.conversation_limit ?? ""), dailyLimit: String(data?.daily_limit ?? ""), metaCost: String(data?.meta_cost ?? ""),
+    conversationLimit: String(data?.conversation_limit ?? ""), dailyLimit: String(data?.daily_limit ?? ""), metaCost: String(data?.meta_cost ?? ""), leadHours: String(data?.booking?.lead_hours ?? 2),
     persona: { orchestrator: data?.persona?.orchestrator ?? "", orchestrator_brief: data?.persona?.orchestrator_brief ?? "" },
     emergencyProtocol: {
       safety_instructions: (data?.emergency?.safety_instructions ?? []).join("\n"),
@@ -205,6 +206,24 @@ function isDurationListValid(entries: Array<{ name: string; minutes: string }>) 
     && Number.isInteger(Number(minutes)) && Number(minutes) >= 1 && Number(minutes) <= 1440);
   const normalized = entries.map(({ name }) => name.trim().toLowerCase());
   return entries.length > 0 && valid && new Set(normalized).size === normalized.length;
+}
+
+function templateIdFromText(text: string) {
+  const stopWords = new Set(["a", "al", "con", "de", "del", "el", "en", "la", "las", "los", "mes", "meses", "un", "una", "y", "tenemos", "tiene", "por", "para"]);
+  const words = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const meaningful = words.filter((word) => !stopWords.has(word) && !/^\d+$/.test(word));
+  return meaningful.slice(0, 4).join("_") || "respuesta";
+}
+
+const SAMPLE_TEMPLATE_DATA: Record<string, string> = {
+  nombre: "Ana", comuna: "Las Condes", direccion: "Av. Siempre Viva 123", equipo: "calefont",
+  problema: "no enciende", disponibilidad: "martes por la mañana", visita: "martes a las 10:00",
+};
+function previewTemplate(text: string) {
+  return text.replace(/{{\s*([^{}]+?)\s*}}/g, (_match, slot: string) => SAMPLE_TEMPLATE_DATA[slot] ?? "dato de ejemplo");
+}
+function templateSlots(text: string) {
+  return [...new Set(Array.from(text.matchAll(/{{\s*([^{}]+?)\s*}}/g), (match) => match[1].trim()))];
 }
 
 function sameValue(left: unknown, right: unknown) {
@@ -398,7 +417,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const pageState = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const baseline = useRef(draftsFrom(data));
   const [draft, setDraft] = useState<Drafts>(() => draftsFrom(data));
-  const [activeSection, setActiveSection] = useState("agent");
+  const [activeSection, setActiveSection] = useState(() => window.location.hash === "#schedule" ? "schedule" : "agent");
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
@@ -414,8 +433,20 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [emailPassword, setEmailPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState("");
+  const [manualTemplateIds, setManualTemplateIds] = useState<number[]>([]);
+  const [technicians, setTechnicians] = useState<UserRef[]>([]);
+  const [techniciansState, setTechniciansState] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
   useEffect(() => { if (data?.model_api_key) setModelApiKeyStatus(data.model_api_key); }, [data?.model_api_key]);
+
+  useEffect(() => {
+    if (activeSection !== "schedule" || techniciansState !== "idle") return;
+    setTechniciansState("loading");
+    void fetchTechnicians().then(({ technicians: loaded }) => {
+      setTechnicians(Array.isArray(loaded) ? loaded : []);
+      setTechniciansState("ready");
+    }).catch(() => setTechniciansState("error"));
+  }, [activeSection, techniciansState]);
 
   useEffect(() => {
     if (!data?.email) return;
@@ -557,6 +588,11 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     if (Object.values(draft.replyTexts).some((value) => !value.trim())) { setSaveState("validation"); return; }
     await save("replyTexts", "/panel/api/settings/reply-texts", { texts: draft.replyTexts }, draft.replyTexts);
   };
+  const saveLeadHours = async () => {
+    const hours = Number(draft.leadHours);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 48) { setSaveState("validation"); return; }
+    await save("leadHours", "/panel/api/settings/booking-lead", { hours }, draft.leadHours);
+  };
   const saveDurations = async () => {
     if (!isDurationListValid(draft.serviceDurations)) { setSaveState("validation"); return; }
     const map: Record<string, number> = {};
@@ -697,13 +733,24 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
            </Card>
            <Card title="Respuestas prediseñadas" description="Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada).">
              <p className="settings-messages__info">A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.</p>
-             <p className="settings-messages__helper">Datos disponibles: <code>{"{{nombre}}, {{comuna}}, {{direccion}}, {{equipo}}, {{problema}}, {{disponibilidad}}, {{visita}}"}</code></p>
+             <p className="settings-messages__helper" role="note">Si a la conversación le falta uno de esos datos, el bot omite esta respuesta y responde normalmente.</p>
              <div className="settings-messages__templates" aria-label="Respuestas prediseñadas">
-               {draft.templates.map((template, index) => <div className="settings-messages__template" key={index}>
-                 <Input label={`ID de respuesta ${index + 1}`} value={template.id} onChange={(event) => update("templates", draft.templates.map((item, current) => current === index ? { ...item, id: event.target.value } : item))} />
-                 <Textarea label={`Texto de respuesta ${index + 1}`} rows={3} value={template.text} onChange={(event) => update("templates", draft.templates.map((item, current) => current === index ? { ...item, text: event.target.value } : item))} />
-                 <Button variant="tertiary" aria-label={`Eliminar respuesta ${index + 1}`} onClick={() => update("templates", draft.templates.filter((_, current) => current !== index))}><Trash2 aria-hidden="true" /></Button>
-               </div>)}
+               {draft.templates.map((template, index) => {
+                 const slots = templateSlots(template.text);
+                 const editingId = manualTemplateIds.includes(index);
+                 return <div className="settings-messages__template" key={index}>
+                   <div className="settings-messages__template-id">
+                     <Input label={`ID de respuesta ${index + 1}`} value={template.id} readOnly={!editingId} onChange={(event) => update("templates", draft.templates.map((item, current) => current === index ? { ...item, id: event.target.value } : item))} />
+                     <Button variant="tertiary" aria-label={`Regenerar ID de respuesta ${index + 1}`} onClick={() => { update("templates", draft.templates.map((item, current) => current === index ? { ...item, id: templateIdFromText(item.text) } : item)); setManualTemplateIds((ids) => ids.filter((entry) => entry !== index)); }}>Regenerar</Button>
+                     <Button variant="tertiary" aria-label={`Editar id de respuesta ${index + 1}`} onClick={() => setManualTemplateIds((ids) => ids.includes(index) ? ids : [...ids, index])}>Editar id</Button>
+                   </div>
+                   <p className="settings-messages__helper">El cliente nunca ve este ID.</p>
+                   <Textarea label={`Texto de respuesta ${index + 1}`} rows={3} value={template.text} onChange={(event) => update("templates", draft.templates.map((item, current) => current === index ? { ...item, text: event.target.value, ...(!editingId ? { id: templateIdFromText(event.target.value) } : {}) } : item))} />
+                   <p className="settings-messages__helper">{slots.length ? <>Datos disponibles: {slots.map((slot, slotIndex) => <code key={slot}>{slotIndex ? ", " : ""}{"{{"}{slot}{"}}"}</code>)}</> : "Sin datos variables."}</p>
+                   <div className="settings-messages__preview"><h3>Vista previa de la respuesta {index + 1}</h3><MessagePreview message={previewTemplate(template.text)} note="Vista previa con datos de ejemplo" avatarSrc="/panel/app/brand/lumat-mark.png" /></div>
+                   <Button variant="tertiary" aria-label={`Eliminar respuesta ${index + 1}`} onClick={() => { update("templates", draft.templates.filter((_, current) => current !== index)); setManualTemplateIds((ids) => ids.filter((entry) => entry !== index).map((entry) => entry > index ? entry - 1 : entry)); }}><Trash2 aria-hidden="true" /></Button>
+                 </div>;
+               })}
              </div>
              <div className="settings-messages__footer">
                <Button variant="tertiary" onClick={() => update("templates", [...draft.templates, { id: "", text: "" }])}><Plus aria-hidden="true" />Agregar respuesta</Button>
@@ -728,9 +775,19 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
         </> : null}
         {active === "schedule" ? <>
         <div className="settings-hours__layout">
+          <Card title="Anticipación mínima" description="Tiempo mínimo entre ahora y la primera hora que se puede ofrecer para una visita.">
+            <Input label="Anticipación mínima" type="number" min={1} max={48} suffix="horas" value={draft.leadHours} onChange={(event) => update("leadHours", event.target.value)} />
+            <div className="settings-hours__footer"><Button variant="secondary" disabled={saving("leadHours") || !Number.isInteger(Number(draft.leadHours)) || Number(draft.leadHours) < 1 || Number(draft.leadHours) > 48} onClick={() => void saveLeadHours()}>Guardar anticipación</Button>{footer("Entre 1 y 48 horas.")}</div>
+          </Card>
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
           <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div>
+          <Card title="Horarios de técnicos" description="Define cuándo puede recibir visitas cada técnico.">
+            {techniciansState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}
+            {techniciansState === "error" ? <div><StateMessage tone="danger" role="alert" title="No pudimos cargar los técnicos" detail="Intenta nuevamente más tarde." /><Button variant="secondary" onClick={() => setTechniciansState("idle")}>Reintentar</Button></div> : null}
+            {techniciansState === "ready" && technicians.length === 0 ? <p>No hay técnicos disponibles.</p> : null}
+            {techniciansState === "ready" ? technicians.map((technician) => <section key={technician.id} className="settings-hours__technician"><h3>{technician.username}</h3><TechnicianScheduleEditor technician={technician} onSaved={() => undefined} /></section>) : null}
+          </Card>
           <Card title="Duraciones por servicio" description="Cuánto ocupa cada servicio en la agenda. El nombre debe coincidir con el servicio que se conversa.">
             <div className="settings-conduct__durations">
               {draft.serviceDurations.map((entry, index) => <div className="settings-conduct__duration" key={index}>

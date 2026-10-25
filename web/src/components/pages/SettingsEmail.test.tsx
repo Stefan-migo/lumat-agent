@@ -12,7 +12,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
   tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },
-  coverage: ["Las Condes"], service_durations: {},
+  coverage: ["Las Condes"], service_durations: {}, booking: { lead_hours: 2 },
   conversation_limit: 4, daily_limit: 20, meta_cost: 0.05,
   persona: { orchestrator: "Eres Max.", orchestrator_brief: "Sé breve.", customized: false },
   emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },

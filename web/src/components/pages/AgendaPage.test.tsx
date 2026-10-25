@@ -78,23 +78,14 @@ describe('AgendaPage', () => {
     expect(screen.queryByText('Llegué / estoy afuera')).not.toBeInTheDocument();
   });
 
-  it('loads technician roster and summaries only when the technician tab is selected', async () => {
-    const user = userEvent.setup();
-    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis Pérez' }] });
-    vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 30, schedule: [{ weekday: 1, opens_at: '09:00:00', closes_at: '18:00:00' }] });
+  it('links to technician schedules in Settings instead of rendering a technicians tab', () => {
     render(<AgendaPage data={[]} state="empty" />);
 
+    expect(screen.queryByRole('tab', { name: 'Técnicos' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Configurar horarios de técnicos' })).toHaveAttribute('href', '/panel/app/settings#schedule');
+    expect(screen.queryByLabelText('Días y horarios de atención')).not.toBeInTheDocument();
     expect(fetchTechnicians).not.toHaveBeenCalled();
     expect(getTechnicianSchedule).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('tab', { name: 'Técnicos' }));
-    expect((await screen.findAllByText('Luis Pérez')).length).toBeGreaterThan(0);
-    expect(fetchTechnicians).toHaveBeenCalledOnce();
-    await waitFor(() => expect(getTechnicianSchedule).toHaveBeenCalledWith(30));
-    expect(screen.getByText('Lun 09:00–18:00')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Horario semanal' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Activas' }));
-    await user.click(screen.getByRole('tab', { name: 'Técnicos' }));
-    expect(fetchTechnicians).toHaveBeenCalledOnce();
   });
 
   it('removes the old disclosure CSS surface', () => {
@@ -102,15 +93,11 @@ describe('AgendaPage', () => {
     expect(stylesheet).not.toMatch(/agenda-page__schedules/);
   });
 
-  it('shows roster errors with a retry and an explicit empty state', async () => {
-    const user = userEvent.setup();
-    vi.mocked(fetchTechnicians).mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce({ technicians: [] });
+  it('keeps technician configuration out of the agenda register', () => {
     render(<AgendaPage data={[]} state="empty" />);
-    await user.click(screen.getByRole('tab', { name: 'Técnicos' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los técnicos');
-    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByText('No hay técnicos disponibles.')).toBeInTheDocument();
-    expect(fetchTechnicians).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('tab', { name: 'Técnicos' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Configurar horarios de técnicos' })).toHaveAttribute('href', '/panel/app/settings#schedule');
+    expect(screen.queryByLabelText('Días y horarios de atención')).not.toBeInTheDocument();
   });
 
   it('renders loading, forbidden, error, and stale recovery states', () => {
