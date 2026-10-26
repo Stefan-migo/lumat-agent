@@ -285,6 +285,20 @@ def _ask_text(fields: list[str], questions: dict[str, str]) -> str:
     return " ".join(questions[field] for field in fields)
 
 
+_INTERROGATIVES = (
+    "que ", "qué ", "cuanto", "cuánto", "como ", "cómo ", "cual", "cuál",
+    "donde", "dónde", "cuando", "cuándo", "por que", "por qué", "quien", "quién",
+)
+
+
+def _looks_like_question(text: str) -> bool:
+    """True for a question, which is never a preventive request."""
+    stripped = (text or "").strip()
+    if "?" in stripped:
+        return True
+    return _normalize(stripped).startswith(tuple(_normalize(word) for word in _INTERROGATIVES))
+
+
 def _looks_like_prose(text: str) -> bool:
     """True for a long or multi-sentence turn, the shape corruption imitates."""
     stripped = (text or "").strip()
@@ -325,8 +339,10 @@ def _merge_extracted(
         ):
             continue
         if field == "comuna":
-            if comuna_cubierta(communes, value):
-                captured[field] = value
+            # Coverage is decided by `_out_of_coverage`, never here: dropping an
+            # out-of-coverage commune made that rule unreachable, so the bot
+            # re-asked instead of deriving `handoff:cobertura` (S15 regression).
+            captured[field] = value
         elif field == "email":
             if re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", value):
                 captured[field] = value
@@ -371,10 +387,14 @@ def capture(state: ConversationState) -> dict:
                 for keyword in get_capture_preventive_keywords(session)
                 if _normalize(keyword)
             }
+        # A QUESTION is not a request: "¿cuánto cuesta la revisión anual?" is a
+        # price question, not a maintenance order, and reading the keyword out of
+        # it silently marked `failure` as skipped (S14/S16 integration tests).
         inbound = " ".join(
             item.get("text") or ""
             for item in state.window
             if item.get("direction", "inbound") == "inbound"
+            and not _looks_like_question(item.get("text") or "")
         )
         normalized_window = _normalize(inbound)
         if any(keyword in normalized_window for keyword in preventive):
@@ -391,6 +411,12 @@ def capture(state: ConversationState) -> dict:
             captured, state.extracted, [], state, get_coverage_communes(session)
         )
     pending = captured.get("_pending")
+    if isinstance(pending, str) and pending != "consent":
+        # A stored one-field batch can arrive as a bare string ("name"); it means
+        # the batch of that field, not its letters. Iterating it character by
+        # character asked for fields called "n" and re-asked forever (the ingest
+        # ack test caught it as an unmocked LLM call).
+        pending = [pending]
     if isinstance(pending, list) and "failure" in (captured.get("_skipped") or []):
         pending = [field for field in pending if field != "failure"]
         if pending:
@@ -414,7 +440,10 @@ def capture(state: ConversationState) -> dict:
             with session_scope() as session:
                 _apply_consent_and_customer(session, state, captured)
                 _persist_captured(session, state, captured)
-            return _ask_next(captured, state)
+            # Consent is the last step: the data is complete, so the flow goes
+            # straight to booking. Routing through `_ask_next` re-ran the coverage
+            # check and derived for a commune that was already accepted.
+            return {"captured": captured, "next_step": "booking"}
         if consent is False:
             captured.pop("email", None)
             captured.pop("address", None)
@@ -463,7 +492,11 @@ def capture(state: ConversationState) -> dict:
             target = pending[0]
             if target not in captured:
                 captured[target] = "unknown"
-        elif not state.extracted and not _looks_like_prose(answer):
+        elif (
+            not state.extracted
+            and not _looks_like_prose(answer)
+            and not _looks_like_question(answer)
+        ):
             # S2: a TERSE answer that the extractor missed belongs to the field we
             # just asked — the customer answered, the model simply did not label it
             # ("Ñuñoa", "Juan Perez"). It goes back through the same per-field
@@ -572,19 +605,7 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             consent = render_reply(get_reply_texts(session), "capture_consent")
             return {"captured": captured, "replies": [consent]}
 
-        first_personal = next(
-            (field for field in conduct["orden"] if field in {"email", "address"} and field not in captured),
-            None,
-        )
         batch = _ask_batch(missing, conduct["max_preguntas_por_mensaje"])
-        if first_personal in batch and "consent" not in captured:
-            captured["_pending"] = "consent"
-            asked = dict(captured.get("_asked") or {})
-            asked["consent"] = asked.get("consent", 0) + 1
-            captured["_asked"] = asked
-            _persist_captured(session, state, captured)
-            consent = render_reply(get_reply_texts(session), "capture_consent")
-            return {"captured": captured, "replies": [consent]}
         if _exhausted(captured, batch):
             # S14: asked twice without an answer — offer a derivation instead of
             # a third identical question. The handoff node owns the reply and

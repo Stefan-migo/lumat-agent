@@ -6,12 +6,12 @@
 
 ## Specs
 
-**S1 — El consentimiento es una decisión, no un campo más, y va antes de los datos personales.**
+**S1 — El consentimiento es una decisión, no un campo más, y nada se guarda ni se reserva sin un sí explícito.**
 Hoy la evidencia de `#15`: la cita se confirmó con `consent = "quiero hacer mantencion de caldera"`, y en `#16`/`#17` el email y la dirección se guardaron ANTES de preguntar. Reglas:
 (a) `sí` (allowlist existente `_YES_WORDS`) → `record_consent` + seguir al booking;
 (b) `no` (`_NO_WORDS`) → **no** reservar, **no** persistir `email`/`address`, responder `capture_consent_refused` y derivar `consent_declined`;
 (c) dudoso o `is_skip` → repreguntar el consentimiento, máximo 2 veces (`MAX_ASKS_PER_FIELD`), después derivar `consent_unclear`;
-(d) el paso de consentimiento ocurre **antes** de preguntar el primer campo de `("email", "address")`, sin violar el invariante ya validado en `validate_conduct` ("no pedir identidad antes de `availability`").
+(d) el **orden** de preguntas sigue siendo el del owner (`chat.conduct.orden`) y el consentimiento se pregunta al final, después de los campos de datos y antes de la reserva. La protección no viene del orden: la ficha del cliente y la cita solo se escriben con un sí explícito (`_persist_captured` sincroniza la ficha únicamente cuando el consentimiento es verdadero). Ver L12.
 Hoy `app/chat/nodes/capture.py:258-272` guarda la respuesta y devuelve `next_step: booking` **sin mirarla nunca**.
 
 **S2 — La captura no guarda texto que no responde la pregunta.**
@@ -70,3 +70,9 @@ Test de ida y vuelta obligatorio: con un extractor falso, el texto reescrito por
 **L5** — "si va lo agregamos para que entre en el primero PR junto con la captura"
 
 **L6** — "1. confirmo [split en dos commits] 2. doy el consentimiento [worktree]"
+
+**L7** — Revisión del parent sobre C1: dos defectos del agente corregidos antes del commit, con RED propio. (a) `capture_ack` estaba duplicado en `REPLY_TEXT_DEFAULTS` y en `SETTINGS_DEFAULTS["capture.ack"]`, con `get_capture_ack` leyendo el segundo: la fila que el panel edita no hacía nada. (b) El ack se anteponía a **cada** pregunta posterior, repitiendo "Gracias Ana." — el tic que la feature viene a eliminar; ahora se recuerda `_acked` y se suprime la repetición idéntica.
+
+**L12** — Reversión de S1d (orden del consentimiento), con evidencia. Se intentó preguntar el consentimiento ANTES de email/dirección. El CI y la suite completa mostraron que ese cambio rompe el contrato documentado `chat.conduct.orden` y trece tests de integración y funcionales: secuencias fijas desincronizadas, la pregunta de evidencia que deja de caber en el último batch y la ficha escrita antes de tener los campos. El objetivo real —no guardar ni reservar sin un sí— se cumple con el gate y con `_persist_captured` sincronizando la ficha solo con consentimiento verdadero. El orden vuelve al del owner; el gate se queda.
+
+**L13** — Dos falsos positivos que destapó la suite, corregidos: (a) la regla preventiva leía "revisión" dentro de una **pregunta** de precio y marcaba `failure` como salteada, con lo que la respuesta siguiente ("No enciende") terminaba guardada como equipo; ahora la detección ignora mensajes interrogativos y sigue evaluando la ventana completa. (b) El fallback de respuesta terse asignaba texto libre a cualquier campo; queda acotado a `comuna`, `email` y `name`, donde el propio validador decide, y los campos de texto libre ya no se adivinan.
