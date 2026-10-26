@@ -4,6 +4,33 @@ import userEvent from "@testing-library/user-event";
 import type { Settings as SettingsData } from "../../types";
 import { Settings } from "./Settings";
 
+const replyTextValues = {
+  handoff_cobertura: "Sin cobertura en {{comuna}}.",
+  handoff_persona: "Te paso con una persona del equipo.",
+  handoff_unknown_intent_thrice: "Te dejo con una persona del equipo.",
+  handoff_campo_sin_respuesta: "Un asesor te contacta para coordinar.",
+  handoff_booking_unavailable: "No hay horarios: un asesor te contacta.",
+  booking_offer: "Horarios: {{opciones}}",
+  booking_no_more_today: "Sin más horarios para hoy: {{opciones}}",
+  booking_unclear: "No entendí el horario.",
+  booking_confirmed: "Visita agendada.",
+  manage_no_visits: "No tienes visitas.",
+  manage_confirm_cancel: "¿Confirmas cancelar?",
+  manage_select: "Elige una visita.",
+  manage_slots_offer: "Nuevos horarios: {{opciones}}",
+  manage_expired: "La visita ya pasó.",
+  manage_appointment_unclear: "No entendí qué visita.",
+  manage_slots_unclear: "No entendí el horario.",
+  manage_kept: "Quedó igual.",
+  manage_reschedule_unavailable: "No hay horarios para reagendar.",
+  manage_rescheduled: "Visita reagendada.",
+  manage_cancel_prompt: "¿Quieres cancelar?",
+  manage_cancel_unavailable: "No se puede cancelar.",
+  manage_cancelled: "Visita cancelada.",
+  handoff: "Te paso con un asesor.",
+  capture_evidence: "¿Puedes enviar evidencia?",
+  capture_consent: "¿Autorizas el tratamiento de tus datos?",
+};
 const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   model_api_key: { configured: false, source: "none", masked: "" },
   email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
@@ -37,7 +64,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
     },
   },
   capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },
-  reply_texts: { texts: { booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual." }, slots: { booking_offer: ["opciones"], manage_kept: [] }, customized: false },
+  reply_texts: { texts: { ...replyTextValues }, slots: { booking_offer: ["opciones"], handoff_cobertura: ["comuna"] }, customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });
@@ -459,51 +486,96 @@ describe("Settings", () => {
     expect(screen.getByRole("button", { name: "Guardar preguntas" })).toBeDisabled();
   });
 
-  it("saves one deterministic reply from its group", async () => {
+  it("saves one deterministic reply from its group under Conducta", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await selectSection(user, "Mensajes");
+    await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
 
     const offer = screen.getByLabelText("Oferta de horarios");
     expect(offer).toHaveValue("Horarios: {{opciones}}");
     expect(screen.getByText("{{opciones}}")).toBeInTheDocument();
     fireEvent.change(offer, { target: { value: "Estos horarios tengo: {{opciones}}" } });
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas del flujo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-      body: JSON.stringify({ texts: { booking_offer: "Estos horarios tengo: {{opciones}}", manage_kept: "Quedó igual." } }),
+      body: JSON.stringify({ texts: { ...replyTextValues, booking_offer: "Estos horarios tengo: {{opciones}}" } }),
     })));
   });
 
-  it("renders the exhausted-day notice inside the booking group", async () => {
+  it("makes Conducta the single editable owner of all 25 reply texts", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    const labels = [
+      "Comuna sin cobertura", "Pide hablar con una persona", "Tres mensajes sin entender", "Un dato no se logró tomar", "No hay horarios para agendar",
+      "Oferta de horarios", "Sin más horarios para ese día", "No se entendió el horario pedido", "Visita agendada", "No tiene visitas",
+      "Confirmar la cancelación", "Elegir una visita", "Ofrecer nuevos horarios", "La visita ya pasó", "No se entendió la visita",
+      "No se entendió el horario", "La visita sigue igual", "Sin horarios para reagendar", "Visita reagendada", "Pedir confirmación para cancelar",
+      "No se puede cancelar", "Visita cancelada", "Derivación a un asesor", "Pedir evidencia", "Pedir consentimiento",
+    ];
+    for (const group of ["Agendar", "Gestionar una visita", "Derivar a una persona", "Captura"]) {
+      await user.click(screen.getByRole("button", { name: new RegExp(group) }));
+    }
+    expect(labels).toHaveLength(25);
+    for (const label of labels) expect(screen.getByLabelText(label)).toBeInTheDocument();
+
+    const changed = Object.fromEntries(Object.entries(replyTextValues).map(([key, value]) => [key, `${value} Edición.`]));
+    for (const [key, value] of Object.entries(changed)) {
+      const label = labels[Object.keys(replyTextValues).indexOf(key)];
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ texts: changed }),
+    }));
+  });
+
+  it("keeps the Conducta reply-text save disabled if any of the 25 values is blank", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const save = screen.getByRole("button", { name: "Guardar respuestas" });
+    expect(save).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText("Visita agendada"), { target: { value: "   " } });
+    expect(save).toBeDisabled();
+  });
+
+  it("does not render flow reply-text editing in Mensajes, while retaining its three other cards", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
+
+    expect(screen.queryByRole("heading", { name: "Respuestas del flujo" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tono del asistente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
+  });
+
+  it("renders the exhausted-day notice inside the booking group under Conducta", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
 
     const notice = screen.getByLabelText("Sin más horarios para ese día");
     fireEvent.change(notice, { target: { value: "Sin más para ese día: {{opciones}}" } });
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas del flujo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-      body: JSON.stringify({ texts: { booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual.", booking_no_more_today: "Sin más para ese día: {{opciones}}" } }),
+      body: JSON.stringify({ texts: { ...replyTextValues, booking_no_more_today: "Sin más para ese día: {{opciones}}" } }),
     })));
   });
 
   describe("derivaciones (S4)", () => {
-    const derivations = {
-      handoff_cobertura: "Sin cobertura en {{comuna}}.",
-      handoff_persona: "Te paso con una persona del equipo.",
-      handoff_unknown_intent_thrice: "Te dejo con una persona del equipo.",
-      handoff_campo_sin_respuesta: "Un asesor te contacta para coordinar.",
-      handoff_booking_unavailable: "No hay horarios: un asesor te contacta.",
-    };
-    const withDerivations = () => settings({
-      reply_texts: { texts: derivations, slots: { handoff_cobertura: ["comuna"] }, customized: false },
-    });
+    const withDerivations = () => settings();
 
     it("renders the five cases the customer reads a text for", async () => {
       const user = userEvent.setup();
@@ -527,10 +599,10 @@ describe("Settings", () => {
       await selectSection(user, "Conducta");
 
       fireEvent.change(screen.getByLabelText("Pide hablar con una persona"), { target: { value: "Ahora te escribe alguien del equipo." } });
-      await user.click(screen.getByRole("button", { name: "Guardar derivaciones" }));
+      await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
 
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-        body: JSON.stringify({ texts: { ...derivations, handoff_persona: "Ahora te escribe alguien del equipo." } }),
+        body: JSON.stringify({ texts: { ...replyTextValues, handoff_persona: "Ahora te escribe alguien del equipo." } }),
       })));
     });
 
