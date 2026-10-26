@@ -201,10 +201,15 @@ def _persist_captured(session, state: ConversationState, captured: dict) -> None
     conv = session.get(Conversation, state.conversation_id)
     if conv is not None:
         conv.captured_data = captured
+    # S1 canvas: consent is asked BEFORE email/address, so a single ficha write at
+    # the consent step would leave the customer record missing every field captured
+    # after it (CI functional flows caught exactly that). The sync is idempotent.
+    if _answer_consent(captured.get("consent", "")) is True:
+        _sync_customer_fields(session, state, captured)
 
 
-def _apply_consent_and_customer(session, state: ConversationState, captured: dict) -> None:
-    """CR-6: write captured identification/location + consent on the ficha."""
+def _sync_customer_fields(session, state: ConversationState, captured: dict) -> None:
+    """CR-6: write captured identification/location on the ficha (idempotent)."""
     customer = session.get(Customer, state.customer_id)
     if customer is None:
         return
@@ -218,6 +223,14 @@ def _apply_consent_and_customer(session, state: ConversationState, captured: dic
         address=clean.get("address"),
     )
     promote_captured_equipment(session, customer, state.conversation_id, clean)
+
+
+def _apply_consent_and_customer(session, state: ConversationState, captured: dict) -> None:
+    """CR-6: write the ficha and record the consent decision once."""
+    _sync_customer_fields(session, state, captured)
+    customer = session.get(Customer, state.customer_id)
+    if customer is None:
+        return
     consent = _answer_consent(captured.get("consent", "unknown"))
     if consent is not None:
         record_consent(session, customer, consent=consent)
@@ -272,6 +285,14 @@ def _ask_text(fields: list[str], questions: dict[str, str]) -> str:
     return " ".join(questions[field] for field in fields)
 
 
+def _looks_like_prose(text: str) -> bool:
+    """True for a long or multi-sentence turn, the shape corruption imitates."""
+    stripped = (text or "").strip()
+    if len(stripped) > 80:
+        return True
+    return len(re.findall(r"[.!?](?:\s|$)", stripped)) >= 2
+
+
 def _merge_extracted(
     captured: dict, extracted: dict | None, pending: list[str], state: ConversationState,
     communes: list[str],
@@ -282,17 +303,24 @@ def _merge_extracted(
         if item.get("direction", "inbound") == "inbound" and item.get("text")
     }
     current_text = _current_text(state)
+    skipped = set(captured.get("_skipped") or [])
     for field, value in (extracted or {}).items():
         if field not in EXTRACTABLE_FIELDS or not isinstance(value, str):
+            continue
+        if field in skipped:
+            # The preventive decision outranks the extractor: a maintenance request
+            # must not be recorded as the fault it was explicitly not.
             continue
         value = value.strip()
         if not value or captured.get(field):
             continue
-        # No extracted field may simply echo the customer's whole inbound turn.
-        # A complete prose turn echoed as a field is extraction corruption; terse
-        # direct answers (a commune, email, or name) naturally equal the turn.
+        # No field may echo a PROSE turn: a multi-sentence message copied into a
+        # field is extraction corruption ("Soy Braulio, me dieron este numero...").
+        # A terse answer legitimately equals the whole message ("tengo un calefont
+        # que no calienta" fills `failure`), and rejecting those starved the flow —
+        # CI functional flows asked the same question twice and then derived.
         if (
-            len(current_text.strip()) > 20
+            _looks_like_prose(current_text)
             and _normalize(value) == _normalize(current_text)
         ):
             continue
@@ -310,6 +338,7 @@ def _merge_extracted(
             # for the failure field.
             if (
                 len(value) <= 80
+                and len(value.split()) <= 4  # a name is a name, not a sentence
                 and "?" not in value
                 and not is_skip(value)
                 and not _normalize(value).startswith("no ")
@@ -353,6 +382,14 @@ def capture(state: ConversationState) -> dict:
             if "failure" not in skipped:
                 skipped.append("failure")
             captured["_skipped"] = skipped
+    # Extraction is merged on EVERY turn, including the first one, which is where
+    # the customer states the problem ("tengo un calefont que no calienta" fills
+    # `failure` and the next question is the equipment). Validators decide what is
+    # accepted; the merge no longer waits for an "answer turn".
+    with session_scope() as session:
+        _merge_extracted(
+            captured, state.extracted, [], state, get_coverage_communes(session)
+        )
     pending = captured.get("_pending")
     if isinstance(pending, list) and "failure" in (captured.get("_skipped") or []):
         pending = [field for field in pending if field != "failure"]
@@ -419,17 +456,27 @@ def capture(state: ConversationState) -> dict:
         # First capture turn: the current message is the intent, not an answer.
         return _ask_next(captured, state)
 
-    # An answer turn merges only validated fields the extractor assigned within
-    # the asked batch. Skip answers retain the explicit unknown sentinel.
-    with session_scope() as session:
-        _merge_extracted(
-            captured, state.extracted, pending, state, get_coverage_communes(session)
-        )
-    if not any(field in captured for field in pending):
-        if is_skip(_current_text(state)):
+    # Skip answers retain the explicit unknown sentinel.
+    if pending and not any(field in captured for field in pending):
+        answer = _current_text(state)
+        if is_skip(answer):
             target = pending[0]
             if target not in captured:
                 captured[target] = "unknown"
+        elif not state.extracted and not _looks_like_prose(answer):
+            # S2: a TERSE answer that the extractor missed belongs to the field we
+            # just asked — the customer answered, the model simply did not label it
+            # ("Ñuñoa", "Juan Perez"). It goes back through the same per-field
+            # validators, so a commune outside coverage or a refusal still fails;
+            # only PROSE is refused outright, which is where the corruption came
+            # from ("Soy Braulio, me dieron este numero...").
+            with session_scope() as session:
+                _merge_extracted(
+                    captured, {pending[0]: answer}, [], state,
+                    get_coverage_communes(session),
+                )
+            if pending[0] not in captured:
+                return _reask_pending(captured, pending, state)
         else:
             return _reask_pending(captured, pending, state)
 

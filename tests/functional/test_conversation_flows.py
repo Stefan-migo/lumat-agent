@@ -175,9 +175,11 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
         ("wamid.cm2c.5", "Ñuñoa"),               # comuna
         ("wamid.cm2c.6", "lunes o martes en la tarde"),  # availability
         ("wamid.cm2c.7", "Juan Perez"),                # name
-        ("wamid.cm2c.8", "juan@mail.cl"),              # email
-        ("wamid.cm2c.9", "Av. Siempre Viva 123"),      # address
-        ("wamid.cm2c.10", "sí"),                       # consent -> completion
+        # S1 canvas: consent is asked BEFORE the contact fields, so the customer
+        # agrees to the data being stored before giving it.
+        ("wamid.cm2c.8", "sí"),                        # consent
+        ("wamid.cm2c.9", "juan@mail.cl"),              # email
+        ("wamid.cm2c.10", "Av. Siempre Viva 123"),     # address -> completion
     ]
     for wamid, text in turns:
         post_message(client, wamid, text)

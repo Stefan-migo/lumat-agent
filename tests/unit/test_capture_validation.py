@@ -106,13 +106,27 @@ def test_name_validator_rejects_skip_question_and_unbounded_messages(harness):
 
 
 @pytest.mark.parametrize("field", ["failure", "address", "name"])
-def test_no_field_accepts_the_whole_inbound_message(harness, field):
-    message = "Braulio quiere una mantencion de caldera"
+def test_no_field_accepts_a_prose_turn_as_its_value(harness, field):
+    """S2: the corruption shape is PROSE copied into a field, not a terse answer.
+
+    A short answer that the extractor missed is legitimate ("Ñuñoa" answering
+    the commune); a multi-sentence message is not. The CI functional flows are
+    the reason this distinction exists: refusing terse answers starved the flow.
+    """
+    message = "Soy Braulio, me dieron este numero. tengo un problema con mi calefont."
     result = capture_node.capture(make_state(
         message, captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
         extracted={field: message},
     ))
     assert field not in result["captured"]
+
+
+def test_a_terse_answer_the_extractor_missed_still_fills_the_asked_field(harness):
+    result = capture_node.capture(make_state(
+        "Ñuñoa", captured={"_pending": ["comuna"], "_asked": {"comuna": 1}},
+    ))
+    assert result["captured"]["comuna"] == "Ñuñoa"
+    assert result["captured"]["_pending"] != ["comuna"]
 
 
 def test_skip_unknown_path_still_advances(harness):
