@@ -13,13 +13,16 @@ PDW-AUTH-1), 404 for a missing conversation. No redirects, no CORS (D1).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, case as sql_case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models import Case, Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, User
+from app.config import get_settings
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_active_conversation_dict, to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
@@ -298,6 +301,28 @@ def retry_message(conversation_id: int, message_id: int, body: RetryCommand, ses
     if message.delivery_status != DeliveryStatus.SENT:
         raise HTTPException(status_code=502, detail="message delivery failed")
     return {"ok": True, "message": to_message_dict(message)}
+
+
+@router.get("/conversations/{conversation_id}/messages/{message_id}/media")
+def conversation_message_media(
+    conversation_id: int,
+    message_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> FileResponse:
+    message = session.scalar(select(Message).where(
+        Message.id == message_id, Message.conversation_id == conversation_id
+    ))
+    if message is None or not message.stored_path:
+        raise HTTPException(status_code=404, detail="media not found")
+    root = Path(get_settings().media_dir).resolve()
+    path = Path(message.stored_path).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="media not found")
+    disposition = "inline" if (message.content_type or "").startswith(("image/", "audio/", "video/")) else "attachment"
+    return FileResponse(path, filename=message.filename or path.name,
+                        media_type=message.content_type or "application/octet-stream",
+                        content_disposition_type=disposition)
 
 
 @router.get("/conversations/{conversation_id}")

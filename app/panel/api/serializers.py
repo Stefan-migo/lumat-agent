@@ -103,6 +103,11 @@ def to_message_dict(message: Message) -> dict:
         "msg_type": message.msg_type.value,
         "text": message.text,
         "media_url": message.media_url,
+        "media_available": bool(message.stored_path),
+        "media_download_url": (
+            f"/panel/api/conversations/{message.conversation_id}/messages/{message.id}/media"
+            if message.stored_path else None
+        ),
         "delivery_status": message.delivery_status.value if message.delivery_status else None,
         "delivery_error": message.delivery_error,
         "delivery_attempts": message.delivery_attempts,
