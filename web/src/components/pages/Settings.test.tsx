@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import type { Settings as SettingsData } from "../../types";
 import { Settings } from "./Settings";
+import { WEEKDAY_NAMES } from "../shared/agendaTime";
 
 const replyTextValues = {
   handoff_cobertura: "Sin cobertura en {{comuna}}.",
@@ -31,10 +32,12 @@ const replyTextValues = {
   capture_evidence: "¿Puedes enviar evidencia?",
   capture_consent: "¿Autorizas el tratamiento de tus datos?",
 };
-const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
+type SettingsWithOptions = SettingsData & { options: { tones: string[]; tarifa_labels: Record<string, string> } };
+const settings = (overrides: Partial<SettingsWithOptions> = {}): SettingsWithOptions => ({
   model_api_key: { configured: false, source: "none", masked: "" },
   email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
+  options: { tones: ["cercano", "formal", "directo"], tarifa_labels: { visita_tecnica: "Visita técnica", mantencion_calefont: "Mantención de calefont", mantencion_caldera: "Mantención de caldera", lavado_red: "Lavado de red" } },
   messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", smalltalk: "Con gusto.", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
@@ -203,6 +206,34 @@ describe("Settings", () => {
     await user.clear(conversationLimit);
     await user.type(conversationLimit, "1.5");
     expect(saveLimits).toBeEnabled();
+  });
+
+  it("renders backend-provided tone options and tariff labels", async () => {
+    const user = userEvent.setup();
+    const payload = settings({ options: {
+      tones: ["directo", "formal", "cercano"],
+      tarifa_labels: { visita_tecnica: "Servicio A", mantencion_calefont: "Servicio B", mantencion_caldera: "Servicio C", lavado_red: "Servicio D" },
+    } });
+    render(<Settings data={payload} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Mensajes");
+    await user.click(screen.getByRole("button", { name: "Tono" }));
+    expect(within(screen.getByRole("menu")).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Directo", "Formal", "Cercano"]);
+    await user.click(screen.getByRole("menuitem", { name: "Formal" }));
+    await selectSection(user, "Tarifas");
+    for (const label of Object.values(payload.options.tarifa_labels)) expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it("uses the shared weekday labels for the settings scheduler", async () => {
+    const previous = WEEKDAY_NAMES[0];
+    WEEKDAY_NAMES[0] = "Lunes compartido";
+    try {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Horarios y avisos");
+      expect(screen.getByRole("button", { name: "Lunes compartido" })).toBeInTheDocument();
+    } finally {
+      WEEKDAY_NAMES[0] = previous;
+    }
   });
 
   it("renders the tone selector and save action together", async () => {

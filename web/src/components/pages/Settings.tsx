@@ -19,6 +19,7 @@ import { MessagePreview } from "../primitives/MessagePreview";
 import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
 import { TechnicianScheduleEditor } from "../shared/TechnicianScheduleEditor";
+import { WEEKDAY_NAMES } from "../shared/agendaTime";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
@@ -28,15 +29,10 @@ import "./Settings.css";
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
 const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
-const SHORT_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-const TARIFA_LABELS: Array<[keyof SettingsData["tarifa"], string]> = [
-  ["visita_tecnica", "Visita técnica"],
-  ["mantencion_calefont", "Mantención de calefont"],
-  ["mantencion_caldera", "Mantención de caldera"],
-  ["lavado_red", "Lavado de red"],
-];
+type SettingsOptions = { tones: string[]; tarifa_labels: Partial<Record<keyof SettingsData["tarifa"], string>> };
+const settingsOptions = (data: SettingsData) => (data as SettingsData & { options: SettingsOptions }).options;
 const EMPTY_TARIFA: SettingsData["tarifa"] = {
   visita_tecnica: [], mantencion_calefont: [], mantencion_caldera: [], lavado_red: [],
 };
@@ -189,8 +185,8 @@ function isValidHours(hours: HoursData) {
     entry.days.length > 0 && entry.open !== "" && entry.close !== "" && entry.open < entry.close);
 }
 
-function isTarifaValid(tarifa: SettingsData["tarifa"]) {
-  return TARIFA_LABELS.every(([service]) => {
+function isTarifaValid(tarifa: SettingsData["tarifa"], labels: SettingsOptions["tarifa_labels"]) {
+  return (Object.keys(labels) as Array<keyof SettingsData["tarifa"]>).every((service) => {
     const ranges = tarifa[service];
     return ranges.length > 0 && ranges.every((rango) =>
       Number.isInteger(rango.valor) && rango.valor > 0);
@@ -251,14 +247,14 @@ function stateMessage(state: SettingsState, errorDetail?: string | null) {
   return null;
 }
 
-function TarifaEditor({ tarifa, onChange }: { tarifa: SettingsData["tarifa"]; onChange: (tarifa: SettingsData["tarifa"]) => void }) {
+function TarifaEditor({ tarifa, labels, onChange }: { tarifa: SettingsData["tarifa"]; labels: SettingsOptions["tarifa_labels"]; onChange: (tarifa: SettingsData["tarifa"]) => void }) {
   const setValor = (service: keyof SettingsData["tarifa"], index: number, valor: number) => {
     const ranges = tarifa[service].map((rango, current) => current === index ? { ...rango, valor } : rango);
     onChange({ ...tarifa, [service]: ranges });
   };
 
   return <div className="settings-tarifa">
-    {TARIFA_LABELS.map(([service, label]) => <fieldset className="settings-tarifa__service" key={service}>
+    {(Object.entries(labels) as Array<[keyof SettingsData["tarifa"], string]>).map(([service, label]) => <fieldset className="settings-tarifa__service" key={service}>
       <legend>{label}</legend>
       <div className="settings-tarifa__ranges">
         {tarifa[service].map((rango, index) => {
@@ -284,9 +280,9 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
   const [newDays, setNewDays] = useState<string[]>([]);
   const [newOpen, setNewOpen] = useState("09:00");
   const [newClose, setNewClose] = useState("18:00");
-  const usedDays = hours.schedule.flatMap((entry) => entry.days).map((day) => SHORT_DAYS[day - 1]);
+  const usedDays = hours.schedule.flatMap((entry) => entry.days).map((day) => WEEKDAY_NAMES[day - 1]);
   const addSchedule = () => {
-    const days = newDays.map((day) => SHORT_DAYS.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(SHORT_DAYS[day - 1]));
+    const days = newDays.map((day) => WEEKDAY_NAMES.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(WEEKDAY_NAMES[day - 1]));
     if (!days.length || !newOpen || !newClose || newOpen >= newClose) return;
     onChange({ ...hours, schedule: [...hours.schedule, { days, open: newOpen, close: newClose }] });
     resetDraft();
@@ -297,7 +293,7 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
     <div className="settings-hours__timezone"><Globe2 aria-hidden="true" /><Select label="Zona horaria" value={hours.timezone} onChange={(event) => onChange({ ...hours, timezone: event.target.value })} options={timezoneOptions.map((timezone) => ({ value: timezone, label: timezone }))} /></div>
     <section className="settings-hours__weekly" aria-label="Horarios semanales"><h3>Horarios semanales</h3>
     {hours.schedule.length ? <div className="settings-hours__list" aria-label="Horarios configurados">{hours.schedule.map((entry, index) => <div className="settings-hours__item" key={index}>
-      <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => SHORT_DAYS[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
+      <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => WEEKDAY_NAMES[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
       <Button variant="tertiary" aria-label={`Eliminar horario ${index + 1}`} onClick={() => onChange({ ...hours, schedule: hours.schedule.filter((_, currentIndex) => currentIndex !== index) })}><Trash2 aria-hidden="true" /> Eliminar</Button>
     </div>)}</div> : <p className="settings-hours__empty">No hay horarios guardados.</p>}</section>
     <div className="settings-hours__new"><div className="settings-hours__new-header"><h3>Nuevo horario</h3><Badge tone="neutral">Sin guardar</Badge><Button variant="tertiary" className="settings-hours__reset" aria-label="Restablecer nuevo horario" onClick={resetDraft}><Trash2 aria-hidden="true" /></Button></div>
@@ -740,7 +736,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </Card>
         </> : null}
         {active === "messages" ? <>
-          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
+          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={settingsOptions(data).tones.map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
            <Card title="Mensajes del asistente" className="settings-messages__editor">
               <div className="settings-messages__panel">
                 <div className="settings-messages__layout">
@@ -825,8 +821,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           <Card title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins}>
             <div className="settings-agent__layout">
               <div className="settings-agent__form">
-                <TarifaEditor tarifa={draft.tarifa} onChange={(value) => update("tarifa", value)} />
-                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
+                <TarifaEditor tarifa={draft.tarifa} labels={settingsOptions(data).tarifa_labels} onChange={(value) => update("tarifa", value)} />
+                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa, settingsOptions(data).tarifa_labels)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
               </div>
               <HelpPanel icon={Coins} title="Cómo se aplica"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></HelpPanel>
             </div>
