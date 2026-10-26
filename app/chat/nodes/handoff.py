@@ -53,6 +53,8 @@ DERIVATION_REPLY_KEYS: dict[str, str] = {
     "unknown_intent_thrice": "handoff_unknown_intent_thrice",
     "campo_sin_respuesta": "handoff_campo_sin_respuesta",
     "booking_unavailable": "handoff_booking_unavailable",
+    "consent_declined": "capture_consent_refused",
+    "consent_unclear": "capture_consent_unclear",
 }
 
 

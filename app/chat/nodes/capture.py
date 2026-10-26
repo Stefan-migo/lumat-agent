@@ -41,7 +41,9 @@ from app.services.customers import (
 from app.services.settings import (
     REPLY_TEXT_DEFAULTS,
     comuna_cubierta,
+    get_capture_ack,
     get_capture_questions,
+    get_capture_preventive_keywords,
     get_conduct,
     get_coverage_communes,
     get_reply_texts,
@@ -176,13 +178,11 @@ def is_skip(text: str) -> bool:
 
 
 def _answer_consent(value: str) -> bool | None:
-    """True/False for an explicit consent answer; None when skipped."""
-    if value == "unknown":
-        return None
-    lowered = value.lower()
-    if any(word in lowered for word in _YES_WORDS):
+    """True/False only for an exact allowlisted answer; otherwise unclear."""
+    normalized = _normalize(value)
+    if normalized in {_normalize(word) for word in _YES_WORDS}:
         return True
-    if any(word in lowered for word in _NO_WORDS):
+    if normalized in {_normalize(word) for word in _NO_WORDS}:
         return False
     return None
 
@@ -223,7 +223,8 @@ def _missing_fields(captured: dict, order: list[str]) -> list[str]:
     `order` is the effective sequence from `chat.conduct.orden` (S11); a field
     the owner dropped from it is never asked.
     """
-    return [field for field in order if field not in captured]
+    skipped = set(captured.get("_skipped") or [])
+    return [field for field in order if field not in captured and field not in skipped]
 
 
 def _field_questions(session) -> dict[str, str]:
@@ -231,15 +232,65 @@ def _field_questions(session) -> dict[str, str]:
     return {**_FIELD_QUESTIONS, **get_capture_questions(session)}
 
 
+def _render_capture_ack(session, captured: dict) -> str:
+    """Render configured acknowledgement using only captured non-sensitive facts.
+
+    An acknowledgement marks a transition; repeating the same sentence before
+    every later question turns it back into the tic this feature removes, so the
+    last one used is remembered and an identical replay is suppressed.
+    """
+    text = get_capture_ack(session)
+    facts = {
+        "nombre": captured.get("name"),
+        "comuna": captured.get("comuna"),
+        "equipo": captured.get("equipment") or captured.get("equipment_type"),
+        "problema": captured.get("failure"),
+        "disponibilidad": captured.get("availability"),
+    }
+    available = {key: value for key, value in facts.items() if isinstance(value, str) and value and value != "unknown"}
+    if not available or not any(re.search(r"{{\s*" + key + r"\s*}}", text) for key in available):
+        return ""
+    rendered = re.sub(
+        r"{{\s*(\w+)\s*}}",
+        lambda match: available.get(match.group(1), ""),
+        text,
+    )
+    if rendered.strip() == (captured.get("_acked") or "").strip():
+        return ""
+    captured["_acked"] = rendered.strip()
+    return rendered
+
+
 def _ask_text(fields: list[str], questions: dict[str, str]) -> str:
     """One message grouping 2-3 field questions, natural language, no list."""
     return " ".join(questions[field] for field in fields)
 
 
-def _merge_extracted(captured: dict, extracted: dict | None) -> None:
-    """Fill captured fields from this turn's extraction (never overwrite/consent)."""
+def _merge_extracted(
+    captured: dict, extracted: dict | None, pending: list[str], state: ConversationState,
+    communes: list[str],
+) -> None:
+    """Merge validated values from this turn, restricted to its pending batch."""
+    prior_texts = {
+        item.get("text") for item in state.window[:-1]
+        if item.get("direction", "inbound") == "inbound" and item.get("text")
+    }
+    current_text = _current_text(state)
     for field, value in (extracted or {}).items():
-        if field in EXTRACTABLE_FIELDS and value and not captured.get(field):
+        if field not in pending or field not in EXTRACTABLE_FIELDS or not isinstance(value, str):
+            continue
+        value = value.strip()
+        if not value or captured.get(field):
+            continue
+        if field == "comuna":
+            captured[field] = value if comuna_cubierta(communes, value) else "unknown"
+        elif field == "email":
+            if re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", value):
+                captured[field] = value
+        elif field in {"failure", "address"}:
+            if value != current_text and value not in prior_texts:
+                captured[field] = value
+        else:
             captured[field] = value
 
 
@@ -253,7 +304,6 @@ def capture(state: ConversationState) -> dict:
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         return _ask_next(captured, state)
-    _merge_extracted(captured, state.extracted)
     pending = captured.get("_pending")
 
     if pending == "consent":
@@ -264,12 +314,40 @@ def capture(state: ConversationState) -> dict:
                 consent = render_reply(get_reply_texts(session), "capture_consent")
             return {"capture_paused": False, "replies": [consent]}
         answer = _current_text(state)
-        captured["consent"] = "unknown" if is_skip(answer) else answer
-        captured.pop("_pending", None)
+        consent = None if is_skip(answer) else _answer_consent(answer)
+        if consent is True:
+            captured["consent"] = answer
+            captured.pop("_pending", None)
+            with session_scope() as session:
+                _apply_consent_and_customer(session, state, captured)
+                _persist_captured(session, state, captured)
+            return _ask_next(captured, state)
+        if consent is False:
+            captured.pop("email", None)
+            captured.pop("address", None)
+            captured["consent"] = "no"
+            captured.pop("_pending", None)
+            with session_scope() as session:
+                texts = get_reply_texts(session)
+                _persist_captured(session, state, captured)
+                reply = render_reply(texts, "capture_consent_refused")
+            return _derive_with_reply(captured, "consent_declined", reply)
         with session_scope() as session:
-            _apply_consent_and_customer(session, state, captured)
+            texts = get_reply_texts(session)
+            asked = dict(captured.get("_asked") or {})
+            if asked.get("consent", 0) == 0 and "consent" not in captured:
+                captured["consent"] = "unknown"
+            if asked.get("consent", 0) >= MAX_ASKS_PER_FIELD:
+                captured.pop("_pending", None)
+                _persist_captured(session, state, captured)
+                reply = render_reply(texts, "capture_consent_unclear")
+                return _derive_with_reply(captured, "consent_unclear", reply)
+            asked["consent"] = asked.get("consent", 0) + 1
+            captured["_asked"] = asked
+            captured["_pending"] = "consent"
             _persist_captured(session, state, captured)
-        return {"captured": captured, "next_step": "booking"}
+            reply = render_reply(texts, "capture_consent_unclear")
+        return {"captured": captured, "replies": [reply]}
 
     if isinstance(pending, list) and is_social_only(_current_text(state)):
         # Answer the greeting without consuming it as a field answer and without
@@ -285,16 +363,42 @@ def capture(state: ConversationState) -> dict:
         # First capture turn: the current message is the intent, not an answer.
         return _ask_next(captured, state)
 
-    # An answer turn. Extraction already filled what it could. A single free-text
-    # answer that extracted nothing is attributed to the first asked field still
-    # missing — the batch we asked is always the leading missing fields in order.
+    # An answer turn merges only validated fields the extractor assigned within
+    # the asked batch. Skip answers retain the explicit unknown sentinel.
+    with session_scope() as session:
+        _merge_extracted(
+            captured, state.extracted, pending, state, get_coverage_communes(session)
+        )
     if not any(field in captured for field in pending):
-        target = pending[0]
-        if target not in captured:
-            captured[target] = "unknown" if is_skip(_current_text(state)) else _current_text(state)
+        if is_skip(_current_text(state)):
+            target = pending[0]
+            if target not in captured:
+                captured[target] = "unknown"
+        else:
+            return _reask_pending(captured, pending, state)
 
     captured.pop("_pending", None)
     return _ask_next(captured, state)
+
+
+def _reask_pending(captured: dict, pending: list[str], state: ConversationState) -> dict:
+    """Repeat the unanswered batch once, then offer its existing derivation."""
+    asked = dict(captured.get("_asked") or {})
+    if any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in pending):
+        captured.pop("_pending", None)
+        return _derive(captured, "campo_sin_respuesta")
+
+    for field in pending:
+        asked[field] = asked.get(field, 0) + 1
+    captured["_asked"] = asked
+    captured["_pending"] = pending
+    with session_scope() as session:
+        ask = _ask_text(pending, _field_questions(session))
+        ack = _render_capture_ack(session, captured)
+        if ack:
+            ask = f"{ack}{ask}"
+        _persist_captured(session, state, captured)
+    return {"captured": captured, "replies": [ask]}
 
 
 def _out_of_coverage(
@@ -307,6 +411,11 @@ def _out_of_coverage(
     if not comuna or comuna == "unknown":
         return False
     return not comuna_cubierta(communes, comuna)
+
+
+def _derive_with_reply(captured: dict, reason: str, reply: str) -> dict:
+    """Send the capture to handoff while preserving its customer-facing reply."""
+    return {**_derive(captured, reason), "replies": [reply]}
 
 
 def _derive(captured: dict, reason: str) -> dict:
@@ -347,14 +456,44 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             captured.pop("_pending", None)
             _persist_captured(session, state, captured)
             return _derive(captured, COVERAGE_DERIVATION)
+        preventive = {
+            _normalize(keyword)
+            for keyword in get_capture_preventive_keywords(session)
+            if _normalize(keyword)
+        }
+        current = _normalize(_current_text(state))
+        if "failure" not in captured and any(word in current for word in preventive):
+            skipped = list(captured.get("_skipped") or [])
+            if "failure" not in skipped:
+                skipped.append("failure")
+            captured["_skipped"] = skipped
+
         missing = _missing_fields(captured, conduct["orden"])
         if not missing:
+            if _answer_consent(captured.get("consent", "")) is True:
+                _persist_captured(session, state, captured)
+                return {"captured": captured, "next_step": "booking"}
             captured["_pending"] = "consent"
+            asked = dict(captured.get("_asked") or {})
+            asked["consent"] = asked.get("consent", 0) + 1
+            captured["_asked"] = asked
             _persist_captured(session, state, captured)
             consent = render_reply(get_reply_texts(session), "capture_consent")
             return {"captured": captured, "replies": [consent]}
 
+        first_personal = next(
+            (field for field in conduct["orden"] if field in {"email", "address"} and field not in captured),
+            None,
+        )
         batch = _ask_batch(missing, conduct["max_preguntas_por_mensaje"])
+        if first_personal in batch and "consent" not in captured:
+            captured["_pending"] = "consent"
+            asked = dict(captured.get("_asked") or {})
+            asked["consent"] = asked.get("consent", 0) + 1
+            captured["_asked"] = asked
+            _persist_captured(session, state, captured)
+            consent = render_reply(get_reply_texts(session), "capture_consent")
+            return {"captured": captured, "replies": [consent]}
         if _exhausted(captured, batch):
             # S14: asked twice without an answer — offer a derivation instead of
             # a third identical question. The handoff node owns the reply and
@@ -369,7 +508,10 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             asked[field] = asked.get(field, 0) + 1
         captured["_asked"] = asked
         texts = get_reply_texts(session)
+        ack = _render_capture_ack(session, captured)
         ask = _ask_text(batch, _field_questions(session))
+        if ack:
+            ask = f"{ack}{ask}"
         label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
         if batch == ["failure"] and label:
             ask = f"Entiendo, es un problema con tu {label}. {ask}"

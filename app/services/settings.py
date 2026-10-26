@@ -182,6 +182,9 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     "capture_consent": (
         "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
     ),
+    "capture_consent_refused": "De acuerdo, no guardaremos tus datos ni agendaremos una visita.",
+    "capture_consent_unclear": "Necesito que me confirmes si autorizas guardar tus datos. Responde sí o no.",
+    "capture_ack": "Gracias {{nombre}}. ",
 }
 
 # S8: the slots each reply may use. The owner can drop a slot from a text, never
@@ -215,6 +218,9 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_booking_unavailable": frozenset(),
     "capture_evidence": frozenset(),
     "capture_consent": frozenset(),
+    "capture_consent_refused": frozenset(),
+    "capture_consent_unclear": frozenset(),
+    "capture_ack": frozenset({"nombre", "comuna", "equipo", "problema", "disponibilidad"}),
 }
 
 # SS-1: the two legal scope modes per category. Anything else behaves as unset.
@@ -434,6 +440,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.smtp_tls": DEFAULT_SMTP_TLS,
     # SS-5: tone style used by the chat nodes.
     "tone.style": DEFAULT_TONE_STYLE,
+    "capture.preventive_keywords": [
+        "mantencion", "mantención", "mantenimiento", "revision", "revisión",
+        "limpieza", "preventiva",
+    ],
     "messages.greeting": MESSAGE_DEFAULTS["greeting"],
     "messages.greeting_short": MESSAGE_DEFAULTS["greeting_short"],
     "messages.greeting_name": MESSAGE_DEFAULTS["greeting_name"],
@@ -838,6 +848,29 @@ def get_message_templates(session: Session) -> list[dict]:
     """Return the stored message-template list, or an empty list if malformed."""
     templates = get_setting(session, MESSAGE_TEMPLATES_KEY, default=[])
     return templates if isinstance(templates, list) else []
+
+
+def get_capture_preventive_keywords(session: Session) -> list[str]:
+    """Return configured preventive-service keywords, falling back when malformed."""
+    value = get_setting(
+        session,
+        "capture.preventive_keywords",
+        default=SETTINGS_DEFAULTS["capture.preventive_keywords"],
+    )
+    if isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value):
+        return value
+    return list(SETTINGS_DEFAULTS["capture.preventive_keywords"])
+
+
+def get_capture_ack(session: Session) -> str:
+    """Return the configurable acknowledgement, read from the reply catalog.
+
+    `capture_ack` is a reply text like every other (S8): it lives in
+    `reply.texts`, so the panel's reply editor, the slot whitelist and the
+    shipped default stay one source of truth. An earlier shape stored it under
+    `capture.ack` too, which made the catalog row the panel edits do nothing.
+    """
+    return get_reply_texts(session)["capture_ack"]
 
 
 def get_capture_questions(session: Session) -> dict[str, str]:
