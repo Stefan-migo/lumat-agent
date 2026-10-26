@@ -23,7 +23,6 @@ import { WEEKDAY_NAMES } from "../shared/agendaTime";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
-import { PushSettings } from "./PushSettings";
 import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
@@ -794,7 +793,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             <div className="settings-hours__footer"><Button variant="secondary" disabled={saving("leadHours") || !Number.isInteger(Number(draft.leadHours)) || Number(draft.leadHours) < 1 || Number(draft.leadHours) > 48} onClick={() => void saveLeadHours()}>Guardar anticipación</Button>{footer("Entre 1 y 48 horas.")}</div>
           </Card>
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
-          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
+          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><p>Configura los avisos del navegador para este dispositivo.</p><a href="/panel/app/push">Configurar notificaciones push →</a></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div>
           <Card title="Horarios de técnicos" description="Define cuándo puede recibir visitas cada técnico.">
             {techniciansState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}

@@ -648,6 +648,15 @@ describe("Settings", () => {
     });
   });
 
+  it("links to the standalone push settings page instead of mounting push controls here", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Horarios y avisos");
+
+    expect(screen.getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
+    expect(screen.queryByRole("button", { name: /activar notificaciones/i })).not.toBeInTheDocument();
+  });
+
   it("opens Horarios y avisos from the Agenda shortcut fragment", async () => {
     const previousUrl = window.location.href;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ technicians: [] }), { status: 200 }));

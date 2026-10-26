@@ -86,6 +86,20 @@ describe('AppShell (T6.4)', () => {
     }
   });
 
+  it('keeps the push deep link landing on the single standalone push settings page', async () => {
+    window.history.replaceState({}, '', '/panel/app/push');
+    vi.stubGlobal('PushManager', vi.fn());
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
+
+    render(<AppShell user={operador} />);
+
+    expect(await screen.findByRole('heading', { name: 'Notificaciones push', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activar notificaciones' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/panel/app/push');
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('keeps the Cases deep link as the initial queue tab', async () => {
     window.history.replaceState({}, '', '/panel/app/cases');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -137,7 +151,7 @@ describe('AppShell (T6.4)', () => {
         '/panel/api/cases': { cases: [], users: [] },
         '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25', case_id: 4 }] },
         '/panel/api/kb': { docs: [] },
-        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'cercano', messages: { greeting: 'Hola', cannot_answer: 'No disponible', clarification: 'Aclara' }, conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
+        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'cercano', options: { tones: ['cercano'], tarifa_labels: {} }, messages: { greeting: 'Hola', cannot_answer: 'No disponible', clarification: 'Aclara' }, conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
       };
       const body = bodies[new URL(path, 'http://localhost').pathname] ?? { contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' };
       return new Response(JSON.stringify(body), { status: 200 });
