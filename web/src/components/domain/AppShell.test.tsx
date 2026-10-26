@@ -86,6 +86,20 @@ describe('AppShell (T6.4)', () => {
     }
   });
 
+  it('keeps the push deep link landing on the single standalone push settings page', async () => {
+    window.history.replaceState({}, '', '/panel/app/push');
+    vi.stubGlobal('PushManager', vi.fn());
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
+
+    render(<AppShell user={operador} />);
+
+    expect(await screen.findByRole('heading', { name: 'Notificaciones push', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activar notificaciones' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/panel/app/push');
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('keeps the Cases deep link as the initial queue tab', async () => {
     window.history.replaceState({}, '', '/panel/app/cases');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -137,7 +151,7 @@ describe('AppShell (T6.4)', () => {
         '/panel/api/cases': { cases: [], users: [] },
         '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25', case_id: 4 }] },
         '/panel/api/kb': { docs: [] },
-        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'cercano', messages: { greeting: 'Hola', cannot_answer: 'No disponible', clarification: 'Aclara' }, conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
+        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'cercano', options: { tones: ['cercano'], tarifa_labels: {} }, messages: { greeting: 'Hola', cannot_answer: 'No disponible', clarification: 'Aclara' }, conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
       };
       const body = bodies[new URL(path, 'http://localhost').pathname] ?? { contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' };
       return new Response(JSON.stringify(body), { status: 200 });
@@ -286,12 +300,13 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps urgent cases in Hoy and routes them to the Casos queue without a dashboard shortcut', async () => {
+  it('routes each urgent case from Hoy to its own conversation without a dashboard shortcut', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = new URL(String(input), 'http://localhost').pathname;
       if (path === '/panel/api/kpis') return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-09-27' }), { status: 200 });
-      if (path === '/panel/api/dashboard/today') return new Response(JSON.stringify({ tz: 'America/Santiago', local_date: '2026-09-27', appointments_today: [], unanswered_conversations: [], urgent_cases: [{ id: 6, customer_name: 'Lucía', service: 'calefont', summary: 'No enciende', emergency: true, escalated_at: '2026-09-27T10:00:00Z' }] }), { status: 200 });
+      if (path === '/panel/api/dashboard/today') return new Response(JSON.stringify({ tz: 'America/Santiago', local_date: '2026-09-27', appointments_today: [], unanswered_conversations: [], urgent_cases: [{ id: 6, customer_id: 12, conversation_id: 44, customer_name: 'Lucía', service: 'calefont', summary: 'No enciende', emergency: true, escalated_at: '2026-09-27T10:00:00Z' }] }), { status: 200 });
       if (path === '/panel/api/dashboard/trend') return new Response(JSON.stringify({ buckets: [] }), { status: 200 });
+      if (path === '/panel/api/conversations/44') return new Response(JSON.stringify({ conversation: { id: 44, customer_id: 12, wa_phone: '+56911112222', state: 'human', version: 0, created_at: '2026-09-27T10:00:00Z', customer: { id: 12, name: 'Lucía', phone_e164: '+56911112222' } }, messages: [], messages_total: 0 }), { status: 200 });
       return new Response(JSON.stringify({ notifications: [], items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 });
     });
     const user = userEvent.setup();
@@ -299,8 +314,8 @@ describe('AppShell (T6.4)', () => {
     await screen.findByRole('button', { name: 'Lucía' });
     expect(screen.queryByRole('button', { name: 'Abrir Casos' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Lucía' }));
-    expect(screen.getByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Lucía' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/panel/app/conversations/44');
     expect(screen.queryByLabelText('Tono')).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });

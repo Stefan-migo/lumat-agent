@@ -100,6 +100,67 @@ it('refetches the thread after a successful close command', async () => {
   expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/9/state', expect.objectContaining({ method: 'POST' }));
 });
 
+describe('conversation message media', () => {
+  const mediaMessage = (overrides: Partial<Message>): Message => ({
+    ...thread.messages[0],
+    id: 20,
+    msg_type: 'image',
+    media_url: 'https://lookaside.facebook.com/temporary-token',
+    media_available: true,
+    media_download_url: '/panel/api/conversations/9/messages/20/media',
+    caption: null,
+    ...overrides,
+  });
+
+  it('renders images from the authenticated URL with caption alt text', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ caption: 'Foto del calefón' })] }} state="ready" />);
+    const image = screen.getByRole('img', { name: 'Foto del calefón' });
+    expect(image).toHaveAttribute('src', '/panel/api/conversations/9/messages/20/media');
+    expect(image).toHaveAttribute('alt', 'Foto del calefón');
+    expect(screen.getByText('Foto del calefón')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /lookaside/i })).not.toBeInTheDocument();
+  });
+
+  it('renders videos with controls from the authenticated URL', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'video' })] }} state="ready" />);
+    const video = document.querySelector('video');
+    expect(video).toHaveAttribute('src', '/panel/api/conversations/9/messages/20/media');
+    expect(video).toHaveAttribute('controls');
+    expect(video).toHaveAttribute('aria-label');
+  });
+
+  it('renders audio with controls and a compact accessible label', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'audio' })] }} state="ready" />);
+    const audio = document.querySelector('audio');
+    expect(audio).toHaveAttribute('src', '/panel/api/conversations/9/messages/20/media');
+    expect(audio).toHaveAttribute('controls');
+    expect(audio).toHaveAttribute('aria-label');
+    expect(screen.getByText('Audio adjunto')).toBeInTheDocument();
+  });
+
+  it('renders documents as download links labelled with their caption', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'document', caption: 'informe.pdf' })] }} state="ready" />);
+    const link = screen.getByRole('link', { name: 'informe.pdf' });
+    expect(link).toHaveAttribute('href', '/panel/api/conversations/9/messages/20/media');
+    expect(link).toHaveAttribute('download');
+  });
+
+  it('shows an unavailable notice instead of media when the backend file is missing', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ media_available: false })] }} state="ready" />);
+    expect(screen.getAllByRole('status').some((status) => /archivo.*no está disponible/i.test(status.textContent ?? ''))).toBe(true);
+    expect(document.querySelector('img, video, audio')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('keeps text messages exactly as before', () => {
+    render(<ConversationThread data={{ ...thread, messages: [{ ...thread.messages[0], text: 'Hola', media_url: null }] }} state="ready" />);
+    const bubble = screen.getByText('Hola').closest('.ai-agent-grammar__bubble');
+    expect(bubble).toHaveTextContent('Hola');
+    expect(bubble?.querySelector('img, video, audio, a')).toBeNull();
+    expect(bubble?.textContent).toBe('Hola');
+  });
+});
+
 it('presents directional bubbles with identity and owner status', () => {
   render(<ConversationThread data={{ ...thread, messages: [
     ...thread.messages,

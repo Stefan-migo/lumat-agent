@@ -16,6 +16,7 @@ const SETTINGS_KEYS = [
   "hours",
   "keywords",
   "meta_cost",
+  "options",
   "messages",
   "model_api_key",
   "persona",

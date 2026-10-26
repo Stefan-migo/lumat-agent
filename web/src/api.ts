@@ -163,6 +163,13 @@ export const listActiveConversations = () => apiFetch<ActiveConversationsRespons
 export const getConversation = (id: number, messagesLimit?: number) => apiFetch<ConversationThread>(`/panel/api/conversations/${id}${messagesLimit ? `?messages_limit=${messagesLimit}` : ""}`);
 export const changeConversationState = (id: number, state: ConversationState, expected_version: number) => command<{ ok: true; conversation: Conversation }>(`/panel/api/conversations/${id}/state`, { state, expected_version, request_id: requestId() });
 export const sendMessage = (id: number, body: { text: string; request_id?: string }) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages`, { ...body, request_id: body.request_id ?? requestId() });
+export const sendMedia = (conversationId: number, input: { file: File; requestId: string; caption?: string }) => {
+  const body = new FormData();
+  body.append('file', input.file);
+  body.append('request_id', input.requestId);
+  if (input.caption) body.append('caption', input.caption);
+  return apiFetch<{ ok: true; message: Message }>(`/panel/api/conversations/${conversationId}/media`, { method: 'POST', body });
+};
 export const retryMessage = (id: number, messageId: number) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages/${messageId}/retry`, { expected_status: 'failed', request_id: requestId() });
 export interface NotificationFilters { unread?: boolean; status?: string; source?: string; }
 export function listNotifications(filters: NotificationFilters = {}) { const params = new URLSearchParams(); if (filters.unread !== undefined) params.set('unread', String(filters.unread)); if (filters.status) params.set('status', filters.status); if (filters.source) params.set('source', filters.source); const query = params.toString(); return apiFetch<NotificationsResponse>(`/panel/api/notifications${query ? `?${query}` : ''}`); }

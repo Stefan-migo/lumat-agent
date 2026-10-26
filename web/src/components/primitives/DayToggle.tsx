@@ -1,6 +1,5 @@
 import "./primitives.css";
-
-const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"] as const;
+import { WEEKDAY_NAMES } from "../shared/agendaTime";
 
 export interface DayToggleProps {
   value: string[];
@@ -12,7 +11,7 @@ export interface DayToggleProps {
 export function DayToggle({ value, onChange, disabled = false, label = "Días de la semana" }: DayToggleProps) {
   return (
     <div className="day-toggle" role="group" aria-label={label}>
-      {DAYS.map((day) => {
+      {WEEKDAY_NAMES.map((day) => {
         const selected = value.includes(day);
         return (
           <button

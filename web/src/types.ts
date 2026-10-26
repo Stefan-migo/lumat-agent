@@ -251,7 +251,7 @@ export interface DashboardToday {
   local_date: string;
   appointments_today: Array<{ id: number; service: string; customer_name: string | null; local_start: string; starts_at: string; ends_at: string }>;
   unanswered_conversations: Array<{ id: number; customer_name: string | null; last_message_at: string | null; state: string }>;
-  urgent_cases: Array<{ id: number; customer_name: string | null; service: string | null; summary: string | null; emergency: boolean; escalated_at: string | null }>;
+  urgent_cases: Array<{ id: number; customer_id: number; conversation_id: number | null; customer_name: string | null; service: string | null; summary: string | null; emergency: boolean; escalated_at: string | null }>;
 }
 
 export interface DashboardPeriod { start: string; end: string; timezone: string; }
@@ -377,6 +377,10 @@ export interface Message {
   msg_type: string;
   text: string | null;
   media_url: string | null;
+  media_available?: boolean;
+  media_download_url?: string | null;
+  caption?: string | null;
+  filename?: string | null;
   created_at: string | null;
   author_id?: number | null;
   request_id?: string | null;
@@ -506,6 +510,8 @@ export interface Settings {
   scope_rules: Record<string, string>;
   keywords: string[];
   tone: string;
+  /** Canonical option lists served by GET /settings; absent against an older backend. */
+  options?: { tones: string[]; tarifa_labels: Record<string, string> };
   messages: {
     greeting: string;
     greeting_short: string;
@@ -549,7 +555,6 @@ export interface Settings {
   /** S10/S18: effective conduct plus the closed option lists the panel renders. */
   conduct: {
     orden: string[];
-    redaccion: string;
     max_preguntas_por_mensaje: number;
     derivaciones: string[];
     customized: boolean;

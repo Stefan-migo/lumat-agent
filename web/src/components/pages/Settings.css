@@ -1,4 +1,7 @@
 .settings-tabs__select { display: none; }
+.settings-tabs > .tabs > .tabs__panel { padding: var(--space-3) 0 0; }
+.settings-tabs > .tabs > .tabs__panel > .tabs--vertical > [role="tablist"] { flex: none; }
+.settings-tabs > .tabs > .tabs__panel > .tabs--vertical > .tabs__panel { min-width: 0; }
 .settings-tabs__content { display: grid; gap: var(--space-3); }
 .settings-tabs__content .card { gap: var(--space-4); }
 .settings__footer-note { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
@@ -128,8 +131,8 @@
 .settings-capabilities__empty { margin: var(--space-3) 0 0; }
 
 @media (max-width: 40rem) {
-  .settings-tabs__select { display: block; }
-  .settings-tabs > .tabs > [role="tablist"] { display: none; }
+  .settings-tabs__select { display: grid; gap: var(--space-2); }
+  .settings-tabs > .tabs [role="tablist"] { display: none; }
   .settings-agent__layout { grid-template-columns: minmax(0, 1fr); }
   .settings-agent__footer { align-items: stretch; flex-direction: column; }
   .settings-messages__tone .card__header { align-items: flex-start; flex-direction: column; }

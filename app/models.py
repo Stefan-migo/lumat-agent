@@ -351,6 +351,13 @@ class Message(Base):
     )
     text: Mapped[str | None] = mapped_column(Text)
     media_url: Mapped[str | None] = mapped_column(Text)
+    meta_media_id: Mapped[str | None] = mapped_column(String(255))
+    stored_path: Mapped[str | None] = mapped_column(Text)
+    content_type: Mapped[str | None] = mapped_column(String(255))
+    filename: Mapped[str | None] = mapped_column(Text)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    caption: Mapped[str | None] = mapped_column(Text)
+    media_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     status: Mapped[MessageStatus] = mapped_column(
         pg_enum(MessageStatus, "message_status"),
         default=MessageStatus.RECEIVED,
