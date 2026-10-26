@@ -216,6 +216,7 @@ def test_the_simulator_is_told_it_is_not_the_assistant(monkeypatch):
     )
 
     system = calls[0][0]["content"]
+    assert len(calls) == 1  # a contracted answer is used as-is, never re-asked
     assert "NOT the assistant" in system
     assert "never write as one" in system
     assert "Never narrate actions" in system
@@ -236,6 +237,79 @@ def test_the_simulator_stops_when_the_goal_is_reached(monkeypatch):
 
     assert simulated["goal_reached"] is True
     assert simulated["message"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Simulated customer — retry, because prose is not a turn (defect #9, L15)
+# ---------------------------------------------------------------------------
+
+
+def _simulate():
+    return judge.simulate_customer_turn(
+        object(),
+        persona="Carlos, cliente con la calefacción rota",
+        goal="Que le confirmen si pueden el sábado",
+        transcript=[{"role": "customer", "text": "hola"}],
+        turn_index=2,
+        max_turns=4,
+    )
+
+
+# The exact shape of the failure that killed a whole run: a perfect customer
+# message with no JSON wrapper around it.
+PROSE = (
+    "me llamo carlos, la calefaccion no calienta nada. "
+    "pero lo importante, pueden el sabado?"
+)
+
+
+def test_a_prose_answer_is_retried_once(monkeypatch):
+    chat, calls = fake_chat([PROSE, '{"message": "¿el sábado pueden?", "goal_reached": false}'])
+    monkeypatch.setattr(judge, "_chat", chat)
+
+    simulated = _simulate()
+
+    assert len(calls) == 2
+    assert simulated == {"message": "¿el sábado pueden?", "goal_reached": False}
+
+
+def test_two_prose_answers_raise_instead_of_inventing_a_turn(monkeypatch):
+    chat, calls = fake_chat([PROSE, "tampoco es json"])
+    monkeypatch.setattr(judge, "_chat", chat)
+
+    with pytest.raises(judge.JudgeError) as raised:
+        _simulate()
+
+    assert len(calls) == 2
+    assert "2 attempts" in str(raised.value)
+
+
+def test_the_retry_carries_the_rejected_answer_back_instead_of_replaying(monkeypatch):
+    """A blind replay is useless here: `_chat` asks for temperature 0, so the same
+    prompt tends to reproduce the same wrong answer. The second attempt shows the
+    model what it wrote and restates the contract."""
+    chat, calls = fake_chat([PROSE, '{"message": "ok", "goal_reached": false}'])
+    monkeypatch.setattr(judge, "_chat", chat)
+
+    _simulate()
+
+    assert len(calls[0]) == 2
+    assert calls[1][-2] == {"role": "assistant", "content": PROSE}
+    assert "JSON object" in calls[1][-1]["content"]
+
+
+def test_an_empty_turn_with_no_goal_reached_is_retried_too(monkeypatch):
+    """Valid JSON is not a valid turn: a message that is neither text nor a reached
+    goal carries nothing, so it is retried like prose."""
+    chat, calls = fake_chat(
+        ['{"message": "", "goal_reached": false}', '{"message": "hola", "goal_reached": false}']
+    )
+    monkeypatch.setattr(judge, "_chat", chat)
+
+    simulated = _simulate()
+
+    assert len(calls) == 2
+    assert simulated["message"] == "hola"
 
 
 # ---------------------------------------------------------------------------
