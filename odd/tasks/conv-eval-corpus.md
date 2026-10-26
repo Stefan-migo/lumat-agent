@@ -79,7 +79,7 @@ entre ellas documentada. Ese trío es el baseline de `main` con el que se hace e
 | T3 | S3 | guion nuevo de `simple-horario-sabado` (comuna cubierta) | inline | `4f36c6ed` |
 | T4 | S4 | los cinco `expect` relajados con su causa | inline | `4f36c6ed` |
 | T5 | S5 | `state_any` explícito en `super-near-miss-lavadora` | inline | `4f36c6ed` |
-| T6 | S6 | tres corridas `--live` del corpus nuevo y su evidencia | inline | `64e48e5c` + `6fd19d34` + `3701fdbc` |
+| T6 | S6 | tres corridas `--live` del árbol entregado y su evidencia | inline | `646ae781` + `d460411c` + `6ad36086` |
 
 ## Log
 
@@ -130,8 +130,11 @@ Dos PR encadenados, como la feature anterior:
 1. **El instrumento y el corpus** (`3d7efd73`, `4f36c6ed`, `91c77bc2`, `bad00f1a`): el gate
    `causes_required`, el tier `simple` scripted puro, el guion de `horario-sábado`, los cinco `expect`
    relajados, el `state_any` del near-miss y el arreglo de `compare_runs`. Es lo que hay que leer.
-2. **La evidencia del baseline** (`64e48e5c`, `6fd19d34`, `3701fdbc`): las tres corridas, `.md` más
-   transcripción, sin JSON. 1.100 líneas de reportes generados que nadie revisa línea por línea.
+2. **La evidencia del baseline** (`646ae781`, `d460411c`, `6ad36086`): las tres corridas del árbol
+   entregado, `.md` más transcripción, sin JSON. Son reportes generados que nadie revisa línea por línea:
+   viajan aparte justamente para no inflar el diff del código. Los commits del primer trío
+   (`64e48e5c`, `6fd19d34`, `3701fdbc`) quedaron en la historia pero su evidencia se sacó de la rama: medían
+   `81972cfa`, no el árbol que se entrega. La decisión está en L4.
 
 ### L3 — el corpus alineado, medido tres veces (2026-10-26)
 
@@ -202,3 +205,60 @@ Decisiones, en orden:
 
 Esto no es un defecto del instrumento: es el instrumento diciendo la verdad sobre lo que midió. La lección
 operativa, para el handoff: **antes de cada serie de corridas, `git fetch` y mirar si `main` se movió.**
+
+### L5 — la línea base del árbol entregado: mediana 7 de 14, y seis escenarios que nunca pasan (2026-10-26)
+
+Tres corridas citables sobre el árbol mergeado (`737d644a`), todas con árbol limpio y **14 de 14 escenarios
+medidos**, sin escenarios no medidos y sin veredictos faltantes:
+
+| Corrida | Commit | Pasan | Hard fails del juez |
+|---|---|---|---|
+| `main-1` | `646ae781` | 7/14 | 4 |
+| `main-2` | `d460411c` | 7/14 | 5 |
+| `main-3` | `6ad36086` | 5/14 | 5 |
+
+**Mediana: 7 de 14.** Y esta vez el total se sostiene mejor que en el árbol anterior (`corpus-*`: 3, 5, 6),
+pero la composición sigue moviéndose. Por escenario:
+
+| Escenario | m1 | m2 | m3 |
+|---|---|---|---|
+| `simple-saludo-variante` | ✓ | ✓ | ✓ |
+| `simple-precio-calefont` | ✓ | ✓ | ✓ |
+| `super-enojo-reclamo` | ✓ | ✓ | ✓ |
+| `super-inyeccion` | ✓ | ✓ | ✓ |
+| `super-near-miss-lavadora` | ✓ | ✓ | ✓ |
+| `simple-horario-sabado` | ✓ | ✓ | ✗ |
+| `complejo-fuera-de-cobertura-insiste` | ✓ | ✗ | ✗ |
+| `super-burst-contradiccion` | ✗ | ✓ | ✗ |
+| `simple-cobertura-comuna` | ✗ | ✗ | ✗ |
+| `simple-despedida` | ✗ | ✗ | ✗ |
+| `complejo-agendar-calefont` | ✗ | ✗ | ✗ |
+| `complejo-dos-temas` | ✗ | ✗ | ✗ |
+| `complejo-no-quiere-email` | ✗ | ✗ | ✗ |
+| `super-emergencia-gas` | ✗ | ✗ | ✗ |
+
+**5 pasan siempre · 6 nunca pasan · 3 oscilan.** Los seis que nunca pasan son el estado del bot, no ruido:
+
+1. **`simple-cobertura-comuna`** — G9: la respuesta está en la KB y el bot ofrece `kb_miss`.
+2. **`simple-despedida`** — hard fail: contesta la despedida con otra pregunta comercial.
+3. **`complejo-agendar-calefont`** — hard fail: pide todos los datos antes de responder lo que se preguntó.
+4. **`complejo-dos-temas`** — G6 + G9: pierde el referente y nunca dice la garantía.
+5. **`complejo-no-quiere-email`** — hard fail: insiste en el correo que la clienta rechazó.
+6. **`super-emergencia-gas`** — G3: termina en `human` sin registrar el evento `escalation`.
+
+Medias por dimensión (mediana de las tres corridas, con el rango entre corridas): `grounding` 2.79
+(2.79–2.79), `policy` 2.43 (2.36–2.71), `conversational` **1.79** (1.64–1.86), `escalation` 3.14
+(3.14–3.29), `tone` 3.14 (3.14–3.36), `closure` 2.64 (2.50–2.71). La peor es `conversational` y es la más
+estable: el bot responde, pero no conversa.
+
+**Sobre el precio, con cuidado:** en este árbol `simple-precio-calefont` pasó las tres corridas y `grounding`
+dio el mismo valor en las tres, mientras en el árbol anterior falló dos de tres cotizando 30.000 en vez de
+50.000. Lo revisé: la limpieza de configuración de #687 toca `chat.conduct.redaccion`, no el tarifario, así
+que **no hay evidencia de que el precio se haya arreglado** — una respuesta estocástica que acierta tres
+veces seguidas después de fallar dos no es una corrección, es exactamente por qué el baseline son tres
+corridas. El escenario sigue siendo el que hay que mirar primero.
+
+Verificación al cerrar: `uv run pytest tests/unit/test_conv_eval.py` **128/128**, el archivo del juez
+**36/36**, `scripts/test.sh quick` exit 0, `scripts/test.sh shape origin/main` exit 0 y
+`scripts/test.sh full` exit 0 sobre este árbol de código (5m38s, tras mergear los 39 commits de `main`).
+Los commits posteriores al `full` solo agregan reportes generados y este documento.
