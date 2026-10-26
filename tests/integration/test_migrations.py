@@ -1119,6 +1119,11 @@ def test_active_conversation_partial_index(migrated_db, admin_conn):
 
 
 def test_h2_outbound_contract_and_delivery_enum(migrated_db, admin_conn):
+    media_id_column = admin_conn.execute(
+        "SELECT data_type, character_maximum_length, is_nullable FROM information_schema.columns "
+        "WHERE table_name = 'messages' AND column_name = 'meta_media_id'"
+    ).fetchone()
+    assert media_id_column == ("character varying", 255, "YES")
     columns = admin_conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_name = 'messages' AND column_name IN "
