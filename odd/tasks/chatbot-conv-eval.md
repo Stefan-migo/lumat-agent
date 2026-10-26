@@ -133,15 +133,16 @@ ausente), no por corrimiento de escala.
 | T8 | E5 | presupuesto de turnos del cliente simulado: margen por defecto, techo declarado y la excepción deliberada | este PR |
 | T9 | E5 | reintento del cliente simulado: prosa no es un turno (defecto #9) | `dd86925d` |
 | T10 | E5 | un escenario que no se mide no tira la corrida: `run_failures`, reporte y no citable | `1e30ca08` |
+| T11 | E5 | la dispersión del juez en el reporte legible: `± máx` por dimensión y por escenario | `7a2d1a1f` |
 
 ## Entrega
 
 La rama pasa las ~400 líneas de slice, así que se entrega en dos PR encadenados:
 
-1. **El instrumento** (`dd86925d`, `e4d40610`, `1e30ca08`, `7dfffaa4`): el reintento del cliente
-   simulado, la política de escenario no medido y sus dos entradas de Log. ~390 líneas, y es lo que
-   alguien tiene que leer de verdad.
-2. **La evidencia del baseline** (`436b22fb` y las corridas que le siguen): reportes generados en
+1. **El instrumento** (`dd86925d`, `e4d40610`, `1e30ca08`, `7dfffaa4`, `7a2d1a1f`): el reintento del
+   cliente simulado, la política de escenario no medido y el `±` en el reporte. Es lo que alguien
+   tiene que leer de verdad.
+2. **La evidencia del baseline** (`436b22fb`, `6f67abb2`, `10a83212`): reportes generados en
    `odd/evals/`, `.md` más transcripción, sin JSON. Son 367 líneas de transcripción por corrida que
    nadie revisa línea por línea — viajan aparte justamente para no inflar el diff del código.
 
@@ -626,3 +627,48 @@ Verificación observada: `uv run pytest tests/unit/test_conv_eval.py tests/unit/
 
 Lo que sigue: correr `citable-1`, `citable-2`, `citable-3` y commitear la evidencia. Con el reintento
 del simulador (#9) y esta política adentro, un hipo del instrumento ya no puede robarse el baseline.
+
+### L18 — el baseline existe, y el número que se lee ahora lleva su ± (2026-10-26)
+
+> "Sí: tabla de ± por dimensión y por escenario" · "Llegaría después de citable-3 para que las tres
+> corridas salgan con el mismo formato"
+
+Las tres corridas citables se hicieron antes de tocar nada, con el mismo instrumento, y las tres
+sellaron **árbol limpio y 14 de 14 escenarios medidos**:
+
+| Corrida | Commit | Sello | Pasan | Gates que fallaron |
+|---|---|---|---|---|
+| `citable-1` | `436b22fb` | `7dfffaa4` | 5/14 | G1 6 · G4 5 · G9 3 · G6 2 · G3 1 |
+| `citable-2` | `6f67abb2` | `436b22fb` | 4/14 | G1 6 · G4 5 · G9 2 |
+| `citable-3` | `10a83212` | `6f67abb2` | 5/14 | G1 5 · G4 4 · G6 3 · G9 2 · G3 1 |
+
+Los sellos difieren porque entre corrida y corrida se commiteó evidencia, no código: lo medido es el
+mismo árbol. Y el `diff` que el propio reporte calcula muestra lo que faltaba decir: entre `citable-2` y
+`citable-3` **no se arregló ni se rompió ningún escenario** —`super-enojo-reclamo` volvió, sin
+regresiones— y sin embargo las medias del juez se movieron `policy +0.93`, `grounding +0.71`,
+`escalation +0.43`. Nada de eso es una mejora: es el piso de ruido que L14 midió, ahora en un diff
+commiteado.
+
+Lo que sí se sostiene en las tres, y es del bot: **G1 y G4 en todas** —la conversación queda en `human`
+donde el corpus espera `bot`, con la `escalation` registrada— y **los cuatro `complejo` en cero**. Ese
+es el defecto que el baseline reporta, y no es varianza.
+
+**El ± llegó a la página** (`7a2d1a1f`). Hasta acá la dispersión viajaba en el JSON y no en el `.md`
+—`grep -c "spread\|dispersión\|±"` sobre un reporte real daba 0—, así que la decisión de L14 estaba
+cumplida a medias y justo en la mitad que lee una persona. Ahora la tabla de dimensiones lleva `± máx` y
+hay una tabla `### Puntaje por escenario` con las 14 filas, no solo las que fallan.
+
+La definición es la parte delicada, y quedó escrita en el encabezado de la tabla: **el puntaje de un
+escenario no tiene un ± propio**, porque es la mediana de tres repeticiones. Lo que el juez mostró es
+cuánto se movió cada dimensión, así que `±` es la **dispersión máxima** entre las dimensiones de ese
+escenario, y en la tabla de dimensiones el máximo de la corrida. Se llama `± máx`, no “intervalo de
+confianza”, para que nadie lo lea como algo que no es.
+
+Tres tests nuevos: la tabla de dimensiones lleva el peor `spread` de la corrida, cada escenario llega a
+la página con su puntaje y su `±`, y una corrida sin juez no inventa incertidumbre. Verificación:
+151/151 en los dos archivos de conv-eval, `scripts/test.sh quick` exit 0, `shape origin/main` exit 0.
+
+Consecuencia asumida: `citable-1/2/3` quedan con el formato con el que se escribieron, por la secuencia
+que pidió el owner. Re-renderizar sus JSON hoy daría `—` en la columna de dimensiones —el `summary` que
+guardaron no tiene `spread_max`— mientras la tabla por escenario sí funciona; los reportes no se
+reescriben.
