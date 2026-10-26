@@ -118,7 +118,9 @@ conversations:
     goal: >
       Saber si puede agendar una visita para el sábado.
     turns:
-      - "buenas, atienden los sabados? necesito una visita"
+      - "hola, buenas"
+      - "necesito una visita, el calefont no calienta. vivo en ñuñoa y solo puedo un sabado"
+      - "carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber"
     expect:
       state_any: [bot]
       events_forbidden: [escalation]
@@ -128,7 +130,10 @@ conversations:
       - "Prometer una visita en sábado como si estuviera en el horario de agendamiento normal"
     notes: >
       La KB separa el horario de agendamiento (lun-vie 09:00-18:00) de los sábados,
-      que se coordinan con un asesor según disponibilidad.
+      que se coordinan con un asesor según disponibilidad. El guion declara una comuna
+      cubierta (Ñuñoa) y el equipo: sin esos datos el bot tiene que preguntarlos, y con
+      el cliente simulado apagado en este tier (S2) la conversación nunca llegaría a la
+      pregunta que el escenario mide.
 
   - id: simple-despedida
     tier: simple
@@ -170,8 +175,9 @@ conversations:
       - "si, me sirve cualquier dia en la mañana"
       - "carolina.p@gmail.com"
     expect:
-      state_any: [bot]
-      events_forbidden: [escalation, unknown_intent]
+      state_any: [human]
+      causes_required: [booking_unavailable]
+      events_forbidden: [unknown_intent]
       must_include_any: ["visita", "agend", "coordina", "técnico", "tecnico"]
     hard_fails:
       - "Volver a preguntar un dato que el cliente ya entregó"
@@ -193,8 +199,8 @@ conversations:
       - "hola, cuanto cuesta el lavado de red?"
       - "y eso cuanto de garantia tiene?"
     expect:
-      state_any: [bot]
-      events_forbidden: [escalation]
+      state_any: [human]
+      causes_required: [persona]
       kb_answered: true
       must_include_any: ["garantia", "garantía", "6 meses", "seis meses"]
     hard_fails:
@@ -217,8 +223,9 @@ conversations:
       - "no te voy a dar mi correo, con el telefono basta"
       - "si, cualquier dia despues de las 6"
     expect:
-      state_any: [bot]
-      events_forbidden: [escalation, unknown_intent]
+      state_any: [human]
+      causes_required: [booking_unavailable]
+      events_forbidden: [unknown_intent]
     hard_fails:
       - "Bloquear el agendamiento exigiendo un dato que el cliente rechazó"
       - "Inventar que el correo es obligatorio si el sistema lo permite omitir"
@@ -238,8 +245,8 @@ conversations:
       - "pero ustedes no van a ir hasta aca? es una caldera grande"
       - "y quien me va a contactar entonces"
     expect:
-      state_any: [bot]
-      events_forbidden: [escalation]
+      state_any: [human]
+      causes_required: [cobertura]
       kb_answered: true
       must_include_any: ["asesor", "coordina"]
       must_not_include: ["no cubrimos", "no atendemos", "no vamos"]
@@ -337,7 +344,8 @@ conversations:
       - "no era calefont, es una caldera, y estoy en providencia"
       - "cuanto sale y cuando pueden venir"
     expect:
-      state_any: [bot]
+      state_any: [human]
+      causes_required: [cobertura]
       events_forbidden: [unknown_intent]
       must_include_any: ["caldera"]
     hard_fails:
@@ -359,6 +367,7 @@ conversations:
       - "hola, arreglan lavadoras? se me inundo el lavadero"
       - "pero es una lavadora secadora, nadie me la quiere ver"
     expect:
+      state_any: [human, bot]
       events_forbidden: [unknown_intent]
       must_not_include: ["si, reparamos lavadoras", "sí, reparamos lavadoras"]
     hard_fails:
