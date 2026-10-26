@@ -377,6 +377,10 @@ export interface Message {
   msg_type: string;
   text: string | null;
   media_url: string | null;
+  media_available?: boolean;
+  media_download_url?: string | null;
+  caption?: string | null;
+  filename?: string | null;
   created_at: string | null;
   author_id?: number | null;
   request_id?: string | null;

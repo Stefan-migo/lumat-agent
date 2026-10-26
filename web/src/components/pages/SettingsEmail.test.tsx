@@ -49,6 +49,7 @@ describe("Settings — Correo section", () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, email: { host: "mail.lumat.cl", port: 587, from_address: "sistema@lumat.cl", user: "", tls: "starttls", password: { configured: false, masked: "" } } }), { status: 200 }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Integraciones" }));
     await user.click(screen.getByRole("tab", { name: "Correo" }));
     fireEvent.change(screen.getByLabelText("Servidor SMTP"), { target: { value: "mail.lumat.cl" } });
     fireEvent.change(screen.getByLabelText("Puerto"), { target: { value: "587" } });
@@ -66,6 +67,7 @@ describe("Settings — Correo section", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, email: { password: { configured: true, masked: "…2468" } } }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, email: { password: { configured: false, masked: "" } } }), { status: 200 }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Integraciones" }));
     await user.click(screen.getByRole("tab", { name: "Correo" }));
     expect(screen.getByText("Sin contraseña guardada")).toBeInTheDocument();
     const passwordInput = screen.getByLabelText("Contraseña SMTP");

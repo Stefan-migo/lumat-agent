@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, deleteProjectFile, moveProjectFile, listProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
+import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, sendMedia, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, deleteProjectFile, moveProjectFile, listProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -294,6 +294,15 @@ describe('conversation API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true, message: { id: 3 } }), { status: 200 }));
     await sendMessage(9, { text: 'Hola', request_id: 'req-1' });
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/conversations/9/messages', expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'Hola', request_id: 'req-1' }) }));
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, message: { id: 4 } }), { status: 200 }));
+    const file = new File(['image'], 'photo.png', { type: 'image/png' });
+    await sendMedia(9, { file, requestId: 'media-req', caption: 'Foto' });
+    const form = vi.mocked(globalThis.fetch).mock.calls[2][1]?.body as FormData;
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/conversations/9/media', expect.objectContaining({ method: 'POST', body: expect.any(FormData) }));
+    expect(form.get('file')).toBe(file);
+    expect(form.get('request_id')).toBe('media-req');
+    expect(form.get('caption')).toBe('Foto');
   });
 
   it('requests the typed queue envelope with search and offset pagination', async () => {
