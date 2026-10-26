@@ -131,6 +131,7 @@ ausente), no por corrimiento de escala.
 | T6 | E5 | modo `--live` con cliente simulado | `e1f87914` (cableado; falta ejercitarlo) |
 | T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `d585f384` + `01084054` |
 | T8 | E5 | presupuesto de turnos del cliente simulado: margen por defecto, techo declarado y la excepción deliberada | este PR |
+| T9 | E5 | reintento del cliente simulado: prosa no es un turno (defecto #9) | `dd86925d` |
 
 ## Log
 
@@ -549,3 +550,33 @@ arreglar el reintento del simulador (defecto #9) con sus tests, decidir si un es
 abortar la corrida o registrarse como no medido, y recién entonces correr `citable-1/2/3` y commitear la
 evidencia. Sigue abierto además `escalation`: caso complejo con **spread 4** (el juez no decide entre 0 y
 4) y caso super estable 2 puntos abajo del owner.
+
+### L16 — el simulador reintenta, y el reintento no es un replay (2026-10-26)
+
+> "arranca con #9"
+
+El defecto #9 de L15, cerrado (`dd86925d`). `simulate_customer_turn` recibió el mismo presupuesto que
+el juez —dos intentos— y el contrato de "respuesta inválida" quedó en un solo lugar
+(`_read_simulated_turn`): **prosa** (lo que reventó el baseline: un turno de cliente impecable sin
+sobre) o **JSON válido sin turno** (ni `message` ni `goal_reached`). Las dos se reintentan igual,
+porque las dos dejan la conversación sin el turno que el guion esperaba.
+
+Una desviación deliberada del patrón del juez, y con motivo: `_chat` pide `temperature=0`, así que un
+replay a ciegas tiende a reproducir la misma respuesta equivocada. El segundo intento devuelve el
+intento rechazado como turno del asistente y reafirma el contrato (`_SIMULATOR_RETRY`). El juez
+conserva su reintento ciego tal como está: tocarlo es otro cambio, y no hay evidencia de que falle.
+
+Cinco tests nuevos, sin red —`_chat` está mockeado, que es el seam determinista de este módulo—: prosa
+reintentada una vez y usada; dos prosa levantan `JudgeError("… after 2 attempts")` sin inventar turno;
+el segundo intento lleva la respuesta rechazada; un JSON sin turno se reintenta; y una respuesta
+contratada sigue costando **una** llamada, que es la garantía de que no se agregó un reintento
+gratuito a la corrida.
+
+Verificación observada: `uv run pytest tests/unit/test_conv_eval_judge.py` 36/36, los dos archivos de
+conv-eval 142/142, `scripts/test.sh quick` exit 0 y `shape origin/main` exit 0 (sin superficie de forma
+tocada: `scripts/` no está en la lista).
+
+**Lo que este arreglo no decide**, y sigue abierto: un escenario que falla igual —dos intentos
+malos— **aborta la corrida entera** (`exit 2`, sin reporte), mientras un veredicto faltante del juez se
+registra como no medido y la corrida sigue. Es la asimetría que L15 dejó nombrada, y la decisión es del
+owner: abortar, o registrar el escenario como no medido y terminar con el reporte de los otros 13.
