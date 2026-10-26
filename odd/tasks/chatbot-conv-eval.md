@@ -464,3 +464,46 @@ Pendiente de medir: la corrección está fijada por tests del prompt, pero **no 
 las tres conversaciones con la rúbrica nueva**. Ese re-juzgue es el paso siguiente y necesita la clave
 del proveedor; hasta que se haga, la calibración dice "el juez viejo fallaba en dos dimensiones", no
 "el juez nuevo está calibrado".
+
+### L14 — el juez no es estable, así que una llamada no es una medición (2026-10-23)
+
+Después de L13 quedaba una pregunta abierta: ¿la rúbrica nueva arregló las dos dimensiones? Corrí el
+re-juzgue de las tres conversaciones de la planilla con la rúbrica nueva, y a la segunda corrida —mismos
+transcripts, mismos hechos, mismo prompt— aparecieron puntajes distintos. Eso obligó a medirlo en vez de
+interpretarlo.
+
+**Medición:** tres repeticiones idénticas por caso, 18 celdas.
+
+| Caso | Dimensión | Owner | Juez (3 reps) | Dispersión |
+|---|---|---|---|---|
+| complejo-agendar-calefont | **escalation** | 4 | **[3, 1, 1]** | **2** |
+| super-enojo-reclamo | policy | 1 | [0, 1, 0] | 1 |
+| super-enojo-reclamo | escalation | 4 | [3, 2, 2] | 1 |
+| super-enojo-reclamo | conversational | 2 | [1, 1, 0] | 1 |
+| complejo-agendar-calefont | policy / conversational | 4 / 1 | [4,4,3] / [1,1,2] | 1 |
+| simple-precio-calefont | tone | 4 | [3, 4, 4] | 1 |
+| super-enojo-reclamo | grounding | 3 | [4, 4, 3] | 1 |
+
+**8 de 18 celdas se mueven entre llamadas idénticas**, y el `hard_fail` del caso super osciló
+`[True, False, True]`. Como `score_scenario` capa el escenario a 0 con ese flag, **la misma
+conversación puntuaba 0 o no según la suerte de la llamada**.
+
+Es el hallazgo de L9 una capa más abajo: no sólo el bot varía, también el instrumento que lo mide. Con
+esa varianza, comparar **una** llamada contra el puntaje humano no puede distinguir un defecto de
+rúbrica del ruido — los dos primeros re-juzgues que corrí dieron tablas distintas, y cualquiera de las
+dos me habría alcanzado para escribir una conclusión falsa.
+
+Lo que sí convergió, y se sostiene en las tres repeticiones: **`policy` del caso super quedó en 0–1
+contra el 1 del owner** (el juez viejo daba 4), y **`escalation` dejó de negar el traspaso registrado**
+—el caso super ya no da 0 y cita el `handoff:persona`—. Los hechos persistidos de L13 funcionan.
+
+**Decisión del owner:** el juez repite y agrega. `JUDGE_REPETITIONS = 3`, la **mediana** por dimensión es
+el puntaje, la **dispersión** viaja en la fila y en el reporte, y el `hard_fail` se decide por
+**mayoría**. La lógica de agregado vive en `conv_eval.py` (model-free, con tests); `conv_eval_judge.py`
+sigue haciendo una llamada y devolviendo un veredicto. Se puede ajustar por corrida con
+`--judge-repetitions`.
+
+Queda sin resolver, y ahora se sabe por qué: **`escalation` del caso complejo**, mediana 1 contra 4 del
+owner con dispersión 2. Una diferencia de 3 puntos entre llamadas idénticas no autoriza a decir que la
+rúbrica está mal ahí; hay que volver cuando el número estabilice, y si no estabiliza, el problema es la
+rúbrica de esa dimensión y no el azar.
