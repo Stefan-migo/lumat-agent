@@ -132,7 +132,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const kbDocId = route.kbDocId ?? null;
   const appointmentId = route.appointmentId ?? null;
 
-  const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
+  const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} onOpenRoute={navigateToRoute} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'chatbot-metrics' ? <ChatbotMetrics onOpenConversation={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
       : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} role={user.role} /> : user.role === 'tecnico' ? <TechnicianAgenda /> : <AgendaPage />

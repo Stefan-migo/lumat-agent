@@ -400,6 +400,54 @@ def test_today_excludes_cancelled_and_replied_rows_and_caps_each_projection(clie
     assert all(row["customer_name"] != "Cliente 0" for row in body["unanswered_conversations"])
 
 
+def test_today_urgent_cases_expose_the_navigation_targets(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    with SessionLocal() as session:
+        with_conversation = Customer(phone_e164="+56977771111", name="Con Conversación")
+        without_conversation = Customer(phone_e164="+56977772222", name="Sin Conversación")
+        session.add_all([with_conversation, without_conversation])
+        session.flush()
+        conversation = Conversation(
+            customer_id=with_conversation.id,
+            wa_phone=with_conversation.phone_e164,
+            state=ConversationState.HUMAN,
+        )
+        session.add(conversation)
+        session.flush()
+        session.add_all(
+            [
+                Case(
+                    conversation_id=conversation.id,
+                    customer_id=with_conversation.id,
+                    service="calefont",
+                    summary="Gotea",
+                    emergency=True,
+                    escalated_at=datetime.now(timezone.utc),
+                ),
+                Case(
+                    customer_id=without_conversation.id,
+                    service="caldera",
+                    summary="No calienta",
+                    emergency=True,
+                    escalated_at=datetime.now(timezone.utc),
+                ),
+            ]
+        )
+        session.commit()
+        conversation_id = conversation.id
+        conversation_customer_id = with_conversation.id
+        manual_customer_id = without_conversation.id
+    _login(client)
+
+    rows = client.get("/panel/api/dashboard/today?timezone=America/Santiago").json()["urgent_cases"]
+    by_summary = {row["summary"]: row for row in rows}
+
+    assert by_summary["Gotea"]["conversation_id"] == conversation_id
+    assert by_summary["Gotea"]["customer_id"] == conversation_customer_id
+    assert by_summary["No calienta"]["conversation_id"] is None
+    assert by_summary["No calienta"]["customer_id"] == manual_customer_id
+
+
 def test_today_rejects_non_dashboard_roles():
     with pytest.raises(Exception) as error:
         require_dashboard_user(SimpleNamespace(role=SimpleNamespace(value="tecnico")))
