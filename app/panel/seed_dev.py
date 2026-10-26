@@ -171,7 +171,9 @@ def seed_dev() -> str:
                 summary=CASE_SUMMARIES[i],
                 amount=25000 + i * 5000, responsible_id=technician.id if i % 2 == 0 else None,
                 escalated_at=at if i in (0, 3, 6) else None, emergency=emergency,
-                acknowledged_at=at + timedelta(minutes=10) if i in (0, 3, 6) else None,
+                # i == 3 stays unacknowledged: the dev dashboard must show at least one
+                # pending emergency, otherwise the Urgentes card is empty on a fresh seed.
+                acknowledged_at=at + timedelta(minutes=10) if i in (0, 6) else None,
                 closed_at=now - timedelta(days=2) if not open_case else None)
             session.add(case)
             session.flush()
