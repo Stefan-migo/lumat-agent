@@ -17,7 +17,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   durations {"service_durations": {...}}  -> booking.service_durations (S4)
   capture-questions {"questions": {field: str}} -> capture.questions (S7)
   reply-texts {"texts": {key: str}}        -> reply.texts (S8)
-  conduct {"conduct": {orden, redaccion, max_preguntas_por_mensaje,
+  conduct {"conduct": {orden, max_preguntas_por_mensaje,
                        derivaciones}}      -> chat.conduct (validated, S10)
   limits {"conversation_limit": n, "daily_limit": n} (> 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
@@ -423,6 +423,10 @@ def settings_get(
         "scope_rules": scope_rules,
         "keywords": settings_service.get_emergency_keywords(session),
         "tone": settings_service.get_tone(session),
+        "options": {
+            "tones": list(settings_service.TONE_STYLES),
+            "tarifa_labels": settings_service.TARIFA_LABELS,
+        },
         "messages": {
             key: settings_service.get_message(session, key)
             for key in settings_service.MESSAGE_DEFAULTS

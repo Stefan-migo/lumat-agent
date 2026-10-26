@@ -24,6 +24,15 @@ export const settings: Settings = {
   },
   keywords: ["fuga", "corte", "emergencia", "gas", "medidor"],
   tone: "cercano",
+  options: {
+    tones: ["cercano", "formal", "directo"],
+    tarifa_labels: {
+      visita_tecnica: "Visita técnica",
+      mantencion_calefont: "Mantención de calefont",
+      mantencion_caldera: "Mantención de caldera",
+      lavado_red: "Lavado de red",
+    },
+  },
   messages: {
     greeting: "Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar.",
     greeting_short: "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.",
@@ -87,7 +96,6 @@ export const settings: Settings = {
   },
   conduct: {
     orden: ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
-    redaccion: "llm",
     max_preguntas_por_mensaje: 1,
     derivaciones: ["cobertura", "pedido_explicito", "garantia", "servicio_sin_tarifa", "presupuesto_especial"],
     customized: false,

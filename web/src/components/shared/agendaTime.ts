@@ -1,4 +1,5 @@
 /** 24-hour slots stay unambiguous and avoid repeating a meridiem across a range. */
+export const WEEKDAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const slotFormat = (timeZone: string) =>
   new Intl.DateTimeFormat('es-CL', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 

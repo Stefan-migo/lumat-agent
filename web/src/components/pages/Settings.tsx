@@ -19,24 +19,22 @@ import { MessagePreview } from "../primitives/MessagePreview";
 import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
 import { TechnicianScheduleEditor } from "../shared/TechnicianScheduleEditor";
+import { WEEKDAY_NAMES } from "../shared/agendaTime";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
-import { PushSettings } from "./PushSettings";
 import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
 const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
-const SHORT_DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-const TARIFA_LABELS: Array<[keyof SettingsData["tarifa"], string]> = [
-  ["visita_tecnica", "Visita técnica"],
-  ["mantencion_calefont", "Mantención de calefont"],
-  ["mantencion_caldera", "Mantención de caldera"],
-  ["lavado_red", "Lavado de red"],
-];
+type SettingsOptions = { tones: string[]; tarifa_labels: Partial<Record<keyof SettingsData["tarifa"], string>> };
+// `options` is additive: a panel served against a backend that predates it must keep
+// rendering, degrading to the current value and the raw service keys instead of crashing.
+const EMPTY_OPTIONS: SettingsOptions = { tones: [], tarifa_labels: {} };
+const settingsOptions = (data: SettingsData): SettingsOptions => (data as SettingsData & { options?: SettingsOptions }).options ?? EMPTY_OPTIONS;
 const EMPTY_TARIFA: SettingsData["tarifa"] = {
   visita_tecnica: [], mantencion_calefont: [], mantencion_caldera: [], lavado_red: [],
 };
@@ -47,12 +45,20 @@ function formatShortDate(value: string) {
   return `${Number(day)} ${MONTHS_SHORT[Number(month) - 1] ?? month} ${year}`;
 }
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-const SECTIONS = [
-  { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "conduct", label: "Conducta" }, { id: "messages", label: "Mensajes" },
-  { id: "schedule", label: "Horarios y avisos" }, { id: "tarifa", label: "Tarifas" }, { id: "coverage", label: "Cobertura" }, { id: "costs", label: "Costos" },
-  { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" },
-  { id: "email", label: "Correo" },
+const GROUPS = [
+  { id: "chatbot", label: "Chatbot", sections: [
+    { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "conduct", label: "Conducta" }, { id: "messages", label: "Mensajes" },
+  ] },
+  { id: "operation", label: "Operación", sections: [
+    { id: "schedule", label: "Horarios y avisos" }, { id: "coverage", label: "Cobertura" }, { id: "tarifa", label: "Tarifas" },
+  ] },
+  { id: "integrations", label: "Integraciones", sections: [
+    { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" }, { id: "email", label: "Correo" },
+  ] },
+  { id: "cost-group", label: "Costos", sections: [{ id: "costs", label: "Costos" }] },
 ];
+const SECTIONS = GROUPS.flatMap(({ sections }) => sections);
+const sectionGroup = (sectionId: string) => GROUPS.find(({ sections }) => sections.some(({ id }) => id === sectionId)) ?? GROUPS[0];
 const MESSAGE_TEMPLATES = [
   { id: "greeting", label: "Saludo cuando falta el nombre", description: "Inicio de conversación; pregunta el nombre del cliente", icon: MessageCircle },
   { id: "greeting_name", label: "Saludo con nombre", description: "Inicio de conversación cuando el nombre ya está cargado", icon: MessageCircle },
@@ -72,8 +78,7 @@ const DERIVACION_LABELS: Record<string, string> = {
 /**
  * S4: the five derivations whose wording the customer reads. Every other
  * reason (inyección, emergencia, límites de costo, KB) reuses the generic
- * "Derivación a un asesor" text from Respuestas del flujo, so the panel never
- * offers copy nobody reviewed.
+ * "Derivación a un asesor" reply text, so the panel never offers copy nobody reviewed.
  */
 const DERIVACION_CASES: Array<{ key: string; label: string; when: string }> = [
   {
@@ -113,6 +118,7 @@ const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: "Derivar a una persona", keys: ["handoff"] },
   { title: "Captura", keys: ["capture_evidence", "capture_consent"] },
 ];
+const REPLY_TEXT_KEYS = [...DERIVACION_CASES.map(({ key }) => key), ...REPLY_TEXT_GROUPS.flatMap(({ keys }) => keys)];
 const REPLY_TEXT_LABELS: Record<string, string> = {
   booking_offer: "Oferta de horarios",
   booking_no_more_today: "Sin más horarios para ese día",
@@ -141,7 +147,7 @@ type Drafts = {
   conversationLimit: string; dailyLimit: string; metaCost: string; leadHours: string;
   persona: { orchestrator: string; orchestrator_brief: string };
   emergencyProtocol: { safety_instructions: string; contacts: string; notify_message: string };
-  conduct: { orden: string[]; redaccion: string; max_preguntas_por_mensaje: number; derivaciones: string[] };
+  conduct: { orden: string[]; max_preguntas_por_mensaje: number; derivaciones: string[] };
   captureQuestions: Record<string, string>;
   replyTexts: Record<string, string>;
   serviceDurations: Array<{ name: string; minutes: string }>;
@@ -167,7 +173,6 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     },
     conduct: {
       orden: data?.conduct?.orden ?? [],
-      redaccion: data?.conduct?.redaccion ?? "llm",
       max_preguntas_por_mensaje: data?.conduct?.max_preguntas_por_mensaje ?? 1,
       derivaciones: data?.conduct?.derivaciones ?? [],
     },
@@ -182,8 +187,8 @@ function isValidHours(hours: HoursData) {
     entry.days.length > 0 && entry.open !== "" && entry.close !== "" && entry.open < entry.close);
 }
 
-function isTarifaValid(tarifa: SettingsData["tarifa"]) {
-  return TARIFA_LABELS.every(([service]) => {
+function isTarifaValid(tarifa: SettingsData["tarifa"], labels: SettingsOptions["tarifa_labels"]) {
+  return (Object.keys(labels) as Array<keyof SettingsData["tarifa"]>).every((service) => {
     const ranges = tarifa[service];
     return ranges.length > 0 && ranges.every((rango) =>
       Number.isInteger(rango.valor) && rango.valor > 0);
@@ -244,14 +249,14 @@ function stateMessage(state: SettingsState, errorDetail?: string | null) {
   return null;
 }
 
-function TarifaEditor({ tarifa, onChange }: { tarifa: SettingsData["tarifa"]; onChange: (tarifa: SettingsData["tarifa"]) => void }) {
+function TarifaEditor({ tarifa, labels, onChange }: { tarifa: SettingsData["tarifa"]; labels: SettingsOptions["tarifa_labels"]; onChange: (tarifa: SettingsData["tarifa"]) => void }) {
   const setValor = (service: keyof SettingsData["tarifa"], index: number, valor: number) => {
     const ranges = tarifa[service].map((rango, current) => current === index ? { ...rango, valor } : rango);
     onChange({ ...tarifa, [service]: ranges });
   };
 
   return <div className="settings-tarifa">
-    {TARIFA_LABELS.map(([service, label]) => <fieldset className="settings-tarifa__service" key={service}>
+    {(Object.entries(labels) as Array<[keyof SettingsData["tarifa"], string]>).map(([service, label]) => <fieldset className="settings-tarifa__service" key={service}>
       <legend>{label}</legend>
       <div className="settings-tarifa__ranges">
         {tarifa[service].map((rango, index) => {
@@ -277,9 +282,9 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
   const [newDays, setNewDays] = useState<string[]>([]);
   const [newOpen, setNewOpen] = useState("09:00");
   const [newClose, setNewClose] = useState("18:00");
-  const usedDays = hours.schedule.flatMap((entry) => entry.days).map((day) => SHORT_DAYS[day - 1]);
+  const usedDays = hours.schedule.flatMap((entry) => entry.days).map((day) => WEEKDAY_NAMES[day - 1]);
   const addSchedule = () => {
-    const days = newDays.map((day) => SHORT_DAYS.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(SHORT_DAYS[day - 1]));
+    const days = newDays.map((day) => WEEKDAY_NAMES.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(WEEKDAY_NAMES[day - 1]));
     if (!days.length || !newOpen || !newClose || newOpen >= newClose) return;
     onChange({ ...hours, schedule: [...hours.schedule, { days, open: newOpen, close: newClose }] });
     resetDraft();
@@ -290,7 +295,7 @@ function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: 
     <div className="settings-hours__timezone"><Globe2 aria-hidden="true" /><Select label="Zona horaria" value={hours.timezone} onChange={(event) => onChange({ ...hours, timezone: event.target.value })} options={timezoneOptions.map((timezone) => ({ value: timezone, label: timezone }))} /></div>
     <section className="settings-hours__weekly" aria-label="Horarios semanales"><h3>Horarios semanales</h3>
     {hours.schedule.length ? <div className="settings-hours__list" aria-label="Horarios configurados">{hours.schedule.map((entry, index) => <div className="settings-hours__item" key={index}>
-      <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => SHORT_DAYS[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
+      <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => WEEKDAY_NAMES[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
       <Button variant="tertiary" aria-label={`Eliminar horario ${index + 1}`} onClick={() => onChange({ ...hours, schedule: hours.schedule.filter((_, currentIndex) => currentIndex !== index) })}><Trash2 aria-hidden="true" /> Eliminar</Button>
     </div>)}</div> : <p className="settings-hours__empty">No hay horarios guardados.</p>}</section>
     <div className="settings-hours__new"><div className="settings-hours__new-header"><h3>Nuevo horario</h3><Badge tone="neutral">Sin guardar</Badge><Button variant="tertiary" className="settings-hours__reset" aria-label="Restablecer nuevo horario" onClick={resetDraft}><Trash2 aria-hidden="true" /></Button></div>
@@ -417,7 +422,17 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const pageState = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const baseline = useRef(draftsFrom(data));
   const [draft, setDraft] = useState<Drafts>(() => draftsFrom(data));
-  const [activeSection, setActiveSection] = useState(() => window.location.hash === "#schedule" ? "schedule" : "agent");
+  const [activeSection, setActiveSectionState] = useState(() => window.location.hash === "#schedule" ? "schedule" : "agent");
+  const [activeGroup, setActiveGroup] = useState(() => sectionGroup(window.location.hash === "#schedule" ? "schedule" : "agent").id);
+  const setActiveSection = (sectionId: string) => {
+    setActiveSectionState(sectionId);
+    setActiveGroup(sectionGroup(sectionId).id);
+  };
+  const selectGroup = (groupId: string) => {
+    const group = GROUPS.find(({ id }) => id === groupId) ?? GROUPS[0];
+    setActiveGroup(group.id);
+    setActiveSectionState(group.sections.some(({ id }) => id === activeSection) ? activeSection : group.sections[0].id);
+  };
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
@@ -584,8 +599,9 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     if (!values.length || values.some((value) => !value.trim()) || values.some((value) => value.includes("{{") || value.includes("}}"))) { setSaveState("validation"); return; }
     await save("captureQuestions", "/panel/api/settings/capture-questions", { questions: draft.captureQuestions }, draft.captureQuestions);
   };
+  const replyTextsValid = REPLY_TEXT_KEYS.every((key) => Boolean(draft.replyTexts[key]?.trim()));
   const saveReplyTexts = async () => {
-    if (Object.values(draft.replyTexts).some((value) => !value.trim())) { setSaveState("validation"); return; }
+    if (!replyTextsValid) { setSaveState("validation"); return; }
     await save("replyTexts", "/panel/api/settings/reply-texts", { texts: draft.replyTexts }, draft.replyTexts);
   };
   const saveLeadHours = async () => {
@@ -612,8 +628,12 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
   return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
-     <div className="settings-tabs__select"><Menu label={SECTIONS.find(({ id }) => id === activeSection)?.label ?? "Agente"} ariaLabel="Sección" showChevron items={SECTIONS.map(({ id, label }) => ({ value: id, label }))} onSelect={setActiveSection} /></div>
-    <Tabs ariaLabel="Secciones de configuración" tabs={SECTIONS} activeTab={activeSection} onTabChange={setActiveSection}>
+      <div className="settings-tabs__select">
+        <Menu label={GROUPS.find(({ id }) => id === activeGroup)?.label ?? "Chatbot"} ariaLabel="Grupo de configuración" showChevron items={GROUPS.map(({ id, label }) => ({ value: id, label }))} onSelect={selectGroup} />
+        <Menu label={SECTIONS.find(({ id }) => id === activeSection)?.label ?? "Agente"} ariaLabel="Sección de configuración" showChevron items={sectionGroup(activeSection).sections.map(({ id, label }) => ({ value: id, label }))} onSelect={setActiveSection} />
+      </div>
+    <Tabs ariaLabel="Super-secciones de configuración" tabs={GROUPS} activeTab={activeGroup} onTabChange={selectGroup}>
+      {() => <Tabs layout="vertical" ariaLabel="Secciones de configuración" tabs={sectionGroup(activeSection).sections} activeTab={activeSection} onTabChange={setActiveSection}>
       {(active) => <div className="settings-tabs__content">
         {active === "agent" ? <>
           <div className="settings-agent__row">
@@ -692,8 +712,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             {Object.entries(draft.captureQuestions).map(([field, text]) => <Textarea key={field} label={data.conduct.options.fields.find((each) => each.value === field)?.label ?? field} rows={2} value={text} onChange={(event) => update("captureQuestions", { ...draft.captureQuestions, [field]: event.target.value })} />)}
             <div className="settings-agent__footer">{footer("El cliente recibe este texto literal.")}<Button disabled={saving("captureQuestions") || Object.values(draft.captureQuestions).some((value) => !value.trim() || value.includes("{{") || value.includes("}}"))} onClick={() => void saveCaptureQuestions()}>Guardar preguntas</Button></div>
           </Card>
-          <Card title="Derivaciones" description="Los cinco casos en que el bot pasa la conversación a una persona y el texto que el cliente lee en cada uno.">
-            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>, en la sección Mensajes. Estos cinco son los únicos que se pueden editar acá.</p>
+          <Card title="Derivaciones" description="Todos los textos deterministas que recibe el cliente en las derivaciones, agenda, visitas y captura.">
+            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los cinco casos específicos se muestran primero.</p>
             <div className="settings-messages__reply-group">
               {DERIVACION_CASES.map(({ key, label, when }) => {
                 const slots = data.reply_texts?.slots?.[key] ?? [];
@@ -703,11 +723,22 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                 </div>;
               })}
             </div>
-            <div className="settings-agent__footer">{footer("El cliente recibe este texto tal cual.")}<Button disabled={saving("replyTexts") || DERIVACION_CASES.some(({ key }) => !(draft.replyTexts[key] ?? "").trim())} onClick={() => void saveReplyTexts()}>Guardar derivaciones</Button></div>
+            {REPLY_TEXT_GROUPS.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
+              <div className="settings-messages__reply-group">
+                {group.keys.map((key) => {
+                  const slots = data.reply_texts?.slots?.[key] ?? [];
+                  return <div className="settings-messages__reply" key={key}>
+                    <Textarea label={REPLY_TEXT_LABELS[key] ?? key} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
+                    {slots.length ? <p className="settings-agent__helper">Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></p> : <p className="settings-agent__helper">Sin datos variables.</p>}
+                  </div>;
+                })}
+              </div>
+            </Accordion>)}
+            <div className="settings-agent__footer">{footer("El cliente recibe este texto tal cual.")}{footer()}<Button disabled={saving("replyTexts") || !replyTextsValid} onClick={() => void saveReplyTexts()}>Guardar respuestas</Button></div>
           </Card>
         </> : null}
         {active === "messages" ? <>
-          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
+          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={(settingsOptions(data).tones.length ? settingsOptions(data).tones : [draft.tone]).filter(Boolean).map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
            <Card title="Mensajes del asistente" className="settings-messages__editor">
               <div className="settings-messages__panel">
                 <div className="settings-messages__layout">
@@ -757,21 +788,6 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                <Button disabled={saving("templates") || draft.templates.some(({ id, text }) => !id.trim() || !text.trim())} onClick={() => void save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates)}>Guardar respuestas</Button>
              </div>
            </Card>
-           <Card title="Respuestas del flujo" description="Los textos deterministas de agenda, cancelación, reagendamiento y derivación. No pasan por el modelo.">
-             <p className="settings-messages__helper">Cada respuesta acepta solo sus propios datos; debajo de cada campo ves los que usa.</p>
-             {REPLY_TEXT_GROUPS.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
-               <div className="settings-messages__reply-group">
-                 {group.keys.map((key) => {
-                   const slots = data.reply_texts?.slots?.[key] ?? [];
-                   return <div className="settings-messages__reply" key={key}>
-                     <Textarea label={REPLY_TEXT_LABELS[key] ?? key} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
-                     {slots.length ? <p className="settings-agent__helper">Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></p> : <p className="settings-agent__helper">Sin datos variables.</p>}
-                   </div>;
-                 })}
-               </div>
-             </Accordion>)}
-             <div className="settings-messages__footer">{footer()}<Button disabled={saving("replyTexts") || Object.values(draft.replyTexts).some((value) => !value.trim())} onClick={() => void saveReplyTexts()}>Guardar respuestas del flujo</Button></div>
-           </Card>
         </> : null}
         {active === "schedule" ? <>
         <div className="settings-hours__layout">
@@ -780,7 +796,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             <div className="settings-hours__footer"><Button variant="secondary" disabled={saving("leadHours") || !Number.isInteger(Number(draft.leadHours)) || Number(draft.leadHours) < 1 || Number(draft.leadHours) > 48} onClick={() => void saveLeadHours()}>Guardar anticipación</Button>{footer("Entre 1 y 48 horas.")}</div>
           </Card>
           <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
-          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><PushSettings embedded /></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
+          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><p>Configura los avisos del navegador para este dispositivo.</p><a href="/panel/app/push">Configurar notificaciones push →</a></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
         </div>
           <Card title="Horarios de técnicos" description="Define cuándo puede recibir visitas cada técnico.">
             {techniciansState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}
@@ -807,8 +823,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           <Card title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins}>
             <div className="settings-agent__layout">
               <div className="settings-agent__form">
-                <TarifaEditor tarifa={draft.tarifa} onChange={(value) => update("tarifa", value)} />
-                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
+                <TarifaEditor tarifa={draft.tarifa} labels={settingsOptions(data).tarifa_labels} onChange={(value) => update("tarifa", value)} />
+                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa, settingsOptions(data).tarifa_labels)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
               </div>
               <HelpPanel icon={Coins} title="Cómo se aplica"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></HelpPanel>
             </div>
@@ -894,6 +910,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </div>
         </Card> : null}
       </div>}
+    </Tabs>}
     </Tabs>
     </div>
     {state === "empty" ? <Button onClick={retry}>Reintentar</Button> : null}
