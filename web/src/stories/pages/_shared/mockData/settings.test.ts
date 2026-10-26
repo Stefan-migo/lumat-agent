@@ -5,6 +5,7 @@ import { settings } from "./settings";
  *  (R-PRD-PG-3): {scope_rules, keywords, tone, messages, hours, conversation_limit,
  *  daily_limit, meta_cost, snapshot, model_api_key, email, persona, emergency}. */
 const SETTINGS_KEYS = [
+  "booking",
   "conversation_limit",
   "capture_questions",
   "conduct",

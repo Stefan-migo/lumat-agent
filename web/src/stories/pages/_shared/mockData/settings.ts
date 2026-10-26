@@ -177,6 +177,7 @@ export const settings: Settings = {
     customized: false,
   },
   service_durations: { Calefont: 60, Caldera: 90 },
+  booking: { lead_hours: 2 },
   conversation_limit: 1.5,
   daily_limit: 5.0,
   meta_cost: 0.01,

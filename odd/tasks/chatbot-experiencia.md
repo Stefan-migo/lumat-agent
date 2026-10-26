@@ -437,3 +437,76 @@ este commit (docs). Rama `odd/chatbot-derivaciones`, rebasada sobre `main` = `c4
   misma que la tarjeta lee. Un corte intermedio dejaría el panel sin los cinco casos que la spec exige.
 - Riesgo del slice: **item 3** (cambia lo que el cliente recibe en toda derivación y el contrato de
   `reply.texts` y `chat.conduct`). Sin migración: la lectura filtra, ningún dato se reescribe.
+
+**L15 — decisiones del owner para T8 (S5), verbatim de las opciones elegidas (2026-10-24):**
+
+1. ID de una respuesta prediseñada: **"Autogenerar y dejar el id a la vista, sólo lectura"** — al escribir el
+   texto se propone un id corto (`garantia_repuestos`), se ve, se puede regenerar, y para cambiarlo a mano
+   hay un botón explícito "editar id". Debajo: "El cliente nunca ve este ID."
+2. Plantilla con slot vacío: **"Aviso fijo + vista previa con datos de ejemplo"** — cada plantilla muestra
+   los datos que usa; la tarjeta lleva una advertencia permanente de que si falta el dato la respuesta se
+   salta; la vista previa usa datos inventados. Se descartó el aviso dinámico por plantilla (requiere leer
+   datos reales de conversaciones).
+3. Anticipación mínima: **"En horas, de 1 a 48, en Horarios y avisos"** — campo numérico simple; 2 = dos
+   horas, el valor que ya está en el código. Se descartaron los minutos (permiten 0) y dejarla fija.
+4. Llaves en los mensajes fijos: **"Rechazar al guardar y avisar por qué"** — sólo las dos claves de saludo
+   con nombre aceptan `{{nombre}}`; el resto rechaza llaves con un mensaje claro. Se descartaron borrarlas
+   en silencio y postergarlo.
+
+Decisión de implementación declarada en esta sesión y no objetada: la pestaña **Técnicos** de Agenda se
+mueve a Configuración → Horarios y avisos, y Agenda conserva un acceso directo, porque quien mira la agenda
+sigue necesitando llegar.
+
+**Alcance resultante de S5 (contrato para los writers):**
+
+- **U1 · Validación de llaves (backend).** `POST /settings/messages` rechaza `{{` o `}}` en las claves que se
+  envían literales y responde 400 nombrando la etiqueta del mensaje; `messages.greeting_name` y
+  `messages.greeting_short_name` aceptan únicamente `{{nombre}}`. El panel muestra ese error en vez de un
+  "no se pudo guardar" genérico.
+- **U2 · Anticipación (backend + panel).** `GET /panel/api/settings` expone `booking.lead_hours` (entero,
+  1..48, derivado de `booking.lead_minutes`); `POST /panel/api/settings/booking-lead` recibe `{"hours": n}`,
+  valida el rango y guarda minutos. Panel: campo "Anticipación mínima [n] horas" en Horarios y avisos.
+- **U3 · Respuestas prediseñadas (panel).** Id autogenerado desde el texto, sólo lectura, con "regenerar" y
+  "editar id"; lista de datos que usa cada plantilla; vista previa con datos de ejemplo; advertencia fija de
+  que una plantilla a la que le falta un dato se salta (S9). Sin cambios de contrato en el endpoint de
+  plantillas.
+- **U4 · Horarios de técnicos (panel).** `TechnicianScheduleEditor` sale de la pestaña Técnicos de Agenda y
+  entra como tarjeta en Configuración → Horarios y avisos; Agenda deja un acceso directo a esa sección.
+
+**L16 — T8 cerrado (2026-10-24), evidencia observada.** Commits `a2060300` (backend: llaves +
+anticipación) y `ae5c45ae` (panel: plantillas, anticipación, horarios de técnicos) + este commit (docs).
+Rama `odd/chatbot-panel`, sobre `main` = `575a30fb`.
+
+- El contrato de las cuatro unidades se escribió en L15 **antes** de delegar, y por eso los dos writers
+  pudieron trabajar en paralelo sin pisarse: uno `app/` + `tests/`, otro `web/`. El panel se codificó
+  contra el contrato acordado (`booking.lead_hours` en el GET, `POST /settings/booking-lead`) y el
+  backend lo cumplió; se verificó al integrar que la forma final coincide.
+- **Hallazgo que sólo aparece en RED:** el lector de `booking.lead_minutes` tenía tope de **24 horas**,
+  así que la decisión de 1..48 horas habría guardado 48 y leído 2. `BOOKING_LEAD_MINUTES_MAX` pasa a
+  `48 * 60` y el borde queda pineado. Los minutos que no son horas enteras **redondean hacia arriba**
+  (121 min → 3 h) para que el panel nunca muestre menos anticipación de la que hay.
+- **Dos correcciones mías a lo que devolvió el panel.** (1) El worker dejó `booking` opcional en
+  `SettingsData` para no romper un fixture fuera de su superficie; se volvió a **obligatorio** y se
+  arregló el fixture, por la misma razón que en T5: la API lo devuelve siempre, y opcional es una
+  mentira que esconde fixtures incompletos. (2) Los tres tests de stories/mock que el worker no podía
+  tocar: la variante `Technicians` de `AgendaPage.stories.tsx` clickeaba una pestaña que ya no existe
+  (se borró junto con su test; la cobertura del editor se movió a `Settings.test.tsx`), la aserción de
+  la pestaña pasó a ser del acceso directo, y `booking` entró en la lista de claves del serializador.
+  Borrar el test dejó dos imports muertos, que `npm run build` cazó (`TS6133`).
+- RED observado: backend — 200 donde correspondía 400 por llaves, `GET` sin `booking`, ruta nueva en
+  404, y el 48 que volvía 2. Panel — 6 fallos focales (id de sólo lectura, editar/regenerar, datos +
+  vista previa + aviso, campo de anticipación, tarjeta de técnicos, acceso directo en Agenda).
+- VERDE: `quick` exit 0; `db tests/functional/test_api_kb_settings.py` exit 0; panel `npm run build`
+  exit 0 y `npm test` → **111 archivos / 1273 tests, exit 0**; `scripts/test.sh full` → **exit 0, 6m11s,
+  0 líneas `FAILED`/`ERROR`**.
+- **Devolución parcial bien hecha:** el writer del panel volvió `partial` con la lista exacta de los tres
+  archivos que no estaban en su superficie, en vez de editarlos igual. Es el comportamiento correcto: un
+  writer que frena y nombra la frontera ahorra revisar cambios fuera de contrato.
+- Decisión de empaquetado: **un PR con `size:exception`** (470 líneas autoradas) y **dos commits** en vez
+  de uno, para que la revisión pueda leer el contrato del backend separado del panel. No se parte en dos
+  PRs porque las cuatro unidades comparten `Settings.tsx` y el corte exigiría cirugía de hunks sobre el
+  mismo archivo; el peso lo ponen los tests (118 líneas) y la cobertura movida, no el comportamiento.
+- Riesgo del slice: **item 3** — `POST /settings/messages` ahora rechaza lo que antes aceptaba, el GET
+  gana `booking.lead_hours`, se suma `POST /settings/booking-lead`, y la pestaña Técnicos deja de existir
+  en Agenda. Sin migración de datos.
+

@@ -328,7 +328,7 @@ SERVICE_DURATIONS_KEY = "booking.service_durations"
 # technician has to get there, so a visit offered for "right now" is not real.
 BOOKING_LEAD_MINUTES_KEY = "booking.lead_minutes"
 BOOKING_LEAD_MINUTES_DEFAULT = 120
-BOOKING_LEAD_MINUTES_MAX = 24 * 60
+BOOKING_LEAD_MINUTES_MAX = 48 * 60
 # A visit cannot reserve more than a day; anything longer is a typo, not intent.
 MAX_SERVICE_DURATION_MINUTES = 1440
 
@@ -938,6 +938,46 @@ def get_reply_texts(session: Session) -> dict[str, str]:
         else default
         for key, default in REPLY_TEXT_DEFAULTS.items()
     }
+
+
+_FIXED_MESSAGE_LABELS: dict[str, str] = {
+    "greeting": "saludo",
+    "greeting_short": "saludo breve",
+    "greeting_name": "saludo con nombre",
+    "greeting_short_name": "saludo breve con nombre",
+    "smalltalk": "mensaje de cortesía",
+    "cannot_answer": "respuesta cuando no puede responder",
+    "clarification": "aclaración",
+    "cannot_understand_offer": "oferta cuando no entiende",
+    "kb_miss_offer": "oferta cuando no tiene ese dato",
+    "farewell": "despedida",
+    "out_of_hours": "aviso fuera de horario",
+}
+
+
+def validate_fixed_messages(value: Any) -> dict[str, str]:
+    """Reject mustache slots the fixed-message renderer cannot fill.
+
+    Only the two name greetings render `{{nombre}}`; all other fixed messages
+    are delivered verbatim and therefore reject both opening and closing braces.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("messages must be an object")
+
+    for key, label in _FIXED_MESSAGE_LABELS.items():
+        text = value.get(key)
+        if not isinstance(text, str):
+            raise ValueError(f"{label} debe ser texto")
+        if key in {"greeting_name", "greeting_short_name"}:
+            remainder = text.replace("{{nombre}}", "")
+            if "{{" in remainder or "}}" in remainder:
+                raise ValueError(
+                    f"El {label} solo admite el marcador exacto {{{{nombre}}}}."
+                )
+        elif "{{" in text or "}}" in text:
+            raise ValueError(f"El {label} no admite llaves de plantilla.")
+
+    return {key: value[key] for key in _FIXED_MESSAGE_LABELS}
 
 
 def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, str]:

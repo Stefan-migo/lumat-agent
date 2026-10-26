@@ -527,6 +527,7 @@ export interface Settings {
   tarifa: Record<TarifaService, TarifaRango[]>;
   coverage: string[];
   service_durations: Record<string, number>;
+  booking: { lead_hours: number };
   conversation_limit: number;
   daily_limit: number;
   meta_cost: number;
