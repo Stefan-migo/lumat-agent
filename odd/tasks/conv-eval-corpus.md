@@ -79,7 +79,7 @@ entre ellas documentada. Ese trío es el baseline de `main` con el que se hace e
 | T3 | S3 | guion nuevo de `simple-horario-sabado` (comuna cubierta) | inline | `4f36c6ed` |
 | T4 | S4 | los cinco `expect` relajados con su causa | inline | `4f36c6ed` |
 | T5 | S5 | `state_any` explícito en `super-near-miss-lavadora` | inline | `4f36c6ed` |
-| T6 | S6 | tres corridas `--live` del corpus nuevo y su evidencia | inline | — |
+| T6 | S6 | tres corridas `--live` del corpus nuevo y su evidencia | inline | `64e48e5c` + `6fd19d34` + `3701fdbc` |
 
 ## Log
 
@@ -122,3 +122,63 @@ bot reservará, terminará en `bot` y G1/G10 fallarán. Eso es información, no 
 que el escenario dejó de ser determinista y hay que mirar por qué.
 
 Verificación de esta entrada: `uv run pytest tests/unit/test_conv_eval.py` **126/126**.
+
+## Entrega
+
+Dos PR encadenados, como la feature anterior:
+
+1. **El instrumento y el corpus** (`3d7efd73`, `4f36c6ed`, `91c77bc2`, `bad00f1a`): el gate
+   `causes_required`, el tier `simple` scripted puro, el guion de `horario-sábado`, los cinco `expect`
+   relajados, el `state_any` del near-miss y el arreglo de `compare_runs`. Es lo que hay que leer.
+2. **La evidencia del baseline** (`64e48e5c`, `6fd19d34`, `3701fdbc`): las tres corridas, `.md` más
+   transcripción, sin JSON. 1.100 líneas de reportes generados que nadie revisa línea por línea.
+
+### L3 — el corpus alineado, medido tres veces (2026-10-26)
+
+Tres corridas citables del corpus nuevo, todas con árbol limpio y **14 de 14 escenarios medidos**:
+
+| Corrida | Commit | Pasan | Juez: hard fails |
+|---|---|---|---|
+| `corpus-1` | `64e48e5c` | 3/14 | 8 |
+| `corpus-2` | `6fd19d34` | 5/14 | 5 |
+| `corpus-3` | `3701fdbc` | 6/14 | 6 |
+
+**Mediana: 5 de 14.** Pero el total es la parte menos informativa. Por escenario, en las tres corridas:
+
+- **Nunca pasan (8):** precio-calefont (2 de 3 corridas cotizó mal), cobertura-comuna, despedida,
+  agendar-calefont, dos-temas, no-quiere-email, fuera-de-cobertura, emergencia-gas, burst-contradiccion.
+  Siete de esos ocho fallan por lo mismo las tres veces: es el estado del bot, no ruido.
+- **Siempre pasan (2):** saludo-variante, super-inyeccion.
+- **Oscilan (4):** precio-calefont, horario-sabado, enojo-reclamo, near-miss-lavadora. Son el piso de
+  ruido, y con dos corridas ya se veían.
+
+Medias por dimensión con las tres corridas: `grounding` 2.50 (rango 2.00–3.00), `policy` 2.50 (2.00–2.57),
+`conversational` 1.50 (1.50–1.71), `escalation` 3.14 (3.14–3.36), `tone` 3.14 (2.93–3.21), `closure` 2.57
+(2.43–2.71). La peor dimensión es **`conversational`**, y es la única estable: el bot no conversa, ejecuta.
+
+**Dos defectos del instrumento aparecieron durante la verificación, y los dos están arreglados:**
+
+1. **`compare_runs` comparaba la clave equivocada** (`bad00f1a`). Leía `report["corpus_fingerprint"]`, que
+   un reporte escrito nunca tiene —el sello vive en `stamp`—, así que comparaba `None` contra `None` y
+   declaraba comparable cualquier par de corridas. `corpus-1`, el primero, "arregló" un gate comparándose
+   contra un probe de un escenario que ya estaba descartado. Los tests existentes pasaban porque construyen
+   dicts con la clave arriba, que es exactamente por qué no lo cachaban.
+2. **El seguro de escenario no medido se usó de verdad.** El primer intento de `corpus-2` perdió
+   `super-burst-contradiccion`: el cliente simulado contestó prosa dos veces y el reintento no alcanzó. La
+   corrida **siguió con las otras 13**, escribió el reporte, se marcó no citable y salió con `exit 2`. Antes
+   de esta sesión eso tiraba la corrida entera. El reporte se borró; el comportamiento queda acá.
+
+**Hallazgo del bot, con evidencia de los dos entornos:** el precio. La mantención de calefont vale 50.000
+(mar–oct) y el bot respondió **30.000** —el valor de la *visita técnica*— en dos corridas; en dos probes
+aislados y en la tercera corrida respondió 50.000. El tarifario de la base de test y el del harness son
+idénticos, así que no es un artefacto del entorno: es una confusión inestable entre dos servicios del mismo
+catálogo. El juez lo marcó hard fail con `grounding` 0 en las tres repeticiones.
+
+**Riesgo medido y anotado:** el simulador perdió un escenario en una de cuatro corridas, y siempre en el
+mismo lugar —los escenarios donde el cliente simulado tiene que escribir un mensaje largo y contradictorio—.
+Si se repite, el cambio que sigue no es del corpus: es un contrato de salida más corto para el simulador o un
+tercer intento.
+
+Verificación observada al cerrar: `uv run pytest tests/unit/test_conv_eval.py` **128/128**, el archivo del
+juez 36/36, `scripts/test.sh quick` exit 0 y `shape origin/main` exit 0 (la feature toca `scripts/`, que no es
+superficie de forma).
