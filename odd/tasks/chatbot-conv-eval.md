@@ -134,6 +134,21 @@ ausente), no por corrimiento de escala.
 | T9 | E5 | reintento del cliente simulado: prosa no es un turno (defecto #9) | `dd86925d` |
 | T10 | E5 | un escenario que no se mide no tira la corrida: `run_failures`, reporte y no citable | `1e30ca08` |
 
+## Entrega
+
+La rama pasa las ~400 líneas de slice, así que se entrega en dos PR encadenados:
+
+1. **El instrumento** (`dd86925d`, `e4d40610`, `1e30ca08`, `7dfffaa4`): el reintento del cliente
+   simulado, la política de escenario no medido y sus dos entradas de Log. ~390 líneas, y es lo que
+   alguien tiene que leer de verdad.
+2. **La evidencia del baseline** (`436b22fb` y las corridas que le siguen): reportes generados en
+   `odd/evals/`, `.md` más transcripción, sin JSON. Son 367 líneas de transcripción por corrida que
+   nadie revisa línea por línea — viajan aparte justamente para no inflar el diff del código.
+
+El primer PR es el que puede cambiar el comportamiento del bot medido; el segundo solo agrega
+evidencia. Un cambio de código posterior a `7dfffaa4` invalidaría la comparabilidad de las corridas ya
+commiteadas, y habría que decirlo en su entrada de Log.
+
 ## Log
 
 ### L1 — pedido original (verbatim)
