@@ -132,6 +132,7 @@ ausente), no por corrimiento de escala.
 | T7 | — | corridas live y scripted sobre la rama, y medición del piso de ruido | `d585f384` + `01084054` |
 | T8 | E5 | presupuesto de turnos del cliente simulado: margen por defecto, techo declarado y la excepción deliberada | este PR |
 | T9 | E5 | reintento del cliente simulado: prosa no es un turno (defecto #9) | `dd86925d` |
+| T10 | E5 | un escenario que no se mide no tira la corrida: `run_failures`, reporte y no citable | `1e30ca08` |
 
 ## Log
 
@@ -580,3 +581,33 @@ tocada: `scripts/` no está en la lista).
 malos— **aborta la corrida entera** (`exit 2`, sin reporte), mientras un veredicto faltante del juez se
 registra como no medido y la corrida sigue. Es la asimetría que L15 dejó nombrada, y la decisión es del
 owner: abortar, o registrar el escenario como no medido y terminar con el reporte de los otros 13.
+
+### L17 — un escenario que no se mide ya no tira la corrida (2026-10-26)
+
+> "arranca con #9" → decisión del owner: **no medido + reporte + no citable (exit 2)**
+
+La asimetría que L15 nombró, cerrada (`1e30ca08`). Un fallo de escenario —los dos intentos del
+simulador, una llamada muerta a la base— hacía `return 2` desde adentro del loop: sin reporte, sin los
+otros 13. Ahora el escenario entra en `run_failures` con su causa, el loop **sigue**, y el reporte lo
+dice de tres maneras: el conteo `no medidos` en el Resumen, una sección `### Escenarios no medidos`
+con el motivo de cada uno, y la corrida **deja de ser citable** —un promedio sobre 13 de 14 esconde el
+hueco—. El `.json` lleva `run_failures` para que un consumidor no tenga que leer prosa.
+
+El código de salida quedó con un contrato de tres valores, y el 2 se eligió por compatibilidad: es el
+que la corrida ya devolvía al abortar, así que una automatización que solo mira `!= 0` no cambia, y
+una que lee el número distingue "el bot falló" (1) de "el instrumento no pudo medir" (2). El 0 sigue
+significando medido y limpio.
+
+Seis tests nuevos. Cinco son funciones puras (`is_citable`, `citability_blockers`, `exit_code`,
+`render_markdown`): la corrida con un no medido no es citable ni con árbol limpio y KB sellada, el
+reporte nombra el escenario y el motivo, y los tres códigos de salida tienen su caso. El sexto maneja
+`main` con el trabajo pesado monkeypatcheado —corpus de dos escenarios, `run_scenario` que revienta en
+uno— y asserta lo que de verdad importa: **exit 2, el escenario sano medido en el reporte, el roto
+nombrado y el `.md` diciendo que no se cite**. Es el único test que prueba que el loop continúa, y por
+eso existe.
+
+Verificación observada: `uv run pytest tests/unit/test_conv_eval.py tests/unit/test_conv_eval_judge.py`
+148/148, `scripts/test.sh quick` exit 0 y `shape origin/main` exit 0.
+
+Lo que sigue: correr `citable-1`, `citable-2`, `citable-3` y commitear la evidencia. Con el reintento
+del simulador (#9) y esta política adentro, un hipo del instrumento ya no puede robarse el baseline.
