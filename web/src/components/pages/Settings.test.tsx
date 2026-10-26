@@ -42,22 +42,48 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   ...overrides,
 });
 const capabilities = { tools: [], personas: [], prompts: [], kb_available: true, memory_available: true };
+const groupForSection: Record<string, string> = {
+  Agente: "Chatbot", Persona: "Chatbot", Conducta: "Chatbot", Mensajes: "Chatbot",
+  "Horarios y avisos": "Operación", Cobertura: "Operación", Tarifas: "Operación",
+  Capacidades: "Integraciones", "API key de modelos": "Integraciones", Correo: "Integraciones", Costos: "Costos",
+};
+async function selectSection(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(within(screen.getByRole("tablist", { name: "Super-secciones de configuración" })).getByRole("tab", { name: groupForSection[label] }));
+  await user.click(within(screen.getByRole("tablist", { name: "Secciones de configuración" })).getByRole("tab", { name: label }));
+}
 
 describe("Settings", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("renders every section and selects Agente by default", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Agente", "Persona", "Conducta", "Mensajes", "Horarios y avisos", "Tarifas", "Cobertura", "Costos", "Capacidades", "API key de modelos", "Correo"]);
+    expect(screen.getAllByRole("tablist").map((tablist) => within(tablist).getAllByRole("tab").map((tab) => tab.textContent))).toEqual([
+      ["Chatbot", "Operación", "Integraciones", "Costos"],
+      ["Agente", "Persona", "Conducta", "Mensajes"],
+    ]);
+    expect(screen.getByRole("tab", { name: "Chatbot" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Agente" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
+  });
+
+  it("renders only the active group's members", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    const members = () => within(screen.getByRole("tablist", { name: "Secciones de configuración" })).getAllByRole("tab").map((tab) => tab.textContent);
+    expect(members()).toEqual(["Agente", "Persona", "Conducta", "Mensajes"]);
+    await user.click(screen.getByRole("tab", { name: "Operación" }));
+    expect(members()).toEqual(["Horarios y avisos", "Cobertura", "Tarifas"]);
+    await user.click(screen.getByRole("tab", { name: "Integraciones" }));
+    expect(members()).toEqual(["Capacidades", "API key de modelos", "Correo"]);
+    await user.click(screen.getByRole("tab", { name: "Costos" }));
+    expect(members()).toEqual(["Costos"]);
   });
 
   it("saves a DeepSeek key and reports a valid key without balance", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, validation: "no_balance", model_api_key: { configured: true, source: "panel", masked: "…1234" } }), { status: 200 }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    await selectSection(user, "API key de modelos");
     expect(screen.getByText("No configurada")).toBeInTheDocument();
     const keyInput = screen.getByLabelText("API key de DeepSeek");
     expect(keyInput).toHaveAttribute("type", "password");
@@ -73,7 +99,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, validation: "valid", model_api_key: { configured: true, source: "panel", masked: "…1234" } }), { status: 200 }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    await selectSection(user, "API key de modelos");
     await user.type(screen.getByLabelText("API key de DeepSeek"), "sk-test-key");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Clave validada.")).toBeInTheDocument();
@@ -85,7 +111,7 @@ describe("Settings", () => {
     fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "invalid api key" }), { status: 400 }));
     fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "could not validate the api key" }), { status: 502 }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    await selectSection(user, "API key de modelos");
     await user.type(screen.getByLabelText("API key de DeepSeek"), "sk-test-key");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Clave inválida.")).toBeInTheDocument();
@@ -97,7 +123,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, model_api_key: { configured: false, source: "none", masked: "" } }), { status: 200 }));
     render(<Settings data={settings({ model_api_key: { configured: true, source: "panel", masked: "…1234" } })} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "API key de modelos" }));
+    await selectSection(user, "API key de modelos");
     expect(screen.getByText("Configurada desde el panel")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Borrar" }));
     expect(await screen.findByText("Clave eliminada del panel.")).toBeInTheDocument();
@@ -124,23 +150,23 @@ describe("Settings", () => {
     expect(rules).toBeEnabled();
   });
 
-  it("switches sections from the accessible mobile menu", async () => {
+  it("switches sections from the accessible mobile menus", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
-    const sectionMenu = screen.getByRole("button", { name: "Sección" });
-    expect(sectionMenu).toHaveTextContent("Mensajes");
-    await user.click(sectionMenu);
+    const groupMenu = screen.getByRole("button", { name: "Grupo de configuración" });
+    expect(groupMenu).toHaveTextContent("Chatbot");
+    await user.click(groupMenu);
     await user.click(screen.getByRole("menuitem", { name: "Costos" }));
-    expect(screen.getByRole("tab", { name: "Costos" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Sección de configuración" })).toHaveTextContent("Costos");
     expect(screen.getByRole("heading", { name: "Gasto actual" })).toBeInTheDocument();
   });
 
   it("cannot save a spend limit of zero (S19: 0 would disable the cost gate)", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Costos" }));
+    await selectSection(user, "Costos");
     const conversationLimit = screen.getByLabelText("Límite por conversación");
     const saveLimits = screen.getByRole("button", { name: "Guardar límites" });
 
@@ -156,7 +182,7 @@ describe("Settings", () => {
   it("renders the tone selector and save action together", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     const tone = screen.getByRole("button", { name: "Tono" });
     const saveTone = screen.getByRole("button", { name: "Guardar tono" });
     expect(tone.closest(".settings-messages__tone-row")).toContainElement(saveTone);
@@ -166,14 +192,14 @@ describe("Settings", () => {
   it("disables saving when no tone is configured", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings({ tone: "" })} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled();
   });
 
   it("switches the message template editor and previews its edited text", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
 
     const greetingPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-greeting"));
     expect(within(greetingPanel!).getByLabelText("Texto del mensaje")).toHaveValue("Hola");
@@ -189,7 +215,7 @@ describe("Settings", () => {
   it("labels each greeting according to whether the name is available", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     expect(screen.getByRole("tab", { name: "Saludo cuando falta el nombre" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Saludo con nombre" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Saludo corto cuando falta el nombre" })).toBeInTheDocument();
@@ -200,7 +226,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("tab", { name: "Saludo corto cuando falta el nombre" }));
 
     const panel = screen.getAllByRole("tabpanel").find((each) => each.getAttribute("aria-labelledby")?.includes("trigger-greeting_short"));
@@ -219,7 +245,7 @@ describe("Settings", () => {
   it("switches the selected template from the mobile selector", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     const selector = screen.getByRole("button", { name: "Plantilla" });
     expect(selector).toHaveTextContent("Saludo cuando falta el nombre");
     expect(screen.getByText("Inicio de conversación; pregunta el nombre del cliente", { selector: ".settings-messages__mobile-selector p" })).toBeInTheDocument();
@@ -233,7 +259,7 @@ describe("Settings", () => {
   it("renders the preset answers card and explains how it differs from fixed messages", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
     expect(screen.getByText("Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada).")).toBeInTheDocument();
     expect(screen.getByText("A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.")).toBeInTheDocument();
@@ -242,7 +268,7 @@ describe("Settings", () => {
   it("generates a readable template id, can regenerate it, and unlocks explicit manual editing", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     const id = screen.getByLabelText("ID de respuesta 1");
     const text = screen.getByLabelText("Texto de respuesta 1");
@@ -264,7 +290,7 @@ describe("Settings", () => {
   it("shows template slots, sample-data preview, and the permanent missing-data warning", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings({ templates: [{ id: "garantia", text: "Hola {{nombre}}, cobertura en {{comuna}}." }] })} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     expect(screen.getByText(/Datos disponibles:/).parentElement).toHaveTextContent("Datos disponibles: {{nombre}}, {{comuna}}");
     expect(screen.getByRole("heading", { name: "Vista previa de la respuesta 1" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vista previa de la respuesta 1" }).parentElement?.querySelector(".message-preview__bubble")).toHaveTextContent("Hola Ana, cobertura en Las Condes.");
@@ -275,7 +301,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     await user.type(screen.getByLabelText("Texto de respuesta 1"), "Hola, cliente");
     await user.click(screen.getByRole("button", { name: "Editar id de respuesta 1" }));
@@ -288,7 +314,7 @@ describe("Settings", () => {
   it("removes a preset answer row", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     expect(screen.getByLabelText("ID de respuesta 1")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Eliminar respuesta 1" }));
@@ -298,7 +324,7 @@ describe("Settings", () => {
   it("disables saving preset answers while a row is blank", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     expect(screen.getByRole("button", { name: "Guardar respuestas" })).toBeDisabled();
   });
@@ -313,10 +339,10 @@ describe("Settings", () => {
   it("disables invalid save controls and disables a valid save while pending", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings({ hours: { timezone: "America/Santiago", schedule: [] } })} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Horarios y avisos" }));
+    await selectSection(user, "Horarios y avisos");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Horarios de atención" })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Guardar horarios" })).toBeDisabled();
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
     const saveResponse = new Promise<Response>(() => undefined);
     vi.spyOn(globalThis, "fetch").mockReturnValue(saveResponse);
@@ -340,7 +366,7 @@ describe("Settings", () => {
         { name: "plain_tool", description: "Herramienta general", read_only: true, write: false },
       ], personas: ["Cercana"], prompts: ["Atención inicial"], kb_available: true, memory_available: false,
     }} />);
-    await user.click(screen.getByRole("tab", { name: "Capacidades" }));
+    await selectSection(user, "Capacidades");
     expect(screen.getByRole("heading", { name: "Herramientas del asistente" })).toBeInTheDocument();
     const regions = screen.getAllByRole("region", { hidden: true });
     expect(regions.filter((region) => region.getAttribute("aria-labelledby") && region.textContent?.includes("kb.retrieve"))).toHaveLength(1);
@@ -362,7 +388,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Persona" }));
+    await selectSection(user, "Persona");
 
     const persona = screen.getByLabelText("Texto de la persona");
     expect(persona).toHaveValue("Eres Max.");
@@ -396,7 +422,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Conducta" }));
+    await selectSection(user, "Conducta");
 
     await user.click(screen.getByRole("button", { name: "Bajar Problema" }));
     await user.click(screen.getByRole("button", { name: "Guardar conducta" }));
@@ -411,7 +437,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Conducta" }));
+    await selectSection(user, "Conducta");
 
     const comuna = screen.getByLabelText("Comuna");
     expect(comuna).toHaveValue("¿En qué comuna estás?");
@@ -426,7 +452,7 @@ describe("Settings", () => {
   it("blocks a capture question that carries braces", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Conducta" }));
+    await selectSection(user, "Conducta");
 
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "{{nombre}}, ¿cómo te llamas?" } });
 
@@ -437,7 +463,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
 
     const offer = screen.getByLabelText("Oferta de horarios");
@@ -455,7 +481,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Mensajes" }));
+    await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
 
     const notice = screen.getByLabelText("Sin más horarios para ese día");
@@ -482,7 +508,7 @@ describe("Settings", () => {
     it("renders the five cases the customer reads a text for", async () => {
       const user = userEvent.setup();
       render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
-      await user.click(screen.getByRole("tab", { name: "Conducta" }));
+      await selectSection(user, "Conducta");
 
       expect(screen.getByRole("heading", { name: "Derivaciones" })).toBeInTheDocument();
       expect(screen.getByLabelText("Comuna sin cobertura")).toHaveValue("Sin cobertura en {{comuna}}.");
@@ -498,7 +524,7 @@ describe("Settings", () => {
       const user = userEvent.setup();
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
       render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
-      await user.click(screen.getByRole("tab", { name: "Conducta" }));
+      await selectSection(user, "Conducta");
 
       fireEvent.change(screen.getByLabelText("Pide hablar con una persona"), { target: { value: "Ahora te escribe alguien del equipo." } });
       await user.click(screen.getByRole("button", { name: "Guardar derivaciones" }));
@@ -511,7 +537,7 @@ describe("Settings", () => {
     it("renders only the derivation rule that has a reader", async () => {
       const user = userEvent.setup();
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-      await user.click(screen.getByRole("tab", { name: "Conducta" }));
+      await selectSection(user, "Conducta");
 
       const rules = screen.getByRole("group", { name: "Derivar a una persona cuando" });
 
@@ -525,7 +551,8 @@ describe("Settings", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
     window.history.replaceState({}, "", "/panel/app/settings#schedule");
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    expect(screen.getByRole("tab", { name: "Horarios y avisos" })).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByRole("tablist", { name: "Super-secciones de configuración" })).getByRole("tab", { name: "Operación" })).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByRole("tablist", { name: "Secciones de configuración" })).getByRole("tab", { name: "Horarios y avisos" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText("No hay técnicos disponibles.")).toBeInTheDocument();
     window.history.replaceState({}, "", previousUrl);
   });
@@ -534,7 +561,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Horarios y avisos" }));
+    await selectSection(user, "Horarios y avisos");
     const leadHours = screen.getByLabelText("Anticipación mínima");
     expect(leadHours).toHaveValue(2);
     await user.clear(leadHours);
@@ -554,7 +581,7 @@ describe("Settings", () => {
       return new Response("{}", { status: 200 });
     });
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Horarios y avisos" }));
+    await selectSection(user, "Horarios y avisos");
     expect(await screen.findByText("Luis Pérez")).toBeInTheDocument();
     expect(await screen.findByLabelText("Días y horarios de atención")).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith("/panel/api/technicians", expect.objectContaining({ credentials: "include" }));
@@ -566,7 +593,7 @@ describe("Settings", () => {
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Horarios y avisos" }));
+    await selectSection(user, "Horarios y avisos");
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar los técnicos");
     await user.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByText("No hay técnicos disponibles.")).toBeInTheDocument();
@@ -577,7 +604,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    await user.click(screen.getByRole("tab", { name: "Horarios y avisos" }));
+    await selectSection(user, "Horarios y avisos");
 
     await user.click(screen.getByRole("button", { name: "Agregar servicio" }));
     fireEvent.change(screen.getByLabelText("Servicio 1"), { target: { value: "Calefont" } });
