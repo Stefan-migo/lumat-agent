@@ -1097,3 +1097,42 @@ def test_the_transcript_names_the_dimensions_that_moved():
 
     assert "dispersión entre repeticiones:** escalation ±2" in markdown
     assert "tone ±0" not in markdown
+
+
+def test_the_stamp_says_which_bot_was_measured():
+    """A baseline that does not name the bot cannot be reproduced: the same
+    markdown, corpus and KB describe deepseek-chat and deepseek-flash equally."""
+    stamp = ev.RunStamp(
+        run_tag="t",
+        started_at="2026-10-26T00:00:00+00:00",
+        head="abc1234",
+        dirty=False,
+        corpus_fingerprint="c0rp",
+        kb_fingerprint="kb00",
+        kb_documents=4,
+        judge_model=None,
+        judge_repetitions=0,
+        live=True,
+        bot_provider="deepseek",
+        bot_model="deepseek-flash",
+    ).as_dict()
+
+    assert stamp["bot_provider"] == "deepseek"
+    assert stamp["bot_model"] == "deepseek-flash"
+
+
+def test_the_report_names_the_bot_and_claims_no_judge_calls_without_a_judge():
+    report = report_for([score_row("a", "simple", True, score=None)])
+    report["stamp"].update(
+        {
+            "judge_model": None,
+            "judge_repetitions": 0,
+            "bot_provider": "deepseek",
+            "bot_model": "deepseek-flash",
+        }
+    )
+
+    markdown = ev.render_markdown(report)
+
+    assert "`deepseek-flash`" in markdown
+    assert "llamada(s) por escenario" not in markdown

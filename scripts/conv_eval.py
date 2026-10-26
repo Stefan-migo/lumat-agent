@@ -862,6 +862,8 @@ class RunStamp:
     judge_model: str | None
     judge_repetitions: int
     live: bool
+    bot_provider: str = ""
+    bot_model: str = ""
 
     def as_dict(self) -> dict:
         return {
@@ -873,7 +875,10 @@ class RunStamp:
             "kb_fingerprint": self.kb_fingerprint,
             "kb_documents": self.kb_documents,
             "judge_model": self.judge_model,
+            "judge_repetitions": self.judge_repetitions,
             "live": self.live,
+            "bot_provider": self.bot_provider,
+            "bot_model": self.bot_model,
         }
 
 
@@ -1206,10 +1211,17 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"{'cliente simulado (--live)' if stamp.get('live') else 'cliente scripted'}",
         f"- Corpus: `{stamp.get('corpus_fingerprint', '?')}` · KB: "
         f"`{stamp.get('kb_fingerprint', '?')}` ({stamp.get('kb_documents', 0)} documentos)",
-        f"- Juez: `{stamp.get('judge_model') or 'sin juez (solo gates)'}` · "
-        f"{stamp.get('judge_repetitions', 1)} llamada(s) por escenario (mediana) · "
-        f"inicio: {stamp.get('started_at', '?')}",
+        # Which bot this measured. Without it the report describes two different
+        # models identically, and a baseline that cannot name its subject is not
+        # reproducible.
+        f"- Bot: `{stamp.get('bot_provider') or '?'}` / `{stamp.get('bot_model') or '?'}`",
     ]
+    judge_line = f"- Juez: `{stamp.get('judge_model') or 'sin juez (solo gates)'}`"
+    if stamp.get("judge_model"):
+        judge_line += (
+            f" · {stamp.get('judge_repetitions', 1)} llamada(s) por escenario (mediana)"
+        )
+    lines.append(judge_line + f" · inicio: {stamp.get('started_at', '?')}")
     if not is_citable(stamp):
         lines += [
             "",
@@ -1460,6 +1472,14 @@ def _validate_only(corpus: Corpus) -> int:
     return 0
 
 
+def _bot_settings() -> tuple[str, str]:
+    """The provider and model the brain under test is configured with."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    return settings.chat_provider, settings.chat_model
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     import json
     from datetime import datetime, timezone
@@ -1535,6 +1555,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge_model=judge_model,
         judge_repetitions=args.judge_repetitions if client is not None else 0,
         live=args.live,
+        bot_provider=_bot_settings()[0],
+        bot_model=_bot_settings()[1],
     ).as_dict()
 
     miss_text = miss_offer_text()

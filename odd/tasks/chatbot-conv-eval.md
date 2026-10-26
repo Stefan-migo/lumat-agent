@@ -507,3 +507,45 @@ Queda sin resolver, y ahora se sabe por qué: **`escalation` del caso complejo**
 owner con dispersión 2. Una diferencia de 3 puntos entre llamadas idénticas no autoriza a decir que la
 rúbrica está mal ahí; hay que volver cuando el número estabilice, y si no estabiliza, el problema es la
 rúbrica de esa dimensión y no el azar.
+
+### L15 — el baseline no se corrió, y el cliente simulado es la razón (2026-10-26)
+
+Tras L14 quedó cerrado lo del juez: repeticiones con mediana, spread y `hard_fail` por mayoría (#679,
+`ce1042f7`), y la re-calibración con ese código dio **11/18 exactas** contra el owner, con `policy` del
+caso super ya en 1/1. Después se cerró otra brecha: el sello **no decía qué bot medía** —`deepseek-chat`
+es el default del código y `deepseek-flash` lo del harness, y los dos producían reportes idénticos—. Ahora
+estampa `bot_provider`/`bot_model` y escribe `judge_repetitions` en el reporte (`0d9c4b6c`).
+
+La clave del bot no está en la base de test: vive en el **entorno del contenedor del harness**
+(`lumat-harness-api-1`). Se toma de ahí sin imprimirla y se pasa como `DEEPSEEK_API_KEY`, que es el
+fallback de `Settings`. Con eso, un smoke de un escenario (`--only … --no-judge`) pasó 1/1.
+
+**Entonces el baseline falló, y no por el bot.** El cliente simulado devolvió prosa en vez del JSON que
+se le pide —un turno de cliente impecable, pero sin sobre— y `_parse_json` reventó:
+
+```
+✗ simple-horario-sabado: la corrida falló: no JSON object in verdict:
+  'me llamo carlos, la calefaccion no calienta nada. pero lo importante, pueden el sabado?…'
+```
+
+Reproducido dos veces con nombres distintos, o sea defecto y no casualidad: **defecto #9, el simulador
+no reintenta.** El juez recibió su reintento en `fb5220fe` por este mismo accidente; el simulador quedó
+sin él. Y hay una asimetría que lo empeora: un veredicto faltante del juez se registra como "no medido" y
+la corrida continúa, pero **un escenario que falla aborta la corrida entera** (`exit 2`, sin reporte), así
+que un hipo del simulador tira 14 escenarios.
+
+Dos trampas operativas medidas en este tramo, y las dos cuestan evidencia falsa:
+
+1. **`pytest` vacía `kb_documents`** en la base compartida del worktree. Tras `quick` o `full`, el juez
+   ve la KB vacía y `grounding` se cae al piso: la primera re-calibración dio 1 donde el owner puso 4 por
+   esto. El runner aborta solo por el preflight, pero un script suelto no. **Re-sembrar después de
+   cualquier suite y antes de cada corrida.**
+2. **Un `--run-tag` puede pisar evidencia histórica.** El tag `baseline-2` habría sobrescrito
+   `conv-eval-baseline-2.md`, commiteado y citado en L8/L9. Los tags del baseline son `citable-1/2/3`
+   justamente por eso: antes de elegir uno, mirar qué hay en `odd/evals/`.
+
+Estado al cerrar: **no existe ningún baseline corrido con este instrumento**. Lo que falta, en orden:
+arreglar el reintento del simulador (defecto #9) con sus tests, decidir si un escenario fallido debe
+abortar la corrida o registrarse como no medido, y recién entonces correr `citable-1/2/3` y commitear la
+evidencia. Sigue abierto además `escalation`: caso complejo con **spread 4** (el juez no decide entre 0 y
+4) y caso super estable 2 puntos abajo del owner.
