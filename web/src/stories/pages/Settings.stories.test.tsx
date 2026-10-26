@@ -18,8 +18,15 @@ const capabilities: AssistantCapabilities = {
   memory_available: false,
 };
 
+const groupForSection: Record<string, string> = {
+  Agente: "Chatbot", Persona: "Chatbot", Conducta: "Chatbot", Mensajes: "Chatbot",
+  "Horarios y avisos": "Operación", Cobertura: "Operación", Tarifas: "Operación",
+  Capacidades: "Integraciones", "API key de modelos": "Integraciones", Correo: "Integraciones", Costos: "Costos",
+};
 async function selectSection(label: string) {
-  await userEvent.setup().click(await screen.findByRole("tab", { name: label }));
+  const user = userEvent.setup();
+  await user.click(within(await screen.findByRole("tablist", { name: "Super-secciones de configuración" })).getByRole("tab", { name: groupForSection[label] }));
+  await user.click(within(await screen.findByRole("tablist", { name: "Secciones de configuración" })).getByRole("tab", { name: label }));
 }
 
 describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () => {
