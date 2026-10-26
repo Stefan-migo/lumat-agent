@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { Bot, CircleCheck, Clock, Copy, Info, Lock, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
-import { ApiError, acknowledgeCase, changeConversationState, getConversation, listActiveConversations, listConversations, retryMessage, sendMessage } from "../../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Bot, CircleCheck, Clock, Copy, Info, Lock, Paperclip, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff, Mic, Square } from "lucide-react";
+import { ApiError, acknowledgeCase, changeConversationState, getConversation, listActiveConversations, listConversations, retryMessage, sendMedia, sendMessage } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { ConversationThread as ThreadData, Message } from "../../types";
 import { Avatar } from "../primitives/Avatar";
@@ -134,6 +134,15 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
 }
 export function ConversationThread({ conversationId, data: controlledData, state: controlledState, customerName, refreshKey = 0, onMutate, onBack, interactive = false }: ConversationThreadProps) {
   const [text, setText] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [caption, setCaption] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const cancelRecordingRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -168,7 +177,43 @@ export function ConversationThread({ conversationId, data: controlledData, state
     return () => { unsubscribe(); unsubscribeStatus(); unregisterRecovery(); };
   }, [controlledData, conversationId, refresh]);
   const windowOpen = conversation?.reply_window_open === true;
-  const mutate = async (action: () => Promise<unknown>) => { setBusy(true); setMutationError(null); try { await action(); setText(""); onMutate?.(); refresh(); } catch (error) { setMutationError(error instanceof ApiError ? `${error.status}: ${error.detail}` : "No se pudo completar la acción"); } finally { setBusy(false); } };
+  const releaseStream = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; };
+  useEffect(() => () => { cancelRecordingRef.current = true; recorderRef.current?.stop(); releaseStream(); }, []);
+  const supportedRecordingMime = typeof MediaRecorder !== "undefined"
+    ? ["audio/ogg;codecs=opus", "audio/mp4", "audio/aac"].find((mime) => MediaRecorder.isTypeSupported(mime)) ?? null
+    : null;
+  const mutate = async (action: () => Promise<unknown>) => { setBusy(true); setMutationError(null); try { await action(); setText(""); onMutate?.(); refresh(); } catch (error) { setMutationError(error instanceof ApiError ? `${error.status}: ${error.detail}` : error && typeof error === "object" && "detail" in error ? String(error.detail) : "No se pudo completar la acción"); } finally { setBusy(false); } };
+  const sendSelectedFile = (file: File, fileCaption = "") => {
+    if (!conversationId || busy) return;
+    void mutate(async () => { await sendMedia(conversationId, { file, requestId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, ...(fileCaption.trim() ? { caption: fileCaption.trim() } : {}) }); setSelectedFile(null); setCaption(""); });
+  };
+  const startRecording = async () => {
+    if (!windowOpen || busy || !supportedRecordingMime) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      cancelRecordingRef.current = false;
+      const recorder = new MediaRecorder(stream, { mimeType: supportedRecordingMime });
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        releaseStream();
+        recorderRef.current = null;
+        setRecording(false);
+        if (!cancelRecordingRef.current && chunksRef.current.length && conversationId) {
+          const blob = new Blob(chunksRef.current, { type: supportedRecordingMime });
+          const extension = supportedRecordingMime.startsWith("audio/ogg") ? "ogg" : supportedRecordingMime === "audio/mp4" ? "mp4" : "aac";
+          sendSelectedFile(new File([blob], `audio-${Date.now()}.${extension}`, { type: supportedRecordingMime }));
+        }
+      };
+      recorder.start();
+      setRecordingSeconds(0);
+      setRecording(true);
+    } catch (error) { setMutationError(error instanceof Error ? error.message : "No se pudo acceder al micrófono"); }
+  };
+  const stopRecording = (cancel = false) => { cancelRecordingRef.current = cancel; recorderRef.current?.stop(); if (cancel) { releaseStream(); setRecording(false); } };
+  useEffect(() => { if (!recording) return; const timer = window.setInterval(() => setRecordingSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer); }, [recording]);
   const acknowledgesEmergency = Boolean(conversation?.case && conversation?.emergency && !conversation.acknowledged_at && conversation.case_id != null);
   const conversationMenuItems = (options: { includeTake?: boolean; includeInfo?: boolean } = {}): MenuItem[] => conversation ? [
     ...(options.includeInfo ? [{ value: "info", label: "Información del chat", icon: Info }] : []),
@@ -221,6 +266,13 @@ export function ConversationThread({ conversationId, data: controlledData, state
            {conversation?.state === "human" ? <form className={`ai-agent-grammar__composer${windowOpen ? "" : " ai-agent-grammar__composer--locked"}`} aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}>
              {!windowOpen ? <div className="ai-agent-grammar__window-warning" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /><div><strong>Fuera de la ventana de 24 horas</strong><span>El envío de mensajes no está disponible.</span></div></div> : null}
              <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field">{!windowOpen ? <Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /> : null}<Textarea label="Respuesta" rows={windowOpen ? undefined : 1} placeholder={windowOpen ? undefined : "Respuesta no disponible"} value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /></div><Button type="submit" aria-label="Enviar respuesta" disabled={!windowOpen || busy || !text.trim()}><SendHorizonal aria-hidden="true" /></Button></div>
+             <div className="conversation-thread__media-tools">
+               <input ref={inputRef} className="conversation-thread__file-input" type="file" aria-label="Adjuntar archivo" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" disabled={!windowOpen || busy} onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setCaption(""); event.currentTarget.value = ""; }} />
+               <Button variant="secondary" aria-label="Adjuntar archivo" disabled={!windowOpen || busy} onClick={() => inputRef.current?.click()}><Paperclip aria-hidden="true" />Adjuntar</Button>
+               {recording ? <><span role="timer" aria-label="Tiempo de grabación">{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</span><Button variant="secondary" aria-label="Cancelar grabación" disabled={busy} onClick={() => stopRecording(true)}>Cancelar</Button><Button aria-label="Detener y enviar audio" disabled={busy} onClick={() => stopRecording(false)}><Square aria-hidden="true" />Detener y enviar</Button></> : <Button variant="secondary" aria-label="Grabar audio" disabled={!windowOpen || busy || !supportedRecordingMime} title={!supportedRecordingMime ? "La grabación de audio no está disponible en este navegador." : undefined} onClick={() => void startRecording()}><Mic aria-hidden="true" />Grabar audio</Button>}
+               {!supportedRecordingMime ? <span className="conversation-thread__recording-help">La grabación de audio no está disponible en este navegador.</span> : null}
+             </div>
+             {selectedFile ? <div className="conversation-thread__selected-file"><span>{selectedFile.name} · {(selectedFile.size / 1024).toFixed(1)} KB</span><Textarea label="Texto del archivo (opcional)" rows={2} value={caption} disabled={busy} onChange={(event) => setCaption(event.target.value)} /><Button disabled={!windowOpen || busy} onClick={() => sendSelectedFile(selectedFile, caption)}>Enviar archivo</Button></div> : null}
              {!windowOpen ? <p className="ai-agent-grammar__closed-note">Conversación cerrada</p> : null}
            </form> : <div className="ai-agent-grammar__composer ai-agent-grammar__composer--locked">
              <div className="ai-agent-grammar__window-warning" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /><div><strong>Fuera de la ventana de 24 horas</strong><span>El envío de mensajes no está disponible.</span></div></div>

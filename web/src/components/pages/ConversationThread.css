@@ -57,6 +57,11 @@
 .ai-agent-grammar__composer--locked .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .ai-agent-grammar__composer--locked .field__control { padding-left: calc(var(--space-3) + var(--icon-md) + var(--space-2)); resize: none; }
 .ai-agent-grammar__closed-note { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.conversation-thread__media-tools, .conversation-thread__selected-file { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.conversation-thread__file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.conversation-thread__selected-file { justify-content: space-between; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.conversation-thread__selected-file .field { flex: 1 1 100%; }
+.conversation-thread__recording-help { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
 /* Context inspector (reference ConversationThread.png): identity, linked case, captured data. */
 .ai-agent-grammar__inspector section { gap: var(--space-3); }
