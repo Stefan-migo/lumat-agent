@@ -219,6 +219,20 @@ def test_case_update_reopening_clears_close_time_and_restores_case(client, make_
     assert any(case["id"] == case_id for case in cases)
 
 
+def test_acknowledged_emergency_is_excluded_from_dashboard_urgent_cases(client, make_user):
+    case_id = _seed_case(status="escalado", emergency=True)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    before = client.get("/panel/api/dashboard/today?timezone=America/Santiago").json()
+    assert any(case["id"] == case_id for case in before["urgent_cases"])
+
+    acked = client.post(f"/panel/api/cases/{case_id}/ack")
+    assert acked.status_code == 200
+
+    after = client.get("/panel/api/dashboard/today?timezone=America/Santiago").json()
+    assert all(case["id"] != case_id for case in after["urgent_cases"])
+
+
 def test_closed_case_is_excluded_from_dashboard_urgent_cases(client, make_user):
     case_id = _seed_case(status="escalado", emergency=True)
     make_user("oper", "oper-pass", role="operador")

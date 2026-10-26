@@ -358,6 +358,8 @@ def to_today_conversation_dict(conversation: Conversation, customer_name: str | 
 def to_today_case_dict(case: Case, customer_name: str | None) -> dict:
     return {
         "id": case.id,
+        "customer_id": case.customer_id,
+        "conversation_id": case.conversation_id,
         "customer_name": customer_name,
         "service": case.service,
         "summary": case.summary,

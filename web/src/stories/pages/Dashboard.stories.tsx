@@ -22,7 +22,7 @@ const MOCK_TODAY: DashboardToday = {
     { id: 22, customer_name: "Carla", last_message_at: "2026-09-09T15:05:00Z", state: "BOT" },
   ],
   urgent_cases: [
-    { id: 31, customer_name: "Rosa", service: "calefont", summary: "Fuga de agua en el calefont", emergency: true, escalated_at: "2026-09-09T13:00:00Z" },
+    { id: 31, customer_id: 12, conversation_id: 44, customer_name: "Rosa", service: "calefont", summary: "Fuga de agua en el calefont", emergency: true, escalated_at: "2026-09-09T13:00:00Z" },
   ],
 };
 
