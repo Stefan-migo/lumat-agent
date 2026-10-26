@@ -179,6 +179,26 @@ mismo lugar —los escenarios donde el cliente simulado tiene que escribir un me
 Si se repite, el cambio que sigue no es del corpus: es un contrato de salida más corto para el simulador o un
 tercer intento.
 
-Verificación observada al cerrar: `uv run pytest tests/unit/test_conv_eval.py` **128/128**, el archivo del
-juez 36/36, `scripts/test.sh quick` exit 0 y `shape origin/main` exit 0 (la feature toca `scripts/`, que no es
-superficie de forma).
+Verificación observada: `uv run pytest tests/unit/test_conv_eval.py` **128/128** y el archivo del juez
+36/36. `scripts/test.sh shape origin/main` **salió 3**, y no por esta feature: `main` avanzó **39 commits**
+(PR #687, limpieza de configuración) mientras corrían las tres corridas, así que el diff contra `main` incluía
+`app/models.py`, `app/services/settings.py` y una migración. Consecuencia directa y anotada abajo: el trío
+`corpus-*` mide el árbol de `81972cfa`, que ya no es `main`.
+
+### L4 — main se movió mientras medíamos: el trío se rehace sobre el árbol entregado (2026-10-26)
+
+Al cerrar la verificación, `git fetch` mostró que `origin/main` estaba 39 commits adelante (`f84a4f00`, PR
+#687): limpieza de configuración —claves muertas de `chat.conduct`, defaults de mensajes desde una sola
+fuente, refactors del panel—. Nada de eso cambia el bot que estos escenarios miden, pero **el sello del trío
+apunta a `81972cfa`, y una línea base que no es el árbol que se entrega no es una línea base**.
+
+Decisiones, en orden:
+
+- Se mergeó `main` en la rama (`d9d3ade6`) y se corrió `full`, que la política del repo exige al mergear.
+- El trío `corpus-1/2/3` **no se entrega**: se conserva en el Log como medición del árbol anterior y se
+  rehace sobre el árbol mergeado, con tags nuevos.
+- Los números del trío viejo (3/5/6, mediana 5, ocho escenarios que nunca pasan y cuatro que oscilan) quedan
+  como referencia de varianza, no como la línea base.
+
+Esto no es un defecto del instrumento: es el instrumento diciendo la verdad sobre lo que midió. La lección
+operativa, para el handoff: **antes de cada serie de corridas, `git fetch` y mirar si `main` se movió.**
