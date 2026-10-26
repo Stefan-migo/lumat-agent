@@ -692,6 +692,63 @@ def test_render_markdown_says_so_when_there_is_no_previous_run():
     assert "Sin corrida previa" in markdown
 
 
+# ---------------------------------------------------------------------------
+# Un escenario que no se mide (L17) — la corrida sigue, y lo dice
+# ---------------------------------------------------------------------------
+
+
+def unmeasured_report(rows, failures):
+    report = report_for(rows)
+    report["run_failures"] = failures
+    return report
+
+
+def test_an_unmeasured_scenario_is_never_citable():
+    """A run with a hole in it is a diagnostic, not a baseline: the other rows are
+    real, but nobody can cite 13 of 14 as the state of the bot."""
+    clean = {"dirty": False, "kb_documents": 4}
+
+    assert ev.is_citable(clean) is True
+    assert ev.is_citable(clean, unmeasured=1) is False
+
+
+def test_the_report_names_the_unmeasured_scenario_and_withholds_citability():
+    report = unmeasured_report(
+        [score_row("sano", "simple", True, score=4.0)],
+        {"simple-horario-sabado": "no usable simulated turn after 2 attempts: no JSON object"},
+    )
+
+    markdown = ev.render_markdown(report)
+
+    assert "No citable como baseline" in markdown
+    assert "simple-horario-sabado" in markdown
+    assert "no usable simulated turn after 2 attempts" in markdown
+    assert "1 escenario(s) no medidos" in markdown
+
+
+def test_exit_2_marks_an_incomplete_measurement():
+    """2 is the code the run already used when it aborted, so an automation that
+    checks `!= 0` keeps working and one that reads the number still sees it."""
+    report = unmeasured_report(
+        [score_row("sano", "simple", True, score=4.0)], {"roto": "boom"}
+    )
+
+    assert ev.exit_code(report) == 2
+
+
+def test_exit_1_marks_a_complete_run_that_did_not_pass():
+    failing_gate = report_for([score_row("a", "simple", False, ["G4"], score=0.0)])
+    missing_verdict = report_for([score_row("a", "simple", True, score=None)])
+    missing_verdict["judge_failures"] = {"a": "sin veredicto"}
+
+    assert ev.exit_code(failing_gate) == 1
+    assert ev.exit_code(missing_verdict) == 1
+
+
+def test_exit_0_needs_every_scenario_measured_and_passing():
+    assert ev.exit_code(report_for([score_row("a", "simple", True, score=4.0)])) == 0
+
+
 def test_render_markdown_reports_regressions_from_the_diff():
     diff = {"comparable": True, "regressions": ["a"], "fixes": [], "gate_flips": [], "dimension_delta": {}}
     markdown = ev.render_markdown(
@@ -1136,3 +1193,45 @@ def test_the_report_names_the_bot_and_claims_no_judge_calls_without_a_judge():
 
     assert "`deepseek-flash`" in markdown
     assert "llamada(s) por escenario" not in markdown
+
+def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path, monkeypatch):
+    """The asymmetry L15 named: a missing verdict was recorded and the run
+    continued, a failed scenario killed all fourteen. Now the run keeps the
+    scenarios it could measure, says which one it could not, and refuses to be a
+    baseline — `exit 2`, with a report on disk."""
+    import json
+    from types import SimpleNamespace
+
+    broken = scenario(id="roto", tier="simple")
+    healthy = scenario(id="sano", tier="simple")
+    tiny = ev.Corpus(version=1, scenarios=(broken, healthy), fingerprint="c0rp")
+
+    monkeypatch.setattr(ev, "load_corpus", lambda _path=None: tiny)
+    monkeypatch.setitem(sys.modules, "seed_kb_docs", SimpleNamespace(ensure_dev_env=lambda: None))
+    monkeypatch.setattr(ev, "existing_conversations", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        ev, "preflight", lambda: {"consistent": True, "documents": 4, "fingerprint": "kb00"}
+    )
+    monkeypatch.setattr(ev, "_bot_settings", lambda: ("deepseek", "deepseek-flash"))
+    monkeypatch.setattr(ev, "git_state", lambda **_kwargs: ("e354f563", False))
+    monkeypatch.setattr(ev, "miss_offer_text", lambda: "te derivo")
+
+    def fake_run(scn, **_kwargs):
+        if scn.id == "roto":
+            raise RuntimeError("no usable simulated turn after 2 attempts: no JSON object")
+        return {"observation": observation()}
+
+    monkeypatch.setattr(ev, "run_scenario", fake_run)
+
+    code = ev.main(
+        ["--no-judge", "--quiet", "--run-tag", "prueba", "--out-dir", str(tmp_path)]
+    )
+
+    report = json.loads((tmp_path / "conv-eval-prueba.json").read_text(encoding="utf-8"))
+    markdown = (tmp_path / "conv-eval-prueba.md").read_text(encoding="utf-8")
+    assert code == 2
+    assert "roto" in report["run_failures"]
+    assert [row["scenario"] for row in report["runs"]] == ["sano"]
+    assert report["summary"]["scenarios"] == 1
+    assert "roto" in markdown
+    assert "No citable como baseline" in markdown

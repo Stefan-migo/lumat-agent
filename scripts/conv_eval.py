@@ -917,9 +917,42 @@ def git_state(
     return head, bool(status)
 
 
-def is_citable(stamp: Mapping[str, Any]) -> bool:
-    """A baseline must stamp a clean tree and a KB that matches `docs/kb`."""
-    return not stamp.get("dirty") and bool(stamp.get("kb_documents"))
+def citability_blockers(stamp: Mapping[str, Any], unmeasured: int = 0) -> list[str]:
+    """Why this run cannot be cited as a baseline; empty when it can.
+
+    A baseline answers "how is the bot". A run that could not measure a scenario
+    answers "how are thirteen of fourteen", and the hole is invisible in every
+    average: it is a diagnostic, never a baseline (S8.6).
+    """
+    blockers: list[str] = []
+    if stamp.get("dirty"):
+        blockers.append("el árbol no estaba limpio")
+    if not stamp.get("kb_documents"):
+        blockers.append("la KB no estaba sellada")
+    if unmeasured:
+        blockers.append(f"{unmeasured} escenario(s) no medidos")
+    return blockers
+
+
+def is_citable(stamp: Mapping[str, Any], *, unmeasured: int = 0) -> bool:
+    """A baseline must stamp a clean tree, a KB that matches `docs/kb`, and every
+    scenario measured."""
+    return not citability_blockers(stamp, unmeasured)
+
+
+def exit_code(report: Mapping[str, Any]) -> int:
+    """The run's status: 0 clean, 1 a row that did not pass, 2 not fully measured.
+
+    2 is the code the run already returned when it aborted on a dead scenario, so
+    an automation that only checks `!= 0` keeps working, and one that reads the
+    number can still tell "the bot failed" from "the instrument could not measure".
+    """
+    summary = report.get("summary") or {}
+    if report.get("run_failures"):
+        return 2
+    if report.get("judge_failures") or summary.get("passed") != summary.get("scenarios"):
+        return 1
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -1222,18 +1255,22 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             f" · {stamp.get('judge_repetitions', 1)} llamada(s) por escenario (mediana)"
         )
     lines.append(judge_line + f" · inicio: {stamp.get('started_at', '?')}")
-    if not is_citable(stamp):
+    run_failures = report.get("run_failures") or {}
+    blockers = citability_blockers(stamp, len(run_failures))
+    if blockers:
         lines += [
             "",
-            "> **No citable como baseline**: la corrida no selló un árbol limpio.",
+            "> **No citable como baseline**: " + ", ".join(blockers) + ".",
         ]
 
+    scenarios_line = f"- Escenarios: **{summary.get('scenarios', 0)}**"
+    if run_failures:
+        scenarios_line += f" · no medidos: **{len(run_failures)}**"
     lines += [
         "",
         "## Resumen",
         "",
-        f"- Escenarios: **{summary.get('scenarios', 0)}** · pasan: "
-        f"**{summary.get('passed', 0)}**",
+        f"{scenarios_line} · pasan: **{summary.get('passed', 0)}**",
         f"- Peor dimensión: `{summary.get('worst_dimension') or '—'}`",
         "",
         "| Tier | Escenarios | Pasan |",
@@ -1266,6 +1303,17 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     if judge_failures:
         lines += ["", "### Sin veredicto del juez", ""]
         for scenario_id, reason in judge_failures.items():
+            lines.append(f"- `{scenario_id}`: {reason}")
+
+    if run_failures:
+        lines += [
+            "",
+            "### Escenarios no medidos",
+            "",
+            "No entran en ningún promedio: la corrida no mide lo que no pudo correr.",
+            "",
+        ]
+        for scenario_id, reason in run_failures.items():
             lines.append(f"- `{scenario_id}`: {reason}")
 
     failed_rows = [row for row in report.get("runs") or () if not row.get("passed")]
@@ -1564,6 +1612,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     tarifario = tarifario_text() if client is not None else ""
 
     runs: list[dict] = []
+    run_failures: dict[str, str] = {}
     judge_failures: dict[str, str] = {}
     gate_details: dict[str, dict[str, str]] = {}
     observations: dict[str, dict] = {}
@@ -1577,9 +1626,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 max_turns=args.max_turns,
                 miss_text=miss_text,
             )
-        except Exception as error:  # noqa: BLE001  a dead scenario must not kill the run
-            print(f"  ✗ {scenario.id}: la corrida falló: {error}", file=sys.stderr)
-            return 2
+        except Exception as error:  # noqa: BLE001  a dead scenario is not a result
+            # Unmeasured, never guessed, and never silent: the report names it and
+            # the run stops being citable, because an average over 13 of 14 hides
+            # the hole. One simulator hiccup used to throw away every scenario.
+            run_failures[scenario.id] = str(error)
+            print(
+                f"  ! {scenario.id}: escenario no medido ({error})",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
 
         observation = result["observation"]
         gates = evaluate_gates(scenario, observation)
@@ -1623,6 +1680,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "runs": runs,
         "summary": summarize(runs),
         "judge_failures": judge_failures,
+        "run_failures": run_failures,
         "gate_details": gate_details,
         "observations": observations,
     }
@@ -1641,14 +1699,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"peor dimensión: {summary['worst_dimension'] or '—'}"
     )
     print(f"reporte: {written[0]} · {written[1]}")
-    if not is_citable(stamp):
-        print("aviso: árbol sucio o KB sin sellar — esta corrida no es citable como baseline")
+    blockers = citability_blockers(stamp, len(run_failures))
+    if blockers:
+        print(f"aviso: no citable como baseline — {', '.join(blockers)}")
+    if run_failures:
+        print(
+            f"aviso: {len(run_failures)} escenario(s) no medidos: "
+            f"{', '.join(run_failures)}",
+            file=sys.stderr,
+        )
     if judge_failures:
         print(f"aviso: {len(judge_failures)} escenario(s) sin veredicto del juez: "
               f"{', '.join(judge_failures)}")
-    if judge_failures or summary["passed"] != summary["scenarios"]:
-        return 1
-    return 0
+    return exit_code(report)
 
 
 if __name__ == "__main__":
