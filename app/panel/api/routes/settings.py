@@ -17,7 +17,7 @@ upserts the KV row AND audits with the acting admin, SH-5):
   durations {"service_durations": {...}}  -> booking.service_durations (S4)
   capture-questions {"questions": {field: str}} -> capture.questions (S7)
   reply-texts {"texts": {key: str}}        -> reply.texts (S8)
-  conduct {"conduct": {orden, redaccion, max_preguntas_por_mensaje,
+  conduct {"conduct": {orden, max_preguntas_por_mensaje,
                        derivaciones}}      -> chat.conduct (validated, S10)
   limits {"conversation_limit": n, "daily_limit": n} (> 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
