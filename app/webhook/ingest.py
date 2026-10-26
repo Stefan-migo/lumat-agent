@@ -87,8 +87,8 @@ class NormalizedMessage:
     msg_type: MessageType
     text: Optional[str]
     media_url: Optional[str]
-    caption: Optional[str]
     payload: dict  # raw Meta message object (WH-4: raw payload survives)
+    caption: Optional[str] = None  # optional Meta caption; last so callers stay source-compatible
 
 
 class MediaDownloadError(RuntimeError):
