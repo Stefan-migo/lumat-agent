@@ -23,8 +23,8 @@ El alcance es la card "Urgentes" del dashboard: cuenta y ruido hoy, y el drill-d
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 | S1, S4 | inline (backend: query + serializer) | `feat(dashboard): count only unacknowledged urgent cases` |
-| T2 | S2, S3 | inline (frontend: Dashboard + AppShell wiring) | `feat(dashboard): open the real conversation or client case from urgent rows` |
+| T1 | S1, S4 | inline (backend: query + serializer) | `7fbe90c4` |
+| T2 | S2, S3 | inline (frontend: Dashboard + AppShell wiring) | `d4542cb1`, `97bc4e9c` |
 | T3 | S1-S4 | inline (verificación: quick + full + frontend gate) | `docs(dashboard): record the urgent-cases evidence` |
 
 ## Log
@@ -59,3 +59,20 @@ El alcance es la card "Urgentes" del dashboard: cuenta y ruido hoy, y el drill-d
   card (puede estar vacío: caso sin conversación, o conversación cerrada). De ahí "no aparece nada" (S2).
 - `GET /panel/api/cases` existe (`app/panel/api/routes/cases.py:62`) pero la card no lo usa; el owner eligió
   no crear una página de casos nueva, así que la navegación por fila es la solución (S2).
+
+**L4 — verificación y hallazgos**
+
+- RED observado antes de cada cambio: `test_acknowledged_emergency_is_excluded_from_dashboard_urgent_cases`
+  (el caso reconocido seguía apareciendo) y `test_today_urgent_cases_expose_the_navigation_targets`
+  (`KeyError: 'conversation_id'`); en el frontend, `opens the real target for each urgent case row`
+  fallaba con "called only 0 times".
+- GREEN: `bash scripts/test.sh db tests/functional/test_api_dashboard.py tests/functional/test_api_cases.py`
+  → 50 passed. Frontend: `npx vitest run Dashboard.test.tsx AppShell.test.tsx` → 66 passed.
+- El gate `npm run build` (`tsc -b`) cazó dos fixtures de test sin los campos nuevos; se corrigieron.
+- `bash scripts/test.sh shape origin/main` → exit 3 (`app/panel/api/serializers.py` es shape surface), así que
+  `full` es obligatorio. La primera corrida de `full` falló en
+  `test_seed_dev.py::test_dev_seed_populates_dashboard_and_composer`: el seed de desarrollo marcaba
+  `acknowledged_at` en los tres casos escalados (i = 0, 3, 6), así que con el filtro nuevo la card quedaba
+  vacía en un seed fresco. Se dejó i = 3 sin reconocer (`app/panel/seed_dev.py`), que es el caso con
+  `emergency=True`, y el test volvió a verde.
+- `npm test` completo del frontend: 111 archivos, 1274 tests, todos verdes.
