@@ -32,12 +32,35 @@ function messageAuthor(message: Message, customerId: number, customerName?: (id:
 function MessageBubble({ message, customerId, customerName }: { message: Message; customerId: number; customerName?: (id: number) => string }) {
   const author = messageAuthor(message, customerId, customerName);
   const outbound = message.direction === "outbound";
+  const isText = message.msg_type === "text";
+  const hasMedia = !isText && (Boolean(message.media_url || message.media_download_url) || ["image", "video", "audio", "document"].includes(message.msg_type));
+  const mediaUrl = message.media_download_url;
+  const mediaLabel = message.caption || message.filename || "Archivo adjunto";
+  const unavailable = hasMedia && message.media_available === false;
+  const mediaContent = !hasMedia ? null : unavailable ? <p className="conversation-thread__media-unavailable" role="status">Este archivo no está disponible.</p> : mediaUrl ? (() => {
+    switch (message.msg_type) {
+      case "image":
+        return <a className="conversation-thread__image-link" href={mediaUrl} target="_blank" rel="noopener noreferrer" aria-label={`Abrir imagen: ${mediaLabel}`}><img className="conversation-thread__image" src={mediaUrl} alt={message.caption || "Imagen adjunta"} /></a>;
+      case "video":
+        return <video className="conversation-thread__video" src={mediaUrl} controls aria-label={message.caption || "Video adjunto"} />;
+      case "audio":
+        return <div className="conversation-thread__audio"><span>Audio adjunto</span><audio src={mediaUrl} controls aria-label={message.caption || "Audio adjunto"} /></div>;
+      case "document":
+        return <a className="conversation-thread__document" href={mediaUrl} download={message.filename || true}>{message.filename || message.caption || "Descargar documento"}</a>;
+      default:
+        return <a className="conversation-thread__document" href={mediaUrl} download>{message.caption || "Archivo adjunto"}</a>;
+    }
+  })() : <p className="conversation-thread__media-unavailable" role="status">Este archivo no está disponible.</p>;
   return <div className={`ai-agent-grammar__bubble-row${outbound ? " ai-agent-grammar__bubble-row--outbound" : ""}`} data-bubble aria-label={`Mensaje ${outbound ? "saliente" : "entrante"} de ${author}`}>
     {!outbound ? <Avatar name={author} className="conversation-thread__bubble-avatar" /> : null}
     <div className="ai-agent-grammar__bubble-stack">
       <span className="ai-agent-grammar__message-meta">{author}</span>
       <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
-        <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span>
+        {isText ? <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span> : <>
+          {message.text ? <span>{message.text}</span> : null}
+          {mediaContent}
+          {hasMedia && message.caption ? <p className="conversation-thread__media-caption">{message.caption}</p> : null}
+        </>}
         {message.delivery_status === "failed" ? <span className="ai-agent-grammar__message-error" role="alert">Entrega fallida{message.delivery_error ? `: ${message.delivery_error}` : ""}</span> : null}
       </div>
       <span className="ai-agent-grammar__message-time">{message.created_at?.slice(11, 16) ?? "—"}</span>
