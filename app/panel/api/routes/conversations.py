@@ -13,19 +13,38 @@ PDW-AUTH-1), 404 for a missing conversation. No redirects, no CORS (D1).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import tempfile
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, case as sql_case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models import Case, Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, User
+from app.config import get_settings
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_active_conversation_dict, to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
-from app.services.conversations import assign, change_state, retry_operator_message, send_operator_message
+from app.services.conversations import assign, change_state, retry_operator_message, send_operator_media, send_operator_message
+from app.webhook.ingest import _safe_filename
 from app.services.cases import case_is_open_expr
 router = APIRouter(tags=["panel-api-conversations"])
+
+_INLINE_MEDIA_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "video/mp4",
+    "video/3gpp",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/aac",
+    "audio/amr",
+}
 
 
 class StateCommand(BaseModel):
@@ -292,12 +311,85 @@ def message_command(conversation_id: int, body: MessageCommand, session: Session
     return {"ok": True, "message": to_message_dict(message)}
 
 
+@router.post("/conversations/{conversation_id}/media")
+def media_command(
+    conversation_id: int,
+    file: UploadFile = File(...),
+    request_id: str = Form(..., min_length=1),
+    caption: str | None = Form(None),
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    media_dir = Path(get_settings().media_dir).resolve()
+    media_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(file.filename or "").suffix
+    safe_filename = _safe_filename(f"{request_id}{suffix}")
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=f"{safe_filename}-", suffix=".upload",
+            dir=media_dir, delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            size = 0
+            while chunk := file.file.read(64 * 1024):
+                temporary.write(chunk)
+                size += len(chunk)
+        if size == 0:
+            raise HTTPException(status_code=422, detail="file must not be empty")
+        try:
+            message = send_operator_media(
+                session, conversation_id, path=temporary_path,
+                content_type=file.content_type or "application/octet-stream",
+                filename=safe_filename, caption=caption, actor=current, request_id=request_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # Same contract as the text endpoint: a failed delivery is recorded on the row and the
+        # operator gets it back with `delivery_status: failed` plus the retry action, not a 502.
+        return {"ok": True, "message": to_message_dict(message)}
+    finally:
+        file.file.close()
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
 @router.post("/conversations/{conversation_id}/messages/{message_id}/retry")
 def retry_message(conversation_id: int, message_id: int, body: RetryCommand, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     message = retry_operator_message(session, conversation_id, message_id, current, body.request_id, body.expected_status)
     if message.delivery_status != DeliveryStatus.SENT:
         raise HTTPException(status_code=502, detail="message delivery failed")
     return {"ok": True, "message": to_message_dict(message)}
+
+
+@router.get("/conversations/{conversation_id}/messages/{message_id}/media")
+def conversation_message_media(
+    conversation_id: int,
+    message_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> FileResponse:
+    message = session.scalar(select(Message).where(
+        Message.id == message_id, Message.conversation_id == conversation_id
+    ))
+    if message is None or not message.stored_path:
+        raise HTTPException(status_code=404, detail="media not found")
+    root = Path(get_settings().media_dir).resolve()
+    path = Path(message.stored_path).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="media not found")
+    content_type = message.content_type or "application/octet-stream"
+    disposition = "inline" if content_type.lower() in _INLINE_MEDIA_TYPES else "attachment"
+    return FileResponse(
+        path,
+        filename=message.filename or path.name,
+        media_type=content_type,
+        content_disposition_type=disposition,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.get("/conversations/{conversation_id}")

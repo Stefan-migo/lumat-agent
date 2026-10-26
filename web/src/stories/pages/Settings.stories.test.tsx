@@ -18,8 +18,15 @@ const capabilities: AssistantCapabilities = {
   memory_available: false,
 };
 
+const groupForSection: Record<string, string> = {
+  Agente: "Chatbot", Persona: "Chatbot", Conducta: "Chatbot", Mensajes: "Chatbot",
+  "Horarios y avisos": "Operación", Cobertura: "Operación", Tarifas: "Operación",
+  Capacidades: "Integraciones", "API key de modelos": "Integraciones", Correo: "Integraciones", Costos: "Costos",
+};
 async function selectSection(label: string) {
-  await userEvent.setup().click(await screen.findByRole("tab", { name: label }));
+  const user = userEvent.setup();
+  await user.click(within(await screen.findByRole("tablist", { name: "Super-secciones de configuración" })).getByRole("tab", { name: groupForSection[label] }));
+  await user.click(within(await screen.findByRole("tablist", { name: "Secciones de configuración" })).getByRole("tab", { name: label }));
 }
 
 describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () => {
@@ -242,12 +249,13 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(banner).getByText(/datos posiblemente desactualizados/i)).toBeInTheDocument();
   });
 
-  it("composes push settings inside Configuración", async () => {
+  it("points the schedule section at the single push settings page", async () => {
     render(<SettingsView />);
     await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
     expect(push).toBeInTheDocument();
-    expect(within(push).getByText(/correo o whatsapp|activa avisos/i)).toBeInTheDocument();
+    // One mounting only: the card links to the standalone page instead of composing it.
+    expect(within(push).getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
   });
 
   it("renders grouped capability tools and translated configuration availability", async () => {
@@ -313,12 +321,13 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     fetchMock.mockRestore();
   });
 
-  it("preserves push configuration fallback in the composed section", async () => {
+  it("keeps the push entry point when this browser cannot subscribe", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ public_key: null }), { status: 200 }));
     render(<Settings data={settings} state="ready" />);
     await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
-    expect(within(push).getByText(/no admite push/i)).toBeInTheDocument();
+    // The unsupported-browser explanation belongs to the page now; the section must still lead there.
+    expect(within(push).getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
     fetchMock.mockRestore();
   });
 });

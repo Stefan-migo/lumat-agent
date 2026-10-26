@@ -54,6 +54,8 @@ def test_conduct_is_exposed_with_its_closed_options(admin):
     conduct = _settings(admin)["conduct"]
 
     assert conduct["orden"] == settings_service.CHAT_CONDUCT_DEFAULTS["orden"]
+    # S5: the phrasing switch is exposed with its default (phrasing off).
+    assert conduct["redaccion"] == "plantilla"
     assert conduct["max_preguntas_por_mensaje"] == 1
     assert conduct["derivaciones"] == list(settings_service.CONDUCT_DERIVACIONES)
     assert conduct["customized"] is False
@@ -70,8 +72,8 @@ def test_conduct_is_exposed_with_its_closed_options(admin):
 
 def test_conduct_save_is_visible_in_the_settings_payload(admin):
     changed = {
-        **settings_service.CHAT_CONDUCT_DEFAULTS,
         "orden": ["failure", "equipment", "comuna", "availability", "name"],
+        "redaccion": "llm",
         "max_preguntas_por_mensaje": 2,
         "derivaciones": ["cobertura"],
     }
@@ -79,9 +81,33 @@ def test_conduct_save_is_visible_in_the_settings_payload(admin):
 
     conduct = _settings(admin)["conduct"]
     assert conduct["orden"] == changed["orden"]
-    assert conduct["max_preguntas_por_mensaje"] == 2
-    assert conduct["derivaciones"] == ["cobertura"]
+    assert conduct["max_preguntas_por_mensaje"] == changed["max_preguntas_por_mensaje"]
+    assert conduct["derivaciones"] == changed["derivaciones"]
+    assert conduct["redaccion"] == "llm"  # the switch survives a save/read round trip
     assert conduct["customized"] is True
+
+
+def test_legacy_redaccion_in_stored_conduct_does_not_break_get(admin):
+    stored = {
+        "orden": ["failure", "comuna", "name"],
+        "redaccion": "legacy-value",
+        "max_preguntas_por_mensaje": 2,
+        "derivaciones": [],
+    }
+    with SessionLocal() as session:
+        session.add(Settings(key=settings_service.CHAT_CONDUCT_KEY, value=stored))
+        session.commit()
+
+    response = admin.get("/panel/api/settings")
+
+    assert response.status_code == 200
+    conduct = response.json()["conduct"]
+    assert conduct["orden"] == stored["orden"]
+    assert conduct["max_preguntas_por_mensaje"] == stored["max_preguntas_por_mensaje"]
+    assert conduct["derivaciones"] == stored["derivaciones"]
+    # A value the allowlist does not know falls back to the default instead of
+    # reaching the panel as an option it cannot save back.
+    assert conduct["redaccion"] == "plantilla"
 
 
 # --- capture questions -------------------------------------------------------

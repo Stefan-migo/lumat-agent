@@ -58,11 +58,15 @@ MESSAGE_TEMPLATES_KEY = "messages.templates"
 # (`chat.conduct.orden` in T10).
 CAPTURE_QUESTIONS_KEY = "capture.questions"
 
-# S10: the conduct object — capture order, redaction mode, question budget per
-# message and the active derivation rules. Closed options only: the five
-# invariants of S19 are NOT configurable and stay out of this key.
+# S10: the conduct object — capture order, question budget per message and
+# active derivation rules. Closed options only: the five invariants of S19 are
+# NOT configurable and stay out of this key.
 CHAT_CONDUCT_KEY = "chat.conduct"
+# S5: the capture-phrasing switch. #687 removed this key because nothing read
+# it; `phrasing.phrase` reads it now, so it comes back with a consumer and stays
+# optional on save so payloads from a panel that does not render it still work.
 CONDUCT_REDACCIONES: tuple[str, ...] = ("llm", "plantilla")
+CONDUCT_OPTIONAL_KEYS: frozenset[str] = frozenset({"redaccion"})
 CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 # The closed list of derivation rules (S10): exactly the ones the derivation
 # logic reads. T10 listed five and T15 implemented `cobertura`; S4 removed the
@@ -390,9 +394,8 @@ DEFAULT_TARIFA_PRECIOS: dict[str, list[dict[str, int]]] = {
 
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
-# Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
-# intentionally live in the chat nodes, not here — `get_message` resolves
-# overrides against the caller-provided default (single source of truth).
+# Fixed-message text is defined once in MESSAGE_DEFAULTS and expanded here for
+# the generic settings KV fallback; get_message uses that same source directly.
 SETTINGS_DEFAULTS: dict[str, Any] = {
     # SS-4: Meta service-message unit cost (USD), effective 2026-10-01.
     # Reference placeholder until verified with Meta at activation (T4.5).
@@ -444,16 +447,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
         "mantencion", "mantención", "mantenimiento", "revision", "revisión",
         "limpieza", "preventiva",
     ],
-    "messages.greeting": MESSAGE_DEFAULTS["greeting"],
-    "messages.greeting_short": MESSAGE_DEFAULTS["greeting_short"],
-    "messages.greeting_name": MESSAGE_DEFAULTS["greeting_name"],
-    "messages.greeting_short_name": MESSAGE_DEFAULTS["greeting_short_name"],
-    "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
-    "messages.clarification": MESSAGE_DEFAULTS["clarification"],
-    "messages.cannot_understand_offer": MESSAGE_DEFAULTS["cannot_understand_offer"],
-    "messages.kb_miss_offer": MESSAGE_DEFAULTS["kb_miss_offer"],
-    "messages.farewell": MESSAGE_DEFAULTS["farewell"],
-    "messages.out_of_hours": MESSAGE_DEFAULTS["out_of_hours"],
+    **{f"messages.{key}": value for key, value in MESSAGE_DEFAULTS.items()},
     MESSAGE_TEMPLATES_KEY: [],
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
@@ -1062,7 +1056,12 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("chat.conduct must be an object")
 
-    missing = [key for key in CHAT_CONDUCT_DEFAULTS if key not in value]
+    # As with other bounded settings, unknown top-level keys are ignored by the
+    # returned projection. This also makes legacy `redaccion` data harmless.
+    missing = [
+        key for key in CHAT_CONDUCT_DEFAULTS
+        if key not in value and key not in CONDUCT_OPTIONAL_KEYS
+    ]
     if missing:
         raise ValueError(f"chat.conduct is missing: {missing}")
 
@@ -1087,12 +1086,6 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
                 f"chat.conduct.orden asks identity before availability: {too_early}"
             )
 
-    redaccion = value["redaccion"]
-    if redaccion not in CONDUCT_REDACCIONES:
-        raise ValueError(
-            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
-        )
-
     max_preguntas = value["max_preguntas_por_mensaje"]
     if isinstance(max_preguntas, bool) or max_preguntas not in CONDUCT_MAX_PREGUNTAS:
         raise ValueError(
@@ -1106,6 +1099,12 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
     unknown_rules = [rule for rule in derivaciones if rule not in CONDUCT_DERIVACIONES]
     if unknown_rules:
         raise ValueError(f"chat.conduct.derivaciones has unknown rules: {unknown_rules}")
+
+    redaccion = value.get("redaccion", CHAT_CONDUCT_DEFAULTS["redaccion"])
+    if redaccion not in CONDUCT_REDACCIONES:
+        raise ValueError(
+            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
+        )
 
     return {
         "orden": list(orden),
@@ -1136,6 +1135,10 @@ def get_conduct(session: Session) -> dict[str, Any]:
         conduct["derivaciones"] = [
             rule for rule in rules if rule in CONDUCT_DERIVACIONES
         ]
+    # Same treatment for the phrasing switch: a value stored before the key was
+    # retired (or written by hand) must not reach the panel as an invalid option.
+    if conduct.get("redaccion") not in CONDUCT_REDACCIONES:
+        conduct["redaccion"] = CHAT_CONDUCT_DEFAULTS["redaccion"]
     return conduct
 
 

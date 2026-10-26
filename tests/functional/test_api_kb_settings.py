@@ -885,6 +885,8 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "persona", "emergency",
         # S18: the conduct surfaces F3/F4 shipped without a read.
         "conduct", "capture_questions", "reply_texts",
+        # Canonical option lists the panel renders instead of keeping its own copies.
+        "options",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
@@ -1432,7 +1434,6 @@ def test_settings_update_capture_questions_rejects_a_partial_map_without_persist
 
 _CONDUCT = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
-    "redaccion": "plantilla",
     "max_preguntas_por_mensaje": 2,
     "derivaciones": ["cobertura"],
 }
@@ -1451,7 +1452,12 @@ def test_settings_update_conduct_audited(client, make_user):
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     with SessionLocal() as session:
-        assert session.get(Settings, "chat.conduct").value == _CONDUCT
+        # S5: validation projects the phrasing switch, so the stored row carries
+        # it even when the caller does not send it.
+        assert session.get(Settings, "chat.conduct").value == {
+            **_CONDUCT,
+            "redaccion": "plantilla",
+        }
     audit = _last_audit("settings.change")
     assert audit is not None and audit.actor == "adm"
     assert audit.entity_id == "chat.conduct"
