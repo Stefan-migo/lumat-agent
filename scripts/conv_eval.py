@@ -728,13 +728,33 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
     }
 
 
+def _corpus_fingerprint(report: Mapping[str, Any]) -> str | None:
+    """The fingerprint of the corpus this report measured.
+
+    A written report keeps it under `stamp`; an older caller may pass it at the top
+    level. Reading only the top level compared `None` against `None` and called every
+    pair of runs comparable, which is the one thing this guard exists to prevent.
+    """
+    if report.get("corpus_fingerprint"):
+        return str(report["corpus_fingerprint"])
+    stamp = report.get("stamp") or {}
+    fingerprint = stamp.get("corpus_fingerprint")
+    return str(fingerprint) if fingerprint else None
+
+
 def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dict:
     """Diff a run against the previous one, scenario by scenario.
 
     Two runs over different corpora are not comparable, and say so instead of
     producing a diff that looks meaningful.
     """
-    comparable = current.get("corpus_fingerprint") == previous.get("corpus_fingerprint")
+    current_fingerprint = _corpus_fingerprint(current)
+    previous_fingerprint = _corpus_fingerprint(previous)
+    comparable = (
+        current_fingerprint is None
+        or previous_fingerprint is None
+        or current_fingerprint == previous_fingerprint
+    )
     current_rows = {row["scenario"]: row for row in current.get("runs") or ()}
     previous_rows = {row["scenario"]: row for row in previous.get("runs") or ()}
 

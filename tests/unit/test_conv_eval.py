@@ -608,6 +608,24 @@ def test_compare_runs_marks_the_same_corpus_comparable():
     assert ev.compare_runs(current, previous)["comparable"] is True
 
 
+def test_two_reports_of_different_corpora_are_not_comparable():
+    """A written report carries the fingerprint under `stamp`, which is where the
+    runner reads it. Comparing the top-level key compared None against None and
+    called every pair of runs comparable."""
+    current = report_for([score_row("a", "simple", True, score=4.0)])
+    previous = report_for([score_row("a", "simple", True, score=4.0)])
+    previous["stamp"]["corpus_fingerprint"] = "otro-corpus"
+
+    assert ev.compare_runs(current, previous)["comparable"] is False
+
+
+def test_reports_of_the_same_corpus_are_comparable_through_the_stamp():
+    current = report_for([score_row("a", "simple", True, score=4.0)])
+    previous = report_for([score_row("a", "simple", True, score=4.0)])
+
+    assert ev.compare_runs(current, previous)["comparable"] is True
+
+
 def test_dimensions_match_the_judge_module():
     """The judged dimensions are declared in the judge; the report math here
     must agree with it or every mean reports the wrong thing."""
