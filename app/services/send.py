@@ -15,13 +15,22 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import session_scope
-from app.models import Conversation, DeliveryStatus, Message, MessageDirection, MessageStatus, User
+from app.models import (
+    Conversation,
+    DeliveryStatus,
+    Message,
+    MessageDirection,
+    MessageStatus,
+    MessageType,
+    User,
+)
 from app.services.audit import record_audit
 from app.services.settings import get_setting
 
@@ -29,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 META_API_VERSION = "v20.0"
 META_SEND_URL = "https://graph.facebook.com/{version}/{phone_number_id}/messages"
+META_MEDIA_URL = "https://graph.facebook.com/{version}/{phone_number_id}/media"
 SEND_TIMEOUT_SECONDS = 30.0
 
 # SS-4 reference unit cost per service message (USD), used when settings do
@@ -59,6 +69,39 @@ def send_text(phone_e164: str, text: str) -> str:
     return response.json()["messages"][0]["id"]
 
 
+def upload_media(path: Path, content_type: str) -> str:
+    """Upload one media file to WhatsApp and return Meta's media id."""
+    settings = get_settings()
+    with path.open("rb") as media_file:
+        response = httpx.post(
+            META_MEDIA_URL.format(version=META_API_VERSION, phone_number_id=settings.meta_phone_number_id),
+            headers={"Authorization": f"Bearer {settings.meta_access_token}"},
+            data={"messaging_product": "whatsapp", "type": content_type},
+            files={"file": (path.name, media_file, content_type)},
+            timeout=SEND_TIMEOUT_SECONDS,
+        )
+    response.raise_for_status()
+    return response.json()["id"]
+
+
+def send_media(phone_e164: str, media_id: str, msg_type: str, caption: str | None, filename: str | None = None) -> str:
+    """Send a previously uploaded WhatsApp media id; return its wamid."""
+    settings = get_settings()
+    media = {"id": media_id}
+    if caption and msg_type != "audio":
+        media["caption"] = caption
+    if msg_type == "document" and filename:
+        media["filename"] = filename
+    response = httpx.post(
+        META_SEND_URL.format(version=META_API_VERSION, phone_number_id=settings.meta_phone_number_id),
+        headers={"Authorization": f"Bearer {settings.meta_access_token}"},
+        json={"messaging_product": "whatsapp", "to": phone_e164, "type": msg_type, msg_type: media},
+        timeout=SEND_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return response.json()["messages"][0]["id"]
+
+
 def deliver_message(message_id: int) -> Message:
     """Claim one operator message, call Meta, and durably finalize its outcome."""
     with session_scope() as session:
@@ -75,10 +118,28 @@ def deliver_message(message_id: int) -> Message:
         phone = session.scalar(
             select(Conversation.wa_phone).where(Conversation.id == message.conversation_id)
         )
+        msg_type = message.msg_type
+        stored_path = message.stored_path
+        content_type = message.content_type
+        caption = message.caption
+        filename = message.filename
 
     try:
-        wamid = send_text(phone, message.text or "")
+        if msg_type == MessageType.TEXT:
+            wamid = send_text(phone, message.text or "")
+        else:
+            if not stored_path:
+                raise ValueError("media message has no stored_path")
+            if not message.meta_media_id:
+                media_id = upload_media(Path(stored_path), content_type or "application/octet-stream")
+                with session_scope() as session:
+                    session.get(Message, message_id).meta_media_id = media_id
+            else:
+                media_id = message.meta_media_id
+            wamid = send_media(phone, media_id, msg_type.value, caption, filename)
     except httpx.HTTPStatusError as exc:
+        _finalize_delivery(message_id, DeliveryStatus.FAILED, str(exc))
+    except ValueError as exc:
         _finalize_delivery(message_id, DeliveryStatus.FAILED, str(exc))
     except httpx.HTTPError as exc:
         _finalize_delivery(message_id, DeliveryStatus.UNKNOWN, "Meta transport outcome is unknown")
@@ -93,6 +154,7 @@ def deliver_message(message_id: int) -> Message:
             row.wamid = wamid
             row.delivery_error = None
             row.delivered_at = datetime.now(timezone.utc)
+            row.cost_meta = meta_message_cost(session)
             actor = session.scalar(select(User.username).where(User.id == row.author_id))
             record_audit(
                 session,
@@ -182,6 +244,10 @@ def deliver_outbound(session, conversation_id: int) -> int:
     unit = meta_message_cost(session)
     sent = 0
     for row in rows:
+        if row.msg_type != MessageType.TEXT:
+            # The legacy sweep has no durable two-step media claim; fail closed
+            # rather than silently delivering the media row as empty text.
+            continue
         wamid = send_text(conversation.wa_phone, row.text or "")
         row.wamid = wamid
         row.cost_meta = unit
