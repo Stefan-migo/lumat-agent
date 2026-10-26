@@ -143,6 +143,7 @@ def test_settings_endpoints_require_login_401_json(client):
         ("post", "/panel/api/settings/tone", {"tone": "casual"}),
         ("post", "/panel/api/settings/limits", {"conversation_limit": 2.0, "daily_limit": 5.0}),
         ("post", "/panel/api/settings/meta", {"service_message_cost": 0.01}),
+        ("post", "/panel/api/settings/booking-lead", {"hours": 2}),
         ("post", "/panel/api/settings/message-templates", {"templates": []}),
         ("post", "/panel/api/settings/unknown", {}),
     ]
@@ -879,7 +880,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages", "templates",
         "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
-        "model_api_key", "email", "tarifa", "coverage", "service_durations",
+        "model_api_key", "email", "tarifa", "coverage", "service_durations", "booking",
         # S12/S13: the editable persona and safety protocol.
         "persona", "emergency",
         # S18: the conduct surfaces F3/F4 shipped without a read.
@@ -909,6 +910,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "o que te atienda una persona?"
     )
     assert body["hours"] == {"timezone": "America/Santiago", "schedule": []}
+    assert body["booking"] == {"lead_hours": 2}
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
     assert body["daily_limit"] == 5.00
@@ -1562,3 +1564,117 @@ def test_settings_hours_rejects_invalid_values_with_the_shared_validator(client,
     assert "weekdays must not repeat" in resp.json()["detail"]
     with SessionLocal() as session:
         assert session.get(Settings, "hours.schedule") is None
+
+
+@pytest.mark.parametrize("unsafe_text", ["Hola {{nombre}}", "Hola }}"])
+def test_settings_messages_reject_unfillable_slots_with_human_label(
+    client, make_user, unsafe_text
+):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {
+        "greeting": unsafe_text,
+        "greeting_short": "Hola breve",
+        "greeting_name": "Hola {{nombre}}",
+        "greeting_short_name": "Hola {{nombre}}",
+        "smalltalk": "Con gusto",
+        "cannot_answer": "No disponible",
+        "clarification": "Aclara",
+        "cannot_understand_offer": "¿Visita o persona?",
+        "kb_miss_offer": "No tengo ese dato",
+        "farewell": "Hasta luego",
+        "out_of_hours": "Estamos cerrados",
+    }
+
+    resp = client.post(
+        "/panel/api/settings/messages", json=value, follow_redirects=False
+    )
+
+    assert resp.status_code == 400
+    assert "saludo" in resp.json()["detail"].lower()
+    assert "greeting" not in resp.json()["detail"]
+    with SessionLocal() as session:
+        assert session.get(Settings, "messages.greeting") is None
+        assert session.scalar(select(AuditLog).where(AuditLog.action == "settings.change")) is None
+
+
+def test_settings_messages_accept_only_nombre_in_the_two_named_greetings(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {
+        "greeting": "Hola",
+        "greeting_short": "Hola breve",
+        "greeting_name": "Hola {{nombre}}",
+        "greeting_short_name": "Hola {{nombre}}",
+        "smalltalk": "Con gusto",
+        "cannot_answer": "No disponible",
+        "clarification": "Aclara",
+        "cannot_understand_offer": "¿Visita o persona?",
+        "kb_miss_offer": "No tengo ese dato",
+        "farewell": "Hasta luego",
+        "out_of_hours": "Estamos cerrados",
+    }
+
+    saved = client.post("/panel/api/settings/messages", json=value)
+    assert saved.status_code == 200
+    with SessionLocal() as session:
+        assert session.get(Settings, "messages.greeting_name").value == "Hola {{nombre}}"
+        assert session.get(Settings, "messages.greeting_short_name").value == "Hola {{nombre}}"
+
+    for key in ("greeting_name", "greeting_short_name"):
+        invalid = {**value, key: "Hola {{comuna}}"}
+        rejected = client.post("/panel/api/settings/messages", json=invalid)
+        assert rejected.status_code == 400
+        assert "saludo" in rejected.json()["detail"].lower()
+        assert "{{nombre}}" in rejected.json()["detail"]
+        with SessionLocal() as session:
+            assert session.get(Settings, f"messages.{key}").value == "Hola {{nombre}}"
+
+
+def test_settings_get_exposes_booking_lead_hours_rounding_up_partial_hours(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    with SessionLocal() as session:
+        session.add(Settings(key="booking.lead_minutes", value=121))
+        session.commit()
+
+    resp = client.get("/panel/api/settings", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json()["booking"] == {"lead_hours": 3}
+
+
+def test_settings_booking_lead_hours_validates_bounds_and_audits(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    for hours in (1, 48):
+        response = client.post(
+            "/panel/api/settings/booking-lead", json={"hours": hours}
+        )
+        assert response.status_code == 200
+        with SessionLocal() as session:
+            assert session.get(Settings, "booking.lead_minutes").value == hours * 60
+        assert client.get("/panel/api/settings").json()["booking"] == {
+            "lead_hours": hours
+        }
+        audit = _last_audit("settings.change")
+        assert audit is not None and audit.entity_id == "booking.lead_minutes"
+
+    with SessionLocal() as session:
+        audits_before_rejections = session.scalars(
+            select(AuditLog).where(AuditLog.action == "settings.change")
+        ).all()
+    for invalid_hours in (0, 49, 2.5, True):
+        response = client.post(
+            "/panel/api/settings/booking-lead", json={"hours": invalid_hours}
+        )
+        assert response.status_code == 400
+        assert response.headers["content-type"].startswith("application/json")
+        assert "hours" in response.json()["detail"]
+        with SessionLocal() as session:
+            assert session.get(Settings, "booking.lead_minutes").value == 48 * 60
+            audits_after_rejection = session.scalars(
+                select(AuditLog).where(AuditLog.action == "settings.change")
+            ).all()
+            assert len(audits_after_rejection) == len(audits_before_rejections)

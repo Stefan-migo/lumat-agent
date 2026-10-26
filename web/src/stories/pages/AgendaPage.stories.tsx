@@ -117,11 +117,3 @@ export const Mobile: Story = {
   args: { data: DATA, state: "ready", width: 390 },
   parameters: { viewport: { defaultViewport: "mobile-compact" } },
 };
-export const Technicians: Story = {
-  args: { data: [], state: "empty", width: 1280 },
-  play: async ({ canvasElement }) => {
-    const user = userEvent.setup();
-    await user.click(within(canvasElement).getByRole("tab", { name: "Técnicos" }));
-    await user.click(await within(canvasElement).findByRole("button", { name: "Editar horario" }));
-  },
-};
