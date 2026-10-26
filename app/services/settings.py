@@ -72,7 +72,7 @@ CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 CONDUCT_DERIVACIONES: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
-    "redaccion": "llm",
+    "redaccion": "plantilla",
     "max_preguntas_por_mensaje": 1,
     "derivaciones": list(CONDUCT_DERIVACIONES),
 }

@@ -39,7 +39,7 @@ def test_the_default_order_is_the_shipped_capture_order():
 
 
 def test_the_defaults_are_the_closed_enum_values():
-    assert CHAT_CONDUCT_DEFAULTS["redaccion"] == "llm"
+    assert CHAT_CONDUCT_DEFAULTS["redaccion"] == "plantilla"
     assert CHAT_CONDUCT_DEFAULTS["max_preguntas_por_mensaje"] == 1
     assert CHAT_CONDUCT_DEFAULTS["derivaciones"] == list(CONDUCT_DERIVACIONES)
 
