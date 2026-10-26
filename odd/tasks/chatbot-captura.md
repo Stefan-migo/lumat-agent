@@ -2,7 +2,7 @@
 
 **Rama:** `odd/chatbot-captura` (worktree `../lumat-agent-odd-chatbot-captura`) · **Base:** `origin/main` `4b24e71b`
 **Origen:** QA manual de 5 conversaciones (`#13`–`#17`) en el stack aislado `lumat-harness` sobre `main` @ `456a0294`.
-**Entrega:** 2 commits revisables en una rama — C1 consentimiento + captura, C2 redacción asistida.
+**Entrega:** dos slices encadenados — (1) captura y consentimiento, (2) redacción asistida detrás de un flag.
 
 ## Specs
 

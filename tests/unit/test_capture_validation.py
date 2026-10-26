@@ -55,21 +55,64 @@ def test_real_corruptions_are_not_accepted_as_answers(harness, field, turn, extr
     result = capture_node.capture(make_state(turn, captured=initial, extracted=extracted))
 
     if bad_value == "unknown":
-        assert result["captured"].get(field) == "unknown"
+        assert field not in result["captured"]
     else:
         assert field not in result["captured"]
-        assert result["captured"]["_pending"] == ("consent" if field == "consent" else [field])
+        if field == "failure":
+            assert "failure" in result["captured"].get("_skipped", [])
+        else:
+            assert result["captured"]["_pending"] == ("consent" if field == "consent" else [field])
         assert turn not in " ".join(result.get("replies", []))
 
 
-def test_email_requires_a_valid_email_and_only_pending_fields_merge(harness):
+def test_email_requires_a_valid_email_but_accepts_it_out_of_turn(harness):
     result = capture_node.capture(make_state(
-        "not an email", captured={"_pending": ["email"], "_asked": {"email": 1}},
-        extracted={"email": "not an email", "name": "Felipe"},
+        "ana@example.cl", captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
+        extracted={"email": "ana@example.cl"},
     ))
-    assert "email" not in result["captured"]
-    assert "name" not in result["captured"]
-    assert result["captured"]["_pending"] == ["email"]
+    assert result["captured"]["email"] == "ana@example.cl"
+    assert result["captured"]["_pending"] == ["equipment"]
+
+
+def test_covered_commune_answered_out_of_turn_is_stored_and_the_flow_continues(harness):
+    """The value must not be thrown away; the still-missing field is still asked.
+
+    The replay defect was discarding "Ñuñoa" while `equipment` was pending, which
+    repeated the same question with no progress until `campo_sin_respuesta`.
+    Asking about the equipment again is correct — the customer has not answered
+    it — so the guard is that the commune is stored and no derivation fires.
+    """
+    result = capture_node.capture(make_state(
+        "Ñuñoa", captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
+        extracted={"comuna": "Ñuñoa"},
+    ))
+    assert result["captured"]["comuna"] == "Ñuñoa"
+    assert result["captured"]["_pending"] == ["equipment"]
+    assert not result.get("escalate")
+
+
+def test_name_validator_rejects_skip_question_and_unbounded_messages(harness):
+    for value in ("no autorizo", "¿Cuál es tu nombre?", "x" * 200):
+        result = capture_node.capture(make_state(
+            value, captured={"_pending": ["name"], "_asked": {"name": 1}},
+            extracted={"name": value},
+        ))
+        assert "name" not in result["captured"]
+    accepted = capture_node.capture(make_state(
+        "Braulio", captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
+        extracted={"name": "Braulio"},
+    ))
+    assert accepted["captured"]["name"] == "Braulio"
+
+
+@pytest.mark.parametrize("field", ["failure", "address", "name"])
+def test_no_field_accepts_the_whole_inbound_message(harness, field):
+    message = "Braulio quiere una mantencion de caldera"
+    result = capture_node.capture(make_state(
+        message, captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
+        extracted={field: message},
+    ))
+    assert field not in result["captured"]
 
 
 def test_skip_unknown_path_still_advances(harness):
@@ -98,6 +141,21 @@ def test_preventive_request_skips_failure_and_marks_it(harness):
     assert "failure" in result["captured"]["_skipped"]
     assert result["captured"]["_pending"] == ["equipment"]
     assert "qué pasa con el equipo" not in result["replies"][0].lower()
+
+
+def test_full_capture_window_preventive_request_skips_pending_failure(harness):
+    first = capture_node.capture(make_state("hola", captured={}))
+    state = ConversationState(
+        customer_id=1, conversation_id=2, phone="", captured=first["captured"],
+        extracted={"failure": "quiero hacer mantencion de caldera"},
+        window=[{"text": "hola", "direction": "inbound"},
+                {"text": "quiero hacer mantencion de caldera", "direction": "inbound"}],
+    )
+    result = capture_node.capture(state)
+    assert "failure" in result["captured"]["_skipped"]
+    assert result["captured"].get("failure") is None
+    assert "qué pasa con el equipo" not in " ".join(result.get("replies", [])).lower()
+    assert result.get("escalate_reason") != "campo_sin_respuesta"
 
 
 def test_ack_is_not_repeated_on_consecutive_questions(harness, monkeypatch):

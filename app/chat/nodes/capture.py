@@ -109,7 +109,13 @@ _SKIP_WORDS = (
     "desconozco",
 )
 _YES_WORDS = ("si", "sí", "yes", "ok", "claro", "confirmo", "acepto")
-_NO_WORDS = ("no", "nope", "negativo")
+# An explicit refusal phrase is a decision, not confusion: matching only the
+# bare "no" made "no autorizo" fall into the unclear path and the customer
+# was asked again (replay T9, conversation #26).
+_NO_WORDS = (
+    "no", "nope", "negativo", "no autorizo", "no quiero", "no acepto",
+    "prefiero no", "no gracias",
+)
 
 # V4 §A3/D3: a social message mid-capture is a greeting, not a field answer.
 # Storing it would write "Hola, ¿cómo estás?" as the customer's name, and
@@ -270,25 +276,48 @@ def _merge_extracted(
     captured: dict, extracted: dict | None, pending: list[str], state: ConversationState,
     communes: list[str],
 ) -> None:
-    """Merge validated values from this turn, restricted to its pending batch."""
+    """Merge any validated extracted value, even when another field was asked."""
     prior_texts = {
         item.get("text") for item in state.window[:-1]
         if item.get("direction", "inbound") == "inbound" and item.get("text")
     }
     current_text = _current_text(state)
     for field, value in (extracted or {}).items():
-        if field not in pending or field not in EXTRACTABLE_FIELDS or not isinstance(value, str):
+        if field not in EXTRACTABLE_FIELDS or not isinstance(value, str):
             continue
         value = value.strip()
         if not value or captured.get(field):
             continue
+        # No extracted field may simply echo the customer's whole inbound turn.
+        # A complete prose turn echoed as a field is extraction corruption; terse
+        # direct answers (a commune, email, or name) naturally equal the turn.
+        if (
+            len(current_text.strip()) > 20
+            and _normalize(value) == _normalize(current_text)
+        ):
+            continue
         if field == "comuna":
-            captured[field] = value if comuna_cubierta(communes, value) else "unknown"
+            if comuna_cubierta(communes, value):
+                captured[field] = value
         elif field == "email":
             if re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", value):
                 captured[field] = value
+        elif field == "name":
+            # A refusal is not a name ("no autorizo" answered the name question in
+            # the replay). `is_skip` alone misses it: its words are matched
+            # anywhere, so a negation prefix is the narrower guard here — adding
+            # "no " to `is_skip` would turn "no enciende" into a skipped answer
+            # for the failure field.
+            if (
+                len(value) <= 80
+                and "?" not in value
+                and not is_skip(value)
+                and not _normalize(value).startswith("no ")
+                and all(char.isalpha() or char.isspace() for char in value)
+            ):
+                captured[field] = value
         elif field in {"failure", "address"}:
-            if value != current_text and value not in prior_texts:
+            if value not in prior_texts:
                 captured[field] = value
         else:
             captured[field] = value
@@ -304,7 +333,34 @@ def capture(state: ConversationState) -> dict:
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         return _ask_next(captured, state)
+    # S4: evaluate the preventive intent once against the entire inbound window,
+    # before any path can ask or re-ask the failure field.
+    if "failure" not in captured:
+        with session_scope() as session:
+            preventive = {
+                _normalize(keyword)
+                for keyword in get_capture_preventive_keywords(session)
+                if _normalize(keyword)
+            }
+        inbound = " ".join(
+            item.get("text") or ""
+            for item in state.window
+            if item.get("direction", "inbound") == "inbound"
+        )
+        normalized_window = _normalize(inbound)
+        if any(keyword in normalized_window for keyword in preventive):
+            skipped = list(captured.get("_skipped") or [])
+            if "failure" not in skipped:
+                skipped.append("failure")
+            captured["_skipped"] = skipped
     pending = captured.get("_pending")
+    if isinstance(pending, list) and "failure" in (captured.get("_skipped") or []):
+        pending = [field for field in pending if field != "failure"]
+        if pending:
+            captured["_pending"] = pending
+        else:
+            captured.pop("_pending", None)
+            return _ask_next(captured, state)
 
     if pending == "consent":
         # CI-3: the explicit consent step runs AFTER every data field, before
@@ -456,18 +512,6 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             captured.pop("_pending", None)
             _persist_captured(session, state, captured)
             return _derive(captured, COVERAGE_DERIVATION)
-        preventive = {
-            _normalize(keyword)
-            for keyword in get_capture_preventive_keywords(session)
-            if _normalize(keyword)
-        }
-        current = _normalize(_current_text(state))
-        if "failure" not in captured and any(word in current for word in preventive):
-            skipped = list(captured.get("_skipped") or [])
-            if "failure" not in skipped:
-                skipped.append("failure")
-            captured["_skipped"] = skipped
-
         missing = _missing_fields(captured, conduct["orden"])
         if not missing:
             if _answer_consent(captured.get("consent", "")) is True:

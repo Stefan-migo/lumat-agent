@@ -100,3 +100,16 @@ def test_unclear_and_skip_reask_then_derive(capture_harness):
     assert last["next_step"] == "handoff"
     assert last["escalate_reason"] == "consent_unclear"
     assert last["replies"] == [REPLY_TEXT_DEFAULTS["capture_consent_unclear"]]
+
+
+def test_an_explicit_refusal_phrase_is_a_decline_not_an_unclear_answer(capture_harness, monkeypatch):
+    """`no autorizo` answers the consent question; it is a decision, not confusion."""
+    calls = []
+    monkeypatch.setattr(capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record"))
+
+    result = capture_node.capture(state("no autorizo"))
+
+    assert result["next_step"] == "handoff"
+    assert result["escalate_reason"] == "consent_declined"
+    assert result["replies"] == [REPLY_TEXT_DEFAULTS["capture_consent_refused"]]
+    assert calls == []
