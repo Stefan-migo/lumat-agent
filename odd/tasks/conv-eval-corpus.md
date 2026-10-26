@@ -262,3 +262,16 @@ Verificación al cerrar: `uv run pytest tests/unit/test_conv_eval.py` **128/128*
 **36/36**, `scripts/test.sh quick` exit 0, `scripts/test.sh shape origin/main` exit 0 y
 `scripts/test.sh full` exit 0 sobre este árbol de código (5m38s, tras mergear los 39 commits de `main`).
 Los commits posteriores al `full` solo agregan reportes generados y este documento.
+
+## Follow-ups (fuera de esta feature)
+
+- **`compare_runs` no mira el árbol del bot.** El diff declara comparables dos corridas cuando coincide el
+  corpus, aunque el árbol medido haya cambiado: `main-1` y `corpus-3` salen "comparables" y el delta mezcla
+  el cambio del bot con el ruido. Siguiente pasada del instrumento: sellar el árbol de `app/` (o el
+  merge-base con `main`) y advertir cuando difiere.
+- **Tasa de prosa del simulador.** Perdió un escenario en una de cuatro corridas, siempre en los escenarios
+  donde el cliente simulado escribe un mensaje largo y contradictorio. Si se repite, el cambio no es del
+  corpus: es un contrato de salida más corto para el simulador o un tercer intento.
+- **Los seis escenarios que nunca pasan son tareas del bot**, no del instrumento: precio, `kb_miss` de
+  retrieval, pedir datos antes de responder, insistir en un dato rechazado, rechazo por comuna, despedida y
+  el evento `escalation` de la emergencia.
