@@ -141,7 +141,7 @@ type Drafts = {
   conversationLimit: string; dailyLimit: string; metaCost: string; leadHours: string;
   persona: { orchestrator: string; orchestrator_brief: string };
   emergencyProtocol: { safety_instructions: string; contacts: string; notify_message: string };
-  conduct: { orden: string[]; redaccion: string; max_preguntas_por_mensaje: number; derivaciones: string[] };
+  conduct: { orden: string[]; max_preguntas_por_mensaje: number; derivaciones: string[] };
   captureQuestions: Record<string, string>;
   replyTexts: Record<string, string>;
   serviceDurations: Array<{ name: string; minutes: string }>;
@@ -167,7 +167,6 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     },
     conduct: {
       orden: data?.conduct?.orden ?? [],
-      redaccion: data?.conduct?.redaccion ?? "llm",
       max_preguntas_por_mensaje: data?.conduct?.max_preguntas_por_mensaje ?? 1,
       derivaciones: data?.conduct?.derivaciones ?? [],
     },

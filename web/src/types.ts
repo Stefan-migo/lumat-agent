@@ -549,7 +549,6 @@ export interface Settings {
   /** S10/S18: effective conduct plus the closed option lists the panel renders. */
   conduct: {
     orden: string[];
-    redaccion: string;
     max_preguntas_por_mensaje: number;
     derivaciones: string[];
     customized: boolean;

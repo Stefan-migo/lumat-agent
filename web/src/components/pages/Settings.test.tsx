@@ -18,7 +18,6 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },
   conduct: {
     orden: ["failure", "comuna", "name"],
-    redaccion: "llm",
     max_preguntas_por_mensaje: 1,
     derivaciones: ["cobertura"],
     customized: false,
@@ -403,7 +402,7 @@ describe("Settings", () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ conduct: { orden: ["comuna", "failure", "name"], redaccion: "llm", max_preguntas_por_mensaje: 1, derivaciones: ["cobertura"] } }),
+      body: JSON.stringify({ conduct: { orden: ["comuna", "failure", "name"], max_preguntas_por_mensaje: 1, derivaciones: ["cobertura"] } }),
     })));
   });
 
