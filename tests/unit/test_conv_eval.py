@@ -110,14 +110,17 @@ def test_shipped_corpus_declares_an_expectation_per_scenario(corpus):
 
 
 def test_a_live_run_gives_the_simulated_customer_room(corpus):
-    """The scripted turns are the opening of the conversation, not all of it."""
+    """The scripted turns are the opening of the conversation, not all of it — except
+    on `simple`, where they ARE the conversation (S2)."""
     for scn in corpus.scenarios:
         budget = ev.resolve_budget(scn, live=True)
         assert budget >= len(scn.turns)
-        if scn.max_turns is None:
-            assert budget == len(scn.turns) + ev.SIMULATED_TURNS
-        else:
+        if scn.max_turns is not None:
             assert budget == scn.max_turns
+        elif scn.tier == "simple":
+            assert budget == len(scn.turns)
+        else:
+            assert budget == len(scn.turns) + ev.SIMULATED_TURNS
 
 
 def test_a_scripted_run_keeps_its_exact_script(corpus):
@@ -127,6 +130,40 @@ def test_a_scripted_run_keeps_its_exact_script(corpus):
         assert plan == [("scripted", text) for text in scn.turns], scn.id
 
 
+def test_a_simple_scenario_keeps_its_script_and_nothing_more(corpus):
+    """S2: `simple` is the floor of the measurement, and a floor that depends on what
+    a language model decides to invent is not a floor."""
+    for scn in corpus.by_tier("simple"):
+        if scn.max_turns is not None:
+            continue
+        assert ev.resolve_budget(scn, live=True) == len(scn.turns), scn.id
+
+
+def test_the_other_tiers_keep_their_simulated_room(corpus):
+    for scn in corpus.by_tier("complejo") + corpus.by_tier("supercomplejo"):
+        if scn.max_turns is not None:
+            continue
+        assert ev.resolve_budget(scn, live=True) == len(scn.turns) + ev.SIMULATED_TURNS, scn.id
+
+
+def test_a_declared_ceiling_still_wins_on_a_simple_scenario():
+    scn = scenario(tier="simple", turns=("hola",), max_turns=4)
+
+    assert ev.resolve_budget(scn, live=True) == 4
+
+
+def test_an_override_still_wins_on_a_simple_scenario():
+    scn = scenario(tier="simple", turns=("hola",), max_turns=None)
+
+    assert ev.resolve_budget(scn, live=True, override=5) == 5
+
+
+def test_a_simple_plan_never_reaches_the_simulator(corpus):
+    for scn in corpus.by_tier("simple"):
+        plan = ev.plan_turns(scn.turns, ev.resolve_budget(scn, live=True), live=True)
+        assert plan and all(origin == "scripted" for origin, _text in plan), scn.id
+
+
 def test_an_explicit_budget_wins_over_the_scenario(corpus):
     scn = corpus.scenarios[0]
     assert ev.resolve_budget(scn, live=True, override=9) == 9
@@ -134,15 +171,17 @@ def test_an_explicit_budget_wins_over_the_scenario(corpus):
 
 
 def test_a_live_plan_reaches_the_simulated_customer(corpus):
-    """Pins the defect this fixes: nine of fourteen scenarios never let it speak."""
+    """Pins the defect this fixes: nine of fourteen scenarios never let it speak.
+
+    The five `simple` scenarios are silent by decision (S2): they are the floor and
+    they are reproducible, so the simulator never gets a turn there.
+    """
     silent = []
     for scn in corpus.scenarios:
         plan = ev.plan_turns(scn.turns, ev.resolve_budget(scn, live=True), live=True)
         if not any(origin == "simulated" for origin, _text in plan):
             silent.append(scn.id)
-    # The greeting scenario sets its goal at the first turn on purpose: a second
-    # message would measure something the corpus decided not to measure (S3, L5).
-    assert silent == ["simple-saludo-variante"], silent
+    assert silent == [scn.id for scn in corpus.by_tier("simple")], silent
 
 
 MINIMAL = """
@@ -293,6 +332,79 @@ def test_g5_forbidden_causes_are_matched_against_the_handoff_reason():
     assert gates_of(scn, miss)["G5"].ok is False
     other = observation(events=[{"event": "escalation", "cause": "handoff:emergency"}])
     assert gates_of(scn, other)["G5"].ok is True
+
+
+def test_g10_a_declared_cause_passes_the_gate():
+    """`causes_required` is the mirror of `causes_forbidden`: the scenario accepts a
+    derivation and says which one. Deriving for another reason still fails."""
+    scn = scenario(expect={"causes_required": ["cobertura"]})
+    obs = observation(events=[{"event": "escalation", "cause": "handoff:cobertura"}])
+
+    assert gates_of(scn, obs)["G10"].ok is True
+
+
+def test_g10_a_cause_that_is_not_the_declared_one_fails_naming_it():
+    scn = scenario(expect={"causes_required": ["booking_unavailable"]})
+    obs = observation(events=[{"event": "escalation", "cause": "handoff:persona"}])
+
+    failed = gates_of(scn, obs)["G10"]
+
+    assert failed.ok is False
+    assert "booking_unavailable" in failed.detail
+    assert "handoff:persona" in failed.detail
+
+
+def test_g10_a_conversation_with_no_derivation_at_all_fails():
+    """A scenario that declares a cause is a scenario where the derivation must
+    happen: finishing inside the bot means the case was never taken."""
+    scn = scenario(expect={"causes_required": ["cobertura"]})
+
+    failed = gates_of(scn, observation(events=[]))["G10"]
+
+    assert failed.ok is False
+
+
+def test_a_scenario_that_declares_no_cause_has_no_g10():
+    """Skipped is absent from the result, never a pass — the convention every gate
+    follows, pinned here for the new one."""
+    result = gates_of(scenario(expect={"state_any": ["bot"]}), observation())
+
+    assert "G10" not in result
+
+
+def test_the_corpus_loader_accepts_causes_required(tmp_path):
+    text = CORPUS_PATH.read_text(encoding="utf-8")
+    patched = text.replace(
+        "      state_any: [bot]\n      events_forbidden: [escalation]\n",
+        "      state_any: [human]\n      causes_required: [booking_unavailable]\n",
+        1,
+    )
+    assert patched != text, "the fixture changed: this test must be revisited"
+    path = tmp_path / "corpus.yaml"
+    path.write_text(patched, encoding="utf-8")
+
+    loaded = ev.load_corpus(path)
+
+    patched_scenario = next(
+        scn for scn in loaded.scenarios if "causes_required" in scn.expect
+    )
+    assert patched_scenario.expect["causes_required"] == ["booking_unavailable"]
+
+
+def test_an_empty_causes_required_list_is_refused(tmp_path):
+    text = CORPUS_PATH.read_text(encoding="utf-8")
+    patched = text.replace(
+        "      state_any: [bot]\n      events_forbidden: [escalation]\n",
+        "      state_any: [human]\n      causes_required: []\n",
+        1,
+    )
+    path = tmp_path / "corpus.yaml"
+    path.write_text(patched, encoding="utf-8")
+
+    with pytest.raises(ValueError) as raised:
+        ev.load_corpus(path)
+
+    assert "causes_required" in str(raised.value)
 
 
 def test_g6_anchors_ignore_case_and_accents():
