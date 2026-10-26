@@ -1,8 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DayToggle } from "./DayToggle";
+import { WEEKDAY_NAMES } from "../shared/agendaTime";
 
 describe("DayToggle", () => {
+  it("uses the shared weekday labels", () => {
+    const previous = WEEKDAY_NAMES[0];
+    WEEKDAY_NAMES[0] = "Lunes compartido";
+    try {
+      render(<DayToggle value={[]} onChange={() => {}} />);
+      expect(screen.getByRole("button", { name: "Lunes compartido" })).toBeInTheDocument();
+    } finally {
+      WEEKDAY_NAMES[0] = previous;
+    }
+  });
   it("renders seven pressed-state buttons and reports controlled changes", () => {
     const onChange = vi.fn();
     render(<DayToggle value={["Lun"]} onChange={onChange} />);

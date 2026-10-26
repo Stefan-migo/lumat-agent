@@ -4,11 +4,11 @@ import type { TechnicianScheduleEntry, UserRef } from "../../types";
 import { Button } from "../primitives/Button";
 import { Input } from "../primitives/Input";
 import { StateMessage } from "./StateMessage";
+import { WEEKDAY_NAMES } from "./agendaTime";
 import "./TechnicianScheduleEditor.css";
 
-const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 type Day = { enabled: boolean; opens_at: string; closes_at: string };
-const emptyWeek = (): Day[] => DAYS.map(() => ({ enabled: false, opens_at: "09:00", closes_at: "18:00" }));
+const emptyWeek = (): Day[] => WEEKDAY_NAMES.map(() => ({ enabled: false, opens_at: "09:00", closes_at: "18:00" }));
 export function formatTechnicianSchedule(schedule: TechnicianScheduleEntry[]): string {
   if (!schedule.length) return "Sin horario";
   const days = [...schedule].sort((left, right) => left.weekday - right.weekday);
@@ -22,7 +22,7 @@ export function formatTechnicianSchedule(schedule: TechnicianScheduleEntry[]): s
   return groups.map((group) => {
     const first = group[0];
     const last = group.at(-1)!;
-    const day = first.weekday === last.weekday ? DAYS[first.weekday - 1] : `${DAYS[first.weekday - 1]}–${DAYS[last.weekday - 1]}`;
+    const day = first.weekday === last.weekday ? WEEKDAY_NAMES[first.weekday - 1] : `${WEEKDAY_NAMES[first.weekday - 1]}–${WEEKDAY_NAMES[last.weekday - 1]}`;
     return `${day} ${first.opens_at.slice(0, 5)}–${first.closes_at.slice(0, 5)}`;
   }).join(" · ");
 }
@@ -54,10 +54,10 @@ export function TechnicianScheduleEditor({ technician, onSaved }: { technician: 
   if (state === "load-error") return <div className="technician-schedule-editor__feedback"><StateMessage tone="danger" role="alert" title="No pudimos cargar el horario" detail="Intenta nuevamente para recuperar la disponibilidad." /><Button variant="secondary" onClick={load}>Reintentar</Button></div>;
   return <div className="technician-schedule-editor">
     <div className="technician-schedule-editor__days" aria-label="Días y horarios de atención">
-      {week.map((day, index) => <div className="technician-schedule-editor__row" key={DAYS[index]}>
-        <Button variant="secondary" className="technician-schedule-editor__day" aria-pressed={day.enabled} disabled={state === "saving"} onClick={() => update(index, { enabled: !day.enabled })}>{DAYS[index]}</Button>
-        <Input label="Inicio" aria-label={`Inicio ${DAYS[index]}`} type="time" value={day.opens_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { opens_at: event.target.value })} />
-        <Input label="Fin" aria-label={`Fin ${DAYS[index]}`} type="time" value={day.closes_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { closes_at: event.target.value })} />
+      {week.map((day, index) => <div className="technician-schedule-editor__row" key={WEEKDAY_NAMES[index]}>
+        <Button variant="secondary" className="technician-schedule-editor__day" aria-pressed={day.enabled} disabled={state === "saving"} onClick={() => update(index, { enabled: !day.enabled })}>{WEEKDAY_NAMES[index]}</Button>
+        <Input label="Inicio" aria-label={`Inicio ${WEEKDAY_NAMES[index]}`} type="time" value={day.opens_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { opens_at: event.target.value })} />
+        <Input label="Fin" aria-label={`Fin ${WEEKDAY_NAMES[index]}`} type="time" value={day.closes_at} disabled={!day.enabled || state === "saving"} onChange={(event) => update(index, { closes_at: event.target.value })} />
       </div>)}
     </div>
     {invalid ? <StateMessage tone="danger" role="alert" title="El horario de fin debe ser posterior al de inicio." /> : null}
