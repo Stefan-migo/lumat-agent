@@ -31,7 +31,10 @@ const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", gr
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 type SettingsOptions = { tones: string[]; tarifa_labels: Partial<Record<keyof SettingsData["tarifa"], string>> };
-const settingsOptions = (data: SettingsData) => (data as SettingsData & { options: SettingsOptions }).options;
+// `options` is additive: a panel served against a backend that predates it must keep
+// rendering, degrading to the current value and the raw service keys instead of crashing.
+const EMPTY_OPTIONS: SettingsOptions = { tones: [], tarifa_labels: {} };
+const settingsOptions = (data: SettingsData): SettingsOptions => (data as SettingsData & { options?: SettingsOptions }).options ?? EMPTY_OPTIONS;
 const EMPTY_TARIFA: SettingsData["tarifa"] = {
   visita_tecnica: [], mantencion_calefont: [], mantencion_caldera: [], lavado_red: [],
 };
@@ -735,7 +738,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </Card>
         </> : null}
         {active === "messages" ? <>
-          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={settingsOptions(data).tones.map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
+          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={(settingsOptions(data).tones.length ? settingsOptions(data).tones : [draft.tone]).filter(Boolean).map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
            <Card title="Mensajes del asistente" className="settings-messages__editor">
               <div className="settings-messages__panel">
                 <div className="settings-messages__layout">
