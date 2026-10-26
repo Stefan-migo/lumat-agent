@@ -35,6 +35,7 @@ from app.db import SessionLocal  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import (  # noqa: E402
     Conversation,
+    ConversationEvent,
     ConversationState,
     AuditLog,
     Customer,
@@ -651,10 +652,50 @@ def test_media_download_stops_after_five_failures(
         assert row.status == MessageStatus.PROCESSED
         assert row.media_attempts == 5
         assert row.stored_path is None
+        event = session.scalar(select(ConversationEvent).where(
+            ConversationEvent.conversation_id == row.conversation_id,
+            ConversationEvent.event == "media_unavailable",
+        ))
+        assert event is not None
+        assert str(mid) in event.cause
     with respx.mock:
         route = respx.get(media_url).mock(return_value=httpx.Response(500))
         assert ingest.sweep_received() == 0
         assert route.call_count == 0
+
+
+def test_downloaded_media_metadata_survives_graph_failure(
+    monkeypatch, tmp_path, migrated_db
+):
+    media_url = "https://lookaside.example/graph-fails.jpg"
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56922223334")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conv)
+        session.flush()
+        message = Message(
+            wamid="wamid.graph-fails", conversation_id=conv.id,
+            direction=MessageDirection.INBOUND, msg_type=MessageType.IMAGE,
+            media_url=media_url, status=MessageStatus.RECEIVED,
+        )
+        session.add(message)
+        session.commit()
+        message_id = message.id
+    monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(
+        media_dir=str(tmp_path), meta_access_token="meta-test-token"))
+    monkeypatch.setattr(ingest, "run_conversation", lambda *args: (_ for _ in ()).throw(RuntimeError("graph failed")))
+    with respx.mock:
+        respx.get(media_url).mock(return_value=httpx.Response(
+            200, content=b"downloaded", headers={"content-type": "image/jpeg"}))
+        assert ingest.sweep_received() == 0
+    with SessionLocal() as session:
+        row = session.get(Message, message_id)
+        assert row.status == MessageStatus.FAILED
+        assert Path(row.stored_path).read_bytes() == b"downloaded"
+        assert row.content_type == "image/jpeg"
+        assert row.size_bytes == len(b"downloaded")
 
 
 def test_media_download_uses_bearer_token(

@@ -38,6 +38,7 @@ from app.db import session_scope
 from app.models import (
     Conversation,
     ConversationState,
+    ConversationEvent,
     Message,
     MessageDirection,
     MessageStatus,
@@ -386,6 +387,7 @@ def process_message(session, message: Message) -> None:
         message.content_type = media.content_type
         message.filename = media.filename
         message.size_bytes = media.size_bytes
+        session.commit()
     if message.direction == MessageDirection.INBOUND:
         if message.text:
             # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
@@ -466,6 +468,12 @@ def sweep_received(limit: int = 50) -> int:
                 if message.media_attempts >= 5:
                     message.status = MessageStatus.PROCESSED
                     message.stored_path = None
+                    session.add(ConversationEvent(
+                        conversation_id=message.conversation_id,
+                        event="media_unavailable",
+                        cause=f"Media download failed after 5 attempts for message {message_id}",
+                        actor="system",
+                    ))
                 else:
                     message.status = MessageStatus.RECEIVED
             if message.media_attempts >= 5:
