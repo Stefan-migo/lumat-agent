@@ -423,6 +423,10 @@ def settings_get(
         "scope_rules": scope_rules,
         "keywords": settings_service.get_emergency_keywords(session),
         "tone": settings_service.get_tone(session),
+        "options": {
+            "tones": list(settings_service.TONE_STYLES),
+            "tarifa_labels": settings_service.TARIFA_LABELS,
+        },
         "messages": {
             key: settings_service.get_message(session, key)
             for key in settings_service.MESSAGE_DEFAULTS

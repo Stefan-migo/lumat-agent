@@ -382,9 +382,8 @@ DEFAULT_TARIFA_PRECIOS: dict[str, list[dict[str, int]]] = {
 
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
-# Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
-# intentionally live in the chat nodes, not here — `get_message` resolves
-# overrides against the caller-provided default (single source of truth).
+# Fixed-message text is defined once in MESSAGE_DEFAULTS and expanded here for
+# the generic settings KV fallback; get_message uses that same source directly.
 SETTINGS_DEFAULTS: dict[str, Any] = {
     # SS-4: Meta service-message unit cost (USD), effective 2026-10-01.
     # Reference placeholder until verified with Meta at activation (T4.5).
@@ -432,16 +431,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.smtp_tls": DEFAULT_SMTP_TLS,
     # SS-5: tone style used by the chat nodes.
     "tone.style": DEFAULT_TONE_STYLE,
-    "messages.greeting": MESSAGE_DEFAULTS["greeting"],
-    "messages.greeting_short": MESSAGE_DEFAULTS["greeting_short"],
-    "messages.greeting_name": MESSAGE_DEFAULTS["greeting_name"],
-    "messages.greeting_short_name": MESSAGE_DEFAULTS["greeting_short_name"],
-    "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
-    "messages.clarification": MESSAGE_DEFAULTS["clarification"],
-    "messages.cannot_understand_offer": MESSAGE_DEFAULTS["cannot_understand_offer"],
-    "messages.kb_miss_offer": MESSAGE_DEFAULTS["kb_miss_offer"],
-    "messages.farewell": MESSAGE_DEFAULTS["farewell"],
-    "messages.out_of_hours": MESSAGE_DEFAULTS["out_of_hours"],
+    **{f"messages.{key}": value for key, value in MESSAGE_DEFAULTS.items()},
     MESSAGE_TEMPLATES_KEY: [],
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
