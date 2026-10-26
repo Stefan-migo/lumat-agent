@@ -29,6 +29,8 @@ import re
 import unicodedata
 
 from app.chat.nodes.handoff_gate import is_media_evidence
+from app.chat.phrasing import facts as phrase_facts
+from app.chat.phrasing import phrase
 from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
 from app.db import session_scope
@@ -299,6 +301,29 @@ def _looks_like_question(text: str) -> bool:
     return _normalize(stripped).startswith(tuple(_normalize(word) for word in _INTERROGATIVES))
 
 
+def _phrase_reply(session, texts: dict[str, str], key: str, captured: dict, *, pending) -> str:
+    """Render one capture reply and optionally rephrase it (S5).
+
+    At most one model call per message: the acknowledgement and the evidence
+    hint travel inside the same message as the question, so they stay in the
+    template. Phrasing each fragment separately tripled the per-turn cost
+    without changing a word the customer reads.
+    """
+    return phrase(
+        session, key, render_reply(texts, key),
+        facts=phrase_facts(captured, pending), pending=pending,
+    )
+
+
+def _phrase_question(session, captured: dict, fields: list[str], questions: dict[str, str]) -> str:
+    """Render the ask for `fields`, optionally rephrased; the batch is the machine's."""
+    rendered = _ask_text(fields, questions)
+    return phrase(
+        session, "capture_question", rendered,
+        facts=phrase_facts(captured, fields), pending=fields,
+    )
+
+
 def _looks_like_prose(text: str) -> bool:
     """True for a long or multi-sentence turn, the shape corruption imitates."""
     stripped = (text or "").strip()
@@ -430,7 +455,7 @@ def capture(state: ConversationState) -> dict:
         # booking. A deviation on this step re-asks it instead of answering it.
         if state.capture_paused:
             with session_scope() as session:
-                consent = render_reply(get_reply_texts(session), "capture_consent")
+                consent = _phrase_reply(session, get_reply_texts(session), "capture_consent", captured, pending=["consent"])
             return {"capture_paused": False, "replies": [consent]}
         answer = _current_text(state)
         consent = None if is_skip(answer) else _answer_consent(answer)
@@ -452,7 +477,7 @@ def capture(state: ConversationState) -> dict:
             with session_scope() as session:
                 texts = get_reply_texts(session)
                 _persist_captured(session, state, captured)
-                reply = render_reply(texts, "capture_consent_refused")
+                reply = _phrase_reply(session, texts, "capture_consent_refused", captured, pending=["consent"])
             return _derive_with_reply(captured, "consent_declined", reply)
         with session_scope() as session:
             texts = get_reply_texts(session)
@@ -462,13 +487,13 @@ def capture(state: ConversationState) -> dict:
             if asked.get("consent", 0) >= MAX_ASKS_PER_FIELD:
                 captured.pop("_pending", None)
                 _persist_captured(session, state, captured)
-                reply = render_reply(texts, "capture_consent_unclear")
+                reply = _phrase_reply(session, texts, "capture_consent_unclear", captured, pending=["consent"])
                 return _derive_with_reply(captured, "consent_unclear", reply)
             asked["consent"] = asked.get("consent", 0) + 1
             captured["_asked"] = asked
             captured["_pending"] = "consent"
             _persist_captured(session, state, captured)
-            reply = render_reply(texts, "capture_consent_unclear")
+            reply = _phrase_reply(session, texts, "capture_consent_unclear", captured, pending=["consent"])
         return {"captured": captured, "replies": [reply]}
 
     if isinstance(pending, list) and is_social_only(_current_text(state)):
@@ -529,7 +554,7 @@ def _reask_pending(captured: dict, pending: list[str], state: ConversationState)
     captured["_asked"] = asked
     captured["_pending"] = pending
     with session_scope() as session:
-        ask = _ask_text(pending, _field_questions(session))
+        ask = _phrase_question(session, captured, pending, _field_questions(session))
         ack = _render_capture_ack(session, captured)
         if ack:
             ask = f"{ack}{ask}"
@@ -602,7 +627,7 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             asked["consent"] = asked.get("consent", 0) + 1
             captured["_asked"] = asked
             _persist_captured(session, state, captured)
-            consent = render_reply(get_reply_texts(session), "capture_consent")
+            consent = _phrase_reply(session, get_reply_texts(session), "capture_consent", captured, pending=["consent"])
             return {"captured": captured, "replies": [consent]}
 
         batch = _ask_batch(missing, conduct["max_preguntas_por_mensaje"])
@@ -621,7 +646,7 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
         captured["_asked"] = asked
         texts = get_reply_texts(session)
         ack = _render_capture_ack(session, captured)
-        ask = _ask_text(batch, _field_questions(session))
+        ask = _phrase_question(session, captured, batch, _field_questions(session))
         if ack:
             ask = f"{ack}{ask}"
         label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")

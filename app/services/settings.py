@@ -62,6 +62,11 @@ CAPTURE_QUESTIONS_KEY = "capture.questions"
 # active derivation rules. Closed options only: the five invariants of S19 are
 # NOT configurable and stay out of this key.
 CHAT_CONDUCT_KEY = "chat.conduct"
+# S5: the capture-phrasing switch. #687 removed this key because nothing read
+# it; `phrasing.phrase` reads it now, so it comes back with a consumer and stays
+# optional on save so payloads from a panel that does not render it still work.
+CONDUCT_REDACCIONES: tuple[str, ...] = ("llm", "plantilla")
+CONDUCT_OPTIONAL_KEYS: frozenset[str] = frozenset({"redaccion"})
 CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 # The closed list of derivation rules (S10): exactly the ones the derivation
 # logic reads. T10 listed five and T15 implemented `cobertura`; S4 removed the
@@ -71,6 +76,7 @@ CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 CONDUCT_DERIVACIONES: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+    "redaccion": "plantilla",
     "max_preguntas_por_mensaje": 1,
     "derivaciones": list(CONDUCT_DERIVACIONES),
 }
@@ -1052,7 +1058,10 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
 
     # As with other bounded settings, unknown top-level keys are ignored by the
     # returned projection. This also makes legacy `redaccion` data harmless.
-    missing = [key for key in CHAT_CONDUCT_DEFAULTS if key not in value]
+    missing = [
+        key for key in CHAT_CONDUCT_DEFAULTS
+        if key not in value and key not in CONDUCT_OPTIONAL_KEYS
+    ]
     if missing:
         raise ValueError(f"chat.conduct is missing: {missing}")
 
@@ -1091,8 +1100,15 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
     if unknown_rules:
         raise ValueError(f"chat.conduct.derivaciones has unknown rules: {unknown_rules}")
 
+    redaccion = value.get("redaccion", CHAT_CONDUCT_DEFAULTS["redaccion"])
+    if redaccion not in CONDUCT_REDACCIONES:
+        raise ValueError(
+            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
+        )
+
     return {
         "orden": list(orden),
+        "redaccion": redaccion,
         "max_preguntas_por_mensaje": max_preguntas,
         "derivaciones": list(derivaciones),
     }
@@ -1119,6 +1135,10 @@ def get_conduct(session: Session) -> dict[str, Any]:
         conduct["derivaciones"] = [
             rule for rule in rules if rule in CONDUCT_DERIVACIONES
         ]
+    # Same treatment for the phrasing switch: a value stored before the key was
+    # retired (or written by hand) must not reach the panel as an invalid option.
+    if conduct.get("redaccion") not in CONDUCT_REDACCIONES:
+        conduct["redaccion"] = CHAT_CONDUCT_DEFAULTS["redaccion"]
     return conduct
 
 

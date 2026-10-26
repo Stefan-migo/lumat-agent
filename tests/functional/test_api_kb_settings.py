@@ -1452,7 +1452,12 @@ def test_settings_update_conduct_audited(client, make_user):
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     with SessionLocal() as session:
-        assert session.get(Settings, "chat.conduct").value == _CONDUCT
+        # S5: validation projects the phrasing switch, so the stored row carries
+        # it even when the caller does not send it.
+        assert session.get(Settings, "chat.conduct").value == {
+            **_CONDUCT,
+            "redaccion": "plantilla",
+        }
     audit = _last_audit("settings.change")
     assert audit is not None and audit.actor == "adm"
     assert audit.entity_id == "chat.conduct"
