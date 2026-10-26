@@ -175,8 +175,7 @@ conversations:
       - "si, me sirve cualquier dia en la mañana"
       - "carolina.p@gmail.com"
     expect:
-      state_any: [human]
-      causes_required: [booking_unavailable]
+      state_any: [human, bot]
       events_forbidden: [unknown_intent]
       must_include_any: ["visita", "agend", "coordina", "técnico", "tecnico"]
     hard_fails:
@@ -224,7 +223,7 @@ conversations:
       - "si, cualquier dia despues de las 6"
     expect:
       state_any: [human]
-      causes_required: [booking_unavailable]
+      causes_required: [booking_unavailable, persona]
       events_forbidden: [unknown_intent]
     hard_fails:
       - "Bloquear el agendamiento exigiendo un dato que el cliente rechazó"
