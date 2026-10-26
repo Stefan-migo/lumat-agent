@@ -73,6 +73,7 @@ Usage
 from __future__ import annotations
 
 import hashlib
+import statistics
 import sys
 import unicodedata
 from collections import Counter
@@ -532,6 +533,65 @@ def _dimension_mean(verdict: Mapping[str, Any] | None) -> float | None:
     return round(sum(scores) / len(scores), 3)
 
 
+JUDGE_REPETITIONS = 3
+"""Calls per scenario before a score counts as a measurement.
+
+One call is one observation. Re-judging the same three calibration
+conversations with identical inputs moved 8 of 18 cells, by up to 3 points, and
+flipped the hard-fail flag — which caps the whole scenario at 0 (L14). The
+median is the score; the spread is its uncertainty and travels with the row.
+"""
+
+
+def aggregate_verdicts(verdicts: Sequence[Mapping[str, Any]]) -> dict:
+    """Fold repeated verdicts into one: median per dimension, majority hard fail.
+
+    The result keeps the verdict shape `score_scenario` already consumes, and
+    adds `spread`: how far the repeated calls disagreed on each dimension. An
+    empty spread is the only honest way to call a score stable.
+    """
+    if not verdicts:
+        raise ValueError("aggregate_verdicts needs at least one verdict")
+
+    dimensions: dict[str, dict[str, Any]] = {}
+    spread: dict[str, int] = {}
+    for name in DIMENSIONS:
+        grades = [
+            (
+                int(verdict["dimensions"][name]["score"]),
+                str(verdict["dimensions"][name].get("evidence") or ""),
+            )
+            for verdict in verdicts
+            if name in (verdict.get("dimensions") or {})
+        ]
+        if not grades:
+            continue
+        scores = [score for score, _quote in grades]
+        middle = statistics.median(scores)
+        # The quote must come from a call that produced the reported number, or
+        # the evidence would not support the score next to it.
+        evidence = next((quote for score, quote in grades if score == middle), grades[0][1])
+        dimensions[name] = {"score": middle, "evidence": evidence}
+        spread[name] = max(scores) - min(scores)
+
+    fails = [bool(verdict.get("hard_fail")) for verdict in verdicts]
+    hard_fail = sum(fails) * 2 > len(fails)
+    return {
+        "dimensions": dimensions,
+        "spread": spread,
+        "hard_fail": hard_fail,
+        "hard_fail_reason": next(
+            (
+                str(verdict.get("hard_fail_reason") or "")
+                for verdict in verdicts
+                if verdict.get("hard_fail") and verdict.get("hard_fail_reason")
+            ),
+            "",
+        ),
+        "summary": next((str(v.get("summary") or "") for v in verdicts if v.get("summary")), ""),
+    }
+
+
 def score_scenario(
     scenario: Scenario,
     gates: Mapping[str, GateResult],
@@ -559,6 +619,13 @@ def score_scenario(
             name: float(verdict["dimensions"][name]["score"])
             for name in DIMENSIONS
             if verdict and name in (verdict.get("dimensions") or {})
+        },
+        # How far the repeated judge calls disagreed: a difference smaller than
+        # this is not a finding about the bot (L14).
+        "dimension_spread": {
+            name: int(verdict["spread"][name])
+            for name in DIMENSIONS
+            if verdict and name in (verdict.get("spread") or {})
         },
         # S7: a score without its cited evidence is not reviewable, and S9
         # calibrates against exactly that evidence. It travels with the row.
@@ -793,6 +860,7 @@ class RunStamp:
     kb_fingerprint: str
     kb_documents: int
     judge_model: str | None
+    judge_repetitions: int
     live: bool
 
     def as_dict(self) -> dict:
@@ -1077,20 +1145,31 @@ def judge_row(
     kb: str,
     tarifario: str,
     model: str | None = None,
+    repetitions: int = JUDGE_REPETITIONS,
 ) -> dict:
-    """Score the conversation with the rubric judge; raises if it cannot."""
+    """Score the conversation with the rubric judge, `repetitions` times.
+
+    Repetition is not a luxury: re-judging the same calibration conversations
+    with identical inputs moved 8 of 18 cells and flipped the hard-fail flag
+    (L14). Each call is one verdict; the answer carries the median per dimension
+    and the spread the calls disagreed by.
+    """
     import conv_eval_judge
 
     kwargs = {"model": model} if model else {}
-    return conv_eval_judge.judge_conversation(
-        client,
-        transcript=transcript_of(observation),
-        scenario=dict(scenario.raw),
-        facts=facts_of(observation),
-        kb_text=kb,
-        tarifario=tarifario,
-        **kwargs,
-    )
+    verdicts = [
+        conv_eval_judge.judge_conversation(
+            client,
+            transcript=transcript_of(observation),
+            scenario=dict(scenario.raw),
+            facts=facts_of(observation),
+            kb_text=kb,
+            tarifario=tarifario,
+            **kwargs,
+        )
+        for _ in range(max(1, repetitions))
+    ]
+    return aggregate_verdicts(verdicts)
 
 
 # ---------------------------------------------------------------------------
@@ -1128,6 +1207,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"- Corpus: `{stamp.get('corpus_fingerprint', '?')}` · KB: "
         f"`{stamp.get('kb_fingerprint', '?')}` ({stamp.get('kb_documents', 0)} documentos)",
         f"- Juez: `{stamp.get('judge_model') or 'sin juez (solo gates)'}` · "
+        f"{stamp.get('judge_repetitions', 1)} llamada(s) por escenario (mediana) · "
         f"inicio: {stamp.get('started_at', '?')}",
     ]
     if not is_citable(stamp):
@@ -1275,12 +1355,22 @@ def render_transcripts(report: Mapping[str, Any], corpus: Corpus) -> str:
             for gate in sorted(gates)
         ) or "—"
         verdict = "sin juez" if row.get("score") is None else f"{row['score']:.2f}"
+        moved = {
+            name: spread
+            for name, spread in (row.get("dimension_spread") or {}).items()
+            if spread
+        }
         lines += [
             f"**estado final:** `{observation.get('state')}` · **juez:** {verdict} · "
             f"**hard fail:** {row.get('hard_fail', False)}",
             f"**gates:** {gate_text}",
-            "",
         ]
+        if moved:
+            lines.append(
+                "**dispersión entre repeticiones:** "
+                + ", ".join(f"{name} ±{spread}" for name, spread in sorted(moved.items()))
+            )
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -1323,6 +1413,13 @@ def _parse_args(argv: Sequence[str] | None) -> Any:
     )
     parser.add_argument(
         "--max-turns", type=int, default=None, help="Override the per-scenario turn budget."
+    )
+    parser.add_argument(
+        "--judge-repetitions",
+        type=int,
+        default=JUDGE_REPETITIONS,
+        help="Judge calls per scenario; the median is the score and the spread is "
+        "reported (the judge moves between identical calls).",
     )
     parser.add_argument("--no-judge", action="store_true", help="Gates only: no LLM, no key needed.")
     parser.add_argument(
@@ -1377,6 +1474,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.validate_only:
         return _validate_only(corpus)
 
+    if args.judge_repetitions < 1:
+        print(
+            f"--judge-repetitions debe ser >= 1, recibí {args.judge_repetitions}",
+            file=sys.stderr,
+        )
+        return 2
+
     import seed_kb_docs
 
     seed_kb_docs.ensure_dev_env()
@@ -1429,6 +1533,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         kb_fingerprint=kb_state["fingerprint"],
         kb_documents=kb_state["documents"],
         judge_model=judge_model,
+        judge_repetitions=args.judge_repetitions if client is not None else 0,
         live=args.live,
     ).as_dict()
 
@@ -1471,6 +1576,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     kb=kb,
                     tarifario=tarifario,
                     model=judge_model,
+                    repetitions=args.judge_repetitions,
                 )
             except Exception as error:  # noqa: BLE001  one verdict must not kill the run
                 # Recorded as unmeasured, never as a score, and named in the

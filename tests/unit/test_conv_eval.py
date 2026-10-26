@@ -961,3 +961,139 @@ def test_reset_is_allowed_on_the_derived_test_database():
         )
         is None
     )
+
+
+# ---------------------------------------------------------------------------
+# Judge repetitions — one call is one observation, not a measurement
+# ---------------------------------------------------------------------------
+
+
+def flat_verdict(score, *, hard_fail=False, reason="", evidence="cita"):
+    return {
+        "dimensions": {name: {"score": score, "evidence": evidence} for name in ev.DIMENSIONS},
+        "hard_fail": hard_fail,
+        "hard_fail_reason": reason,
+    }
+
+
+def test_a_single_verdict_passes_through_unchanged():
+    aggregated = ev.aggregate_verdicts([flat_verdict(3)])
+
+    assert {n: aggregated["dimensions"][n]["score"] for n in ev.DIMENSIONS} == {
+        name: 3 for name in ev.DIMENSIONS
+    }
+    assert aggregated["spread"] == {name: 0 for name in ev.DIMENSIONS}
+
+
+def test_the_median_is_taken_per_dimension():
+    aggregated = ev.aggregate_verdicts([flat_verdict(1), flat_verdict(4), flat_verdict(2)])
+
+    assert {n: aggregated["dimensions"][n]["score"] for n in ev.DIMENSIONS} == {
+        name: 2 for name in ev.DIMENSIONS
+    }
+
+
+def test_the_spread_is_reported_per_dimension():
+    low = flat_verdict(2)
+    high = flat_verdict(2)
+    low["dimensions"]["escalation"]["score"] = 0
+    high["dimensions"]["escalation"]["score"] = 3
+
+    aggregated = ev.aggregate_verdicts([low, high])
+
+    assert aggregated["spread"]["escalation"] == 3
+    assert aggregated["spread"]["tone"] == 0
+
+
+def test_a_hard_fail_needs_a_majority():
+    clean = flat_verdict(3)
+    dirty = flat_verdict(3, hard_fail=True, reason="minimiza el reclamo")
+
+    assert ev.aggregate_verdicts([dirty, clean, dirty])["hard_fail"] is True
+    assert ev.aggregate_verdicts([dirty, clean, clean])["hard_fail"] is False
+
+
+def test_the_evidence_comes_from_a_verdict_at_the_median():
+    low = flat_verdict(1, evidence="baja")
+    mid = flat_verdict(2, evidence="media")
+    high = flat_verdict(4, evidence="alta")
+
+    aggregated = ev.aggregate_verdicts([low, high, mid])
+
+    assert aggregated["dimensions"]["tone"]["score"] == 2
+    assert aggregated["dimensions"]["tone"]["evidence"] == "media"
+
+
+def test_judge_row_asks_the_judge_once_per_repetition(corpus, monkeypatch):
+    import conv_eval_judge
+
+    calls = []
+
+    def fake_judge(_client, **_kwargs):
+        calls.append(1)
+        return flat_verdict(3)
+
+    monkeypatch.setattr(conv_eval_judge, "judge_conversation", fake_judge)
+    aggregated = ev.judge_row(
+        corpus.scenarios[0],
+        observation(),
+        client=object(),
+        kb="",
+        tarifario="",
+        repetitions=3,
+    )
+
+    assert len(calls) == 3
+    assert aggregated["dimensions"]["tone"]["score"] == 3
+    assert aggregated["spread"]["tone"] == 0
+
+
+def test_the_row_carries_the_spread_so_a_difference_is_readable(corpus):
+    scn = corpus.scenarios[0]
+    low = flat_verdict(3)
+    high = flat_verdict(3)
+    low["dimensions"]["escalation"]["score"] = 1
+    high["dimensions"]["escalation"]["score"] = 4
+    aggregated = ev.aggregate_verdicts([low, high])
+
+    row = ev.score_scenario(scn, gates_of(scn, observation()), aggregated)
+
+    assert row["dimensions"]["escalation"] == 2.5
+    assert row["dimension_spread"]["escalation"] == 3
+
+
+def test_zero_judge_repetitions_is_refused():
+    """A run with no judge call would report a score nothing measured."""
+    assert ev.main(["--judge-repetitions", "0"]) == 2
+
+
+def test_the_report_says_how_many_calls_produced_a_score():
+    report = report_for([score_row("a", "simple", True, score=4.0)])
+    report["stamp"]["judge_repetitions"] = 3
+
+    markdown = ev.render_markdown(report)
+
+    assert "3 llamada(s) por escenario (mediana)" in markdown
+
+
+def test_the_transcript_names_the_dimensions_that_moved():
+    corpus = ev.load_corpus(CORPUS_PATH)
+    scenario = corpus.scenarios[0]
+    row = score_row(scenario.id, scenario.tier, True, score=4.0)
+    row["dimension_spread"] = {"escalation": 2, "tone": 0}
+    report = report_for([row])
+    report["observations"] = {
+        scenario.id: {
+            "state": "bot",
+            "events": [],
+            "intents": [],
+            "replies": ["hola"],
+            "turns": [{"text": scenario.turns[0], "replies": ["hola"], "intent": None}],
+        }
+    }
+    report["gate_details"] = {scenario.id: {"G1": "state=bot"}}
+
+    markdown = ev.render_transcripts(report, corpus)
+
+    assert "dispersión entre repeticiones:** escalation ±2" in markdown
+    assert "tone ±0" not in markdown
