@@ -4,15 +4,20 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import shutil
+import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.chat.state import set_conversation_state
+from app.config import get_settings
 from app.models import AuditLog, Conversation, ConversationEvent, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
 from app.panel.api.serializers import to_conversation_dict
 from app.services.send import deliver_message
+from app.webhook.ingest import _safe_filename
 
 LEGAL_TRANSITIONS = {
     ConversationState.BOT: {ConversationState.HUMAN},
@@ -231,6 +236,65 @@ def send_operator_message(session: Session, conversation_id: int, actor: User, t
     session.flush()
     conversation.last_message_at = datetime.now(timezone.utc)
     record_audit(session, actor=actor.username, action="message.send_requested", entity="message", entity_id=str(message.id), after={"request_id": request_id, "conversation_id": conversation_id, "text": text})
+    session.commit()
+    return deliver_message(message.id)
+
+
+MEDIA_SIZE_LIMITS = {"image": 5 * 1024 * 1024, "video": 16 * 1024 * 1024, "audio": 16 * 1024 * 1024, "document": 100 * 1024 * 1024}
+
+
+def send_operator_media(session: Session, conversation_id: int, *, path: Path, content_type: str, filename: str, caption: str | None, actor: User, request_id: str) -> Message:
+    """Persist and synchronously deliver one operator-uploaded media message."""
+    path = Path(path)
+    kind = content_type.split("/", 1)[0].lower()
+    msg_type = {"image": MessageType.IMAGE, "video": MessageType.VIDEO, "audio": MessageType.AUDIO}.get(kind, MessageType.DOCUMENT)
+    limit = MEDIA_SIZE_LIMITS[msg_type.value]
+    size_bytes = path.stat().st_size
+    if size_bytes > limit:
+        raise ValueError(f"{msg_type.value} file exceeds the {limit // (1024 * 1024)} MB limit")
+
+    conversation = session.scalar(select(Conversation).where(Conversation.id == conversation_id).with_for_update())
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    payload = {"content_type": content_type, "filename": filename, "caption": caption, "size_bytes": size_bytes}
+    existing = session.scalar(select(Message).where(Message.request_id == request_id, Message.direction == MessageDirection.OUTBOUND))
+    if existing is not None:
+        if existing.conversation_id != conversation_id or existing.content_type != content_type or existing.filename != filename or existing.caption != caption:
+            _reject(session, conversation, actor, "message.send_rejected", request_id, "request_id already used for another message", payload, 409)
+        if existing.delivery_status == DeliveryStatus.SENT:
+            return existing
+        if existing.delivery_status in (DeliveryStatus.PENDING, DeliveryStatus.SENDING):
+            raise HTTPException(status_code=409, detail="message delivery in progress")
+        raise HTTPException(status_code=502, detail="message delivery failed")
+    if conversation.state != ConversationState.HUMAN:
+        _reject(session, conversation, actor, "message.send_rejected", request_id, "operator messages require human conversation", payload, 422)
+    inbound = _latest_inbound(session, conversation_id)
+    if inbound is None or inbound.created_at is None:
+        _reject(session, conversation, actor, "message.send_rejected", request_id, "customer reply window expired", payload, 422)
+    created = inbound.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - created >= timedelta(hours=24):
+        _reject(session, conversation, actor, "message.send_rejected", request_id, "customer reply window expired", payload, 422)
+
+    settings = get_settings()
+    media_dir = Path(settings.media_dir)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(filename).suffix
+    safe_name = _safe_filename(f"{uuid.uuid4().hex}{ext}")
+    stored_path = media_dir / safe_name
+    shutil.copyfile(path, stored_path)
+    message = Message(
+        conversation_id=conversation_id, author_id=actor.id, request_id=request_id,
+        direction=MessageDirection.OUTBOUND, msg_type=msg_type,
+        status=MessageStatus.PROCESSED, delivery_status=DeliveryStatus.PENDING,
+        stored_path=str(stored_path), content_type=content_type, filename=filename,
+        size_bytes=size_bytes, caption=caption,
+    )
+    session.add(message)
+    session.flush()
+    conversation.last_message_at = datetime.now(timezone.utc)
+    record_audit(session, actor=actor.username, action="message.send_requested", entity="message", entity_id=str(message.id), after={"request_id": request_id, "conversation_id": conversation_id, **payload})
     session.commit()
     return deliver_message(message.id)
 
