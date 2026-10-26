@@ -19,6 +19,7 @@ import {
 import { getDashboardKpis, getDashboardToday, getDashboardTrend } from "../../api";
 import type { DashboardToday, Kpis, Role } from "../../types";
 import type { PanelView } from "../domain/PanelShell";
+import type { PanelRoute } from "../domain/panelRoutes";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -98,6 +99,8 @@ export interface DashboardProps {
   onRetry?: () => void;
   role?: Role;
   onNavigate?: (view: PanelView) => void;
+  /** Opens the exact route of an urgent case row; without it the card keeps its aggregate link. */
+  onOpenRoute?: (route: PanelRoute) => void;
 }
 
 export type DashboardState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
@@ -114,7 +117,7 @@ function stateMessage(state: DashboardState, retry: () => void) {
   return null;
 }
 
-export function Dashboard({ data: controlledData, state: controlledState, onRetry, role = "admin", onNavigate }: DashboardProps) {
+export function Dashboard({ data: controlledData, state: controlledState, onRetry, role = "admin", onNavigate, onOpenRoute }: DashboardProps) {
   const [windowDays, setWindowDays] = useState(7);
   const fetchDashboard = useCallback(async (): Promise<DashboardData> => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -136,6 +139,15 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const today = data?.today && Array.isArray(data.today.appointments_today) ? data.today : emptyToday;
   const hasPartialError = data?.todayError || data?.trendError;
   const navigate = (view: PanelView) => onNavigate?.(view);
+  // A case row leads to its own conversation, or to the client ficha when the case has no
+  // conversation; a case-only filter keeps the old aggregate behaviour for consumers
+  // that do not supply the route navigator.
+  const openUrgentCase = (row: DashboardToday["urgent_cases"][number]) => {
+    if (!onOpenRoute) return navigate("cases");
+    onOpenRoute(row.conversation_id != null
+      ? { view: "conversations", conversationId: row.conversation_id }
+      : { view: "clients", clientId: row.customer_id, clientTab: "cases" });
+  };
   const cards = ["Conversaciones", "Clientes", "Agenda", "Configuración"] as const;
   const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda", Configuración: "settings" } as const;
   const iconFor: Record<(typeof cards)[number], IconName> = { Conversaciones: "message", Clientes: "users", Agenda: "calendar", Configuración: "settings" };
@@ -190,7 +202,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
             )) : <li className="dashboard__empty"><Icon icon={ICONS.inbox} size="sm" /><span>No hay conversaciones pendientes</span></li>}</ul></div>, false)}
           {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length, "Ver casos", "cases",
             <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.urgent_cases.length}</strong><ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.slice(0, 3).map((row) => (
-              <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => navigate("cases")} aria-label={row.customer_name ?? "Caso urgente"}>
+              <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => openUrgentCase(row)} aria-label={row.customer_name ?? "Caso urgente"}>
                 <span className="dashboard__row__head">
                   <strong>{row.customer_name ?? "Sin nombre"}</strong>
                   <span className="dashboard__tag dashboard__tag--danger"><Icon icon={ICONS.alert} size="sm" />Urgente</span>

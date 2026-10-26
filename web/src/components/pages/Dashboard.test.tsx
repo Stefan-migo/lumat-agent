@@ -31,7 +31,7 @@ const data = {
     local_date: "2026-09-09",
     appointments_today: [{ id: 4, service: "visita", customer_name: "Ana", local_start: "2026-09-09T10:00:00.000000", starts_at: "2026-09-09T13:00:00Z", ends_at: "2026-09-09T14:00:00Z" }],
     unanswered_conversations: [{ id: 5, customer_name: "Pedro", last_message_at: "2026-09-09T12:00:00Z", state: "BOT" }],
-    urgent_cases: [{ id: 6, customer_name: "Lucía", service: "calefont", summary: "No enciende", emergency: true, escalated_at: "2026-09-09T11:00:00Z" }],
+    urgent_cases: [{ id: 6, customer_id: 9, conversation_id: 77, customer_name: "Lucía", service: "calefont", summary: "No enciende", emergency: true, escalated_at: "2026-09-09T11:00:00Z" }],
   },
 };
 
@@ -142,7 +142,7 @@ describe("Dashboard operational surface", () => {
     const today = {
       ...data.today,
       unanswered_conversations: Array.from({ length: 5 }, (_, index) => ({ id: index, customer_name: `Customer ${index}`, last_message_at: "2026-09-09T12:00:00Z", state: "BOT" })),
-      urgent_cases: Array.from({ length: 4 }, (_, index) => ({ id: index, customer_name: `Case ${index}`, service: "calefont", summary: "Urgent", emergency: true, escalated_at: "2026-09-09T11:00:00Z" })),
+      urgent_cases: Array.from({ length: 4 }, (_, index) => ({ id: index, customer_id: index, conversation_id: null, customer_name: `Case ${index}`, service: "calefont", summary: "Urgent", emergency: true, escalated_at: "2026-09-09T11:00:00Z" })),
     };
     const { container } = render(<Dashboard data={{ ...data, today }} state="ready" />);
 
@@ -165,6 +165,24 @@ describe("Dashboard operational surface", () => {
     expect(onNavigate).toHaveBeenNthCalledWith(1, "agenda");
     expect(onNavigate).toHaveBeenNthCalledWith(2, "conversations");
     expect(onNavigate).toHaveBeenNthCalledWith(3, "cases");
+  });
+
+  it("opens the real target for each urgent case row", () => {
+    const onOpenRoute = vi.fn();
+    const today = {
+      ...data.today,
+      urgent_cases: [
+        { id: 6, customer_id: 9, conversation_id: 77, customer_name: "Lucía", service: "calefont", summary: "No enciende", emergency: true, escalated_at: "2026-09-09T11:00:00Z" },
+        { id: 7, customer_id: 12, conversation_id: null, customer_name: "Mario", service: "caldera", summary: "Sin agua caliente", emergency: true, escalated_at: "2026-09-09T12:00:00Z" },
+      ],
+    };
+    render(<Dashboard data={{ ...data, today }} state="ready" onOpenRoute={onOpenRoute} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Lucía/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Mario/ }));
+
+    expect(onOpenRoute).toHaveBeenNthCalledWith(1, { view: "conversations", conversationId: 77 });
+    expect(onOpenRoute).toHaveBeenNthCalledWith(2, { view: "clients", clientId: 12, clientTab: "cases" });
   });
 
   it("renders urgent name and tag in the head with summary in its own line", () => {
