@@ -30,6 +30,20 @@ from app.services.conversations import assign, change_state, retry_operator_mess
 from app.services.cases import case_is_open_expr
 router = APIRouter(tags=["panel-api-conversations"])
 
+_INLINE_MEDIA_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "video/mp4",
+    "video/3gpp",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/aac",
+    "audio/amr",
+}
+
 
 class StateCommand(BaseModel):
     state: ConversationState
@@ -319,10 +333,18 @@ def conversation_message_media(
     path = Path(message.stored_path).resolve()
     if not path.is_relative_to(root) or not path.is_file():
         raise HTTPException(status_code=404, detail="media not found")
-    disposition = "inline" if (message.content_type or "").startswith(("image/", "audio/", "video/")) else "attachment"
-    return FileResponse(path, filename=message.filename or path.name,
-                        media_type=message.content_type or "application/octet-stream",
-                        content_disposition_type=disposition)
+    content_type = message.content_type or "application/octet-stream"
+    disposition = "inline" if content_type.lower() in _INLINE_MEDIA_TYPES else "attachment"
+    return FileResponse(
+        path,
+        filename=message.filename or path.name,
+        media_type=content_type,
+        content_disposition_type=disposition,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.get("/conversations/{conversation_id}")
