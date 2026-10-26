@@ -58,11 +58,10 @@ MESSAGE_TEMPLATES_KEY = "messages.templates"
 # (`chat.conduct.orden` in T10).
 CAPTURE_QUESTIONS_KEY = "capture.questions"
 
-# S10: the conduct object — capture order, redaction mode, question budget per
-# message and the active derivation rules. Closed options only: the five
-# invariants of S19 are NOT configurable and stay out of this key.
+# S10: the conduct object — capture order, question budget per message and
+# active derivation rules. Closed options only: the five invariants of S19 are
+# NOT configurable and stay out of this key.
 CHAT_CONDUCT_KEY = "chat.conduct"
-CONDUCT_REDACCIONES: tuple[str, ...] = ("llm", "plantilla")
 CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 # The closed list of derivation rules (S10): exactly the ones the derivation
 # logic reads. T10 listed five and T15 implemented `cobertura`; S4 removed the
@@ -72,7 +71,6 @@ CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 CONDUCT_DERIVACIONES: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
-    "redaccion": "llm",
     "max_preguntas_por_mensaje": 1,
     "derivaciones": list(CONDUCT_DERIVACIONES),
 }
@@ -1029,6 +1027,8 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("chat.conduct must be an object")
 
+    # As with other bounded settings, unknown top-level keys are ignored by the
+    # returned projection. This also makes legacy `redaccion` data harmless.
     missing = [key for key in CHAT_CONDUCT_DEFAULTS if key not in value]
     if missing:
         raise ValueError(f"chat.conduct is missing: {missing}")
@@ -1054,12 +1054,6 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
                 f"chat.conduct.orden asks identity before availability: {too_early}"
             )
 
-    redaccion = value["redaccion"]
-    if redaccion not in CONDUCT_REDACCIONES:
-        raise ValueError(
-            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
-        )
-
     max_preguntas = value["max_preguntas_por_mensaje"]
     if isinstance(max_preguntas, bool) or max_preguntas not in CONDUCT_MAX_PREGUNTAS:
         raise ValueError(
@@ -1076,7 +1070,6 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
 
     return {
         "orden": list(orden),
-        "redaccion": redaccion,
         "max_preguntas_por_mensaje": max_preguntas,
         "derivaciones": list(derivaciones),
     }
