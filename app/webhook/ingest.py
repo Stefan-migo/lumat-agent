@@ -87,11 +87,20 @@ class NormalizedMessage:
     msg_type: MessageType
     text: Optional[str]
     media_url: Optional[str]
+    caption: Optional[str]
     payload: dict  # raw Meta message object (WH-4: raw payload survives)
 
 
 class MediaDownloadError(RuntimeError):
-    """Raised when a media file cannot be downloaded; the sweep will retry."""
+    """Raised when a media file cannot be downloaded."""
+
+
+@dataclass(frozen=True)
+class DownloadedMedia:
+    path: Path
+    content_type: str
+    filename: str
+    size_bytes: int
 
 
 # ---------------------------------------------------------------------------
@@ -127,12 +136,15 @@ def normalize_message(raw: dict, value: dict) -> Optional[NormalizedMessage]:
 
     text: Optional[str] = None
     media_url: Optional[str] = None
+    caption: Optional[str] = None
     if raw_type == "text":
         text = (raw.get("text") or {}).get("body")
     elif raw_type in {"system", "unsupported", "ephemeral", "request_welcome"}:
         text = (raw.get(raw_type) or {}).get("body")
     elif raw_type in _MEDIA_TYPES:
-        media_url = (raw.get(raw_type) or {}).get("url")
+        media_data = raw.get(raw_type) or {}
+        media_url = media_data.get("url")
+        caption = media_data.get("caption")
 
     return NormalizedMessage(
         wamid=wamid,
@@ -140,6 +152,7 @@ def normalize_message(raw: dict, value: dict) -> Optional[NormalizedMessage]:
         msg_type=_META_TYPE_TO_ENUM.get(raw_type, MessageType.OTHER),
         text=text,
         media_url=media_url,
+        caption=caption,
         payload=raw,
     )
 
@@ -262,6 +275,7 @@ def persist_message(session, normalized: NormalizedMessage) -> bool:
         msg_type=normalized.msg_type,
         text=normalized.text,
         media_url=normalized.media_url,
+        caption=normalized.caption,
         status=MessageStatus.RECEIVED,
         payload=normalized.payload,
     )
@@ -321,7 +335,7 @@ def _safe_filename(wamid: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", wamid)
 
 
-def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> Path:
+def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> DownloadedMedia:
     """Download a Meta media URL to the media volume; raise on failure.
 
     Meta lookaside URLs require the access token as a Bearer header. A failed
@@ -343,7 +357,7 @@ def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> Pa
     dest = Path(media_dir) / f"{_safe_filename(wamid)}{ext}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(resp.content)
-    return dest
+    return DownloadedMedia(dest, mime or "application/octet-stream", dest.name, len(resp.content))
 
 
 def process_message(session, message: Message) -> None:
@@ -365,9 +379,13 @@ def process_message(session, message: Message) -> None:
     """
     if message.media_url:
         settings = get_settings()
-        download_media(
+        media = download_media(
             message.media_url, message.wamid, settings.meta_access_token, settings.media_dir
         )
+        message.stored_path = str(media.path)
+        message.content_type = media.content_type
+        message.filename = media.filename
+        message.size_bytes = media.size_bytes
     if message.direction == MessageDirection.INBOUND:
         if message.text:
             # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
@@ -442,13 +460,19 @@ def sweep_received(limit: int = 50) -> int:
                 process_message(session, message)
             processed += 1
         except MediaDownloadError:
-            # keep status='received' -> next sweep retries the download
             with session_scope() as session:
                 message = session.get(Message, message_id)
-                message.status = MessageStatus.RECEIVED
-            logger.warning(
-                "media download failed for message %s; will retry on next sweep", message_id
-            )
+                message.media_attempts += 1
+                if message.media_attempts >= 5:
+                    message.status = MessageStatus.PROCESSED
+                    message.stored_path = None
+                else:
+                    message.status = MessageStatus.RECEIVED
+            if message.media_attempts >= 5:
+                logger.error("media download failed for message %s after %s attempts; media unavailable", message_id, message.media_attempts)
+                processed += 1
+            else:
+                logger.warning("media download failed for message %s; will retry on next sweep", message_id)
         except Exception:
             logger.exception("processing failed for message %s; marking failed", message_id)
             with session_scope() as session:

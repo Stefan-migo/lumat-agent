@@ -610,11 +610,51 @@ def test_media_download_failure_retries_via_sweep(
         )
         ingest.sweep_received()
     with SessionLocal() as session:
-        assert session.get(Message, mid).status == MessageStatus.PROCESSED
+        row = session.get(Message, mid)
+        assert row.status == MessageStatus.PROCESSED
+        assert Path(row.stored_path).read_bytes() == b"FAKEJPEG"
+        assert row.content_type == "image/jpeg"
+        assert row.filename == "wamid.media.jpg"
+        assert row.size_bytes == len(b"FAKEJPEG")
+        assert row.media_attempts == 1
 
     files = list(Path(tmp_path).iterdir())
     assert len(files) == 1
     assert files[0].suffix == ".jpg"
+
+
+def test_media_download_stops_after_five_failures(
+    monkeypatch, tmp_path, migrated_db, mock_openai_chat
+):
+    media_url = "https://lookaside.example/never.jpg"
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56922223333")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56922223333")
+        session.add(conv)
+        session.flush()
+        msg = Message(wamid="wamid.never", conversation_id=conv.id,
+                      direction=MessageDirection.INBOUND, msg_type=MessageType.IMAGE,
+                      media_url=media_url, status=MessageStatus.RECEIVED)
+        session.add(msg)
+        session.commit()
+        mid = msg.id
+    monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(
+        media_dir=str(tmp_path), meta_access_token="meta-test-token"))
+    with respx.mock:
+        respx.get(media_url).mock(return_value=httpx.Response(500))
+        for _ in range(5):
+            ingest.sweep_received()
+    with SessionLocal() as session:
+        row = session.get(Message, mid)
+        assert row.status == MessageStatus.PROCESSED
+        assert row.media_attempts == 5
+        assert row.stored_path is None
+    with respx.mock:
+        route = respx.get(media_url).mock(return_value=httpx.Response(500))
+        assert ingest.sweep_received() == 0
+        assert route.call_count == 0
 
 
 def test_media_download_uses_bearer_token(
