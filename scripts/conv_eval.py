@@ -645,10 +645,12 @@ def score_scenario(
 
 
 def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
-    """Aggregate run rows: pass rate, gate failures and per-dimension means."""
+    """Aggregate run rows: pass rate, gate failures, dimension means and the
+    worst dispersion the judge showed in each dimension."""
     gate_failures: Counter[str] = Counter()
     by_tier: dict[str, dict[str, int]] = {}
     totals: dict[str, list[float]] = {name: [] for name in DIMENSIONS}
+    spreads: dict[str, list[float]] = {name: [] for name in DIMENSIONS}
 
     for row in rows:
         gate_failures.update(row.get("gates_failed") or ())
@@ -660,10 +662,16 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
         for name, value in (row.get("dimensions") or {}).items():
             if name in totals and value is not None:
                 totals[name].append(float(value))
+        for name, value in (row.get("dimension_spread") or {}).items():
+            if name in spreads and value is not None:
+                spreads[name].append(float(value))
 
     dimensions = {
         name: {
             "mean": round(sum(values) / len(values), 3) if values else None,
+            # The worst the judge moved between identical repetitions, in points.
+            # A difference that does not beat this one is not a difference.
+            "spread_max": max(spreads[name]) if spreads[name] else None,
             "n": len(values),
         }
         for name, values in totals.items()
@@ -1293,11 +1301,37 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         name: data for name, data in (summary.get("dimensions") or {}).items() if data["n"]
     }
     if measured:
-        lines += ["| Dimensión | Media | n |", "| --- | --- | --- |"]
+        lines += [
+            "| Dimensión | Media | ± máx | n |",
+            "| --- | --- | --- | --- |",
+        ]
         for name, data in measured.items():
-            lines.append(f"| {name} | {data['mean']:.2f} | {data['n']} |")
+            spread_max = data.get("spread_max")
+            spread_cell = "—" if spread_max is None else f"±{spread_max:g}"
+            lines.append(f"| {name} | {data['mean']:.2f} | {spread_cell} | {data['n']} |")
     else:
         lines.append("Sin juez en esta corrida: los gates deciden solos.")
+
+    judged = [row for row in report.get("runs") or () if row.get("score") is not None]
+    if judged:
+        # The score of a scenario is a median over repetitions, so it has no ± of
+        # its own: what the judge showed is how far its dimensions moved, and the
+        # worst of those is what a difference has to beat to mean anything.
+        lines += [
+            "",
+            "### Puntaje por escenario",
+            "",
+            "`±` es la dispersión máxima del juez entre repeticiones, en puntos de la escala 0–4.",
+            "",
+            "| Escenario | Tier | Puntaje | ± máx |",
+            "| --- | --- | --- | --- |",
+        ]
+        for row in judged:
+            values = [v for v in (row.get("dimension_spread") or {}).values() if v is not None]
+            spread_cell = "—" if not values else f"±{max(values):g}"
+            lines.append(
+                f"| `{row['scenario']}` | {row['tier']} | {row['score']:.2f} | {spread_cell} |"
+            )
 
     judge_failures = report.get("judge_failures") or {}
     if judge_failures:

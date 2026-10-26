@@ -693,6 +693,57 @@ def test_render_markdown_says_so_when_there_is_no_previous_run():
 
 
 # ---------------------------------------------------------------------------
+# La dispersión del juez llega a la página (L18) — un número sin ± miente
+# ---------------------------------------------------------------------------
+
+
+def spread_row(scenario_id, tier, passed, score, spreads, failed_gates=()):
+    row = score_row(scenario_id, tier, passed, failed_gates, score)
+    row["dimension_spread"] = spreads
+    return row
+
+
+def spreads(**overrides):
+    base = dict.fromkeys(ev.DIMENSIONS, 0)
+    base.update(overrides)
+    return base
+
+
+def test_the_dimension_table_carries_the_worst_spread_the_judge_produced():
+    rows = [
+        spread_row("a", "simple", True, 4.0, spreads(policy=2, escalation=1)),
+        spread_row("b", "simple", False, 0.0, spreads(grounding=1, conversational=3)),
+    ]
+
+    summary = ev.summarize(rows)
+
+    assert summary["dimensions"]["policy"]["spread_max"] == 2
+    assert summary["dimensions"]["conversational"]["spread_max"] == 3
+    assert summary["dimensions"]["tone"]["spread_max"] == 0
+
+
+def test_every_scenario_reaches_the_page_with_its_score_and_its_uncertainty():
+    """A passing scenario is invisible in the report today: only failures get a
+    section. The ± is what makes a 0.9 difference readable as noise."""
+    rows = [
+        spread_row("sano", "simple", True, 3.5, spreads(policy=2)),
+        spread_row("roto", "complejo", False, 0.0, spreads(conversational=1, tone=1)),
+    ]
+
+    markdown = ev.render_markdown(report_for(rows))
+
+    assert "± máx" in markdown
+    assert "| `sano` | simple | 3.50 | ±2 |" in markdown
+    assert "| `roto` | complejo | 0.00 | ±1 |" in markdown
+
+
+def test_a_gates_only_run_invents_no_uncertainty():
+    markdown = ev.render_markdown(report_for([score_row("a", "simple", True, score=None)]))
+
+    assert "±" not in markdown
+
+
+# ---------------------------------------------------------------------------
 # Un escenario que no se mide (L17) — la corrida sigue, y lo dice
 # ---------------------------------------------------------------------------
 
