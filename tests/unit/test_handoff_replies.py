@@ -1,6 +1,6 @@
 """S4 derivation replies: the customer reads one approved text per reason.
 
-Five escalation reasons have their own wording; every other reason keeps the
+Seven escalation reasons have their own wording; every other reason keeps the
 generic `handoff` text. The selection is a pure function, so the mapping is
 testable without a database, an LLM or a full conversation.
 """
@@ -32,12 +32,18 @@ APPROVED = {
         "dejar esperando: un asesor de Lumat te contacta para coordinar la visita "
         "directamente."
     ),
+    "consent_declined": (
+        "De acuerdo, no guardaremos tus datos ni agendaremos una visita."
+    ),
+    "consent_unclear": (
+        "Necesito que me confirmes si autorizas guardar tus datos. Responde sí o no."
+    ),
 }
 
 GENERIC = "Un asesor revisará tu caso y te contactará a la brevedad."
 
 
-def test_the_mapping_covers_exactly_the_five_customer_facing_cases():
+def test_the_mapping_covers_exactly_the_customer_facing_cases():
     assert set(DERIVATION_REPLY_KEYS) == set(APPROVED)
     for key in DERIVATION_REPLY_KEYS.values():
         assert key in REPLY_TEXT_DEFAULTS
