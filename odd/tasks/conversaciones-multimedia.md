@@ -42,11 +42,21 @@ enviar y recibir multimedia, con grabación y reproducción de audio en el panel
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 | S1, S5 | inline (migration 058 + ingest + endpoint autenticado) | — |
-| T2 | S1 | inline (serializer + hilo: imagen/video/audio/documento y fallback) | — |
-| T3 | S2, S4 | inline (send.py subida + `send_operator_media` + endpoint multipart) | — |
-| T4 | S3 | inline (compositor: adjuntar, grabar audio, reproducir) | — |
+| T1 | S1, S5 | inline (migration 058 + ingest + endpoint autenticado) | `a2f997b7`, `40e8d3c5` |
+| T2 | S1 | inline (serializer + hilo: imagen/video/audio/documento y fallback) | `b0bd2001` |
+| T3a | S2, S4 | worker (send.py subida + `send_operator_media` + delivery por tipo) | `68e896c2`, `7610c2a9` |
+| T3b | S2, S4 | worker (endpoint multipart + higiene de temporales) | `f71030e5` |
+| T4 | S3 | worker (compositor: adjuntar, grabar audio, reproducir) | — |
 | T5 | S1-S5 | inline (verificación: shape/full + gate frontend + evidencia) | — |
+
+**Corte de entrega (decidido al pasar las ~400 líneas autoradas):**
+
+- **Slice 1 — media entrante** (persistida, servida, renderizada y endurecida): `a2f997b7`,
+  `40e8d3c5`, `b0bd2001`, `4026be6e`, `0406fe88`, `2c67e0bd`.
+- **Slice 2 — media saliente** (subida a Meta, envío por id, endpoint multipart y compositor con
+  audio): `68e896c2`, `7610c2a9`, `f71030e5`, más T4.
+
+Los dos slices se pueden entregar como PRs encadenados; abrirlos es decisión del owner.
 
 ## Log
 
@@ -80,3 +90,34 @@ Datos y frontend:
 - `web/src/components/pages/ConversationThread.tsx:196-206` — el compositor es solo `Textarea`.
 - `web/src/components/primitives/` — no hay primitiva de audio (`MediaRecorder`/`getUserMedia` no aparece en `web/src`).
 - `web/src/api.ts:118-124,179` — ya hay precedentes de subida con `FormData`.
+
+**L4 — verificación del frente 2**
+
+- **Slice 1 (entrante).** RED→GREEN en `tests/integration/test_api_conversations_media.py`
+  (persistencia + endpoint + traversal + symlink + auth 401/403) y
+  `tests/integration/test_webhook_ingest.py` (tope de 5 intentos, evento `media_unavailable`,
+  metadata sobrevive a un fallo posterior del grafo).
+- **Revisión de seguridad independiente** (`gentle-ai-verify`): sin bloqueantes. Confirmó con
+  ejecución real auth (401 sin sesión), contención de path (12 formas: `..`, absolutos, symlink de
+  archivo y de directorio, prefijo engañoso `mediaX/`), scoping por conversación+mensaje, 404
+  byte-idéntico y `Content-Disposition` no inyectable. Único hallazgo Medium: `inline` derivado de
+  un `content_type` externo dejaba pasar `image/svg+xml` → cerrado en `0406fe88`.
+- **Slice 2 (saliente).** RED→GREEN en `tests/integration/test_operator_media.py` (subida única,
+  reuso de `meta_media_id` en el reintento, media nunca como texto vacío, fallo cerrado sin
+  `stored_path`, límites de tamaño antes de la red) y
+  `tests/functional/test_api_conversation_media_send.py` (200 con `delivery_status: failed`,
+  higiene del temporal, 401/403/409/422).
+- **Gate frontend:** `npm run build` (`tsc -b`) verde; `npm test` → 112 archivos, **1285 tests**,
+  todos verdes.
+- **Backend:** `scripts/test.sh shape origin/main` → exit 3 (`app/models.py`,
+  `app/panel/api/serializers.py`, `db/migrations/058_message_media.sql` son shape surfaces) →
+  `scripts/test.sh full` **verde (8m49s)**.
+- **Defectos propios que cazó la verificación** (los tres corregidos, no del agente que reporta):
+  `NormalizedMessage.caption` requerido rompía tres tests existentes (`4026be6e`); la lista de
+  migraciones aplicadas sin `058`; `MessageType` sin importar en `send.py` tras el cambio de
+  delivery; y el endpoint devolvía 502 ante un rechazo de Meta mientras el texto devuelve 200 con la
+  fila `failed` (`f71030e5`, alineado y pinneado con test).
+- **Residuales aceptados y documentados:** carrera entre el chequeo de contención y la apertura del
+  archivo; escritura sobre el volumen `media/`; y `audio/webm` sigue siendo imposible de grabar en
+  navegadores que solo lo soportan (ahí el botón queda deshabilitado, por diseño).
+- **Entrega:** push y PRs quedan en manos del owner; el corte slice 1 / slice 2 está arriba.
