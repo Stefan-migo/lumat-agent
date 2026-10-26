@@ -510,6 +510,8 @@ export interface Settings {
   scope_rules: Record<string, string>;
   keywords: string[];
   tone: string;
+  /** Canonical option lists served by GET /settings; absent against an older backend. */
+  options?: { tones: string[]; tarifa_labels: Record<string, string> };
   messages: {
     greeting: string;
     greeting_short: string;
@@ -553,7 +555,6 @@ export interface Settings {
   /** S10/S18: effective conduct plus the closed option lists the panel renders. */
   conduct: {
     orden: string[];
-    redaccion: string;
     max_preguntas_por_mensaje: number;
     derivaciones: string[];
     customized: boolean;

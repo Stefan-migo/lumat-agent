@@ -3,9 +3,23 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { getTechnicianSchedule, saveTechnicianSchedule } from "../../api";
 import { formatTechnicianSchedule, TechnicianScheduleEditor } from "./TechnicianScheduleEditor";
+import { WEEKDAY_NAMES } from "./agendaTime";
 
 vi.mock("../../api", () => ({ ApiError: class ApiError extends Error {}, getTechnicianSchedule: vi.fn(), saveTechnicianSchedule: vi.fn() }));
 describe("TechnicianScheduleEditor", () => {
+  it("uses the shared weekday labels for its controls and summaries", async () => {
+    const previous = WEEKDAY_NAMES[0];
+    WEEKDAY_NAMES[0] = "Lunes compartido";
+    try {
+      vi.mocked(getTechnicianSchedule).mockResolvedValue({ technician_id: 4, schedule: [] });
+      render(<TechnicianScheduleEditor technician={{ id: 4, username: "Luis" }} onSaved={() => {}} />);
+      const editor = await screen.findByLabelText("Días y horarios de atención");
+      expect(within(editor).getByRole("button", { name: "Lunes compartido" })).toBeInTheDocument();
+      expect(formatTechnicianSchedule([{ weekday: 1, opens_at: "09:00:00", closes_at: "18:00:00" }])).toBe("Lunes compartido 09:00–18:00");
+    } finally {
+      WEEKDAY_NAMES[0] = previous;
+    }
+  });
   it("summarizes consecutive days that share the same hours", () => {
     expect(formatTechnicianSchedule([
       { weekday: 1, opens_at: "09:00:00", closes_at: "18:00:00" },

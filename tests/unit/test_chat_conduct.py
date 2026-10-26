@@ -1,7 +1,7 @@
 """Chat conduct (S10): one settings key with the four closed-option fields.
 
-`chat.conduct` holds the order of the capture fields, the redaction mode, the
-question budget per message and the active derivation rules. F3 only validates
+`chat.conduct` holds the order of the capture fields, the question budget per
+message and the active derivation rules. F3 only validates
 and stores it: nothing reads it until T11/F4, so the current flow keeps working
 with the shipped order.
 
@@ -24,7 +24,6 @@ from app.services.settings import (
 FIELDS = ["failure", "equipment", "comuna", "availability", "name", "email", "address"]
 VALID = {
     "orden": FIELDS,
-    "redaccion": "llm",
     "max_preguntas_por_mensaje": 1,
     "derivaciones": list(CONDUCT_DERIVACIONES),
 }
@@ -38,8 +37,9 @@ def test_the_default_order_is_the_shipped_capture_order():
     assert CHAT_CONDUCT_DEFAULTS["orden"] == FIELDS
 
 
-def test_the_defaults_are_the_closed_enum_values():
-    assert CHAT_CONDUCT_DEFAULTS["redaccion"] == "llm"
+def test_the_defaults_keep_the_other_conduct_fields_without_redaccion():
+    assert "redaccion" not in CHAT_CONDUCT_DEFAULTS
+    assert CHAT_CONDUCT_DEFAULTS["orden"] == FIELDS
     assert CHAT_CONDUCT_DEFAULTS["max_preguntas_por_mensaje"] == 1
     assert CHAT_CONDUCT_DEFAULTS["derivaciones"] == list(CONDUCT_DERIVACIONES)
 
@@ -83,11 +83,14 @@ def test_validate_accepts_a_reordered_order():
     ]
 
 
-def test_validate_accepts_plantilla_and_two_questions():
-    value = {**VALID, "redaccion": "plantilla", "max_preguntas_por_mensaje": 2}
+def test_validate_accepts_two_questions_without_changing_other_fields():
+    value = {**VALID, "max_preguntas_por_mensaje": 2}
 
-    assert validate_conduct(value, FIELDS)["redaccion"] == "plantilla"
-    assert validate_conduct(value, FIELDS)["max_preguntas_por_mensaje"] == 2
+    assert validate_conduct(value, FIELDS) == {
+        "orden": FIELDS,
+        "max_preguntas_por_mensaje": 2,
+        "derivaciones": list(CONDUCT_DERIVACIONES),
+    }
 
 
 def test_validate_accepts_a_single_active_derivation():
@@ -122,8 +125,6 @@ def test_validate_accepts_no_active_derivation():
             {**VALID, "orden": ["failure", "equipment", "address", "comuna", "availability", "name", "email"]},
             id="address-before-availability",
         ),
-        pytest.param({**VALID, "redaccion": "magia"}, id="unknown-redaccion"),
-        pytest.param({**VALID, "redaccion": None}, id="redaccion-not-a-string"),
         pytest.param({**VALID, "max_preguntas_por_mensaje": 3}, id="max-out-of-enum"),
         pytest.param({**VALID, "max_preguntas_por_mensaje": 0}, id="max-zero"),
         pytest.param({**VALID, "max_preguntas_por_mensaje": "1"}, id="max-not-an-int"),
@@ -135,6 +136,13 @@ def test_validate_accepts_no_active_derivation():
 def test_validate_rejects_malformed_conduct(value):
     with pytest.raises(ValueError):
         validate_conduct(value, FIELDS)
+
+
+@pytest.mark.parametrize("redaccion", ["llm", "plantilla", "legacy-value", None])
+def test_validate_ignores_legacy_redaccion_values(redaccion):
+    value = {**VALID, "redaccion": redaccion}
+
+    assert validate_conduct(value, FIELDS) == VALID
 
 
 def test_get_returns_the_defaults_without_a_row():
@@ -177,6 +185,6 @@ def test_get_falls_back_per_key_on_a_partial_row():
     conduct = get_conduct(session)
 
     assert conduct["orden"] == ["failure"]
-    assert conduct["redaccion"] == "plantilla"
+    assert "redaccion" not in conduct
     assert conduct["max_preguntas_por_mensaje"] == 1
     assert conduct["derivaciones"] == list(CONDUCT_DERIVACIONES)
