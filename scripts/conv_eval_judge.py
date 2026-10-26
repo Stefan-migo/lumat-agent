@@ -193,6 +193,12 @@ Answer with JSON only:
 {"message": "the next customer message", "goal_reached": false}
 """
 
+_SIMULATOR_RETRY = """\
+That reply was not the JSON object this task requires, so it cannot be used as a
+customer message. Answer again, with JSON only and nothing else:
+{"message": "the next customer message", "goal_reached": false}
+"""
+
 
 class JudgeError(RuntimeError):
     """The judge did not produce the exact verdict contract."""
@@ -412,6 +418,20 @@ def validate_verdict(payload: dict) -> dict:
     }
 
 
+def _read_simulated_turn(raw: str) -> dict:
+    """Turn one raw answer into a turn, or refuse it.
+
+    Two ways an answer carries no turn: it is not the JSON object the contract
+    asks for, or it is valid JSON with neither a message nor a reached goal.
+    """
+    payload = _parse_json(raw)
+    message = str(payload.get("message") or "").strip()
+    reached = bool(payload.get("goal_reached"))
+    if not reached and not message:
+        raise JudgeError("simulated customer produced neither a message nor goal_reached")
+    return {"message": message, "goal_reached": reached}
+
+
 def simulate_customer_turn(
     client: OpenAI,
     *,
@@ -426,6 +446,10 @@ def simulate_customer_turn(
 
     The simulator owns exactly one decision per call: what this character types
     next, or that the goal is already reached. It never writes as the assistant.
+
+    Like the judge, it gets one retry: an answer that is not the contracted JSON,
+    or that carries neither a message nor a reached goal, is asked for again with
+    the rejected answer quoted back. Two failures raise `JudgeError`.
     """
     prompt = f"""\
 ## Character
@@ -446,17 +470,25 @@ Write customer message #{turn_index} of at most {max_turns}. If the assistant
 already satisfied your goal, or clearly handed you to a person, answer with
 goal_reached true and an empty message.
 """
-    raw = _chat(
-        client,
-        [
-            {"role": "system", "content": _SIMULATOR_INSTRUCTIONS},
-            {"role": "user", "content": prompt},
-        ],
-        model=model,
-    )
-    payload = _parse_json(raw)
-    message = str(payload.get("message") or "").strip()
-    reached = bool(payload.get("goal_reached"))
-    if not reached and not message:
-        raise JudgeError("simulated customer produced neither a message nor goal_reached")
-    return {"message": message, "goal_reached": reached}
+    messages = [
+        {"role": "system", "content": _SIMULATOR_INSTRUCTIONS},
+        {"role": "user", "content": prompt},
+    ]
+    # Prose instead of the contracted JSON is a transport accident, not a turn for
+    # the transcript, and a failed scenario takes the whole run with it (L15). One
+    # retry — the same budget the judge has — then the run is told, never guessed.
+    # A blind replay would be useless at temperature 0: the retry shows the model
+    # what it wrote and restates the contract.
+    last: Exception | None = None
+    for _ in range(2):
+        raw = _chat(client, messages, model=model)
+        try:
+            return _read_simulated_turn(raw)
+        except JudgeError as error:
+            last = error
+            messages = [
+                *messages[:2],
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": _SIMULATOR_RETRY},
+            ]
+    raise JudgeError(f"no usable simulated turn after 2 attempts: {last}")
