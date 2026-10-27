@@ -650,3 +650,9 @@ Observed checks:
 - `git diff --check`: exit 0. `bash scripts/test.sh shape`: exit 0, no shape surfaces touched. No new full/quick run; historical green evidence from L15/L16 retained.
 
 Delivery split (engineering, not a product change): T5c equipment/optional-slot compatibility with its unit tests in one commit (<=5 files including this task record); tariff/quotation before handoff with its integration/channel tests and handoff note in a second commit. Stage only the relevant handoff.py hunk for the first unit; never restore, discard or rewrite working source to achieve the split. Record commit identities after observing successful commits. No push, PR or merge authorized here. The overall feature and real-model evaluation remain open; T2b then T6 are next.
+
+### L23 — cohesive local delivery
+
+Equipment/legacy-slot compatibility committed as `5c0d5e3a` (5 files, +266/-19). Only the equipment rendering hunk was staged from handoff.py; working source was preserved. First staged whitespace check caught an extra blank line at the end of this task document (exit 2); removed that trailing blank line, subsequent staged and working `git diff --check` both exit 0. No test or behavior was changed by the whitespace correction.
+Second unit contains the existing verified tariff/quotation logic, integration handoff tests, public ingest silence test and historical handoff note. Commit identity is recorded after successful creation. Native review was not run: owner requested the manual route without Gentle AI review tools (L21); no native approval is claimed.
+Memory mirror full content submitted successfully; large observation readback is truncated by the memory tool, so a full exact readback cannot be claimed. Local feature file remains the full authoritative record.

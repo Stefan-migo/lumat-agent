@@ -24,6 +24,7 @@ import psycopg
 import pytest
 from sqlalchemy import select
 
+from app.chat.nodes.handoff import handoff  # noqa: E402
 from app.chat.nodes.handoff_gate import handoff_gate  # noqa: E402
 from app.chat.state import (  # noqa: E402
     ConversationState,
@@ -43,7 +44,13 @@ from app.models import (  # noqa: E402
     MessageType,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
-from app.services.settings import REPLY_TEXT_DEFAULTS, REPLY_TEXTS_KEY, set_setting  # noqa: E402
+from app.services.settings import (
+    DEFAULT_TARIFA_PRECIOS,
+    REPLY_TEXT_DEFAULTS,
+    REPLY_TEXTS_KEY,
+    TARIFA_PRECIOS_KEY,
+    set_setting,
+)  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
@@ -518,6 +525,127 @@ def test_handoff_summary_failure_uses_deterministic_fallback(monkeypatch):
         case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
         assert case.summary == "Solicitud registrada sin detalle del problema."
         assert case.bundle["summary"] == case.summary
+
+
+def _coverage_handoff_state(
+    conv_id: int, *, service: str | None, captured: dict
+) -> ConversationState:
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        customer_id = conversation.customer_id
+    return ConversationState(
+        customer_id=customer_id,
+        conversation_id=conv_id,
+        phone="+56912345678",
+        case={"service": service},
+        captured=captured,
+        escalate_reason="cobertura",
+        window=[
+            {
+                "id": 1,
+                "direction": "inbound",
+                "msg_type": "text",
+                "text": "no era calefont, es una caldera, y estoy en providencia",
+            }
+        ],
+    )
+
+
+def test_coverage_handoff_names_corrected_equipment_and_quotes_published_maintenance(
+    monkeypatch,
+):
+    monkeypatch.setattr("app.chat.nodes.handoff.generate_summary", lambda state, customer: "resumen")
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            TARIFA_PRECIOS_KEY,
+            {
+                **DEFAULT_TARIFA_PRECIOS,
+                "mantencion_caldera": [
+                    {"desde_mes": 1, "hasta_mes": 12, "valor": 123456}
+                ],
+            },
+        )
+        session.commit()
+    conv_id = _start_conversation()
+    state = _coverage_handoff_state(
+        conv_id,
+        service="Mantención de caldera",
+        captured={
+            "comuna": "Providencia",
+            "equipment": "calefont",
+            "equipment_type": "caldera",
+        },
+    )
+
+    result = handoff(state)
+
+    reply = result["replies"][0]
+    assert "caldera" in reply.lower()
+    assert "Mantención de caldera" in reply
+    assert "$123.456" in reply
+    assert "asesor" in reply.lower() and "coordinar" in reply.lower()
+    assert "fecha" in reply.lower() and "hora" in reply.lower()
+    assert _conversation_state(conv_id) == "human"
+    assert "handoff:cobertura" in [event.cause for event in _events(conv_id)]
+
+
+def test_coverage_handoff_falls_back_when_equipment_is_missing(monkeypatch):
+    monkeypatch.setattr("app.chat.nodes.handoff.generate_summary", lambda state, customer: "resumen")
+    conv_id = _start_conversation()
+    state = _coverage_handoff_state(
+        conv_id,
+        service="Mantención de caldera",
+        captured={"comuna": "Providencia"},
+    )
+
+    result = handoff(state)
+
+    assert "tu equipo" in result["replies"][0].lower()
+    assert "$" in result["replies"][0]
+
+
+@pytest.mark.parametrize("service", ["reparación de caldera", "caldera", None])
+def test_coverage_handoff_does_not_infer_a_tariff_from_equipment(monkeypatch, service):
+    monkeypatch.setattr("app.chat.nodes.handoff.generate_summary", lambda state, customer: "resumen")
+    conv_id = _start_conversation()
+    state = _coverage_handoff_state(
+        conv_id,
+        service=service,
+        captured={"comuna": "Providencia", "equipment_type": "caldera"},
+    )
+
+    result = handoff(state)
+
+    reply = result["replies"][0]
+    assert "requiere cotización" in reply.lower()
+    assert "$" not in reply
+    assert "asesor" in reply.lower() and "coordinar" in reply.lower()
+
+
+def test_legacy_custom_coverage_text_without_equipment_slot_is_preserved(monkeypatch):
+    monkeypatch.setattr("app.chat.nodes.handoff.generate_summary", lambda state, customer: "resumen")
+    custom = "Cobertura para {{comuna}}; un asesor coordina."
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            REPLY_TEXTS_KEY,
+            {**REPLY_TEXT_DEFAULTS, "handoff_cobertura": custom},
+            actor="test",
+        )
+        session.commit()
+    conv_id = _start_conversation()
+    state = _coverage_handoff_state(
+        conv_id,
+        service="reparación de caldera",
+        captured={"comuna": "Providencia", "equipment_type": "caldera"},
+    )
+
+    result = handoff(state)
+
+    assert result["replies"][0].startswith("Cobertura para Providencia; un asesor coordina.")
+    assert "{{equipo}}" not in result["replies"][0]
+    assert "requiere cotización" in result["replies"][0].lower()
 
 
 def test_configured_handoff_reply_is_used(monkeypatch):

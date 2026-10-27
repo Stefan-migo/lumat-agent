@@ -496,6 +496,60 @@ def test_processing_failure_marks_failed(monkeypatch, migrated_db):
         assert session.get(Message, mid).status == MessageStatus.FAILED
 
 
+def test_coverage_handoff_followup_stays_silent_at_process_message_boundary(migrated_db, monkeypatch):
+    """T5c: the real ingest entry point preserves operator ownership after transfer."""
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56955556666")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(
+            customer_id=customer.id,
+            wa_phone=customer.phone_e164,
+            state=ConversationState.HUMAN,
+        )
+        session.add(conv)
+        session.flush()
+        handoff_reply = Message(
+            wamid="wamid.coverage-handoff",
+            conversation_id=conv.id,
+            direction=MessageDirection.OUTBOUND,
+            msg_type=MessageType.TEXT,
+            text="Todavía no tenemos visitas técnicas en Providencia; un asesor coordinará.",
+            status=MessageStatus.PROCESSED,
+        )
+        inbound = Message(
+            wamid="wamid.coverage-followup",
+            conversation_id=conv.id,
+            direction=MessageDirection.INBOUND,
+            msg_type=MessageType.TEXT,
+            text="cuanto sale",
+            status=MessageStatus.RECEIVED,
+        )
+        session.add_all([handoff_reply, inbound])
+        session.commit()
+        inbound_id = inbound.id
+        conversation_id = conv.id
+
+    graph_calls = []
+    delivery_calls = []
+    monkeypatch.setattr(ingest, "run_conversation", lambda *args: graph_calls.append(args))
+    monkeypatch.setattr(ingest, "deliver_outbound", lambda *args: delivery_calls.append(args))
+    with SessionLocal() as session:
+        inbound = session.get(Message, inbound_id)
+        ingest.process_message(session, inbound)
+        session.commit()
+        assert inbound.status == MessageStatus.PROCESSED
+        assert session.get(Conversation, conversation_id).state == ConversationState.HUMAN
+        outbound = list(session.scalars(select(Message).where(
+            Message.conversation_id == conversation_id,
+            Message.direction == MessageDirection.OUTBOUND,
+        )))
+
+    assert [message.text for message in outbound] == [handoff_reply.text]
+    assert graph_calls == []
+    assert delivery_calls == []
+
+
 def test_human_inbound_is_processed_once_without_bot_outbound(migrated_db, mock_openai_chat):
     """WH-8/HH-5: human ownership keeps inbound history continuous."""
     with SessionLocal() as session:

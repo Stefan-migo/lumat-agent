@@ -20,6 +20,10 @@ runs again for the conversation (ingest boundary, no panel reply in H1).
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.chat.nodes.replies import render_reply
 from app.chat.nodes.summary import compose_fallback_summary, generate_summary
@@ -34,7 +38,14 @@ from app.services import prompts
 from app.services.audit import record_audit
 from app.services.cases import create_handoff_case
 from app.services.realtime import record_activity
-from app.services.settings import REPLY_TEXT_DEFAULTS, get_reply_texts
+from app.services.settings import (
+    REPLY_TEXT_DEFAULTS,
+    TARIFA_LABELS,
+    get_hours_timezone,
+    get_reply_texts,
+    get_tarifa_precios,
+    tarifa_vigente,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +72,43 @@ DERIVATION_REPLY_KEYS: dict[str, str] = {
 def _escalate_reason(state: ConversationState) -> str:
     """Label the escalation: post-classification reason > gate trigger."""
     return state.escalate_reason or state.handoff_reason or "handoff"
+
+
+def _normalise_service(value: str) -> str:
+    folded = unicodedata.normalize("NFKD", value.casefold())
+    without_accents = "".join(
+        char for char in folded if not unicodedata.combining(char)
+    )
+    return re.sub(r"[^a-z0-9]+", " ", without_accents).strip()
+
+
+def _coverage_price_reply(session, state: ConversationState) -> str:
+    """Quote only an explicitly classified, currently published tariff service."""
+    service = (state.case or {}).get("service")
+    service_key = None
+    if isinstance(service, str) and service.strip():
+        normalized = _normalise_service(service)
+        service_key = next(
+            (
+                key
+                for key, label in TARIFA_LABELS.items()
+                if normalized in {_normalise_service(key), _normalise_service(label)}
+            ),
+            None,
+        )
+
+    today = datetime.now(ZoneInfo(get_hours_timezone(session))).date()
+    vigente = tarifa_vigente(get_tarifa_precios(session), today)
+    price = vigente.get(service_key) if service_key else None
+    coordination = (
+        "Un asesor coordinará contigo la visita; todavía no puedo confirmar fecha ni hora."
+    )
+    if price is None:
+        return f"El valor de este trabajo requiere cotización. {coordination}"
+
+    label = TARIFA_LABELS[service_key]
+    formatted_price = f"${price:,.0f}".replace(",", ".")
+    return f"El precio vigente de {label} es {formatted_price}. {coordination}"
 
 
 def derivation_reply(
@@ -125,6 +173,8 @@ def handoff(state: ConversationState) -> dict:
         handoff_reply = derivation_reply(
             get_reply_texts(session), reason, state.captured
         )
+        if reason == "cobertura":
+            handoff_reply = f"{handoff_reply} {_coverage_price_reply(session, state)}"
         conversation = session.get(Conversation, state.conversation_id)
         case = create_handoff_case(
             session, state, summary_text=summary_text, reason=reason
