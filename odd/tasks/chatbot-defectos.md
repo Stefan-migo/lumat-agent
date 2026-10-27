@@ -106,12 +106,19 @@ Cerrado en T5a (`c29f844c`, la cobertura decide antes de derivar) y T5b (`c87943
 dos caminos de captura): el escenario pasó de `{G10, G6}` a `{G6}` y la causa registrada es `handoff:cobertura`.
 Lo que queda es G6.
 
-**Decisión de producto (L11): acusar recibo y no repetir.** La derivación por cobertura **nombra el equipo** que
-el cliente corrigió (slot nuevo en `handoff_cobertura`, con texto de respaldo cuando el equipo no está
-capturado), y la frase **no se repite** en los turnos siguientes. No puede ser silencio: `G8 reply_present` exige
-respuesta a cada turno del cliente, así que el turno posterior contesta lo que sí se puede (por ejemplo el
-precio) y aclara que la visita la coordina un asesor, sin prometer. El texto es owner-editable: el cambio es de
-contrato de slots (`REPLY_TEXT_SLOTS`), no sólo de copy.
+**Decisión vigente (L14, reemplaza el momento de respuesta propuesto en L11–L12):** ante la pregunta
+«¿Elegís 1, 2 o 3?», el owner eligió «si las 2»: **«Responder antes de transferir»**. El bot reconoce el equipo
+corregido e informa el precio publicado aplicable al servicio solicitado **antes** de transferir al asesor. Si
+falta un precio publicado o el servicio es ambiguo, aclara que requiere cotización: reconocer «caldera» no
+permite asumir reparación o mantención. No inventa precio, fecha ni disponibilidad.
+
+La respuesta que transfiere incluye esa información y aclara que un asesor coordina. Después de transferir,
+se conserva el silencio del bot en conversaciones `HUMAN`/`CLOSED`, sin excepciones ni respuestas automáticas
+que interfieran con la persona. El texto de cobertura reconoce el equipo y mantiene respaldo si falta ese dato;
+los textos personalizados existentes deben seguir siendo válidos. La frase no se repite porque el bot ya no
+interviene después de transferir. El requisito previo «No puede ser silencio» se retira: confundía el evaluador
+directo del cerebro con el canal real. No se modifica el corpus en T5c; si contradice esta política, su resultado
+se reporta como limitación del instrumento, no se altera el producto para hacerlo pasar.
 
 ### S6 — «no te voy a dar mi correo» se registra como campo sin respuesta
 
@@ -159,7 +166,7 @@ de la feature, donde `full` y `shape` también son obligatorios.
 | T3 | S3 | Cerrar la despedida: frases de `closure_gate` y si puede dispararse con captura pendiente | `--only simple-despedida` + test de `closure_gate` |
 | T4 | S4 | Responder antes de la primera pregunta y no preguntar dos veces un campo que la intención preventiva ya salteó | `--only complejo-agendar-calefont` en 3 corridas (hoy 2 de 3) |
 | T5 | S5 | Evaluar cobertura antes de derivar y llevar el equipo capturado al texto de re-pregunta | `--only super-burst-contradiccion` |
-| T5c | S5 | Remate de `super-burst-contradiccion`: la derivación nombra el equipo y el turno siguiente no repite la frase | `--only super-burst-contradiccion` (G6 verde, G8 y G10 siguen verdes) |
+| T5c | S5 | **Manual verification passed · local delivery in progress (L22)**: owner-authorized parent review and focused/differential checks passed; not independent approval. Preserve verified work in two cohesive commits; real-model proof remains deferred. Full real-model evaluation remains deferred to feature closure | Prior integration 79, slots 22, `quick` and `full` exit 0; previous verifier emitted NO verdict; no real-classifier proof; see L15–L18 |
 | T6 | S6 | Rechazo explícito a un dato = saltar el campo; el correo sigue en la lista y no bloquea el agendamiento | `--only complejo-no-quiere-email` + test de rechazo explícito en `test_chat_capture.py` |
 
 Un commit por tarea, con su test. T1 es la más chica y la más grave: una emisión de evento.
@@ -432,3 +439,214 @@ opción. **Ninguna de las tres cambia el corpus**: las tres se arreglan en códi
   «Sigue en la lista, rechazo no bloquea». O sea: el correo se sigue preguntando a todos, un rechazo explícito
   se trata como saltar el campo y el flujo continúa. Sin causa nueva, y con la consecuencia aceptada: el panel
   no distingue «dijo que no» de «no contestó» en el agregado. → S6, T6.
+
+### L12 — precisión del owner y arranque de T5c
+
+Pedido verbatim: «perfecto merge y limpieza. y luego continuamos con lo que sigue. ii ademas respodner el precio de la caldera.»
+
+#697 y #698 mergeados (`82e311c6`, `3fa72711`), con ambos CI verdes; ramas de entrega eliminadas.
+T5c arranca en `odd/chatbot-defectos-t5c` desde `3fa72711`. El primer worker no escribió nada:
+el grafo estaba desactualizado y su superficie de edición no autorizaba regenerarlo. El parent ejecutó
+`graphify update .`: exit 0, 22.852 nodos, 40.976 aristas y 1.527 comunidades. Advertencias:
+57 archivos SQL omitidos por dependencia `tree_sitter_sql` ausente, cinco JSON sin nodos; no se instaló nada.
+Consulta `capture handoff derivation_reply tariff`: nodos `capture()`, `_reask_pending()`, `_ask_next()`,
+`handoff()`, `derivation_reply()`, `get_reply_texts()`; aristas consultadas por `graphify path capture handoff`:
+no encontró camino dirigido (el despacho se revisa en el grafo conversacional real).
+
+No hay prueba todavía de ausencia de credenciales: buscar `OPENAI_API_KEY` no demuestra qué proveedor usa
+el proyecto. El worker debe identificar la configuración real sin imprimir secretos antes de declarar el
+corpus disponible o bloqueado. No se elimina `settings` si contiene configuración necesaria para el modelo.
+
+Risk: item 3 (contrato compartido de textos y slots; conservar textos personalizados existentes).
+Requiere verificación independiente después de la implementación. Suite `full` requerida por el merge de
+`origin/main` en la rama de decisiones; el CI sobre `bd8754f5` pasó antes del merge de #698.
+
+### L13 — bloqueo de producto: el bot no responde tras transferir a una persona
+
+El segundo worker no modificó código ni ejecutó RED/GREEN. El parent verificó:
+`app/webhook/ingest.py:396-402` conserva el mensaje entrante pero no ejecuta el bot cuando la conversación
+está `HUMAN` o `CLOSED`. `handoff.py` cambia a `HUMAN` al derivar por cobertura. El evaluador llama al
+cerebro directamente y deja el webhook fuera de alcance (`scripts/conv_eval.py:8`, `:1312`); por tanto, el
+texto repetido en su turno 4 no demuestra qué recibe un cliente real después de derivar. La premisa previa
+sobre ese turno en producción era incorrecta.
+
+Pendiente decisión del owner: mantener silencio tras la transferencia, cambiar el momento de transferencia,
+o autorizar una excepción acotada. No debilitar el control para satisfacer el evaluador. La ampliación necesaria
+a `tests/unit/test_reply_texts.py` es un ajuste de superficie de ingeniería que resuelve el parent, no otra
+pregunta de producto.
+
+### L14 — el owner elige informar antes de transferir
+
+Respuesta verbatim: «si las 2».
+
+Opción elegida presentada: «2. Responder antes de transferir» — «El bot informa el precio publicado que
+corresponda —o aclara que requiere cotización— y después pasa al asesor para coordinar.»
+La recomendación fue resolver la información disponible antes de entregar la conversación y después dejar
+al asesor a cargo. S5 reemplaza la exigencia de respuesta automática posterior a la transferencia. No se
+modifica el control `HUMAN`/`CLOSED` de `app/webhook/ingest.py`.
+
+El parent amplía la superficie necesaria a `tests/unit/test_reply_texts.py` y
+`tests/integration/test_webhook_ingest.py` para verificar slots y silencio por el canal público. No requiere
+otra elección del owner. Graph Check: `handoff() --calls [EXTRACTED]--> derivation_reply()` (1 salto), y nodos
+`tarifa_vigente()`, `get_reply_texts()`; grafo actualizado en esta sesión. T5c se reabre para implementación.
+
+### L15 — T5c parcial: precio antes de transferir, sin prueba del corpus
+
+**S5 implementado.** La respuesta de cobertura incluye el equipo corregido (`equipment_type` antes que
+`equipment`, y «equipo» como respaldo), luego consulta sólo una tarifa vigente cuando `case.service` coincide
+con una clave o etiqueta de servicio publicada. Si el servicio no se identifica o no tiene precio vigente,
+dice que requiere cotización; en ambos casos indica que un asesor coordinará y que no puede confirmar fecha ni
+hora. El texto de cobertura permite el slot opcional `{{equipo}}`; el texto personalizado antiguo que sólo
+contiene `{{comuna}}` sigue siendo válido. La transferencia a `HUMAN` y el silencio posterior no se cambiaron.
+
+**RED/GREEN deterministas observados.** Antes del cambio de slots,
+`bash scripts/test.sh focused tests/unit/test_reply_texts.py` falló porque esperaba `{"comuna", "equipo"}`
+y sólo estaba permitido `{"comuna"}`. Antes de completar la respuesta, la integración enfocada registró seis
+fallas: faltaban equipo y respaldo, tres servicios no identificados no indicaban cotización y el texto legacy
+no quedaba preservado. Tras implementar, `bash scripts/test.sh db tests/integration/test_handoff.py tests/integration/test_webhook_ingest.py`
+terminó con **79 tests pasados**. Advertencia real: `RuntimeWarning: coroutine '_publish_all' was never awaited`
+en `test_startup_sweep_reprocesses_received` (`_pytest/stash.py:108`).
+`bash scripts/test.sh focused tests/unit/test_reply_texts.py` terminó con **22 tests pasados**.
+
+El primer `bash scripts/test.sh quick` falló únicamente por dos pins de copy anteriores en
+`tests/unit/test_handoff_replies.py`: `test_the_five_reasons_ship_the_approved_wording` y
+`test_each_derivation_reason_renders_its_own_text[cobertura]`. Con autorización explícita se actualizó sólo
+la expectativa del copy de cobertura y el renderizado del respaldo `equipo`; se conservaron las expectativas
+para los otros motivos, la comuna ausente y el copy custom legacy. La única corrida de `quick` después de esa
+corrección terminó con **exit 0**, llegó a **100%** y no emitió advertencias. El runner no mostró un conteo
+agregado de tests.
+
+**Prueba de canal:** `test_coverage_handoff_followup_stays_silent_at_process_message_boundary` ejercita
+`ingest.process_message`; pasa el test de integración y comprueba persistencia del mensaje, sin llamada al grafo
+ni envío saliente. No se alteró `app/webhook/ingest.py` ni se debilitó la guarda `HUMAN`/`CLOSED`.
+
+**Corpus pendiente, no inferido.** No se ejecutó `scripts/conv_eval.py` ni se midió un transcript con el
+clasificador real; los tests de handoff usan estado clasificado construido directamente. La configuración
+observada es `deepseek`, sin clave en el entorno y sin fila coincidente de `PanelSecret` en la base de test; no
+se imprimieron secretos. Por eso T5c queda **partial**, no cerrada. No se modificó `scripts/conv_eval_corpus.yaml`.
+
+**Graph Check de esta tarea:** consultados `capture()`, `handoff()`, `derivation_reply()`, `get_reply_texts()` y
+nodos de settings/tarifas; `graphify path "handoff()" "derivation_reply()"` devolvió
+`handoff() --calls [EXTRACTED]--> derivation_reply()` (1 salto). Leído `graphify-out/GRAPH_REPORT.md`
+(22.852 nodos, 40.976 aristas, 1.527 comunidades; grafo construido desde `bd8754f5`). No se refrescó el grafo.
+
+### L16 — verificación del parent: suite verde y dos pruebas faltantes
+
+`git diff --check`: exit 0. `bash scripts/test.sh shape`: exit 0, sin superficies de shape.
+Native ASSESS: riesgo nativo medium, elevado a high por item 3 (contrato compartido de textos editables),
+independentVerifier requerido; reviewDue false (`under_budget`), por lo que no se inicia review nativa.
+Verificador independiente `mvqzuyqp-5-5etq`: falló con `assistant reported an error`, sin verdict ni evidencia
+admitida. No se reintenta ni se reemplaza por una revisión del propio autor.
+
+Suite completa del parent: `bash scripts/test.sh full`, job-6: **exit 0**, 5 min 50 s, llegó a 100%; sin conteo
+agregado en la salida final. Advertencias observadas: coroutine `_publish_all` sin await en
+`test_startup_sweep_reprocesses_received`; cambio de pooling CLS a mean del modelo FastEmbed en
+`test_project_slug_is_normalized_and_unique`. No son fallos de test y no se corrigieron fuera de alcance.
+
+Corpus con clasificador real no disponible por credenciales ausentes. T5c queda **blocked**, sin commit ni
+publicación nuevos. Needs owner decision: aportar configuración para la prueba real y revisión independiente
+por una persona, o aceptar explícitamente continuar con esas dos pruebas faltantes. No se declara S5
+verificado completo ni se prosigue a T2b/T6 ocultando el bloqueo.
+
+### L17 — orden acordado y cierre explícito de conversación
+
+El owner aceptó el orden propuesto: «perfecto seguiremos con ese orden.» Revisión independiente de T5c ahora;
+después T2b y T6 con pruebas enfocadas; evaluación conversacional completa con el modelo real al terminar los
+cambios. Esto reemplaza la propuesta de tratar revisión y corpus como una aceptación conjunta de faltantes:
+se puede diferir la evaluación completa, pero no afirmar que ya se probó el clasificador ni que la revisión
+independiente fallida aprobó el código.
+
+Pedido de cierre verbatim: «perfecto seguiremos con ese orden. pero primero necesito que cerremos esta conversacion. necesito que cerremos aqui. guarda la memoria y pasame el handoff para continuar desde aqui con un nuevo chat.»
+
+Pausa por pedido explícito del owner: no seguir implementando, no commit, push, PR ni más verificaciones en
+esta conversación. Handoff: `odd/handoffs/chatbot-defectos-t5c-continuacion.md`. Worktree
+`/home/stefan/repos/lumat-agent-odd-chatbot-defectos`, rama `odd/chatbot-defectos-t5c`, HEAD `3fa72711`.
+T5c conserva cambios locales; los siguientes cambios de código T2b/T6 todavía no empezaron.
+Graph Check de cierre: `handoff() --calls [EXTRACTED]--> derivation_reply()` (1 salto). El grafo ya se actualizó
+una vez durante esta sesión; no se repite la regeneración por cada edición de documentación.
+
+### L18 — resume reconciliation and independent review route
+
+Owner request verbatim:
+
+```text
+Continuamos chatbot-defectos en el worktree
+   /home/stefan/repos/lumat-agent-odd-chatbot-defectos,
+   rama odd/chatbot-defectos-t5c.
+
+   Leé odd/handoffs/chatbot-defectos-t5c-continuacion.md y
+   odd/tasks/chatbot-defectos.md (hasta ## Log, después L9–L17).
+   Recuperá la memoria odd/chatbot-defectos/tasks y reconciliá
+   el diff local sin descartar ni rehacer los cambios.
+
+   T5c ya está implementado, sin commit. Los tests enfocados,
+   quick y la suite completa pasaron. Su revisión independiente
+   falló sin emitir resultado.
+
+   El orden acordado es:
+   1. Resolver la revisión independiente de T5c.
+   2. Implementar T2b: búsqueda en los documentos por tema.
+   3. Implementar T6: continuar sin correo ante rechazo explícito.
+   4. Hacer la evaluación conversacional completa con el modelo
+      real al terminar los cambios de código.
+
+   Para T5c, el bot informa el precio publicado aplicable o la
+   necesidad de cotización ANTES de transferir al asesor.
+   Después de transferir queda en silencio. No confundir el
+   precio de reparación con el de mantención.
+
+   No se ejecutó el corpus con el clasificador real: faltan
+   credenciales del proveedor configurado. No lo cuentes como
+   prueba aprobada ni como una renuncia a evaluarlo al final.
+```
+
+Recovered observation 6865 (`odd/chatbot-defectos/tasks`): its full feature document matched the local file exactly before this entry.
+Confirmed branch `odd/chatbot-defectos-t5c`, HEAD `3fa72711d76fa6f15afe508b6d6f8a4e5d000cd2`.
+Preserved all seven modified tracked files and the untracked continuation handoff; no source edits, resets, commits or publication.
+Resume snapshot: tracked diff +414/-21; `git diff --check` exit 0. Prior green tests remain historical evidence, not newly executed checks.
+Source/test diff matches the handoff: corrected equipment, optional legacy-safe slot, explicit current service tariff or quotation, unchanged HUMAN/CLOSED guard, public ingest silence assertion.
+Graph consulted: `handoff()`, `derivation_reply()`, `get_reply_texts()`, `tarifa_vigente()`; extracted one-hop `handoff() → derivation_reply()`.
+Read report summary/community hubs (22,852 nodes, 40,976 edges, 1,527 communities; provenance bd8754f5); no graph regeneration.
+Independent verifier role is advertised with read/grep/find/bash, but the failed prior invocation still has NO verdict.
+Per L16/handoff no automatic retry: awaiting owner's explicit choice of one new bounded verifier invocation or human review. No substitute native review or author's self-review.
+T2b and T6 remain ordered next; complete real-model evaluation remains required at the end, with configured-provider credentials still missing as last observed.
+
+### L19 — explicit authorization for one new bounded verifier invocation
+
+Owner selected «Autorizar un nuevo intento acotado (recomendado)» (token `authorize_one_new_t5c_verifier_attempt`).
+Presented consequences: «Una nueva ejecución del verificador independiente sobre T5c y S5, con pruebas enfocadas; sin repetir full ni ejecutar el corpus real. Si vuelve a fallar sin resultado, se detiene.»
+Route: delegated `gentle-ai-verify`, required by Risk: item 3 (shared owner-editable reply contract). Prior failed invocation remains without a verdict; this is the one explicitly authorized new invocation, not an automatic retry.
+Scope: T5c/S5 and affected existing reply contracts only; baseline `3fa72711d76fa6f15afe508b6d6f8a4e5d000cd2`. No full-suite rerun, source edits, commits, publication or real-model corpus run in this verification.
+
+### L20 — authorized verifier failed without a result; stop at missing proof
+
+Task `mvr1ke6f-1-pmyb` (`gentle-ai-verify`) failed with exact result `Subagent gentle-ai-verify failed: assistant reported an error`. Read the delivered result once: no verdict, findings, command results or test evidence were returned. This is unavailable proof, not a rejected implementation and not an approval. No third invocation, alternative review ceremony or author self-review substitutes for it.
+
+Owner follow-up verbatim: «Review the delivered subagent output and continue.» Reviewed the output; continuation reaches the previously agreed stop condition: «Si vuelve a fallar sin resultado, se detiene.»
+
+T5c remains blocked pending an independent human review against S5 and affected existing reply contracts. T2b and T6 remain pending in the agreed order. Complete real-model evaluation remains required after code changes, with credentials still missing as last observed. No tests, full suite or corpus were run by the parent in this continuation; `git diff --check` exit 0. Existing source/test modifications and untracked handoff remain preserved; no commit or publication.
+
+Needs your decision: arrange independent human review and provide its result, or explicitly revise the independent-review prerequisite. No prerequisite is waived by silence or by the agent failure.
+
+### L21 — owner authorizes manual verification instead of Gentle AI reviewers
+
+Owner request verbatim: «puedes hacer una verificacion manual. sin utilizar las herramientas de gentle ai? solo para estar seguro del proceoso y continuar?» Follow-up verbatim: «continue».
+Parent explained this is a manual code review and focused functional verification, NOT independent review. Owner's explicit request revises the review-route prerequisite from L20 for this unit; the failed independent runs still have no verdict. No Gentle AI review/lifecycle tools or new subagents are used for this manual verification.
+Route: inline manual review of actual T5c source/test diff and focused test wrapper commands. Preserve local code, no reimplementation. Final real-model evaluation remains required after T2b/T6.
+Progress: inspected handoff(), derivation_reply(), current tariff helpers, reply validation, public process_message HUMAN/CLOSED guard and focused test assertions. Graph query consulted handoff(), derivation_reply(), tarifa_vigente(); extracted handoff() → derivation_reply() edge. Graph report summary/community hubs read; no refresh.
+`bash scripts/test.sh focused tests/unit/test_reply_texts.py tests/unit/test_handoff_replies.py tests/unit/test_tarifa_vigente.py`: exit 0, reached 100%, no stdout aggregate count or stderr warning. Test DB target validated without printing credentials: localhost:5907/lumat reachable. Focused integration and direct manual/differential probes still pending; do not mark T5c verified yet.
+
+### L22 — manual verification passed; preserve missing real-model proof
+
+Owner-authorized parent verification found no blocker in the implemented T5c behavior. This is NOT independent approval: both independent verifier invocations failed without verdicts.
+
+Observed checks:
+- `bash scripts/test.sh focused tests/unit/test_reply_texts.py tests/unit/test_handoff_replies.py tests/unit/test_tarifa_vigente.py`: exit 0, reached 100%, no warning.
+- `env -u DATABASE_URL -u TEST_ADMIN_DB_URL -u TEST_DB_PORT -u TEST_DB_PROJECT bash scripts/test.sh db tests/integration/test_handoff.py tests/integration/test_webhook_ingest.py`: job-1 exit 0, 79 cases, reached 100%. Existing warning: `RuntimeWarning: coroutine '_publish_all' was never awaited` in `test_startup_sweep_reprocesses_received`.
+- Initial ephemeral differential probe: exit 1 BEFORE behavior; application import lacked six dummy Settings variables outside pytest. No product failure or RED claimed. One correction supplied the same dummy import requirements as `tests/conftest.py`, with a deliberately unreachable DB URL and no provider/DB calls.
+- Corrected differential/manual command: exit 0. Compared baseline `3fa72711d76fa6f15afe508b6d6f8a4e5d000cd2` source copies in a temporary ignored project directory against current source in separate Python subprocesses: 16 existing render paths, identical stdout, empty stderr, exit 0 for both. Includes existing derivation reasons, legacy custom coverage text and missing-commune fallback. Scratch copies automatically removed.
+- Supplemental isolated helper probes: corrected caldera wins stale calefont; unknown/blank/missing equipment falls back safely; exact service key, accented label and uppercase unaccented label select the injected published 123456 tariff and format `$123.456`; repair, ambiguous service, missing service and absent current tariff return quotation without a currency amount. These helper probes do NOT prove live classifier behavior.
+- Source review confirms published tariff resolution uses configured timezone/current date and existing tarifa_vigente; process_message keeps the unchanged HUMAN/CLOSED early return. Integration proves HUMAN state/event and inbound history without graph invocation or outbound delivery.
+- `git diff --check`: exit 0. `bash scripts/test.sh shape`: exit 0, no shape surfaces touched. No new full/quick run; historical green evidence from L15/L16 retained.
+
+Delivery split (engineering, not a product change): T5c equipment/optional-slot compatibility with its unit tests in one commit (<=5 files including this task record); tariff/quotation before handoff with its integration/channel tests and handoff note in a second commit. Stage only the relevant handoff.py hunk for the first unit; never restore, discard or rewrite working source to achieve the split. Record commit identities after observing successful commits. No push, PR or merge authorized here. The overall feature and real-model evaluation remain open; T2b then T6 are next.

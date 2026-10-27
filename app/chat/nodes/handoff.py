@@ -74,12 +74,29 @@ def derivation_reply(
     literal braces or break the escalation.
     """
     key = DERIVATION_REPLY_KEYS.get(reason, "handoff")
+    placeholders = prompts.placeholders(texts[key])
     values: dict[str, str] = {}
-    if "comuna" in prompts.placeholders(texts[key]):
+    if "comuna" in placeholders:
         comuna = (captured or {}).get("comuna")
         if not comuna or comuna == "unknown":
             return render_reply(texts, "handoff")
         values["comuna"] = comuna
+    if "equipo" in placeholders:
+        captured_equipment = captured or {}
+        equipment = captured_equipment.get("equipment_type")
+        if (
+            not isinstance(equipment, str)
+            or not equipment.strip()
+            or equipment == "unknown"
+        ):
+            equipment = captured_equipment.get("equipment")
+        if (
+            not isinstance(equipment, str)
+            or not equipment.strip()
+            or equipment == "unknown"
+        ):
+            equipment = "equipo"
+        values["equipo"] = equipment
     return render_reply(texts, key, **values)
 
 

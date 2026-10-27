@@ -101,9 +101,9 @@ def test_the_slot_vocabulary_is_closed():
     }
 
 
-def test_only_the_coverage_derivation_takes_a_slot():
-    """S4: one derivation text names the comuna; the other four are plain."""
-    assert REPLY_TEXT_SLOTS["handoff_cobertura"] == frozenset({"comuna"})
+def test_only_the_coverage_derivation_takes_optional_equipment_slot():
+    """S5: coverage names the equipo; other derivations keep their contract."""
+    assert REPLY_TEXT_SLOTS["handoff_cobertura"] == frozenset({"comuna", "equipo"})
     for key in (
         "handoff_persona",
         "handoff_unknown_intent_thrice",
@@ -121,6 +121,15 @@ def test_validate_accepts_a_text_that_drops_its_slot():
     value = {**REPLY_TEXT_DEFAULTS, "booking_confirmed": "Tu visita quedó agendada."}
 
     assert validate_reply_texts(value)["booking_confirmed"] == "Tu visita quedó agendada."
+
+
+def test_validate_accepts_legacy_coverage_text_without_optional_equipment_slot():
+    value = {
+        **REPLY_TEXT_DEFAULTS,
+        "handoff_cobertura": "Derivamos la atención en {{comuna}}.",
+    }
+
+    assert validate_reply_texts(value)["handoff_cobertura"] == value["handoff_cobertura"]
 
 
 @pytest.mark.parametrize(

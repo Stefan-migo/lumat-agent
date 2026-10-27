@@ -12,8 +12,8 @@ from app.services.settings import REPLY_TEXT_DEFAULTS
 
 APPROVED = {
     "cobertura": (
-        "Todavía no tenemos visitas técnicas en {{comuna}}, un asesor de Lumat se "
-        "contactará contigo para ayudarte a la brevedad."
+        "Todavía no tenemos visitas técnicas en {{comuna}} para tu {{equipo}}, "
+        "un asesor de Lumat se contactará contigo para ayudarte a la brevedad."
     ),
     "persona": (
         "Listo, te paso con una persona del equipo. En cuanto esté disponible te "
@@ -56,7 +56,9 @@ def test_the_five_reasons_ship_the_approved_wording():
 
 @pytest.mark.parametrize("reason", sorted(APPROVED))
 def test_each_derivation_reason_renders_its_own_text(reason):
-    expected = APPROVED[reason].replace("{{comuna}}", "Ñuñoa")
+    expected = APPROVED[reason].replace("{{comuna}}", "Ñuñoa").replace(
+        "{{equipo}}", "equipo"
+    )
 
     assert derivation_reply(REPLY_TEXT_DEFAULTS, reason, {"comuna": "Ñuñoa"}) == expected
 

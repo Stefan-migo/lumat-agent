@@ -162,8 +162,8 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     # S4 (chatbot-experiencia): one approved text per derivation reason the
     # customer reads. The remaining reasons keep `handoff` above.
     "handoff_cobertura": (
-        "Todavía no tenemos visitas técnicas en {{comuna}}, un asesor de Lumat se "
-        "contactará contigo para ayudarte a la brevedad."
+        "Todavía no tenemos visitas técnicas en {{comuna}} para tu {{equipo}}, "
+        "un asesor de Lumat se contactará contigo para ayudarte a la brevedad."
     ),
     "handoff_persona": (
         "Listo, te paso con una persona del equipo. En cuanto esté disponible te "
@@ -194,8 +194,9 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
 # S8: the slots each reply may use. The owner can drop a slot from a text, never
 # add one the call site does not fill: an unfilled `{{fecha}}` would reach the
 # customer. `opciones` is the numbered list, `accion` the verb (cancelar /
-# reagendar), `fecha` the appointment datetime, `visita` its full label and
-# `comuna` the captured commune of a coverage derivation (S4).
+# reagendar), `fecha` the appointment datetime, `visita` its full label,
+# `comuna` the captured commune and `equipo` the corrected equipment for a
+# coverage derivation (S5; optional when rendering legacy owner text).
 REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "booking_offer": frozenset({"opciones"}),
     "booking_unclear": frozenset(),
@@ -215,7 +216,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "manage_cancel_unavailable": frozenset(),
     "manage_cancelled": frozenset({"visita"}),
     "handoff": frozenset(),
-    "handoff_cobertura": frozenset({"comuna"}),
+    "handoff_cobertura": frozenset({"comuna", "equipo"}),
     "handoff_persona": frozenset(),
     "handoff_unknown_intent_thrice": frozenset(),
     "handoff_campo_sin_respuesta": frozenset(),
