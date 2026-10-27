@@ -890,7 +890,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                     <Menu label={MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.label ?? MESSAGE_TEMPLATES[0].label} ariaLabel="Plantilla" showChevron items={visibleMessageTemplates.map(({ id, label }) => ({ value: id, label }))} onSelect={(id) => setActiveMessage(id as typeof activeMessage)} />
                     <p>{MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.description}</p>
                   </div>
-                {visibleMessageTemplates.length ? <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={visibleMessageTemplates.map((template) => ({ ...template, label: <span className="settings-messages__tab-label">{template.label}<Badge tone="neutral">Mensaje fijo</Badge></span> }))} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
+                {visibleMessageTemplates.length ? <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={visibleMessageTemplates.map(({ id, label, icon }) => ({ id, label, icon }))} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
                 {(selected) => {
                   const template = MESSAGE_TEMPLATES.find(({ id }) => id === selected) ?? MESSAGE_TEMPLATES[0];
                   return <div className="settings-messages__edit">

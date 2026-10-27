@@ -393,7 +393,12 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByText("11 mensajes")).toBeInTheDocument();
-    expect(screen.getAllByText("Mensaje fijo").length).toBeGreaterThanOrEqual(11);
+    expect(screen.getAllByText("Mensaje fijo")).toHaveLength(1);
+    const list = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
+    expect(within(list).getAllByRole("tab")).toHaveLength(11);
+    expect(within(list).queryByText("Mensaje fijo")).not.toBeInTheDocument();
+    expect(within(list).getByRole("tab", { name: "Despedida" })).toHaveTextContent("Despedida");
+    expect(within(list).queryByText("Cierre de conversación")).not.toBeInTheDocument();
     expect(screen.getByText("Ilustrativa")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vista previa en WhatsApp" }).closest(".settings-messages__edit")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^Saludo con nombre/ })).toBeInTheDocument();
