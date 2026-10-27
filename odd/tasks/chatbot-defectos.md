@@ -188,3 +188,35 @@ Verificación: `bash scripts/test.sh db tests/integration/test_emergency.py test
 sin gates fallando** (antes: 0/1 por G3). El test vive en `test_strong_hit_mid_capture_interrupts`, junto a la
 aserción del evento `emergency`, así que también cubre la interrupción a mitad de captura. El RED se observó
 antes de implementar (`assert any(e.event == "escalation" ...)` → `assert False`).
+
+### L6 — T2a: el umbral está descartado por medición, no por opinión
+
+Similitud real (`app/services/kb.py:retrieve`, `top_k=5`, `min_sim=0.0`, KB sembrada con los 4 documentos
+customer, fingerprint `91ca087a1130`), sobre las consultas de los escenarios que fallan **más el control que no
+debe matchear**:
+
+| Consulta | top-1 | top-2 | margen | ¿debería matchear? |
+|---|---|---|---|---|
+| `hola, ustedes trabajan en maipu?` | **0.4033** | 0.3302 | 0.073 | sí |
+| `necesito una visita, el calefont no calienta. vivo en ñuñoa y solo puedo un sabado` | 0.2866 | 0.2254 | 0.061 | sí |
+| `carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber` | 0.1298 | 0.1033 | 0.027 | sí |
+| `y eso cuanto de garantia tiene?` | **0.4498** | 0.3768 | 0.073 | sí |
+| `hola, necesito mantencion de caldera, estoy en temuquito` | 0.3491 | 0.3418 | 0.007 | sí |
+| **`hola, arreglan lavadoras? se me inundo el lavadero` (control)** | **0.4026** | 0.3404 | 0.062 | **no** |
+
+**Bajar `min_sim` no es un arreglo y ahora está probado**: el control que hoy *no* matchea (`0.4026 < 0.50`, y por
+eso `super-near-miss-lavadora` pasa 3 de 3) puntúa **más alto que tres de las cuatro consultas que sí deberían
+matchear**. Un umbral que deje pasar "trabajan en maipú?" deja pasar "arreglan lavadoras?", que es exactamente el
+escenario que demuestra que el bot no se inventa servicios. El margen entre top-1 y top-2 tampoco separa: el
+del control (0.062) cae en el mismo rango que el de dos consultas respondibles.
+
+La causa de fondo no es el umbral sino **la construcción de la consulta**: el turno crudo se compara contra 22
+chunks largos (4 documentos), y una pregunta corta —o una que sólo tiene sentido con el turno anterior, como
+"y eso cuanto de garantia tiene?"— queda diluida. La señal que sí existe en el sistema es la **intención ya
+clasificada**: `respond.py:126-131` sólo agrega el fallback por `service` cuando `intent not in (None,
+"unknown")`, y los documentos de la KB ya están separados por tema (cobertura y horarios, garantías y pagos,
+identidad, servicios). Enrutar por intención a documento deja de ser un concurso de similitud.
+
+**Consecuencia sobre T2**: deja de ser "cambiar la forma de la regla" y pasa a ser una decisión de diseño con
+alcance transversal — el retrieval alimenta todos los turnos del cliente, no sólo estos cuatro escenarios. No se
+implementa hasta elegir el camino, y T2b queda bloqueada igual que T6.
