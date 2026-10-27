@@ -56,3 +56,8 @@ refs/current/
 # Conversation-eval runs: the transcripts and the Markdown report are the permanent
 # record, the 40-70 KB JSON is only the input for the diff against the previous run.
 odd/evals/*.json
+
+# Local Engram export (4700+ generated Markdown files). Engram is the source of
+# truth; the dump is a browsing aid, so it never enters the repository — and as an
+# untracked tree it dirtied every conversation-eval stamp, which is worse.
+wiki/
