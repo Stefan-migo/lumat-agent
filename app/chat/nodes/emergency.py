@@ -38,6 +38,7 @@ from app.services.audit import record_audit
 from app.services.cases import set_case_status, get_or_create_case
 from app.services.notify import send_emergency_notification
 from app.services.notifications import notify_admins
+from app.services.realtime import record_activity
 from app.services.settings import get_emergency_protocol
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,16 @@ def emergency(state: ConversationState) -> dict:
         case.emergency = True
         set_case_status(case, "escalado")
         case.escalated_at = datetime.now(timezone.utc)
+        record_activity(
+            session,
+            state.conversation_id,
+            "escalation",
+            # `origin:reason`, the shape `handoff` already writes (`handoff:<reason>`)
+            # and the one analytics filters on. The state change above keeps its own
+            # `emergency_strong_hit` cause; this event names its origin instead.
+            cause="emergency:strong_hit",
+            actor="system",
+        )
         session.add(
             ConversationEvent(
                 conversation_id=state.conversation_id,
