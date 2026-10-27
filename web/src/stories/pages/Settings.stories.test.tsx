@@ -109,7 +109,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/próximo mensaje entrante/i)).toBeInTheDocument();
-    const chips = within(card).getByRole("list", { name: "Frases de emergencia" });
+    const chips = within(card).getByRole("list", { name: "Palabras y frases de activación" });
     expect(within(chips).getAllByRole("listitem")).toHaveLength(settings.keywords.length);
     for (const keyword of settings.keywords) {
       expect(within(chips).getByText(keyword)).toBeInTheDocument();

@@ -177,8 +177,8 @@ describe("Settings", () => {
     expect(screen.getByLabelText("Reglas de alcance")).toHaveAttribute("placeholder", "Ej: reparación=bot_resolve");
     await user.click(screen.getByText("Configuración avanzada"));
     expect(screen.getByLabelText("Reglas de alcance")).toBeVisible();
-    expect(screen.getByText("Configuración avanzada").parentElement).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
-    expect(screen.getByText("Configuración avanzada").parentElement).toHaveTextContent("presupuesto=bot_resolve");
+    expect(screen.getByText("Configuración avanzada").closest("details")).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
+    expect(screen.getByText("Configuración avanzada").closest("details")).toHaveTextContent("presupuesto=bot_resolve");
   });
 
   it("shows Historial only for Agente and Persona", async () => {
