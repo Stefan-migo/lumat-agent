@@ -81,9 +81,6 @@ const MESSAGE_TEMPLATES = [
   { id: "farewell", label: "Despedida", description: "Cierre de conversación", icon: DoorOpen },
   { id: "out_of_hours", label: "Fuera de horario", description: "Atención no disponible", icon: Clock3 },
 ] as const;
-const DERIVACION_LABELS: Record<string, string> = {
-  cobertura: "Comuna fuera de cobertura",
-};
 /**
  * S4: the five derivations whose wording the customer reads. Every other
  * reason (inyección, emergencia, límites de costo, KB) reuses the generic
@@ -477,6 +474,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     setActiveSectionState(group.sections.some(({ id }) => id === activeSection) ? activeSection : group.sections[0].id);
   };
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
+  const [replySearch, setReplySearch] = useState("");
+  const [selectedReplyKey, setSelectedReplyKey] = useState("handoff_cobertura");
   const [keywordEntry, setKeywordEntry] = useState("");
   const [scopeDisclosureOpen, setScopeDisclosureOpen] = useState(false);
   const [personaMode, setPersonaMode] = useState<"preview" | "edit">("preview");
@@ -733,6 +732,20 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const footer = (note = GENERIC_NOTE) => <p className="settings__footer-note">{note}</p>;
   const saving = (key: DraftKey) => Boolean(pending[key]);
   const numericLimitsValid = isValidPositive(draft.conversationLimit) && isValidPositive(draft.dailyLimit);
+  const replyQuery = replySearch.trim().toLocaleLowerCase();
+  const matchesReply = (key: string, label: string) => !replyQuery || `${label} ${key}`.toLocaleLowerCase().includes(replyQuery);
+  const visibleDerivationCases = DERIVACION_CASES.filter(({ key, label }) => matchesReply(key, label));
+  const visibleReplyGroups = REPLY_TEXT_GROUPS.map((group) => ({
+    ...group,
+    keys: group.keys.filter((key) => !replyQuery || group.title.toLocaleLowerCase().includes(replyQuery) || matchesReply(key, REPLY_TEXT_LABELS[key] ?? key)),
+  })).filter(({ keys }) => keys.length > 0);
+  const selectedCase = DERIVACION_CASES.find(({ key }) => key === selectedReplyKey);
+  const selectedGroup = REPLY_TEXT_GROUPS.find(({ keys }) => keys.includes(selectedReplyKey));
+  const selectedReplyLabel = selectedCase?.label ?? REPLY_TEXT_LABELS[selectedReplyKey] ?? selectedReplyKey;
+  const selectedReplyWhen = selectedCase?.when ?? selectedGroup?.title ?? "";
+  const selectedReplySlots = data?.reply_texts?.slots?.[selectedReplyKey] ?? [];
+  const selectedDerivationRule = selectedCase?.key.replace(/^handoff_/, "");
+  const selectedDerivationAvailable = Boolean(selectedDerivationRule && data?.conduct?.options?.derivaciones.includes(selectedDerivationRule));
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
   return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className="settings-page" actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
@@ -814,40 +827,45 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               <span className="settings-conduct__helper">Los textos se envían tal como están escritos.</span>
             </div>
           </Card>
-          <Card title="Derivaciones" description="Todos los textos deterministas que recibe el cliente en las derivaciones, agenda, visitas y captura.">
+          <Card title="Derivaciones y respuestas" description="Selecciona una situación para editar el mensaje que recibe el cliente.">
             <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los cinco casos específicos se muestran primero.</p>
-            <div className="settings-messages__reply-group">
-              {DERIVACION_CASES.map(({ key, label, when }) => {
-                const slots = data.reply_texts?.slots?.[key] ?? [];
-                return <div className="settings-messages__reply" key={key}>
-                  <Textarea label={label} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
-                  <p className="settings-agent__helper">{when}{slots.length ? <> Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></> : null}</p>
-                </div>;
-              })}
+            <div className="settings-replies">
+              <nav className="settings-replies__list" aria-label="Situaciones de respuesta">
+                <SearchInput aria-label="Buscar situación" placeholder="Buscar situación" delay={0} onSearch={setReplySearch} />
+                <h3>Casos de derivación</h3>
+                <ul>{visibleDerivationCases.map(({ key, label }) => <li key={key}>
+                  <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><FileText aria-hidden="true" />{label}</Button>
+                </li>)}</ul>
+                {visibleReplyGroups.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
+                  <ul>{group.keys.map((key) => <li key={key}>
+                    <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}>{REPLY_TEXT_LABELS[key] ?? key}</Button>
+                  </li>)}</ul>
+                </Accordion>)}
+                {!visibleDerivationCases.length && !visibleReplyGroups.length ? <p>No hay situaciones que coincidan con la búsqueda.</p> : null}
+              </nav>
+              <section className="settings-replies__detail" aria-label="Detalle de la situación">
+                <header><h3>{selectedCase?.label ?? selectedGroup?.title ?? selectedReplyLabel}</h3>
+                  <p><strong>Cuándo se envía</strong><span>{selectedReplyWhen}</span></p>
+                </header>
+                {selectedDerivationAvailable ? <label className="settings-replies__toggle">
+                  <input type="checkbox" aria-label="Derivar al equipo" checked={draft.conduct.derivaciones.includes(selectedDerivationRule!)} onChange={(event) => update("conduct", {
+                    ...draft.conduct,
+                    derivaciones: event.target.checked
+                      ? [...new Set([...draft.conduct.derivaciones, selectedDerivationRule!])]
+                      : draft.conduct.derivaciones.filter((rule) => rule !== selectedDerivationRule),
+                  })} />
+                  <span><strong>Derivar al equipo</strong><small>Si lo desactivas, este caso no se deriva automáticamente.</small></span>
+                </label> : null}
+                <Textarea label="Mensaje al cliente" rows={3} value={draft.replyTexts[selectedReplyKey] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [selectedReplyKey]: event.target.value })} />
+                <div className="settings-replies__slots"><strong>Insertar dato</strong>
+                  {selectedReplySlots.length ? selectedReplySlots.map((slot) => <Button key={slot} variant="tertiary" aria-label={`Insertar dato {{${slot}}}`} onClick={() => update("replyTexts", { ...draft.replyTexts, [selectedReplyKey]: `${draft.replyTexts[selectedReplyKey] ?? ""}${draft.replyTexts[selectedReplyKey]?.trim() ? " " : ""}{{${slot}}}` })}><code>{`{{${slot}}}`}</code></Button>) : <span className="settings-agent__helper">No hay datos disponibles para esta situación.</span>}
+                </div>
+                <section className="settings-replies__preview" aria-label="Vista previa">
+                  <div><h4>Vista previa</h4><Badge tone="neutral">Datos de ejemplo</Badge></div>
+                  <MessagePreview message={previewTemplate(draft.replyTexts[selectedReplyKey] ?? "")} />
+                </section>
+              </section>
             </div>
-            {REPLY_TEXT_GROUPS.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
-              <div className="settings-messages__reply-group">
-                {group.keys.map((key) => {
-                  const slots = data.reply_texts?.slots?.[key] ?? [];
-                  return <div className="settings-messages__reply" key={key}>
-                    <Textarea label={REPLY_TEXT_LABELS[key] ?? key} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
-                    {slots.length ? <p className="settings-agent__helper">Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></p> : <p className="settings-agent__helper">Sin datos variables.</p>}
-                  </div>;
-                })}
-              </div>
-            </Accordion>)}
-            <div className="settings-agent__footer">{footer("El cliente recibe este texto tal cual.")}{footer()}<Button disabled={saving("replyTexts") || !replyTextsValid} onClick={() => void saveReplyTexts()}>Guardar respuestas</Button></div>
-            <fieldset className="settings-conduct__derivaciones">
-              <legend>Derivar a una persona cuando</legend>
-              {data.conduct.options.derivaciones.map((rule) => <label className="settings-conduct__check" key={rule}>
-                <input type="checkbox" checked={draft.conduct.derivaciones.includes(rule)} onChange={(event) => update("conduct", {
-                  ...draft.conduct,
-                  derivaciones: event.target.checked ? [...draft.conduct.derivaciones, rule] : draft.conduct.derivaciones.filter((each) => each !== rule),
-                })} />
-                <span>{DERIVACION_LABELS[rule] ?? rule}</span>
-              </label>)}
-            </fieldset>
-            <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
           </Card>
         </> : null}
         {active === "messages" ? <>
