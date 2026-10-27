@@ -142,8 +142,30 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
   cambio es visual, de composición y de estado de guardado. El análisis previo
   `odd/analysis/configuracion/findings.md` sigue siendo válido como inventario, pero varias filas
   (`configuracion-016` HelpPanel, `018` MessagePreview, `021` header action) ya están resueltas.
-- L5 (orquestador, re-secuenciación): S4 se implementa junto a S1–S3 en T1, porque el sistema visual
-  (barra sticky y tarjetas con `?`) solo se puede probar de punta a punta sobre una sección migrada.
+- L4 (desvío registrado en S4.1): el botón `+ Agregar regla` de la referencia abre `Configuración
+  avanzada` en vez de crear una fila con selector de categoría, porque el backend no expone un
+  catálogo de categorías de alcance.
+- L5 (orquestador, re-secuenciación): S4 se implementa junto a S1–S3 en T1, porque el sistema
+  visual (barra sticky y tarjetas con `?`) solo se puede probar de punta a punta sobre una sección
+  migrada. Los slices restantes quedan como S5, S6 y S7, uno por pantalla.
 - L6 (orquestador, re-secuenciación 2): S6 se entrega en dos slices —la tabla `Datos y preguntas`
   (S6.1–S6.4) y el editor `Derivaciones y respuestas` (S6.5–S6.6)— porque juntos pasaban de 400
   líneas en un solo commit y mezclaban dos concerns revisables por separado.
+- L9 (owner, segunda ronda visual): cuatro defectos concretos sobre el resultado real del 5175.
+  1. **Doble línea verde en el título.** No era una regla global duplicada: dos páginas dibujaban su
+     propio acento encima del `::before` global de `.page-header__copy` (`Settings.css` en T1 y
+     `AutomationRecipesPage.css`, el caso que el owner ya había visto en Automatizaciones). Se
+     eliminaron ambas; el acento queda con una sola fuente.
+  2. **Historial.** Se mantiene (la referencia lo muestra y el historial de versiones es real) pero se
+     rediseña como acción fantasma: sin borde, verde de marca, `--text-sm`, superficie al hacer hover.
+  3. **Faltaban los iconos del menú de secciones.** Cada sección declara su icono en `GROUPS` y el
+     primitive `Tabs` ya lo renderizaba; los iconos quedan en `--corp-fg-muted` y toman `--corp-text`
+     en el ítem activo.
+  4. **El popover de ayuda rompía el diseño.** Duplicaba el título (`Popover` + `HelpPanel`) y se
+     anclaba a la izquierda, saliéndose del viewport. Ahora el popover muestra un solo título y las
+     dos frases, y se ancla al borde derecho (`.popover__panel { inset: auto 0 auto auto }`).
+  Además, en las tarjetas de Agente: chip de icono de 44px con `--success-bg`, padding `--space-5`,
+  título semibold, estado vacío centrado con icono, fila `Configuración avanzada` con `</>` y chevron
+  que rota, fila de palabras clave en un único control bordeado con el botón `Agregar` dentro, y la
+  etiqueta `Palabras y frases de activación` sobre los chips. El ayudante del protocolo ya no se
+  monta sobre el textarea porque las columnas ahora son grid con `gap`.
