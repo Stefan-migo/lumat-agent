@@ -178,7 +178,7 @@ type Drafts = {
   conversationLimit: string; dailyLimit: string; metaCost: string; leadHours: string;
   persona: { orchestrator: string; orchestrator_brief: string };
   emergencyProtocol: { safety_instructions: string; contacts: string; notify_message: string };
-  conduct: { orden: string[]; max_preguntas_por_mensaje: number; derivaciones: string[] };
+  conduct: { orden: string[]; redaccion: string; max_preguntas_por_mensaje: number; derivaciones: string[] };
   captureQuestions: Record<string, string>;
   replyTexts: Record<string, string>;
   serviceDurations: Array<{ name: string; minutes: string }>;
@@ -203,6 +203,7 @@ function draftsFrom(data?: SettingsData | null): Drafts {
     },
     conduct: {
       orden: data?.conduct?.orden ?? [],
+      redaccion: data?.conduct?.redaccion ?? "plantilla",
       max_preguntas_por_mensaje: data?.conduct?.max_preguntas_por_mensaje ?? 1,
       derivaciones: data?.conduct?.derivaciones ?? [],
     },
@@ -827,6 +828,22 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                 <Button variant="tertiary" aria-label="Aumentar preguntas por mensaje" disabled={draft.conduct.max_preguntas_por_mensaje >= Math.max(...data.conduct.options.max_preguntas_por_mensaje)} onClick={() => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Math.min(Math.max(...data.conduct.options.max_preguntas_por_mensaje), draft.conduct.max_preguntas_por_mensaje + 1) })}>+</Button>
               </div>
               <span className="settings-conduct__helper">Los textos se envían tal como están escritos.</span>
+            </div>
+            <div className="settings-conduct__row">
+              <span className="settings-conduct__row-label">Redacción de las preguntas</span>
+              <Menu
+                label={draft.conduct.redaccion === "llm" ? "Redactada por el modelo" : "Textos fijos"}
+                ariaLabel="Redacción de las preguntas"
+                showChevron
+                items={data.conduct.options.redaccion.map((value) => ({
+                  value,
+                  label: value === "llm" ? "Redactada por el modelo" : "Textos fijos",
+                }))}
+                onSelect={(value) => update("conduct", { ...draft.conduct, redaccion: value })}
+              />
+              <span className="settings-conduct__helper">{draft.conduct.redaccion === "llm"
+                ? "El modelo reescribe la pregunta con los datos ya capturados. Si no pasa la validación, se envía el texto fijo."
+                : "Las preguntas se envían tal como están escritas."}</span>
             </div>
           </Card>
           <Card title="Derivaciones y respuestas" description="Selecciona una situación para editar el mensaje que recibe el cliente.">

@@ -48,10 +48,12 @@ const settings = (overrides: Partial<SettingsWithOptions> = {}): SettingsWithOpt
   emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },
   conduct: {
     orden: ["failure", "comuna", "name"],
+    redaccion: "plantilla",
     max_preguntas_por_mensaje: 1,
     derivaciones: ["cobertura"],
     customized: false,
     options: {
+      redaccion: ["llm", "plantilla"],
       fields: [
         { value: "failure", label: "Problema" },
         { value: "equipment", label: "Equipo" },
@@ -821,7 +823,7 @@ describe("Settings", () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ conduct: { orden: ["comuna", "failure", "name"], max_preguntas_por_mensaje: 1, derivaciones: ["cobertura"] } }),
+      body: JSON.stringify({ conduct: { orden: ["comuna", "failure", "name"], redaccion: "plantilla", max_preguntas_por_mensaje: 1, derivaciones: ["cobertura"] } }),
     })));
   });
 
@@ -854,7 +856,25 @@ describe("Settings", () => {
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
-      body: JSON.stringify({ conduct: { orden: ["failure", "comuna", "name"], max_preguntas_por_mensaje: 2, derivaciones: ["cobertura"] } }),
+      body: JSON.stringify({ conduct: { orden: ["failure", "comuna", "name"], redaccion: "plantilla", max_preguntas_por_mensaje: 2, derivaciones: ["cobertura"] } }),
+    })));
+  });
+
+  it("lets the owner choose how the capture questions are written", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    const trigger = () => screen.getByRole("button", { name: "Redacción de las preguntas" });
+    expect(trigger()).toHaveTextContent("Textos fijos");
+    await user.click(trigger());
+    await user.click(screen.getByRole("menuitem", { name: "Redactada por el modelo" }));
+    expect(trigger()).toHaveTextContent("Redactada por el modelo");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
+      body: JSON.stringify({ conduct: { orden: ["failure", "comuna", "name"], redaccion: "llm", max_preguntas_por_mensaje: 1, derivaciones: ["cobertura"] } }),
     })));
   });
 

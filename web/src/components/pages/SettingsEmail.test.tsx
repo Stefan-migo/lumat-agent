@@ -18,10 +18,12 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
   emergency: { safety_instructions: ["Corta el gas."], contacts: ["Bomberos 132."], notify_message: "Notificado.", customized: false },
   conduct: {
     orden: ["failure", "comuna", "name"],
+    redaccion: "plantilla",
     max_preguntas_por_mensaje: 1,
     derivaciones: ["cobertura"],
     customized: false,
     options: {
+      redaccion: ["llm", "plantilla"],
       fields: [
         { value: "failure", label: "Problema" },
         { value: "equipment", label: "Equipo" },

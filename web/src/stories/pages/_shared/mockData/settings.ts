@@ -96,10 +96,12 @@ export const settings: Settings = {
   },
   conduct: {
     orden: ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+    redaccion: "plantilla",
     max_preguntas_por_mensaje: 1,
     derivaciones: ["cobertura", "pedido_explicito", "garantia", "servicio_sin_tarifa", "presupuesto_especial"],
     customized: false,
     options: {
+      redaccion: ["llm", "plantilla"],
       fields: [
         { value: "failure", label: "Problema" },
         { value: "equipment", label: "Equipo" },

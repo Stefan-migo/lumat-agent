@@ -162,6 +162,23 @@ def test_validate_accepts_a_payload_without_the_phrasing_switch():
     assert validate_conduct(VALID, FIELDS)["redaccion"] == "plantilla"
 
 
+def test_validate_keeps_the_previous_mode_when_the_payload_omits_the_key():
+    assert validate_conduct(VALID, FIELDS, previous={"redaccion": "llm"})["redaccion"] == "llm"
+
+
+def test_validate_ignores_an_invalid_previous_mode_instead_of_failing():
+    assert (
+        validate_conduct(VALID, FIELDS, previous={"redaccion": "legacy"})["redaccion"]
+        == "plantilla"
+    )
+
+
+def test_an_explicit_mode_in_the_payload_wins_over_the_previous_one():
+    value = {**VALID, "redaccion": "plantilla"}
+
+    assert validate_conduct(value, FIELDS, previous={"redaccion": "llm"})["redaccion"] == "plantilla"
+
+
 def test_get_returns_the_defaults_without_a_row():
     session = MagicMock()
     session.get.return_value = None
