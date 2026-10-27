@@ -113,6 +113,23 @@ def test_ensure_conversation_never_reopens_a_closed_conversation():
     assert states == [ConversationState.CLOSED, ConversationState.BOT]
 
 
+def test_inspect_reports_the_conversation_own_phone_not_the_caller_flag():
+    """The REPL header must name the conversation's customer, not `--phone`.
+
+    Reproduced live: `--conversation 5` printed `+56900000001` (the flag's
+    default) while conversation #5 belonged to another customer entirely, so the
+    operator could not tell whose thread they were writing into.
+    """
+    with SessionLocal() as session:
+        first = ensure_conversation(session, PHONE)
+        session.commit()
+        second = ensure_conversation(session, "+56987654321")
+        session.commit()
+
+        assert inspect(session, first)["phone"] == PHONE
+        assert inspect(session, second)["phone"] == "+56987654321"
+
+
 # ---------------------------------------------------------------------------
 # run_turn — drives the real entry point
 # ---------------------------------------------------------------------------
