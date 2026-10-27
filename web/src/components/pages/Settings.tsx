@@ -729,13 +729,13 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </div>
           <div className="settings-agent__row">
             <Card className="settings-agent__card" title="Detección de emergencias" description="Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante." icon={ShieldAlert} headerAction={<Popover title="Consideraciones" triggerLabel="Ayuda: Detección de emergencias" trigger="?"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></Popover>}>
-              <div className="settings-agent__keywords">
-                <span className="settings-agent__chips-label" id="settings-emergency-chips">Palabras y frases de activación</span>
+              <span className="settings-agent__chips-label" id="settings-emergency-chips">Palabras y frases de activación</span>
+              <div className="settings-chips-field">
                 <ul className="settings-agent__chips" aria-labelledby="settings-emergency-chips">{draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean).map((phrase, index) => <li key={`${phrase}-${index}`}><span>{phrase}</span><Button variant="tertiary" aria-label={`Quitar palabra clave ${phrase}`} onClick={() => update("keywords", draft.keywords.split("\n").map((item) => item.trim()).filter((item) => item && item !== phrase).join("\n"))}>×</Button></li>)}</ul>
-                <div className="settings-agent__keyword-add"><Input label="Escribe una frase y presiona Enter" value={keywordEntry} onChange={(event) => setKeywordEntry(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addKeyword(); } }} /><Button variant="secondary" onClick={addKeyword}><Plus aria-hidden="true" />Agregar</Button></div>
-                <p className="settings-agent__helper">Usa expresiones claras para evitar activaciones innecesarias.</p>
-                <p className="settings-agent__info"><Info aria-hidden="true" />La detección se evalúa antes de generar la respuesta.</p>
+                <div className="settings-agent__keyword-add"><input className="field__control" aria-label="Escribe una frase y presiona Enter" placeholder="Escribe una frase y presiona Enter" value={keywordEntry} onChange={(event) => setKeywordEntry(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addKeyword(); } }} /><Button variant="secondary" onClick={addKeyword}><Plus aria-hidden="true" />Agregar</Button></div>
               </div>
+              <p className="settings-agent__helper">Usa expresiones claras para evitar activaciones innecesarias.</p>
+              <p className="settings-agent__info"><Info aria-hidden="true" />La detección se evalúa antes de generar la respuesta.</p>
             </Card>
           </div>
           <div className="settings-agent__row">
