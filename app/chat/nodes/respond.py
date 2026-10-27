@@ -90,6 +90,61 @@ def asks_about_schedule(question: str) -> bool:
     return any(term in words for term in _SCHEDULE_TERMS)
 
 
+# L2 debt: prices live in the tariff, never in a customer KB document, so a KB
+# miss on a published service used to answer "no tengo ese dato" while the
+# figure was already configured (`simple-precio-calefont`, measured live). Only
+# explicit service phrases are mapped: an unrecognised wording keeps the
+# existing path, so no figure is ever invented.
+_TARIFF_SERVICE_PHRASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "mantencion_calefont",
+        (
+            "mantencion de calefont",
+            "mantencion calefont",
+            "mantencion de calefon",
+            "mantencion calefon",
+        ),
+    ),
+    ("mantencion_caldera", ("mantencion de caldera", "mantencion caldera")),
+    ("lavado_red", ("lavado de red",)),
+    ("visita_tecnica", ("visita tecnica",)),
+)
+
+
+def _normalise_question(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", _normalise_topic_text(text)).strip()
+
+
+def tariff_service(question: str) -> str | None:
+    """The published service key this question names, if it names one."""
+    normalized = _normalise_question(question)
+    for service, phrases in _TARIFF_SERVICE_PHRASES:
+        if any(phrase in normalized for phrase in phrases):
+            return service
+    return None
+
+
+def tariff_price_reply(session, state: ConversationState) -> str | None:
+    """The published price for the service this turn asks about (L2 debt).
+
+    Deterministic and read-only: no model call, no invented figure. Returns
+    ``None`` when the turn is not a price question, names no published service,
+    or that service has no price in force today; the caller then keeps its
+    existing answer path.
+    """
+    if state.intent != "valores":
+        return None
+    service = tariff_service(_current_text(state))
+    if service is None:
+        return None
+    today = datetime.now(ZoneInfo(get_hours_timezone(session))).date()
+    price = tarifa_vigente(get_tarifa_precios(session), today).get(service)
+    if price is None:
+        return None
+    formatted = f"${price:,.0f}".replace(",", ".")
+    return f"El precio vigente de {TARIFA_LABELS[service]} es {formatted}."
+
+
 def topic_document_ids(question: str) -> list[str]:
     """Return seeded KB document source IDs matching this turn, in fixed topic order."""
     normalized = _normalise_topic_text(question)
@@ -430,6 +485,11 @@ def respond(state: ConversationState) -> dict:
                     "escalate_reason": "kb_unavailable",
                 }
         if not chunks:
+            # L2 debt: a published service has a configured price, so a KB miss on
+            # it is not a knowledge gap. Answer the figure, never the miss offer.
+            price_reply = tariff_price_reply(session, state)
+            if price_reply is not None:
+                return {"replies": [price_reply]}
             # D18: offer both paths without deriving; CM-6 still records the miss.
             miss_context = f"intent={state.intent}"
             log_unresolved(
