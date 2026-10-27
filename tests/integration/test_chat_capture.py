@@ -927,3 +927,41 @@ def test_s16_a_question_with_a_capture_intent_is_answered_not_stored(
     captured = _conversation_captured(conv_id)
     assert "failure" not in captured
     assert captured["_pending"] == ["failure"]
+
+
+def test_s15_coverage_outranks_an_exhausted_pending_field():
+    """S5/T5a: the coverage rule is unreachable once a field is pending.
+
+    Measured on `super-burst-contradiccion`: the conversation ended in `human`
+    with `handoff:campo_sin_respuesta` while `captured_data` held
+    `comuna: Providencia` -- outside coverage -- and `_asked.failure == 2`.
+
+    `_reask_pending` derives at the attempt limit, and `_out_of_coverage` is only
+    consulted from `_ask_next`, which this path never reaches. So the captured
+    state is built directly here: seeding `captured_data` in the database or
+    mocking the classifier does not reproduce this path.
+    """
+    from app.chat.nodes.capture import MAX_ASKS_PER_FIELD, _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        conv = session.get(Conversation, conv_id)
+        customer_id = conv.customer_id
+
+    captured = {
+        "comuna": "Providencia",
+        "_pending": ["failure"],
+        "_asked": {"failure": MAX_ASKS_PER_FIELD},
+        "equipment": "calefont",
+        "equipment_type": "caldera",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert result["escalate_reason"] == "cobertura"

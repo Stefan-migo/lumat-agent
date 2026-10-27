@@ -544,6 +544,19 @@ def capture(state: ConversationState) -> dict:
 
 def _reask_pending(captured: dict, pending: list[str], state: ConversationState) -> dict:
     """Repeat the unanswered batch once, then offer its existing derivation."""
+    with session_scope() as session:
+        conduct = get_conduct(session)
+        if _out_of_coverage(
+            captured, get_coverage_communes(session), conduct["derivaciones"]
+        ):
+            # S5/T5a: the coverage rule outranks an exhausted pending field. It used
+            # to live only in `_ask_next`, which this path never reaches, so a
+            # customer outside coverage whose last field went unanswered was
+            # derived as `campo_sin_respuesta` -- the measured behaviour on
+            # `super-burst-contradiccion`, with `comuna: Providencia` captured.
+            captured.pop("_pending", None)
+            _persist_captured(session, state, captured)
+            return _derive(captured, COVERAGE_DERIVATION)
     asked = dict(captured.get("_asked") or {})
     if any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in pending):
         captured.pop("_pending", None)
