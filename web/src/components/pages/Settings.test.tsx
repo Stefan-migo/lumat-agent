@@ -502,6 +502,17 @@ describe("Settings", () => {
     expect(screen.getByLabelText("Texto de la persona")).toHaveValue(markdown);
   });
 
+  it("keeps persona mode and expand controls together below the card heading", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+    const toolbar = screen.getByRole("toolbar", { name: "Herramientas de persona" });
+    expect(within(toolbar).getByRole("button", { name: "Vista previa" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(toolbar).getByRole("button", { name: "Editar Markdown" })).toHaveAttribute("aria-pressed", "false");
+    await user.click(within(toolbar).getByRole("button", { name: "Ampliar" }));
+    expect(screen.getByRole("dialog", { name: "Vista previa de la persona" })).toBeInTheDocument();
+  });
+
   it("opens the persona Markdown in an enlarged dialog", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings({ persona: { orchestrator: "# Identidad\n\nEres Max.", orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
