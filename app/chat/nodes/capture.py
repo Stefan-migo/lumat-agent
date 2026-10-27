@@ -544,6 +544,19 @@ def capture(state: ConversationState) -> dict:
 
 def _reask_pending(captured: dict, pending: list[str], state: ConversationState) -> dict:
     """Repeat the unanswered batch once, then offer its existing derivation."""
+    with session_scope() as session:
+        conduct = get_conduct(session)
+        if _out_of_coverage(
+            captured, get_coverage_communes(session), conduct["derivaciones"]
+        ):
+            # S5/T5a: the coverage rule outranks an exhausted pending field. It used
+            # to live only in `_ask_next`, which this path never reaches, so a
+            # customer outside coverage whose last field went unanswered was
+            # derived as `campo_sin_respuesta` -- the measured behaviour on
+            # `super-burst-contradiccion`, with `comuna: Providencia` captured.
+            captured.pop("_pending", None)
+            _persist_captured(session, state, captured)
+            return _derive(captured, COVERAGE_DERIVATION)
     asked = dict(captured.get("_asked") or {})
     if any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in pending):
         captured.pop("_pending", None)
@@ -554,10 +567,7 @@ def _reask_pending(captured: dict, pending: list[str], state: ConversationState)
     captured["_asked"] = asked
     captured["_pending"] = pending
     with session_scope() as session:
-        ask = _phrase_question(session, captured, pending, _field_questions(session))
-        ack = _render_capture_ack(session, captured)
-        if ack:
-            ask = f"{ack}{ask}"
+        ask = _render_capture_question(session, captured, pending)
         _persist_captured(session, state, captured)
     return {"captured": captured, "replies": [ask]}
 
@@ -606,6 +616,26 @@ def _exhausted(captured: dict, batch: list[str]) -> bool:
     return any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in batch)
 
 
+def _render_capture_question(
+    session, captured: dict, batch: list[str]
+) -> str:
+    """The customer-facing question for a batch of fields.
+
+    One renderer for both ask paths. They used to render separately, and the copy
+    in `_reask_pending` was missing the equipment label, so a customer who
+    corrected "no era calefont, es una caldera" was asked a generic question and
+    no reply ever said "caldera" (T5b, gate G6 on `super-burst-contradiccion`).
+    """
+    ask = _phrase_question(session, captured, batch, _field_questions(session))
+    ack = _render_capture_ack(session, captured)
+    if ack:
+        ask = f"{ack}{ask}"
+    label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
+    if batch == ["failure"] and label:
+        ask = f"Entiendo, es un problema con tu {label}. {ask}"
+    return ask
+
+
 def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = False) -> dict:
     """Ask the next missing fields, or the consent step when none remain."""
     with session_scope() as session:
@@ -645,13 +675,7 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             asked[field] = asked.get(field, 0) + 1
         captured["_asked"] = asked
         texts = get_reply_texts(session)
-        ack = _render_capture_ack(session, captured)
-        ask = _phrase_question(session, captured, batch, _field_questions(session))
-        if ack:
-            ask = f"{ack}{ask}"
-        label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
-        if batch == ["failure"] and label:
-            ask = f"Entiendo, es un problema con tu {label}. {ask}"
+        ask = _render_capture_question(session, captured, batch)
         if len(missing) <= len(batch) and not captured.get("_evidence_asked"):
             ask = f"{ask} {render_reply(texts, 'capture_evidence')}"
             captured["_evidence_asked"] = True

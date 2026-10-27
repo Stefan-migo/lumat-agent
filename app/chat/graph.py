@@ -28,7 +28,9 @@ budget block still delivers the safety protocol (the emergency path never
 calls the LLM anyway); `cost_gate` runs before `handoff_gate` so a blocked
 conversation labels the escalation with the cost reason.
 
-Batch 4 (T4.4) adds the handoff node, which owns every escalation:
+Batch 4 (T4.4) adds the handoff node, which owns every escalation except the
+emergency strong hit: that one stops at `emergency` (`emergency -> END`) and
+records its own `escalation` activity with an `emergency:<reason>` cause.
 
     handoff_gate (persona/media/complaint) -> handoff
     emergency_gate weak hit -> handoff
