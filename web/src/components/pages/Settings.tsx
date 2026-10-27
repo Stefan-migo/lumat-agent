@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ChevronDown, ClipboardList, CircleHelp, Clock3, Code2, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, KeyRound, LayoutDashboard, Mail, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, fetchTechnicians, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -9,6 +9,7 @@ import { Badge } from "../primitives/Badge";
 import { Accordion } from "../primitives/Accordion";
 import { Card } from "../primitives/Card";
 import { HelpPanel } from "../primitives/HelpPanel";
+import { Popover } from "../primitives/Popover";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
 import { Menu } from "../primitives/Menu";
@@ -47,17 +48,23 @@ function formatShortDate(value: string) {
 const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const GROUPS = [
   { id: "chatbot", label: "Chatbot", sections: [
-    { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "conduct", label: "Conducta" }, { id: "messages", label: "Mensajes" },
+    { id: "agent", label: "Agente", icon: Bot }, { id: "persona", label: "Persona", icon: UserRound }, { id: "conduct", label: "Conducta", icon: SlidersHorizontal }, { id: "messages", label: "Mensajes", icon: MessageCircle },
   ] },
   { id: "operation", label: "Operación", sections: [
-    { id: "schedule", label: "Horarios y avisos" }, { id: "coverage", label: "Cobertura" }, { id: "tarifa", label: "Tarifas" },
+    { id: "schedule", label: "Horarios y avisos", icon: Clock3 }, { id: "coverage", label: "Cobertura", icon: Globe }, { id: "tarifa", label: "Tarifas", icon: Receipt },
   ] },
   { id: "integrations", label: "Integraciones", sections: [
-    { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" }, { id: "email", label: "Correo" },
+    { id: "capabilities", label: "Capacidades", icon: Wrench }, { id: "model-api-key", label: "API key de modelos", icon: KeyRound }, { id: "email", label: "Correo", icon: Mail },
   ] },
-  { id: "cost-group", label: "Costos", sections: [{ id: "costs", label: "Costos" }] },
+  { id: "cost-group", label: "Costos", sections: [{ id: "costs", label: "Costos", icon: Coins }] },
 ];
 const SECTIONS = GROUPS.flatMap(({ sections }) => sections);
+const SECTION_META: Record<string, { title: string; description: string }> = {
+  agent: { title: "Agente", description: "Define qué puede resolver y cómo actúa ante una emergencia." },
+  persona: { title: "Persona", description: "Define quién es Max y cómo conversa con tus clientes." },
+  conduct: { title: "Conducta", description: "Organiza los datos que solicita el bot y los mensajes de cada situación." },
+  schedule: { title: "Horarios y avisos", description: "Configura la atención del equipo y la disponibilidad para visitas." },
+};
 const sectionGroup = (sectionId: string) => GROUPS.find(({ sections }) => sections.some(({ id }) => id === sectionId)) ?? GROUPS[0];
 const MESSAGE_TEMPLATES = [
   { id: "greeting", label: "Saludo cuando falta el nombre", description: "Inicio de conversación; pregunta el nombre del cliente", icon: MessageCircle },
@@ -231,11 +238,25 @@ function templateSlots(text: string) {
   return [...new Set(Array.from(text.matchAll(/{{\s*([^{}]+?)\s*}}/g), (match) => match[1].trim()))];
 }
 
+function isScopeValid(value: string) {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => {
+    const [category, mode, ...rest] = line.split("=").map((part) => part.trim());
+    return Boolean(category) && rest.length === 0 && ["bot_resolve", "always_escalate"].includes(mode);
+  });
+}
+
 function sameValue(left: unknown, right: unknown) {
   return typeof left === "object" && left !== null && typeof right === "object" && right !== null
     ? JSON.stringify(left) === JSON.stringify(right)
     : Object.is(left, right);
 }
+
+const SECTION_DRAFT_KEYS: Record<string, DraftKey[]> = {
+  agent: ["scope", "keywords", "emergencyProtocol"], persona: ["persona"],
+  conduct: ["conduct", "captureQuestions", "replyTexts"], messages: ["tone", "messages", "templates"],
+  schedule: ["leadHours", "hours", "serviceDurations"], tarifa: ["tarifa"], coverage: ["coverage"],
+  costs: ["conversationLimit", "dailyLimit", "metaCost"], capabilities: [], "model-api-key": [], email: [],
+};
 
 function stateMessage(state: SettingsState, errorDetail?: string | null) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando configuración" />;
@@ -434,6 +455,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     setActiveSectionState(group.sections.some(({ id }) => id === activeSection) ? activeSection : group.sections[0].id);
   };
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
+  const [keywordEntry, setKeywordEntry] = useState("");
+  const [scopeDisclosureOpen, setScopeDisclosureOpen] = useState(false);
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
   const [personaVersion, setPersonaVersion] = useState(0);
@@ -565,14 +588,14 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       setSaveErrorDetail(error instanceof Error ? error.message : null); setSaveState("server-error");
     } finally { setPending((current) => ({ ...current, [key]: false })); }
   };
-  const saveScope = () => {
+  const saveScope = async () => {
+    if (!isScopeValid(draft.scope)) { setSaveState("validation"); return; }
     const rules: Record<string, string> = {};
     for (const line of draft.scope.split("\n").map((value) => value.trim()).filter(Boolean)) {
       const [category, mode] = line.split("=").map((value) => value.trim());
-      if (!category || !["bot_resolve", "always_escalate"].includes(mode)) { setSaveState("validation"); return; }
       rules[category] = mode;
     }
-    void save("scope", "/panel/api/settings/scope", { rules }, draft.scope);
+    await save("scope", "/panel/api/settings/scope", { rules }, draft.scope);
   };
   const savePersona = async () => {
     if (!draft.persona.orchestrator.trim() || !draft.persona.orchestrator_brief.trim()) { setSaveState("validation"); return; }
@@ -615,6 +638,67 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     for (const { name, minutes } of draft.serviceDurations) map[name.trim()] = Number(minutes);
     await save("serviceDurations", "/panel/api/settings/durations", { service_durations: map }, draft.serviceDurations);
   };
+  const sectionKeys = SECTION_DRAFT_KEYS[activeSection] ?? [];
+  const pendingDraftKeys = sectionKeys.filter((key) => !sameValue(draft[key], baseline.current[key]));
+  const hasPendingChanges = pendingDraftKeys.length > 0;
+  const savePendingChanges = async () => {
+    const valid = pendingDraftKeys.every((key) => {
+      if (key === "scope") return isScopeValid(draft.scope);
+      if (key === "persona") return Boolean(draft.persona.orchestrator.trim() && draft.persona.orchestrator_brief.trim());
+      if (key === "emergencyProtocol") return Boolean(draft.emergencyProtocol.safety_instructions.trim() && draft.emergencyProtocol.contacts.trim() && draft.emergencyProtocol.notify_message.trim());
+      if (key === "conduct") return Boolean(draft.conduct.orden.length && draft.conduct.derivaciones.length);
+      if (key === "captureQuestions") return Boolean(Object.values(draft.captureQuestions).length && Object.values(draft.captureQuestions).every((value) => value.trim() && !value.includes("{{") && !value.includes("}}")));
+      if (key === "replyTexts") return replyTextsValid;
+      if (key === "leadHours") return Number.isInteger(Number(draft.leadHours)) && Number(draft.leadHours) >= 1 && Number(draft.leadHours) <= 48;
+      if (key === "hours") return isValidHours(draft.hours);
+      if (key === "serviceDurations") return isDurationListValid(draft.serviceDurations);
+      if (key === "tarifa") return isTarifaValid(draft.tarifa, settingsOptions(data! as SettingsData).tarifa_labels);
+      if (key === "conversationLimit" || key === "dailyLimit") return numericLimitsValid;
+      if (key === "metaCost") return isValidNonNegative(draft.metaCost);
+      if (key === "tone") return Boolean(draft.tone.trim());
+      if (key === "messages") return Object.values(draft.messages).every((value) => value.trim());
+      if (key === "templates") return draft.templates.every(({ id, text }) => id.trim() && text.trim());
+      return true;
+    });
+    if (!valid) { setSaveState("validation"); return; }
+    // The two spend limits share one endpoint, so either dirty key saves both once.
+    let limitsSaved = false;
+    for (const key of pendingDraftKeys) {
+      if (key === "scope") await saveScope();
+      else if (key === "keywords") await save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords);
+      else if (key === "persona") await savePersona();
+      else if (key === "emergencyProtocol") await saveEmergencyProtocol();
+      else if (key === "conduct") await saveConduct();
+      else if (key === "captureQuestions") await saveCaptureQuestions();
+      else if (key === "replyTexts") await saveReplyTexts();
+      else if (key === "tone") await save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone);
+      else if (key === "messages") await save("messages", "/panel/api/settings/messages", draft.messages, draft.messages);
+      else if (key === "templates") await save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates);
+      else if (key === "leadHours") await saveLeadHours();
+      else if (key === "hours") await save("hours", "/panel/api/settings/hours", draft.hours, draft.hours);
+      else if (key === "serviceDurations") await saveDurations();
+      else if (key === "tarifa") await save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa);
+      else if (key === "coverage") await save("coverage", "/panel/api/settings/coverage", { communes: draft.coverage.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.coverage);
+      else if (key === "conversationLimit" || key === "dailyLimit") {
+        if (limitsSaved) continue;
+        limitsSaved = true;
+        await save("conversationLimit", "/panel/api/settings/limits", { conversation_limit: Number(draft.conversationLimit), daily_limit: Number(draft.dailyLimit) }, draft.conversationLimit);
+      }
+      else if (key === "metaCost") await save("metaCost", "/panel/api/settings/meta", { service_message_cost: Number(draft.metaCost) }, draft.metaCost);
+    }
+  };
+  const discardPendingChanges = () => setDraft((current) => {
+    const next = { ...current };
+    pendingDraftKeys.forEach((key) => { (next as Drafts)[key] = baseline.current[key] as never; });
+    return next;
+  });
+  const addKeyword = () => {
+    const phrase = keywordEntry.trim();
+    if (!phrase) return;
+    const keywords = draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean);
+    if (!keywords.includes(phrase)) update("keywords", [...keywords, phrase].join("\n"));
+    setKeywordEntry("");
+  };
   const snapshot = data?.snapshot;
   const state = saveState ?? pageState;
   const retry = onRetry ?? fetched.retry;
@@ -626,7 +710,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const saving = (key: DraftKey) => Boolean(pending[key]);
   const numericLimitsValid = isValidPositive(draft.conversationLimit) && isValidPositive(draft.dailyLimit);
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
-  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state, saveErrorDetail)}>
+  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className="settings-page" actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
       <div className="settings-tabs__select">
         <Menu label={GROUPS.find(({ id }) => id === activeGroup)?.label ?? "Chatbot"} ariaLabel="Grupo de configuración" showChevron items={GROUPS.map(({ id, label }) => ({ value: id, label }))} onSelect={selectGroup} />
@@ -635,42 +719,32 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     <Tabs ariaLabel="Super-secciones de configuración" tabs={GROUPS} activeTab={activeGroup} onTabChange={selectGroup}>
       {() => <Tabs layout="vertical" ariaLabel="Secciones de configuración" tabs={sectionGroup(activeSection).sections} activeTab={activeSection} onTabChange={setActiveSection}>
       {(active) => <div className="settings-tabs__content">
+        {SECTION_META[active] ? <header className="settings-section-head"><h2>{SECTION_META[active].title}</h2><p>{SECTION_META[active].description}</p></header> : null}
         {active === "agent" ? <>
           <div className="settings-agent__row">
-            <Card title="Alcance del agente" description="Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona." icon={SlidersHorizontal} headerAction={<Badge tone="neutral">Avanzado</Badge>}>
-              <div className="settings-agent__layout">
-                <div className="settings-agent__form">
-                  <Textarea label="Reglas de alcance" rows={4} placeholder="Ej: reparación=bot_resolve" value={draft.scope} onChange={(event) => update("scope", event.target.value)} />
-                  <details><summary>Sintaxis avanzada</summary><p>Escribe una categoría y un modo en cada línea, separados por un signo igual. <code>bot_resolve</code> significa que el agente responde por su cuenta; <code>always_escalate</code> significa que deriva la conversación a una persona. Por ejemplo: <code>presupuesto=bot_resolve</code>.</p></details>
-                  <div className="settings-agent__footer">{footer()}<Button disabled={saving("scope") || !draft.scope.trim() || !draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => { const [category, mode] = line.split("=").map((value) => value.trim()); return Boolean(category) && ["bot_resolve", "always_escalate"].includes(mode); })} onClick={saveScope}>Guardar alcance</Button></div>
-                </div>
-                <HelpPanel icon={CircleHelp} title="Cómo funciona"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></HelpPanel>
-              </div>
+            <Card className="settings-agent__card" title="Alcance del agente" description="Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona." icon={Bot} headerAction={<><Badge tone="neutral">Avanzado</Badge><Popover title="Cómo funciona" triggerLabel="Ayuda: Alcance del agente" trigger="?"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></Popover></>}>
+              {draft.scope.trim() ? <ul className="settings-agent__rules">{draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => { const [category, mode] = line.split("=").map((part) => part.trim()); return <li key={line}><span>{category}</span><Badge tone={mode === "always_escalate" ? "warning" : "neutral"}>{mode}</Badge></li>; })}</ul> : <div className="settings-agent__empty"><FileText className="settings-agent__empty-icon" aria-hidden="true" /><strong>No hay reglas personalizadas</strong><p>Agrega categorías o revisa la configuración avanzada.</p><Button variant="secondary" onClick={() => setScopeDisclosureOpen(true)}><Plus aria-hidden="true" />Agregar regla</Button></div>}
+              <details className="settings-advanced" open={scopeDisclosureOpen} onToggle={(event) => setScopeDisclosureOpen(event.currentTarget.open)}><summary className="settings-advanced__summary"><Code2 aria-hidden="true" /><span>Configuración avanzada<span className="visually-hidden">, sintaxis avanzada</span></span><ChevronDown className="settings-advanced__chevron" aria-hidden="true" /></summary><div className="settings-agent__advanced"><Textarea label="Reglas de alcance" rows={4} placeholder="Ej: reparación=bot_resolve" value={draft.scope} onChange={(event) => update("scope", event.target.value)} /><p>Escribe una categoría y un modo en cada línea, separados por un signo igual. <code>bot_resolve</code> significa que el agente responde por su cuenta; <code>always_escalate</code> significa que deriva la conversación a una persona. Por ejemplo: <code>presupuesto=bot_resolve</code>.</p></div></details>
             </Card>
           </div>
           <div className="settings-agent__row">
-            <Card title="Detección de emergencias" description="Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante." icon={ShieldAlert}>
-              <div className="settings-agent__layout">
-                <div className="settings-agent__form">
-                  <Textarea label="Palabras clave de emergencia" rows={6} value={draft.keywords} onChange={(event) => update("keywords", event.target.value)} />
-                  <p className="settings-agent__helper">Escribe una palabra o frase por línea.</p>
-                  <div className="settings-agent__footer">{footer()}<Button disabled={saving("keywords") || !draft.keywords.split("\n").some((value) => value.trim())} onClick={() => void save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords)}>Guardar palabras clave</Button></div>
-                </div>
-                <HelpPanel icon={ShieldAlert} title="Consideraciones"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></HelpPanel>
+            <Card className="settings-agent__card" title="Detección de emergencias" description="Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante." icon={ShieldAlert} headerAction={<Popover title="Consideraciones" triggerLabel="Ayuda: Detección de emergencias" trigger="?"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></Popover>}>
+              <span className="settings-agent__chips-label" id="settings-emergency-chips">Palabras y frases de activación</span>
+              <div className="settings-chips-field">
+                <ul className="settings-agent__chips" aria-labelledby="settings-emergency-chips">{draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean).map((phrase, index) => <li key={`${phrase}-${index}`}><span>{phrase}</span><Button variant="tertiary" aria-label={`Quitar palabra clave ${phrase}`} onClick={() => update("keywords", draft.keywords.split("\n").map((item) => item.trim()).filter((item) => item && item !== phrase).join("\n"))}>×</Button></li>)}</ul>
+                <div className="settings-agent__keyword-add"><input className="field__control" aria-label="Escribe una frase y presiona Enter" placeholder="Escribe una frase y presiona Enter" value={keywordEntry} onChange={(event) => setKeywordEntry(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addKeyword(); } }} /><Button variant="secondary" onClick={addKeyword}><Plus aria-hidden="true" />Agregar</Button></div>
               </div>
+              <p className="settings-agent__helper">Usa expresiones claras para evitar activaciones innecesarias.</p>
+              <p className="settings-agent__info"><Info aria-hidden="true" />La detección se evalúa antes de generar la respuesta.</p>
             </Card>
           </div>
           <div className="settings-agent__row">
-            <Card title="Protocolo de emergencia" description="Lo que Max responde cuando detecta riesgo. La detección de la emergencia no depende de este texto: se revisa antes, en cada mensaje." icon={ShieldAlert} headerAction={data.emergency?.customized ? <Badge tone="success">Personalizado</Badge> : <Badge tone="neutral">Original</Badge>}>
-              <div className="settings-agent__form">
-                <Textarea label="Instrucciones de seguridad" rows={6} value={draft.emergencyProtocol.safety_instructions} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, safety_instructions: event.target.value })} />
-                <p className="settings-agent__helper">Una instrucción por línea.</p>
-                <Textarea label="Contactos de emergencia" rows={4} value={draft.emergencyProtocol.contacts} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, contacts: event.target.value })} />
-                <p className="settings-agent__helper">Un contacto por línea.</p>
-                <Textarea label="Mensaje al notificar" rows={3} value={draft.emergencyProtocol.notify_message} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, notify_message: event.target.value })} />
-                <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente aviso de emergencia.")}<Button disabled={saving("emergencyProtocol") || !draft.emergencyProtocol.notify_message.trim() || !draft.emergencyProtocol.safety_instructions.trim() || !draft.emergencyProtocol.contacts.trim()} onClick={() => void saveEmergencyProtocol()}>Guardar protocolo</Button></div>
+            <Card className="settings-agent__card" title="Protocolo de emergencia" description="Lo que Max responde cuando detecta riesgo. La detección de la emergencia no depende de este texto: se revisa antes, en cada mensaje." icon={FileText} headerAction={data.emergency?.customized ? <Badge tone="success">Personalizado</Badge> : <Badge tone="neutral">Original</Badge>}>
+              <div className="settings-agent__form settings-agent__protocol">
+                <div><Textarea label="Instrucciones de seguridad" rows={6} value={draft.emergencyProtocol.safety_instructions} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, safety_instructions: event.target.value })} /><p className="settings-agent__helper">Una instrucción por línea.</p></div>
+                <div><Textarea label="Contactos de emergencia" rows={4} value={draft.emergencyProtocol.contacts} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, contacts: event.target.value })} /><p className="settings-agent__helper">Un contacto por línea.</p></div>
+                <div className="settings-agent__protocol-message"><Textarea label="Mensaje al notificar" rows={3} value={draft.emergencyProtocol.notify_message} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, notify_message: event.target.value })} /><p className="settings-agent__helper">Se envía cuando se notifica al equipo.</p></div>
               </div>
-              <SettingsVersionHistory scope="emergency" refreshToken={emergencyVersion} onRestored={retry} />
             </Card>
           </div>
         </> : null}
@@ -912,6 +986,10 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       </div>}
     </Tabs>}
     </Tabs>
+    </div>
+    <div className={`settings-save-bar${hasPendingChanges ? " is-dirty" : ""}`} role="group" aria-label="Estado y acciones de guardado">
+      <span className="settings-save-bar__state">{hasPendingChanges ? <><span aria-hidden="true">●</span>Cambios sin guardar</> : <><span aria-hidden="true">✓</span>Sin cambios pendientes</>}</span>
+      <div className="settings-save-bar__actions"><Button variant="secondary" disabled={!hasPendingChanges} onClick={discardPendingChanges}>Descartar</Button><Button disabled={!hasPendingChanges || pendingDraftKeys.some((key) => saving(key)) || state === "saving"} onClick={() => void savePendingChanges()}>Guardar cambios</Button></div>
     </div>
     {state === "empty" ? <Button onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;

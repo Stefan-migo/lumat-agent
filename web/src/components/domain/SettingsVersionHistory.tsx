@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Clock3 } from "lucide-react";
 import { apiFetch, postJson } from "../../api";
 import type { SettingsDiffResponse, SettingsVersionEntry, SettingsVersionsResponse } from "../../types";
 import { Button } from "../primitives/Button";
@@ -11,6 +12,7 @@ export interface SettingsVersionHistoryProps {
   onRestored: () => void;
   /** Bumped by the parent after every save so an open history stays current. */
   refreshToken?: number;
+  triggerLabel?: string;
 }
 
 type HistoryState = "idle" | "loading" | "ready" | "error";
@@ -27,7 +29,7 @@ function diffLabel(diff: Record<string, string>): string {
 }
 
 /** Version history of one editable scope (S12/S13): view a change, restore it. */
-export function SettingsVersionHistory({ scope, onRestored, refreshToken = 0 }: SettingsVersionHistoryProps) {
+export function SettingsVersionHistory({ scope, onRestored, refreshToken = 0, triggerLabel = "Ver historial" }: SettingsVersionHistoryProps) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<HistoryState>("idle");
   const [versions, setVersions] = useState<SettingsVersionEntry[]>([]);
@@ -82,7 +84,7 @@ export function SettingsVersionHistory({ scope, onRestored, refreshToken = 0 }: 
   return (
     <div className="settings-version-history">
       <Button variant="tertiary" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
-        {open ? "Ocultar historial" : "Ver historial"}
+        {open ? "Ocultar historial" : <><Clock3 aria-hidden="true" />{triggerLabel}</>}
       </Button>
       {open ? (
         <div className="settings-version-history__body">
