@@ -45,6 +45,7 @@ G6   must_include_any  no bot reply contains any of the anchors
 G7   must_not_include  a bot reply contains one of the forbidden anchors
 G8   reply_present     an inbound customer turn got no reply at all
 G9   kb_answered       the answer lives in the KB, yet the bot took the kb_miss path
+G10  causes_required   no escalation carried any of the causes in `causes_required`
 ===  ================  =======================================================
 
 Anchors are matched case- and accent-insensitively, as substrings: the bot says
@@ -134,6 +135,7 @@ GATE_NAMES = {
     "G7": "must_not_include",
     "G8": "reply_present",
     "G9": "kb_answered",
+    "G10": "causes_required",
 }
 
 _SCENARIO_KEYS = {
@@ -153,6 +155,7 @@ _EXPECT_KEYS = {
     "events_required",
     "events_forbidden",
     "causes_forbidden",
+    "causes_required",
     "must_include_any",
     "must_not_include",
     "kb_answered",
@@ -283,6 +286,7 @@ def _build_scenario(entry: Any, index: int) -> Scenario:
         "events_required",
         "events_forbidden",
         "causes_forbidden",
+        "causes_required",
         "must_include_any",
         "must_not_include",
     ):
@@ -405,6 +409,24 @@ def _causes(observation: Mapping[str, Any]) -> list[str]:
     return [str(event.get("cause") or "") for event in _events(observation)]
 
 
+def _cause_matches(cause: str, expected: str) -> bool:
+    """`handoff:cobertura` and a bare `cobertura` both match a declared `cobertura`."""
+    normalised = _normalise(cause)
+    return any(
+        normalised.endswith(_normalise(candidate))
+        for candidate in (expected, _HANDOFF_PREFIX + expected)
+    )
+
+
+def _escalation_causes(observation: Mapping[str, Any]) -> list[str]:
+    """Only the derivations: the other events carry causes too, but no reason."""
+    return [
+        str(event.get("cause") or "")
+        for event in _events(observation)
+        if str(event.get("event") or "") == "escalation"
+    ]
+
+
 def _gate(gate: str, ok: bool, detail: str = "") -> GateResult:
     return GateResult(gate=gate, name=GATE_NAMES[gate], ok=ok, detail=detail)
 
@@ -460,11 +482,28 @@ def evaluate_gates(
             cause
             for cause in causes
             for forbidden in expect["causes_forbidden"]
-            if _normalise(cause).endswith(_normalise(forbidden))
-            or _normalise(cause).endswith(_normalise(_HANDOFF_PREFIX + forbidden))
+            if _cause_matches(cause, forbidden)
         ]
         results["G5"] = _gate(
             "G5", not offences, f"causas prohibidas presentes: {', '.join(sorted(set(offences)))}"
+        )
+
+    if "causes_required" in expect:
+        # The mirror of G5: this scenario expects the derivation to happen, and only
+        # for the reason it declares. Deriving out of panic, or not deriving at all,
+        # still fails.
+        derived = _escalation_causes(observation)
+        matched = [
+            cause
+            for cause in derived
+            for required in expect["causes_required"]
+            if _cause_matches(cause, required)
+        ]
+        results["G10"] = _gate(
+            "G10",
+            bool(matched),
+            f"ninguna derivación esperada (esperaba {', '.join(expect['causes_required'])}); "
+            f"se registró: {', '.join(derived) or 'ninguna'}",
         )
 
     replies = _replies(observation)
@@ -689,13 +728,33 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict:
     }
 
 
+def _corpus_fingerprint(report: Mapping[str, Any]) -> str | None:
+    """The fingerprint of the corpus this report measured.
+
+    A written report keeps it under `stamp`; an older caller may pass it at the top
+    level. Reading only the top level compared `None` against `None` and called every
+    pair of runs comparable, which is the one thing this guard exists to prevent.
+    """
+    if report.get("corpus_fingerprint"):
+        return str(report["corpus_fingerprint"])
+    stamp = report.get("stamp") or {}
+    fingerprint = stamp.get("corpus_fingerprint")
+    return str(fingerprint) if fingerprint else None
+
+
 def compare_runs(current: Mapping[str, Any], previous: Mapping[str, Any]) -> dict:
     """Diff a run against the previous one, scenario by scenario.
 
     Two runs over different corpora are not comparable, and say so instead of
     producing a diff that looks meaningful.
     """
-    comparable = current.get("corpus_fingerprint") == previous.get("corpus_fingerprint")
+    current_fingerprint = _corpus_fingerprint(current)
+    previous_fingerprint = _corpus_fingerprint(previous)
+    comparable = (
+        current_fingerprint is None
+        or previous_fingerprint is None
+        or current_fingerprint == previous_fingerprint
+    )
     current_rows = {row["scenario"]: row for row in current.get("runs") or ()}
     previous_rows = {row["scenario"]: row for row in previous.get("runs") or ()}
 
@@ -750,6 +809,9 @@ The scripted turns are the opening of a conversation, not all of it: a live run
 that stops there never lets the simulated customer act like a customer. This is
 a ceiling, not a target — the simulator reports `goal_reached` and the run ends
 as soon as it does, so a generous ceiling costs nothing on a short scenario.
+
+`simple` scenarios get none of this room: they are the floor, and a floor that
+depends on what the simulator invents is not reproducible (S2).
 """
 
 
@@ -760,13 +822,16 @@ def resolve_budget(
 
     A declared `max_turns` is the author's ceiling for that scenario and wins. An
     explicit override (`--max-turns`) wins over everything. Otherwise a scripted
-    run stops at its script, and a live run gets room for the simulated customer.
+    run stops at its script, and a live run gets room for the simulated customer —
+    except on `simple`, which is the floor of the measurement: what a simulated
+    customer invents mid-run must not decide whether the core of the bot works (S2).
     """
     if override:
         return override
     if scenario.max_turns is not None:
         return scenario.max_turns
-    return len(scenario.turns) + (SIMULATED_TURNS if live else 0)
+    headroom = SIMULATED_TURNS if live and scenario.tier != "simple" else 0
+    return len(scenario.turns) + headroom
 
 
 def plan_turns(
