@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, Ban, Bell, BookOpen, Bot, CalendarCheck, CalendarClock, CalendarDays, CalendarSearch, CalendarX, Camera, ChevronDown, CircleHelp, ClipboardList, ClipboardX, Clock3, Code2, Coins, Database, DoorOpen, Eye, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, KeyRound, LayoutDashboard, ListChecks, Mail, MapPinOff, Maximize2, MessageCircle, MessageCircleQuestion, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Ban, Bell, BookOpen, Bot, CalendarCheck, CalendarClock, CalendarDays, CalendarSearch, CalendarX, Camera, ChevronDown, CircleHelp, ClipboardList, ClipboardX, Clock3, Code2, Coins, Database, DoorOpen, Eye, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Headset, History, Info, KeyRound, LayoutDashboard, ListChecks, Mail, MapPinOff, Maximize2, MessageCircle, MessageCircleQuestion, MessagesSquare, Moon, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, fetchTechnicians, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -8,7 +8,6 @@ import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Accordion } from "../primitives/Accordion";
 import { Card } from "../primitives/Card";
-import { HelpPanel } from "../primitives/HelpPanel";
 import { Popover } from "../primitives/Popover";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
@@ -18,10 +17,9 @@ import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { Dialog } from "../primitives/Dialog";
 import { MessagePreview } from "../primitives/MessagePreview";
-import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
-import { TechnicianScheduleEditor } from "../shared/TechnicianScheduleEditor";
-import { WEEKDAY_NAMES } from "../shared/agendaTime";
+import { SettingsHoursEditor } from "./SettingsHoursEditor";
+import { SettingsTechnicians } from "./SettingsTechnicians";
 import { PageFrame } from "../shared/PageFrame";
 import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
@@ -47,7 +45,6 @@ function formatShortDate(value: string) {
   const [, year, month, day] = match;
   return `${Number(day)} ${MONTHS_SHORT[Number(month) - 1] ?? month} ${year}`;
 }
-const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const GROUPS = [
   { id: "chatbot", label: "Chatbot", sections: [
     { id: "agent", label: "Agente", icon: Bot }, { id: "persona", label: "Persona", icon: UserRound }, { id: "conduct", label: "Conducta", icon: SlidersHorizontal }, { id: "messages", label: "Mensajes", icon: MessageCircle },
@@ -188,7 +185,6 @@ type Drafts = {
 };
 type DraftKey = keyof Drafts;
 const GENERIC_NOTE = "Los cambios se aplican al guardar.";
-const SCHEDULE_NOTE = "Completa los días y las horas para guardar.";
 
 function draftsFrom(data?: SettingsData | null): Drafts {
   return {
@@ -324,34 +320,6 @@ function TarifaEditor({ tarifa, labels, onChange }: { tarifa: SettingsData["tari
       </div>
     </fieldset>)}
   </div>;
-}
-
-function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: HoursData) => void }) {
-  const [newDays, setNewDays] = useState<string[]>([]);
-  const [newOpen, setNewOpen] = useState("09:00");
-  const [newClose, setNewClose] = useState("18:00");
-  const usedDays = hours.schedule.flatMap((entry) => entry.days).map((day) => WEEKDAY_NAMES[day - 1]);
-  const addSchedule = () => {
-    const days = newDays.map((day) => WEEKDAY_NAMES.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(WEEKDAY_NAMES[day - 1]));
-    if (!days.length || !newOpen || !newClose || newOpen >= newClose) return;
-    onChange({ ...hours, schedule: [...hours.schedule, { days, open: newOpen, close: newClose }] });
-    resetDraft();
-  };
-  const resetDraft = () => { setNewDays([]); setNewOpen("09:00"); setNewClose("18:00"); };
-  const timezoneOptions = [...new Set([hours.timezone, ...TIMEZONES])].filter(Boolean).sort((left, right) => left.localeCompare(right));
-  return <>
-    <div className="settings-hours__timezone"><Globe2 aria-hidden="true" /><Select label="Zona horaria" value={hours.timezone} onChange={(event) => onChange({ ...hours, timezone: event.target.value })} options={timezoneOptions.map((timezone) => ({ value: timezone, label: timezone }))} /></div>
-    <section className="settings-hours__weekly" aria-label="Horarios semanales"><h3>Horarios semanales</h3>
-    {hours.schedule.length ? <div className="settings-hours__list" aria-label="Horarios configurados">{hours.schedule.map((entry, index) => <div className="settings-hours__item" key={index}>
-      <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => WEEKDAY_NAMES[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
-      <Button variant="tertiary" aria-label={`Eliminar horario ${index + 1}`} onClick={() => onChange({ ...hours, schedule: hours.schedule.filter((_, currentIndex) => currentIndex !== index) })}><Trash2 aria-hidden="true" /> Eliminar</Button>
-    </div>)}</div> : <p className="settings-hours__empty">No hay horarios guardados.</p>}</section>
-    <div className="settings-hours__new"><div className="settings-hours__new-header"><h3>Nuevo horario</h3><Badge tone="neutral">Sin guardar</Badge><Button variant="tertiary" className="settings-hours__reset" aria-label="Restablecer nuevo horario" onClick={resetDraft}><Trash2 aria-hidden="true" /></Button></div>
-      <span className="settings-hours__day-label">Días de atención</span><DayToggle label="Días de atención" value={newDays} onChange={(value) => setNewDays(value.filter((day) => !usedDays.includes(day)))} />
-      <div className="settings-hours__times"><Input label="Inicio" type="time" value={newOpen} onChange={(event) => setNewOpen(event.target.value)} /><Input label="Fin" type="time" value={newClose} onChange={(event) => setNewClose(event.target.value)} /></div>
-      <p className="settings-hours__info"><Info aria-hidden="true" />Cada día puede pertenecer a un solo horario.</p>
-    </div><Button variant="tertiary" className="settings-hours__add" disabled={!newDays.some((day) => !usedDays.includes(day)) || !newOpen || !newClose || newOpen >= newClose} onClick={addSchedule}><Plus aria-hidden="true" />Agregar otro horario</Button>
-  </>;
 }
 
 export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
@@ -705,6 +673,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       if (key === "hours") return isValidHours(draft.hours);
       if (key === "serviceDurations") return isDurationListValid(draft.serviceDurations);
       if (key === "tarifa") return isTarifaValid(draft.tarifa, settingsOptions(data! as SettingsData).tarifa_labels);
+      if (key === "coverage") return draft.coverage.split("\n").some((value) => value.trim());
       if (key === "conversationLimit" || key === "dailyLimit") return numericLimitsValid;
       if (key === "metaCost") return isValidNonNegative(draft.metaCost);
       if (key === "tone") return Boolean(draft.tone.trim());
@@ -778,7 +747,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const selectedDerivationRule = selectedCase?.key.replace(/^handoff_/, "");
   const selectedDerivationAvailable = Boolean(selectedDerivationRule && data?.conduct?.options?.derivaciones.includes(selectedDerivationRule));
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
-  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className="settings-page" actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state, saveErrorDetail)}>
+  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className={activeGroup === "operation" ? "settings-page settings-page--operation" : "settings-page"} actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
       <div className="settings-tabs__select">
         <Menu label={GROUPS.find(({ id }) => id === activeGroup)?.label ?? "Chatbot"} ariaLabel="Grupo de configuración" showChevron items={GROUPS.map(({ id, label }) => ({ value: id, label }))} onSelect={selectGroup} />
@@ -960,59 +929,50 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
              <p className="settings-messages__info"><Info aria-hidden="true" />Si falta un dato necesario, el bot responde normalmente.</p>
            </Card>
         </> : null}
-        {active === "schedule" ? <>
-        <div className="settings-hours__layout">
-          <Card title="Anticipación mínima" description="Tiempo mínimo entre ahora y la primera hora que se puede ofrecer para una visita.">
-            <Input label="Anticipación mínima" type="number" min={1} max={48} suffix="horas" value={draft.leadHours} onChange={(event) => update("leadHours", event.target.value)} />
-            <div className="settings-hours__footer"><Button variant="secondary" disabled={saving("leadHours") || !Number.isInteger(Number(draft.leadHours)) || Number(draft.leadHours) < 1 || Number(draft.leadHours) > 48} onClick={() => void saveLeadHours()}>Guardar anticipación</Button>{footer("Entre 1 y 48 horas.")}</div>
-          </Card>
-          <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
-          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><p>Configura los avisos del navegador para este dispositivo.</p><a href="/panel/app/push">Configurar notificaciones push →</a></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
-        </div>
-          <Card title="Horarios de técnicos" description="Define cuándo puede recibir visitas cada técnico.">
+        {active === "schedule" ? <div className="settings-operation">
+          <div className="settings-operation__grid">
+            <Card className="settings-operation__lead" title="Anticipación mínima" description="Tiempo mínimo para ofrecer una visita desde ahora." icon={Clock3}>
+              <Input label="Anticipación mínima" type="number" min={1} max={48} suffix="horas" value={draft.leadHours} onChange={(event) => update("leadHours", event.target.value)} />
+              {footer("Entre 1 y 48 horas.")}
+              <p className="settings-operation__note"><Info aria-hidden="true" />Se aplica a las nuevas visitas.</p>
+            </Card>
+            <SettingsHoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} />
+            <Card title="Notificaciones del navegador" description="Configura los avisos de este dispositivo." icon={Bell}>
+              <a className="settings-operation__link" href="/panel/app/push">Configurar notificaciones →</a>
+            </Card>
+            <Card title="Fuera de horario" icon={Moon}>
+              <p className="settings-operation__message">{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p>
+              <Button variant="tertiary" className="settings-operation__link" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar en Mensajes →</Button>
+            </Card>
+          </div>
+          <Card title="Horarios de técnicos" description="Selecciona un técnico para editar su disponibilidad." icon={Users}>
             {techniciansState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}
             {techniciansState === "error" ? <div><StateMessage tone="danger" role="alert" title="No pudimos cargar los técnicos" detail="Intenta nuevamente más tarde." /><Button variant="secondary" onClick={() => setTechniciansState("idle")}>Reintentar</Button></div> : null}
-            {techniciansState === "ready" && technicians.length === 0 ? <p>No hay técnicos disponibles.</p> : null}
-            {techniciansState === "ready" ? technicians.map((technician) => <section key={technician.id} className="settings-hours__technician"><h3>{technician.username}</h3><TechnicianScheduleEditor technician={technician} onSaved={() => undefined} /></section>) : null}
+            {techniciansState === "ready" && technicians.length === 0 ? <p className="settings-operation__note">No hay técnicos disponibles.</p> : null}
+            {techniciansState === "ready" && technicians.length > 0 ? <SettingsTechnicians technicians={technicians} /> : null}
           </Card>
-          <Card title="Duraciones por servicio" description="Cuánto ocupa cada servicio en la agenda. El nombre debe coincidir con el servicio que se conversa.">
-            <div className="settings-conduct__durations">
+          <Card title="Duraciones por servicio" description="Tiempo que ocupa cada servicio en la agenda." icon={Clock3} headerAction={<Button variant="secondary" onClick={() => update("serviceDurations", [...draft.serviceDurations, { name: "", minutes: "60" }])}><Plus aria-hidden="true" />Agregar servicio</Button>}>
+            {draft.serviceDurations.length ? <div className="settings-conduct__durations">
               {draft.serviceDurations.map((entry, index) => <div className="settings-conduct__duration" key={index}>
                 <Input label={`Servicio ${index + 1}`} value={entry.name} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, name: event.target.value } : item))} />
-                <Input label={`Minutos ${index + 1}`} inputMode="numeric" value={entry.minutes} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, minutes: event.target.value } : item))} />
+                <Input label={`Minutos ${index + 1}`} inputMode="numeric" suffix="min" value={entry.minutes} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, minutes: event.target.value } : item))} />
                 <Button variant="tertiary" aria-label={`Eliminar servicio ${index + 1}`} onClick={() => update("serviceDurations", draft.serviceDurations.filter((_, current) => current !== index))}><Trash2 aria-hidden="true" /></Button>
               </div>)}
-            </div>
-            <div className="settings-agent__footer">
-              <Button variant="tertiary" onClick={() => update("serviceDurations", [...draft.serviceDurations, { name: "", minutes: "60" }])}><Plus aria-hidden="true" />Agregar servicio</Button>
-              <Button disabled={saving("serviceDurations") || !isDurationListValid(draft.serviceDurations)} onClick={() => void saveDurations()}>Guardar duraciones</Button>
-            </div>
-            {footer("Entre 1 y 1440 minutos por servicio, sin nombres repetidos.")}
+            </div> : <div className="settings-operation__empty"><Clock3 aria-hidden="true" /><strong>Aún no hay duraciones configuradas</strong><p>Crea un servicio para definir su duración.</p></div>}
+            <p className="settings-operation__note"><Info aria-hidden="true" />Entre 1 y 1440 minutos por servicio, sin nombres repetidos. El nombre debe coincidir con el servicio que se conversa.</p>
           </Card>
-        </> : null}
-        {active === "tarifa" ? <>
-          <Card title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins}>
-            <div className="settings-agent__layout">
-              <div className="settings-agent__form">
-                <TarifaEditor tarifa={draft.tarifa} labels={settingsOptions(data).tarifa_labels} onChange={(value) => update("tarifa", value)} />
-                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa, settingsOptions(data).tarifa_labels)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
-              </div>
-              <HelpPanel icon={Coins} title="Cómo se aplica"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></HelpPanel>
-            </div>
-          </Card>
-        </> : null}
-          {active === "coverage" ? <>
-          <Card title="Cobertura" description="Comunas donde se agenda una visita. Fuera de esta lista el asistente no rechaza el trabajo: coordina con un asesor." icon={Globe}>
-            <div className="settings-agent__layout">
-              <div className="settings-agent__form">
-                <Textarea label="Comunas con cobertura" rows={8} value={draft.coverage} onChange={(event) => update("coverage", event.target.value)} />
-                <p className="settings-agent__helper">Una comuna por línea. Se comparan sin tildes y sin distinguir mayúsculas.</p>
-                <div className="settings-agent__footer">{footer()}<Button disabled={saving("coverage") || !draft.coverage.split("\n").some((value) => value.trim())} onClick={() => void save("coverage", "/panel/api/settings/coverage", { communes: draft.coverage.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.coverage)}>Guardar cobertura</Button></div>
-              </div>
-              <HelpPanel icon={Globe} title="Cómo se aplica"><p>El asistente reconoce la comuna aunque el cliente la escriba sin tildes o en minúsculas.</p><p>Una comuna fuera de la lista se coordina con un asesor; nunca se rechaza el trabajo.</p></HelpPanel>
-            </div>
-          </Card>
-        </> : null}
+        </div> : null}
+        {active === "tarifa" ? <Card className="settings-operation settings-operation__tariffs" title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins} headerAction={<><Badge tone="neutral">CLP</Badge><Popover title="Cómo se aplican las tarifas" triggerLabel="Ayuda sobre tarifas" trigger="?"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></Popover></>}>
+          <TarifaEditor tarifa={draft.tarifa} labels={settingsOptions(data).tarifa_labels} onChange={(value) => update("tarifa", value)} />
+          <p className="settings-operation__notice"><Info aria-hidden="true" />El asistente solo informa el precio que corresponde a la fecha de hoy.</p>
+        </Card> : null}
+        {active === "coverage" ? <Card className="settings-operation settings-operation__coverage" title="Cobertura" description="Comunas donde se agenda una visita. Fuera de esta lista el asistente no rechaza el trabajo: coordina con un asesor." icon={Globe} headerAction={<><Badge tone="neutral">{draft.coverage.split("\n").filter((value) => value.trim()).length} comunas</Badge><Popover title="Cómo se aplica la cobertura" triggerLabel="Ayuda sobre cobertura" trigger="?"><p>El asistente reconoce la comuna aunque el cliente la escriba sin tildes o en minúsculas.</p><p>Una comuna fuera de la lista se coordina con un asesor; nunca se rechaza el trabajo.</p></Popover></>}>
+          <div className="settings-operation__coverage-field">
+            <Textarea label="Comunas con cobertura" rows={8} value={draft.coverage} onChange={(event) => update("coverage", event.target.value)} />
+            <p className="settings__footer-note">Una comuna por línea. Se comparan sin tildes y sin distinguir mayúsculas.</p>
+          </div>
+          <p className="settings-operation__notice"><Info aria-hidden="true" />Fuera de esta lista, el asistente coordina la visita con un asesor.</p>
+        </Card> : null}
         {active === "costs" ? <div className="settings-costs">
             <Card title="Gasto actual" description="Resumen del consumo en el periodo actual." headerAction={snapshot ? <Badge tone="neutral"><CalendarDays aria-hidden="true" />{formatShortDate(snapshot.date)}</Badge> : undefined}>
               {snapshot ? <StatCard metrics={[

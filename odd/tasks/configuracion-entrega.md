@@ -21,8 +21,8 @@ Implementation requirements and previous verification remain in `odd/tasks/confi
 | T5 | S3 | inline, in progress | #694 Derivaciones; mergef956528a. Headfa30fbc0 CI panel failed one timing-dependent test; honest correction waits for filtered absence. Job18 exit0: focused + Settings file pass. Republish/new exact-head CI/merge pending. |
 | T6 | S3 | inline, done | #696 Mensajes MERGED16587dfa; conflicta578696f resolved, Settings61/61 and exact-head test/panel SUCCESS run40579279983, job22 exit0. |
 | T7 | S3 | inline, done | #700 Horarios MERGED1f0787dc; heade9473e7d, test/panel SUCCESS run40580104893, job24 exit0. |
-| T8 | S3 | inline, in progress | #701 Técnicos; normal origin/main merge in job25; retarget/push and exact-head CI/main merge pending. |
-| T9 | S3 | inline, pending | #702 Integración Operación; base/head update, combined checks and merge pending. |
+| T8 | S3 | inline, done | #701 Técnicos MERGEDe83741d2; head72a1e640, test/panel SUCCESS run40580942935, job26 exit0. |
+| T9 | S3 | inline, in progress | #702 Integración Operación; normal origin/main merge in job27, then retarget/push/exact-head CI/main merge. |
 | T10 | S3 | inline, pending | Verify main contains all approved heads, preserve ignored evidence, remove only merged Configuración branches/worktree, preserve unrelated worktrees and main edits. |
 
 ## Log
