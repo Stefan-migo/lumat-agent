@@ -20,8 +20,8 @@ Implementation requirements and previous verification remain in `odd/tasks/confi
 | T4 | S3 | inline, done | #693 Conducta MERGED368c8937; head9a60530b, test/panel SUCCESS run40576658396, job15 exit0. |
 | T5 | S3 | inline, in progress | #694 Derivaciones; mergef956528a. Headfa30fbc0 CI panel failed one timing-dependent test; honest correction waits for filtered absence. Job18 exit0: focused + Settings file pass. Republish/new exact-head CI/merge pending. |
 | T6 | S3 | inline, done | #696 Mensajes MERGED16587dfa; conflicta578696f resolved, Settings61/61 and exact-head test/panel SUCCESS run40579279983, job22 exit0. |
-| T7 | S3 | inline, in progress | #700 Horarios; normal origin/main merge in job23; retarget/push and exact-head CI/main merge pending. |
-| T8 | S3 | inline, pending | #701 Técnicos; base/head update, combined checks and merge pending. |
+| T7 | S3 | inline, done | #700 Horarios MERGED1f0787dc; heade9473e7d, test/panel SUCCESS run40580104893, job24 exit0. |
+| T8 | S3 | inline, in progress | #701 Técnicos; normal origin/main merge in job25; retarget/push and exact-head CI/main merge pending. |
 | T9 | S3 | inline, pending | #702 Integración Operación; base/head update, combined checks and merge pending. |
 | T10 | S3 | inline, pending | Verify main contains all approved heads, preserve ignored evidence, remove only merged Configuración branches/worktree, preserve unrelated worktrees and main edits. |
 
