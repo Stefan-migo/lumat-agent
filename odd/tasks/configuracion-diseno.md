@@ -1,6 +1,8 @@
 # Rediseño visual de la sección Configuración (Chatbot)
 
-Estado: implementando. Worktree `../lumat-agent-odd-configuracion-diseno`, branch `odd/configuracion-diseno`.
+Estado: entregado en 5 slices encadenados, pendiente de merge. Worktree `../lumat-agent-odd-configuracion-diseno`.
+PRs apilados: #691 (S1–S4 + Agente), #692 (Persona), #693 (tabla de datos), #694 (derivaciones),
+#696 (Mensajes).
 Referencias: `refs/Diseño Lumat/Configuracion/redesign-2026-10-27/01-agente.png`, `02-persona.png`,
 `03-conducta.png`, `04-mensajes.png`, `05-operacion-horarios.png` (ignoradas por git).
 Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/findings.md`, `visual.md`.
@@ -144,6 +146,6 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
   (`configuracion-016` HelpPanel, `018` MessagePreview, `021` header action) ya están resueltas.
 - L5 (orquestador, re-secuenciación): S4 se implementa junto a S1–S3 en T1, porque el sistema visual
   (barra sticky y tarjetas con `?`) solo se puede probar de punta a punta sobre una sección migrada.
-- L6 (orquestador, re-secuenciación 2): S6 se entrega en dos slices —la tabla `Datos y preguntas`
-  (S6.1–S6.4) y el editor `Derivaciones y respuestas` (S6.5–S6.6)— porque juntos pasaban de 400
-  líneas en un solo commit y mezclaban dos concerns revisables por separado.
+- L7 (orquestador, cierre): las cuatro pantallas del Chatbot quedaron migradas y verificadas
+  (`npm run build` + `npm test` → 1308 pruebas en 112 archivos). Queda pendiente de decisión del
+  owner el merge de la pila y, después, Operación/Horarios con el mismo sistema visual.
