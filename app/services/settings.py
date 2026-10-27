@@ -1043,7 +1043,9 @@ def validate_capture_questions(value: Any, fields: Sequence[str]) -> dict[str, s
     return {field: value[field] for field in fields}
 
 
-def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
+def validate_conduct(
+    value: Any, fields: Sequence[str], previous: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Validate the conduct object before persistence (S10).
 
     `fields` is the capture model's field list, passed by the caller so that
@@ -1100,10 +1102,24 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
     if unknown_rules:
         raise ValueError(f"chat.conduct.derivaciones has unknown rules: {unknown_rules}")
 
-    redaccion = value.get("redaccion", CHAT_CONDUCT_DEFAULTS["redaccion"])
-    if redaccion not in CONDUCT_REDACCIONES:
-        raise ValueError(
-            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
+    # S5: a payload that does not carry the switch must not switch it off. The
+    # panel only renders the keys it knows, so every save from a panel without
+    # the control arrives here without `redaccion`; keeping the stored value is
+    # what stops an unrelated edit (the capture order) from silently resetting an
+    # owner's explicit choice. An explicit value always wins, and an unknown one
+    # in the payload is still an error.
+    if "redaccion" in value:
+        redaccion = value["redaccion"]
+        if redaccion not in CONDUCT_REDACCIONES:
+            raise ValueError(
+                f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
+            )
+    else:
+        stored_mode = (previous or {}).get("redaccion")
+        redaccion = (
+            stored_mode
+            if stored_mode in CONDUCT_REDACCIONES
+            else CHAT_CONDUCT_DEFAULTS["redaccion"]
         )
 
     return {

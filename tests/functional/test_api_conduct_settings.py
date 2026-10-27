@@ -110,6 +110,37 @@ def test_legacy_redaccion_in_stored_conduct_does_not_break_get(admin):
     assert conduct["redaccion"] == "plantilla"
 
 
+def test_conduct_options_expose_the_redaction_modes(admin):
+    """The panel can only render a closed list it is actually told about."""
+    conduct = _settings(admin)["conduct"]
+
+    assert conduct["options"]["redaccion"] == list(settings_service.CONDUCT_REDACCIONES)
+
+
+def test_saving_conduct_without_the_redaction_mode_keeps_the_stored_one(admin):
+    """A panel payload without the key must not silently switch phrasing off.
+
+    The redesigned panel does not render the switch yet, so every save from it
+    arrives without `redaccion`. Falling back to the default would overwrite an
+    owner's explicit `llm` choice while they edit the capture order.
+    """
+    with_mode = {
+        "orden": ["failure", "equipment", "comuna", "availability", "name"],
+        "redaccion": "llm",
+        "max_preguntas_por_mensaje": 1,
+        "derivaciones": ["cobertura"],
+    }
+    assert admin.post(CONDUCT, json={"conduct": with_mode}, follow_redirects=False).status_code == 200
+
+    without_mode = {key: value for key, value in with_mode.items() if key != "redaccion"}
+    without_mode["max_preguntas_por_mensaje"] = 2
+    assert admin.post(CONDUCT, json={"conduct": without_mode}, follow_redirects=False).status_code == 200
+
+    conduct = _settings(admin)["conduct"]
+    assert conduct["max_preguntas_por_mensaje"] == 2
+    assert conduct["redaccion"] == "llm"
+
+
 # --- capture questions -------------------------------------------------------
 
 

@@ -267,6 +267,7 @@ def _conduct_payload(session: Session) -> dict:
                 for field in CAPTURE_FIELD_ORDER
             ],
             "max_preguntas_por_mensaje": list(settings_service.CONDUCT_MAX_PREGUNTAS),
+            "redaccion": list(settings_service.CONDUCT_REDACCIONES),
             "derivaciones": list(settings_service.CONDUCT_DERIVACIONES),
         },
     }
@@ -737,7 +738,11 @@ def settings_conduct(
     current: User = Depends(require_admin_json),
 ) -> dict:
     try:
-        conduct = settings_service.validate_conduct(body.conduct, CAPTURE_FIELD_ORDER)
+        conduct = settings_service.validate_conduct(
+            body.conduct,
+            CAPTURE_FIELD_ORDER,
+            previous=settings_service.get_conduct(session),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     _save(session, settings_service.CHAT_CONDUCT_KEY, conduct, current)
