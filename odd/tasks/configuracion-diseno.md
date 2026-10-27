@@ -1,6 +1,8 @@
 # Rediseño visual de la sección Configuración (Chatbot)
 
-Estado: implementando. Worktree `../lumat-agent-odd-configuracion-diseno`, branch `odd/configuracion-diseno`.
+Estado: entregado en 5 slices encadenados, pendiente de merge. Worktree `../lumat-agent-odd-configuracion-diseno`.
+PRs apilados: #691 (S1–S4 + Agente), #692 (Persona), #693 (tabla de datos), #694 (derivaciones),
+#696 (Mensajes).
 Referencias: `refs/Diseño Lumat/Configuracion/redesign-2026-10-27/01-agente.png`, `02-persona.png`,
 `03-conducta.png`, `04-mensajes.png`, `05-operacion-horarios.png` (ignoradas por git).
 Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/findings.md`, `visual.md`.
@@ -144,11 +146,11 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 | T6 | S1–S7 | inline | verificación final: `npm run build` + `npm test` |
 
 | T7 | S8.1 | inline, done | `96b08129`; Persona follow-up; PR #692 slice |
-| T8 | S8.2 | inline, done | Derivations follow-up; PR #694 slice |
-| T9 | S8.3 | inline, pending | Messages follow-up; PR #696 slice |
-| T10 | S8 | inline, pending | Build, frontend suite and browser verification |
+| T8 | S8.2 | inline, done | `e594b824`; Derivations follow-up; PR #694 slice |
+| T9 | S8.3 | inline, done | `bac3ca37`; Messages follow-up; PR #696 slice |
+| T10 | S8 | inline, done | L16–L17: build, 93 focused tests, 1310 full-suite tests, browser and pushes |
 
-| T11 | S9 | inline, in progress | Contextual icons for all 25 reply options; PR #694 slice |
+| T11 | S9 | inline, done | `48098ac7`, merged upward as `e7978558`; both normally pushed on resume, exit 0; job-21 verified (95 focused, 1312 full); L22–L23 |
 
 ## Log
 
@@ -169,6 +171,15 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 - L6 (orquestador, re-secuenciación 2): S6 se entrega en dos slices —la tabla `Datos y preguntas`
   (S6.1–S6.4) y el editor `Derivaciones y respuestas` (S6.5–S6.6)— porque juntos pasaban de 400
   líneas en un solo commit y mezclaban dos concerns revisables por separado.
+- L7 (orquestador, cierre): las cuatro pantallas del Chatbot quedaron migradas y verificadas
+  (`npm run build` + `npm test` → 1308 pruebas en 112 archivos). Queda pendiente de decisión del
+  owner el merge de la pila y, después, Operación/Horarios con el mismo sistema visual.
+- L8 (owner, revisión del resultado real en el 5175): «los tab del side bar menu son muy anchos,
+  quitan espacio para la informacion principal. hay que reducir el widht de todo el side bar menu con
+  los tabs "agente, persona, conducta, mensajes"». El menú vertical pasa de `minmax(12rem, 0.8fr)` a
+  `minmax(10rem, 13rem)` con `gap: var(--space-5)`, y el ayudante del protocolo deja de montarse sobre
+  el textarea (el margen negativo heredado de la versión de una columna). El arreglo vive en la rama
+  base (#691) y se propaga a las ramas apiladas con merges ascendentes, sin reescribir historia.
 - L9 (owner, segunda ronda visual): cuatro defectos concretos sobre el resultado real del 5175.
   1. **Doble línea verde en el título.** No era una regla global duplicada: dos páginas dibujaban su
      propio acento encima del `::before` global de `.page-header__copy` (`Settings.css` en T1 y
@@ -224,8 +235,45 @@ el panel derecho esta bien. pero se podria mejorar la version de la vista previa
 
 - L14 (T8 evidence): RED missing accordion trigger; GREEN collapse/reopen, independent generic/specific text and preserved draft. Browser Enter/Space/search/count passed. Derivation editor fits 390px; whole-page mobile overflow check failed (scrollWidth 620px), originating in unchanged capture table and its visually-hidden label. Not fixed as part of this request. Assessment unavailable because temporary browser script was untracked; script removed. Risk: none, uses existing local accordion without API changes.
 
+- L15 (T9 evidence): RED sidebar repeated 12 fixed-message badges vs required one in detail; GREEN compact list/search/draft unit test. Browser all 11 rows 36px/nowrap, drafts preserved, multiline preview uses pre-wrap. Browser mobile RED two columns (late S7 desktop CSS overwrote earlier mobile rule); GREEN one column, detail visible at 390px, no horizontal overflow at 900/390px. WhatsApp visual checked in screenshots; test harness maps production logo URL to existing public asset for Storybook. Graph: Settings.tsx imports MessagePreview(), which imports Avatar(); shared components left unchanged. Risk: none, local selectors only.
+
+- L16 (final functional gates): npm ci exit 0; first npm run build exit 1 (new test used unsupported Testing Library ByRoleOptions.exact), removed option; corrected npm run build exit 0 (tsc -b + Vite, chunk-size warning); focused Settings + stories 93/93, exit 0; npm test 1310/1310 across 112 files, exit 0 (117.94s). Native assessment medium, reviewDue=false; no native review started. npm ci reports 11 vulnerabilities (4 moderate, 3 high, 4 critical); dependency remediation is outside this visual scope, lockfile unchanged. Delivery pending normal pushes of #692/#693/#694/#696.
+
+- L17 (delivery evidence): all normal pushes succeeded (job-18, exit 0): #692 `96b08129`, #693 `2c400288` (merge), #694 `e594b824`, #696 `bac3ca37`. Changes propagated upward only, no rebase/force-push/main merge. T7–T10 complete; this documentation-only commit records final hashes and checks. Remaining unrelated observations: existing capture-table mobile overflow and dependency audit warnings.
+
 - L18 (owner, verbatim): “perfecto solo me quedo un detalle. en el tab conducta:
 
 
 - los dropdowns "Agendar, Gestionar una visita, Derivar a una persona, Captura", no tienen iconos cuando se abre el dropdown. asegurate de usar iconografia adecuada para cada caso. tambien para los casos de derivacion actualmente todos usan el mismo icono. si hay alguno mas adecuado mejoralos.”
 - L19 (T11 evidence): RED two icon tests fail (generic FileText in cases, missing SVG in other groups); GREEN both pass. Lucide icons are decorative, aria-hidden, with unchanged accessible labels, selection and dirty state. Graph consulted: DERIVACION_CASES and REPLY_TEXT_GROUPS contained by Settings.tsx; Settings community, path through Settings.stories.tsx to settings fixture. Existing model/fixture god nodes unaffected. Scope limited to Settings.tsx and its tests, no shared primitive edits. Browser: all 25 icons 20x20, decorative aria-hidden, selected option and 390px navigation fit checked. Browser RED two long labels overflowed with new icon width; GREEN after local text wrapping. Native assess medium/reviewDue=false. Build/full gates pending. Risk: none, no shared primitive or data/API changes.
+
+- L20 (owner, verbatim stop): “ok perfecto cerramos aqui guarda memoria y pasame el handoff para continuar desde aca en un nuevo chat”. Paused with icon commits local and unpushed; job-21 still running at last observation. No new pushes after stop. Handoff: odd/handoffs/configuracion-diseno.md. Closing task/handoff notes intentionally uncommitted.
+
+- L21 (completion event before handoff): job-21 FINAL_EXIT=0; npm ci and build exit 0, focused Settings/stories 95/95 exit 0, full npm test 1312/1312 in 112 files exit 0 (128.07s). No further verification or pushes started after owner stop. T11 code verified; delivery remains paused, latest two commits still local.
+
+- L22 (owner, verbatim resume/delivery authorization):
+
+```text
+Completá el cierre de T11: reconciliá el registro, commiteá las notas
+   y hacé los pushes normales de esas dos ramas, ya autorizados.
+   No repitas los tests si el código no cambió.
+
+   No hagas rebase, force-push ni merge a main.
+   No avances a Operación/Horarios todavía; después seguimos con
+   la próxima revisión visual que te indique.
+```
+
+- L23 (T11 delivery evidence): resumed in the authorized worktree on odd/configuracion-diseno-mensajes. Source tree and index unchanged; historical build/focused/full logs confirm L21. Normal pushes succeeded, each exit 0: Derivaciones `e594b824..48098ac7`, Mensajes `f5a208c0..e7978558`. Closing notes/handoff reconciled for a documentation-only commit; no tests repeated. No rebase, force-push or main merge. Graph refreshed once on resume (12148 nodes / 27959 edges), report generated at `e7978558`; consulted Task configuración-diseño, Handoff configuración visual follow-up and Settings.tsx community. Directed Settings.tsx → Settings.stories.tsx query returned no path, not proof of independence. Graph extraction warned about excluded out-of-scope/duplicate nodes; exit 0, no application files changed.
+
+- L24 (owner, verbatim next visual review; supersedes the earlier pause on Operación):
+
+```text
+vamos a trabajar en el Tab general Operacion. y sus sub tabs: Horarios y avisos, Cobertura, Tarifas.
+
+
+- '/home/stefan/Downloads/screencapture-localhost-5175-panel-app-settings-2026-10-27-15_06_01.png' actual esta completamente roto.
+
+- '/home/stefan/Downloads/LUMAT schedules, hours, and alerts.png' la referencia reorganiza el tab completamente. sobre todo del subtab Horarios y avisos
+```
+
+- L25 (image-only comparison, no implementation): reference defines Horarios y avisos: compact team-hours table with timezone in header; notification/out-of-hours second row; searchable technician list plus selected-technician weekly editor; service-duration empty state and header action. Current screenshot instead stacks hour blocks and every technician editor, creating excessive height and empty gaps. Cobertura and Tarifas content is not visible in either supplied image; their visual direction remains an owner decision. No operation source/spec changes in this T11 closing commit.

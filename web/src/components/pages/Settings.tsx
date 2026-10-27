@@ -502,6 +502,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     setActiveSectionState(group.sections.some(({ id }) => id === activeSection) ? activeSection : group.sections[0].id);
   };
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
+  const [messageSearch, setMessageSearch] = useState("");
   const [replySearch, setReplySearch] = useState("");
   const [selectedReplyKey, setSelectedReplyKey] = useState("handoff_cobertura");
   const [keywordEntry, setKeywordEntry] = useState("");
@@ -760,6 +761,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const footer = (note = GENERIC_NOTE) => <p className="settings__footer-note">{note}</p>;
   const saving = (key: DraftKey) => Boolean(pending[key]);
   const numericLimitsValid = isValidPositive(draft.conversationLimit) && isValidPositive(draft.dailyLimit);
+  const messageQuery = messageSearch.trim().toLocaleLowerCase();
+  const visibleMessageTemplates = MESSAGE_TEMPLATES.filter(({ label, description }) => !messageQuery || `${label} ${description}`.toLocaleLowerCase().includes(messageQuery));
   const replyQuery = replySearch.trim().toLocaleLowerCase();
   const matchesReply = (key: string, label: string) => !replyQuery || `${label} ${key}`.toLocaleLowerCase().includes(replyQuery);
   const visibleDerivationCases = DERIVACION_CASES.filter(({ key, label }) => matchesReply(key, label));
@@ -903,33 +906,38 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </Card>
         </> : null}
         {active === "messages" ? <>
-          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={(settingsOptions(data).tones.length ? settingsOptions(data).tones : [draft.tone]).filter(Boolean).map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
-           <Card title="Mensajes del asistente" className="settings-messages__editor">
+          <Card title="Tono del asistente" description="Define el estilo de las respuestas generadas. Los mensajes fijos se envían tal como los escribes." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={(settingsOptions(data).tones.length ? settingsOptions(data).tones : [draft.tone]).filter(Boolean).map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /></div>} >{null}</Card>
+           <Card title="Mensajes del asistente" className="settings-messages__editor" headerAction={<Badge tone="neutral">{MESSAGE_TEMPLATES.length} mensajes</Badge>}>
               <div className="settings-messages__panel">
                 <div className="settings-messages__layout">
+                  <SearchInput aria-label="Buscar mensaje" placeholder="Buscar mensaje" delay={0} value={messageSearch} onSearch={(query) => {
+                    setMessageSearch(query);
+                    const normalized = query.trim().toLocaleLowerCase();
+                    const matching = MESSAGE_TEMPLATES.filter(({ label, description }) => !normalized || `${label} ${description}`.toLocaleLowerCase().includes(normalized));
+                    if (!matching.some(({ id }) => id === activeMessage) && matching[0]) setActiveMessage(matching[0].id);
+                  }} />
                   <div className="settings-messages__mobile-selector">
                     <label>Plantilla</label>
-                    <Menu label={MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.label ?? MESSAGE_TEMPLATES[0].label} ariaLabel="Plantilla" showChevron items={MESSAGE_TEMPLATES.map(({ id, label }) => ({ value: id, label }))} onSelect={(id) => setActiveMessage(id as typeof activeMessage)} />
+                    <Menu label={MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.label ?? MESSAGE_TEMPLATES[0].label} ariaLabel="Plantilla" showChevron items={visibleMessageTemplates.map(({ id, label }) => ({ value: id, label }))} onSelect={(id) => setActiveMessage(id as typeof activeMessage)} />
                     <p>{MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.description}</p>
                   </div>
-                <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={[...MESSAGE_TEMPLATES]} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
+                {visibleMessageTemplates.length ? <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={visibleMessageTemplates.map(({ id, label, icon }) => ({ id, label, icon }))} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
                 {(selected) => {
                   const template = MESSAGE_TEMPLATES.find(({ id }) => id === selected) ?? MESSAGE_TEMPLATES[0];
                   return <div className="settings-messages__edit">
-                    <h3>{template.label}</h3>
+                    <header><h3>{template.label}</h3><Badge tone="neutral">Mensaje fijo</Badge></header>
+                    <div className="settings-messages__when"><strong>Cuándo se envía</strong><p>{template.description}</p></div>
                     <Textarea label="Texto del mensaje" rows={5} value={draft.messages[template.id]} onChange={(event) => update("messages", { ...draft.messages, [template.id]: event.target.value })} />
                     <p className="settings-messages__info"><Info aria-hidden="true" />Este mensaje se usa como respuesta automática para esta situación.</p>
+                    <section className="settings-messages__preview" aria-label="Vista previa en WhatsApp"><div><h3>Vista previa en WhatsApp</h3><Badge tone="neutral">Ilustrativa</Badge></div><MessagePreview message={draft.messages[template.id]} note="Menú de categorías automático" avatarSrc="/panel/app/brand/lumat-mark.png" /></section>
                   </div>;
                 }}
-                </Tabs>
-                <div className="settings-messages__preview"><h3>Vista previa</h3><MessagePreview message={draft.messages[activeMessage]} note="Menú de categorías automático" avatarSrc="/panel/app/brand/lumat-mark.png" /></div>
+                </Tabs> : <p className="settings-messages__no-results">No hay mensajes que coincidan con la búsqueda.</p>}
                 </div>
               </div>
-              <div className="settings-messages__footer">{footer()}<Button disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button></div>
            </Card>
-           <Card title="Respuestas prediseñadas" description="Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada).">
-             <p className="settings-messages__info">A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.</p>
-             <p className="settings-messages__helper" role="note">Si a la conversación le falta uno de esos datos, el bot omite esta respuesta y responde normalmente.</p>
+           <Card title="Respuestas prediseñadas" description="Plantillas que el bot puede elegir según la consulta y los datos disponibles." headerAction={<Button variant="secondary" className="settings-messages__add" onClick={() => update("templates", [...draft.templates, { id: "", text: "" }])}><Plus aria-hidden="true" />Agregar respuesta</Button>}>
+             {draft.templates.length ? <>
              <div className="settings-messages__templates" aria-label="Respuestas prediseñadas">
                {draft.templates.map((template, index) => {
                  const slots = templateSlots(template.text);
@@ -948,10 +956,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                  </div>;
                })}
              </div>
-             <div className="settings-messages__footer">
-               <Button variant="tertiary" onClick={() => update("templates", [...draft.templates, { id: "", text: "" }])}><Plus aria-hidden="true" />Agregar respuesta</Button>
-               <Button disabled={saving("templates") || draft.templates.some(({ id, text }) => !id.trim() || !text.trim())} onClick={() => void save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates)}>Guardar respuestas</Button>
-             </div>
+             </> : <div className="settings-messages__empty"><FileText aria-hidden="true" /><strong>Aún no hay respuestas prediseñadas</strong><p>Crea una plantilla para una consulta frecuente.</p></div>}
+             <p className="settings-messages__info"><Info aria-hidden="true" />Si falta un dato necesario, el bot responde normalmente.</p>
            </Card>
         </> : null}
         {active === "schedule" ? <>
