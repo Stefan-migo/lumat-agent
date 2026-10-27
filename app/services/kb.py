@@ -396,12 +396,16 @@ def retrieve(
     audience: KbVisibility | str | None = KbVisibility.CUSTOMER,
     project_id: int | None = None,
     global_only: bool = False,
+    source_ids: list[str] | None = None,
 ) -> list[dict]:
     """Semantic retrieval over the ACTIVE versions of enabled documents.
 
     Filters: kb_documents.active AND kb_chunks.version == active_version.
-    Cosine similarity >= min_sim (pgvector <=> distance); ordered best-first.
-    Below-threshold queries return [] -> the CM-4 "cannot answer reliably" path.
+    Full-corpus retrieval applies ``similarity >= min_sim`` and orders best-first.
+    When ``source_ids`` is supplied, only chunks whose stored source metadata
+    identifies one of those seeded documents are eligible; their similarity
+    ranks results but does not reject them at the global threshold. Audience,
+    activity, and project guards remain independent.
 
     The audience defaults to ``customer`` so a caller that forgets the argument
     cannot read internal-only documents. ``audience=None`` disables the filter
@@ -417,10 +421,13 @@ def retrieve(
     filters = [
         KbDocument.active.is_(True),
         KbChunk.version == KbDocument.active_version,
-        distance <= 1 - min_sim,
     ]
     if audience is not None:
         filters.append(KbDocument.visibility == KbVisibility(audience))
+    if source_ids is not None:
+        filters.append(KbChunk.source_meta["source_id"].astext.in_(source_ids))
+    else:
+        filters.append(distance <= 1 - min_sim)
     if global_only:
         filters.append(KbDocument.project_id.is_(None))
     elif project_id is not None:

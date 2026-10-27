@@ -15,6 +15,8 @@ paths never call the LLM, design Cost Guardrails).
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -22,10 +24,11 @@ from sqlalchemy import select
 
 from app.chat.state import ConversationState, conversation_transcript
 from app.db import session_scope
-from app.models import KbVisibility, Message
+from app.models import Conversation, KbVisibility, Message
 from app.services import kb, prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
+from app.services.realtime import record_activity
 from app.services.settings import (
     MESSAGE_DEFAULTS,
     TARIFA_LABELS,
@@ -39,6 +42,122 @@ from app.services.settings import (
 )
 
 logger = logging.getLogger(__name__)
+
+# These identifiers are the actual docs/kb filenames recorded by seed_kb_docs.
+_TOPIC_DOCUMENTS = (
+    (
+        "lumat-cobertura-horarios",
+        ("comuna", "comunas", "atienden", "atienden en", "trabajan", "llegan", "cobertura", "vivo en", "estoy en", "sabado", "domingo", "horario", "festivo"),
+    ),
+    (
+        "lumat-garantias-pagos",
+        ("garantia", "garantias", "garantía", "garantías", "pago", "pagos", "boleta", "factura", "cancelar", "reagendar"),
+    ),
+    (
+        "lumat-servicios",
+        ("servicios", "visita", "reparacion", "reparar", "reparan", "incluye", "dura", "resuelve", "lavado de red", "instalacion", "gasfiteria"),
+    ),
+    (
+        "lumat-identidad",
+        ("lumat", "empresa", "quienes somos", "quien es", "tecnicos sec", "tecnicos autorizados", "eslogan"),
+    ),
+)
+
+
+def _normalise_topic_text(text: str) -> str:
+    """Case-fold and remove accents so topic terms match normal Spanish spelling."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+# S4/T4: the schedule and coverage terms a customer uses to ASK about opening
+# hours or weekend visits. Deliberately narrower than the topic map below: the
+# location terms (`comuna`, `vivo en`, `estoy en`) belong to capture answers, and
+# treating them as questions would divert the coverage scenarios away from
+# capture.
+_SCHEDULE_TERMS = ("sabado", "domingo", "festivo", "horario", "atienden", "cobertura")
+
+
+def asks_about_schedule(question: str) -> bool:
+    """True when the turn names a schedule or weekend-attention term (T4).
+
+    `capture` is dispatched before any answer path, so a customer who asks
+    "dime altiro si atienden sabado" while the bot is collecting data used to be
+    read as an answer to the pending field and never got an answer. This is the
+    deterministic signal for that case, without touching the classifier prompt.
+    """
+    words = set(re.findall(r"[a-z0-9]+", _normalise_topic_text(question)))
+    return any(term in words for term in _SCHEDULE_TERMS)
+
+
+# L2 debt: prices live in the tariff, never in a customer KB document, so a KB
+# miss on a published service used to answer "no tengo ese dato" while the
+# figure was already configured (`simple-precio-calefont`, measured live). Only
+# explicit service phrases are mapped: an unrecognised wording keeps the
+# existing path, so no figure is ever invented.
+_TARIFF_SERVICE_PHRASES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "mantencion_calefont",
+        (
+            "mantencion de calefont",
+            "mantencion calefont",
+            "mantencion de calefon",
+            "mantencion calefon",
+        ),
+    ),
+    ("mantencion_caldera", ("mantencion de caldera", "mantencion caldera")),
+    ("lavado_red", ("lavado de red",)),
+    ("visita_tecnica", ("visita tecnica",)),
+)
+
+
+def _normalise_question(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", _normalise_topic_text(text)).strip()
+
+
+def tariff_service(question: str) -> str | None:
+    """The published service key this question names, if it names one."""
+    normalized = _normalise_question(question)
+    for service, phrases in _TARIFF_SERVICE_PHRASES:
+        if any(phrase in normalized for phrase in phrases):
+            return service
+    return None
+
+
+def tariff_price_reply(session, state: ConversationState) -> str | None:
+    """The published price for the service this turn asks about (L2 debt).
+
+    Deterministic and read-only: no model call, no invented figure. Returns
+    ``None`` when the turn is not a price question, names no published service,
+    or that service has no price in force today; the caller then keeps its
+    existing answer path.
+    """
+    if state.intent != "valores":
+        return None
+    service = tariff_service(_current_text(state))
+    if service is None:
+        return None
+    today = datetime.now(ZoneInfo(get_hours_timezone(session))).date()
+    price = tarifa_vigente(get_tarifa_precios(session), today).get(service)
+    if price is None:
+        return None
+    formatted = f"${price:,.0f}".replace(",", ".")
+    return f"El precio vigente de {TARIFA_LABELS[service]} es {formatted}."
+
+
+def topic_document_ids(question: str) -> list[str]:
+    """Return seeded KB document source IDs matching this turn, in fixed topic order."""
+    normalized = _normalise_topic_text(question)
+    words = set(re.findall(r"[a-z0-9]+", normalized))
+    matched = []
+    for source_id, terms in _TOPIC_DOCUMENTS:
+        if any(
+            term in words if " " not in term else term in normalized
+            for term in (_normalise_topic_text(value) for value in terms)
+        ):
+            matched.append(source_id)
+    return matched
+
 
 CANNOT_ANSWER_REPLY = MESSAGE_DEFAULTS["cannot_answer"]
 KB_UNAVAILABLE_REPLY = (
@@ -142,17 +261,45 @@ def retrieval_queries(state: ConversationState) -> list[str]:
     )
 
 
-def retrieve_for_queries(session, queries: list[str]) -> list[dict]:
-    """The production KB retrieval — the only place its arguments are declared.
+def retrieve_for_queries(
+    session, queries: list[str], topic_source_ids: list[str] | None = None
+) -> list[dict]:
+    """Retrieve from the routed topic documents first, then the prior full corpus.
 
-    Every caller (the `respond` node, the `research_triage` guard and the fidelity
-    harness) goes through here, so `global_only` and the customer-audience filter
-    cannot be true on the answering path and false on the measuring one.
-
-    A miss on the customer text costs one more local embed + pgvector query,
-    never a model call: the fallback exists so a wording problem cannot become a
-    human handoff while the KB holds the answer.
+    Every caller goes through here, so both scoped and fallback searches retain
+    customer-only/global-only access. A missing topic hit falls back to the
+    unchanged unfiltered retrieval rather than relaxing similarity or access.
+    Calls without ``topic_source_ids`` preserve the historical query behavior.
     """
+    if topic_source_ids:
+        for query in queries:
+            chunks = kb.retrieve(
+                session,
+                query,
+                top_k=kb.DEFAULT_TOP_K,
+                # The document topic is the eligibility gate; similarity ranks
+                # its chunks without applying the full-corpus cutoff.
+                audience=KbVisibility.CUSTOMER,
+                global_only=True,
+                source_ids=topic_source_ids,
+            )
+            if chunks:
+                unique = []
+                seen = set()
+                for chunk in chunks:
+                    key = (
+                        chunk.get("document_id"),
+                        chunk.get("version"),
+                        chunk.get("chunk_index"),
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    unique.append(chunk)
+                return unique
+
+    # Preserve historical raw-then-classified-service ordering for full-corpus
+    # retrieval, including callers that do not supply a topic.
     for query in queries:
         chunks = kb.retrieve(
             session,
@@ -169,8 +316,12 @@ def retrieve_for_queries(session, queries: list[str]) -> list[dict]:
 
 
 def retrieve_chunks(session, state: ConversationState) -> list[dict]:
-    """First non-empty KB retrieval across the turn's queries (no LLM spend)."""
-    return retrieve_for_queries(session, retrieval_queries(state))
+    """Route the current text by topic, then use turn queries with safe fallback."""
+    return retrieve_for_queries(
+        session,
+        retrieval_queries(state),
+        topic_source_ids=topic_document_ids(_current_text(state)),
+    )
 
 
 def log_unresolved(session, message_id: int, context: str) -> None:
@@ -334,12 +485,29 @@ def respond(state: ConversationState) -> dict:
                     "escalate_reason": "kb_unavailable",
                 }
         if not chunks:
+            # L2 debt: a published service has a configured price, so a KB miss on
+            # it is not a knowledge gap. Answer the figure, never the miss offer.
+            price_reply = tariff_price_reply(session, state)
+            if price_reply is not None:
+                return {"replies": [price_reply]}
             # D18: offer both paths without deriving; CM-6 still records the miss.
+            miss_context = f"intent={state.intent}"
             log_unresolved(
                 session,
                 message_id=state.window[-1]["id"],
-                context=f"intent={state.intent}",
+                context=miss_context,
             )
+            # Same tolerance as `log_unresolved`: a synthetic state without a
+            # persisted conversation cannot own an activity row (FK), and the
+            # single-reply contract must not fail because of telemetry.
+            if session.get(Conversation, state.conversation_id) is not None:
+                record_activity(
+                    session,
+                    state.conversation_id,
+                    "kb_miss",
+                    cause=miss_context,
+                    actor="bot",
+                )
             return {"replies": [get_message(session, "kb_miss_offer")]}
         kb_text = "\n".join(f"{i + 1}. {c['content']}" for i, c in enumerate(chunks))
 

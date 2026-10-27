@@ -137,6 +137,41 @@ def test_skip_unknown_path_still_advances(harness):
     assert result["captured"]["_pending"] == ["equipment"]
 
 
+def test_an_out_of_turn_email_refusal_skips_the_email_not_the_asked_field(harness):
+    """S6: the refusal names the datum; the flow keeps asking what it asked.
+
+    Live transcript of `complejo-no-quiere-email`: the refusal arrived while the
+    equipment was pending, the generic skip marked THAT field, and the email was
+    asked again two turns later. The refusal belongs to the email only.
+    """
+    result = capture_node.capture(make_state(
+        "no te voy a dar mi correo, con el telefono basta",
+        captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
+    ))
+
+    captured = result["captured"]
+    assert captured["email"] == "unknown"
+    assert "email" in captured["_skipped"]
+    assert "equipment" not in captured
+    assert "correo" not in " ".join(result["replies"]).lower()
+
+
+def test_a_refused_email_is_not_asked_again_on_later_turns(harness):
+    result = capture_node.capture(make_state(
+        "Calle 1",
+        captured={
+            "failure": "fuga de agua", "equipment": "calefont", "comuna": "Ñuñoa",
+            "availability": "después de las 6", "name": "Jorge",
+            "email": "unknown", "_asked": {"email": 1},
+            "_pending": ["address"],
+        },
+    ))
+
+    replies = " ".join(result.get("replies", [])).lower()
+    assert "correo" not in replies
+    assert result["captured"].get("address") == "Calle 1"
+
+
 def test_ack_uses_configured_text_and_only_non_sensitive_captured_facts(harness, monkeypatch):
     monkeypatch.setattr(capture_node, "get_capture_ack", lambda _session: "Gracias {{nombre}} por el dato de {{equipo}}.")
     result = capture_node.capture(make_state(

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.models import ConversationEvent
 
 logger = logging.getLogger(__name__)
-ACTIVITY_EVENTS = {"classified", "kb_retrieved", "escalation"}
+ACTIVITY_EVENTS = {"classified", "kb_retrieved", "kb_miss", "escalation"}
 _STAGED_EVENTS_KEY = "realtime_events"
 
 
