@@ -256,3 +256,45 @@ Dos consecuencias:
    configurado por un test.
 2. **Es un follow-up del instrumento**, no de esta feature: `conv_eval.py` debería rechazar (o resetear) un
    `settings` que no coincida con los defaults antes de medir. No se arregla acá.
+
+### L8 — T5: primer intento revertido, y el diagnóstico corregido
+
+Se delegó T5 y volvió a medias: código sin test verde. **Revertido sin commitear** (`git checkout` de los dos
+archivos). Lo que dejó fue útil, igual.
+
+**Por qué se revirtió.** El worker reportó que su test de cobertura **pasaba antes de implementar**. Un test que
+no falla antes no demuestra el defecto, y un parche sobre esa base es especulación: después quedó con
+`KeyError: '_pending'` en su propio setup y sin el texto del equipo.
+
+**El diagnóstico corregido, y confirma el original por otra vía.** El transcript real (`after-682-3`) dice:
+
+```
+2. cliente  necesito arreglar un calefont
+   bot      Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?
+3. cliente  no era calefont, es una caldera, y estoy en providencia
+   bot      Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?
+4. cliente  cuanto sale y cuando pueden venir
+   bot      Veo que esa pregunta no te acomoda. Un asesor de Lumat te contacta…
+```
+
+- La config **no** es la causa: `CONDUCT_DERIVACIONES = ("cobertura",)` (`app/services/settings.py:76`) y el
+  default la incluye, así que la guarda `if COVERAGE_DERIVATION not in derivaciones` pasa.
+- `_out_of_coverage` se consulta **sólo** desde `_ask_next` (`capture.py:614`). Mientras `failure` está
+  pendiente el flujo va por `_reask_pending` (`:545-560`) y a la tercera deriva. O sea: **con un campo pendiente
+  que llega a la derivación, la cobertura es estructuralmente inalcanzable.** El test del worker pasaba porque
+  armaba un estado donde `_ask_next` sí se alcanzaba; no reproducía el camino.
+- El worker buscó la corrección del equipo en `equipment_type` y no apareció por una razón distinta a la que
+  asumimos: `_merge_extracted` (`capture.py:354`) hace `if not value or captured.get(field): continue`, es decir
+  **nunca sobrescribe un campo ya capturado**. En el turno 2 el equipo quedó como calefont, y la corrección del
+  turno 3 se descarta. Eso explica G6 (ningún mensaje dice "caldera") mejor que el renderizado de la pregunta.
+
+**Qué necesita T5 para hacerse bien** — dos arreglos, no uno, y tests que reproduzcan el camino con campo
+pendiente:
+
+1. Evaluar la cobertura **antes** de la rama de derivación de `_reask_pending` (la dirección del worker era
+   correcta; su test no).
+2. Permitir que una **corrección explícita** sobrescriba un campo ya capturado, sin abrir la puerta a la
+   corrupción por prosa que la guarda de `:356` protege. Es la parte delicada y merece su propio análisis.
+
+**Corte de slice**: la rama queda en **363 líneas autoradas, 6 commits**, con T1 y T3 cerradas y verificadas
+contra el corpus. Es un corte de PR limpio; T5, T2b y T6 siguen abiertas y T5 necesita su propia unidad.
