@@ -161,7 +161,7 @@ Apply S1–S3's established visual system and saving model to Operación, preser
 
 | T11 | S9 | inline, done | `48098ac7`, merged upward as `e7978558`; both normally pushed on resume, exit 0; job-21 verified (95 focused, 1312 full); L22–L23 |
 
-| T12 | S10 S3 | worker, done | Component checks 6/6; parent build + 111 focused tests exit 0; local work-unit commit to follow (L28). |
+| T12 | S10 S3 | worker, done | `df60db9f`; component checks 6/6; parent build + 111 focused tests exit 0; native medium/reviewDue=false. |
 | T13 | S10 S3 | worker, done | Component checks 3/3; parent build + 111 focused tests exit 0; missing valid pre-implementation RED recorded in L28; local commit to follow. |
 | T14 | S10 S1–S3 | inline, done | Integration RED 3 missing rules/1 preservation pass → GREEN 4/4; build + 111 focused tests exit 0; local commit to follow. |
 | T15 | S10 | inline + independent verifier (item 3), in progress | npm ci → build → focused/full suite; responsive browser/differential checks; assess work-unit slices; local commits/handoff |
