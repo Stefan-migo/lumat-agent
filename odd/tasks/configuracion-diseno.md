@@ -134,6 +134,15 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 
 “los dropdowns "Agendar, Gestionar una visita, Derivar a una persona, Captura", no tienen iconos cuando se abre el dropdown. asegurate de usar iconografia adecuada para cada caso. tambien para los casos de derivacion actualmente todos usan el mismo icono. si hay alguno mas adecuado mejoralos.”
 
+### S10 — Operación: Horarios y avisos, Cobertura, Tarifas
+
+Owner: “vamos a trabajar en el Tab general Operacion. y sus sub tabs: Horarios y avisos, Cobertura, Tarifas.”
+Current: “'/home/stefan/Downloads/screencapture-localhost-5175-panel-app-settings-2026-10-27-15_06_01.png' actual esta completamente roto.”
+Reference: “'/home/stefan/Downloads/LUMAT schedules, hours, and alerts.png' la referencia reorganiza el tab completamente. sobre todo del subtab Horarios y avisos”.
+Owner direction for Cobertura/Tarifas: “adaptalas no tengo referencias propias”.
+
+Apply S1–S3's established visual system and saving model to Operación, preserving existing fields, validation, endpoints and payloads. Horarios follows the supplied reference geometry; Cobertura/Tarifas inherit its existing tokens, card headers, contextual help and compact forms, without a new palette or backend behavior. Technician schedules retain their independent existing save action/API, not the global settings endpoint.
+
 ## Tasks
 
 | ID | Specs | Ruta | Commit |
@@ -151,6 +160,11 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 | T10 | S8 | inline, done | L16–L17: build, 93 focused tests, 1310 full-suite tests, browser and pushes |
 
 | T11 | S9 | inline, done | `48098ac7`, merged upward as `e7978558`; both normally pushed on resume, exit 0; job-21 verified (95 focused, 1312 full); L22–L23 |
+
+| T12 | S10 S3 | worker, in progress | New settings-only team-hours table/editor; existing hours contract and unique-day rule; RED/GREEN component tests |
+| T13 | S10 S3 | worker, pending | New settings-only technician search/selection wrapper, preserve independent editors/drafts/saving; RED/GREEN tests |
+| T14 | S10 S1–S3 | inline, pending | Integrate schedules, arrange cards/durations, adapt Cobertura/Tarifas and remove redundant per-card settings saves; integration tests |
+| T15 | S10 | inline + independent verifier (item 3), pending | npm ci → build → focused/full suite; responsive browser/differential checks; assess work-unit slices; local commits/handoff |
 
 ## Log
 
@@ -277,3 +291,7 @@ vamos a trabajar en el Tab general Operacion. y sus sub tabs: Horarios y avisos,
 ```
 
 - L25 (image-only comparison, no implementation): reference defines Horarios y avisos: compact team-hours table with timezone in header; notification/out-of-hours second row; searchable technician list plus selected-technician weekly editor; service-duration empty state and header action. Current screenshot instead stacks hour blocks and every technician editor, creating excessive height and empty gaps. Cobertura and Tarifas content is not visible in either supplied image; their visual direction remains an owner decision. No operation source/spec changes in this T11 closing commit.
+
+- L26 (owner, verbatim): “adaptalas no tengo referencias propias”. Resolves Cobertura/Tarifas visual direction; S10 added. Work continues in the existing authorized worktree on new local branch odd/configuracion-diseno-operacion, based on 0398c73e; no new worktree, push or PR authorized by this sentence.
+
+- L27 (plan and route): retain the existing feature-branch stack/slice strategy. Forecast ~800–1100 authored diff lines across team-hours component, technician navigation, integration and tests; split cohesive commits rather than code-golf. T12/T13 are independent substantial components (>100 lines each), launched together with disjoint settings-only files. T14 integration and Coverage/Rates stay inline. Parent owns task ledger and common Settings tests. Graph consulted Settings() → api.ts (imports_from), HoursData/Settings.tsx community and technician schedule editor. Backend model/fixture god nodes untouched. Risk: item 3 only if shared save validation is extended to preserve the previous coverage-empty rejection; verify sibling section saving and unchanged shared technician editor behavior. No new dependencies/shared primitive changes. Copy-to-days and menu actions shown only in mockup are not invented as nonfunctional controls.
