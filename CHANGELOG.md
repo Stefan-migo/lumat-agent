@@ -6,6 +6,90 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.7] - 2026-10-27
+
+This release ships a conversation evaluator and the defects it measured: the
+chatbot now greets, understands courtesy, rephrases and offers paths before it
+derives, and never stores a capture answer that does not answer the question.
+The human conversation thread gains WhatsApp media in both directions, and the
+Configuración section is regrouped into four super-sections and redesigned.
+
+### Added
+
+- **Conversation evaluator.** A versioned corpus of customer conversations, a
+  runner against `run_conversation` with no channel, and a two-layer evaluation
+  (deterministic gates plus a rubric judge run with repetitions) that produces a
+  report comparable between versions, with transcripts, a diff against the
+  previous run, and a stamp naming the tree a run actually measured.
+- **WhatsApp media in the conversation thread.** Images, audio, video and
+  documents arrive in the thread and are served by an authenticated panel
+  endpoint instead of Meta's temporary lookaside URL; the operator attaches and
+  sends media, records audio, and keeps the same `pending`/`sent`/`failed`
+  states and retry as text. A media that cannot be downloaded from Meta stops
+  after a bounded number of attempts and says so instead of showing a file that
+  will never arrive. Migration `058` adds the metadata to `messages`.
+- **Settings super-sections.** The eleven flat tabs become four groups —
+  Chatbot, Operación, Integraciones, Costos — with vertical sub-tabs. Tab ids and
+  labels do not change, so the existing deep links keep working.
+- **Chatbot settings redesign.** Agente with a sticky save bar and version
+  history, Persona with markdown preview, Conducta with a data table, the capture
+  questions and a derivation editor with preview, Mensajes with search and a
+  WhatsApp preview.
+- **Operación settings.** A compact team-hours editor, one technician schedule
+  selected at a time, and hours, coverage and rates integrated on one surface.
+- **Capture phrasing switch in the panel.** `chat.conduct.redaccion` gets its
+  control; a payload that omits the key preserves the stored value.
+- **Visits assigned on a 30-minute grid by daily load**, a paginated slot offer
+  that names the technician in the confirmation, and a greeting that uses the
+  customer's name and asks for it when missing.
+- **A panel surface that explains the chatbot**, and an urgent-cases card that
+  counts only open emergencies without an acknowledgement, shows at most three
+  rows, and opens the conversation or the customer's cases tab.
+
+### Changed
+
+- **The chatbot treats a conversation as a conversation.** A greeting and a
+  courtesy are understood turns instead of comprehension failures, platform
+  messages are ignored, one detector decides when the customer is asking for a
+  human, and consecutive unknowns are counted so the third one derives.
+- **Rephrase before deriving.** After a failure the bot rephrases, then offers
+  the two paths, and derives only after three failures; a knowledge miss offers
+  the two paths instead of deriving immediately.
+- **Retrieval runs once per turn** and falls back to the classified service on a
+  miss, so the measurement and the answer describe the same retrieval.
+- **Capture asks a validated answer.** Consent is a decision, not another field:
+  nothing is persisted or reserved without an explicit yes, a refusal derives,
+  and an unclear answer is re-asked up to the limit. The capture never stores
+  the current message as the answer to a question it did not answer. The model
+  may word the question behind a validator.
+- **One owner for `reply.texts`.** The 25 keys are edited only in Conducta, with
+  one save covering all of them; the duplicated block leaves Mensajes, and the
+  dead conduct key is removed.
+- **The five customer-facing derivations have their own text**, and the coverage
+  rule outranks an exhausted pending field.
+
+### Fixed
+
+- **Published prices are answered from the tariff** instead of the knowledge base.
+- **A schedule question is answered mid-capture** and the capture resumes, even
+  without a question mark.
+- **An explicit email refusal is honoured** while another field is pending.
+- **The emergency no longer hides its escalation**: the case records the
+  `escalation` event the analytics and the panel read, and the goodbye no longer
+  gets a sales pitch on top.
+- **A soft knowledge miss is recorded as activity** without inventing a
+  conversation that was never persisted.
+- **A knowledge answer is retrieved from the routed topic document**, including
+  when the raw message missed.
+
+### Development
+
+- **The project runs on Pi through Gentle Shell**, with the agent contract in
+  `AGENTS.md` and its skills and extensions in `.agents/` and `.pi/`.
+- **Tiered backend verification.** `scripts/test.sh gate|unit|quick|db|shape|full`
+  replaces "always the full suite", and `shape` decides mechanically when the
+  full suite becomes mandatory.
+
 ## [2026.10.6] - 2026-10-22
 
 This release turns the customer chatbot's behavior into configuration: the price
