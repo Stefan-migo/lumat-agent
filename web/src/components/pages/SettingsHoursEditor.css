@@ -1,0 +1,36 @@
+.settings-hours-editor { min-width: 0; }
+.settings-hours-editor .card__header { align-items: center; }
+.settings-hours-editor .card__header-action { min-width: 0; }
+.settings-hours-editor__timezone { position: relative; display: flex; align-items: center; gap: var(--space-2); min-width: min(16rem, 100%); }
+.settings-hours-editor__timezone > svg { position: absolute; z-index: 1; left: var(--space-2); width: var(--icon-sm); height: var(--icon-sm); color: var(--corp-fg-muted); pointer-events: none; }
+.settings-hours-editor__timezone .field { min-width: 0; }
+.settings-hours-editor__timezone .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.settings-hours-editor__timezone .field__control { min-width: 0; padding-left: calc(var(--space-2) + var(--icon-sm) + var(--space-2)); }
+.settings-hours-editor__table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.settings-hours-editor__table { width: 100%; min-width: 34rem; border-collapse: collapse; font-size: var(--text-sm); }
+.settings-hours-editor__table th,
+.settings-hours-editor__table td { padding: var(--space-2); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.settings-hours-editor__table th { background: var(--surface-subtle); color: var(--corp-text); font-weight: var(--weight-semibold); white-space: nowrap; }
+.settings-hours-editor__table tr:last-child td { border-bottom: 0; }
+.settings-hours-editor__table td:first-child { min-width: 10rem; color: var(--corp-text); }
+.settings-hours-editor__table .field { min-width: 7rem; }
+.settings-hours-editor__table .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.settings-hours-editor__table .field__control { min-height: calc(var(--space-8) + var(--space-1)); }
+.settings-hours-editor__row-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-1); }
+.settings-hours-editor__row-actions .btn { width: var(--space-8); min-width: var(--space-8); min-height: var(--space-8); padding: var(--space-1); }
+.settings-hours-editor__row-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
+.settings-hours-editor__unassigned td { color: var(--corp-fg-muted); }
+.settings-hours-editor__form { display: grid; gap: var(--space-3); padding: var(--space-2); }
+.settings-hours-editor__form .day-toggle { gap: var(--space-1); }
+.settings-hours-editor__form .day-toggle__day { min-width: var(--space-8); height: var(--space-8); }
+.settings-hours-editor__times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.settings-hours-editor__form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.settings-hours-editor__add { justify-self: start; border: 1px dashed var(--border-strong); }
+.settings-hours-editor__add::first-letter { color: var(--primary-700); }
+@media (max-width: 40rem) {
+  .settings-hours-editor .card__header { align-items: flex-start; flex-wrap: wrap; }
+  .settings-hours-editor .card__header-action { width: 100%; margin-left: calc(var(--space-8) + var(--space-3)); }
+  .settings-hours-editor__timezone { width: 100%; }
+  .settings-hours-editor__table { min-width: 34rem; }
+  .settings-hours-editor__times { gap: var(--space-2); }
+}
