@@ -26,7 +26,28 @@ CLOSING_TOKENS = frozenset({
     # "ok" to an instruction with a goodbye.
     "adios", "bye", "chao", "chau", "hasta", "luego", "nos", "pronto", "vemos",
 })
-_CLOSING_PHRASES = ("eso fue todo",)
+# T3/S3: "eso era todo" is how this customer actually closes, and the judge caught
+# the gate answering it with a sales question («¿En qué más te puedo ayudar?»).
+# These stay phrases and not tokens: `eso`, `era` and `todo` are ordinary words,
+# and a token match would close "el calefont era viejo" too. `is_farewell`
+# requires the phrase to be the whole message, which is what keeps that out.
+# Stored folded, like the text they are matched against.
+# T3: words that may sit around an explicit closing phrase without cancelling it.
+# Deliberately NOT part of CLOSING_TOKENS: an acknowledgement on its own is not a
+# farewell (S3), it only stops being an obstacle when a real closing is present.
+# Measured: "dale, muchas gracias, eso era todo" was answered with another sales
+# question.
+_COURTESY_TOKENS = frozenset({
+    "dale", "bueno", "ya", "ok", "oka", "listo", "perfecto", "gracias",
+    "muchas", "mil", "genial", "excelente", "amable", "saludos", "cordial",
+})
+_CLOSING_PHRASES = (
+    "eso fue todo",
+    "eso era todo",
+    "eso es todo",
+    "eso seria todo",
+    "nada mas",
+)
 _WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
 
 
@@ -60,6 +81,11 @@ def is_farewell(text: str) -> bool:
         # acknowledgement that followed it, and acknowledgements are no longer
         # closing tokens (S3).
         return matched_phrase
+    if matched_phrase and all(token in _COURTESY_TOKENS for token in tokens):
+        # Courtesy around an explicit closing must not cancel it -- but courtesy
+        # alone still must not close, and neither must content that happens to
+        # follow the phrase ("eso era todo lo que necesitaba saber del precio").
+        return True
     return all(token in CLOSING_TOKENS for token in tokens)
 
 

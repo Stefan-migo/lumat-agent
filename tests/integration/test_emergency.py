@@ -271,6 +271,11 @@ def test_strong_hit_mid_capture_interrupts(mock_openai_chat, mock_meta_send):
             select(ConversationEvent).where(ConversationEvent.conversation_id == conv_id)
         ).all()
         assert any(e.event == "emergency" for e in events)
+        # The escalation names its origin the way `handoff` does, so analytics can
+        # filter it without a second convention.
+        assert any(
+            e.event == "escalation" and e.cause == "emergency:strong_hit" for e in events
+        )
 
 
 def test_emergency_reopens_closed_case_and_restores_it_to_open_list(mock_openai_chat, mock_meta_send):
