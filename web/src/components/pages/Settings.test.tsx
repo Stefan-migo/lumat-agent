@@ -82,6 +82,80 @@ async function selectSection(user: ReturnType<typeof userEvent.setup>, label: st
 }
 
 describe("Settings", () => {
+  it("uses contextual decorative icons for all five derivation cases", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    for (const [label, icon] of [
+      ["Comuna sin cobertura", "map-pin-off"], ["Pide hablar con una persona", "headset"],
+      ["Tres mensajes sin entender", "message-circle-question-mark"],
+      ["Un dato no se logró tomar", "clipboard-x"], ["No hay horarios para agendar", "calendar-x"],
+    ]) {
+      const button = within(nav).getByRole("button", { name: label });
+      expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      await user.click(button);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("heading", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("shows a contextual icon on each option inside all four reply accordions", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const groups = [
+      { title: "Agendar", entries: [
+        ["Oferta de horarios", "calendar-days"], ["Sin más horarios para ese día", "calendar-x"],
+        ["No se entendió el horario pedido", "circle-help"], ["Visita agendada", "calendar-check"],
+      ] },
+      { title: "Gestionar una visita", entries: [
+        ["No tiene visitas", "calendar-x"], ["Confirmar la cancelación", "circle-help"],
+        ["Elegir una visita", "list-checks"], ["Ofrecer nuevos horarios", "calendar-days"],
+        ["La visita ya pasó", "history"], ["No se entendió la visita", "calendar-search"],
+        ["No se entendió el horario", "circle-help"], ["La visita sigue igual", "calendar-check"],
+        ["Sin horarios para reagendar", "calendar-x"], ["Visita reagendada", "calendar-clock"],
+        ["Pedir confirmación para cancelar", "circle-help"], ["No se puede cancelar", "ban"],
+        ["Visita cancelada", "calendar-x"],
+      ] },
+      { title: "Derivar a una persona", entries: [["Derivación a un asesor", "headset"]] },
+      { title: "Captura", entries: [["Pedir evidencia", "camera"], ["Pedir consentimiento", "shield-check"]] },
+    ];
+    for (const { title, entries } of groups) {
+      await user.click(within(nav).getByRole("button", { name: new RegExp(title) }));
+      for (const [label, icon] of entries) {
+        const button = within(nav).getByRole("button", { name: label });
+        expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
+        expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      }
+    }
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+  });
+
+  it("groups specific derivation cases in a collapsible list separate from generic handoff", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const cases = within(nav).getByRole("button", { name: /Casos de derivación/ });
+    expect(cases).toHaveAttribute("aria-expanded", "true");
+    expect(cases).toHaveTextContent("5");
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "Borrador específico" } });
+    await user.click(cases);
+    expect(cases).toHaveAttribute("aria-expanded", "false");
+    expect(within(nav).queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+    await user.click(cases);
+    expect(within(nav).getByRole("button", { name: "Comuna sin cobertura" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(nav).getByRole("button", { name: /Derivar a una persona/ }));
+    await user.click(within(nav).getByRole("button", { name: "Derivación a un asesor" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).not.toHaveValue("Borrador específico");
+    await user.click(within(nav).getByRole("button", { name: "Comuna sin cobertura" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+  });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("renders every section and selects Agente by default", () => {
@@ -662,18 +736,18 @@ describe("Settings", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("saves one deterministic reply from its group under Conducta", async () => {
+  it("selects a grouped reply and saves its edit through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
+    await user.click(screen.getByRole("button", { name: "Oferta de horarios" }));
 
-    const offer = screen.getByLabelText("Oferta de horarios");
-    expect(offer).toHaveValue("Horarios: {{opciones}}");
-    expect(screen.getByText("{{opciones}}")).toBeInTheDocument();
-    fireEvent.change(offer, { target: { value: "Estos horarios tengo: {{opciones}}" } });
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Horarios: {{opciones}}");
+    expect(screen.getByRole("heading", { name: "Agendar" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "Estos horarios tengo: {{opciones}}" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
       body: JSON.stringify({ texts: { ...replyTextValues, booking_offer: "Estos horarios tengo: {{opciones}}" } }),
@@ -693,34 +767,46 @@ describe("Settings", () => {
       "No se entendió el horario", "La visita sigue igual", "Sin horarios para reagendar", "Visita reagendada", "Pedir confirmación para cancelar",
       "No se puede cancelar", "Visita cancelada", "Derivación a un asesor", "Pedir evidencia", "Pedir consentimiento",
     ];
-    for (const group of ["Agendar", "Gestionar una visita", "Derivar a una persona", "Captura"]) {
-      await user.click(screen.getByRole("button", { name: new RegExp(group) }));
+    const selectEntry = async (label: string) => {
+      if (labels.indexOf(label) >= 5 && labels.indexOf(label) <= 8) {
+        if (screen.getByRole("button", { name: /Agendar/ }).getAttribute("aria-expanded") !== "true") await user.click(screen.getByRole("button", { name: /Agendar/ }));
+      } else if (labels.indexOf(label) >= 9 && labels.indexOf(label) <= 21) {
+        if (screen.getByRole("button", { name: /Gestionar una visita/ }).getAttribute("aria-expanded") !== "true") await user.click(screen.getByRole("button", { name: /Gestionar una visita/ }));
+      } else if (label === "Derivación a un asesor") {
+        if (screen.getByRole("button", { name: /Derivar a una persona/ }).getAttribute("aria-expanded") !== "true") await user.click(screen.getByRole("button", { name: /Derivar a una persona/ }));
+      }
+      else if (["Pedir evidencia", "Pedir consentimiento"].includes(label)) {
+        if (screen.getByRole("button", { name: /Captura/ }).getAttribute("aria-expanded") !== "true") await user.click(screen.getByRole("button", { name: /Captura/ }));
+      }
+      await user.click(screen.getByRole("button", { name: label }));
+    };
+    const replyKeys = Object.keys(replyTextValues) as Array<keyof typeof replyTextValues>;
+    const changed: Record<string, string> = Object.fromEntries(Object.entries(replyTextValues).map(([key, value]) => [key, `${value} Edición.`]));
+    for (let index = 0; index < labels.length; index += 1) {
+      await selectEntry(labels[index]);
+      const editor = screen.getByLabelText("Mensaje al cliente");
+      expect(editor).toHaveValue(replyTextValues[replyKeys[index]]);
+      fireEvent.change(editor, { target: { value: changed[replyKeys[index]] } });
     }
-    expect(labels).toHaveLength(25);
-    for (const label of labels) expect(screen.getByLabelText(label)).toBeInTheDocument();
-
-    const changed = Object.fromEntries(Object.entries(replyTextValues).map(([key, value]) => [key, `${value} Edición.`]));
-    for (const [key, value] of Object.entries(changed)) {
-      const label = labels[Object.keys(replyTextValues).indexOf(key)];
-      fireEvent.change(screen.getByLabelText(label), { target: { value } });
-    }
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({ texts: changed }),
-    }));
+    expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({ method: "POST", body: JSON.stringify({ texts: changed }) }));
   });
 
-  it("keeps the Conducta reply-text save disabled if any of the 25 values is blank", async () => {
+  it("blocks the sticky save if any of the 25 reply texts is blank", async () => {
     const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
-    const save = screen.getByRole("button", { name: "Guardar respuestas" });
-    expect(save).toBeEnabled();
+    const save = screen.getByRole("button", { name: "Guardar cambios" });
 
-    fireEvent.change(screen.getByLabelText("Visita agendada"), { target: { value: "   " } });
-    expect(save).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /Agendar/ }));
+    await user.click(screen.getByRole("button", { name: "Visita agendada" }));
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "   " } });
+    expect(save).toBeEnabled();
+    await user.click(save);
+    expect(await screen.findByText("Sintaxis no válida")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("does not render flow reply-text editing in Mensajes, while retaining its three other cards", async () => {
@@ -734,64 +820,66 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
   });
 
-  it("renders the exhausted-day notice inside the booking group under Conducta", async () => {
+  it("keeps the exhausted-day notice editable and saves it through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
+    await user.click(screen.getByRole("button", { name: "Sin más horarios para ese día" }));
 
-    const notice = screen.getByLabelText("Sin más horarios para ese día");
+    const notice = screen.getByLabelText("Mensaje al cliente");
+    expect(notice).toHaveValue("Sin más horarios para hoy: {{opciones}}");
     fireEvent.change(notice, { target: { value: "Sin más para ese día: {{opciones}}" } });
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
       body: JSON.stringify({ texts: { ...replyTextValues, booking_no_more_today: "Sin más para ese día: {{opciones}}" } }),
     })));
   });
 
-  describe("derivaciones (S4)", () => {
-    const withDerivations = () => settings();
-
-    it("renders the five cases the customer reads a text for", async () => {
-      const user = userEvent.setup();
-      render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
-      await selectSection(user, "Conducta");
-
-      expect(screen.getByRole("heading", { name: "Derivaciones" })).toBeInTheDocument();
-      expect(screen.getByLabelText("Comuna sin cobertura")).toHaveValue("Sin cobertura en {{comuna}}.");
-      expect(screen.getByLabelText("Pide hablar con una persona")).toHaveValue("Te paso con una persona del equipo.");
-      expect(screen.getByLabelText("Tres mensajes sin entender")).toHaveValue("Te dejo con una persona del equipo.");
-      expect(screen.getByLabelText("Un dato no se logró tomar")).toHaveValue("Un asesor te contacta para coordinar.");
-      expect(screen.getByLabelText("No hay horarios para agendar")).toHaveValue("No hay horarios: un asesor te contacta.");
-      // the only slot of the group is named next to its case
-      expect(screen.getByText("{{comuna}}")).toBeInTheDocument();
-    });
-
-    it("saves an edited derivation text with the whole reply map", async () => {
-      const user = userEvent.setup();
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-      render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
-      await selectSection(user, "Conducta");
-
-      fireEvent.change(screen.getByLabelText("Pide hablar con una persona"), { target: { value: "Ahora te escribe alguien del equipo." } });
-      await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
-
-      await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-        body: JSON.stringify({ texts: { ...replyTextValues, handoff_persona: "Ahora te escribe alguien del equipo." } }),
-      })));
-    });
-
-    it("keeps the derivation rule checkbox inside the existing Derivaciones card", async () => {
+  describe("derivaciones (S6.5–S6.6)", () => {
+    it("shows the five specific cases first and their existing team rule only when offered", async () => {
       const user = userEvent.setup();
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
 
-      const card = screen.getByRole("heading", { name: "Derivaciones" }).closest(".card") as HTMLElement;
-      const rules = within(card).getByRole("group", { name: "Derivar a una persona cuando" });
+      expect(screen.getByRole("heading", { name: "Derivaciones y respuestas" })).toBeInTheDocument();
+      expect(screen.getByText("Selecciona una situación para editar el mensaje que recibe el cliente.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Comuna sin cobertura" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Pide hablar con una persona" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Sin cobertura en {{comuna}}.");
+      expect(screen.getByLabelText("Derivar al equipo")).toBeChecked();
+      expect(screen.queryByRole("button", { name: "Guardar respuestas" })).not.toBeInTheDocument();
+    });
 
-      expect(within(rules).getAllByRole("checkbox")).toHaveLength(1);
-      expect(within(rules).getByRole("checkbox", { name: "Comuna fuera de cobertura" })).toBeChecked();
+    it("search narrows the situation list", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Conducta");
+      fireEvent.change(screen.getByLabelText("Buscar situación"), { target: { value: "horarios" } });
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument());
+      expect(screen.getByRole("button", { name: "No hay horarios para agendar" })).toBeInTheDocument();
+    });
+
+    it("updates the available derivation rule and marks conduct dirty", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Conducta");
+      await user.click(screen.getByLabelText("Derivar al equipo"));
+      expect(screen.getByLabelText("Derivar al equipo")).not.toBeChecked();
+      expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    });
+
+    it("appends an available slot and previews its sample value", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Conducta");
+      expect(screen.getByText("Sin cobertura en Las Condes.")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Insertar dato {{comuna}}" }));
+      expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Sin cobertura en {{comuna}}. {{comuna}}");
+      expect(screen.getByText("Sin cobertura en Las Condes. Las Condes")).toBeInTheDocument();
     });
   });
 
