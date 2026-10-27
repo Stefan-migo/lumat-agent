@@ -295,3 +295,65 @@ La lección, y ya es la segunda vez en la sesión: **este repo mueve `main` más
 serie de tres corridas (≈80 minutos).** Antes de cada serie: `git fetch`; si `main` se movió, decidir
 explícitamente si se mide igual —sellando el snapshot— o se rehace. Y por eso el follow-up de
 `compare_runs` importa: hoy un diff entre árboles distintos se ve idéntico a un diff entre el mismo árbol.
+
+### L7 — el trío sobre el árbol publicado: la captura movió un defecto, el número no (2026-10-27)
+
+Tres corridas citables sobre `2a9d861b`, el árbol que publicó `main` después de #682/#683 (el código del bot es
+idéntico; los dos commits del sello sólo tocan el harness y el `.gitignore`). Sello `bd075c8d`, árbol limpio en
+las tres, **14 de 14 escenarios medidos**, sin veredictos faltantes, corpus `dfb632518dd0` y KB `91ca087a1130`
+—los mismos fingerprints que `main-*`, así que la comparación es válida—.
+
+| Corrida | Pasan |
+|---|---|
+| `after-682-1` | 7/14 |
+| `after-682-2` | 7/14 |
+| `after-682-3` | 4/14 |
+
+**Mediana: 7 de 14.** El número no se movió respecto de L5. La composición sí:
+
+| Escenario | m1 | m2 | m3 | a1 | a2 | a3 | Movimiento |
+|---|---|---|---|---|---|---|---|
+| `simple-saludo-variante` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| `simple-precio-calefont` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| `super-inyeccion` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| `super-near-miss-lavadora` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| `super-enojo-reclamo` | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | **perdió una** |
+| `simple-horario-sabado` | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | — |
+| `complejo-agendar-calefont` | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | **ganó dos** |
+| `complejo-fuera-de-cobertura-insiste` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | perdió una |
+| `super-burst-contradiccion` | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | perdió una |
+| `simple-cobertura-comuna` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | — |
+| `simple-despedida` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | — |
+| `complejo-dos-temas` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | — |
+| `complejo-no-quiere-email` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | — |
+| `super-emergencia-gas` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | — |
+
+**4 pasan siempre · 7 nunca pasan · 3 oscilan.** Lo único que el piso de ruido (1 de 14) permite afirmar:
+
+1. **`complejo-agendar-calefont` pasó de 0 de 3 a 2 de 3.** Es el defecto que pedía *todos* los datos antes
+   de responder, y es exactamente lo que reescribe la captura de #682/#683. La corrida que todavía falla ya no
+   pide todos los datos: pide nombre y diagnóstico y repite algo que el cliente ya había aclarado. El defecto
+   se achicó, no desapareció.
+2. **`complejo-no-quiere-email` cambió de modo de falla.** Ya no es el hard fail de insistir con el correo
+   rechazado: ahora deriva por `handoff:campo_sin_respuesta` (dos veces) en vez de por `booking_unavailable`
+   o `persona`, y lo que falla es G10 `causes_required` — la causa registrada, no la negativa del cliente.
+3. **`super-emergencia-gas` sigue fallando 3 de 3 por G3**, sin evento `escalation`. No lo tocó nadie y no se
+   movió. Es el defecto más chico de arreglar y el más grave del producto.
+4. **G9 `kb_miss` es el defecto de mayor alcance**: aparece en 2 o 3 escenarios por corrida
+   (`cobertura-comuna`, `horario-sabado` en a3, `dos-temas`) y en `fuera-de-cobertura` con el rechazo por
+   comuna encima. Un solo nodo de retrieval explica cuatro escenarios.
+5. **`super-enojo-reclamo` perdió una de tres** (hard fail: minimizó el reclamo). No alcanza para llamarlo
+   regresión con el piso de ruido medido; se registra como candidato a vigilar, no como hecho.
+
+Medias por dimensión (a1 / a2 / a3), contra la mediana de L5 entre paréntesis: `grounding` 2.86 / 3.00 / 3.29
+(2.79) · `policy` 2.79 / 2.79 / 2.64 (2.43) · `conversational` 1.86 / 1.86 / 1.50 (**1.79**) · `escalation`
+3.07 / 3.14 / 3.07 (3.14) · `tone` 3.36 / 3.50 / 3.00 (3.14) · `closure` 2.50 / 2.86 / 2.50 (2.64).
+`policy` y `grounding` subieron; `conversational` sigue siendo la peor y la más estable.
+
+Las tres corridas salieron con **exit 1**, que `exit_code()` reserva para "el bot falló"; exit 2 es "el
+instrumento no pudo medir". Ninguna quedó no citable.
+
+**Conclusión para el trabajo siguiente:** el instrumento ya no es el tema. El ataque va a los seis defectos
+del bot, con este orden por relación valor/riesgo: (1) el evento `escalation` de la emergencia, aislado y
+grave; (2) el retrieval de `kb_miss`, que alcanza cuatro escenarios; (3) `simple-despedida` y el cierre, que es
+la dimensión peor; (4) lo que queda de `agendar-calefont` y `no-quiere-email`, ya achicados por la captura.
