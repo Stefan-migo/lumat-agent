@@ -298,3 +298,86 @@ pendiente:
 
 **Corte de slice**: la rama queda en **363 líneas autoradas, 6 commits**, con T1 y T3 cerradas y verificadas
 contra el corpus. Es un corte de PR limpio; T5, T2b y T6 siguen abiertas y T5 necesita su propia unidad.
+
+### L9 — T5a cerrada (`c29f844c`) y por qué tres intentos fallaron en el mismo punto
+
+**El mecanismo, medido y no inferido.** Corrida instrumentada de `super-burst-contradiccion`, mirando la base
+después:
+
+```
+captured_data: {"comuna": "Providencia", "equipment": "calefont",
+                "equipment_type": "caldera",
+                "_asked": {"failure": 2}, "_pending": ["failure"]}
+events:        state_change bot->human: handoff:campo_sin_respuesta
+               escalation               handoff:campo_sin_respuesta
+```
+
+Tres cosas quedaron probadas:
+
+1. **La comuna sí se captura.** "y estoy en providencia" llega a `captured_data`. La extracción **no** es el
+   defecto: mi sospecha inicial era falsa en esa parte.
+2. **`equipment_type` sí se corrige** a `caldera`. El que queda obsoleto es el campo libre `equipment`
+   ("calefont"). Eso es T5b.
+3. **La derivación ignora la cobertura**: `campo_sin_respuesta` con la comuna fuera de cobertura. `_out_of_coverage`
+   se consultaba sólo desde `_ask_next`, y con un campo pendiente el flujo va por `_reask_pending` y deriva, así
+   que la regla era **estructuralmente inalcanzable** en ese camino.
+
+**Por qué los tres intentos fallaron, y la lección.** Los tres tests pasaban antes de implementar, o sea no
+demostraban nada. Las dos razones:
+
+- Sembrar `_pending` / `_asked` en `captured_data` desde el test y correr el grafo **no reproduce el camino**:
+  termina en `_ask_next`, donde la cobertura sí se evalúa, y el test pasa por la razón equivocada.
+- Con el clasificador mockeado (`mock_openai_chat`) **tampoco**: la extracción real de "providencia" y la
+  corrección del equipo no ocurren con un doble.
+
+El test que funciona construye el estado que la corrida dejó en la base y llama `_reask_pending` **directo**. RED
+observado: `assert 'campo_sin_respuesta' == 'cobertura'`.
+
+**Resultado**: 32 tests verdes en `test_chat_capture.py` (incluido el nuevo) y 40 en `test_handoff.py`; en el
+escenario, los gates pasaron de `{G10, G6}` a **`{G6}`** y la causa registrada es `handoff:cobertura`. **G10
+queda arreglado; G6 sigue fallando a propósito** porque el texto de la re-pregunta todavía no nombra el equipo
+corregido.
+
+**Notas de entorno para la próxima sesión, caras de redescubrir:**
+
+- Los tests van por **`bash scripts/test.sh db …`**, nunca por `uv run pytest` directo: el script es quien exporta
+  `TEST_POSTGRES_PASSWORD`, y sin él `migrate.sh` falla con "permission denied to alter role".
+- Un volumen nuevo necesita **una** pasada manual de `db/migrate.sh` con `DATABASE_URL=$TEST_ADMIN_DB_URL`, o el
+  primer `pytest` muere en la migración.
+- La suite vacía `kb_documents` **y deja filas en `settings`**. Antes de cualquier corrida: re-sembrar la KB y
+  borrar `settings`. Las dos cosas, no una (L7).
+
+**Corte de slice**: 456 líneas, 8 commits. El PR #695 cubre T1+T3; T5a ya está en la rama y entra en el próximo
+slice junto con T5b.
+
+### L10 — T5 cerrada en su código (`c879438c`), y el escenario cambió de pregunta
+
+Con T5a y T5b dentro, `super-burst-contradiccion` ya no repite la pregunta genérica. La conversación real ahora:
+
+```
+2. cliente  necesito arreglar un calefont
+   bot      Entiendo, es un problema con tu calefont. Cuéntame qué pasa con el equipo: ...
+3. cliente  no era calefont, es una caldera, y estoy en providencia
+   bot      Todavía no tenemos visitas técnicas en Providencia, un asesor de Lumat se contactará
+            contigo para ayudarte a la brevedad.
+4. cliente  cuanto sale y cuando pueden venir
+   bot      Todavía no tenemos visitas técnicas en Providencia, un asesor de Lumat se contactará
+            contigo para ayudarte a la brevedad.
+```
+
+El label del equipo ya aparece (turno 2) y la cobertura ya decide (turno 3), que era el objetivo. Pero **G6 sigue
+fallando, y por una razón nueva**: ninguna respuesta dice "caldera" porque la derivación por cobertura se adelanta
+y no vuelve a hablar del equipo. También se repite la misma respuesta en los turnos 3 y 4.
+
+Eso **no es un bug que yo deba cerrar solo**. Son dos preguntas de producto:
+
+1. ¿La respuesta de derivación por cobertura debe reconocer el equipo que el cliente corrigió, o alcanza con
+   derivar?
+2. Si la conversación ya derivó, ¿el turno siguiente debe repetir la misma respuesta textual?
+
+Las dos cambian lo que el cliente lee y lo que el corpus espera. Quedan como pregunta abierta, igual que S6, y
+**no** se resuelven cambiando el corpus a conveniencia del bot.
+
+Nota sobre el duplicado: aparecieron **dos** divergencias entre `_ask_next` y `_reask_pending` (la regla de
+cobertura y el label del equipo). La segunda no se copió: se unificó en `_render_capture_question`, porque el
+defecto es la duplicación, no cada omisión por separado.
