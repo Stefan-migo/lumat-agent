@@ -82,6 +82,89 @@ async function selectSection(user: ReturnType<typeof userEvent.setup>, label: st
 }
 
 describe("Settings", () => {
+  it("operation uses the shared save bar for hours and durations with an explicit empty state", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Horarios y avisos");
+    const durations = screen.getByRole("heading", { name: "Duraciones por servicio" }).closest(".card") as HTMLElement;
+    expect(within(durations).getByText("Aún no hay duraciones configuradas")).toBeInTheDocument();
+    expect(within(durations.querySelector(".card__header")!).getByRole("button", { name: "Agregar servicio" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar anticipación" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar horarios" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar duraciones" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Configurar notificaciones/ })).toHaveAttribute("href", "/panel/app/push");
+    expect(screen.getByRole("button", { name: /Editar en Mensajes/ })).toBeInTheDocument();
+    await user.click(within(durations).getByRole("button", { name: "Agregar servicio" }));
+    fireEvent.change(screen.getByLabelText("Servicio 1"), { target: { value: " Calefont " } });
+    fireEvent.change(screen.getByLabelText("Minutos 1"), { target: { value: "90" } });
+    fireEvent.change(screen.getByLabelText("Anticipación mínima"), { target: { value: "0" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(screen.getByLabelText("Anticipación mínima")).toHaveValue(0);
+    expect(screen.getByLabelText("Servicio 1")).toHaveValue(" Calefont ");
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(screen.getByLabelText("Anticipación mínima")).toHaveValue(2);
+    expect(screen.queryByLabelText("Servicio 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+  });
+
+  it("operation adapts coverage help and keeps empty rejection and exact normalized payload", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Cobertura");
+    expect(screen.getByRole("button", { name: "Ayuda sobre cobertura" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar cobertura" })).not.toBeInTheDocument();
+    const field = screen.getByLabelText("Comunas con cobertura");
+    fireEvent.change(field, { target: { value: " \n " } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(field).toHaveValue(" \n ");
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    fireEvent.change(field, { target: { value: " Ñuñoa \n\n Las Condes " } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/coverage", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ communes: ["Ñuñoa", "Las Condes"] }),
+    })));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled());
+  });
+
+  it("operation adapts tariff help while preserving season fields, validation and save payload", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
+    const data = settings();
+    render(<Settings data={data} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Tarifas");
+    expect(screen.getByRole("button", { name: "Ayuda sobre tarifas" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar tarifas" })).not.toBeInTheDocument();
+    const field = screen.getByLabelText(/Visita técnica/);
+    fireEvent.change(field, { target: { value: "0" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(field).toHaveValue(null);
+    fireEvent.change(field, { target: { value: "35000" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/tarifa", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ precios: { ...data.tarifa, visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 35000 }] } }),
+    })));
+  });
+
+  it("operation keeps unsaved coverage and tariff drafts isolated and discards only the active section", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Cobertura");
+    fireEvent.change(screen.getByLabelText("Comunas con cobertura"), { target: { value: "Ñuñoa" } });
+    await selectSection(user, "Tarifas");
+    fireEvent.change(screen.getByLabelText(/Visita técnica/), { target: { value: "35000" } });
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(screen.getByLabelText(/Visita técnica/)).toHaveValue(30000);
+    await selectSection(user, "Cobertura");
+    expect(screen.getByLabelText("Comunas con cobertura")).toHaveValue("Ñuñoa");
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
   it("uses contextual decorative icons for all five derivation cases", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
@@ -349,7 +432,7 @@ describe("Settings", () => {
       const user = userEvent.setup();
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Horarios y avisos");
-      expect(screen.getByRole("button", { name: "Lunes compartido" })).toBeInTheDocument();
+      expect(screen.getByText("Lunes compartido")).toBeInTheDocument();
     } finally {
       WEEKDAY_NAMES[0] = previous;
     }
@@ -587,7 +670,8 @@ describe("Settings", () => {
     render(<Settings data={settings({ hours: { timezone: "America/Santiago", schedule: [] } })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Horarios de atención" })).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Guardar horarios" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Guardar horarios" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
     await selectSection(user, "Mensajes");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
     const saveResponse = new Promise<Response>(() => undefined);
@@ -962,7 +1046,7 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
 
-    expect(screen.getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
+    expect(screen.getByRole("link", { name: /configurar notificaciones/i })).toHaveAttribute("href", "/panel/app/push");
     expect(screen.queryByRole("button", { name: /activar notificaciones/i })).not.toBeInTheDocument();
   });
 
@@ -986,7 +1070,7 @@ describe("Settings", () => {
     expect(leadHours).toHaveValue(2);
     await user.clear(leadHours);
     await user.type(leadHours, "6");
-    await user.click(screen.getByRole("button", { name: "Guardar anticipación" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/booking-lead", expect.objectContaining({
       method: "POST", body: JSON.stringify({ hours: 6 }),
     })));
@@ -1002,7 +1086,7 @@ describe("Settings", () => {
     });
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
-    expect(await screen.findByText("Luis Pérez")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Luis Pérez" })).toBeInTheDocument();
     expect(await screen.findByLabelText("Días y horarios de atención")).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith("/panel/api/technicians", expect.objectContaining({ credentials: "include" }));
   });
@@ -1029,7 +1113,7 @@ describe("Settings", () => {
     await user.click(screen.getByRole("button", { name: "Agregar servicio" }));
     fireEvent.change(screen.getByLabelText("Servicio 1"), { target: { value: "Calefont" } });
     fireEvent.change(screen.getByLabelText("Minutos 1"), { target: { value: "90" } });
-    await user.click(screen.getByRole("button", { name: "Guardar duraciones" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/durations", expect.objectContaining({
       body: JSON.stringify({ service_durations: { Calefont: 90 } }),
