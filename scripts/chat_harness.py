@@ -18,10 +18,14 @@ exercises the **brain**, not the WhatsApp plumbing.
 
 Usage
 -----
-    # inside the api container, so it shares the app's env and database
-    docker compose -p lumat-odd-chat-harness -f infra/docker-compose.yml \
-        -f infra/docker-compose.harness.yml exec api \
-        uv run python scripts/chat_harness.py --phone +56900000001
+    # inside the api container, so it shares the app's env and database. Kept on
+    # ONE line on purpose: these docs used to wrap it with a backslash continuation
+    # and a trailing space after one of them left Compose with `-f` and no value, so
+    # the terminal printed `Usage: docker compose [OPTIONS] COMMAND` instead.
+    docker compose -p lumat-harness -f infra/docker-compose.yml -f infra/docker-compose.harness.yml exec api uv run python scripts/chat_harness.py --phone +56900000001
+
+    # A known phone resumes its own conversation; another phone opens a new one,
+    # and --conversation <id> resumes one by id.
 
 Conversations written here are plain `conversations`/`messages` rows, so the
 panel of the same stack renders them (refresh by hand: the realtime publisher
@@ -52,6 +56,7 @@ from app.models import (  # noqa: E402
     Case,
     Conversation,
     ConversationEvent,
+    Customer,
     Memory,
     Message,
     MessageDirection,
@@ -129,6 +134,11 @@ def inspect(session: Session, conversation_id: int) -> dict:
     if conversation is None:
         raise ValueError(f"unknown conversation {conversation_id}")
 
+    # The conversation's own customer, so the REPL header can name whose thread
+    # this is instead of echoing the `--phone` flag (which is unused, and
+    # therefore misleading, when `--conversation` selected the thread).
+    customer = session.get(Customer, conversation.customer_id)
+
     case = session.scalar(
         select(Case)
         .where(Case.conversation_id == conversation_id)
@@ -156,6 +166,7 @@ def inspect(session: Session, conversation_id: int) -> dict:
 
     return {
         "conversation_id": conversation.id,
+        "phone": customer.phone_e164 if customer is not None else None,
         "state": conversation.state.value,
         "captured_data": conversation.captured_data,
         "summary": conversation.summary,
@@ -202,8 +213,28 @@ def _case_row(case: Case | None) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Interactive shell — I/O glue, deliberately not unit-tested
+# Interactive shell — I/O glue, deliberately not unit-tested. One exception:
+# `_fix_encoding` is pure and is pinned by a test, because a single mangled byte
+# from a terminal used to kill a live conversation (see its docstring).
 # ---------------------------------------------------------------------------
+
+
+def _fix_encoding(text: str) -> str:
+    """Recover terminal input that Python decoded with the wrong charset.
+
+    The api container ships no locale, so `input()` can decode a typed `ñ` with
+    the POSIX charset and `surrogateescape`: the two UTF-8 bytes arrive as two
+    lone surrogates (`\\udcc3\\udcb1`). psycopg refuses to encode a surrogate, so
+    `run_turn` died on `session.flush()` and took the whole session with it —
+    observed twice, typing "ñuñoino 568" into a live conversation.
+
+    Rebuilding the bytes and decoding them as UTF-8 restores the character the
+    terminal actually sent; if those bytes are genuinely invalid, they degrade to
+    U+FFFD, which Postgres stores. One ugly turn instead of a dead harness.
+    """
+    if not any("\ud800" <= char <= "\udfff" for char in text):
+        return text
+    return text.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
 
 
 def _intent_of(events: list[dict], since: int) -> str | None:
@@ -240,13 +271,13 @@ def main(argv: list[str] | None = None) -> int:
         conversation_id = args.conversation or ensure_conversation(session, args.phone)
         snapshot = inspect(session, conversation_id)
 
-    print(f"lumat-harness · conversación #{conversation_id} · {args.phone}")
+    print(f"lumat-harness · conversación #{conversation_id} · {snapshot['phone'] or args.phone}")
     print(f"state={snapshot['state']} · escribe como el cliente · 'salir' o Ctrl-D termina\n")
 
     seen_events = len(snapshot["events"])
     while True:
         try:
-            text = input("cliente> ").strip()
+            text = _fix_encoding(input("cliente> ").strip())
         except (EOFError, KeyboardInterrupt):
             print()
             break
