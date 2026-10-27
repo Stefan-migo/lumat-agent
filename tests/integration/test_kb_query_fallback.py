@@ -23,7 +23,9 @@ from app.chat.nodes import respond as respond_node
 from app.chat.state import ConversationState, get_or_create_conversation
 from app.chat.subgraphs import research_triage
 from app.db import SessionLocal
-from app.models import Message, MessageDirection, MessageStatus, MessageType
+from app.models import ConversationEvent, Message, MessageDirection, MessageStatus, MessageType
+from app.services.realtime import activity_events
+from app.services.settings import MESSAGE_DEFAULTS
 from app.services import kb as kb_service
 from app.services.customers import get_or_create_customer
 from _testdb import admin_database_url
@@ -181,6 +183,21 @@ def test_a_recorded_miss_is_offered_without_a_second_retrieval(monkeypatch):
     assert calls == [RAW, SERVICE]
     assert seen == {}
     assert len(result["replies"]) == 1
+
+
+def test_soft_kb_miss_is_visible_in_reconnect_safe_activity_history(monkeypatch):
+    state = _state(intent="consulta", service=None)
+    state.retrieval = []
+
+    result = respond_node.respond(state)
+
+    assert result == {"replies": [MESSAGE_DEFAULTS["kb_miss_offer"]]}
+    assert len(result["replies"]) == 1
+    with SessionLocal() as session:
+        events = list(session.scalars(activity_events(state.conversation_id)))
+    assert [(event.event, event.cause, event.actor) for event in events] == [
+        ("kb_miss", "intent=consulta", "bot")
+    ]
 
 
 def test_a_turn_that_skipped_triage_still_retrieves_in_respond(monkeypatch):

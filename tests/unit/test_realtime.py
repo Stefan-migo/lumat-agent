@@ -13,9 +13,9 @@ from app.services.realtime import (
 
 
 def test_activity_validator_accepts_only_activity_vocabulary():
-    assert ACTIVITY_EVENTS == {"classified", "kb_retrieved", "escalation"}
-    assert validate_activity_event("classified") == "classified"
-    assert validate_activity_event("kb_retrieved") == "kb_retrieved"
+    assert ACTIVITY_EVENTS == {"classified", "kb_retrieved", "kb_miss", "escalation"}
+    for event in ("classified", "kb_retrieved", "kb_miss", "escalation"):
+        assert validate_activity_event(event) == event
     with pytest.raises(ValueError, match="unsupported activity event"):
         validate_activity_event("state_change")
 

@@ -28,6 +28,7 @@ from app.models import KbVisibility, Message
 from app.services import kb, prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
+from app.services.realtime import record_activity
 from app.services.settings import (
     MESSAGE_DEFAULTS,
     TARIFA_LABELS,
@@ -410,10 +411,18 @@ def respond(state: ConversationState) -> dict:
                 }
         if not chunks:
             # D18: offer both paths without deriving; CM-6 still records the miss.
+            miss_context = f"intent={state.intent}"
             log_unresolved(
                 session,
                 message_id=state.window[-1]["id"],
-                context=f"intent={state.intent}",
+                context=miss_context,
+            )
+            record_activity(
+                session,
+                state.conversation_id,
+                "kb_miss",
+                cause=miss_context,
+                actor="bot",
             )
             return {"replies": [get_message(session, "kb_miss_offer")]}
         kb_text = "\n".join(f"{i + 1}. {c['content']}" for i, c in enumerate(chunks))
