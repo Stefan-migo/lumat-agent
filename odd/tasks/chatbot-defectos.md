@@ -349,3 +349,35 @@ corregido.
 
 **Corte de slice**: 456 líneas, 8 commits. El PR #695 cubre T1+T3; T5a ya está en la rama y entra en el próximo
 slice junto con T5b.
+
+### L10 — T5 cerrada en su código (`c879438c`), y el escenario cambió de pregunta
+
+Con T5a y T5b dentro, `super-burst-contradiccion` ya no repite la pregunta genérica. La conversación real ahora:
+
+```
+2. cliente  necesito arreglar un calefont
+   bot      Entiendo, es un problema con tu calefont. Cuéntame qué pasa con el equipo: ...
+3. cliente  no era calefont, es una caldera, y estoy en providencia
+   bot      Todavía no tenemos visitas técnicas en Providencia, un asesor de Lumat se contactará
+            contigo para ayudarte a la brevedad.
+4. cliente  cuanto sale y cuando pueden venir
+   bot      Todavía no tenemos visitas técnicas en Providencia, un asesor de Lumat se contactará
+            contigo para ayudarte a la brevedad.
+```
+
+El label del equipo ya aparece (turno 2) y la cobertura ya decide (turno 3), que era el objetivo. Pero **G6 sigue
+fallando, y por una razón nueva**: ninguna respuesta dice "caldera" porque la derivación por cobertura se adelanta
+y no vuelve a hablar del equipo. También se repite la misma respuesta en los turnos 3 y 4.
+
+Eso **no es un bug que yo deba cerrar solo**. Son dos preguntas de producto:
+
+1. ¿La respuesta de derivación por cobertura debe reconocer el equipo que el cliente corrigió, o alcanza con
+   derivar?
+2. Si la conversación ya derivó, ¿el turno siguiente debe repetir la misma respuesta textual?
+
+Las dos cambian lo que el cliente lee y lo que el corpus espera. Quedan como pregunta abierta, igual que S6, y
+**no** se resuelven cambiando el corpus a conveniencia del bot.
+
+Nota sobre el duplicado: aparecieron **dos** divergencias entre `_ask_next` y `_reask_pending` (la regla de
+cobertura y el label del equipo). La segunda no se copió: se unificó en `_render_capture_question`, porque el
+defecto es la duplicación, no cada omisión por separado.
