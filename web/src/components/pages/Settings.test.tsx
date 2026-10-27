@@ -858,8 +858,8 @@ describe("Settings", () => {
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
       fireEvent.change(screen.getByLabelText("Buscar situación"), { target: { value: "horarios" } });
-      await waitFor(() => expect(screen.getByRole("button", { name: "No hay horarios para agendar" })).toBeInTheDocument());
-      expect(screen.queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument());
+      expect(screen.getByRole("button", { name: "No hay horarios para agendar" })).toBeInTheDocument();
     });
 
     it("updates the available derivation rule and marks conduct dirty", async () => {
