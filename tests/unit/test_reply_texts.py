@@ -50,6 +50,9 @@ EXPECTED_KEYS = {
     "handoff_booking_unavailable",
     "capture_evidence",
     "capture_consent",
+    "capture_consent_refused",
+    "capture_consent_unclear",
+    "capture_ack",
 }
 
 
@@ -93,7 +96,8 @@ def test_every_default_slot_is_whitelisted_for_its_key():
 
 def test_the_slot_vocabulary_is_closed():
     assert set().union(*REPLY_TEXT_SLOTS.values()) == {
-        "opciones", "fecha", "visita", "accion", "tecnico", "comuna"
+        "opciones", "fecha", "visita", "accion", "tecnico", "comuna",
+        "nombre", "equipo", "problema", "disponibilidad",
     }
 
 

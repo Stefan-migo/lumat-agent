@@ -321,9 +321,15 @@ def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
     assert captured["_pending"] == "consent"
 
     _turn(conv_id, "paso", "wamid.optional-skip")
+    # S1: skipping the consent answer is not a yes. It is re-asked once and then
+    # derived, because nothing is booked without an explicit consent.
     captured = _conversation_captured(conv_id)
-    assert captured["consent"] == "unknown"
-    assert "_pending" not in captured
+    assert "consent" not in captured
+    assert captured["_pending"] == "consent"
+
+    _turn(conv_id, "paso", "wamid.optional-skip-2")
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"
 
 
 def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_chat, fake_embedder):

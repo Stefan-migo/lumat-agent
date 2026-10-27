@@ -37,8 +37,10 @@ def test_the_default_order_is_the_shipped_capture_order():
     assert CHAT_CONDUCT_DEFAULTS["orden"] == FIELDS
 
 
-def test_the_defaults_keep_the_other_conduct_fields_without_redaccion():
-    assert "redaccion" not in CHAT_CONDUCT_DEFAULTS
+def test_the_defaults_keep_the_other_conduct_fields_and_the_phrasing_switch():
+    # S5: `redaccion` comes back with a reader (`phrasing.phrase`); #687 had
+    # removed it while nothing read it. The default keeps phrasing off.
+    assert CHAT_CONDUCT_DEFAULTS["redaccion"] == "plantilla"
     assert CHAT_CONDUCT_DEFAULTS["orden"] == FIELDS
     assert CHAT_CONDUCT_DEFAULTS["max_preguntas_por_mensaje"] == 1
     assert CHAT_CONDUCT_DEFAULTS["derivaciones"] == list(CONDUCT_DERIVACIONES)
@@ -54,7 +56,8 @@ def test_the_closed_derivation_list_keeps_only_the_rule_with_a_reader():
 
 
 def test_validate_accepts_a_complete_conduct_object():
-    assert validate_conduct(VALID, FIELDS) == VALID
+    # S5: the projection carries the phrasing switch, defaulting it when absent.
+    assert validate_conduct(VALID, FIELDS) == {**VALID, "redaccion": "plantilla"}
 
 
 def test_validate_accepts_a_subset_order():
@@ -88,6 +91,7 @@ def test_validate_accepts_two_questions_without_changing_other_fields():
 
     assert validate_conduct(value, FIELDS) == {
         "orden": FIELDS,
+        "redaccion": "plantilla",
         "max_preguntas_por_mensaje": 2,
         "derivaciones": list(CONDUCT_DERIVACIONES),
     }
@@ -138,11 +142,24 @@ def test_validate_rejects_malformed_conduct(value):
         validate_conduct(value, FIELDS)
 
 
-@pytest.mark.parametrize("redaccion", ["llm", "plantilla", "legacy-value", None])
-def test_validate_ignores_legacy_redaccion_values(redaccion):
+@pytest.mark.parametrize("redaccion", ["llm", "plantilla"])
+def test_validate_projects_the_phrasing_switch(redaccion):
+    # S5: the key has a reader now (`phrasing.phrase`), so it is validated and
+    # returned instead of being dropped as dead configuration.
     value = {**VALID, "redaccion": redaccion}
 
-    assert validate_conduct(value, FIELDS) == VALID
+    assert validate_conduct(value, FIELDS)["redaccion"] == redaccion
+
+
+@pytest.mark.parametrize("redaccion", ["legacy-value", None])
+def test_validate_rejects_an_unknown_phrasing_mode(redaccion):
+    with pytest.raises(ValueError):
+        validate_conduct({**VALID, "redaccion": redaccion}, FIELDS)
+
+
+def test_validate_accepts_a_payload_without_the_phrasing_switch():
+    """A panel that does not render the switch still saves; the default applies."""
+    assert validate_conduct(VALID, FIELDS)["redaccion"] == "plantilla"
 
 
 def test_get_returns_the_defaults_without_a_row():
@@ -185,6 +202,6 @@ def test_get_falls_back_per_key_on_a_partial_row():
     conduct = get_conduct(session)
 
     assert conduct["orden"] == ["failure"]
-    assert "redaccion" not in conduct
+    assert conduct["redaccion"] == "plantilla"
     assert conduct["max_preguntas_por_mensaje"] == 1
     assert conduct["derivaciones"] == list(CONDUCT_DERIVACIONES)

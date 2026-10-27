@@ -62,6 +62,11 @@ CAPTURE_QUESTIONS_KEY = "capture.questions"
 # active derivation rules. Closed options only: the five invariants of S19 are
 # NOT configurable and stay out of this key.
 CHAT_CONDUCT_KEY = "chat.conduct"
+# S5: the capture-phrasing switch. #687 removed this key because nothing read
+# it; `phrasing.phrase` reads it now, so it comes back with a consumer and stays
+# optional on save so payloads from a panel that does not render it still work.
+CONDUCT_REDACCIONES: tuple[str, ...] = ("llm", "plantilla")
+CONDUCT_OPTIONAL_KEYS: frozenset[str] = frozenset({"redaccion"})
 CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 # The closed list of derivation rules (S10): exactly the ones the derivation
 # logic reads. T10 listed five and T15 implemented `cobertura`; S4 removed the
@@ -71,6 +76,7 @@ CONDUCT_MAX_PREGUNTAS: tuple[int, ...] = (1, 2)
 CONDUCT_DERIVACIONES: tuple[str, ...] = ("cobertura",)
 CHAT_CONDUCT_DEFAULTS: dict[str, Any] = {
     "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+    "redaccion": "plantilla",
     "max_preguntas_por_mensaje": 1,
     "derivaciones": list(CONDUCT_DERIVACIONES),
 }
@@ -180,6 +186,9 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     "capture_consent": (
         "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
     ),
+    "capture_consent_refused": "De acuerdo, no guardaremos tus datos ni agendaremos una visita.",
+    "capture_consent_unclear": "Necesito que me confirmes si autorizas guardar tus datos. Responde sí o no.",
+    "capture_ack": "Gracias {{nombre}}. ",
 }
 
 # S8: the slots each reply may use. The owner can drop a slot from a text, never
@@ -213,6 +222,9 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_booking_unavailable": frozenset(),
     "capture_evidence": frozenset(),
     "capture_consent": frozenset(),
+    "capture_consent_refused": frozenset(),
+    "capture_consent_unclear": frozenset(),
+    "capture_ack": frozenset({"nombre", "comuna", "equipo", "problema", "disponibilidad"}),
 }
 
 # SS-1: the two legal scope modes per category. Anything else behaves as unset.
@@ -431,6 +443,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.smtp_tls": DEFAULT_SMTP_TLS,
     # SS-5: tone style used by the chat nodes.
     "tone.style": DEFAULT_TONE_STYLE,
+    "capture.preventive_keywords": [
+        "mantencion", "mantención", "mantenimiento", "revision", "revisión",
+        "limpieza", "preventiva",
+    ],
     **{f"messages.{key}": value for key, value in MESSAGE_DEFAULTS.items()},
     MESSAGE_TEMPLATES_KEY: [],
     "hours.timezone": "America/Santiago",
@@ -828,6 +844,29 @@ def get_message_templates(session: Session) -> list[dict]:
     return templates if isinstance(templates, list) else []
 
 
+def get_capture_preventive_keywords(session: Session) -> list[str]:
+    """Return configured preventive-service keywords, falling back when malformed."""
+    value = get_setting(
+        session,
+        "capture.preventive_keywords",
+        default=SETTINGS_DEFAULTS["capture.preventive_keywords"],
+    )
+    if isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value):
+        return value
+    return list(SETTINGS_DEFAULTS["capture.preventive_keywords"])
+
+
+def get_capture_ack(session: Session) -> str:
+    """Return the configurable acknowledgement, read from the reply catalog.
+
+    `capture_ack` is a reply text like every other (S8): it lives in
+    `reply.texts`, so the panel's reply editor, the slot whitelist and the
+    shipped default stay one source of truth. An earlier shape stored it under
+    `capture.ack` too, which made the catalog row the panel edits do nothing.
+    """
+    return get_reply_texts(session)["capture_ack"]
+
+
 def get_capture_questions(session: Session) -> dict[str, str]:
     """Return the stored capture questions, or an empty map so the caller keeps
     its own defaults (the wording defaults live in `app/chat/nodes/capture.py`)."""
@@ -1019,7 +1058,10 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
 
     # As with other bounded settings, unknown top-level keys are ignored by the
     # returned projection. This also makes legacy `redaccion` data harmless.
-    missing = [key for key in CHAT_CONDUCT_DEFAULTS if key not in value]
+    missing = [
+        key for key in CHAT_CONDUCT_DEFAULTS
+        if key not in value and key not in CONDUCT_OPTIONAL_KEYS
+    ]
     if missing:
         raise ValueError(f"chat.conduct is missing: {missing}")
 
@@ -1058,8 +1100,15 @@ def validate_conduct(value: Any, fields: Sequence[str]) -> dict[str, Any]:
     if unknown_rules:
         raise ValueError(f"chat.conduct.derivaciones has unknown rules: {unknown_rules}")
 
+    redaccion = value.get("redaccion", CHAT_CONDUCT_DEFAULTS["redaccion"])
+    if redaccion not in CONDUCT_REDACCIONES:
+        raise ValueError(
+            f"chat.conduct.redaccion must be one of {list(CONDUCT_REDACCIONES)}"
+        )
+
     return {
         "orden": list(orden),
+        "redaccion": redaccion,
         "max_preguntas_por_mensaje": max_preguntas,
         "derivaciones": list(derivaciones),
     }
@@ -1086,6 +1135,10 @@ def get_conduct(session: Session) -> dict[str, Any]:
         conduct["derivaciones"] = [
             rule for rule in rules if rule in CONDUCT_DERIVACIONES
         ]
+    # Same treatment for the phrasing switch: a value stored before the key was
+    # retired (or written by hand) must not reach the panel as an invalid option.
+    if conduct.get("redaccion") not in CONDUCT_REDACCIONES:
+        conduct["redaccion"] = CHAT_CONDUCT_DEFAULTS["redaccion"]
     return conduct
 
 
