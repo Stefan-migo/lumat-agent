@@ -965,3 +965,35 @@ def test_s15_coverage_outranks_an_exhausted_pending_field():
     result = _reask_pending(captured, ["failure"], state)
 
     assert result["escalate_reason"] == "cobertura"
+
+
+def test_s5_the_reask_names_the_equipment_the_customer_corrected():
+    """S5/T5b: the reply must name the corrected equipment.
+
+    Measured on `super-burst-contradiccion`: the customer corrected "no era
+    calefont, es una caldera" and the bot repeated a generic question, so no
+    reply contained "caldera" (gate G6). `equipment_type` holds the correction;
+    the free `equipment` field keeps the first value.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "equipment_type": "caldera",
+        "_pending": ["failure"],
+        "_asked": {"failure": 0},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any("caldera" in reply.lower() for reply in result["replies"])
