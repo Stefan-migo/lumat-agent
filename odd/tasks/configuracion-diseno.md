@@ -130,6 +130,10 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 2. Conducta: “podriamos meter los casos de derivacion en un dropdown menu tambien. para que sigan todos la misma logica?” Presentation only: preserve specific cases and generic response as separate groups, use the existing accordion, initially expanded.
 3. Mensajes: “el actual muestra mucha informacion es un card de 3 o 4 lineas por mensaje del asistente. en la referencia es solo una linea. todo se explica en el panel derecho.” “el panel derecho esta bien. pero se podria mejorar la version de la vista previa. para crear algo mas estilo whtasapp como lo hace la ref.”
 
+### S9 — Conducta option iconography
+
+“los dropdowns "Agendar, Gestionar una visita, Derivar a una persona, Captura", no tienen iconos cuando se abre el dropdown. asegurate de usar iconografia adecuada para cada caso. tambien para los casos de derivacion actualmente todos usan el mismo icono. si hay alguno mas adecuado mejoralos.”
+
 ## Tasks
 
 | ID | Specs | Ruta | Commit |
@@ -145,6 +149,8 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 | T8 | S8.2 | inline, done | `e594b824`; Derivations follow-up; PR #694 slice |
 | T9 | S8.3 | inline, done | `bac3ca37`; Messages follow-up; PR #696 slice |
 | T10 | S8 | inline, done | L16–L17: build, 93 focused tests, 1310 full-suite tests, browser and pushes |
+
+| T11 | S9 | inline, in progress | Contextual icons for all 25 reply options; PR #694 slice |
 
 ## Log
 
@@ -234,3 +240,9 @@ el panel derecho esta bien. pero se podria mejorar la version de la vista previa
 - L16 (final functional gates): npm ci exit 0; first npm run build exit 1 (new test used unsupported Testing Library ByRoleOptions.exact), removed option; corrected npm run build exit 0 (tsc -b + Vite, chunk-size warning); focused Settings + stories 93/93, exit 0; npm test 1310/1310 across 112 files, exit 0 (117.94s). Native assessment medium, reviewDue=false; no native review started. npm ci reports 11 vulnerabilities (4 moderate, 3 high, 4 critical); dependency remediation is outside this visual scope, lockfile unchanged. Delivery pending normal pushes of #692/#693/#694/#696.
 
 - L17 (delivery evidence): all normal pushes succeeded (job-18, exit 0): #692 `96b08129`, #693 `2c400288` (merge), #694 `e594b824`, #696 `bac3ca37`. Changes propagated upward only, no rebase/force-push/main merge. T7–T10 complete; this documentation-only commit records final hashes and checks. Remaining unrelated observations: existing capture-table mobile overflow and dependency audit warnings.
+
+- L18 (owner, verbatim): “perfecto solo me quedo un detalle. en el tab conducta:
+
+
+- los dropdowns "Agendar, Gestionar una visita, Derivar a una persona, Captura", no tienen iconos cuando se abre el dropdown. asegurate de usar iconografia adecuada para cada caso. tambien para los casos de derivacion actualmente todos usan el mismo icono. si hay alguno mas adecuado mejoralos.”
+- L19 (T11 evidence): RED two icon tests fail (generic FileText in cases, missing SVG in other groups); GREEN both pass. Lucide icons are decorative, aria-hidden, with unchanged accessible labels, selection and dirty state. Graph consulted: DERIVACION_CASES and REPLY_TEXT_GROUPS contained by Settings.tsx; Settings community, path through Settings.stories.tsx to settings fixture. Existing model/fixture god nodes unaffected. Scope limited to Settings.tsx and its tests, no shared primitive edits. Browser: all 25 icons 20x20, decorative aria-hidden, selected option and 390px navigation fit checked. Browser RED two long labels overflowed with new icon width; GREEN after local text wrapping. Native assess medium/reviewDue=false. Build/full gates pending. Risk: none, no shared primitive or data/API changes.
