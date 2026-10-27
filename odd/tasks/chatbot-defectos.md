@@ -220,3 +220,39 @@ identidad, servicios). Enrutar por intención a documento deja de ser un concurs
 **Consecuencia sobre T2**: deja de ser "cambiar la forma de la regla" y pasa a ser una decisión de diseño con
 alcance transversal — el retrieval alimenta todos los turnos del cliente, no sólo estos cuatro escenarios. No se
 implementa hasta elegir el camino, y T2b queda bloqueada igual que T6.
+
+### L7 — T3 cerrada (`312293ca`) y la trampa de entorno que casi la mide mal
+
+**T3.** El mensaje real no era "eso era todo" sino **"dale, muchas gracias, eso era todo"**, y el bot contestaba
+"Con gusto. ¿En qué más te puedo ayudar?". Fallaban dos cosas: `_CLOSING_PHRASES` sólo conocía "eso fue todo", y
+aun matcheando la frase, `is_farewell` exigía que **todos** los tokens restantes fueran de cierre — mientras
+`dale`, `muchas` y `gracias` fueron sacados de `CLOSING_TOKENS` a propósito en S3 (la cortesía pertenece al
+clasificador). Resultado: una despedida explícita envuelta en cortesía no podía cerrar nunca.
+
+Frases agregadas ("eso era todo", "eso es todo", "eso seria todo", "nada mas") y un set separado
+`_COURTESY_TOKENS` que **sólo** se consulta cuando una frase de cierre matcheó. Así la cortesía sola no cierra
+("gracias" sigue sin cerrar) y el contenido que sigue a la frase tampoco ("eso era todo lo que necesitaba saber
+del precio" queda abierto). Después: `> *bot:* ¡Gracias por escribirnos! Que tengas buen día.` · juez **3.83**,
+sin hard fail, gates limpios. Antes: 0/1 con hard fail.
+
+Queda abierto a propósito: `closure_gate` devuelve `{}` cuando hay `_pending`, así que una despedida a mitad de
+captura no cierra. Es una decisión de comportamiento, no un descuido.
+
+**La trampa de entorno, y es la más peligrosa de la sesión.** La primera verificación de T3 dio 0/1 con
+`Aviso de horario configurado.` en **todos** los turnos, incluida la pregunta del precio. No era el bot: la base
+de test del worktree nuevo tenía cuatro filas en `settings` —`hours.schedule` con una ventana de **00:00 a
+00:01**, `hours.timezone`, y los textos de fixture "Despedida configurada." / "Aviso de horario configurado."—
+que había dejado el test `test_out_of_hours_and_farewell.py` que corrí dos pasos antes.
+
+`--reset` vacía 24 tablas de **estado de conversación**, y `settings` no está entre ellas. La receta documentada
+advierte de re-sembrar la KB después de `pytest` (porque `kb_documents` sí se trunca), pero **no dice nada de
+`settings`**: cualquiera que corra el corpus después de una suite mide un bot configurado por un test. La base de
+`main` tenía cero filas (defaults, abierto); la del worktree nuevo, una ventana cerrada.
+
+Dos consecuencias:
+
+1. **Antes de citar una corrida hay que revisar los fingerprints del sello *y* el estado de `settings`,** igual
+   que se revisa la KB. Un run con `árbol sucio: no` y fingerprints iguales todavía puede estar midiendo un bot
+   configurado por un test.
+2. **Es un follow-up del instrumento**, no de esta feature: `conv_eval.py` debería rechazar (o resetear) un
+   `settings` que no coincida con los defaults antes de medir. No se arregla acá.
