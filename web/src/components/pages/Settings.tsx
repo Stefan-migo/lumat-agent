@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ClipboardList, CircleHelp, Clock3, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, LayoutDashboard, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Ban, Bell, BookOpen, Bot, CalendarCheck, CalendarClock, CalendarDays, CalendarSearch, CalendarX, Camera, ChevronDown, CircleHelp, ClipboardList, ClipboardX, Clock3, Code2, Coins, Database, DoorOpen, Eye, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Headset, History, Info, KeyRound, LayoutDashboard, ListChecks, Mail, MapPinOff, Maximize2, MessageCircle, MessageCircleQuestion, MessagesSquare, Moon, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, fetchTechnicians, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -8,19 +8,20 @@ import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Accordion } from "../primitives/Accordion";
 import { Card } from "../primitives/Card";
-import { HelpPanel } from "../primitives/HelpPanel";
+import { Popover } from "../primitives/Popover";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
 import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
+import { Dialog } from "../primitives/Dialog";
 import { MessagePreview } from "../primitives/MessagePreview";
-import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
-import { TechnicianScheduleEditor } from "../shared/TechnicianScheduleEditor";
-import { WEEKDAY_NAMES } from "../shared/agendaTime";
+import { SettingsHoursEditor } from "./SettingsHoursEditor";
+import { SettingsTechnicians } from "./SettingsTechnicians";
 import { PageFrame } from "../shared/PageFrame";
+import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
 import "./Settings.css";
@@ -44,20 +45,25 @@ function formatShortDate(value: string) {
   const [, year, month, day] = match;
   return `${Number(day)} ${MONTHS_SHORT[Number(month) - 1] ?? month} ${year}`;
 }
-const TIMEZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
 const GROUPS = [
   { id: "chatbot", label: "Chatbot", sections: [
-    { id: "agent", label: "Agente" }, { id: "persona", label: "Persona" }, { id: "conduct", label: "Conducta" }, { id: "messages", label: "Mensajes" },
+    { id: "agent", label: "Agente", icon: Bot }, { id: "persona", label: "Persona", icon: UserRound }, { id: "conduct", label: "Conducta", icon: SlidersHorizontal }, { id: "messages", label: "Mensajes", icon: MessageCircle },
   ] },
   { id: "operation", label: "Operación", sections: [
-    { id: "schedule", label: "Horarios y avisos" }, { id: "coverage", label: "Cobertura" }, { id: "tarifa", label: "Tarifas" },
+    { id: "schedule", label: "Horarios y avisos", icon: Clock3 }, { id: "coverage", label: "Cobertura", icon: Globe }, { id: "tarifa", label: "Tarifas", icon: Receipt },
   ] },
   { id: "integrations", label: "Integraciones", sections: [
-    { id: "capabilities", label: "Capacidades" }, { id: "model-api-key", label: "API key de modelos" }, { id: "email", label: "Correo" },
+    { id: "capabilities", label: "Capacidades", icon: Wrench }, { id: "model-api-key", label: "API key de modelos", icon: KeyRound }, { id: "email", label: "Correo", icon: Mail },
   ] },
-  { id: "cost-group", label: "Costos", sections: [{ id: "costs", label: "Costos" }] },
+  { id: "cost-group", label: "Costos", sections: [{ id: "costs", label: "Costos", icon: Coins }] },
 ];
 const SECTIONS = GROUPS.flatMap(({ sections }) => sections);
+const SECTION_META: Record<string, { title: string; description: string }> = {
+  agent: { title: "Agente", description: "Define qué puede resolver y cómo actúa ante una emergencia." },
+  persona: { title: "Persona", description: "Define quién es Max y cómo conversa con tus clientes." },
+  conduct: { title: "Conducta", description: "Organiza los datos que solicita el bot y los mensajes de cada situación." },
+  schedule: { title: "Horarios y avisos", description: "Configura la atención del equipo y la disponibilidad para visitas." },
+};
 const sectionGroup = (sectionId: string) => GROUPS.find(({ sections }) => sections.some(({ id }) => id === sectionId)) ?? GROUPS[0];
 const MESSAGE_TEMPLATES = [
   { id: "greeting", label: "Saludo cuando falta el nombre", description: "Inicio de conversación; pregunta el nombre del cliente", icon: MessageCircle },
@@ -72,37 +78,39 @@ const MESSAGE_TEMPLATES = [
   { id: "farewell", label: "Despedida", description: "Cierre de conversación", icon: DoorOpen },
   { id: "out_of_hours", label: "Fuera de horario", description: "Atención no disponible", icon: Clock3 },
 ] as const;
-const DERIVACION_LABELS: Record<string, string> = {
-  cobertura: "Comuna fuera de cobertura",
-};
 /**
  * S4: the five derivations whose wording the customer reads. Every other
  * reason (inyección, emergencia, límites de costo, KB) reuses the generic
  * "Derivación a un asesor" reply text, so the panel never offers copy nobody reviewed.
  */
-const DERIVACION_CASES: Array<{ key: string; label: string; when: string }> = [
+const DERIVACION_CASES: Array<{ key: string; label: string; when: string; icon: LucideIcon }> = [
   {
     key: "handoff_cobertura",
+    icon: MapPinOff,
     label: "Comuna sin cobertura",
     when: "Pide una visita en una comuna donde todavía no se atiende. Usa el dato de la comuna.",
   },
   {
     key: "handoff_persona",
+    icon: Headset,
     label: "Pide hablar con una persona",
     when: "Dice que quiere hablar con alguien del equipo.",
   },
   {
     key: "handoff_unknown_intent_thrice",
+    icon: MessageCircleQuestion,
     label: "Tres mensajes sin entender",
     when: "Tres mensajes seguidos y no se logra entender qué necesita.",
   },
   {
     key: "handoff_campo_sin_respuesta",
+    icon: ClipboardX,
     label: "Un dato no se logró tomar",
     when: "Se preguntó dos veces el mismo dato y el cliente no lo respondió.",
   },
   {
     key: "handoff_booking_unavailable",
+    icon: CalendarX,
     label: "No hay horarios para agendar",
     when: "Se intentó agendar la visita y no quedó ningún horario disponible.",
   },
@@ -119,6 +127,29 @@ const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: "Captura", keys: ["capture_evidence", "capture_consent"] },
 ];
 const REPLY_TEXT_KEYS = [...DERIVACION_CASES.map(({ key }) => key), ...REPLY_TEXT_GROUPS.flatMap(({ keys }) => keys)];
+// Decorative navigation cues; reply keys and selection remain unchanged.
+const REPLY_TEXT_ICONS: Record<string, LucideIcon> = {
+  booking_offer: CalendarDays,
+  booking_no_more_today: CalendarX,
+  booking_unclear: CircleHelp,
+  booking_confirmed: CalendarCheck,
+  manage_no_visits: CalendarX,
+  manage_confirm_cancel: CircleHelp,
+  manage_select: ListChecks,
+  manage_slots_offer: CalendarDays,
+  manage_expired: History,
+  manage_appointment_unclear: CalendarSearch,
+  manage_slots_unclear: CircleHelp,
+  manage_kept: CalendarCheck,
+  manage_reschedule_unavailable: CalendarX,
+  manage_rescheduled: CalendarClock,
+  manage_cancel_prompt: CircleHelp,
+  manage_cancel_unavailable: Ban,
+  manage_cancelled: CalendarX,
+  handoff: Headset,
+  capture_evidence: Camera,
+  capture_consent: ShieldCheck,
+};
 const REPLY_TEXT_LABELS: Record<string, string> = {
   booking_offer: "Oferta de horarios",
   booking_no_more_today: "Sin más horarios para ese día",
@@ -154,7 +185,6 @@ type Drafts = {
 };
 type DraftKey = keyof Drafts;
 const GENERIC_NOTE = "Los cambios se aplican al guardar.";
-const SCHEDULE_NOTE = "Completa los días y las horas para guardar.";
 
 function draftsFrom(data?: SettingsData | null): Drafts {
   return {
@@ -231,11 +261,25 @@ function templateSlots(text: string) {
   return [...new Set(Array.from(text.matchAll(/{{\s*([^{}]+?)\s*}}/g), (match) => match[1].trim()))];
 }
 
+function isScopeValid(value: string) {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => {
+    const [category, mode, ...rest] = line.split("=").map((part) => part.trim());
+    return Boolean(category) && rest.length === 0 && ["bot_resolve", "always_escalate"].includes(mode);
+  });
+}
+
 function sameValue(left: unknown, right: unknown) {
   return typeof left === "object" && left !== null && typeof right === "object" && right !== null
     ? JSON.stringify(left) === JSON.stringify(right)
     : Object.is(left, right);
 }
+
+const SECTION_DRAFT_KEYS: Record<string, DraftKey[]> = {
+  agent: ["scope", "keywords", "emergencyProtocol"], persona: ["persona"],
+  conduct: ["conduct", "captureQuestions", "replyTexts"], messages: ["tone", "messages", "templates"],
+  schedule: ["leadHours", "hours", "serviceDurations"], tarifa: ["tarifa"], coverage: ["coverage"],
+  costs: ["conversationLimit", "dailyLimit", "metaCost"], capabilities: [], "model-api-key": [], email: [],
+};
 
 function stateMessage(state: SettingsState, errorDetail?: string | null) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando configuración" />;
@@ -276,34 +320,6 @@ function TarifaEditor({ tarifa, labels, onChange }: { tarifa: SettingsData["tari
       </div>
     </fieldset>)}
   </div>;
-}
-
-function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: HoursData) => void }) {
-  const [newDays, setNewDays] = useState<string[]>([]);
-  const [newOpen, setNewOpen] = useState("09:00");
-  const [newClose, setNewClose] = useState("18:00");
-  const usedDays = hours.schedule.flatMap((entry) => entry.days).map((day) => WEEKDAY_NAMES[day - 1]);
-  const addSchedule = () => {
-    const days = newDays.map((day) => WEEKDAY_NAMES.indexOf(day) + 1).filter((day) => day > 0 && !usedDays.includes(WEEKDAY_NAMES[day - 1]));
-    if (!days.length || !newOpen || !newClose || newOpen >= newClose) return;
-    onChange({ ...hours, schedule: [...hours.schedule, { days, open: newOpen, close: newClose }] });
-    resetDraft();
-  };
-  const resetDraft = () => { setNewDays([]); setNewOpen("09:00"); setNewClose("18:00"); };
-  const timezoneOptions = [...new Set([hours.timezone, ...TIMEZONES])].filter(Boolean).sort((left, right) => left.localeCompare(right));
-  return <>
-    <div className="settings-hours__timezone"><Globe2 aria-hidden="true" /><Select label="Zona horaria" value={hours.timezone} onChange={(event) => onChange({ ...hours, timezone: event.target.value })} options={timezoneOptions.map((timezone) => ({ value: timezone, label: timezone }))} /></div>
-    <section className="settings-hours__weekly" aria-label="Horarios semanales"><h3>Horarios semanales</h3>
-    {hours.schedule.length ? <div className="settings-hours__list" aria-label="Horarios configurados">{hours.schedule.map((entry, index) => <div className="settings-hours__item" key={index}>
-      <strong>Horario {index + 1}</strong><span>{entry.days.map((day) => WEEKDAY_NAMES[day - 1]).join(", ") || "Sin días seleccionados"}</span><span>{entry.open} – {entry.close}</span>
-      <Button variant="tertiary" aria-label={`Eliminar horario ${index + 1}`} onClick={() => onChange({ ...hours, schedule: hours.schedule.filter((_, currentIndex) => currentIndex !== index) })}><Trash2 aria-hidden="true" /> Eliminar</Button>
-    </div>)}</div> : <p className="settings-hours__empty">No hay horarios guardados.</p>}</section>
-    <div className="settings-hours__new"><div className="settings-hours__new-header"><h3>Nuevo horario</h3><Badge tone="neutral">Sin guardar</Badge><Button variant="tertiary" className="settings-hours__reset" aria-label="Restablecer nuevo horario" onClick={resetDraft}><Trash2 aria-hidden="true" /></Button></div>
-      <span className="settings-hours__day-label">Días de atención</span><DayToggle label="Días de atención" value={newDays} onChange={(value) => setNewDays(value.filter((day) => !usedDays.includes(day)))} />
-      <div className="settings-hours__times"><Input label="Inicio" type="time" value={newOpen} onChange={(event) => setNewOpen(event.target.value)} /><Input label="Fin" type="time" value={newClose} onChange={(event) => setNewClose(event.target.value)} /></div>
-      <p className="settings-hours__info"><Info aria-hidden="true" />Cada día puede pertenecer a un solo horario.</p>
-    </div><Button variant="tertiary" className="settings-hours__add" disabled={!newDays.some((day) => !usedDays.includes(day)) || !newOpen || !newClose || newOpen >= newClose} onClick={addSchedule}><Plus aria-hidden="true" />Agregar otro horario</Button>
-  </>;
 }
 
 export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
@@ -379,10 +395,12 @@ export function AssistantCapabilitiesView({ capabilities }: { capabilities: Assi
   </div>;
 }
 
-function ConductOrderEditor({ order, options, onChange }: {
+function ConductOrderEditor({ order, questions, options, onChangeOrder, onChangeQuestion }: {
   order: string[];
+  questions: Record<string, string>;
   options: SettingsData["conduct"]["options"];
-  onChange: (order: string[]) => void;
+  onChangeOrder: (order: string[]) => void;
+  onChangeQuestion: (field: string, question: string) => void;
 }) {
   const label = (value: string) => options.fields.find((field) => field.value === value)?.label ?? value;
   const move = (index: number, delta: number) => {
@@ -390,23 +408,41 @@ function ConductOrderEditor({ order, options, onChange }: {
     if (target < 0 || target >= order.length) return;
     const next = [...order];
     [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
+    onChangeOrder(next);
+  };
+  const remove = (field: string) => {
+    if (order.length > 1) onChangeOrder(order.filter((each) => each !== field));
   };
   const remaining = options.fields.filter((field) => !order.includes(field.value));
 
-  return <div className="settings-conduct__order">
-    <ol className="settings-conduct__list">
-      {order.map((field, index) => <li className="settings-conduct__item" key={field}>
-        <span className="settings-conduct__label">{label(field)}</span>
-        <div className="settings-conduct__actions">
-          <Button variant="tertiary" aria-label={`Subir ${label(field)}`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden="true" /></Button>
-          <Button variant="tertiary" aria-label={`Bajar ${label(field)}`} disabled={index === order.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden="true" /></Button>
-          <Button variant="tertiary" aria-label={`Quitar ${label(field)}`} disabled={order.length === 1} onClick={() => onChange(order.filter((each) => each !== field))}><Trash2 aria-hidden="true" /></Button>
-        </div>
-      </li>)}
-    </ol>
+  return <div className="settings-conduct__table-wrap">
+    <table className="settings-conduct__table">
+      <thead><tr><th scope="col">#</th><th scope="col">Campo</th><th scope="col">Pregunta al cliente</th><th scope="col"><span className="visually-hidden">Acciones</span></th></tr></thead>
+      <tbody>{order.map((field, index) => {
+        const fieldLabel = label(field);
+        const action = (value: string) => {
+          if (value === "up") move(index, -1);
+          else if (value === "down") move(index, 1);
+          else if (value === "remove") remove(field);
+        };
+        return <tr key={field}>
+          <td className="settings-conduct__number">{index + 1}</td>
+          <th scope="row">{fieldLabel}</th>
+          <td><Textarea label={fieldLabel} rows={2} value={questions[field] ?? ""} onChange={(event) => onChangeQuestion(field, event.target.value)} /></td>
+          <td><div className="settings-conduct__actions">
+            <Button variant="tertiary" aria-label={`Subir ${fieldLabel}`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden="true" /></Button>
+            <Button variant="tertiary" aria-label={`Bajar ${fieldLabel}`} disabled={index === order.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden="true" /></Button>
+            <Menu label={`Acciones de ${fieldLabel}`} ariaLabel={`Acciones de ${fieldLabel}`} trigger="icon" align="end" items={[
+              { value: "up", label: "Subir", disabled: index === 0 },
+              { value: "down", label: "Bajar", disabled: index === order.length - 1 },
+              { value: "remove", label: "Quitar", disabled: order.length === 1, tone: "danger" },
+            ]} onSelect={action} />
+          </div></td>
+        </tr>;
+      })}</tbody>
+    </table>
     {remaining.length ? <div className="settings-conduct__add">
-      <Menu label="Agregar campo" ariaLabel="Agregar campo" showChevron items={remaining.map((field) => ({ value: field.value, label: field.label }))} onSelect={(value) => onChange([...order, value])} />
+      <Menu label="Agregar campo" ariaLabel="Agregar campo" showChevron items={remaining.map((field) => ({ value: field.value, label: field.label }))} onSelect={(value) => onChangeOrder([...order, value])} />
     </div> : null}
   </div>;
 }
@@ -434,6 +470,13 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     setActiveSectionState(group.sections.some(({ id }) => id === activeSection) ? activeSection : group.sections[0].id);
   };
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [replySearch, setReplySearch] = useState("");
+  const [selectedReplyKey, setSelectedReplyKey] = useState("handoff_cobertura");
+  const [keywordEntry, setKeywordEntry] = useState("");
+  const [scopeDisclosureOpen, setScopeDisclosureOpen] = useState(false);
+  const [personaMode, setPersonaMode] = useState<"preview" | "edit">("preview");
+  const [personaDialogOpen, setPersonaDialogOpen] = useState(false);
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
   const [personaVersion, setPersonaVersion] = useState(0);
@@ -565,14 +608,14 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       setSaveErrorDetail(error instanceof Error ? error.message : null); setSaveState("server-error");
     } finally { setPending((current) => ({ ...current, [key]: false })); }
   };
-  const saveScope = () => {
+  const saveScope = async () => {
+    if (!isScopeValid(draft.scope)) { setSaveState("validation"); return; }
     const rules: Record<string, string> = {};
     for (const line of draft.scope.split("\n").map((value) => value.trim()).filter(Boolean)) {
       const [category, mode] = line.split("=").map((value) => value.trim());
-      if (!category || !["bot_resolve", "always_escalate"].includes(mode)) { setSaveState("validation"); return; }
       rules[category] = mode;
     }
-    void save("scope", "/panel/api/settings/scope", { rules }, draft.scope);
+    await save("scope", "/panel/api/settings/scope", { rules }, draft.scope);
   };
   const savePersona = async () => {
     if (!draft.persona.orchestrator.trim() || !draft.persona.orchestrator_brief.trim()) { setSaveState("validation"); return; }
@@ -615,6 +658,68 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     for (const { name, minutes } of draft.serviceDurations) map[name.trim()] = Number(minutes);
     await save("serviceDurations", "/panel/api/settings/durations", { service_durations: map }, draft.serviceDurations);
   };
+  const sectionKeys = SECTION_DRAFT_KEYS[activeSection] ?? [];
+  const pendingDraftKeys = sectionKeys.filter((key) => !sameValue(draft[key], baseline.current[key]));
+  const hasPendingChanges = pendingDraftKeys.length > 0;
+  const savePendingChanges = async () => {
+    const valid = pendingDraftKeys.every((key) => {
+      if (key === "scope") return isScopeValid(draft.scope);
+      if (key === "persona") return Boolean(draft.persona.orchestrator.trim() && draft.persona.orchestrator_brief.trim());
+      if (key === "emergencyProtocol") return Boolean(draft.emergencyProtocol.safety_instructions.trim() && draft.emergencyProtocol.contacts.trim() && draft.emergencyProtocol.notify_message.trim());
+      if (key === "conduct") return Boolean(draft.conduct.orden.length && draft.conduct.derivaciones.length);
+      if (key === "captureQuestions") return Boolean(Object.values(draft.captureQuestions).length && Object.values(draft.captureQuestions).every((value) => value.trim() && !value.includes("{{") && !value.includes("}}")));
+      if (key === "replyTexts") return replyTextsValid;
+      if (key === "leadHours") return Number.isInteger(Number(draft.leadHours)) && Number(draft.leadHours) >= 1 && Number(draft.leadHours) <= 48;
+      if (key === "hours") return isValidHours(draft.hours);
+      if (key === "serviceDurations") return isDurationListValid(draft.serviceDurations);
+      if (key === "tarifa") return isTarifaValid(draft.tarifa, settingsOptions(data! as SettingsData).tarifa_labels);
+      if (key === "coverage") return draft.coverage.split("\n").some((value) => value.trim());
+      if (key === "conversationLimit" || key === "dailyLimit") return numericLimitsValid;
+      if (key === "metaCost") return isValidNonNegative(draft.metaCost);
+      if (key === "tone") return Boolean(draft.tone.trim());
+      if (key === "messages") return Object.values(draft.messages).every((value) => value.trim());
+      if (key === "templates") return draft.templates.every(({ id, text }) => id.trim() && text.trim());
+      return true;
+    });
+    if (!valid) { setSaveState("validation"); return; }
+    // The two spend limits share one endpoint, so either dirty key saves both once.
+    let limitsSaved = false;
+    for (const key of pendingDraftKeys) {
+      if (key === "scope") await saveScope();
+      else if (key === "keywords") await save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords);
+      else if (key === "persona") await savePersona();
+      else if (key === "emergencyProtocol") await saveEmergencyProtocol();
+      else if (key === "conduct") await saveConduct();
+      else if (key === "captureQuestions") await saveCaptureQuestions();
+      else if (key === "replyTexts") await saveReplyTexts();
+      else if (key === "tone") await save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone);
+      else if (key === "messages") await save("messages", "/panel/api/settings/messages", draft.messages, draft.messages);
+      else if (key === "templates") await save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates);
+      else if (key === "leadHours") await saveLeadHours();
+      else if (key === "hours") await save("hours", "/panel/api/settings/hours", draft.hours, draft.hours);
+      else if (key === "serviceDurations") await saveDurations();
+      else if (key === "tarifa") await save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa);
+      else if (key === "coverage") await save("coverage", "/panel/api/settings/coverage", { communes: draft.coverage.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.coverage);
+      else if (key === "conversationLimit" || key === "dailyLimit") {
+        if (limitsSaved) continue;
+        limitsSaved = true;
+        await save("conversationLimit", "/panel/api/settings/limits", { conversation_limit: Number(draft.conversationLimit), daily_limit: Number(draft.dailyLimit) }, draft.conversationLimit);
+      }
+      else if (key === "metaCost") await save("metaCost", "/panel/api/settings/meta", { service_message_cost: Number(draft.metaCost) }, draft.metaCost);
+    }
+  };
+  const discardPendingChanges = () => setDraft((current) => {
+    const next = { ...current };
+    pendingDraftKeys.forEach((key) => { (next as Drafts)[key] = baseline.current[key] as never; });
+    return next;
+  });
+  const addKeyword = () => {
+    const phrase = keywordEntry.trim();
+    if (!phrase) return;
+    const keywords = draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean);
+    if (!keywords.includes(phrase)) update("keywords", [...keywords, phrase].join("\n"));
+    setKeywordEntry("");
+  };
   const snapshot = data?.snapshot;
   const state = saveState ?? pageState;
   const retry = onRetry ?? fetched.retry;
@@ -625,8 +730,24 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const footer = (note = GENERIC_NOTE) => <p className="settings__footer-note">{note}</p>;
   const saving = (key: DraftKey) => Boolean(pending[key]);
   const numericLimitsValid = isValidPositive(draft.conversationLimit) && isValidPositive(draft.dailyLimit);
+  const messageQuery = messageSearch.trim().toLocaleLowerCase();
+  const visibleMessageTemplates = MESSAGE_TEMPLATES.filter(({ label, description }) => !messageQuery || `${label} ${description}`.toLocaleLowerCase().includes(messageQuery));
+  const replyQuery = replySearch.trim().toLocaleLowerCase();
+  const matchesReply = (key: string, label: string) => !replyQuery || `${label} ${key}`.toLocaleLowerCase().includes(replyQuery);
+  const visibleDerivationCases = DERIVACION_CASES.filter(({ key, label }) => matchesReply(key, label));
+  const visibleReplyGroups = REPLY_TEXT_GROUPS.map((group) => ({
+    ...group,
+    keys: group.keys.filter((key) => !replyQuery || group.title.toLocaleLowerCase().includes(replyQuery) || matchesReply(key, REPLY_TEXT_LABELS[key] ?? key)),
+  })).filter(({ keys }) => keys.length > 0);
+  const selectedCase = DERIVACION_CASES.find(({ key }) => key === selectedReplyKey);
+  const selectedGroup = REPLY_TEXT_GROUPS.find(({ keys }) => keys.includes(selectedReplyKey));
+  const selectedReplyLabel = selectedCase?.label ?? REPLY_TEXT_LABELS[selectedReplyKey] ?? selectedReplyKey;
+  const selectedReplyWhen = selectedCase?.when ?? selectedGroup?.title ?? "";
+  const selectedReplySlots = data?.reply_texts?.slots?.[selectedReplyKey] ?? [];
+  const selectedDerivationRule = selectedCase?.key.replace(/^handoff_/, "");
+  const selectedDerivationAvailable = Boolean(selectedDerivationRule && data?.conduct?.options?.derivaciones.includes(selectedDerivationRule));
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
-  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state, saveErrorDetail)}>
+  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className={activeGroup === "operation" ? "settings-page settings-page--operation" : "settings-page"} actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state, saveErrorDetail)}>
     <div className="settings-tabs">
       <div className="settings-tabs__select">
         <Menu label={GROUPS.find(({ id }) => id === activeGroup)?.label ?? "Chatbot"} ariaLabel="Grupo de configuración" showChevron items={GROUPS.map(({ id, label }) => ({ value: id, label }))} onSelect={selectGroup} />
@@ -635,136 +756,157 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     <Tabs ariaLabel="Super-secciones de configuración" tabs={GROUPS} activeTab={activeGroup} onTabChange={selectGroup}>
       {() => <Tabs layout="vertical" ariaLabel="Secciones de configuración" tabs={sectionGroup(activeSection).sections} activeTab={activeSection} onTabChange={setActiveSection}>
       {(active) => <div className="settings-tabs__content">
+        {SECTION_META[active] ? <header className="settings-section-head"><h2>{SECTION_META[active].title}</h2><p>{SECTION_META[active].description}</p></header> : null}
         {active === "agent" ? <>
           <div className="settings-agent__row">
-            <Card title="Alcance del agente" description="Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona." icon={SlidersHorizontal} headerAction={<Badge tone="neutral">Avanzado</Badge>}>
-              <div className="settings-agent__layout">
-                <div className="settings-agent__form">
-                  <Textarea label="Reglas de alcance" rows={4} placeholder="Ej: reparación=bot_resolve" value={draft.scope} onChange={(event) => update("scope", event.target.value)} />
-                  <details><summary>Sintaxis avanzada</summary><p>Escribe una categoría y un modo en cada línea, separados por un signo igual. <code>bot_resolve</code> significa que el agente responde por su cuenta; <code>always_escalate</code> significa que deriva la conversación a una persona. Por ejemplo: <code>presupuesto=bot_resolve</code>.</p></details>
-                  <div className="settings-agent__footer">{footer()}<Button disabled={saving("scope") || !draft.scope.trim() || !draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).every((line) => { const [category, mode] = line.split("=").map((value) => value.trim()); return Boolean(category) && ["bot_resolve", "always_escalate"].includes(mode); })} onClick={saveScope}>Guardar alcance</Button></div>
-                </div>
-                <HelpPanel icon={CircleHelp} title="Cómo funciona"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></HelpPanel>
-              </div>
+            <Card className="settings-agent__card" title="Alcance del agente" description="Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona." icon={Bot} headerAction={<><Badge tone="neutral">Avanzado</Badge><Popover title="Cómo funciona" triggerLabel="Ayuda: Alcance del agente" trigger="?"><p>El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.</p><p>Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.</p></Popover></>}>
+              {draft.scope.trim() ? <ul className="settings-agent__rules">{draft.scope.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => { const [category, mode] = line.split("=").map((part) => part.trim()); return <li key={line}><span>{category}</span><Badge tone={mode === "always_escalate" ? "warning" : "neutral"}>{mode}</Badge></li>; })}</ul> : <div className="settings-agent__empty"><FileText className="settings-agent__empty-icon" aria-hidden="true" /><strong>No hay reglas personalizadas</strong><p>Agrega categorías o revisa la configuración avanzada.</p><Button variant="secondary" onClick={() => setScopeDisclosureOpen(true)}><Plus aria-hidden="true" />Agregar regla</Button></div>}
+              <details className="settings-advanced" open={scopeDisclosureOpen} onToggle={(event) => setScopeDisclosureOpen(event.currentTarget.open)}><summary className="settings-advanced__summary"><Code2 aria-hidden="true" /><span>Configuración avanzada<span className="visually-hidden">, sintaxis avanzada</span></span><ChevronDown className="settings-advanced__chevron" aria-hidden="true" /></summary><div className="settings-agent__advanced"><Textarea label="Reglas de alcance" rows={4} placeholder="Ej: reparación=bot_resolve" value={draft.scope} onChange={(event) => update("scope", event.target.value)} /><p>Escribe una categoría y un modo en cada línea, separados por un signo igual. <code>bot_resolve</code> significa que el agente responde por su cuenta; <code>always_escalate</code> significa que deriva la conversación a una persona. Por ejemplo: <code>presupuesto=bot_resolve</code>.</p></div></details>
             </Card>
           </div>
           <div className="settings-agent__row">
-            <Card title="Detección de emergencias" description="Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante." icon={ShieldAlert}>
-              <div className="settings-agent__layout">
-                <div className="settings-agent__form">
-                  <Textarea label="Palabras clave de emergencia" rows={6} value={draft.keywords} onChange={(event) => update("keywords", event.target.value)} />
-                  <p className="settings-agent__helper">Escribe una palabra o frase por línea.</p>
-                  <div className="settings-agent__footer">{footer()}<Button disabled={saving("keywords") || !draft.keywords.split("\n").some((value) => value.trim())} onClick={() => void save("keywords", "/panel/api/settings/keywords", { keywords: draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.keywords)}>Guardar palabras clave</Button></div>
-                </div>
-                <HelpPanel icon={ShieldAlert} title="Consideraciones"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></HelpPanel>
+            <Card className="settings-agent__card" title="Detección de emergencias" description="Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante." icon={ShieldAlert} headerAction={<Popover title="Consideraciones" triggerLabel="Ayuda: Detección de emergencias" trigger="?"><p>Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.</p><p>Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.</p></Popover>}>
+              <span className="settings-agent__chips-label" id="settings-emergency-chips">Palabras y frases de activación</span>
+              <div className="settings-chips-field">
+                <ul className="settings-agent__chips" aria-labelledby="settings-emergency-chips">{draft.keywords.split("\n").map((value) => value.trim()).filter(Boolean).map((phrase, index) => <li key={`${phrase}-${index}`}><span>{phrase}</span><Button variant="tertiary" aria-label={`Quitar palabra clave ${phrase}`} onClick={() => update("keywords", draft.keywords.split("\n").map((item) => item.trim()).filter((item) => item && item !== phrase).join("\n"))}>×</Button></li>)}</ul>
+                <div className="settings-agent__keyword-add"><input className="field__control" aria-label="Escribe una frase y presiona Enter" placeholder="Escribe una frase y presiona Enter" value={keywordEntry} onChange={(event) => setKeywordEntry(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addKeyword(); } }} /><Button variant="secondary" onClick={addKeyword}><Plus aria-hidden="true" />Agregar</Button></div>
               </div>
+              <p className="settings-agent__helper">Usa expresiones claras para evitar activaciones innecesarias.</p>
+              <p className="settings-agent__info"><Info aria-hidden="true" />La detección se evalúa antes de generar la respuesta.</p>
             </Card>
           </div>
           <div className="settings-agent__row">
-            <Card title="Protocolo de emergencia" description="Lo que Max responde cuando detecta riesgo. La detección de la emergencia no depende de este texto: se revisa antes, en cada mensaje." icon={ShieldAlert} headerAction={data.emergency?.customized ? <Badge tone="success">Personalizado</Badge> : <Badge tone="neutral">Original</Badge>}>
-              <div className="settings-agent__form">
-                <Textarea label="Instrucciones de seguridad" rows={6} value={draft.emergencyProtocol.safety_instructions} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, safety_instructions: event.target.value })} />
-                <p className="settings-agent__helper">Una instrucción por línea.</p>
-                <Textarea label="Contactos de emergencia" rows={4} value={draft.emergencyProtocol.contacts} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, contacts: event.target.value })} />
-                <p className="settings-agent__helper">Un contacto por línea.</p>
-                <Textarea label="Mensaje al notificar" rows={3} value={draft.emergencyProtocol.notify_message} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, notify_message: event.target.value })} />
-                <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente aviso de emergencia.")}<Button disabled={saving("emergencyProtocol") || !draft.emergencyProtocol.notify_message.trim() || !draft.emergencyProtocol.safety_instructions.trim() || !draft.emergencyProtocol.contacts.trim()} onClick={() => void saveEmergencyProtocol()}>Guardar protocolo</Button></div>
+            <Card className="settings-agent__card" title="Protocolo de emergencia" description="Lo que Max responde cuando detecta riesgo. La detección de la emergencia no depende de este texto: se revisa antes, en cada mensaje." icon={FileText} headerAction={data.emergency?.customized ? <Badge tone="success">Personalizado</Badge> : <Badge tone="neutral">Original</Badge>}>
+              <div className="settings-agent__form settings-agent__protocol">
+                <div><Textarea label="Instrucciones de seguridad" rows={6} value={draft.emergencyProtocol.safety_instructions} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, safety_instructions: event.target.value })} /><p className="settings-agent__helper">Una instrucción por línea.</p></div>
+                <div><Textarea label="Contactos de emergencia" rows={4} value={draft.emergencyProtocol.contacts} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, contacts: event.target.value })} /><p className="settings-agent__helper">Un contacto por línea.</p></div>
+                <div className="settings-agent__protocol-message"><Textarea label="Mensaje al notificar" rows={3} value={draft.emergencyProtocol.notify_message} onChange={(event) => update("emergencyProtocol", { ...draft.emergencyProtocol, notify_message: event.target.value })} /><p className="settings-agent__helper">Se envía cuando se notifica al equipo.</p></div>
               </div>
-              <SettingsVersionHistory scope="emergency" refreshToken={emergencyVersion} onRestored={retry} />
             </Card>
           </div>
         </> : null}
         {active === "persona" ? <>
-          <Card title="Persona del asistente" description="El texto que define quién es Max y cómo conversa. Se aplica en el siguiente mensaje." icon={UserRound} headerAction={data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>
-            <div className="settings-agent__form">
-              <Textarea label="Texto de la persona" rows={18} value={draft.persona.orchestrator} onChange={(event) => update("persona", { ...draft.persona, orchestrator: event.target.value })} />
-              <Textarea label="Instrucción de brevedad" rows={4} value={draft.persona.orchestrator_brief} onChange={(event) => update("persona", { ...draft.persona, orchestrator_brief: event.target.value })} />
-              <p className="settings-agent__helper">Los datos variables se inyectan aparte: no escribas llaves como <code>{"{{nombre}}"}</code> en la persona.</p>
-              <div className="settings-agent__footer">{footer("Una persona que rompe el contrato no se guarda.")}<Button disabled={saving("persona") || !draft.persona.orchestrator.trim() || !draft.persona.orchestrator_brief.trim()} onClick={() => void savePersona()}>Guardar persona</Button></div>
+          <Card className="settings-persona" title="Persona del asistente" description="Estas instrucciones se aplican en el siguiente mensaje." icon={UserRound} headerAction={<div className="settings-persona__header-actions">{data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}</div>}>
+            <div className="settings-persona__content">
+              <div className="settings-persona__toolbar" role="toolbar" aria-label="Herramientas de persona">
+                <div className="settings-persona__segments" role="group" aria-label="Modo de edición de la persona">
+                  <Button variant={personaMode === "preview" ? "secondary" : "tertiary"} aria-pressed={personaMode === "preview"} onClick={() => setPersonaMode("preview")}><Eye aria-hidden="true" />Vista previa</Button>
+                  <Button variant={personaMode === "edit" ? "secondary" : "tertiary"} aria-pressed={personaMode === "edit"} onClick={() => setPersonaMode("edit")}><Pencil aria-hidden="true" />Editar Markdown</Button>
+                </div>
+                <Button variant="tertiary" onClick={() => setPersonaDialogOpen(true)}><Maximize2 aria-hidden="true" />Ampliar</Button>
+              </div>
+              {personaMode === "preview" ? <div className="settings-persona__preview" role="region" aria-label="Vista previa del documento Markdown"><Markdown content={draft.persona.orchestrator} /></div>
+                : <Textarea label="Texto de la persona" rows={18} value={draft.persona.orchestrator} onChange={(event) => update("persona", { ...draft.persona, orchestrator: event.target.value })} />}
+              <p className="settings-persona__info"><Info aria-hidden="true" /><span>Los datos del cliente se agregan automáticamente. No incluyas variables como <code>{"{{nombre}}"}</code>.</span></p>
             </div>
-            <SettingsVersionHistory scope="persona" refreshToken={personaVersion} onRestored={retry} />
           </Card>
+          <Card title="Instrucción de brevedad" description="Se utiliza cuando queda poco presupuesto de conversación." icon={FileText}>
+            <Textarea label="Instrucción de brevedad" rows={4} value={draft.persona.orchestrator_brief} onChange={(event) => update("persona", { ...draft.persona, orchestrator_brief: event.target.value })} />
+          </Card>
+          <div className="settings-persona__dialog">
+            <Dialog open={personaDialogOpen} onClose={() => setPersonaDialogOpen(false)} title="Vista previa de la persona" size="wide" closeLabel="Cerrar vista ampliada">
+              <div className="settings-persona__dialog-preview"><Markdown content={draft.persona.orchestrator} /></div>
+            </Dialog>
+          </div>
         </> : null}
         {active === "conduct" ? <>
-          <Card title="Conducta de la conversación" description="Qué datos pide el bot, en qué orden y cuándo deriva a una persona." icon={SlidersHorizontal} headerAction={data.conduct?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>
-            <h3 className="settings-conduct__title">Orden de captura</h3>
-            <p className="settings-agent__helper">Un campo que quitas no se vuelve a preguntar. El nombre, el correo y la dirección van siempre después de la disponibilidad.</p>
-            <ConductOrderEditor order={draft.conduct.orden} options={data.conduct.options} onChange={(orden) => update("conduct", { ...draft.conduct, orden })} />
+          <Card title="Datos y preguntas" description="Define el orden y edita lo que recibe el cliente en cada paso." icon={SlidersHorizontal} headerAction={<Badge tone={data.conduct?.customized ? "success" : "neutral"}>{draft.conduct.orden.length} datos</Badge>}>
+            <ConductOrderEditor
+              order={draft.conduct.orden}
+              questions={draft.captureQuestions}
+              options={data.conduct.options}
+              onChangeOrder={(orden) => update("conduct", { ...draft.conduct, orden })}
+              onChangeQuestion={(field, question) => update("captureQuestions", { ...draft.captureQuestions, [field]: question })}
+            />
+            <p className="settings-conduct__info"><Info aria-hidden="true" /><span><span>Nombre, correo y dirección se solicitan después de la disponibilidad.</span><span>Si quitas un dato, el bot deja de preguntarlo.</span></span></p>
             <div className="settings-conduct__row">
               <span className="settings-conduct__row-label">Preguntas por mensaje</span>
-              <Menu label={String(draft.conduct.max_preguntas_por_mensaje)} ariaLabel="Preguntas por mensaje" showChevron items={data.conduct.options.max_preguntas_por_mensaje.map((value) => ({ value: String(value), label: value === 1 ? "Una pregunta" : `${value} preguntas` }))} onSelect={(value) => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Number(value) })} />
-            </div>
-            <fieldset className="settings-conduct__derivaciones">
-              <legend>Derivar a una persona cuando</legend>
-              {data.conduct.options.derivaciones.map((rule) => <label className="settings-conduct__check" key={rule}>
-                <input type="checkbox" checked={draft.conduct.derivaciones.includes(rule)} onChange={(event) => update("conduct", {
-                  ...draft.conduct,
-                  derivaciones: event.target.checked ? [...draft.conduct.derivaciones, rule] : draft.conduct.derivaciones.filter((each) => each !== rule),
-                })} />
-                <span>{DERIVACION_LABELS[rule] ?? rule}</span>
-              </label>)}
-            </fieldset>
-            <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
-            <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente mensaje.")}<Button disabled={saving("conduct") || !draft.conduct.orden.length} onClick={() => void saveConduct()}>Guardar conducta</Button></div>
-          </Card>
-          <Card title="Preguntas de captura" description="El texto exacto que recibe el cliente para cada dato. Se envía tal cual: sin llaves.">
-            <p className="settings-agent__helper">El orden lo define la tarjeta de arriba. Guarda el orden antes de editar los textos.</p>
-            {Object.entries(draft.captureQuestions).map(([field, text]) => <Textarea key={field} label={data.conduct.options.fields.find((each) => each.value === field)?.label ?? field} rows={2} value={text} onChange={(event) => update("captureQuestions", { ...draft.captureQuestions, [field]: event.target.value })} />)}
-            <div className="settings-agent__footer">{footer("El cliente recibe este texto literal.")}<Button disabled={saving("captureQuestions") || Object.values(draft.captureQuestions).some((value) => !value.trim() || value.includes("{{") || value.includes("}}"))} onClick={() => void saveCaptureQuestions()}>Guardar preguntas</Button></div>
-          </Card>
-          <Card title="Derivaciones" description="Todos los textos deterministas que recibe el cliente en las derivaciones, agenda, visitas y captura.">
-            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los cinco casos específicos se muestran primero.</p>
-            <div className="settings-messages__reply-group">
-              {DERIVACION_CASES.map(({ key, label, when }) => {
-                const slots = data.reply_texts?.slots?.[key] ?? [];
-                return <div className="settings-messages__reply" key={key}>
-                  <Textarea label={label} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
-                  <p className="settings-agent__helper">{when}{slots.length ? <> Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></> : null}</p>
-                </div>;
-              })}
-            </div>
-            {REPLY_TEXT_GROUPS.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
-              <div className="settings-messages__reply-group">
-                {group.keys.map((key) => {
-                  const slots = data.reply_texts?.slots?.[key] ?? [];
-                  return <div className="settings-messages__reply" key={key}>
-                    <Textarea label={REPLY_TEXT_LABELS[key] ?? key} rows={3} value={draft.replyTexts[key] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [key]: event.target.value })} />
-                    {slots.length ? <p className="settings-agent__helper">Datos: <code>{slots.map((slot) => `{{${slot}}}`).join(", ")}</code></p> : <p className="settings-agent__helper">Sin datos variables.</p>}
-                  </div>;
-                })}
+              <div className="settings-conduct__stepper" role="group" aria-label="Preguntas por mensaje">
+                <Button variant="tertiary" aria-label="Disminuir preguntas por mensaje" disabled={draft.conduct.max_preguntas_por_mensaje <= Math.min(...data.conduct.options.max_preguntas_por_mensaje)} onClick={() => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Math.max(Math.min(...data.conduct.options.max_preguntas_por_mensaje), draft.conduct.max_preguntas_por_mensaje - 1) })}>−</Button>
+                <output className="settings-conduct__stepper-value" aria-live="polite">{draft.conduct.max_preguntas_por_mensaje}</output>
+                <Button variant="tertiary" aria-label="Aumentar preguntas por mensaje" disabled={draft.conduct.max_preguntas_por_mensaje >= Math.max(...data.conduct.options.max_preguntas_por_mensaje)} onClick={() => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Math.min(Math.max(...data.conduct.options.max_preguntas_por_mensaje), draft.conduct.max_preguntas_por_mensaje + 1) })}>+</Button>
               </div>
-            </Accordion>)}
-            <div className="settings-agent__footer">{footer("El cliente recibe este texto tal cual.")}{footer()}<Button disabled={saving("replyTexts") || !replyTextsValid} onClick={() => void saveReplyTexts()}>Guardar respuestas</Button></div>
+              <span className="settings-conduct__helper">Los textos se envían tal como están escritos.</span>
+            </div>
+          </Card>
+          <Card title="Derivaciones y respuestas" description="Selecciona una situación para editar el mensaje que recibe el cliente.">
+            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los cinco casos específicos se muestran primero.</p>
+            <div className="settings-replies">
+              <nav className="settings-replies__list" aria-label="Situaciones de respuesta">
+                <SearchInput aria-label="Buscar situación" placeholder="Buscar situación" delay={0} onSearch={setReplySearch} />
+                {visibleDerivationCases.length ? <Accordion title="Casos de derivación" count={visibleDerivationCases.length} defaultExpanded>
+                  <ul>{visibleDerivationCases.map(({ key, label, icon: CaseIcon }) => <li key={key}>
+                    <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><CaseIcon aria-hidden="true" /><span>{label}</span></Button>
+                  </li>)}</ul>
+                </Accordion> : null}
+                {visibleReplyGroups.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
+                  <ul>{group.keys.map((key) => {
+                    const ReplyIcon = REPLY_TEXT_ICONS[key] ?? FileText;
+                    return <li key={key}>
+                      <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><ReplyIcon aria-hidden="true" /><span>{REPLY_TEXT_LABELS[key] ?? key}</span></Button>
+                    </li>;
+                  })}</ul>
+                </Accordion>)}
+                {!visibleDerivationCases.length && !visibleReplyGroups.length ? <p>No hay situaciones que coincidan con la búsqueda.</p> : null}
+              </nav>
+              <section className="settings-replies__detail" aria-label="Detalle de la situación">
+                <header><h3>{selectedCase?.label ?? selectedGroup?.title ?? selectedReplyLabel}</h3>
+                  <p><strong>Cuándo se envía</strong><span>{selectedReplyWhen}</span></p>
+                </header>
+                {selectedDerivationAvailable ? <label className="settings-replies__toggle">
+                  <input type="checkbox" aria-label="Derivar al equipo" checked={draft.conduct.derivaciones.includes(selectedDerivationRule!)} onChange={(event) => update("conduct", {
+                    ...draft.conduct,
+                    derivaciones: event.target.checked
+                      ? [...new Set([...draft.conduct.derivaciones, selectedDerivationRule!])]
+                      : draft.conduct.derivaciones.filter((rule) => rule !== selectedDerivationRule),
+                  })} />
+                  <span><strong>Derivar al equipo</strong><small>Si lo desactivas, este caso no se deriva automáticamente.</small></span>
+                </label> : null}
+                <Textarea label="Mensaje al cliente" rows={3} value={draft.replyTexts[selectedReplyKey] ?? ""} onChange={(event) => update("replyTexts", { ...draft.replyTexts, [selectedReplyKey]: event.target.value })} />
+                <div className="settings-replies__slots"><strong>Insertar dato</strong>
+                  {selectedReplySlots.length ? selectedReplySlots.map((slot) => <Button key={slot} variant="tertiary" aria-label={`Insertar dato {{${slot}}}`} onClick={() => update("replyTexts", { ...draft.replyTexts, [selectedReplyKey]: `${draft.replyTexts[selectedReplyKey] ?? ""}${draft.replyTexts[selectedReplyKey]?.trim() ? " " : ""}{{${slot}}}` })}><code>{`{{${slot}}}`}</code></Button>) : <span className="settings-agent__helper">No hay datos disponibles para esta situación.</span>}
+                </div>
+                <section className="settings-replies__preview" aria-label="Vista previa">
+                  <div><h4>Vista previa</h4><Badge tone="neutral">Datos de ejemplo</Badge></div>
+                  <MessagePreview message={previewTemplate(draft.replyTexts[selectedReplyKey] ?? "")} />
+                </section>
+              </section>
+            </div>
           </Card>
         </> : null}
         {active === "messages" ? <>
-          <Card title="Tono del asistente" description="Define cómo suenan las respuestas en cada conversación." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={(settingsOptions(data).tones.length ? settingsOptions(data).tones : [draft.tone]).filter(Boolean).map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /><Button disabled={saving("tone") || !draft.tone.trim()} onClick={() => void save("tone", "/panel/api/settings/tone", { tone: draft.tone }, draft.tone)}>Guardar tono</Button></div>} >{null}</Card>
-           <Card title="Mensajes del asistente" className="settings-messages__editor">
+          <Card title="Tono del asistente" description="Define el estilo de las respuestas generadas. Los mensajes fijos se envían tal como los escribes." className="settings-messages__tone" headerAction={<div className="settings-messages__tone-row"><Menu label={draft.tone ? draft.tone[0].toUpperCase() + draft.tone.slice(1) : "Selecciona un tono"} ariaLabel="Tono" showChevron items={(settingsOptions(data).tones.length ? settingsOptions(data).tones : [draft.tone]).filter(Boolean).map((tone) => ({ value: tone, label: tone[0].toUpperCase() + tone.slice(1) }))} onSelect={(value) => update("tone", value)} /></div>} >{null}</Card>
+           <Card title="Mensajes del asistente" className="settings-messages__editor" headerAction={<Badge tone="neutral">{MESSAGE_TEMPLATES.length} mensajes</Badge>}>
               <div className="settings-messages__panel">
                 <div className="settings-messages__layout">
+                  <SearchInput aria-label="Buscar mensaje" placeholder="Buscar mensaje" delay={0} value={messageSearch} onSearch={(query) => {
+                    setMessageSearch(query);
+                    const normalized = query.trim().toLocaleLowerCase();
+                    const matching = MESSAGE_TEMPLATES.filter(({ label, description }) => !normalized || `${label} ${description}`.toLocaleLowerCase().includes(normalized));
+                    if (!matching.some(({ id }) => id === activeMessage) && matching[0]) setActiveMessage(matching[0].id);
+                  }} />
                   <div className="settings-messages__mobile-selector">
                     <label>Plantilla</label>
-                    <Menu label={MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.label ?? MESSAGE_TEMPLATES[0].label} ariaLabel="Plantilla" showChevron items={MESSAGE_TEMPLATES.map(({ id, label }) => ({ value: id, label }))} onSelect={(id) => setActiveMessage(id as typeof activeMessage)} />
+                    <Menu label={MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.label ?? MESSAGE_TEMPLATES[0].label} ariaLabel="Plantilla" showChevron items={visibleMessageTemplates.map(({ id, label }) => ({ value: id, label }))} onSelect={(id) => setActiveMessage(id as typeof activeMessage)} />
                     <p>{MESSAGE_TEMPLATES.find(({ id }) => id === activeMessage)?.description}</p>
                   </div>
-                <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={[...MESSAGE_TEMPLATES]} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
+                {visibleMessageTemplates.length ? <Tabs layout="vertical" ariaLabel="Plantillas de mensajes" tabs={visibleMessageTemplates.map(({ id, label, icon }) => ({ id, label, icon }))} activeTab={activeMessage} onTabChange={(id) => setActiveMessage(id as typeof activeMessage)}>
                 {(selected) => {
                   const template = MESSAGE_TEMPLATES.find(({ id }) => id === selected) ?? MESSAGE_TEMPLATES[0];
                   return <div className="settings-messages__edit">
-                    <h3>{template.label}</h3>
+                    <header><h3>{template.label}</h3><Badge tone="neutral">Mensaje fijo</Badge></header>
+                    <div className="settings-messages__when"><strong>Cuándo se envía</strong><p>{template.description}</p></div>
                     <Textarea label="Texto del mensaje" rows={5} value={draft.messages[template.id]} onChange={(event) => update("messages", { ...draft.messages, [template.id]: event.target.value })} />
                     <p className="settings-messages__info"><Info aria-hidden="true" />Este mensaje se usa como respuesta automática para esta situación.</p>
+                    <section className="settings-messages__preview" aria-label="Vista previa en WhatsApp"><div><h3>Vista previa en WhatsApp</h3><Badge tone="neutral">Ilustrativa</Badge></div><MessagePreview message={draft.messages[template.id]} note="Menú de categorías automático" avatarSrc="/panel/app/brand/lumat-mark.png" /></section>
                   </div>;
                 }}
-                </Tabs>
-                <div className="settings-messages__preview"><h3>Vista previa</h3><MessagePreview message={draft.messages[activeMessage]} note="Menú de categorías automático" avatarSrc="/panel/app/brand/lumat-mark.png" /></div>
+                </Tabs> : <p className="settings-messages__no-results">No hay mensajes que coincidan con la búsqueda.</p>}
                 </div>
               </div>
-              <div className="settings-messages__footer">{footer()}<Button disabled={saving("messages") || Object.values(draft.messages).some((value) => !value.trim())} onClick={() => void save("messages", "/panel/api/settings/messages", draft.messages, draft.messages)}>Guardar mensajes</Button></div>
            </Card>
-           <Card title="Respuestas prediseñadas" description="Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada).">
-             <p className="settings-messages__info">A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.</p>
-             <p className="settings-messages__helper" role="note">Si a la conversación le falta uno de esos datos, el bot omite esta respuesta y responde normalmente.</p>
+           <Card title="Respuestas prediseñadas" description="Plantillas que el bot puede elegir según la consulta y los datos disponibles." headerAction={<Button variant="secondary" className="settings-messages__add" onClick={() => update("templates", [...draft.templates, { id: "", text: "" }])}><Plus aria-hidden="true" />Agregar respuesta</Button>}>
+             {draft.templates.length ? <>
              <div className="settings-messages__templates" aria-label="Respuestas prediseñadas">
                {draft.templates.map((template, index) => {
                  const slots = templateSlots(template.text);
@@ -783,65 +925,54 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
                  </div>;
                })}
              </div>
-             <div className="settings-messages__footer">
-               <Button variant="tertiary" onClick={() => update("templates", [...draft.templates, { id: "", text: "" }])}><Plus aria-hidden="true" />Agregar respuesta</Button>
-               <Button disabled={saving("templates") || draft.templates.some(({ id, text }) => !id.trim() || !text.trim())} onClick={() => void save("templates", "/panel/api/settings/message-templates", { templates: draft.templates }, draft.templates)}>Guardar respuestas</Button>
-             </div>
+             </> : <div className="settings-messages__empty"><FileText aria-hidden="true" /><strong>Aún no hay respuestas prediseñadas</strong><p>Crea una plantilla para una consulta frecuente.</p></div>}
+             <p className="settings-messages__info"><Info aria-hidden="true" />Si falta un dato necesario, el bot responde normalmente.</p>
            </Card>
         </> : null}
-        {active === "schedule" ? <>
-        <div className="settings-hours__layout">
-          <Card title="Anticipación mínima" description="Tiempo mínimo entre ahora y la primera hora que se puede ofrecer para una visita.">
-            <Input label="Anticipación mínima" type="number" min={1} max={48} suffix="horas" value={draft.leadHours} onChange={(event) => update("leadHours", event.target.value)} />
-            <div className="settings-hours__footer"><Button variant="secondary" disabled={saving("leadHours") || !Number.isInteger(Number(draft.leadHours)) || Number(draft.leadHours) < 1 || Number(draft.leadHours) > 48} onClick={() => void saveLeadHours()}>Guardar anticipación</Button>{footer("Entre 1 y 48 horas.")}</div>
-          </Card>
-          <Card title="Horarios de atención" description="Define los días y las horas en que atiende tu equipo."><HoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} /><div className="settings-hours__footer"><Button variant="secondary" disabled={saving("hours") || !isValidHours(draft.hours)} onClick={() => void save("hours", "/panel/api/settings/hours", draft.hours, draft.hours)}>Guardar horarios</Button>{footer(SCHEDULE_NOTE)}</div></Card>
-          <div className="settings-hours__aside"><Card title="Notificaciones push" icon={Bell}><p>Configura los avisos del navegador para este dispositivo.</p><a href="/panel/app/push">Configurar notificaciones push →</a></Card><Card title="Fuera de horario" icon={Clock3}><p>{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p><Button variant="tertiary" className="settings-hours__edit-message" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar mensaje →</Button></Card></div>
-        </div>
-          <Card title="Horarios de técnicos" description="Define cuándo puede recibir visitas cada técnico.">
+        {active === "schedule" ? <div className="settings-operation">
+          <div className="settings-operation__grid">
+            <Card className="settings-operation__lead" title="Anticipación mínima" description="Tiempo mínimo para ofrecer una visita desde ahora." icon={Clock3}>
+              <Input label="Anticipación mínima" type="number" min={1} max={48} suffix="horas" value={draft.leadHours} onChange={(event) => update("leadHours", event.target.value)} />
+              {footer("Entre 1 y 48 horas.")}
+              <p className="settings-operation__note"><Info aria-hidden="true" />Se aplica a las nuevas visitas.</p>
+            </Card>
+            <SettingsHoursEditor hours={draft.hours} onChange={(value) => update("hours", value)} />
+            <Card title="Notificaciones del navegador" description="Configura los avisos de este dispositivo." icon={Bell}>
+              <a className="settings-operation__link" href="/panel/app/push">Configurar notificaciones →</a>
+            </Card>
+            <Card title="Fuera de horario" icon={Moon}>
+              <p className="settings-operation__message">{draft.messages.out_of_hours || "Configura el mensaje que recibirán las personas fuera del horario de atención."}</p>
+              <Button variant="tertiary" className="settings-operation__link" onClick={() => { setActiveSection("messages"); setActiveMessage("out_of_hours"); }}>Editar en Mensajes →</Button>
+            </Card>
+          </div>
+          <Card title="Horarios de técnicos" description="Selecciona un técnico para editar su disponibilidad." icon={Users}>
             {techniciansState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando técnicos" /> : null}
             {techniciansState === "error" ? <div><StateMessage tone="danger" role="alert" title="No pudimos cargar los técnicos" detail="Intenta nuevamente más tarde." /><Button variant="secondary" onClick={() => setTechniciansState("idle")}>Reintentar</Button></div> : null}
-            {techniciansState === "ready" && technicians.length === 0 ? <p>No hay técnicos disponibles.</p> : null}
-            {techniciansState === "ready" ? technicians.map((technician) => <section key={technician.id} className="settings-hours__technician"><h3>{technician.username}</h3><TechnicianScheduleEditor technician={technician} onSaved={() => undefined} /></section>) : null}
+            {techniciansState === "ready" && technicians.length === 0 ? <p className="settings-operation__note">No hay técnicos disponibles.</p> : null}
+            {techniciansState === "ready" && technicians.length > 0 ? <SettingsTechnicians technicians={technicians} /> : null}
           </Card>
-          <Card title="Duraciones por servicio" description="Cuánto ocupa cada servicio en la agenda. El nombre debe coincidir con el servicio que se conversa.">
-            <div className="settings-conduct__durations">
+          <Card title="Duraciones por servicio" description="Tiempo que ocupa cada servicio en la agenda." icon={Clock3} headerAction={<Button variant="secondary" onClick={() => update("serviceDurations", [...draft.serviceDurations, { name: "", minutes: "60" }])}><Plus aria-hidden="true" />Agregar servicio</Button>}>
+            {draft.serviceDurations.length ? <div className="settings-conduct__durations">
               {draft.serviceDurations.map((entry, index) => <div className="settings-conduct__duration" key={index}>
                 <Input label={`Servicio ${index + 1}`} value={entry.name} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, name: event.target.value } : item))} />
-                <Input label={`Minutos ${index + 1}`} inputMode="numeric" value={entry.minutes} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, minutes: event.target.value } : item))} />
+                <Input label={`Minutos ${index + 1}`} inputMode="numeric" suffix="min" value={entry.minutes} onChange={(event) => update("serviceDurations", draft.serviceDurations.map((item, current) => current === index ? { ...item, minutes: event.target.value } : item))} />
                 <Button variant="tertiary" aria-label={`Eliminar servicio ${index + 1}`} onClick={() => update("serviceDurations", draft.serviceDurations.filter((_, current) => current !== index))}><Trash2 aria-hidden="true" /></Button>
               </div>)}
-            </div>
-            <div className="settings-agent__footer">
-              <Button variant="tertiary" onClick={() => update("serviceDurations", [...draft.serviceDurations, { name: "", minutes: "60" }])}><Plus aria-hidden="true" />Agregar servicio</Button>
-              <Button disabled={saving("serviceDurations") || !isDurationListValid(draft.serviceDurations)} onClick={() => void saveDurations()}>Guardar duraciones</Button>
-            </div>
-            {footer("Entre 1 y 1440 minutos por servicio, sin nombres repetidos.")}
+            </div> : <div className="settings-operation__empty"><Clock3 aria-hidden="true" /><strong>Aún no hay duraciones configuradas</strong><p>Crea un servicio para definir su duración.</p></div>}
+            <p className="settings-operation__note"><Info aria-hidden="true" />Entre 1 y 1440 minutos por servicio, sin nombres repetidos. El nombre debe coincidir con el servicio que se conversa.</p>
           </Card>
-        </> : null}
-        {active === "tarifa" ? <>
-          <Card title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins}>
-            <div className="settings-agent__layout">
-              <div className="settings-agent__form">
-                <TarifaEditor tarifa={draft.tarifa} labels={settingsOptions(data).tarifa_labels} onChange={(value) => update("tarifa", value)} />
-                <div className="settings-agent__footer">{footer("El asistente solo informa el precio que corresponde a la fecha de hoy.")}<Button disabled={saving("tarifa") || !isTarifaValid(draft.tarifa, settingsOptions(data).tarifa_labels)} onClick={() => void save("tarifa", "/panel/api/settings/tarifa", { precios: draft.tarifa }, draft.tarifa)}>Guardar tarifas</Button></div>
-              </div>
-              <HelpPanel icon={Coins} title="Cómo se aplica"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></HelpPanel>
-            </div>
-          </Card>
-        </> : null}
-          {active === "coverage" ? <>
-          <Card title="Cobertura" description="Comunas donde se agenda una visita. Fuera de esta lista el asistente no rechaza el trabajo: coordina con un asesor." icon={Globe}>
-            <div className="settings-agent__layout">
-              <div className="settings-agent__form">
-                <Textarea label="Comunas con cobertura" rows={8} value={draft.coverage} onChange={(event) => update("coverage", event.target.value)} />
-                <p className="settings-agent__helper">Una comuna por línea. Se comparan sin tildes y sin distinguir mayúsculas.</p>
-                <div className="settings-agent__footer">{footer()}<Button disabled={saving("coverage") || !draft.coverage.split("\n").some((value) => value.trim())} onClick={() => void save("coverage", "/panel/api/settings/coverage", { communes: draft.coverage.split("\n").map((value) => value.trim()).filter(Boolean) }, draft.coverage)}>Guardar cobertura</Button></div>
-              </div>
-              <HelpPanel icon={Globe} title="Cómo se aplica"><p>El asistente reconoce la comuna aunque el cliente la escriba sin tildes o en minúsculas.</p><p>Una comuna fuera de la lista se coordina con un asesor; nunca se rechaza el trabajo.</p></HelpPanel>
-            </div>
-          </Card>
-        </> : null}
+        </div> : null}
+        {active === "tarifa" ? <Card className="settings-operation settings-operation__tariffs" title="Tarifario" description="Precios que el asistente informa según la fecha. Solo se menciona el precio vigente; las temporadas nunca se nombran al cliente." icon={Coins} headerAction={<><Badge tone="neutral">CLP</Badge><Popover title="Cómo se aplican las tarifas" triggerLabel="Ayuda sobre tarifas" trigger="?"><p>El asistente resuelve el precio con la fecha de hoy en la zona horaria configurada y solo recibe los precios vigentes.</p><p>Si un precio no está configurado, el asistente no inventa una cifra: deriva la consulta a un asesor.</p></Popover></>}>
+          <TarifaEditor tarifa={draft.tarifa} labels={settingsOptions(data).tarifa_labels} onChange={(value) => update("tarifa", value)} />
+          <p className="settings-operation__notice"><Info aria-hidden="true" />El asistente solo informa el precio que corresponde a la fecha de hoy.</p>
+        </Card> : null}
+        {active === "coverage" ? <Card className="settings-operation settings-operation__coverage" title="Cobertura" description="Comunas donde se agenda una visita. Fuera de esta lista el asistente no rechaza el trabajo: coordina con un asesor." icon={Globe} headerAction={<><Badge tone="neutral">{draft.coverage.split("\n").filter((value) => value.trim()).length} comunas</Badge><Popover title="Cómo se aplica la cobertura" triggerLabel="Ayuda sobre cobertura" trigger="?"><p>El asistente reconoce la comuna aunque el cliente la escriba sin tildes o en minúsculas.</p><p>Una comuna fuera de la lista se coordina con un asesor; nunca se rechaza el trabajo.</p></Popover></>}>
+          <div className="settings-operation__coverage-field">
+            <Textarea label="Comunas con cobertura" rows={8} value={draft.coverage} onChange={(event) => update("coverage", event.target.value)} />
+            <p className="settings__footer-note">Una comuna por línea. Se comparan sin tildes y sin distinguir mayúsculas.</p>
+          </div>
+          <p className="settings-operation__notice"><Info aria-hidden="true" />Fuera de esta lista, el asistente coordina la visita con un asesor.</p>
+        </Card> : null}
         {active === "costs" ? <div className="settings-costs">
             <Card title="Gasto actual" description="Resumen del consumo en el periodo actual." headerAction={snapshot ? <Badge tone="neutral"><CalendarDays aria-hidden="true" />{formatShortDate(snapshot.date)}</Badge> : undefined}>
               {snapshot ? <StatCard metrics={[
@@ -912,6 +1043,10 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
       </div>}
     </Tabs>}
     </Tabs>
+    </div>
+    <div className={`settings-save-bar${hasPendingChanges ? " is-dirty" : ""}`} role="group" aria-label="Estado y acciones de guardado">
+      <span className="settings-save-bar__state">{hasPendingChanges ? <><span aria-hidden="true">●</span>Cambios sin guardar</> : <><span aria-hidden="true">✓</span>Sin cambios pendientes</>}</span>
+      <div className="settings-save-bar__actions"><Button variant="secondary" disabled={!hasPendingChanges} onClick={discardPendingChanges}>Descartar</Button><Button disabled={!hasPendingChanges || pendingDraftKeys.some((key) => saving(key)) || state === "saving"} onClick={() => void savePendingChanges()}>Guardar cambios</Button></div>
     </div>
     {state === "empty" ? <Button onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;

@@ -89,9 +89,10 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView />);
     await selectSection("Mensajes");
     const toneCard = screen.getByRole("heading", { name: "Tono del asistente" }).closest(".card") as HTMLElement;
-    expect(within(toneCard).getByRole("button", { name: "Guardar tono" })).toBeInTheDocument();
+    expect(within(toneCard).queryByRole("button", { name: "Guardar tono" })).not.toBeInTheDocument();
     const toneMessageCard = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
-    expect(within(toneMessageCard).getByRole("button", { name: "Guardar mensajes" })).toBeInTheDocument();
+    expect(within(toneMessageCard).queryByRole("button", { name: "Guardar mensajes" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeInTheDocument();
     await selectSection("Costos");
     const limitsCard = screen.getByRole("heading", { name: "Límites de gasto" }).closest(".card") as HTMLElement;
     const pricingCard = screen.getByRole("heading", { name: "Precio Meta" }).closest(".card") as HTMLElement;
@@ -100,19 +101,19 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     await selectSection("Agente");
     const agentCard = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
     const emergencyCard = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
-    expect(within(agentCard).getByRole("button", { name: "Guardar alcance" })).toBeInTheDocument();
-    expect(within(emergencyCard).getByRole("button", { name: "Guardar palabras clave" })).toBeInTheDocument();
+    expect(within(agentCard).queryByRole("button", { name: /^Guardar/ })).not.toBeInTheDocument();
+    expect(within(emergencyCard).queryByRole("button", { name: /^Guardar/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeInTheDocument();
   });
 
-  it("renders the emergency-keywords textarea with one keyword per line and plain-Spanish effect", () => {
+  it("renders the emergency keywords as chips with the plain-Spanish effect", () => {
     render(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/próximo mensaje entrante/i)).toBeInTheDocument();
-    const keywordsTextarea = within(card).getByLabelText(/palabras clave/i) as HTMLTextAreaElement;
-    const lines = keywordsTextarea.value.split("\n").filter((l) => l.length > 0);
-    expect(lines.length).toBe(settings.keywords.length);
-    for (const kw of settings.keywords) {
-      expect(lines).toContain(kw);
+    const chips = within(card).getByRole("list", { name: "Palabras y frases de activación" });
+    expect(within(chips).getAllByRole("listitem")).toHaveLength(settings.keywords.length);
+    for (const keyword of settings.keywords) {
+      expect(within(chips).getByText(keyword)).toBeInTheDocument();
     }
   });
 
@@ -120,7 +121,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView />);
     await selectSection("Mensajes");
     const card = screen.getByRole("heading", { name: "Tono del asistente" }).closest(".card") as HTMLElement;
-    expect(within(card).getByText("Define cómo suenan las respuestas en cada conversación.")).toBeInTheDocument();
+    expect(within(card).getByText("Define el estilo de las respuestas generadas. Los mensajes fijos se envían tal como los escribes.")).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Tono" })).toHaveTextContent("Cercano");
   });
 
@@ -141,42 +142,34 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
       ["out_of_hours", "Fuera de horario", settings.messages.out_of_hours],
     ] as const;
     for (const [id, label, value] of templates) {
-      expect(within(card).getByRole("tab", { name: label })).toHaveAttribute("aria-label", label);
-      await userEvent.click(within(card).getByRole("tab", { name: label }));
+      const tab = within(card).getByRole("tab", { name: new RegExp(`^${label}`) });
+      expect(tab).toBeInTheDocument();
+      await userEvent.click(tab);
       const panel = screen.getAllByRole("tabpanel").find((item) => item.getAttribute("aria-labelledby")?.includes(`trigger-${id}`));
       expect(within(panel!).getByLabelText("Texto del mensaje")).toHaveValue(value);
     }
   });
 
-  it("renders the configured timezone, weekly schedule, and new schedule editor", async () => {
+  it("renders the configured timezone and weekly table without an always-open new editor", async () => {
     render(<SettingsView />);
     await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
-    expect(within(card).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
-    expect(within(card).getByText("Lun, Mar, Mié, Jue, Vie")).toBeInTheDocument();
-    expect(within(card).getByText("09:00 – 18:00")).toBeInTheDocument();
-    expect(within(card).getByRole("group", { name: "Días de atención" })).toBeInTheDocument();
-    expect(within(card).getByText("Sin guardar")).toBeInTheDocument();
-    expect(within(card).getByText("Cada día puede pertenecer a un solo horario.")).toBeInTheDocument();
-    expect(within(card).getByLabelText("Inicio")).toHaveValue("09:00");
-    expect(within(card).getByLabelText("Fin")).toHaveValue("18:00");
-    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
+    expect(within(card.querySelector(".card__header")!).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
+    expect(within(card).getByRole("table")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Inicio horario 1")).toHaveValue("09:00");
+    expect(within(card).getByLabelText("Fin horario 1")).toHaveValue("18:00");
+    expect(within(card).queryByRole("group", { name: "Días de atención" })).not.toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Agregar horario" })).toBeEnabled();
   });
 
-  it("prevents duplicate weekdays when adding a schedule entry", async () => {
+  it("keeps the occupied-day rule in the schedule editor", async () => {
     render(<SettingsView />);
     await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Lun" }));
-    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
-    fireEvent.click(within(card).getByRole("button", { name: "Sáb" }));
-    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeEnabled();
-    fireEvent.change(within(card).getByLabelText("Inicio"), { target: { value: "10:00" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Restablecer nuevo horario" }));
-    expect(within(card).getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(card).getByLabelText("Inicio")).toHaveValue("09:00");
-    expect(within(card).getByLabelText("Fin")).toHaveValue("18:00");
-    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
+    fireEvent.click(within(card).getByRole("button", { name: "Agregar horario" }));
+    const days = within(card).getByRole("group", { name: "Días de atención" });
+    fireEvent.click(within(days).getByRole("button", { name: "Lun" }));
+    expect(within(days).getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("renders the paired USD spend-limit inputs", async () => {
@@ -252,10 +245,10 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   it("points the schedule section at the single push settings page", async () => {
     render(<SettingsView />);
     await selectSection("Horarios y avisos");
-    const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
+    const push = screen.getByRole("heading", { name: "Notificaciones del navegador" }).closest(".card") as HTMLElement;
     expect(push).toBeInTheDocument();
     // One mounting only: the card links to the standalone page instead of composing it.
-    expect(within(push).getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
+    expect(within(push).getByRole("link", { name: /configurar notificaciones/i })).toHaveAttribute("href", "/panel/app/push");
   });
 
   it("renders grouped capability tools and translated configuration availability", async () => {
@@ -325,9 +318,9 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ public_key: null }), { status: 200 }));
     render(<Settings data={settings} state="ready" />);
     await selectSection("Horarios y avisos");
-    const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
+    const push = screen.getByRole("heading", { name: "Notificaciones del navegador" }).closest(".card") as HTMLElement;
     // The unsupported-browser explanation belongs to the page now; the section must still lead there.
-    expect(within(push).getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
+    expect(within(push).getByRole("link", { name: /configurar notificaciones/i })).toHaveAttribute("href", "/panel/app/push");
     fetchMock.mockRestore();
   });
 });
@@ -347,7 +340,7 @@ describe("Settings API page", () => {
     await waitFor(() => expect(tone).toHaveTextContent("Cercano"));
     await userEvent.setup().click(tone);
     await userEvent.setup().click(screen.getByRole("menuitem", { name: "Directo" }));
-    await userEvent.setup().click(screen.getByRole("button", { name: "Guardar tono" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/tone",
@@ -366,21 +359,21 @@ describe("Settings API page", () => {
     render(<Settings />);
     await selectSection("Mensajes");
     const templates = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
-    const greetingTab = within(templates).getByRole("tab", { name: "Saludo cuando falta el nombre" });
+    const greetingTab = within(templates).getByRole("tab", { name: /^Saludo cuando falta el nombre/ });
     const getEditor = (id: string) => {
       const panel = screen.getAllByRole("tabpanel").find((item) => item.getAttribute("aria-labelledby")?.includes(`trigger-${id}`));
       return within(panel!).getByLabelText("Texto del mensaje");
     };
     const greeting = getEditor("greeting");
     fireEvent.change(greeting, { target: { value: "Hola nuevo" } });
-    await user.click(within(templates).getByRole("tab", { name: "Despedida" }));
+    await user.click(within(templates).getByRole("tab", { name: /^Despedida/ }));
     const farewell = getEditor("farewell");
     fireEvent.change(farewell, { target: { value: "Hasta luego nuevo" } });
-    await user.click(within(templates).getByRole("tab", { name: "Fuera de horario" }));
+    await user.click(within(templates).getByRole("tab", { name: /^Fuera de horario/ }));
     const outOfHours = getEditor("out_of_hours");
     fireEvent.change(outOfHours, { target: { value: "Estamos cerrados" } });
     expect(greetingTab).toHaveAttribute("aria-selected", "false");
-    fireEvent.click(screen.getByRole("button", { name: "Guardar mensajes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/messages",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ ...settings.messages, greeting: "Hola nuevo", farewell: "Hasta luego nuevo", out_of_hours: "Estamos cerrados" }) }),
@@ -398,7 +391,7 @@ describe("Settings API page", () => {
     const timezone = await screen.findByLabelText("Zona horaria");
     const card = timezone.closest(".card") as HTMLElement;
     fireEvent.change(within(card).getByLabelText("Zona horaria"), { target: { value: "America/New_York" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Guardar horarios" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/hours",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ timezone: "America/New_York", schedule: settings.hours.schedule }) }),
@@ -413,7 +406,8 @@ describe("Settings API page", () => {
     });
     render(<Settings />);
     await selectSection("Horarios y avisos");
-    fireEvent.click(await screen.findByRole("button", { name: "Guardar horarios" }));
+    fireEvent.change(await screen.findByLabelText("Zona horaria"), { target: { value: "America/New_York" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByText("weekday repeated across entries")).toBeInTheDocument();
     fetchMock.mockRestore();
   });
@@ -465,7 +459,7 @@ describe("Settings API page", () => {
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
     fireEvent.change(within(card).getByLabelText(/Mantención de calefont .*marzo a octubre/i), { target: { value: "52000" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Guardar tarifas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/tarifa",
@@ -485,7 +479,7 @@ describe("Settings API page", () => {
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
     fireEvent.change(field, { target: { value: "Las Condes\nColina" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Guardar cobertura" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/coverage",

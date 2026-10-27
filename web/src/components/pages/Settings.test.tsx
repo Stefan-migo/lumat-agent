@@ -82,6 +82,163 @@ async function selectSection(user: ReturnType<typeof userEvent.setup>, label: st
 }
 
 describe("Settings", () => {
+  it("operation uses the shared save bar for hours and durations with an explicit empty state", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Horarios y avisos");
+    const durations = screen.getByRole("heading", { name: "Duraciones por servicio" }).closest(".card") as HTMLElement;
+    expect(within(durations).getByText("Aún no hay duraciones configuradas")).toBeInTheDocument();
+    expect(within(durations.querySelector(".card__header")!).getByRole("button", { name: "Agregar servicio" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar anticipación" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar horarios" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar duraciones" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Configurar notificaciones/ })).toHaveAttribute("href", "/panel/app/push");
+    expect(screen.getByRole("button", { name: /Editar en Mensajes/ })).toBeInTheDocument();
+    await user.click(within(durations).getByRole("button", { name: "Agregar servicio" }));
+    fireEvent.change(screen.getByLabelText("Servicio 1"), { target: { value: " Calefont " } });
+    fireEvent.change(screen.getByLabelText("Minutos 1"), { target: { value: "90" } });
+    fireEvent.change(screen.getByLabelText("Anticipación mínima"), { target: { value: "0" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(screen.getByLabelText("Anticipación mínima")).toHaveValue(0);
+    expect(screen.getByLabelText("Servicio 1")).toHaveValue(" Calefont ");
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(screen.getByLabelText("Anticipación mínima")).toHaveValue(2);
+    expect(screen.queryByLabelText("Servicio 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+  });
+
+  it("operation adapts coverage help and keeps empty rejection and exact normalized payload", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Cobertura");
+    expect(screen.getByRole("button", { name: "Ayuda sobre cobertura" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar cobertura" })).not.toBeInTheDocument();
+    const field = screen.getByLabelText("Comunas con cobertura");
+    fireEvent.change(field, { target: { value: " \n " } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(field).toHaveValue(" \n ");
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    fireEvent.change(field, { target: { value: " Ñuñoa \n\n Las Condes " } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/coverage", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ communes: ["Ñuñoa", "Las Condes"] }),
+    })));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled());
+  });
+
+  it("operation adapts tariff help while preserving season fields, validation and save payload", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
+    const data = settings();
+    render(<Settings data={data} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Tarifas");
+    expect(screen.getByRole("button", { name: "Ayuda sobre tarifas" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar tarifas" })).not.toBeInTheDocument();
+    const field = screen.getByLabelText(/Visita técnica/);
+    fireEvent.change(field, { target: { value: "0" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(field).toHaveValue(null);
+    fireEvent.change(field, { target: { value: "35000" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/tarifa", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ precios: { ...data.tarifa, visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 35000 }] } }),
+    })));
+  });
+
+  it("operation keeps unsaved coverage and tariff drafts isolated and discards only the active section", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Cobertura");
+    fireEvent.change(screen.getByLabelText("Comunas con cobertura"), { target: { value: "Ñuñoa" } });
+    await selectSection(user, "Tarifas");
+    fireEvent.change(screen.getByLabelText(/Visita técnica/), { target: { value: "35000" } });
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(screen.getByLabelText(/Visita técnica/)).toHaveValue(30000);
+    await selectSection(user, "Cobertura");
+    expect(screen.getByLabelText("Comunas con cobertura")).toHaveValue("Ñuñoa");
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
+  it("uses contextual decorative icons for all five derivation cases", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    for (const [label, icon] of [
+      ["Comuna sin cobertura", "map-pin-off"], ["Pide hablar con una persona", "headset"],
+      ["Tres mensajes sin entender", "message-circle-question-mark"],
+      ["Un dato no se logró tomar", "clipboard-x"], ["No hay horarios para agendar", "calendar-x"],
+    ]) {
+      const button = within(nav).getByRole("button", { name: label });
+      expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      await user.click(button);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("heading", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("shows a contextual icon on each option inside all four reply accordions", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const groups = [
+      { title: "Agendar", entries: [
+        ["Oferta de horarios", "calendar-days"], ["Sin más horarios para ese día", "calendar-x"],
+        ["No se entendió el horario pedido", "circle-help"], ["Visita agendada", "calendar-check"],
+      ] },
+      { title: "Gestionar una visita", entries: [
+        ["No tiene visitas", "calendar-x"], ["Confirmar la cancelación", "circle-help"],
+        ["Elegir una visita", "list-checks"], ["Ofrecer nuevos horarios", "calendar-days"],
+        ["La visita ya pasó", "history"], ["No se entendió la visita", "calendar-search"],
+        ["No se entendió el horario", "circle-help"], ["La visita sigue igual", "calendar-check"],
+        ["Sin horarios para reagendar", "calendar-x"], ["Visita reagendada", "calendar-clock"],
+        ["Pedir confirmación para cancelar", "circle-help"], ["No se puede cancelar", "ban"],
+        ["Visita cancelada", "calendar-x"],
+      ] },
+      { title: "Derivar a una persona", entries: [["Derivación a un asesor", "headset"]] },
+      { title: "Captura", entries: [["Pedir evidencia", "camera"], ["Pedir consentimiento", "shield-check"]] },
+    ];
+    for (const { title, entries } of groups) {
+      await user.click(within(nav).getByRole("button", { name: new RegExp(title) }));
+      for (const [label, icon] of entries) {
+        const button = within(nav).getByRole("button", { name: label });
+        expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
+        expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      }
+    }
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+  });
+
+  it("groups specific derivation cases in a collapsible list separate from generic handoff", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const cases = within(nav).getByRole("button", { name: /Casos de derivación/ });
+    expect(cases).toHaveAttribute("aria-expanded", "true");
+    expect(cases).toHaveTextContent("5");
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "Borrador específico" } });
+    await user.click(cases);
+    expect(cases).toHaveAttribute("aria-expanded", "false");
+    expect(within(nav).queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+    await user.click(cases);
+    expect(within(nav).getByRole("button", { name: "Comuna sin cobertura" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(nav).getByRole("button", { name: /Derivar a una persona/ }));
+    await user.click(within(nav).getByRole("button", { name: "Derivación a un asesor" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).not.toHaveValue("Borrador específico");
+    await user.click(within(nav).getByRole("button", { name: "Comuna sin cobertura" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+  });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("renders every section and selects Agente by default", () => {
@@ -159,24 +316,69 @@ describe("Settings", () => {
     expect(screen.getByText("No configurada")).toBeInTheDocument();
   });
 
-  it("renders the Agente cards, help panels, and editable advanced rules", () => {
+  it("renders Agente contextual help in popovers and keeps the advanced rule editor", async () => {
+    const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detección de emergencias" })).toBeInTheDocument();
     expect(screen.getByText("Avanzado")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Cómo funciona" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Consideraciones" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Cómo funciona" }).closest(".help-panel")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card")).toContainElement(screen.getByRole("heading", { name: "Cómo funciona" }));
-    expect(screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card")).toContainElement(screen.getByRole("heading", { name: "Consideraciones" }));
+    expect(screen.getByRole("dialog", { name: "Cómo funciona" })).toHaveAttribute("popover", "auto");
+    expect(screen.queryByText("Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ayuda: Alcance del agente" }));
+    expect(screen.getByText("El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.")).toBeInTheDocument();
+    expect(screen.getByText("Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ayuda: Detección de emergencias" }));
+    expect(screen.getByText("Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.")).toBeInTheDocument();
+    expect(screen.getByText("Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.")).toBeInTheDocument();
     expect(screen.getByText("Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.")).toBeInTheDocument();
     expect(screen.getByLabelText("Reglas de alcance")).toHaveAttribute("placeholder", "Ej: reparación=bot_resolve");
-    fireEvent.click(screen.getByText("Sintaxis avanzada"));
-    expect(screen.getByText("Sintaxis avanzada").parentElement).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
-    expect(screen.getByText("Sintaxis avanzada").parentElement).toHaveTextContent("presupuesto=bot_resolve");
-    const rules = screen.getByLabelText("Reglas de alcance");
-    expect(rules).toHaveValue("general=bot_resolve");
-    expect(rules).toBeEnabled();
+    await user.click(screen.getByText("Configuración avanzada"));
+    expect(screen.getByLabelText("Reglas de alcance")).toBeVisible();
+    expect(screen.getByText("Configuración avanzada").closest("details")).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
+    expect(screen.getByText("Configuración avanzada").closest("details")).toHaveTextContent("presupuesto=bot_resolve");
+  });
+
+  it("shows Historial only for Agente and Persona", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    await selectSection(user, "Mensajes");
+    expect(screen.queryByRole("button", { name: "Historial" })).not.toBeInTheDocument();
+    await selectSection(user, "Persona");
+    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+  });
+
+  it("tracks dirty state, discards without a request, and disables save when clean", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    const save = screen.getByRole("button", { name: "Guardar cambios" });
+    expect(screen.getByText("Sin cambios pendientes")).toBeInTheDocument();
+    expect(save).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Instrucciones de seguridad"), { target: { value: "Corta el gas.\nVentila." } });
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Descartar" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(screen.getByLabelText("Instrucciones de seguridad")).toHaveValue("Corta el gas.");
+    expect(screen.getByText("Sin cambios pendientes")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes emergency keyword chips and persists them through the sticky save bar", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    const input = screen.getByLabelText("Escribe una frase y presiona Enter");
+    await user.type(input, " humo{enter}");
+    expect(screen.getByRole("button", { name: "Quitar palabra clave humo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/keywords", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ keywords: ["gas", "humo"] }),
+    })));
+    await user.click(screen.getByRole("button", { name: "Quitar palabra clave humo" }));
+    expect(screen.queryByRole("button", { name: "Quitar palabra clave humo" })).not.toBeInTheDocument();
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
   });
 
   it("switches sections from the accessible mobile menus", async () => {
@@ -230,27 +432,32 @@ describe("Settings", () => {
       const user = userEvent.setup();
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Horarios y avisos");
-      expect(screen.getByRole("button", { name: "Lunes compartido" })).toBeInTheDocument();
+      expect(screen.getByText("Lunes compartido")).toBeInTheDocument();
     } finally {
       WEEKDAY_NAMES[0] = previous;
     }
   });
 
-  it("renders the tone selector and save action together", async () => {
+  it("renders the tone selector in the row header and saves only through the sticky bar", async () => {
     const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     const tone = screen.getByRole("button", { name: "Tono" });
-    const saveTone = screen.getByRole("button", { name: "Guardar tono" });
-    expect(tone.closest(".settings-messages__tone-row")).toContainElement(saveTone);
+    expect(tone.closest(".card__header")).toContainElement(tone);
     expect(tone).toHaveTextContent("Cercano");
+    expect(screen.queryByRole("button", { name: "Guardar tono" })).not.toBeInTheDocument();
+    await user.click(tone);
+    await user.click(screen.getByRole("menuitem", { name: "Formal" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/tone", expect.objectContaining({ method: "POST", body: JSON.stringify({ tone: "formal" }) })));
   });
 
-  it("disables saving when no tone is configured", async () => {
+  it("disables sticky saving when no tone is configured", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings({ tone: "" })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
-    expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
   });
 
   it("switches the message template editor and previews its edited text", async () => {
@@ -260,23 +467,25 @@ describe("Settings", () => {
 
     const greetingPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-greeting"));
     expect(within(greetingPanel!).getByLabelText("Texto del mensaje")).toHaveValue("Hola");
-    await user.click(screen.getByRole("tab", { name: "Aclaración" }));
+    await user.click(screen.getByRole("tab", { name: /^Aclaración/ }));
     const clarificationPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-clarification"));
     const clarification = within(clarificationPanel!).getByLabelText("Texto del mensaje");
     expect(clarification).toHaveValue("¿Cuál?");
     await user.clear(clarification);
     await user.type(clarification, "¿Me puedes indicar tu comuna?");
-    expect(screen.getByRole("heading", { name: "Vista previa" }).closest("section")?.querySelector(".message-preview__bubble")).toHaveTextContent("¿Me puedes indicar tu comuna?");
+    const editor = screen.getByRole("heading", { name: "Aclaración" }).closest(".settings-messages__edit");
+    expect(within(editor as HTMLElement).getByRole("heading", { name: "Vista previa en WhatsApp" })).toBeInTheDocument();
+    expect(within(editor as HTMLElement).getByRole("region", { name: "Vista previa en WhatsApp" }).querySelector(".message-preview__bubble")).toHaveTextContent("¿Me puedes indicar tu comuna?");
   });
 
   it("labels each greeting according to whether the name is available", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
-    expect(screen.getByRole("tab", { name: "Saludo cuando falta el nombre" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Saludo con nombre" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Saludo corto cuando falta el nombre" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Saludo corto con nombre" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Saludo cuando falta el nombre/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Saludo con nombre/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Saludo corto cuando falta el nombre/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Saludo corto con nombre/ })).toBeInTheDocument();
   });
 
   it("edits the short greeting and saves all ten messages", async () => {
@@ -284,14 +493,15 @@ describe("Settings", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
-    await user.click(screen.getByRole("tab", { name: "Saludo corto cuando falta el nombre" }));
+    await user.click(screen.getByRole("tab", { name: /^Saludo corto cuando falta el nombre/ }));
 
     const panel = screen.getAllByRole("tabpanel").find((each) => each.getAttribute("aria-labelledby")?.includes("trigger-greeting_short"));
     const textarea = within(panel!).getByLabelText("Texto del mensaje");
     expect(textarea).toHaveValue("Hola, ¿qué necesitas?");
     await user.clear(textarea);
     await user.type(textarea, "Hola, cuéntame");
-    await user.click(screen.getByRole("button", { name: "Guardar mensajes" }));
+    expect(screen.queryByRole("button", { name: "Guardar mensajes" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/messages", expect.objectContaining({
       method: "POST",
@@ -313,13 +523,70 @@ describe("Settings", () => {
     expect(screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-farewell"))).toBeInTheDocument();
   });
 
+  it("shows the 11 fixed messages, filters them, and previews inside the selected editor", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Mensajes");
+    expect(screen.getByText("11 mensajes")).toBeInTheDocument();
+    expect(screen.getAllByText("Mensaje fijo")).toHaveLength(1);
+    const list = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
+    expect(within(list).getAllByRole("tab")).toHaveLength(11);
+    expect(within(list).queryByText("Mensaje fijo")).not.toBeInTheDocument();
+    expect(within(list).getByRole("tab", { name: "Despedida" })).toHaveTextContent("Despedida");
+    expect(within(list).queryByText("Cierre de conversación")).not.toBeInTheDocument();
+    expect(screen.getByText("Ilustrativa")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vista previa en WhatsApp" }).closest(".settings-messages__edit")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Saludo con nombre/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar mensaje" }), { target: { value: "Aclaración" } });
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /^Aclaración/ })).toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: /^Saludo con nombre/ })).not.toBeInTheDocument();
+    });
+    const clarification = screen.getByLabelText("Texto del mensaje");
+    expect(clarification).toHaveValue("¿Cuál?");
+    fireEvent.change(clarification, { target: { value: "Texto aclaratorio" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar mensaje" }), { target: { value: "" } });
+    await user.click(await screen.findByRole("tab", { name: /^Saludo con nombre/ }));
+    expect(screen.getByLabelText("Texto del mensaje")).toHaveValue("Hola, Ana");
+  });
+
+  it("shows the exact empty state and informational band for preset answers", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings({ templates: [] })} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Mensajes");
+    expect(screen.getByText("Aún no hay respuestas prediseñadas")).toBeInTheDocument();
+    expect(screen.getByText("Crea una plantilla para una consulta frecuente.")).toBeInTheDocument();
+    expect(screen.getByText("Si falta un dato necesario, el bot responde normalmente.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Agregar respuesta" })).toBeInTheDocument();
+  });
+
+  it("saves tone, messages and preset answers through the sticky bar with unchanged payloads", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Mensajes");
+    const tone = screen.getByRole("button", { name: "Tono" });
+    await user.click(tone);
+    await user.click(screen.getByRole("menuitem", { name: "Formal" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/tone", expect.objectContaining({ body: JSON.stringify({ tone: "formal" }) })));
+    fireEvent.change(screen.getByLabelText("Texto del mensaje"), { target: { value: "Hola editado" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/messages", expect.objectContaining({ body: JSON.stringify({ ...settings().messages, greeting: "Hola editado" }) })));
+    await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
+    fireEvent.change(screen.getByLabelText("Texto de respuesta 1"), { target: { value: "Respuesta nueva" } });
+    fireEvent.change(screen.getByLabelText("ID de respuesta 1"), { target: { value: "respuesta_nueva" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/message-templates", expect.objectContaining({ body: JSON.stringify({ templates: [{ id: "respuesta_nueva", text: "Respuesta nueva" }] }) })));
+  });
+
   it("renders the preset answers card and explains how it differs from fixed messages", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
-    expect(screen.getByText("Plantillas que el bot elige solo según lo que pregunta el cliente. Se envían con los datos reales ya cargados (nombre, comuna, equipo o la visita agendada).")).toBeInTheDocument();
-    expect(screen.getByText("A diferencia de los Mensajes del asistente de arriba —que son fijos y se disparan solos en momentos puntuales (saludo, derivación, fuera de horario)— estas respuestas las selecciona el bot en cada conversación.")).toBeInTheDocument();
+    expect(screen.getByText("Plantillas que el bot puede elegir según la consulta y los datos disponibles.")).toBeInTheDocument();
+    expect(screen.getByText("Si falta un dato necesario, el bot responde normalmente.")).toBeInTheDocument();
   });
 
   it("generates a readable template id, can regenerate it, and unlocks explicit manual editing", async () => {
@@ -351,7 +618,7 @@ describe("Settings", () => {
     expect(screen.getByText(/Datos disponibles:/).parentElement).toHaveTextContent("Datos disponibles: {{nombre}}, {{comuna}}");
     expect(screen.getByRole("heading", { name: "Vista previa de la respuesta 1" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vista previa de la respuesta 1" }).parentElement?.querySelector(".message-preview__bubble")).toHaveTextContent("Hola Ana, cobertura en Las Condes.");
-    expect(screen.getByText(/Si a la conversación le falta uno de esos datos, el bot omite esta respuesta y responde normalmente\./)).toBeInTheDocument();
+    expect(screen.getByText("Si falta un dato necesario, el bot responde normalmente.")).toBeInTheDocument();
   });
 
   it("adds a preset answer row and saves its templates", async () => {
@@ -364,7 +631,8 @@ describe("Settings", () => {
     await user.click(screen.getByRole("button", { name: "Editar id de respuesta 1" }));
     await user.clear(screen.getByLabelText("ID de respuesta 1"));
     await user.type(screen.getByLabelText("ID de respuesta 1"), "saludo_personalizado");
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    expect(screen.queryByRole("button", { name: "Guardar respuestas" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/message-templates", expect.objectContaining({ method: "POST", body: JSON.stringify({ templates: [{ id: "saludo_personalizado", text: "Hola, cliente" }] }) })));
   });
 
@@ -383,14 +651,18 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
-    expect(screen.getByRole("button", { name: "Guardar respuestas" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(await screen.findByText("Sintaxis no válida")).toBeInTheDocument();
   });
 
   it("keeps an edited draft when refreshed persisted data changes", () => {
     const { rerender } = render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    fireEvent.change(screen.getByLabelText("Palabras clave de emergencia"), { target: { value: "gas\nincendio" } });
+    fireEvent.change(screen.getByLabelText("Escribe una frase y presiona Enter"), { target: { value: "incendio" } });
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
     rerender(<Settings data={settings({ keywords: ["gas", "humo"] })} state="ready" capabilities={capabilities} />);
-    expect(screen.getByLabelText("Palabras clave de emergencia")).toHaveValue("gas\nincendio");
+    expect(screen.getByRole("button", { name: "Quitar palabra clave incendio" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quitar palabra clave humo" })).not.toBeInTheDocument();
   });
 
   it("disables invalid save controls and disables a valid save while pending", async () => {
@@ -398,7 +670,8 @@ describe("Settings", () => {
     render(<Settings data={settings({ hours: { timezone: "America/Santiago", schedule: [] } })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Horarios de atención" })).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Guardar horarios" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Guardar horarios" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
     await selectSection(user, "Mensajes");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
     const saveResponse = new Promise<Response>(() => undefined);
@@ -407,8 +680,9 @@ describe("Settings", () => {
     await user.click(tone);
     await user.click(screen.getByRole("menuitem", { name: "Formal" }));
     expect(tone).toHaveTextContent("Formal");
-    await user.click(screen.getByRole("button", { name: "Guardar tono" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar tono" })).toBeDisabled());
+    expect(screen.queryByRole("button", { name: "Guardar tono" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled());
   });
 
   it("groups, searches, and filters capability tools by ordered category", async () => {
@@ -441,16 +715,55 @@ describe("Settings", () => {
     expect(screen.getByText("Disponible")).toBeInTheDocument();
     expect(screen.getByText("No disponible")).toBeInTheDocument();
   });
-  it("saves the persona and its brief in one request", async () => {
+  it("renders the persona draft as Markdown and switches to its editor", async () => {
+    const user = userEvent.setup();
+    const markdown = "# Identidad\n\nEres Max.\n\n- Responde con claridad";
+    render(<Settings data={settings({ persona: { orchestrator: markdown, orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+
+    expect(screen.getByRole("heading", { name: "Identidad" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Responde con claridad");
+    expect(screen.getByText((_content, element) => element?.classList.contains("settings-persona__info") ?? false)).toHaveTextContent("Los datos del cliente se agregan automáticamente. No incluyas variables como {{nombre}}.");
+    expect(screen.queryByLabelText("Texto de la persona")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Editar Markdown" }));
+    expect(screen.getByLabelText("Texto de la persona")).toHaveValue(markdown);
+  });
+
+  it("keeps persona mode and expand controls together below the card heading", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+    const toolbar = screen.getByRole("toolbar", { name: "Herramientas de persona" });
+    expect(within(toolbar).getByRole("button", { name: "Vista previa" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(toolbar).getByRole("button", { name: "Editar Markdown" })).toHaveAttribute("aria-pressed", "false");
+    await user.click(within(toolbar).getByRole("button", { name: "Ampliar" }));
+    expect(screen.getByRole("dialog", { name: "Vista previa de la persona" })).toBeInTheDocument();
+  });
+
+  it("opens the persona Markdown in an enlarged dialog", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings({ persona: { orchestrator: "# Identidad\n\nEres Max.", orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+    await user.click(screen.getByRole("button", { name: "Ampliar" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Vista previa de la persona" });
+    expect(dialog).toHaveClass("dialog--wide");
+    expect(within(dialog).getByRole("heading", { name: "Identidad" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Eres Max.")).toBeInTheDocument();
+  });
+
+  it("saves the edited persona and its brief through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Persona");
+    await user.click(screen.getByRole("button", { name: "Editar Markdown" }));
 
     const persona = screen.getByLabelText("Texto de la persona");
     expect(persona).toHaveValue("Eres Max.");
     fireEvent.change(persona, { target: { value: "Eres Max, edición del panel." } });
-    await user.click(screen.getByRole("button", { name: "Guardar persona" }));
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/persona", expect.objectContaining({
       method: "POST",
@@ -464,7 +777,7 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
 
     fireEvent.change(screen.getByLabelText("Instrucciones de seguridad"), { target: { value: "Corta el gas.\nVentila el lugar." } });
-    await user.click(screen.getByRole("button", { name: "Guardar protocolo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/emergency", expect.objectContaining({
       method: "POST",
@@ -475,14 +788,36 @@ describe("Settings", () => {
       }),
     })));
   });
-  it("reorders the capture fields and saves the conduct object", async () => {
+  it("renders ordered capture fields and their inline questions in the Datos y preguntas table", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    const card = screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card") as HTMLElement;
+    expect(within(card).getByText("Define el orden y edita lo que recibe el cliente en cada paso.")).toBeInTheDocument();
+    expect(within(card).getByText("3 datos")).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "#" })).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "Campo" })).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "Pregunta al cliente" })).toBeInTheDocument();
+    const rows = within(card).getAllByRole("row");
+    expect(rows.slice(1).map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Problema"), expect.stringContaining("Comuna"), expect.stringContaining("Nombre"),
+    ]);
+    expect(within(card).getByLabelText("Problema")).toHaveValue("¿Qué pasa con el equipo?");
+    expect(within(card).getByLabelText("Comuna")).toHaveValue("¿En qué comuna estás?");
+    expect(within(card).getByLabelText("Nombre")).toHaveValue("¿Cuál es tu nombre?");
+    expect(within(card).queryByRole("button", { name: /^Guardar/ })).not.toBeInTheDocument();
+  });
+
+  it("reorders the table and saves the conduct order through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     await user.click(screen.getByRole("button", { name: "Bajar Problema" }));
-    await user.click(screen.getByRole("button", { name: "Guardar conducta" }));
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
       method: "POST",
@@ -490,7 +825,7 @@ describe("Settings", () => {
     })));
   });
 
-  it("saves the capture-question wording exactly as typed", async () => {
+  it("saves inline capture-question edits through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
@@ -499,46 +834,87 @@ describe("Settings", () => {
     const comuna = screen.getByLabelText("Comuna");
     expect(comuna).toHaveValue("¿En qué comuna estás?");
     fireEvent.change(comuna, { target: { value: "¿En qué comuna queda tu casa?" } });
-    await user.click(screen.getByRole("button", { name: "Guardar preguntas" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/capture-questions", expect.objectContaining({
       body: JSON.stringify({ questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna queda tu casa?", name: "¿Cuál es tu nombre?" } }),
     })));
   });
 
-  it("blocks a capture question that carries braces", async () => {
+  it("changes Preguntas por mensaje with the bounded stepper and saves conduct", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    expect(screen.getByText("Los textos se envían tal como están escritos.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Aumentar preguntas por mensaje" }));
+    expect(screen.getByText("2", { selector: ".settings-conduct__stepper-value" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aumentar preguntas por mensaje" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
+      body: JSON.stringify({ conduct: { orden: ["failure", "comuna", "name"], max_preguntas_por_mensaje: 2, derivaciones: ["cobertura"] } }),
+    })));
+  });
+
+  it("removes a capture field from the table through its kebab menu without removing the last field", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "{{nombre}}, ¿cómo te llamas?" } });
+    await user.click(screen.getByRole("button", { name: "Acciones de Problema" }));
+    await user.click(screen.getByRole("menuitem", { name: "Quitar" }));
+    expect(screen.queryByLabelText("Problema")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card")).toHaveTextContent("2 datos");
 
-    expect(screen.getByRole("button", { name: "Guardar preguntas" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Acciones de Comuna" }));
+    await user.click(screen.getByRole("menuitem", { name: "Quitar" }));
+    await user.click(screen.getByRole("button", { name: "Acciones de Nombre" }));
+    expect(screen.getByRole("menuitem", { name: "Quitar" })).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("saves one deterministic reply from its group under Conducta", async () => {
+  it("keeps capture-question validation and both capture-order rules in the card", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    const card = screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card") as HTMLElement;
+    expect(within(card).getByText("Nombre, correo y dirección se solicitan después de la disponibilidad.")).toBeInTheDocument();
+    expect(within(card).getByText("Si quitas un dato, el bot deja de preguntarlo.")).toBeInTheDocument();
+    fireEvent.change(within(card).getByLabelText("Nombre"), { target: { value: "{{nombre}}, ¿cómo te llamas?" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(await screen.findByText("Sintaxis no válida")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("selects a grouped reply and saves its edit through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
+    await user.click(screen.getByRole("button", { name: "Oferta de horarios" }));
 
-    const offer = screen.getByLabelText("Oferta de horarios");
-    expect(offer).toHaveValue("Horarios: {{opciones}}");
-    expect(screen.getByText("{{opciones}}")).toBeInTheDocument();
-    fireEvent.change(offer, { target: { value: "Estos horarios tengo: {{opciones}}" } });
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Horarios: {{opciones}}");
+    expect(screen.getByRole("heading", { name: "Agendar" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "Estos horarios tengo: {{opciones}}" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
       body: JSON.stringify({ texts: { ...replyTextValues, booking_offer: "Estos horarios tengo: {{opciones}}" } }),
     })));
   });
 
+  // Drives 25 editors on one page: scoped queries keep it fast, and the explicit timeout covers the
+  // slowdown of the full suite running many files in parallel.
   it("makes Conducta the single editable owner of all 25 reply texts", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
+    const situationList = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
 
     const labels = [
       "Comuna sin cobertura", "Pide hablar con una persona", "Tres mensajes sin entender", "Un dato no se logró tomar", "No hay horarios para agendar",
@@ -547,34 +923,46 @@ describe("Settings", () => {
       "No se entendió el horario", "La visita sigue igual", "Sin horarios para reagendar", "Visita reagendada", "Pedir confirmación para cancelar",
       "No se puede cancelar", "Visita cancelada", "Derivación a un asesor", "Pedir evidencia", "Pedir consentimiento",
     ];
-    for (const group of ["Agendar", "Gestionar una visita", "Derivar a una persona", "Captura"]) {
-      await user.click(screen.getByRole("button", { name: new RegExp(group) }));
+    const selectEntry = (label: string) => {
+      if (labels.indexOf(label) >= 5 && labels.indexOf(label) <= 8) {
+        if (within(situationList).getByRole("button", { name: /Agendar/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Agendar/ }));
+      } else if (labels.indexOf(label) >= 9 && labels.indexOf(label) <= 21) {
+        if (within(situationList).getByRole("button", { name: /Gestionar una visita/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Gestionar una visita/ }));
+      } else if (label === "Derivación a un asesor") {
+        if (within(situationList).getByRole("button", { name: /Derivar a una persona/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Derivar a una persona/ }));
+      }
+      else if (["Pedir evidencia", "Pedir consentimiento"].includes(label)) {
+        if (within(situationList).getByRole("button", { name: /Captura/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Captura/ }));
+      }
+      fireEvent.click(within(situationList).getByRole("button", { name: label }));
+    };
+    const replyKeys = Object.keys(replyTextValues) as Array<keyof typeof replyTextValues>;
+    const changed: Record<string, string> = Object.fromEntries(Object.entries(replyTextValues).map(([key, value]) => [key, `${value} Edición.`]));
+    for (let index = 0; index < labels.length; index += 1) {
+      selectEntry(labels[index]);
+      const editor = screen.getByLabelText("Mensaje al cliente");
+      expect(editor).toHaveValue(replyTextValues[replyKeys[index]]);
+      fireEvent.change(editor, { target: { value: changed[replyKeys[index]] } });
     }
-    expect(labels).toHaveLength(25);
-    for (const label of labels) expect(screen.getByLabelText(label)).toBeInTheDocument();
-
-    const changed = Object.fromEntries(Object.entries(replyTextValues).map(([key, value]) => [key, `${value} Edición.`]));
-    for (const [key, value] of Object.entries(changed)) {
-      const label = labels[Object.keys(replyTextValues).indexOf(key)];
-      fireEvent.change(screen.getByLabelText(label), { target: { value } });
-    }
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({ texts: changed }),
-    }));
-  });
+    expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({ method: "POST", body: JSON.stringify({ texts: changed }) }));
+  }, 60_000);
 
-  it("keeps the Conducta reply-text save disabled if any of the 25 values is blank", async () => {
+  it("blocks the sticky save if any of the 25 reply texts is blank", async () => {
     const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
-    const save = screen.getByRole("button", { name: "Guardar respuestas" });
-    expect(save).toBeEnabled();
+    const save = screen.getByRole("button", { name: "Guardar cambios" });
 
-    fireEvent.change(screen.getByLabelText("Visita agendada"), { target: { value: "   " } });
-    expect(save).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /Agendar/ }));
+    await user.click(screen.getByRole("button", { name: "Visita agendada" }));
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "   " } });
+    expect(save).toBeEnabled();
+    await user.click(save);
+    expect(await screen.findByText("Sintaxis no válida")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("does not render flow reply-text editing in Mensajes, while retaining its three other cards", async () => {
@@ -588,63 +976,68 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
   });
 
-  it("renders the exhausted-day notice inside the booking group under Conducta", async () => {
+  it("keeps the exhausted-day notice editable and saves it through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
+    await user.click(screen.getByRole("button", { name: "Sin más horarios para ese día" }));
 
-    const notice = screen.getByLabelText("Sin más horarios para ese día");
+    const notice = screen.getByLabelText("Mensaje al cliente");
+    expect(notice).toHaveValue("Sin más horarios para hoy: {{opciones}}");
     fireEvent.change(notice, { target: { value: "Sin más para ese día: {{opciones}}" } });
-    await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
       body: JSON.stringify({ texts: { ...replyTextValues, booking_no_more_today: "Sin más para ese día: {{opciones}}" } }),
     })));
   });
 
-  describe("derivaciones (S4)", () => {
-    const withDerivations = () => settings();
-
-    it("renders the five cases the customer reads a text for", async () => {
-      const user = userEvent.setup();
-      render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
-      await selectSection(user, "Conducta");
-
-      expect(screen.getByRole("heading", { name: "Derivaciones" })).toBeInTheDocument();
-      expect(screen.getByLabelText("Comuna sin cobertura")).toHaveValue("Sin cobertura en {{comuna}}.");
-      expect(screen.getByLabelText("Pide hablar con una persona")).toHaveValue("Te paso con una persona del equipo.");
-      expect(screen.getByLabelText("Tres mensajes sin entender")).toHaveValue("Te dejo con una persona del equipo.");
-      expect(screen.getByLabelText("Un dato no se logró tomar")).toHaveValue("Un asesor te contacta para coordinar.");
-      expect(screen.getByLabelText("No hay horarios para agendar")).toHaveValue("No hay horarios: un asesor te contacta.");
-      // the only slot of the group is named next to its case
-      expect(screen.getByText("{{comuna}}")).toBeInTheDocument();
-    });
-
-    it("saves an edited derivation text with the whole reply map", async () => {
-      const user = userEvent.setup();
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-      render(<Settings data={withDerivations()} state="ready" capabilities={capabilities} />);
-      await selectSection(user, "Conducta");
-
-      fireEvent.change(screen.getByLabelText("Pide hablar con una persona"), { target: { value: "Ahora te escribe alguien del equipo." } });
-      await user.click(screen.getByRole("button", { name: "Guardar respuestas" }));
-
-      await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
-        body: JSON.stringify({ texts: { ...replyTextValues, handoff_persona: "Ahora te escribe alguien del equipo." } }),
-      })));
-    });
-
-    it("renders only the derivation rule that has a reader", async () => {
+  describe("derivaciones (S6.5–S6.6)", () => {
+    it("shows the five specific cases first and their existing team rule only when offered", async () => {
       const user = userEvent.setup();
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
 
-      const rules = screen.getByRole("group", { name: "Derivar a una persona cuando" });
+      expect(screen.getByRole("heading", { name: "Derivaciones y respuestas" })).toBeInTheDocument();
+      expect(screen.getByText("Selecciona una situación para editar el mensaje que recibe el cliente.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Comuna sin cobertura" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Pide hablar con una persona" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Sin cobertura en {{comuna}}.");
+      expect(screen.getByLabelText("Derivar al equipo")).toBeChecked();
+      expect(screen.queryByRole("button", { name: "Guardar respuestas" })).not.toBeInTheDocument();
+    });
 
-      expect(within(rules).getAllByRole("checkbox")).toHaveLength(1);
-      expect(within(rules).getByRole("checkbox", { name: "Comuna fuera de cobertura" })).toBeChecked();
+    it("search narrows the situation list", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Conducta");
+      fireEvent.change(screen.getByLabelText("Buscar situación"), { target: { value: "horarios" } });
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "No hay horarios para agendar" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument();
+      });
+    });
+
+    it("updates the available derivation rule and marks conduct dirty", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Conducta");
+      await user.click(screen.getByLabelText("Derivar al equipo"));
+      expect(screen.getByLabelText("Derivar al equipo")).not.toBeChecked();
+      expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    });
+
+    it("appends an available slot and previews its sample value", async () => {
+      const user = userEvent.setup();
+      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      await selectSection(user, "Conducta");
+      expect(screen.getByText("Sin cobertura en Las Condes.")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Insertar dato {{comuna}}" }));
+      expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Sin cobertura en {{comuna}}. {{comuna}}");
+      expect(screen.getByText("Sin cobertura en Las Condes. Las Condes")).toBeInTheDocument();
     });
   });
 
@@ -653,7 +1046,7 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
 
-    expect(screen.getByRole("link", { name: /configurar notificaciones push/i })).toHaveAttribute("href", "/panel/app/push");
+    expect(screen.getByRole("link", { name: /configurar notificaciones/i })).toHaveAttribute("href", "/panel/app/push");
     expect(screen.queryByRole("button", { name: /activar notificaciones/i })).not.toBeInTheDocument();
   });
 
@@ -677,7 +1070,7 @@ describe("Settings", () => {
     expect(leadHours).toHaveValue(2);
     await user.clear(leadHours);
     await user.type(leadHours, "6");
-    await user.click(screen.getByRole("button", { name: "Guardar anticipación" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/booking-lead", expect.objectContaining({
       method: "POST", body: JSON.stringify({ hours: 6 }),
     })));
@@ -693,7 +1086,7 @@ describe("Settings", () => {
     });
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
-    expect(await screen.findByText("Luis Pérez")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Luis Pérez" })).toBeInTheDocument();
     expect(await screen.findByLabelText("Días y horarios de atención")).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith("/panel/api/technicians", expect.objectContaining({ credentials: "include" }));
   });
@@ -720,7 +1113,7 @@ describe("Settings", () => {
     await user.click(screen.getByRole("button", { name: "Agregar servicio" }));
     fireEvent.change(screen.getByLabelText("Servicio 1"), { target: { value: "Calefont" } });
     fireEvent.change(screen.getByLabelText("Minutos 1"), { target: { value: "90" } });
-    await user.click(screen.getByRole("button", { name: "Guardar duraciones" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/durations", expect.objectContaining({
       body: JSON.stringify({ service_durations: { Calefont: 90 } }),
