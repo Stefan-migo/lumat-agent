@@ -24,7 +24,7 @@ from sqlalchemy import select
 
 from app.chat.state import ConversationState, conversation_transcript
 from app.db import session_scope
-from app.models import KbVisibility, Message
+from app.models import Conversation, KbVisibility, Message
 from app.services import kb, prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
@@ -417,13 +417,17 @@ def respond(state: ConversationState) -> dict:
                 message_id=state.window[-1]["id"],
                 context=miss_context,
             )
-            record_activity(
-                session,
-                state.conversation_id,
-                "kb_miss",
-                cause=miss_context,
-                actor="bot",
-            )
+            # Same tolerance as `log_unresolved`: a synthetic state without a
+            # persisted conversation cannot own an activity row (FK), and the
+            # single-reply contract must not fail because of telemetry.
+            if session.get(Conversation, state.conversation_id) is not None:
+                record_activity(
+                    session,
+                    state.conversation_id,
+                    "kb_miss",
+                    cause=miss_context,
+                    actor="bot",
+                )
             return {"replies": [get_message(session, "kb_miss_offer")]}
         kb_text = "\n".join(f"{i + 1}. {c['content']}" for i, c in enumerate(chunks))
 
