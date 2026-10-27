@@ -111,6 +111,14 @@ _SKIP_WORDS = (
     "no te voy a dar mi correo",
     "desconozco",
 )
+
+# S6: an explicit refusal names the datum it refuses. The generic skip above
+# marks the field the bot just asked, which is wrong when the customer answers a
+# different question out of turn: the email stayed pending and was asked again
+# later (measured on `complejo-no-quiere-email`, capture order vs. script).
+_REFUSAL_FIELDS: tuple[tuple[str, str], ...] = (
+    ("no te voy a dar mi correo", "email"),
+)
 _YES_WORDS = ("si", "sí", "yes", "ok", "claro", "confirmo", "acepto")
 # An explicit refusal phrase is a decision, not confusion: matching only the
 # bare "no" made "no autorizo" fall into the unclear path and the customer
@@ -184,6 +192,17 @@ def is_social_only(text: str) -> bool:
 
 def is_skip(text: str) -> bool:
     return any(word in text.lower() for word in _SKIP_WORDS)
+
+
+def refused_field(text: str) -> str | None:
+    """The capture field an explicit refusal names, if it names one (S6)."""
+    normalized = _normalize(text)
+    if not normalized:
+        return None
+    for phrase, field in _REFUSAL_FIELDS:
+        if _normalize(phrase) in normalized:
+            return field
+    return None
 
 
 def _answer_consent(value: str) -> bool | None:
@@ -437,6 +456,19 @@ def capture(state: ConversationState) -> dict:
             captured, state.extracted, [], state, get_coverage_communes(session)
         )
     pending = captured.get("_pending")
+    refused = refused_field(_current_text(state))
+    if refused is not None and refused not in captured:
+        # S6: honour the refusal for the field it names, then keep the capture
+        # going. The turn is not an answer to whatever field was pending, so it is
+        # not consumed as one; the flow resumes with the next ask.
+        captured[refused] = "unknown"
+        skipped = list(captured.get("_skipped") or [])
+        if refused not in skipped:
+            skipped.append(refused)
+        captured["_skipped"] = skipped
+        if not state.extracted:
+            captured.pop("_pending", None)
+            return _ask_next(captured, state)
     if isinstance(pending, str) and pending != "consent":
         # A stored one-field batch can arrive as a bare string ("name"); it means
         # the batch of that field, not its letters. Iterating it character by
