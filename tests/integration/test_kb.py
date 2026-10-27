@@ -358,6 +358,70 @@ def test_kb_retrieve_default_project_filter_returns_all_documents(fake_embedder)
     assert {result["document_id"] for result in results} == ids
 
 
+def test_kb_retrieve_topic_source_ids_keep_audience_project_and_active_guards(fake_embedder):
+    with SessionLocal() as session:
+        project_id = _project(session, "kb-topic-filter")
+        matching_id = kb.ingest_document(
+            session,
+            title="Topic global customer",
+            fmt=DocumentFormat.MD,
+            content=b"maipu sabado garantia pregunta de tema",
+            source_meta={"source": "docs/kb", "source_id": "lumat-cobertura-horarios"},
+            visibility=KbVisibility.CUSTOMER,
+        ).id
+        wrong_topic_id = kb.ingest_document(
+            session,
+            title="Other global customer",
+            fmt=DocumentFormat.MD,
+            content=b"maipu sabado garantia pregunta de tema",
+            source_meta={"source_id": "lumat-servicios"},
+            visibility=KbVisibility.CUSTOMER,
+        ).id
+        internal_id = kb.ingest_document(
+            session,
+            title="Internal topic",
+            fmt=DocumentFormat.MD,
+            content=b"maipu sabado garantia pregunta de tema",
+            source_meta={"source_id": "lumat-cobertura-horarios"},
+            visibility=KbVisibility.INTERNAL,
+        ).id
+        project_id_doc = kb.ingest_document(
+            session,
+            title="Project topic",
+            fmt=DocumentFormat.MD,
+            content=b"maipu sabado garantia pregunta de tema",
+            source_meta={"source_id": "lumat-cobertura-horarios"},
+            visibility=KbVisibility.CUSTOMER,
+            project_id=project_id,
+        ).id
+        disabled_id = kb.ingest_document(
+            session,
+            title="Disabled topic",
+            fmt=DocumentFormat.MD,
+            content=b"maipu sabado garantia pregunta de tema",
+            source_meta={"source_id": "lumat-cobertura-horarios"},
+            visibility=KbVisibility.CUSTOMER,
+        ).id
+        kb.disable_document(session, disabled_id)
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(
+            session,
+            "maipu sabado garantia pregunta de tema",
+            audience=KbVisibility.CUSTOMER,
+            global_only=True,
+            project_id=project_id,
+            source_ids=["lumat-cobertura-horarios"],
+        )
+
+    assert [result["document_id"] for result in results] == [matching_id]
+    assert wrong_topic_id not in {result["document_id"] for result in results}
+    assert internal_id not in {result["document_id"] for result in results}
+    assert project_id_doc not in {result["document_id"] for result in results}
+    assert disabled_id not in {result["document_id"] for result in results}
+
+
 def test_kb_retrieve_audience_filter_is_orthogonal_to_project_filter(fake_embedder):
     query = "audience and project"
     with SessionLocal() as session:

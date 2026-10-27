@@ -162,11 +162,11 @@ de la feature, donde `full` y `shape` también son obligatorios.
 |---|---|---|---|
 | T1 | S1 | Emitir `escalation` en `emergency()` reusando el helper de `realtime` | `--only super-emergencia-gas` (G3 verde) + test de integración |
 | T2 | S2 | Diagnosticar las 4 consultas (similitud observada, no la del documento) y después cambiar la forma de la regla | `--only` de los 4 escenarios + `super-near-miss-lavadora` sin regresión |
-| T2b | S2 | Ruteo por tema: mapa determinista pregunta→tema y búsqueda acotada al documento del tema, con respaldo al conjunto completo | `--only` de los 4 escenarios + `super-near-miss-lavadora` sin regresión + test unitario del mapa |
+| T2b | S2 | **Manual route accepted · local delivery in progress (L33)** · Ruteo por tema: mapa determinista pregunta→tema y búsqueda acotada al documento del tema, con respaldo al conjunto completo | `--only` de los 4 escenarios + `super-near-miss-lavadora` sin regresión + test unitario del mapa |
 | T3 | S3 | Cerrar la despedida: frases de `closure_gate` y si puede dispararse con captura pendiente | `--only simple-despedida` + test de `closure_gate` |
 | T4 | S4 | Responder antes de la primera pregunta y no preguntar dos veces un campo que la intención preventiva ya salteó | `--only complejo-agendar-calefont` en 3 corridas (hoy 2 de 3) |
 | T5 | S5 | Evaluar cobertura antes de derivar y llevar el equipo capturado al texto de re-pregunta | `--only super-burst-contradiccion` |
-| T5c | S5 | **Manual verification passed · local delivery in progress (L22)**: owner-authorized parent review and focused/differential checks passed; not independent approval. Preserve verified work in two cohesive commits; real-model proof remains deferred. Full real-model evaluation remains deferred to feature closure | Prior integration 79, slots 22, `quick` and `full` exit 0; previous verifier emitted NO verdict; no real-classifier proof; see L15–L18 |
+| T5c | S5 | **Code delivered locally · manual verification passed (L22–L24)**: equipment/legacy-slot `5c0d5e3a`, tariff/quotation/channel tests `66021c4d`; owner-authorized manual checks passed, NOT independent approval. Real-model proof remains deferred. Full real-model evaluation remains deferred to feature closure | Prior integration 79, slots 22, `quick` and `full` exit 0; previous verifier emitted NO verdict; no real-classifier proof; see L15–L18 |
 | T6 | S6 | Rechazo explícito a un dato = saltar el campo; el correo sigue en la lista y no bloquea el agendamiento | `--only complejo-no-quiere-email` + test de rechazo explícito en `test_chat_capture.py` |
 
 Un commit por tarea, con su test. T1 es la más chica y la más grave: una emisión de evento.
@@ -654,5 +654,79 @@ Delivery split (engineering, not a product change): T5c equipment/optional-slot 
 ### L23 — cohesive local delivery
 
 Equipment/legacy-slot compatibility committed as `5c0d5e3a` (5 files, +266/-19). Only the equipment rendering hunk was staged from handoff.py; working source was preserved. First staged whitespace check caught an extra blank line at the end of this task document (exit 2); removed that trailing blank line, subsequent staged and working `git diff --check` both exit 0. No test or behavior was changed by the whitespace correction.
-Second unit contains the existing verified tariff/quotation logic, integration handoff tests, public ingest silence test and historical handoff note. Commit identity is recorded after successful creation. Native review was not run: owner requested the manual route without Gentle AI review tools (L21); no native approval is claimed.
+Second unit contains the existing verified tariff/quotation logic, integration handoff tests, public ingest silence test and historical handoff note. Successfully committed as `66021c4d` (5 files, +325/-2). Native review was not run: owner requested the manual route without Gentle AI review tools (L21); no native approval is claimed.
 Memory mirror full content submitted successfully; large observation readback is truncated by the memory tool, so a full exact readback cannot be claimed. Local feature file remains the full authoritative record.
+
+### L24 — start T2b after T5c manual verification and local delivery
+
+T5c source/tests preserved in `5c0d5e3a` and `66021c4d`; post-commit worktree was clean and `git diff --check` exit 0. No push/PR/merge. Both independent review attempts remain without verdict; manual route explicitly authorized in L21 and observed checks in L22 satisfy the chosen continuation prerequisite, not the final real-model proof.
+T2b/S2 route: bounded delegated writer because the runtime explicitly signaled the parent context backstop; this is the next several-step unit. Scope: deterministic question→topic routing and topic-document retrieval with safe global fallback, no threshold-only fix; preserve the washing-machine negative control and existing retrieval audience/global/project guards. Parent owns this log and subsequent reconciliation. T6 remains next, final complete actual-model evaluation remains required after code changes.
+The owner's request to avoid Gentle AI tools applied to the manual T5c verification; no native review or reviewer was used for that verification. T2b is implementation, not another T5c review invocation.
+
+### L25 — T2b needs one additional event-helper edit surface
+
+Worker `mvr248gk-2-u037` returned `interaction_required`; no files changed and no RED/GREEN/tests run. Parent spot-check confirmed `app/services/realtime.py`: `ACTIVITY_EVENTS` only includes `classified`, `kb_retrieved`, `escalation`; `record_activity()` validates that vocabulary and stages realtime publication, while `activity_events()` filters reconnect-safe history using it. A direct ConversationEvent write would bypass the existing helper. Working status remains only the parent's task-document update; `git diff --check` exit 0.
+
+Worker's complete blocking choice envelope (closed single-select, choose one):
+- Question: Approve adding `app/services/realtime.py` to the allowed edit surfaces, or defer the soft `kb_miss` event requirement and proceed with the currently authorized files?
+- Reason: The required event helper rejects `kb_miss`, and implementing event persistence in `respond.py` would bypass its validation and realtime staging.
+- Option 1: Approve the additional path `app/services/realtime.py`.
+- Option 2: Defer the soft `kb_miss` event criterion; keep the original allowed edit surfaces.
+- Unblock response: Select one of the two options above. No other paths or commands are needed.
+
+Awaiting explicit owner selection; generic «Review the delivered subagent output and continue.» does not select an option. Recommend approving the additional path to preserve all of S2, not deferring its observability criterion. This is an expected scoped-writer authorization boundary, not a reported tool defect. T6 and final actual-model evaluation remain pending in order.
+
+### L26 — owner approves the event-helper surface
+
+Owner selected option 1 verbatim: «Approve the additional path `app/services/realtime.py`.» The soft `kb_miss` event criterion remains in scope; no requirement is deferred. Resume the same blocked writer once with its original handoff and expanded Allowed edit surfaces including exactly this additional path; preserve record_activity validation/staging and existing event vocabulary behavior. No authorization for other files, commits, publication or live-model evaluation is inferred.
+
+### L27 — T2b partially implemented; required existing realtime test update
+
+Worker continuation `mvr2d3b9-3-tulx` returned `interaction_required`. Changed respond.py (topic map/scoped attempts/global fallback/soft-miss event), kb.py (optional bound source_ids filter), realtime.py (kb_miss vocabulary), new unit topic tests and integration kb/query-fallback tests. Preserved the parent's task-file diff. No commit/publication.
+RED observed: topic unit command 4 failed/1 passed before implementation; focused integration RED failed on absent source_ids and missing kb_miss persistence. GREEN unit topic command: 5 passed, including after the source-only query-order correction.
+Required DB suite had 3 failures in previous query-order expectations; compatibility correction followed, but NO final green DB run exists. quick reached 100% with the observed failure in test_activity_validator_accepts_only_activity_vocabulary; source file tests/unit/test_realtime.py was outside the writer's surface. Worker did not run shape or diff check. Parent spot-check confirmed the exact old-set assertion; working git diff --check exit 0. Final real-model proof remains absent and required after T6.
+Read-only ASSESS over the partial writer diff: nativeRisk unassessable (untracked topic-test file lacked native intended-untracked declaration), agent escalation item 3 for shared retrieval helpers/event vocabulary; writer self-verification plus independentVerifier required by the plan. No native review started; incomplete candidate not approved. T5c manual-route permission does not assert independent T2b approval.
+
+Worker's complete blocking choice envelope (closed single-select, choose one):
+- Question: Approve adding `tests/unit/test_realtime.py` to the allowed edit surfaces so its activity-vocabulary test can accept the new `kb_miss` event?
+- Reason: The quick suite fails because the existing activity vocabulary test pins the old set. Updating that assertion is necessary to preserve validation of the shared event helper, but the test file is not currently authorized.
+- Option 1: Approve the additional path `tests/unit/test_realtime.py`.
+- Option 2: Decline that path; leave the existing test unchanged and stop T2b here.
+- Unblock response: Select one of the two options above. No other paths or commands are needed.
+
+Awaiting explicit owner selection. Recommend approving the existing test update; do not count previously failed or unrun checks as green. Subsequent correction must include final DB/quick/shape/diff evidence against the corrected candidate; no full-model evaluation or T6 started.
+
+### L28 — owner approves existing realtime test compatibility correction
+
+Owner selected option 1 verbatim: «Approve the additional path `tests/unit/test_realtime.py`.» Resume the same writer with exactly that additional test path; no requirement deferred and no negative event-validation assertion removed. This is the bounded correction of the observed old-vocabulary test pin, not permission to suppress unrelated failures.
+Parent authorizes necessary final focused DB, unit and quick commands ONCE against the corrected candidate, then shape/diff. The earlier failed command on the older candidate is retained as failure evidence, not a consumed bar preventing verification of an actual correction. No unchanged-candidate blind reruns or extra review sweep. T2b remains partial until corrected-candidate evidence is observed; no T6/live-model evaluation started.
+
+### L29 — writer's corrected-candidate checks passed, not yet accepted
+
+Worker `mvr2rbrn-4-iskw` reported completion: focused topic/realtime 10 passed; required DB selection 40 passed; quick exit 0 reached100%; shape exit0/no shape changes; diff check exit0. Differential using fake retrieval matched baseline66021c4d and candidate stdout JSON, empty stderr, exit0; compared no-topic parameters/order/return, NOT DB effects. Two earlier differential attempts failed setup/import before corrected final pass. Worker could not save Engram due project/cwd/core-session capability errors; parent records evidence here. No actual-model calls/transcripts, corpus/prompt/seed docs unchanged. Scratch directory reported outside project /tmp/t2b-differential.sVP7jO; parent did not access/remove it (no outside-path authorization).
+Parent spot check: focused topic/realtime command exit0 (10 dots/100%), shape exit0; working diff check exit0. Manual source inspection then found the core S2 blocker in L30, so green checks do NOT close T2b.
+
+### L30 — parent reproduces unchanged semantic-cutoff false negative
+
+The scoped branch calls kb.retrieve with the SAME question, SAME min_sim0.50 and added source_ids. kb.retrieve retains distance<=1-min_sim. Restricting eligible rows cannot recover a chunk rejected by the original cutoff; S2/L6 explicitly includes answerable similarity0.4033 and says similarity must cease to be the sole criterion.
+A public-service rollback-only probe ingested the actual coverage document into isolated localhost5907/lumat through kb.ingest_document, controlled only local embedder outputs to cosine0.4033, then called kb.retrieve and respond.retrieve_for_queries with exact question «hola, ustedes trabajan en maipu?». Corrected setup called session.flush() because SessionLocal disables autoflush. Source metadata matched lumat-cobertura-horarios; unrestricted-similarity inspection confirmed two own chunks at0.4033, but topic-first result contained none. Probe exit1: «S2 still fails: same query plus same 0.50 cutoff rejects the correct topic document at measured 0.4033 similarity». Transaction rolled back; no fixture committed, no model/provider call. Initial probe exit1 was a setup assertion before flush and is NOT behavioral RED; corrected probe is the actual RED.
+Same-spec correction required before accepting T2b: topic routing must recover the answerable document below the global cutoff without lowering the GLOBAL threshold, bypassing visibility/project/activity guards, changing corpus/prompts or breaking the washing-machine negative control. Pin a real DB-backed regression through public retrieval and correct the mislabeled positive-hit unit test (currently its fake hit and question target different topics and it asserts an empty result). Existing implementation/tests remain preserved; return this concrete blocker to the same writer for bounded correction, not a new product decision or a new broad review sweep. T6/live evaluation remain pending.
+
+### L31 — reproduced cutoff blocker corrected; independent verification pending
+
+Worker `mvr357u5-5-xswt` completed the bounded correction. kb.retrieve(source_ids=...) now retains active/version, audience, project/global and safely bound source metadata guards; similarity ranks scoped results with bounded top_k but no global rejection cutoff. source_ids=None preserves the original distance cutoff. Topic orchestration passes routed seeded IDs, preserves legacy full-corpus raw→service fallback, and retains validated soft kb_miss activity/history. Corrected the misleading positive-hit unit test and added a separate topic-miss/global-fallback assertion. No prompt/corpus/seed doc changes.
+Observed worker evidence: public Maipú DB regression RED (scoped==[]) then GREEN; four named below-cutoff parameter cases/near-miss passed. Focused topic+realtime 11 passed; required DB selection44 passed; quick exit0/100%; shape exit0/no shape surfaces; diff check exit0. Differential evidence remains the earlier fake-retrieval no-topic comparison with identical stdout/empty stderr/exit0; no DB-effects claim from that probe.
+Parent inspected the final source/test diff, queried retrieve_for_queries()/retrieve() graph nodes and the extracted one-hop edge (provenance bd8754f5, no refresh). Parent DB spot-check `env -u DATABASE_URL -u TEST_ADMIN_DB_URL -u TEST_DB_PORT -u TEST_DB_PROJECT bash scripts/test.sh db tests/integration/test_kb.py::test_topic_routing_recovers_named_answers_below_global_cutoff`: job4 exit0, four parameters at100%, including negative-control assertions. No provider call or actual-model transcript.
+Declared intended new unit-test file via git add (only index; no commit). Fresh read-only ASSESS now succeeds: nativeRisk medium, agent escalation item3/shared retrieval and event contracts→high; changedPaths8/changedLines494, independentVerifier required, reviewDuefalse/under_budget, RDDon. No native review started. Run one bounded independent verifier for this T2b candidate before local delivery; failed T5c reviewer runs and T5c-only manual permission do NOT constitute T2b approval.
+T2b remains in progress pending that result and cohesive <=5-file commits; T6 and final actual-model evaluation remain next. No push/PR/merge.
+
+### L32 — T2b independent verifier unavailable; retain green deterministic evidence
+
+Independent verifier `mvr3l8u7-6-exyq` failed with exact result `Subagent gentle-ai-verify failed: assistant reported an error`. Parent read the delivered result once: no verdict, findings, executed-command results or evidence returned. This is missing independent proof, not an implementation rejection or approval. No automatic retry or alternative reviewer invocation.
+Preserve L31's worker GREEN evidence and parent's four-case DB spot-check; these remain valid deterministic checks but do not become independent approval. T2b remains uncommitted; current source/tests and staged intended topic-test file preserved. Parent git diff --check exit0; no further functional tests/full/corpus run in this continuation.
+Needs owner decision: explicitly accept the already-observed parent manual/source/DB verification as the alternative route for T2b (as previously chosen for T5c, but not inferred for a different unit), or obtain independent human review and supply its result. No new verification ceremony or third reviewer is proposed. T6 remains pending in order; full actual-model evaluation remains required after T6 with credentials still absent as last observed.
+
+### L33 — owner accepts observed manual T2b verification; local delivery
+
+Owner selected «Aceptar la verificación manual de T2b» (token `accept_observed_manual_verification_for_t2b`). Presented consequences: «Tomar la revisión de código y las pruebas ya observadas como alternativa a la revisión independiente no disponible; guardar los commits locales y seguir con T6. No implica aprobación independiente ni prueba del modelo real.»
+This explicitly resolves L32 without inventing an independent verdict or real-model proof. Preserve all observed GREEN/RED evidence, no additional reviewer or repeat suite for the unchanged candidate. Delivery plan: (1) optional topic-source eligibility helper plus DB guard tests; (2) topic routing/orchestration plus unit and below-cutoff DB regressions; (3) soft kb_miss activity plus vocabulary/history tests. Each commit <=5 files, cohesive code/tests/docs, no working-source discard or rewrite; stage only appropriate hunks. Record exact observed commit IDs. Then T6; actual-model evaluation still required afterward. No push/PR/merge.
