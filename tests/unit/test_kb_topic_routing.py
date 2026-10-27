@@ -22,6 +22,21 @@ TOPIC_CASES = [
 ]
 
 
+def test_schedule_terms_are_recognised_without_a_question_mark():
+    """S4/T4: the measured sentence that used to be stored as the name."""
+    assert respond.asks_about_schedule(
+        "carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber"
+    )
+    assert respond.asks_about_schedule("¿atienden los domingos?")
+
+
+def test_location_and_other_answers_are_not_schedule_questions():
+    """T5/T5a and plain answers must keep landing in capture."""
+    assert not respond.asks_about_schedule("estoy en providencia")
+    assert not respond.asks_about_schedule("vivo en ñuñoa")
+    assert not respond.asks_about_schedule("cuanto cuesta la mantención")
+
+
 def test_topic_map_routes_s2_questions_to_seeded_document_ids():
     for question, expected in TOPIC_CASES:
         assert respond.topic_document_ids(question) == expected

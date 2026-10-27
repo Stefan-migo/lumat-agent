@@ -70,6 +70,26 @@ def _normalise_topic_text(text: str) -> str:
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
+# S4/T4: the schedule and coverage terms a customer uses to ASK about opening
+# hours or weekend visits. Deliberately narrower than the topic map below: the
+# location terms (`comuna`, `vivo en`, `estoy en`) belong to capture answers, and
+# treating them as questions would divert the coverage scenarios away from
+# capture.
+_SCHEDULE_TERMS = ("sabado", "domingo", "festivo", "horario", "atienden", "cobertura")
+
+
+def asks_about_schedule(question: str) -> bool:
+    """True when the turn names a schedule or weekend-attention term (T4).
+
+    `capture` is dispatched before any answer path, so a customer who asks
+    "dime altiro si atienden sabado" while the bot is collecting data used to be
+    read as an answer to the pending field and never got an answer. This is the
+    deterministic signal for that case, without touching the classifier prompt.
+    """
+    words = set(re.findall(r"[a-z0-9]+", _normalise_topic_text(question)))
+    return any(term in words for term in _SCHEDULE_TERMS)
+
+
 def topic_document_ids(question: str) -> list[str]:
     """Return seeded KB document source IDs matching this turn, in fixed topic order."""
     normalized = _normalise_topic_text(question)

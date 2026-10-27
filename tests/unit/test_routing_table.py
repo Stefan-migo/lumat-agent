@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.chat.nodes.orchestrate import _dispatch, is_tool_whitelisted
+from app.chat.nodes.orchestrate import _dispatch, is_tool_whitelisted, orchestrate
+from app.chat.state import ConversationState
 
 
 # --- escalate flag -> handoff (escalation), reason preserved -----------------
@@ -221,3 +222,61 @@ def test_mid_capture_question_shape_answers_then_resumes(intent):
 
 def test_a_statement_with_a_capture_intent_stays_a_field_answer():
     assert _dispatch("calefont", mid_capture=True, question=False) == {"next_step": "capture"}
+
+
+# --- S4/T4: a schedule question without "?" is answered, then capture resumes ----
+
+
+def _capture_state(text, *, pending=("name",), extracted=None, intent="solicitar_visita"):
+    return ConversationState(
+        customer_id=1,
+        conversation_id=1,
+        phone="+56912345678",
+        intent=intent,
+        captured={"_pending": list(pending), "_asked": {pending[0]: 1}} if pending else {},
+        extracted=extracted or {},
+        window=[{"id": 1, "text": text}],
+    )
+
+
+def test_a_schedule_question_without_a_question_mark_is_answered_and_resumes():
+    """Measured on `simple-horario-sabado`: no "?", and the name was extracted.
+
+    The old `_is_question` required both a "?" and an empty extraction, so the
+    sentence was stored as the name and the Saturday question went unanswered.
+    """
+    state = _capture_state(
+        "carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber",
+        extracted={"name": "carlos"},
+    )
+
+    assert orchestrate(state) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_a_location_statement_mid_capture_stays_a_field_answer():
+    """T5/T5a: `estoy en providencia` answers the commune, it does not ask."""
+    assert orchestrate(_capture_state("no era calefont, es una caldera, y estoy en providencia")) == {
+        "next_step": "capture"
+    }
+
+
+def test_a_plain_answer_mid_capture_stays_a_field_answer():
+    assert orchestrate(_capture_state("carlos")) == {"next_step": "capture"}
+
+
+def test_a_greeting_mid_capture_is_not_a_schedule_question():
+    assert orchestrate(_capture_state("hola, buenas")) == {"next_step": "capture"}
+
+
+def test_a_first_turn_schedule_mention_keeps_starting_the_capture():
+    """Known limit: this rule answers mid-capture turns, not the opening one."""
+    state = _capture_state(
+        "necesito una visita, el calefont no calienta. vivo en ñuñoa y solo puedo un sabado",
+        pending=(),
+    )
+
+    assert orchestrate(state) == {"next_step": "capture"}

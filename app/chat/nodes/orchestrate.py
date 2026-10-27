@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 
 from app.chat.nodes.capture import is_social_only
+from app.chat.nodes.respond import asks_about_schedule
 from app.chat.state import ConversationState
 
 logger = logging.getLogger(__name__)
@@ -126,15 +127,25 @@ def is_tool_whitelisted(whitelist: tuple[str, ...] | list[str] | None, tool: str
 
 
 def _is_question(state: ConversationState) -> bool:
-    """A mid-capture message that asks something (S16).
+    """A mid-capture message that asks something (S16, S4/T4).
 
     A question mark is the deterministic signal the classifier contract honours.
     Two guards keep answers in the capture flow: extraction (an answer phrased as
     a question, "¿puede ser el sábado?") and the social set (a greeting like
     "Hola, ¿cómo estás?" is answered by capture, never sent to retrieval).
+
+    S4/T4 adds the measured shape that those guards missed: "carlos. pero dime
+    altiro si atienden sabado, eso es lo que necesito saber" has no question mark
+    and yields an extracted name, so it was stored as the name and the Saturday
+    question went unanswered. Naming a schedule or coverage term is enough to
+    answer it and then resume the capture.
     """
     text = (state.window[-1].get("text") or "") if state.window else ""
-    return "?" in text and not state.extracted and not is_social_only(text)
+    if is_social_only(text):
+        return False
+    if "?" in text and not state.extracted:
+        return True
+    return asks_about_schedule(text)
 
 
 def orchestrate(state: ConversationState) -> dict:

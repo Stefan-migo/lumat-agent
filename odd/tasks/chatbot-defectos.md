@@ -821,3 +821,16 @@ Remaining failures, by owner of the problem:
 3. `complejo-dos-temas` — the bot answers both topics correctly from the KB; the corpus expects a `persona` derivation instead. Product/corpus decision, not a KB miss.
 4. `complejo-no-quiere-email` — S6 behavior now correct (refusal honoured, email never re-asked); the gates still demand `human` plus `booking_unavailable`/`persona`, unreachable with four turns and the current capture order. Product/corpus decision.
 Generated evaluation artifacts under `odd/evals/` are untracked; they are evidence for review, and committing them is a delivery decision, not done here. No push/PR/merge.
+
+### L45 — T4/S4: a schedule question is answered mid-capture; corpus now 11/14
+
+Owner chose to continue with T4 instead of closing, and to commit the `.md` evaluation artifacts as evidence (`4996fb4d`).
+Read-only exploration (delegated) established the mechanism: `capture` is dispatched before any answer path, and `orchestrate._is_question` required both a `?` and an empty extraction. The measured failing turn — «carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber» — has neither, so it was stored as the name and the Saturday question was never answered.
+Change, kept inside chat nodes to avoid the classifier shape surface: `respond.asks_about_schedule()` reuses the existing topic normaliser with schedule-only terms (`sabado`, `domingo`, `festivo`, `horario`, `atienden`, `cobertura`); `orchestrate._is_question` returns true for those terms even with an extracted field, which routes the turn through the existing research→resume edge. Location terms (`comuna`, `vivo en`, `estoy en`) were deliberately excluded so the coverage scenarios keep landing in capture. No prompt, corpus or seed-document change.
+RED/GREEN observed: with `respond.py` and `orchestrate.py` stashed, the new tests failed (missing predicate, wrong dispatch); both files were restored byte-identical (`cmp`) and the rerun passed. GREEN: routing+topic unit52cases; `quick` exit0/100%; shape exit0/no shape surfaces; diff check exit0.
+Real-model evidence (deepseek-chat, gates only, `--reset`):
+- job18, four scenarios, **4/4 pass**: `simple-horario-sabado` now passes and `complejo-agendar-calefont`, `complejo-fuera-de-cobertura-insiste`, `super-burst-contradiccion` still pass.
+- job19, `complejo-agendar-calefont` two more runs: both pass, so 3/3 against the 2/3 baseline that T4 names.
+- job19 full corpus: **11 of 14** (was10). Failing: `simple-precio-calefont` G6, `complejo-dos-temas` G1+G10, `complejo-no-quiere-email` G1+G10. Those three remain the owner-decision set from L44; nothing was changed to make them pass.
+Juez sigue ausente (`--no-judge`), así que las dimensiones cualitativas siguen sin medirse. Artifacts: `odd/evals/conv-eval-t4-schedule-answers.*`, `conv-eval-t4-agendar-{2,3}.*`, `conv-eval-t4-full.*`.
+A full-suite run is required again because code changed after the earlier closure; it is launched after the commits. No push/PR/merge.
