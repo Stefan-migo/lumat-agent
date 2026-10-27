@@ -402,10 +402,12 @@ export function AssistantCapabilitiesView({ capabilities }: { capabilities: Assi
   </div>;
 }
 
-function ConductOrderEditor({ order, options, onChange }: {
+function ConductOrderEditor({ order, questions, options, onChangeOrder, onChangeQuestion }: {
   order: string[];
+  questions: Record<string, string>;
   options: SettingsData["conduct"]["options"];
-  onChange: (order: string[]) => void;
+  onChangeOrder: (order: string[]) => void;
+  onChangeQuestion: (field: string, question: string) => void;
 }) {
   const label = (value: string) => options.fields.find((field) => field.value === value)?.label ?? value;
   const move = (index: number, delta: number) => {
@@ -413,23 +415,41 @@ function ConductOrderEditor({ order, options, onChange }: {
     if (target < 0 || target >= order.length) return;
     const next = [...order];
     [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
+    onChangeOrder(next);
+  };
+  const remove = (field: string) => {
+    if (order.length > 1) onChangeOrder(order.filter((each) => each !== field));
   };
   const remaining = options.fields.filter((field) => !order.includes(field.value));
 
-  return <div className="settings-conduct__order">
-    <ol className="settings-conduct__list">
-      {order.map((field, index) => <li className="settings-conduct__item" key={field}>
-        <span className="settings-conduct__label">{label(field)}</span>
-        <div className="settings-conduct__actions">
-          <Button variant="tertiary" aria-label={`Subir ${label(field)}`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden="true" /></Button>
-          <Button variant="tertiary" aria-label={`Bajar ${label(field)}`} disabled={index === order.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden="true" /></Button>
-          <Button variant="tertiary" aria-label={`Quitar ${label(field)}`} disabled={order.length === 1} onClick={() => onChange(order.filter((each) => each !== field))}><Trash2 aria-hidden="true" /></Button>
-        </div>
-      </li>)}
-    </ol>
+  return <div className="settings-conduct__table-wrap">
+    <table className="settings-conduct__table">
+      <thead><tr><th scope="col">#</th><th scope="col">Campo</th><th scope="col">Pregunta al cliente</th><th scope="col"><span className="visually-hidden">Acciones</span></th></tr></thead>
+      <tbody>{order.map((field, index) => {
+        const fieldLabel = label(field);
+        const action = (value: string) => {
+          if (value === "up") move(index, -1);
+          else if (value === "down") move(index, 1);
+          else if (value === "remove") remove(field);
+        };
+        return <tr key={field}>
+          <td className="settings-conduct__number">{index + 1}</td>
+          <th scope="row">{fieldLabel}</th>
+          <td><Textarea label={fieldLabel} rows={2} value={questions[field] ?? ""} onChange={(event) => onChangeQuestion(field, event.target.value)} /></td>
+          <td><div className="settings-conduct__actions">
+            <Button variant="tertiary" aria-label={`Subir ${fieldLabel}`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden="true" /></Button>
+            <Button variant="tertiary" aria-label={`Bajar ${fieldLabel}`} disabled={index === order.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden="true" /></Button>
+            <Menu label={`Acciones de ${fieldLabel}`} ariaLabel={`Acciones de ${fieldLabel}`} trigger="icon" align="end" items={[
+              { value: "up", label: "Subir", disabled: index === 0 },
+              { value: "down", label: "Bajar", disabled: index === order.length - 1 },
+              { value: "remove", label: "Quitar", disabled: order.length === 1, tone: "danger" },
+            ]} onSelect={action} />
+          </div></td>
+        </tr>;
+      })}</tbody>
+    </table>
     {remaining.length ? <div className="settings-conduct__add">
-      <Menu label="Agregar campo" ariaLabel="Agregar campo" showChevron items={remaining.map((field) => ({ value: field.value, label: field.label }))} onSelect={(value) => onChange([...order, value])} />
+      <Menu label="Agregar campo" ariaLabel="Agregar campo" showChevron items={remaining.map((field) => ({ value: field.value, label: field.label }))} onSelect={(value) => onChangeOrder([...order, value])} />
     </div> : null}
   </div>;
 }
@@ -775,31 +795,24 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </div>
         </> : null}
         {active === "conduct" ? <>
-          <Card title="Conducta de la conversación" description="Qué datos pide el bot, en qué orden y cuándo deriva a una persona." icon={SlidersHorizontal} headerAction={data.conduct?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>
-            <h3 className="settings-conduct__title">Orden de captura</h3>
-            <p className="settings-agent__helper">Un campo que quitas no se vuelve a preguntar. El nombre, el correo y la dirección van siempre después de la disponibilidad.</p>
-            <ConductOrderEditor order={draft.conduct.orden} options={data.conduct.options} onChange={(orden) => update("conduct", { ...draft.conduct, orden })} />
+          <Card title="Datos y preguntas" description="Define el orden y edita lo que recibe el cliente en cada paso." icon={SlidersHorizontal} headerAction={<Badge tone={data.conduct?.customized ? "success" : "neutral"}>{draft.conduct.orden.length} datos</Badge>}>
+            <ConductOrderEditor
+              order={draft.conduct.orden}
+              questions={draft.captureQuestions}
+              options={data.conduct.options}
+              onChangeOrder={(orden) => update("conduct", { ...draft.conduct, orden })}
+              onChangeQuestion={(field, question) => update("captureQuestions", { ...draft.captureQuestions, [field]: question })}
+            />
+            <p className="settings-conduct__info"><Info aria-hidden="true" /><span><span>Nombre, correo y dirección se solicitan después de la disponibilidad.</span><span>Si quitas un dato, el bot deja de preguntarlo.</span></span></p>
             <div className="settings-conduct__row">
               <span className="settings-conduct__row-label">Preguntas por mensaje</span>
-              <Menu label={String(draft.conduct.max_preguntas_por_mensaje)} ariaLabel="Preguntas por mensaje" showChevron items={data.conduct.options.max_preguntas_por_mensaje.map((value) => ({ value: String(value), label: value === 1 ? "Una pregunta" : `${value} preguntas` }))} onSelect={(value) => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Number(value) })} />
+              <div className="settings-conduct__stepper" role="group" aria-label="Preguntas por mensaje">
+                <Button variant="tertiary" aria-label="Disminuir preguntas por mensaje" disabled={draft.conduct.max_preguntas_por_mensaje <= Math.min(...data.conduct.options.max_preguntas_por_mensaje)} onClick={() => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Math.max(Math.min(...data.conduct.options.max_preguntas_por_mensaje), draft.conduct.max_preguntas_por_mensaje - 1) })}>−</Button>
+                <output className="settings-conduct__stepper-value" aria-live="polite">{draft.conduct.max_preguntas_por_mensaje}</output>
+                <Button variant="tertiary" aria-label="Aumentar preguntas por mensaje" disabled={draft.conduct.max_preguntas_por_mensaje >= Math.max(...data.conduct.options.max_preguntas_por_mensaje)} onClick={() => update("conduct", { ...draft.conduct, max_preguntas_por_mensaje: Math.min(Math.max(...data.conduct.options.max_preguntas_por_mensaje), draft.conduct.max_preguntas_por_mensaje + 1) })}>+</Button>
+              </div>
+              <span className="settings-conduct__helper">Los textos se envían tal como están escritos.</span>
             </div>
-            <fieldset className="settings-conduct__derivaciones">
-              <legend>Derivar a una persona cuando</legend>
-              {data.conduct.options.derivaciones.map((rule) => <label className="settings-conduct__check" key={rule}>
-                <input type="checkbox" checked={draft.conduct.derivaciones.includes(rule)} onChange={(event) => update("conduct", {
-                  ...draft.conduct,
-                  derivaciones: event.target.checked ? [...draft.conduct.derivaciones, rule] : draft.conduct.derivaciones.filter((each) => each !== rule),
-                })} />
-                <span>{DERIVACION_LABELS[rule] ?? rule}</span>
-              </label>)}
-            </fieldset>
-            <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
-            <div className="settings-agent__footer">{footer("Los cambios se aplican al siguiente mensaje.")}<Button disabled={saving("conduct") || !draft.conduct.orden.length} onClick={() => void saveConduct()}>Guardar conducta</Button></div>
-          </Card>
-          <Card title="Preguntas de captura" description="El texto exacto que recibe el cliente para cada dato. Se envía tal cual: sin llaves.">
-            <p className="settings-agent__helper">El orden lo define la tarjeta de arriba. Guarda el orden antes de editar los textos.</p>
-            {Object.entries(draft.captureQuestions).map(([field, text]) => <Textarea key={field} label={data.conduct.options.fields.find((each) => each.value === field)?.label ?? field} rows={2} value={text} onChange={(event) => update("captureQuestions", { ...draft.captureQuestions, [field]: event.target.value })} />)}
-            <div className="settings-agent__footer">{footer("El cliente recibe este texto literal.")}<Button disabled={saving("captureQuestions") || Object.values(draft.captureQuestions).some((value) => !value.trim() || value.includes("{{") || value.includes("}}"))} onClick={() => void saveCaptureQuestions()}>Guardar preguntas</Button></div>
           </Card>
           <Card title="Derivaciones" description="Todos los textos deterministas que recibe el cliente en las derivaciones, agenda, visitas y captura.">
             <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los cinco casos específicos se muestran primero.</p>
@@ -824,6 +837,17 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               </div>
             </Accordion>)}
             <div className="settings-agent__footer">{footer("El cliente recibe este texto tal cual.")}{footer()}<Button disabled={saving("replyTexts") || !replyTextsValid} onClick={() => void saveReplyTexts()}>Guardar respuestas</Button></div>
+            <fieldset className="settings-conduct__derivaciones">
+              <legend>Derivar a una persona cuando</legend>
+              {data.conduct.options.derivaciones.map((rule) => <label className="settings-conduct__check" key={rule}>
+                <input type="checkbox" checked={draft.conduct.derivaciones.includes(rule)} onChange={(event) => update("conduct", {
+                  ...draft.conduct,
+                  derivaciones: event.target.checked ? [...draft.conduct.derivaciones, rule] : draft.conduct.derivaciones.filter((each) => each !== rule),
+                })} />
+                <span>{DERIVACION_LABELS[rule] ?? rule}</span>
+              </label>)}
+            </fieldset>
+            <p className="settings-agent__helper">Solo se muestran las reglas que el bot ya aplica. Si apagas la cobertura, una comuna fuera de la lista queda sin salida a un asesor.</p>
           </Card>
         </> : null}
         {active === "messages" ? <>

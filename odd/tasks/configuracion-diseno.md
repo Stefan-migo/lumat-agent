@@ -127,9 +127,10 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 | --- | --- | --- | --- |
 | T1 | S1 S2 S3 S4 | writer | `feat(settings): sistema visual y Agente con barra de guardado sticky` |
 | T2 | S5 | writer | `feat(settings): persona con vista previa markdown y ampliar` |
-| T3 | S6 | writer | `feat(settings): conducta con tabla de datos y editor de derivaciones` |
-| T4 | S7 | writer | `feat(settings): mensajes con buscador y vista previa en el editor` |
-| T5 | S1–S7 | inline | verificación final: `npm run build` + `npm test` |
+| T3 | S6.1–S6.4 | writer | `feat(settings): conducta con tabla de datos y preguntas` |
+| T4 | S6.5–S6.6 | writer | `feat(settings): conducta con editor de derivaciones y vista previa` |
+| T5 | S7 | writer | `feat(settings): mensajes con buscador y vista previa en el editor` |
+| T6 | S1–S7 | inline | verificación final: `npm run build` + `npm test` |
 
 ## Log
 
@@ -141,6 +142,8 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
   cambio es visual, de composición y de estado de guardado. El análisis previo
   `odd/analysis/configuracion/findings.md` sigue siendo válido como inventario, pero varias filas
   (`configuracion-016` HelpPanel, `018` MessagePreview, `021` header action) ya están resueltas.
-- L5 (orquestador, re-secuenciación): S4 se implementa junto a S1–S3 en T1, porque el sistema
-  visual (barra sticky y tarjetas con `?`) solo se puede probar de punta a punta sobre una sección
-  migrada. Los slices restantes quedan como S5, S6 y S7, uno por pantalla.
+- L5 (orquestador, re-secuenciación): S4 se implementa junto a S1–S3 en T1, porque el sistema visual
+  (barra sticky y tarjetas con `?`) solo se puede probar de punta a punta sobre una sección migrada.
+- L6 (orquestador, re-secuenciación 2): S6 se entrega en dos slices —la tabla `Datos y preguntas`
+  (S6.1–S6.4) y el editor `Derivaciones y respuestas` (S6.5–S6.6)— porque juntos pasaban de 400
+  líneas en un solo commit y mezclaban dos concerns revisables por separado.
