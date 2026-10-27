@@ -810,3 +810,14 @@ Live re-measure (job16, real deepseek-chat, `--only complejo-no-quiere-email --n
 Environment trap re-confirmed: running the test suites clears the customer KB, so the next evaluation is refused by preflight until `scripts/seed_kb_docs.py --apply` runs again. This time it was caught by the guard, not by a wrong measurement.
 Also observed in that transcript: the bot asked `¿Qué equipo es?` twice and then advanced, so `equipment` ends filled without a customer answer. Not touched here; recorded as an observation, not fixed inside S6.
 The re-measure run is not citable as a baseline because the working tree was dirty (fix uncommitted); the report says so itself.
+
+### L44 — full corpus after the S6 fix: still 10/14, with the same four scenarios
+
+Run job17 over committed `a70ffd59`, real `deepseek-chat`, gates only, `--reset`, run-tag `chatbot-defectos-final2`: **10 of 14 pass**, same failing set (`simple-precio-calefont` G6, `simple-horario-sabado` G6, `complejo-dos-temas` G1+G10, `complejo-no-quiere-email` G1+G10). Artifacts: `odd/evals/conv-eval-chatbot-defectos-final2.{json,md}` plus generated transcript files.
+That is the honest reading: the S6 fix changes the live conversation (email no longer re-asked, verified in L43) but does not move these gates, because reaching `human` there needs the address, the consent step and a booking attempt inside four scripted turns. The count did not improve and is not reported as an improvement.
+Remaining failures, by owner of the problem:
+1. `simple-precio-calefont` — intent `valores` reaches the KB, which holds no prices, so the reply is `No tengo ese dato`. Prices live in the tariff; answering them belongs to the price/responder architecture noted as debt in L2, outside S1–S6.
+2. `simple-horario-sabado` — capture asks name/email without answering the Saturday question: the pending S4/T4 residue, already out of this feature's T5c/T2b/T6 scope.
+3. `complejo-dos-temas` — the bot answers both topics correctly from the KB; the corpus expects a `persona` derivation instead. Product/corpus decision, not a KB miss.
+4. `complejo-no-quiere-email` — S6 behavior now correct (refusal honoured, email never re-asked); the gates still demand `human` plus `booking_unavailable`/`persona`, unreachable with four turns and the current capture order. Product/corpus decision.
+Generated evaluation artifacts under `odd/evals/` are untracked; they are evidence for review, and committing them is a delivery decision, not done here. No push/PR/merge.
