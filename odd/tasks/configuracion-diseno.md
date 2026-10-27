@@ -143,8 +143,8 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 
 | T7 | S8.1 | inline, done | `96b08129`; Persona follow-up; PR #692 slice |
 | T8 | S8.2 | inline, done | `e594b824`; Derivations follow-up; PR #694 slice |
-| T9 | S8.3 | inline, done | Messages follow-up; PR #696 slice |
-| T10 | S8 | inline, in progress | Build, frontend suite and browser verification |
+| T9 | S8.3 | inline, done | `bac3ca37`; Messages follow-up; PR #696 slice |
+| T10 | S8 | inline, done | L16–L17: build, 93 focused tests, 1310 full-suite tests, browser and pushes |
 
 ## Log
 
@@ -232,3 +232,5 @@ el panel derecho esta bien. pero se podria mejorar la version de la vista previa
 - L15 (T9 evidence): RED sidebar repeated 12 fixed-message badges vs required one in detail; GREEN compact list/search/draft unit test. Browser all 11 rows 36px/nowrap, drafts preserved, multiline preview uses pre-wrap. Browser mobile RED two columns (late S7 desktop CSS overwrote earlier mobile rule); GREEN one column, detail visible at 390px, no horizontal overflow at 900/390px. WhatsApp visual checked in screenshots; test harness maps production logo URL to existing public asset for Storybook. Graph: Settings.tsx imports MessagePreview(), which imports Avatar(); shared components left unchanged. Risk: none, local selectors only.
 
 - L16 (final functional gates): npm ci exit 0; first npm run build exit 1 (new test used unsupported Testing Library ByRoleOptions.exact), removed option; corrected npm run build exit 0 (tsc -b + Vite, chunk-size warning); focused Settings + stories 93/93, exit 0; npm test 1310/1310 across 112 files, exit 0 (117.94s). Native assessment medium, reviewDue=false; no native review started. npm ci reports 11 vulnerabilities (4 moderate, 3 high, 4 critical); dependency remediation is outside this visual scope, lockfile unchanged. Delivery pending normal pushes of #692/#693/#694/#696.
+
+- L17 (delivery evidence): all normal pushes succeeded (job-18, exit 0): #692 `96b08129`, #693 `2c400288` (merge), #694 `e594b824`, #696 `bac3ca37`. Changes propagated upward only, no rebase/force-push/main merge. T7–T10 complete; this documentation-only commit records final hashes and checks. Remaining unrelated observations: existing capture-table mobile overflow and dependency audit warnings.
