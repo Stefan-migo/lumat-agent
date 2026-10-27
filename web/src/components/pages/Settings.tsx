@@ -789,17 +789,18 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </div>
         </> : null}
         {active === "persona" ? <>
-          <Card title="Persona del asistente" description="Estas instrucciones se aplican en el siguiente mensaje." icon={UserRound} headerAction={<div className="settings-persona__header-actions">{data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}<Button variant="tertiary" onClick={() => setPersonaDialogOpen(true)}><Maximize2 aria-hidden="true" />Ampliar</Button></div>}>
+          <Card className="settings-persona" title="Persona del asistente" description="Estas instrucciones se aplican en el siguiente mensaje." icon={UserRound} headerAction={<div className="settings-persona__header-actions">{data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}</div>}>
             <div className="settings-persona__content">
-              <div className="settings-persona__toolbar">
+              <div className="settings-persona__toolbar" role="toolbar" aria-label="Herramientas de persona">
                 <div className="settings-persona__segments" role="group" aria-label="Modo de edición de la persona">
                   <Button variant={personaMode === "preview" ? "secondary" : "tertiary"} aria-pressed={personaMode === "preview"} onClick={() => setPersonaMode("preview")}><Eye aria-hidden="true" />Vista previa</Button>
                   <Button variant={personaMode === "edit" ? "secondary" : "tertiary"} aria-pressed={personaMode === "edit"} onClick={() => setPersonaMode("edit")}><Pencil aria-hidden="true" />Editar Markdown</Button>
                 </div>
+                <Button variant="tertiary" onClick={() => setPersonaDialogOpen(true)}><Maximize2 aria-hidden="true" />Ampliar</Button>
               </div>
               {personaMode === "preview" ? <div className="settings-persona__preview" role="region" aria-label="Vista previa del documento Markdown"><Markdown content={draft.persona.orchestrator} /></div>
                 : <Textarea label="Texto de la persona" rows={18} value={draft.persona.orchestrator} onChange={(event) => update("persona", { ...draft.persona, orchestrator: event.target.value })} />}
-              <p className="settings-persona__info"><Info aria-hidden="true" />Los datos del cliente se agregan automáticamente. No incluyas variables como <code>{"{{nombre}}"}</code>.</p>
+              <p className="settings-persona__info"><Info aria-hidden="true" /><span>Los datos del cliente se agregan automáticamente. No incluyas variables como <code>{"{{nombre}}"}</code>.</span></p>
             </div>
           </Card>
           <Card title="Instrucción de brevedad" description="Se utiliza cuando queda poco presupuesto de conversación." icon={FileText}>
@@ -836,10 +837,11 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             <div className="settings-replies">
               <nav className="settings-replies__list" aria-label="Situaciones de respuesta">
                 <SearchInput aria-label="Buscar situación" placeholder="Buscar situación" delay={0} onSearch={setReplySearch} />
-                <h3>Casos de derivación</h3>
-                <ul>{visibleDerivationCases.map(({ key, label }) => <li key={key}>
-                  <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><FileText aria-hidden="true" />{label}</Button>
-                </li>)}</ul>
+                {visibleDerivationCases.length ? <Accordion title="Casos de derivación" count={visibleDerivationCases.length} defaultExpanded>
+                  <ul>{visibleDerivationCases.map(({ key, label }) => <li key={key}>
+                    <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><FileText aria-hidden="true" />{label}</Button>
+                  </li>)}</ul>
+                </Accordion> : null}
                 {visibleReplyGroups.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
                   <ul>{group.keys.map((key) => <li key={key}>
                     <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}>{REPLY_TEXT_LABELS[key] ?? key}</Button>
