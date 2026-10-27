@@ -292,6 +292,7 @@
 .settings-replies__list .btn:focus-visible, .settings-replies__slots .btn:focus-visible, .settings-replies__toggle input:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .settings-replies__list .accordion { border-top: 1px solid var(--border); }
 .settings-replies__list .accordion__panel { padding: 0 var(--space-2) var(--space-2); }
+.settings-replies__list .accordion__panel .btn > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .settings-replies__detail > header { display: grid; gap: var(--space-1); }
 .settings-replies__detail > header h3, .settings-replies__detail > header p { margin: 0; }
 .settings-replies__detail > header h3 { font-size: var(--text-md); }

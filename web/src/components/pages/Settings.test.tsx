@@ -82,6 +82,58 @@ async function selectSection(user: ReturnType<typeof userEvent.setup>, label: st
 }
 
 describe("Settings", () => {
+  it("uses contextual decorative icons for all five derivation cases", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    for (const [label, icon] of [
+      ["Comuna sin cobertura", "map-pin-off"], ["Pide hablar con una persona", "headset"],
+      ["Tres mensajes sin entender", "message-circle-question-mark"],
+      ["Un dato no se logró tomar", "clipboard-x"], ["No hay horarios para agendar", "calendar-x"],
+    ]) {
+      const button = within(nav).getByRole("button", { name: label });
+      expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      await user.click(button);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("heading", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("shows a contextual icon on each option inside all four reply accordions", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const groups = [
+      { title: "Agendar", entries: [
+        ["Oferta de horarios", "calendar-days"], ["Sin más horarios para ese día", "calendar-x"],
+        ["No se entendió el horario pedido", "circle-help"], ["Visita agendada", "calendar-check"],
+      ] },
+      { title: "Gestionar una visita", entries: [
+        ["No tiene visitas", "calendar-x"], ["Confirmar la cancelación", "circle-help"],
+        ["Elegir una visita", "list-checks"], ["Ofrecer nuevos horarios", "calendar-days"],
+        ["La visita ya pasó", "history"], ["No se entendió la visita", "calendar-search"],
+        ["No se entendió el horario", "circle-help"], ["La visita sigue igual", "calendar-check"],
+        ["Sin horarios para reagendar", "calendar-x"], ["Visita reagendada", "calendar-clock"],
+        ["Pedir confirmación para cancelar", "circle-help"], ["No se puede cancelar", "ban"],
+        ["Visita cancelada", "calendar-x"],
+      ] },
+      { title: "Derivar a una persona", entries: [["Derivación a un asesor", "headset"]] },
+      { title: "Captura", entries: [["Pedir evidencia", "camera"], ["Pedir consentimiento", "shield-check"]] },
+    ];
+    for (const { title, entries } of groups) {
+      await user.click(within(nav).getByRole("button", { name: new RegExp(title) }));
+      for (const [label, icon] of entries) {
+        const button = within(nav).getByRole("button", { name: label });
+        expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
+        expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      }
+    }
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+  });
+
   it("groups specific derivation cases in a collapsible list separate from generic handoff", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
