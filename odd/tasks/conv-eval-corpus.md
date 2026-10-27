@@ -125,7 +125,8 @@ Verificación de esta entrada: `uv run pytest tests/unit/test_conv_eval.py` **12
 
 ## Entrega
 
-Dos PR encadenados, como la feature anterior:
+Un PR con dos slices, como terminó siendo la feature anterior (el doc decía dos PR encadenados; en la
+práctica el segundo slice es evidencia generada y viaja con el mismo PR, separado en el cuerpo):
 
 1. **El instrumento y el corpus** (`3d7efd73`, `4f36c6ed`, `91c77bc2`, `bad00f1a`): el gate
    `causes_required`, el tier `simple` scripted puro, el guion de `horario-sábado`, los cinco `expect`
@@ -275,3 +276,22 @@ Los commits posteriores al `full` solo agregan reportes generados y este documen
 - **Los seis escenarios que nunca pasan son tareas del bot**, no del instrumento: precio, `kb_miss` de
   retrieval, pedir datos antes de responder, insistir en un dato rechazado, rechazo por comuna, despedida y
   el evento `escalation` de la emergencia.
+
+### L6 — main volvió a moverse antes de publicar: la captura se reescribió (#682, #683)
+
+Al ir a publicar, `origin/main` estaba **11 commits adelante** (`9f39b79b`): los PR **#682** y **#683**, que
+reescriben la captura del chat —`app/chat/nodes/capture.py`, `app/chat/nodes/handoff.py` y un
+`app/chat/phrasing.py` nuevo: el modelo redacta las preguntas de captura detrás de un validador, el
+consentimiento pasa por un gate y se respetan las respuestas cortas—. Es exactamente el área de buena parte
+de los seis escenarios que nunca pasan: pedir todos los datos antes de responder, insistir en el correo
+rechazado, el rechazo por comuna.
+
+Sin maquillaje: **el trío de L5 mide `737d644a`, que ya no es el árbol que se entrega.** Se mergeó `main`
+(`b85bef60`) y se corrió `full`; el trío se rehace sobre el árbol publicado y su evidencia llega como commit
+aparte. Lo que se entrega ahora es el instrumento y el corpus alineados, con el número de L5 fechado y
+sellado, no un "estado del bot" sin fecha.
+
+La lección, y ya es la segunda vez en la sesión: **este repo mueve `main` más rápido de lo que tarda una
+serie de tres corridas (≈80 minutos).** Antes de cada serie: `git fetch`; si `main` se movió, decidir
+explícitamente si se mide igual —sellando el snapshot— o se rehace. Y por eso el follow-up de
+`compare_runs` importa: hoy un diff entre árboles distintos se ve idéntico a un diff entre el mismo árbol.
