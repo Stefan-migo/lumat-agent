@@ -561,14 +561,36 @@ describe("Settings", () => {
       }),
     })));
   });
-  it("reorders the capture fields and saves the conduct object", async () => {
+  it("renders ordered capture fields and their inline questions in the Datos y preguntas table", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    const card = screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card") as HTMLElement;
+    expect(within(card).getByText("Define el orden y edita lo que recibe el cliente en cada paso.")).toBeInTheDocument();
+    expect(within(card).getByText("3 datos")).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "#" })).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "Campo" })).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "Pregunta al cliente" })).toBeInTheDocument();
+    const rows = within(card).getAllByRole("row");
+    expect(rows.slice(1).map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Problema"), expect.stringContaining("Comuna"), expect.stringContaining("Nombre"),
+    ]);
+    expect(within(card).getByLabelText("Problema")).toHaveValue("¿Qué pasa con el equipo?");
+    expect(within(card).getByLabelText("Comuna")).toHaveValue("¿En qué comuna estás?");
+    expect(within(card).getByLabelText("Nombre")).toHaveValue("¿Cuál es tu nombre?");
+    expect(within(card).queryByRole("button", { name: /^Guardar/ })).not.toBeInTheDocument();
+  });
+
+  it("reorders the table and saves the conduct order through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     await user.click(screen.getByRole("button", { name: "Bajar Problema" }));
-    await user.click(screen.getByRole("button", { name: "Guardar conducta" }));
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
       method: "POST",
@@ -576,7 +598,7 @@ describe("Settings", () => {
     })));
   });
 
-  it("saves the capture-question wording exactly as typed", async () => {
+  it("saves inline capture-question edits through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
@@ -585,21 +607,59 @@ describe("Settings", () => {
     const comuna = screen.getByLabelText("Comuna");
     expect(comuna).toHaveValue("¿En qué comuna estás?");
     fireEvent.change(comuna, { target: { value: "¿En qué comuna queda tu casa?" } });
-    await user.click(screen.getByRole("button", { name: "Guardar preguntas" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/capture-questions", expect.objectContaining({
       body: JSON.stringify({ questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna queda tu casa?", name: "¿Cuál es tu nombre?" } }),
     })));
   });
 
-  it("blocks a capture question that carries braces", async () => {
+  it("changes Preguntas por mensaje with the bounded stepper and saves conduct", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    expect(screen.getByText("Los textos se envían tal como están escritos.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Aumentar preguntas por mensaje" }));
+    expect(screen.getByText("2", { selector: ".settings-conduct__stepper-value" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aumentar preguntas por mensaje" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/conduct", expect.objectContaining({
+      body: JSON.stringify({ conduct: { orden: ["failure", "comuna", "name"], max_preguntas_por_mensaje: 2, derivaciones: ["cobertura"] } }),
+    })));
+  });
+
+  it("removes a capture field from the table through its kebab menu without removing the last field", async () => {
     const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "{{nombre}}, ¿cómo te llamas?" } });
+    await user.click(screen.getByRole("button", { name: "Acciones de Problema" }));
+    await user.click(screen.getByRole("menuitem", { name: "Quitar" }));
+    expect(screen.queryByLabelText("Problema")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card")).toHaveTextContent("2 datos");
 
-    expect(screen.getByRole("button", { name: "Guardar preguntas" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Acciones de Comuna" }));
+    await user.click(screen.getByRole("menuitem", { name: "Quitar" }));
+    await user.click(screen.getByRole("button", { name: "Acciones de Nombre" }));
+    expect(screen.getByRole("menuitem", { name: "Quitar" })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keeps capture-question validation and both capture-order rules in the card", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+
+    const card = screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card") as HTMLElement;
+    expect(within(card).getByText("Nombre, correo y dirección se solicitan después de la disponibilidad.")).toBeInTheDocument();
+    expect(within(card).getByText("Si quitas un dato, el bot deja de preguntarlo.")).toBeInTheDocument();
+    fireEvent.change(within(card).getByLabelText("Nombre"), { target: { value: "{{nombre}}, ¿cómo te llamas?" } });
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(await screen.findByText("Sintaxis no válida")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("saves one deterministic reply from its group under Conducta", async () => {
@@ -722,12 +782,13 @@ describe("Settings", () => {
       })));
     });
 
-    it("renders only the derivation rule that has a reader", async () => {
+    it("keeps the derivation rule checkbox inside the existing Derivaciones card", async () => {
       const user = userEvent.setup();
       render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
 
-      const rules = screen.getByRole("group", { name: "Derivar a una persona cuando" });
+      const card = screen.getByRole("heading", { name: "Derivaciones" }).closest(".card") as HTMLElement;
+      const rules = within(card).getByRole("group", { name: "Derivar a una persona cuando" });
 
       expect(within(rules).getAllByRole("checkbox")).toHaveLength(1);
       expect(within(rules).getByRole("checkbox", { name: "Comuna fuera de cobertura" })).toBeChecked();
