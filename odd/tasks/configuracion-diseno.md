@@ -121,6 +121,13 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 5. La sección Operación (`05-operacion-horarios.png`) queda fuera de esta entrega por decisión del
    owner; se trabaja después sobre el mismo sistema visual.
 
+### S8 — Owner visual follow-up (2026-10-27)
+
+1. Persona: “todo el "header" del card persona del asistente debe mejorar el layout, el original tiene el elayout roto, el boton ampliar no esta en el contenedor de los botones vista previa y editar. el estilo de los Botones Vista previa y Editar MD, no estan correctos mejorar. color del banner con el texto "Los datos del cliente se agregan automáticamente. No incluyas variables como
+{{nombre}}."”
+2. Conducta: “podriamos meter los casos de derivacion en un dropdown menu tambien. para que sigan todos la misma logica?” Presentation only: preserve specific cases and generic response as separate groups, use the existing accordion, initially expanded.
+3. Mensajes: “el actual muestra mucha informacion es un card de 3 o 4 lineas por mensaje del asistente. en la referencia es solo una linea. todo se explica en el panel derecho.” “el panel derecho esta bien. pero se podria mejorar la version de la vista previa. para crear algo mas estilo whtasapp como lo hace la ref.”
+
 ## Tasks
 
 | ID | Specs | Ruta | Commit |
@@ -130,6 +137,11 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 | T3 | S6 | writer | `feat(settings): conducta con tabla de datos y editor de derivaciones` |
 | T4 | S7 | writer | `feat(settings): mensajes con buscador y vista previa en el editor` |
 | T5 | S1–S7 | inline | verificación final: `npm run build` + `npm test` |
+
+| T7 | S8.1 | inline, done | Persona follow-up; PR #692 slice |
+| T8 | S8.2 | inline, pending | Derivations follow-up; PR #694 slice |
+| T9 | S8.3 | inline, pending | Messages follow-up; PR #696 slice |
+| T10 | S8 | inline, pending | Build, frontend suite and browser verification |
 
 ## Log
 
@@ -168,3 +180,31 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
   contiene la fila de alta; el alta usa `placeholder` + `aria-label` en vez de una etiqueta visible
   (como en la referencia y como ya hace `SearchInput`); y la banda informativa deja el `--info-tint`
   azul por el tono sage de la página con texto e icono en `--corp-fg-muted`.
+
+- L11 (owner, verbatim):
+
+```text
+ok bastante mejor:
+
+tab persona:
+
+- actual /tmp/gpUBFQIP/pi-clipboard-a27b7d60-f5b8-4022-9925-74ce2d602085.png, referencia, /tmp/gpUBFQIP/pi-clipboard-30f2dfdb-e3c6-4900-adc4-6ad4e8dd3de6.png. varias cosas aun no estan alineadas:
+todo el "header" del card persona del asistente debe mejorar el layout, el original tiene el elayout roto, el boton ampliar no esta en el contenedor de los botones vista previa y editar. el estilo de los Botones Vista previa y Editar MD, no estan correctos mejorar. color del banner con el texto "Los datos del cliente se agregan automáticamente. No incluyas variables como
+{{nombre}}."
+
+
+tab conducta:
+
+en el card Derivaciones y respuestas /tmp/gpUBFQIP/pi-clipboard-b0811087-97f6-4b48-9f46-e29c9188e343.png actual, primero hay un apartado "Casos de derivacion" y luego abajo hay un dropdown button con "Derivar a una persona". podriamos unificar? estamos mezclando cosas si es asi? podriamos meter los casos de derivacion en un dropdown menu tambien. para que sigan todos la misma logica?
+
+Tab Mensajes:
+
+- actual /tmp/gpUBFQIP/pi-clipboard-f3c06adb-5265-4a3f-a0af-ae0d3207d29b.png, referencia : /tmp/gpUBFQIP/pi-clipboard-1d984066-cc1c-49a4-a8af-fc092ace245f.png.
+
+ok aqui principalmente es la barra lateral con los mensajes reducidos. el actual muestra mucha informacion es un card de 3 o 4 lineas por mensaje del asistente. en la referencia es solo una linea. todo se explica en el panel derecho.
+
+el panel derecho esta bien. pero se podria mejorar la version de la vista previa. para crear algo mas estilo whtasapp como lo hace la ref. /tmp/gpUBFQIP/pi-clipboard-415a5973-77a1-45fe-af25-a84b21d0e000.png
+```
+- L12 (execution plan): follow the existing stacked-PR boundaries (#692, #694, #696), never one accumulated main-range slice. Local CSS only; no primitive/token/API changes. Graph consulted: Settings(), Settings.tsx, previewTemplate(), Settings.test.tsx; Settings community; path queries returned ambiguous/no directed paths (not evidence of independence). Existing report lists model/fixture god nodes; none touched. Graph refresh remains session-close only.
+
+- L13 (T7 evidence): RED missing toolbar, GREEN 4 Persona tests; browser 1440/390px, same-row controls, edited draft in preview/dialog, no mobile overflow. Pure styling validated visually (no meaningful unit RED for colors). Native assess medium, reviewDue=false. Risk: none; local-only selectors.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ChevronDown, ClipboardList, CircleHelp, Clock3, Code2, Coins, Database, DoorOpen, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, KeyRound, LayoutDashboard, Mail, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Bell, BookOpen, Bot, CalendarDays, ChevronDown, CircleHelp, ClipboardList, Clock3, Code2, Coins, Database, DoorOpen, Eye, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Globe2, Headset, History, Info, KeyRound, LayoutDashboard, Mail, Maximize2, MessageCircle, MessagesSquare, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, fetchTechnicians, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -16,12 +16,14 @@ import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
+import { Dialog } from "../primitives/Dialog";
 import { MessagePreview } from "../primitives/MessagePreview";
 import { DayToggle } from "../primitives/DayToggle";
 import { StatCard } from "../shared/StatCard";
 import { TechnicianScheduleEditor } from "../shared/TechnicianScheduleEditor";
 import { WEEKDAY_NAMES } from "../shared/agendaTime";
 import { PageFrame } from "../shared/PageFrame";
+import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
 import "./Settings.css";
@@ -457,6 +459,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [activeMessage, setActiveMessage] = useState<(typeof MESSAGE_TEMPLATES)[number]["id"]>("greeting");
   const [keywordEntry, setKeywordEntry] = useState("");
   const [scopeDisclosureOpen, setScopeDisclosureOpen] = useState(false);
+  const [personaMode, setPersonaMode] = useState<"preview" | "edit">("preview");
+  const [personaDialogOpen, setPersonaDialogOpen] = useState(false);
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
   const [personaVersion, setPersonaVersion] = useState(0);
@@ -749,15 +753,28 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
           </div>
         </> : null}
         {active === "persona" ? <>
-          <Card title="Persona del asistente" description="El texto que define quién es Max y cómo conversa. Se aplica en el siguiente mensaje." icon={UserRound} headerAction={data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>
-            <div className="settings-agent__form">
-              <Textarea label="Texto de la persona" rows={18} value={draft.persona.orchestrator} onChange={(event) => update("persona", { ...draft.persona, orchestrator: event.target.value })} />
-              <Textarea label="Instrucción de brevedad" rows={4} value={draft.persona.orchestrator_brief} onChange={(event) => update("persona", { ...draft.persona, orchestrator_brief: event.target.value })} />
-              <p className="settings-agent__helper">Los datos variables se inyectan aparte: no escribas llaves como <code>{"{{nombre}}"}</code> en la persona.</p>
-              <div className="settings-agent__footer">{footer("Una persona que rompe el contrato no se guarda.")}<Button disabled={saving("persona") || !draft.persona.orchestrator.trim() || !draft.persona.orchestrator_brief.trim()} onClick={() => void savePersona()}>Guardar persona</Button></div>
+          <Card className="settings-persona" title="Persona del asistente" description="Estas instrucciones se aplican en el siguiente mensaje." icon={UserRound} headerAction={<div className="settings-persona__header-actions">{data.persona?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}</div>}>
+            <div className="settings-persona__content">
+              <div className="settings-persona__toolbar" role="toolbar" aria-label="Herramientas de persona">
+                <div className="settings-persona__segments" role="group" aria-label="Modo de edición de la persona">
+                  <Button variant={personaMode === "preview" ? "secondary" : "tertiary"} aria-pressed={personaMode === "preview"} onClick={() => setPersonaMode("preview")}><Eye aria-hidden="true" />Vista previa</Button>
+                  <Button variant={personaMode === "edit" ? "secondary" : "tertiary"} aria-pressed={personaMode === "edit"} onClick={() => setPersonaMode("edit")}><Pencil aria-hidden="true" />Editar Markdown</Button>
+                </div>
+                <Button variant="tertiary" onClick={() => setPersonaDialogOpen(true)}><Maximize2 aria-hidden="true" />Ampliar</Button>
+              </div>
+              {personaMode === "preview" ? <div className="settings-persona__preview" role="region" aria-label="Vista previa del documento Markdown"><Markdown content={draft.persona.orchestrator} /></div>
+                : <Textarea label="Texto de la persona" rows={18} value={draft.persona.orchestrator} onChange={(event) => update("persona", { ...draft.persona, orchestrator: event.target.value })} />}
+              <p className="settings-persona__info"><Info aria-hidden="true" /><span>Los datos del cliente se agregan automáticamente. No incluyas variables como <code>{"{{nombre}}"}</code>.</span></p>
             </div>
-            <SettingsVersionHistory scope="persona" refreshToken={personaVersion} onRestored={retry} />
           </Card>
+          <Card title="Instrucción de brevedad" description="Se utiliza cuando queda poco presupuesto de conversación." icon={FileText}>
+            <Textarea label="Instrucción de brevedad" rows={4} value={draft.persona.orchestrator_brief} onChange={(event) => update("persona", { ...draft.persona, orchestrator_brief: event.target.value })} />
+          </Card>
+          <div className="settings-persona__dialog">
+            <Dialog open={personaDialogOpen} onClose={() => setPersonaDialogOpen(false)} title="Vista previa de la persona" size="wide" closeLabel="Cerrar vista ampliada">
+              <div className="settings-persona__dialog-preview"><Markdown content={draft.persona.orchestrator} /></div>
+            </Dialog>
+          </div>
         </> : null}
         {active === "conduct" ? <>
           <Card title="Conducta de la conversación" description="Qué datos pide el bot, en qué orden y cuándo deriva a una persona." icon={SlidersHorizontal} headerAction={data.conduct?.customized ? <Badge tone="success">Personalizada</Badge> : <Badge tone="neutral">Original</Badge>}>

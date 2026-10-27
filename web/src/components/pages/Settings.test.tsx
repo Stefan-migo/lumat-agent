@@ -488,16 +488,55 @@ describe("Settings", () => {
     expect(screen.getByText("Disponible")).toBeInTheDocument();
     expect(screen.getByText("No disponible")).toBeInTheDocument();
   });
-  it("saves the persona and its brief in one request", async () => {
+  it("renders the persona draft as Markdown and switches to its editor", async () => {
+    const user = userEvent.setup();
+    const markdown = "# Identidad\n\nEres Max.\n\n- Responde con claridad";
+    render(<Settings data={settings({ persona: { orchestrator: markdown, orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+
+    expect(screen.getByRole("heading", { name: "Identidad" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Responde con claridad");
+    expect(screen.getByText((_content, element) => element?.classList.contains("settings-persona__info") ?? false)).toHaveTextContent("Los datos del cliente se agregan automáticamente. No incluyas variables como {{nombre}}.");
+    expect(screen.queryByLabelText("Texto de la persona")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Editar Markdown" }));
+    expect(screen.getByLabelText("Texto de la persona")).toHaveValue(markdown);
+  });
+
+  it("keeps persona mode and expand controls together below the card heading", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+    const toolbar = screen.getByRole("toolbar", { name: "Herramientas de persona" });
+    expect(within(toolbar).getByRole("button", { name: "Vista previa" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(toolbar).getByRole("button", { name: "Editar Markdown" })).toHaveAttribute("aria-pressed", "false");
+    await user.click(within(toolbar).getByRole("button", { name: "Ampliar" }));
+    expect(screen.getByRole("dialog", { name: "Vista previa de la persona" })).toBeInTheDocument();
+  });
+
+  it("opens the persona Markdown in an enlarged dialog", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings({ persona: { orchestrator: "# Identidad\n\nEres Max.", orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Persona");
+    await user.click(screen.getByRole("button", { name: "Ampliar" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Vista previa de la persona" });
+    expect(dialog).toHaveClass("dialog--wide");
+    expect(within(dialog).getByRole("heading", { name: "Identidad" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Eres Max.")).toBeInTheDocument();
+  });
+
+  it("saves the edited persona and its brief through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Persona");
+    await user.click(screen.getByRole("button", { name: "Editar Markdown" }));
 
     const persona = screen.getByLabelText("Texto de la persona");
     expect(persona).toHaveValue("Eres Max.");
     fireEvent.change(persona, { target: { value: "Eres Max, edición del panel." } });
-    await user.click(screen.getByRole("button", { name: "Guardar persona" }));
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/persona", expect.objectContaining({
       method: "POST",
