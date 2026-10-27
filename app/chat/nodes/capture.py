@@ -108,6 +108,7 @@ _SKIP_WORDS = (
     "ninguna",
     "no aplica",
     "prefiero no responder",
+    "no te voy a dar mi correo",
     "desconozco",
 )
 _YES_WORDS = ("si", "sí", "yes", "ok", "claro", "confirmo", "acepto")

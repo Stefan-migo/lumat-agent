@@ -506,6 +506,39 @@ def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
     assert any("equipo" in r.lower() for r in replies)
 
 
+def test_s6_explicit_email_refusal_skips_email_and_reaches_booking(mock_openai_chat):
+    conv_id = _start_conversation()
+    for index, text in enumerate(
+        ["quiero una visita", "no enciende", "Calefont Bosch", "Ñuñoa",
+         "mañana después de las 6", "Jorge"],
+        start=1,
+    ):
+        _turn(conv_id, text, f"wamid.s6-{index}")
+
+    assert _conversation_captured(conv_id)["_pending"] == ["email"]
+    replies = _turn(
+        conv_id, "no te voy a dar mi correo, con el telefono basta", "wamid.s6-refusal"
+    )
+
+    captured = _conversation_captured(conv_id)
+    from app.chat.nodes.capture import CAPTURE_FIELDS
+
+    assert "email" in [field for field, _ in CAPTURE_FIELDS]
+    assert captured["email"] == "unknown"
+    assert captured["_asked"]["email"] == 1
+    assert captured["_pending"] == ["address"]
+    assert all("correo" not in reply.lower() for reply in replies)
+    assert any("dirección" in reply.lower() for reply in replies)
+
+    _turn(conv_id, "Calle 1", "wamid.s6-address")
+    _turn(conv_id, "si", "wamid.s6-consent")
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"
+    causes = _turn_causes(conv_id)
+    assert "handoff:booking_unavailable" in causes
+    assert "handoff:campo_sin_respuesta" not in causes
+
+
 def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
     """CI-3: consent is its own step, not a capture field (never extracted)."""
     from app.chat.nodes.capture import CAPTURE_FIELDS
