@@ -46,6 +46,17 @@ top-2, o una segunda consulta construida desde intención + tópico), y no puede
 Parte del defecto, no un extra: el camino de `kb_miss` blando **no registra ningún evento**, así que ni el
 panel ni la telemetría pueden ver cuántas veces el bot dijo "no sé" sobre algo que sí sabía.
 
+**Decisión de producto (L11): ruteo por tema.** El bot busca primero **dentro del documento del tema** al que
+pertenece la pregunta (cobertura y horarios, garantías y pagos, servicios, quiénes somos), y el parecido deja de
+ser el único criterio. El tema sale de un **mapa determinista pregunta→tema**, medido contra los 4 escenarios; un
+campo nuevo del clasificador (`agent/personas/*`, shape surface) sólo si el mapa no alcanza. La regla no puede
+aflojar `super-near-miss-lavadora`: "arreglan lavadoras" tiene que seguir sin encontrar nada, y eso es parte de la
+verificación, no una nota al pie.
+
+Por qué el ruteo y no una consulta mejor armada: `turn_queries` ya intenta texto crudo y después el `service`
+clasificado (`respond.py:104-140`), y las cuatro consultas siguen fallando porque el problema no es el texto de
+la consulta sino que el puntaje corta dentro de la distribución respondible.
+
 ### S3 — la despedida se contesta con otra pregunta comercial
 
 > Hard fail del juez: «Respondió la despedida («eso era todo») con una nueva pregunta comercial («¿En qué más te
@@ -91,7 +102,18 @@ evalúa únicamente desde `_ask_next` (`:617-623`), mientras la derivación por 
 antes (`:548-550`) — aunque Providencia está fuera de `DEFAULT_COVERAGE_COMMUNES`
 (`app/services/settings.py:349-357`).
 
-### S6 — DECISIÓN DE PRODUCTO ABIERTA: "no te voy a dar mi correo" no tiene causa propia
+Cerrado en T5a (`c29f844c`, la cobertura decide antes de derivar) y T5b (`c879438c`, un solo renderizado para los
+dos caminos de captura): el escenario pasó de `{G10, G6}` a `{G6}` y la causa registrada es `handoff:cobertura`.
+Lo que queda es G6.
+
+**Decisión de producto (L11): acusar recibo y no repetir.** La derivación por cobertura **nombra el equipo** que
+el cliente corrigió (slot nuevo en `handoff_cobertura`, con texto de respaldo cuando el equipo no está
+capturado), y la frase **no se repite** en los turnos siguientes. No puede ser silencio: `G8 reply_present` exige
+respuesta a cada turno del cliente, así que el turno posterior contesta lo que sí se puede (por ejemplo el
+precio) y aclara que la visita la coordina un asesor, sin prometer. El texto es owner-editable: el cambio es de
+contrato de slots (`REPLY_TEXT_SLOTS`), no sólo de copy.
+
+### S6 — «no te voy a dar mi correo» se registra como campo sin respuesta
 
 > `G10 · causes_required`: «ninguna derivación esperada (esperaba booking_unavailable, persona); se registró:
 > handoff:campo_sin_respuesta, handoff:campo_sin_respuesta»
@@ -109,10 +131,19 @@ Un rechazo explícito cae hoy en "campo sin respuesta" porque `_SKIP_WORDS` (`ca
 "no te voy a dar". La consecuencia no es cosmética: el panel y las métricas leen "el cliente no contestó" donde
 pasó "el cliente dijo que no", que son dos problemas comerciales distintos.
 
-Hay tres caminos y ninguno se puede elegir desde el código: **(a)** agregar una causa propia
-(`campo_rechazado`) y permitir que el agendamiento siga sin ese dato; **(b)** tratar el rechazo como `is_skip`
-y hacer el correo opcional en el flujo de booking; **(c)** aceptar que el bot está bien y que lo que está mal
-es la expectativa del corpus. La spec queda abierta y **no se convierte en tarea** hasta que el owner elija.
+Los tres caminos eran: **(a)** agregar una causa propia (`campo_rechazado`) y permitir que el agendamiento siga
+sin ese dato; **(b)** tratar el rechazo como `is_skip` y que el correo no bloquee; **(c)** aceptar que el bot
+está bien y que lo que está mal es la expectativa del corpus.
+
+**Decisión de producto (L11): (b), con el correo todavía en la lista.** El correo se sigue preguntando a todos
+—la regla comercial no cambia para el cliente que sí lo da—, pero un rechazo explícito se reconoce como
+**saltar el campo**: el campo queda «sin dato», no se vuelve a preguntar, el flujo continúa y la derivación, si
+ocurre, lleva su causa real (`booking_unavailable`, `persona`). No se agrega una causa nueva, y el corpus no se
+toca.
+
+**Consecuencia aceptada y registrada**: el panel y las métricas siguen sin distinguir «dijo que no» de «no
+contestó» en la causa; el rechazo queda visible en el hilo del caso (campo sin dato), no en el agregado. Era el
+costo de (b) sobre (a), elegido a conciencia.
 
 ## Tasks
 
@@ -124,10 +155,12 @@ de la feature, donde `full` y `shape` también son obligatorios.
 |---|---|---|---|
 | T1 | S1 | Emitir `escalation` en `emergency()` reusando el helper de `realtime` | `--only super-emergencia-gas` (G3 verde) + test de integración |
 | T2 | S2 | Diagnosticar las 4 consultas (similitud observada, no la del documento) y después cambiar la forma de la regla | `--only` de los 4 escenarios + `super-near-miss-lavadora` sin regresión |
+| T2b | S2 | Ruteo por tema: mapa determinista pregunta→tema y búsqueda acotada al documento del tema, con respaldo al conjunto completo | `--only` de los 4 escenarios + `super-near-miss-lavadora` sin regresión + test unitario del mapa |
 | T3 | S3 | Cerrar la despedida: frases de `closure_gate` y si puede dispararse con captura pendiente | `--only simple-despedida` + test de `closure_gate` |
 | T4 | S4 | Responder antes de la primera pregunta y no preguntar dos veces un campo que la intención preventiva ya salteó | `--only complejo-agendar-calefont` en 3 corridas (hoy 2 de 3) |
 | T5 | S5 | Evaluar cobertura antes de derivar y llevar el equipo capturado al texto de re-pregunta | `--only super-burst-contradiccion` |
-| T6 | S6 | **Bloqueada**: espera la decisión de producto | — |
+| T5c | S5 | Remate de `super-burst-contradiccion`: la derivación nombra el equipo y el turno siguiente no repite la frase | `--only super-burst-contradiccion` (G6 verde, G8 y G10 siguen verdes) |
+| T6 | S6 | Rechazo explícito a un dato = saltar el campo; el correo sigue en la lista y no bloquea el agendamiento | `--only complejo-no-quiere-email` + test de rechazo explícito en `test_chat_capture.py` |
 
 Un commit por tarea, con su test. T1 es la más chica y la más grave: una emisión de evento.
 
@@ -381,3 +414,21 @@ Las dos cambian lo que el cliente lee y lo que el corpus espera. Quedan como pre
 Nota sobre el duplicado: aparecieron **dos** divergencias entre `_ask_next` y `_reask_pending` (la regla de
 cobertura y el label del equipo). La segunda no se copió: se unificó en `_render_capture_question`, porque el
 defecto es la duplicación, no cada omisión por separado.
+
+### L11 — las tres decisiones de producto, tomadas en `rapso-session`
+
+Sesión: `.rapsodia-code/sessions/archived/2026-10-27-chatbot-defectos-decisiones/` (registro completo, más Engram).
+El owner eligió sobre tres explicaciones en simple, con ejemplo de lo que ve el cliente y el costo de cada
+opción. **Ninguna de las tres cambia el corpus**: las tres se arreglan en código.
+
+- **D1 — retrieval.** Eligió: «(a) Buscar dentro del documento que corresponde». El tema sale primero de un mapa
+  determinista pregunta→tema; un campo nuevo del clasificador sólo si el mapa no alcanza, porque `consulta`
+  cubre cobertura, horarios, servicios y plazos en una sola etiqueta. Guardia: `super-near-miss-lavadora` sigue
+  sin encontrar nada. → S2, T2b.
+- **D2 — derivación por cobertura.** Eligió: «(a)+(b) Las dos cosas»: la derivación **nombra el equipo**
+  corregido y la frase **no se repite** en los turnos siguientes. No puede ser silencio: `G8 reply_present` exige
+  respuesta a cada turno. → S5, T5c.
+- **D3 — rechazo de un dato.** Eligió: «(b) Saltar el campo y correo opcional», y precisó la regla comercial:
+  «Sigue en la lista, rechazo no bloquea». O sea: el correo se sigue preguntando a todos, un rechazo explícito
+  se trata como saltar el campo y el flujo continúa. Sin causa nueva, y con la consecuencia aceptada: el panel
+  no distingue «dijo que no» de «no contestó» en el agregado. → S6, T6.
