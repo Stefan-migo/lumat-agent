@@ -166,3 +166,25 @@ Graph Check: `graphify query` corrido sobre las cuatro áreas (emergencia, retri
 nodos consultados `emergency()`, `events.py`, `record_audit()`, `closure_gate()`, `capture()`, `_ask_next()`,
 `services/settings.py` y `chat/graph.py`. El grafo está **desactualizado** (construido desde `456a0294`, HEAD
 `9337731a`): el refresh `graphify . --update` corresponde al cierre de la sesión, no a cada tarea.
+
+### L5 — T1 cerrada: la emergencia ya registra su escalamiento (`a6e0d921`)
+
+`record_activity(..., "escalation", cause="emergency:strong_hit", actor="system")` dentro de `emergency()`, junto
+al marcado del caso que ya existía. El evento anterior (`emergency`/`strong_hit`) y las banderas del caso **no**
+se reemplazan: se agrega el que faltaba.
+
+Dos correcciones sobre lo que entregó el worker, y el porqué:
+
+1. **El `cause` pasó de `emergency_strong_hit` a `emergency:strong_hit`.** `handoff` escribe
+   `handoff:<razón>` y `app/services/analytics.py:101` filtra por esa forma (`cause == "handoff:kb_miss"`), así
+   que un nombre sin origen habría sido una segunda convención en el mismo campo. El `actor="system"` se
+   mantuvo: es el que este nodo ya usa dos líneas más arriba en `set_conversation_state`.
+2. **`app/chat/graph.py:31` afirmaba que `handoff` "owns every escalation".** Con el strong hit emitiendo el
+   suyo, la frase quedó falsa; ahora dice cuál se detiene en `emergency`. Es documentación que el cambio
+   invalidaba, no un extra.
+
+Verificación: `bash scripts/test.sh db tests/integration/test_emergency.py tests/integration/test_handoff.py`
+→ **82 passed**; `scripts/conv_eval.py --only super-emergencia-gas --no-judge --reset` → **1/1 escenarios pasan,
+sin gates fallando** (antes: 0/1 por G3). El test vive en `test_strong_hit_mid_capture_interrupts`, junto a la
+aserción del evento `emergency`, así que también cubre la interrupción a mitad de captura. El RED se observó
+antes de implementar (`assert any(e.event == "escalation" ...)` → `assert False`).
