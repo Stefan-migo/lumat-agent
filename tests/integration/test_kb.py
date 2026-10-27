@@ -28,6 +28,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal  # noqa: E402
+from app.chat.nodes import respond as respond_node  # noqa: E402
 from app.models import AuditLog, DocumentFormat, KbChunk, KbDocument, KbVisibility, Project  # noqa: E402
 from app.services import kb  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -356,6 +357,84 @@ def test_kb_retrieve_default_project_filter_returns_all_documents(fake_embedder)
         results = kb.retrieve(session, query, audience=None)
 
     assert {result["document_id"] for result in results} == ids
+
+
+@pytest.mark.parametrize(
+    ("question", "source_ids", "similarity", "answer_text"),
+    [
+        (
+            "hola, ustedes trabajan en maipu?",
+            ["lumat-cobertura-horarios"],
+            0.4033,
+            "Otras comunas",
+        ),
+        (
+            "carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber",
+            ["lumat-cobertura-horarios"],
+            0.1298,
+            "Fuera de horario, fines de semana y festivos",
+        ),
+        (
+            "y eso cuanto de garantia tiene?",
+            ["lumat-garantias-pagos"],
+            0.4498,
+            "Garantía de lavado de red",
+        ),
+        (
+            "hola, necesito mantencion de caldera, estoy en temuquito",
+            ["lumat-cobertura-horarios"],
+            0.3491,
+            "igual podemos ayudarte",
+        ),
+    ],
+)
+def test_topic_routing_recovers_named_answers_below_global_cutoff(
+    question, source_ids, similarity, answer_text, monkeypatch
+):
+    near_miss = "hola, arreglan lavadoras? se me inundo el lavadero"
+    query_vector = [1.0] + [0.0] * (kb.EMBED_DIMS - 1)
+    document_vector = [similarity, (1 - similarity**2) ** 0.5] + [0.0] * (kb.EMBED_DIMS - 2)
+
+    class _MeasuredEmbedder:
+        def embed(self, texts):
+            for text in texts:
+                yield query_vector if text in {question, near_miss} else document_vector
+
+    monkeypatch.setattr(kb, "get_embedder", lambda: _MeasuredEmbedder())
+    kb_dir = Path(__file__).resolve().parents[2] / "docs/kb"
+    with SessionLocal() as session:
+        document_ids = set()
+        for source_id in source_ids:
+            content = (kb_dir / f"{source_id}.md").read_text()
+            document = kb.ingest_document(
+                session,
+                title=source_id,
+                fmt=DocumentFormat.MD,
+                content=content.encode(),
+                source_meta={"source": "docs/kb", "source_id": source_id},
+                visibility=KbVisibility.CUSTOMER,
+            )
+            session.flush()
+            document_ids.add(document.id)
+
+        # The measured score is below the unchanged full-corpus cutoff, but
+        # the explicitly routed document remains eligible to ground the reply.
+        scoped = respond_node.retrieve_for_queries(
+            session,
+            [question],
+            topic_source_ids=respond_node.topic_document_ids(question),
+        )
+        rejected = respond_node.retrieve_for_queries(
+            session,
+            [near_miss],
+            topic_source_ids=respond_node.topic_document_ids(near_miss),
+        )
+
+    assert scoped
+    assert {chunk["document_id"] for chunk in scoped} == document_ids
+    assert any(answer_text in chunk["content"] for chunk in scoped)
+    assert all(chunk["similarity"] == pytest.approx(similarity, abs=0.0001) for chunk in scoped)
+    assert rejected == []
 
 
 def test_kb_retrieve_topic_source_ids_keep_audience_project_and_active_guards(fake_embedder):

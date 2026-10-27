@@ -15,6 +15,8 @@ paths never call the LLM, design Cost Guardrails).
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -39,6 +41,47 @@ from app.services.settings import (
 )
 
 logger = logging.getLogger(__name__)
+
+# These identifiers are the actual docs/kb filenames recorded by seed_kb_docs.
+_TOPIC_DOCUMENTS = (
+    (
+        "lumat-cobertura-horarios",
+        ("comuna", "comunas", "atienden", "atienden en", "trabajan", "llegan", "cobertura", "vivo en", "estoy en", "sabado", "domingo", "horario", "festivo"),
+    ),
+    (
+        "lumat-garantias-pagos",
+        ("garantia", "garantias", "garantía", "garantías", "pago", "pagos", "boleta", "factura", "cancelar", "reagendar"),
+    ),
+    (
+        "lumat-servicios",
+        ("servicios", "visita", "reparacion", "reparar", "reparan", "incluye", "dura", "resuelve", "lavado de red", "instalacion", "gasfiteria"),
+    ),
+    (
+        "lumat-identidad",
+        ("lumat", "empresa", "quienes somos", "quien es", "tecnicos sec", "tecnicos autorizados", "eslogan"),
+    ),
+)
+
+
+def _normalise_topic_text(text: str) -> str:
+    """Case-fold and remove accents so topic terms match normal Spanish spelling."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def topic_document_ids(question: str) -> list[str]:
+    """Return seeded KB document source IDs matching this turn, in fixed topic order."""
+    normalized = _normalise_topic_text(question)
+    words = set(re.findall(r"[a-z0-9]+", normalized))
+    matched = []
+    for source_id, terms in _TOPIC_DOCUMENTS:
+        if any(
+            term in words if " " not in term else term in normalized
+            for term in (_normalise_topic_text(value) for value in terms)
+        ):
+            matched.append(source_id)
+    return matched
+
 
 CANNOT_ANSWER_REPLY = MESSAGE_DEFAULTS["cannot_answer"]
 KB_UNAVAILABLE_REPLY = (
@@ -142,17 +185,45 @@ def retrieval_queries(state: ConversationState) -> list[str]:
     )
 
 
-def retrieve_for_queries(session, queries: list[str]) -> list[dict]:
-    """The production KB retrieval — the only place its arguments are declared.
+def retrieve_for_queries(
+    session, queries: list[str], topic_source_ids: list[str] | None = None
+) -> list[dict]:
+    """Retrieve from the routed topic documents first, then the prior full corpus.
 
-    Every caller (the `respond` node, the `research_triage` guard and the fidelity
-    harness) goes through here, so `global_only` and the customer-audience filter
-    cannot be true on the answering path and false on the measuring one.
-
-    A miss on the customer text costs one more local embed + pgvector query,
-    never a model call: the fallback exists so a wording problem cannot become a
-    human handoff while the KB holds the answer.
+    Every caller goes through here, so both scoped and fallback searches retain
+    customer-only/global-only access. A missing topic hit falls back to the
+    unchanged unfiltered retrieval rather than relaxing similarity or access.
+    Calls without ``topic_source_ids`` preserve the historical query behavior.
     """
+    if topic_source_ids:
+        for query in queries:
+            chunks = kb.retrieve(
+                session,
+                query,
+                top_k=kb.DEFAULT_TOP_K,
+                # The document topic is the eligibility gate; similarity ranks
+                # its chunks without applying the full-corpus cutoff.
+                audience=KbVisibility.CUSTOMER,
+                global_only=True,
+                source_ids=topic_source_ids,
+            )
+            if chunks:
+                unique = []
+                seen = set()
+                for chunk in chunks:
+                    key = (
+                        chunk.get("document_id"),
+                        chunk.get("version"),
+                        chunk.get("chunk_index"),
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    unique.append(chunk)
+                return unique
+
+    # Preserve historical raw-then-classified-service ordering for full-corpus
+    # retrieval, including callers that do not supply a topic.
     for query in queries:
         chunks = kb.retrieve(
             session,
@@ -169,8 +240,12 @@ def retrieve_for_queries(session, queries: list[str]) -> list[dict]:
 
 
 def retrieve_chunks(session, state: ConversationState) -> list[dict]:
-    """First non-empty KB retrieval across the turn's queries (no LLM spend)."""
-    return retrieve_for_queries(session, retrieval_queries(state))
+    """Route the current text by topic, then use turn queries with safe fallback."""
+    return retrieve_for_queries(
+        session,
+        retrieval_queries(state),
+        topic_source_ids=topic_document_ids(_current_text(state)),
+    )
 
 
 def log_unresolved(session, message_id: int, context: str) -> None:
