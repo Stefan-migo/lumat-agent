@@ -17,8 +17,8 @@ Implementation requirements and previous verification remain in `odd/tasks/confi
 | T1 | S1 S2 | inline, done | Push8e790572 exit0; issue#699 approved/readback; PR#700/#701/#702 published/readback with Refs699 and type:feature. Original workflow runs all exit0. |
 | T2 | S3 | inline, done | #691 MERGED c301ed64; head18411ded exact required test/panel SUCCESS, run40575001705, job11 exit0. Local backend failures preserved; CI alternative accepted L11. |
 | T3 | S3 | inline, done | #692 Persona MERGED 4a450ad1; head29f4cab9 retargeted to main, test/panel SUCCESS run40575968298, job13 exit0. |
-| T4 | S3 | inline, in progress | #693 Conducta; updated by normal origin/main mergef1092129, no conflicts. Retarget/push and exact-head CI/main merge pending. |
-| T5 | S3 | inline, pending | #694 Derivaciones; base/head update, combined checks and merge pending. |
+| T4 | S3 | inline, done | #693 Conducta MERGED368c8937; head9a60530b, test/panel SUCCESS run40576658396, job15 exit0. |
+| T5 | S3 | inline, in progress | #694 Derivaciones; normal origin/main merge f956528a, no conflicts (job16 exit0); retarget/push and exact-head CI/main merge pending. |
 | T6 | S3 | inline, pending | #696 Mensajes; base/head update, combined checks and merge pending. |
 | T7 | S3 | inline, pending | #700 Horarios; base/head update, combined checks and merge pending. |
 | T8 | S3 | inline, pending | #701 Técnicos; base/head update, combined checks and merge pending. |
