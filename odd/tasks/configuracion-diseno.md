@@ -169,3 +169,9 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
   que rota, fila de palabras clave en un único control bordeado con el botón `Agregar` dentro, y la
   etiqueta `Palabras y frases de activación` sobre los chips. El ayudante del protocolo ya no se
   monta sobre el textarea porque las columnas ahora son grid con `gap`.
+- L10 (owner, tercera ronda visual): la tarjeta `Detección de emergencias` todavía se leía "más
+  cruda" que la referencia. Los chips pasan a ser pastillas rellenas en `--bg`, sin borde, con la `×`
+  como botón silencioso (sin cromo, gris y con hover) dentro de **un solo campo bordeado** que también
+  contiene la fila de alta; el alta usa `placeholder` + `aria-label` en vez de una etiqueta visible
+  (como en la referencia y como ya hace `SearchInput`); y la banda informativa deja el `--info-tint`
+  azul por el tono sage de la página con texto e icono en `--corp-fg-muted`.
