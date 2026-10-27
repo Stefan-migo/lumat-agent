@@ -833,4 +833,5 @@ Real-model evidence (deepseek-chat, gates only, `--reset`):
 - job19, `complejo-agendar-calefont` two more runs: both pass, so 3/3 against the 2/3 baseline that T4 names.
 - job19 full corpus: **11 of 14** (was10). Failing: `simple-precio-calefont` G6, `complejo-dos-temas` G1+G10, `complejo-no-quiere-email` G1+G10. Those three remain the owner-decision set from L44; nothing was changed to make them pass.
 Juez sigue ausente (`--no-judge`), así que las dimensiones cualitativas siguen sin medirse. Artifacts: `odd/evals/conv-eval-t4-schedule-answers.*`, `conv-eval-t4-agendar-{2,3}.*`, `conv-eval-t4-full.*`.
-A full-suite run is required again because code changed after the earlier closure; it is launched after the commits. No push/PR/merge.
+A full-suite run is required again because code changed after the earlier closure. Observed after the commits: `bash scripts/test.sh full` exit0, 5m22s, with only the two pre-existing warnings (`_publish_all` unawaited; FastEmbed pooling notice). No failure, no timeout this run. T4 is therefore closed on deterministic and live evidence, and the feature's code work is complete for S1–S6 except the three scenario expectations that remain an owner decision.
+No push/PR/merge.
