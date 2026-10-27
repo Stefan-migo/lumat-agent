@@ -149,3 +149,9 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 - L7 (orquestador, cierre): las cuatro pantallas del Chatbot quedaron migradas y verificadas
   (`npm run build` + `npm test` → 1308 pruebas en 112 archivos). Queda pendiente de decisión del
   owner el merge de la pila y, después, Operación/Horarios con el mismo sistema visual.
+- L8 (owner, revisión del resultado real en el 5175): «los tab del side bar menu son muy anchos,
+  quitan espacio para la informacion principal. hay que reducir el widht de todo el side bar menu con
+  los tabs "agente, persona, conducta, mensajes"». El menú vertical pasa de `minmax(12rem, 0.8fr)` a
+  `minmax(10rem, 13rem)` con `gap: var(--space-5)`, y el ayudante del protocolo deja de montarse sobre
+  el textarea (el margen negativo heredado de la versión de una columna). El arreglo vive en la rama
+  base (#691) y se propaga a las ramas apiladas con merges ascendentes, sin reescribir historia.
