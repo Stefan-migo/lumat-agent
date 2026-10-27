@@ -834,10 +834,11 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             <div className="settings-replies">
               <nav className="settings-replies__list" aria-label="Situaciones de respuesta">
                 <SearchInput aria-label="Buscar situación" placeholder="Buscar situación" delay={0} onSearch={setReplySearch} />
-                <h3>Casos de derivación</h3>
-                <ul>{visibleDerivationCases.map(({ key, label }) => <li key={key}>
-                  <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><FileText aria-hidden="true" />{label}</Button>
-                </li>)}</ul>
+                {visibleDerivationCases.length ? <Accordion title="Casos de derivación" count={visibleDerivationCases.length} defaultExpanded>
+                  <ul>{visibleDerivationCases.map(({ key, label }) => <li key={key}>
+                    <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}><FileText aria-hidden="true" />{label}</Button>
+                  </li>)}</ul>
+                </Accordion> : null}
                 {visibleReplyGroups.map((group) => <Accordion key={group.title} title={group.title} count={group.keys.length}>
                   <ul>{group.keys.map((key) => <li key={key}>
                     <Button variant={selectedReplyKey === key ? "secondary" : "tertiary"} aria-pressed={selectedReplyKey === key} onClick={() => setSelectedReplyKey(key)}>{REPLY_TEXT_LABELS[key] ?? key}</Button>

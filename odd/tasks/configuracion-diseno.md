@@ -139,8 +139,8 @@ Análisis previo (2026-10-08, referencia anterior): `odd/analysis/configuracion/
 | T5 | S7 | writer | `feat(settings): mensajes con buscador y vista previa en el editor` |
 | T6 | S1–S7 | inline | verificación final: `npm run build` + `npm test` |
 
-| T7 | S8.1 | inline, done | Persona follow-up; PR #692 slice |
-| T8 | S8.2 | inline, pending | Derivations follow-up; PR #694 slice |
+| T7 | S8.1 | inline, done | `96b08129`; Persona follow-up; PR #692 slice |
+| T8 | S8.2 | inline, done | Derivations follow-up; PR #694 slice |
 | T9 | S8.3 | inline, pending | Messages follow-up; PR #696 slice |
 | T10 | S8 | inline, pending | Build, frontend suite and browser verification |
 
@@ -215,3 +215,5 @@ el panel derecho esta bien. pero se podria mejorar la version de la vista previa
 - L12 (execution plan): follow the existing stacked-PR boundaries (#692, #694, #696), never one accumulated main-range slice. Local CSS only; no primitive/token/API changes. Graph consulted: Settings(), Settings.tsx, previewTemplate(), Settings.test.tsx; Settings community; path queries returned ambiguous/no directed paths (not evidence of independence). Existing report lists model/fixture god nodes; none touched. Graph refresh remains session-close only.
 
 - L13 (T7 evidence): RED missing toolbar, GREEN 4 Persona tests; browser 1440/390px, same-row controls, edited draft in preview/dialog, no mobile overflow. Pure styling validated visually (no meaningful unit RED for colors). Native assess medium, reviewDue=false. Risk: none; local-only selectors.
+
+- L14 (T8 evidence): RED missing accordion trigger; GREEN collapse/reopen, independent generic/specific text and preserved draft. Browser Enter/Space/search/count passed. Derivation editor fits 390px; whole-page mobile overflow check failed (scrollWidth 620px), originating in unchanged capture table and its visually-hidden label. Not fixed as part of this request. Assessment unavailable because temporary browser script was untracked; script removed. Risk: none, uses existing local accordion without API changes.

@@ -82,6 +82,28 @@ async function selectSection(user: ReturnType<typeof userEvent.setup>, label: st
 }
 
 describe("Settings", () => {
+  it("groups specific derivation cases in a collapsible list separate from generic handoff", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const cases = within(nav).getByRole("button", { name: /Casos de derivación/ });
+    expect(cases).toHaveAttribute("aria-expanded", "true");
+    expect(cases).toHaveTextContent("5");
+    fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "Borrador específico" } });
+    await user.click(cases);
+    expect(cases).toHaveAttribute("aria-expanded", "false");
+    expect(within(nav).queryByRole("button", { name: "Comuna sin cobertura" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+    await user.click(cases);
+    expect(within(nav).getByRole("button", { name: "Comuna sin cobertura" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(nav).getByRole("button", { name: /Derivar a una persona/ }));
+    await user.click(within(nav).getByRole("button", { name: "Derivación a un asesor" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).not.toHaveValue("Borrador específico");
+    await user.click(within(nav).getByRole("button", { name: "Comuna sin cobertura" }));
+    expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+  });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("renders every section and selects Agente by default", () => {
