@@ -100,19 +100,19 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     await selectSection("Agente");
     const agentCard = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
     const emergencyCard = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
-    expect(within(agentCard).getByRole("button", { name: "Guardar alcance" })).toBeInTheDocument();
-    expect(within(emergencyCard).getByRole("button", { name: "Guardar palabras clave" })).toBeInTheDocument();
+    expect(within(agentCard).queryByRole("button", { name: /^Guardar/ })).not.toBeInTheDocument();
+    expect(within(emergencyCard).queryByRole("button", { name: /^Guardar/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeInTheDocument();
   });
 
-  it("renders the emergency-keywords textarea with one keyword per line and plain-Spanish effect", () => {
+  it("renders the emergency keywords as chips with the plain-Spanish effect", () => {
     render(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/próximo mensaje entrante/i)).toBeInTheDocument();
-    const keywordsTextarea = within(card).getByLabelText(/palabras clave/i) as HTMLTextAreaElement;
-    const lines = keywordsTextarea.value.split("\n").filter((l) => l.length > 0);
-    expect(lines.length).toBe(settings.keywords.length);
-    for (const kw of settings.keywords) {
-      expect(lines).toContain(kw);
+    const chips = within(card).getByRole("list", { name: "Frases de emergencia" });
+    expect(within(chips).getAllByRole("listitem")).toHaveLength(settings.keywords.length);
+    for (const keyword of settings.keywords) {
+      expect(within(chips).getByText(keyword)).toBeInTheDocument();
     }
   });
 

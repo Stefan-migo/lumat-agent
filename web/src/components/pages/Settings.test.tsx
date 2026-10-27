@@ -159,24 +159,69 @@ describe("Settings", () => {
     expect(screen.getByText("No configurada")).toBeInTheDocument();
   });
 
-  it("renders the Agente cards, help panels, and editable advanced rules", () => {
+  it("renders Agente contextual help in popovers and keeps the advanced rule editor", async () => {
+    const user = userEvent.setup();
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detección de emergencias" })).toBeInTheDocument();
     expect(screen.getByText("Avanzado")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Cómo funciona" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Consideraciones" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Cómo funciona" }).closest(".help-panel")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card")).toContainElement(screen.getByRole("heading", { name: "Cómo funciona" }));
-    expect(screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card")).toContainElement(screen.getByRole("heading", { name: "Consideraciones" }));
+    expect(screen.getByRole("dialog", { name: "Cómo funciona" })).toHaveAttribute("popover", "auto");
+    expect(screen.queryByText("Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ayuda: Alcance del agente" }));
+    expect(screen.getByText("El agente responde de forma automática en las categorías configuradas y deriva a una persona cuando la regla lo indica.")).toBeInTheDocument();
+    expect(screen.getByText("Usa una categoría por línea. Conserva las reglas actuales si no estás seguro del efecto de un cambio.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ayuda: Detección de emergencias" }));
+    expect(screen.getByText("Las palabras clave se revisan en cada mensaje entrante y activan el aviso correspondiente.")).toBeInTheDocument();
+    expect(screen.getByText("Incluye términos claros y evita agregar palabras ambiguas que puedan generar avisos innecesarios.")).toBeInTheDocument();
     expect(screen.getByText("Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.")).toBeInTheDocument();
     expect(screen.getByLabelText("Reglas de alcance")).toHaveAttribute("placeholder", "Ej: reparación=bot_resolve");
-    fireEvent.click(screen.getByText("Sintaxis avanzada"));
-    expect(screen.getByText("Sintaxis avanzada").parentElement).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
-    expect(screen.getByText("Sintaxis avanzada").parentElement).toHaveTextContent("presupuesto=bot_resolve");
-    const rules = screen.getByLabelText("Reglas de alcance");
-    expect(rules).toHaveValue("general=bot_resolve");
-    expect(rules).toBeEnabled();
+    await user.click(screen.getByText("Configuración avanzada"));
+    expect(screen.getByLabelText("Reglas de alcance")).toBeVisible();
+    expect(screen.getByText("Configuración avanzada").parentElement).toHaveTextContent(/bot_resolve.*responde por su cuenta.*always_escalate.*deriva la conversación a una persona/);
+    expect(screen.getByText("Configuración avanzada").parentElement).toHaveTextContent("presupuesto=bot_resolve");
+  });
+
+  it("shows Historial only for Agente and Persona", async () => {
+    const user = userEvent.setup();
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+    await selectSection(user, "Mensajes");
+    expect(screen.queryByRole("button", { name: "Historial" })).not.toBeInTheDocument();
+    await selectSection(user, "Persona");
+    expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
+  });
+
+  it("tracks dirty state, discards without a request, and disables save when clean", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    const save = screen.getByRole("button", { name: "Guardar cambios" });
+    expect(screen.getByText("Sin cambios pendientes")).toBeInTheDocument();
+    expect(save).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Instrucciones de seguridad"), { target: { value: "Corta el gas.\nVentila." } });
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Descartar" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+    expect(screen.getByLabelText("Instrucciones de seguridad")).toHaveValue("Corta el gas.");
+    expect(screen.getByText("Sin cambios pendientes")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes emergency keyword chips and persists them through the sticky save bar", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    const input = screen.getByLabelText("Escribe una frase y presiona Enter");
+    await user.type(input, " humo{enter}");
+    expect(screen.getByRole("button", { name: "Quitar palabra clave humo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/keywords", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ keywords: ["gas", "humo"] }),
+    })));
+    await user.click(screen.getByRole("button", { name: "Quitar palabra clave humo" }));
+    expect(screen.queryByRole("button", { name: "Quitar palabra clave humo" })).not.toBeInTheDocument();
+    expect(screen.getByText("Cambios sin guardar")).toBeInTheDocument();
   });
 
   it("switches sections from the accessible mobile menus", async () => {
@@ -388,9 +433,11 @@ describe("Settings", () => {
 
   it("keeps an edited draft when refreshed persisted data changes", () => {
     const { rerender } = render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
-    fireEvent.change(screen.getByLabelText("Palabras clave de emergencia"), { target: { value: "gas\nincendio" } });
+    fireEvent.change(screen.getByLabelText("Escribe una frase y presiona Enter"), { target: { value: "incendio" } });
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
     rerender(<Settings data={settings({ keywords: ["gas", "humo"] })} state="ready" capabilities={capabilities} />);
-    expect(screen.getByLabelText("Palabras clave de emergencia")).toHaveValue("gas\nincendio");
+    expect(screen.getByRole("button", { name: "Quitar palabra clave incendio" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quitar palabra clave humo" })).not.toBeInTheDocument();
   });
 
   it("disables invalid save controls and disables a valid save while pending", async () => {
@@ -464,7 +511,7 @@ describe("Settings", () => {
     render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
 
     fireEvent.change(screen.getByLabelText("Instrucciones de seguridad"), { target: { value: "Corta el gas.\nVentila el lugar." } });
-    await user.click(screen.getByRole("button", { name: "Guardar protocolo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/emergency", expect.objectContaining({
       method: "POST",
