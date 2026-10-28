@@ -490,3 +490,53 @@ def test_a_franja_that_leaves_nothing_widens_instead_of_dead_ending(mock_openai_
     # also print a numbered slot, so "1." alone would be a false pass.
     assert "Para la tarde no me quedan horarios" in replies[0]
     assert "1." in replies[0]
+
+
+def test_no_me_sirve_with_an_open_offer_pages_instead_of_handing_off(mock_openai_chat):
+    """S3: the measured dead end, with the words the customer actually typed.
+
+    `booking.py` treats "no me sirve" as "give me other slots" and
+    `handoff_gate.py` as a complaint. The gate runs first and won, so the offer's
+    30-slot universe was abandoned and the customer was handed to a person while
+    the requested day still had room.
+    """
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+
+    first = _invoke(conv_id, _add_message(conv_id, "si", "wamid.nome.ask"))
+    assert any("3." in reply for reply in first)
+
+    second = _invoke(
+        conv_id,
+        _add_message(
+            conv_id, "No me sirve ninguno de los horarios que me ofreces", "wamid.nome.next"
+        ),
+    )
+
+    assert len(second) == 1
+    assert "asesor" not in second[0].lower()
+    assert "1." in second[0]
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "bot"
+
+
+def test_a_real_complaint_during_an_offer_still_reaches_a_person(mock_openai_chat):
+    """S3 boundary: the de-collision must not make the bot deaf to complaints."""
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.complaint.ask"))
+
+    replies = _invoke(
+        conv_id,
+        _add_message(
+            conv_id, "no me sirve nada, quiero hacer un reclamo por el tecnico", "wamid.complaint.next"
+        ),
+    )
+
+    assert any("asesor" in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"

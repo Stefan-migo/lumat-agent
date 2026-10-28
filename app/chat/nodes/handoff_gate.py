@@ -31,8 +31,10 @@ real complaint ("quiero hacer un reclamo") escalates.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from app.chat.human_request import is_human_request
+from app.chat.nodes.booking import is_offer_answer
 from app.chat.state import ConversationState
 from app.models import MessageType
 
@@ -84,10 +86,33 @@ _COMPLAINT_PATTERN = re.compile(
     ),
     re.IGNORECASE,
 )
+# S3 (agenda-preferencia): a complaint *word* is unambiguous and always escalates.
+# A complaint *phrase* is not: "no me sirve" is also how a customer asks for
+# another slot, so with an offer on the table the offer node owns the answer.
+_COMPLAINT_WORD_PATTERN = re.compile(
+    "|".join(rf"\b{re.escape(w)}\b" for w in _COMPLAINT_WORDS), re.IGNORECASE
+)
+_COMPLAINT_PHRASE_PATTERN = re.compile(
+    "|".join(re.escape(p) for p in _COMPLAINT_PHRASES), re.IGNORECASE
+)
 
 
 def _current_message(state: ConversationState) -> dict | None:
     return state.window[-1] if state.window else None
+
+
+def _answers_active_offer(state: ConversationState, text: str) -> bool:
+    """Whether the message is an answer the offer node is waiting for."""
+
+    captured = state.captured or {}
+    offer = captured.get("_booking_offer") or captured.get("_manage_offer") or {}
+    if not offer:
+        return False
+    # Only the boolean matters here ("does it name a day at all"), and the node
+    # recomputes the date against the business timezone. A UTC date keeps this
+    # gate free of a database session, which is what lets it run before the LLM.
+    today = datetime.now(timezone.utc).date()
+    return is_offer_answer(text, offer.get("slots") or [], today=today)
 
 
 def evaluate_handoff(state: ConversationState) -> str | None:
@@ -98,7 +123,11 @@ def evaluate_handoff(state: ConversationState) -> str | None:
     text = message.get("text") or ""
     if is_human_request(text):
         return "persona"
-    if _COMPLAINT_PATTERN.search(text):
+    if _COMPLAINT_WORD_PATTERN.search(text):
+        return "complaint"
+    if _COMPLAINT_PHRASE_PATTERN.search(text):
+        if _answers_active_offer(state, text):
+            return None
         return "complaint"
     return None
 
