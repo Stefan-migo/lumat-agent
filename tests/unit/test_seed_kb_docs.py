@@ -90,3 +90,41 @@ def test_dockerignore_keeps_docs_kb_in_the_build_context():
     # A re-inclusion that comes BEFORE the exclusion it undoes would silently
     # reintroduce the failure: docker applies these in order, last match wins.
     assert lines.index("!docs/kb/**") > lines.index("docs/")
+
+
+# The seed decides "already consistent" or "drifted" from `content_digest`. A
+# document edited in the panel comes back with hard line breaks mid-sentence and
+# indented lines (the textarea wraps), and the digest used to treat that as a
+# different document: measured on production doc 44, which sat at version 5 with
+# the right text and would have been re-created as a duplicate on the next seed.
+def test_a_rewrapped_document_is_the_same_document():
+    unwrapped = (
+        "**Otras comunas.** Si estás fuera de esas comunas, un asesor coordina "
+        "la visita según disponibilidad."
+    )
+    rewrapped = (
+        "   **Otras comunas.** Si estás fuera de esas comunas, un asesor coordina\n"
+        "   la visita según disponibilidad.\n"
+    )
+
+    assert seed_kb_docs.content_digest(rewrapped) == seed_kb_docs.content_digest(unwrapped)
+
+
+def test_a_real_edit_still_changes_the_digest():
+    before = "Las visitas se agendan de lunes a viernes."
+    after = "Las visitas se agendan de lunes a sábado."
+
+    assert seed_kb_docs.content_digest(before) != seed_kb_docs.content_digest(after)
+
+
+def test_word_order_still_matters():
+    assert seed_kb_docs.content_digest("sábado domingos") != seed_kb_docs.content_digest(
+        "domingos sábado"
+    )
+
+
+def test_repeated_blank_lines_and_indentation_change_nothing():
+    plain = "uno\ndos\ntres"
+    noisy = "\n\n   uno\n\n      dos\n   tres\n\n"
+
+    assert seed_kb_docs.content_digest(plain) == seed_kb_docs.content_digest(noisy)
