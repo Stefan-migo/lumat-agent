@@ -19,6 +19,8 @@ import { Textarea } from "../primitives/Textarea";
 import { Avatar } from "../primitives/Avatar";
 import { projectStatusLabel, projectStatusTone, sessionStatusLabel, sessionStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
+import { mergeWorkspaceTabs, readWorkspaceTabState, workspaceTabIdentity, writeWorkspaceTabs } from "../domain/assistantTabs";
+import type { WorkspaceTab } from "../domain/assistantTabs";
 import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
 import { PlanningSessions } from "./PlanningSessions";
@@ -26,12 +28,18 @@ import { ThreadProjectResources } from "./ThreadResources";
 import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
-export type WorkspaceTab =
-  | { kind: "thread"; threadId: number }
-  | { kind: "planning"; slug: string }
-  | { kind: "context"; projectSlug: string }
-  | { kind: "history"; projectSlug: string }
-  | { kind: "sessions"; projectSlug: string };
+export type { WorkspaceTab } from "../domain/assistantTabs";
+
+function routeWorkspaceTabs(): WorkspaceTab[] {
+  const params = new URLSearchParams(window.location.search);
+  const threadId = Number(params.get("thread_id"));
+  if (Number.isInteger(threadId) && threadId > 0) return [{ kind: "thread", threadId }];
+  if (params.get("context")) return [{ kind: "context", projectSlug: params.get("context")! }];
+  if (params.get("planning")) return [{ kind: "planning", slug: params.get("planning")! }];
+  if (params.get("history")) return [{ kind: "history", projectSlug: params.get("history")! }];
+  if (params.get("sessions")) return [{ kind: "sessions", projectSlug: params.get("sessions")! }];
+  return [];
+}
 
 function useDesktopWorkspace() {
   const [desktop, setDesktop] = useState(() => window.matchMedia?.("(min-width: 64rem)").matches ?? window.innerWidth > 1024);
@@ -51,7 +59,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, userId, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; userId?: number; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -72,11 +80,19 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [threadTitles, setThreadTitles] = useState<Record<number, string>>({});
-  const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const threadId = Number(params.get("thread_id"));
-    return threadId ? [{ kind: "thread", threadId }] : params.get("context") ? [{ kind: "context", projectSlug: params.get("context")! }] : params.get("planning") ? [{ kind: "planning", slug: params.get("planning")! }] : params.get("history") ? [{ kind: "history", projectSlug: params.get("history")! }] : params.get("sessions") ? [{ kind: "sessions", projectSlug: params.get("sessions")! }] : [];
+  const [restoredWorkspace] = useState(() => {
+    const persisted = userId === undefined ? { tabs: [], activeTab: null } : readWorkspaceTabState(userId);
+    const routeTabs = routeWorkspaceTabs();
+    return {
+      tabs: mergeWorkspaceTabs(persisted.tabs, routeTabs),
+      activeTab: routeTabs[0] ?? persisted.activeTab,
+    };
   });
+  const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(restoredWorkspace.tabs);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab | null>(restoredWorkspace.activeTab);
+  useEffect(() => {
+    if (userId !== undefined) writeWorkspaceTabs(userId, openTabs, activeTab);
+  }, [activeTab, openTabs, userId]);
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
   const [renameTarget, setRenameTarget] = useState<{ id: number; title: string | null } | null>(null);
@@ -219,13 +235,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   useEffect(() => {
     const onPopState = () => {
       setLocationKey(`${window.location.pathname}${window.location.search}`);
-      const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
-      const params = new URLSearchParams(window.location.search);
-      if (threadId) setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === threadId) ? current : [...current, { kind: "thread", threadId }]);
-      else if (params.get("context")) setOpenTabs((current) => current.some((tab) => tab.kind === "context" && tab.projectSlug === params.get("context")) ? current : [...current, { kind: "context", projectSlug: params.get("context")! }]);
-      else if (params.get("planning")) setOpenTabs((current) => current.some((tab) => tab.kind === "planning" && tab.slug === params.get("planning")) ? current : [...current, { kind: "planning", slug: params.get("planning")! }]);
-      else if (params.get("history")) setOpenTabs((current) => current.some((tab) => tab.kind === "history" && tab.projectSlug === params.get("history")) ? current : [...current, { kind: "history", projectSlug: params.get("history")! }]);
-      else if (params.get("sessions")) setOpenTabs((current) => current.some((tab) => tab.kind === "sessions" && tab.projectSlug === params.get("sessions")) ? current : [...current, { kind: "sessions", projectSlug: params.get("sessions")! }]);
+      const routeTab = routeWorkspaceTabs()[0];
+      if (routeTab) {
+        setActiveTab(routeTab);
+        setOpenTabs((current) => mergeWorkspaceTabs(current, [routeTab]));
+      }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -245,7 +259,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
-  const navigateToTab = (tab: WorkspaceTab) => {
+  const navigateToTab = (tab: WorkspaceTab, replace = false) => {
     const thread = tab.kind === "thread" ? [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === tab.threadId) : undefined;
     const target = tab.kind === "thread"
       ? pathForRoute({ view: "chat", ...((thread?.proyecto ?? routeProjectSlug) ? { projectSlug: thread?.proyecto ?? routeProjectSlug } : {}), threadId: tab.threadId })
@@ -254,9 +268,15 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         : tab.kind === "planning"
           ? pathForRoute({ view: "chat", planningSlug: tab.slug })
           : tab.kind === "history" ? pathForRoute({ view: "chat", historyProjectSlug: tab.projectSlug }) : pathForRoute({ view: "chat", sessionsProjectSlug: tab.projectSlug });
-    window.history.pushState({}, "", target);
+    window.history[replace ? "replaceState" : "pushState"]({}, "", target);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
+
+  useEffect(() => {
+    if (!routeWorkspaceTabs().length && activeTab && openTabs.some((tab) => workspaceTabIdentity(tab) === workspaceTabIdentity(activeTab))) {
+      navigateToTab(activeTab, true);
+    }
+  }, [activeTab, openTabs]);
 
   const closeTab = (tab: WorkspaceTab) => {
     const sameTab = (candidate: WorkspaceTab) => {
@@ -271,6 +291,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     if (!active) return;
     if (remaining.length) navigateToTab(remaining[remaining.length - 1]);
     else {
+      setActiveTab(null);
       window.history.pushState({}, "", pathForRoute({ view: "chat" }));
       window.dispatchEvent(new PopStateEvent("popstate"));
     }
@@ -319,6 +340,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         const nextTab = openTabs.filter((tab) => tab.kind !== "thread" || tab.threadId !== deleteTarget.id).at(-1);
         if (nextTab) navigateToTab(nextTab);
         else {
+          setActiveTab(null);
           window.history.pushState({}, "", pathForRoute({ view: "chat" }));
           window.dispatchEvent(new PopStateEvent("popstate"));
         }
