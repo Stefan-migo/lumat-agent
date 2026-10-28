@@ -6,6 +6,70 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.8] - 2026-10-28
+
+This release makes the bot's words and the bot's calendar come from the same
+place. The knowledge base now says Saturday can be booked because Saturday can
+be booked, the offer engine only proposes days and hours the business actually
+sells, and a document that restates a configured value fails a check instead of
+drifting until a customer notices. The assistant panel also settles down: tabs
+survive navigation, a background run can be reattached, and the retired
+planning feature is gone from both the backend and the UI.
+
+### Added
+
+- **Reschedule onto the day the customer asks for.** Slot offers filter by the
+  day and franja resolved from the request, move forward when that window is
+  empty, and format choices as `dd/mm/yyyy a las HH:MM` instead of raw ISO.
+- **The business window narrows every offer.** A visit is proposed only when it
+  starts and ends inside `hours.schedule`; a 60-minute visit is never offered at
+  17:30 by a business that closes at 18:00. An empty schedule means no
+  restriction, which is what the setting ships with.
+- **KB drift control.** `scripts/kb_doc_drift.py` flags values in `docs/kb/*.md`
+  that the configuration owns — covered communes, clock literals, prices,
+  durations, weekday ranges — and fails on a finding that is not in the
+  checked-in baseline, so today's accepted restatements are visible debt rather
+  than silent drift. The seed report prints the same summary.
+- **Panel assistant runs.** Workspace tabs survive section changes and reloads,
+  a background run raises an alert and a toast when it ends, and opening the
+  thread again reattaches to a run in flight.
+- **Project files without auto-indexing.** Uploads are stored locally instead of
+  being ingested into the project knowledge base, and the upload path no longer
+  touches a project's existing documents.
+
+### Changed
+
+- **Out-of-hours closure is an explicit opt-in.** `hours.closure_enabled`,
+  `false` by default. The window narrows the offers; the switch decides whether
+  the chat also goes quiet outside it. The panel reads the state and cannot flip
+  it — that stays an operator action, documented in `docs/ops.md` §2.6.
+- **The release check for the knowledge base can run in production.** The image
+  ships `scripts/` and `docs/kb/`, `.dockerignore` keeps `docs/kb` in the build
+  context, and `docs/ops.md` §2.5 states what the customer KB is, how it is
+  seeded, and why a seeded document must not be hand-edited in the panel.
+- **Planning is retired.** The planner's sessions, UI and documentation are gone;
+  planner JSON is read tolerantly so one malformed plan no longer poisons a run.
+
+### Fixed
+
+- **A new version of a KB document kept its topic routing.**
+  `kb.update_document` wrote the new version without `source_meta`, and topic
+  routing filters on exactly that key: a re-seeded or panel-edited document
+  stopped being eligible for its own topic and the turn fell back to the
+  similarity threshold, answering "no tengo ese dato" with the document sitting
+  right there. The new version now inherits the metadata, and the seed repairs a
+  document that lost it in place — no re-embedding, no invented version, with an
+  audit row.
+- **A re-wrapped document is the same document.** The seed's digest compared line
+  by line, so a document the panel textarea re-wrapped read as drifted; combined
+  with a title that no longer matched the repository heading, the next seed would
+  have created a duplicate document instead of re-versioning it.
+- **An answer to a slot offer no longer falls into the complaint gate.** Naming a
+  day or a window in reply to an offer is read as an answer, not as a complaint
+  about the offer.
+- **The knowledge base says Saturday is bookable online**, and keeps Sunday and
+  holidays with an advisor, matching what the agenda can actually staff.
+
 ## [2026.10.7] - 2026-10-27
 
 This release ships a conversation evaluator and the defects it measured: the
