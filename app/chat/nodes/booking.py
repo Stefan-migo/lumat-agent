@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 
 from app.chat.nodes.replies import render_reply
-from app.chat.slot_window import AFTERNOON, MORNING, SlotWindow, resolve_window
+from app.chat.slot_window import SlotWindow, resolve_window, window_label
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, Conversation, User
@@ -92,28 +92,10 @@ def _slot_entries(assignments: list[tuple[int, date, time]]) -> list[dict]:
     ]
 
 
-_WEEKDAY_LABELS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
-
-
-def _local_today(session, now: datetime) -> date:
+def local_today(session, now: datetime) -> date:
     """The business-local date: every window the customer speaks is local."""
 
     return now.astimezone(ZoneInfo(get_hours_timezone(session))).date()
-
-
-def _franja_label(franja: tuple[time, time]) -> str:
-    return "la mañana" if franja == MORNING else "la tarde"
-
-
-def _window_label(window: SlotWindow) -> str:
-    """Name the window in the customer's own words for the S2 notice."""
-
-    if window.day is None:
-        return _franja_label(window.franja or AFTERNOON)
-    label = f"{_WEEKDAY_LABELS[window.day.isoweekday() - 1]} {window.day:%d/%m}"
-    if window.franja is None:
-        return f"el {label}"
-    return f"{_franja_label(window.franja)} del {label}"
 
 
 def _requested_window(session, state: ConversationState, now: datetime) -> SlotWindow | None:
@@ -123,11 +105,16 @@ def _requested_window(session, state: ConversationState, now: datetime) -> SlotW
     if conversation is None:
         return None
     availability = (conversation.captured_data or {}).get("availability") or ""
-    return resolve_window(str(availability), today=_local_today(session, now))
+    return resolve_window(str(availability), today=local_today(session, now))
 
 
 def _search_slots(
-    session, now: datetime, today: date, duration: int, window: SlotWindow | None
+    session,
+    now: datetime,
+    today: date,
+    duration: int,
+    window: SlotWindow | None,
+    limit: int = UNIVERSE_LIMIT,
 ) -> list[tuple[int, date, time]]:
     """Slots for a window, widening the day count when the day sits past it.
 
@@ -139,11 +126,46 @@ def _search_slots(
     if window is not None and window.day is not None:
         days = max(days, (window.day - today).days + 1)
     return scheduling.open_slots_for_assignment(
-        session, now=now, days=days, duration_minutes=duration, limit=UNIVERSE_LIMIT,
+        session, now=now, days=days, duration_minutes=duration, limit=limit,
         # S1: a visit offered for "right now" cannot be staffed.
         lead_minutes=get_booking_lead_minutes(session),
         window=window,
     )
+
+
+def slots_for_window(
+    session,
+    *,
+    now: datetime,
+    duration_minutes: int,
+    window: SlotWindow | None,
+    limit: int = UNIVERSE_LIMIT,
+) -> tuple[list[tuple[int, date, time]], bool]:
+    """Slots for a requested window, moving forward when that window holds nothing.
+
+    S2 (agenda-preferencia): moving *forward* is the rule — handing back a day the
+    customer already ruled out is worse than saying the day is full. The same
+    widening covers a franja that leaves nothing, so a preference never dead-ends.
+
+    Returns the assignments and whether the fallback produced them, because the
+    reply differs: a widened offer has to say what was asked and is unavailable.
+    """
+
+    today = local_today(session, now)
+    assignments = _search_slots(session, now, today, duration_minutes, window, limit)
+    if assignments or window is None:
+        return assignments, False
+    if window.day is not None:
+        for offset in range(1, FALLBACK_DAYS + 1):
+            day = window.day + timedelta(days=offset)
+            assignments = _search_slots(
+                session, now, today, duration_minutes, SlotWindow(day=day), limit
+            )
+            if assignments:
+                return assignments, True
+        return [], False
+    widened = _search_slots(session, now, today, duration_minutes, None, limit)
+    return widened, bool(widened)
 
 
 def _new_offer(
@@ -167,26 +189,9 @@ def _new_offer(
         window = _requested_window(session, state, now)
     duration = get_service_duration(session, case.service, default=DEFAULT_DURATION_MINUTES)
     technician_schedule.ensure_horizon(session, now)
-    today = _local_today(session, now)
-    assignments = _search_slots(session, now, today, duration, window)
-
-    # S2: a requested window that holds nothing moves *forward* to the nearest day
-    # that does, and the reply says so. Moving backwards would hand the customer a
-    # day they already ruled out. A franja that leaves nothing widens to the whole
-    # day for the same reason: a preference must never dead-end.
-    widened = False
-    if not assignments and window is not None:
-        if window.day is not None:
-            for offset in range(1, FALLBACK_DAYS + 1):
-                assignments = _search_slots(
-                    session, now, today, duration, SlotWindow(day=window.day + timedelta(days=offset))
-                )
-                if assignments:
-                    break
-        else:
-            assignments = _search_slots(session, now, today, duration, None)
-        widened = bool(assignments)
-
+    assignments, widened = slots_for_window(
+        session, now=now, duration_minutes=duration, window=window
+    )
     if not assignments:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}
     universe = _slot_entries(assignments)
@@ -200,7 +205,7 @@ def _new_offer(
         return {"next_step": "end", "replies": [
             render_reply(
                 texts, "booking_window_unavailable",
-                momento=_window_label(window), opciones=_options(slots),
+                momento=window_label(window), opciones=_options(slots),
             )
         ]}
     return {"next_step": "end", "replies": [_offer_text(slots, texts)]}
@@ -296,7 +301,7 @@ def booking(state: ConversationState) -> dict:
             # S1/S4: naming a day — or asking whether one has room — is a request
             # this node can serve, so it rebuilds the offer for that day instead of
             # spending the single clarification the handoff sits behind.
-            requested = resolve_window(text, today=_local_today(session, now))
+            requested = resolve_window(text, today=local_today(session, now))
             if requested is not None:
                 return _new_offer(session, state, now, texts, window=requested)
             if _requests_more_slots(text):
