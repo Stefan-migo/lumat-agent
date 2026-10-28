@@ -1,9 +1,7 @@
 export type WorkspaceTab =
   | { kind: "thread"; threadId: number }
-  | { kind: "planning"; slug: string }
   | { kind: "context"; projectSlug: string }
-  | { kind: "history"; projectSlug: string }
-  | { kind: "sessions"; projectSlug: string };
+  | { kind: "history"; projectSlug: string };
 
 const STORAGE_VERSION = 1;
 const STORAGE_PREFIX = "lumat:assistant-workspace-tabs";
@@ -19,10 +17,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function workspaceTabIdentity(tab: WorkspaceTab): string {
   switch (tab.kind) {
     case "thread": return `thread:${tab.threadId}`;
-    case "planning": return `planning:${tab.slug}`;
     case "context":
-    case "history":
-    case "sessions": return `${tab.kind}:${tab.projectSlug}`;
+    case "history": return `${tab.kind}:${tab.projectSlug}`;
   }
 }
 
@@ -31,10 +27,7 @@ function parseTab(value: unknown): WorkspaceTab | null {
   if (value.kind === "thread" && Number.isInteger(value.threadId)) {
     return { kind: "thread", threadId: value.threadId as number };
   }
-  if (value.kind === "planning" && typeof value.slug === "string" && value.slug.length > 0) {
-    return { kind: "planning", slug: value.slug };
-  }
-  if ((value.kind === "context" || value.kind === "history" || value.kind === "sessions")
+  if ((value.kind === "context" || value.kind === "history")
     && typeof value.projectSlug === "string" && value.projectSlug.length > 0) {
     return { kind: value.kind, projectSlug: value.projectSlug };
   }

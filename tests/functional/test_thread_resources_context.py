@@ -1,10 +1,4 @@
-"""Pinned resources surface as a compact reference in the turn context (S3, T3b).
-
-Fixing a resource marks it for the thread; the turn context carries only a compact,
-content-free reference so the planner knows it exists. Content is read on demand:
-project files with read_project_file, planning sessions with planning.read_report,
-and pinned project skills are declared for the responder (bodies via _skill_context).
-"""
+"""Pinned project files and skills surface as compact turn-context references."""
 
 from app.chat.assistant import nodes
 from app.db import SessionLocal
@@ -30,7 +24,6 @@ def _seed(owner_id, *, slug):
         session.add(thread)
         session.add(InternalChatThread(
             user_id=owner_id, proyecto=slug,
-            assistant_state={"cortex_session": {"slug": "plan-1", "topic": "Tema", "status": "closed"}},
         ))
         session.commit()
         return thread.id
@@ -56,7 +49,7 @@ def _pinned_thread(client, make_user, monkeypatch, tmp_path, username, slug):
         set_thread_resources(
             session,
             thread,
-            ThreadResources(project_files=[file["id"]], planning_sessions=["plan-1"], skills=["local-skill"]),
+            ThreadResources(project_files=[file["id"]], skills=["local-skill"]),
         )
         session.commit()
     get_settings.cache_clear()
@@ -76,7 +69,7 @@ def test_assemble_context_surfaces_a_compact_pinned_reference(client, make_user,
     reference = pinned[0]["content"]
     assert reference.startswith("<pinned_resources>")
     assert "notes.txt" in reference
-    assert "plan-1" in reference
+    assert "plan-1" not in reference
     assert "local-skill" in reference
     assert "HELLO-CONTENT" not in reference
     assert "BODY-MARKER" not in reference

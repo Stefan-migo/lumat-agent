@@ -965,30 +965,13 @@ def test_failed_write_tool_remains_terminal_error(monkeypatch):
     assert result["response"] == "Tool execution failed: write failed"
 
 
-def test_execution_boundary_refuses_write_tool_in_active_planning_session():
-    state = _tool_state(
-        actor_role="admin",
-        user_id=1,
-        effective={"tools_whitelist": ("kb.retrieve",)},
-        cortex_session={
-            "slug": "budget-review",
-            "topic": "Budget review",
-            "status": "active",
-            "opened_at": "2026-09-13T12:00:00Z",
-            "closed_at": None,
-            "report_key": None,
-        },
-        plan={
-            "kind": "tool", "tool": "memory.delete", "arguments": {"memory_id": 1},
-            "summary": "Delete memory", "requires_approval": False,
-        },
-    )
+def test_legacy_cortex_state_does_not_filter_effective_tool_catalog():
+    from app.chat.assistant.nodes import _effective_tools
 
-    result = execute(state)
+    effective = {"tools_whitelist": ("memory.delete", "kb.retrieve")}
+    state = {"effective": effective, "cortex_session": {"status": "active"}}
 
-    assert result["status"] == "error"
-    assert isinstance(result["error"], str)
-    assert "not whitelisted" in result["error"]
+    assert _effective_tools(state) == effective["tools_whitelist"]
 
 
 def test_no_tool_prompt_keeps_non_invoking_statement(monkeypatch):

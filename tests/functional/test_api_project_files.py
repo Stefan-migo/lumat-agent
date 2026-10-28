@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from app.db import SessionLocal
-from app.models import KbDocument, Project
+from app.models import KbDocument, Project, ProjectFile
 
 
 def _login(client, make_user, username):
@@ -40,7 +42,13 @@ def test_upload_list_and_download_project_file(client, make_user, monkeypatch, t
     get_settings.cache_clear()
 
 
-def test_upload_text_file_ingests_project_scoped_kb_document(client, make_user, monkeypatch, tmp_path):
+def test_upload_text_file_stays_local_without_kb_document(client, make_user, monkeypatch, tmp_path):
+    """S12: the upload stores the file and leaves the project KB alone.
+
+    The project knowledge base is fed only from the "Conocimiento del proyecto" card, so an
+    upload must not create a document, must report a null `kb_document_id`, and must still keep
+    the bytes on disk.
+    """
     from app.config import get_settings
     owner_id = make_user("project-file-kb-owner", "project-files-pass")
     slug = _seed_project(owner_id, "project-file-kb")
@@ -52,11 +60,18 @@ def test_upload_text_file_ingests_project_scoped_kb_document(client, make_user, 
         files={"file": ("manual.txt", b"Project-only safety instructions for the heater.", "text/plain")},
     )
     assert uploaded.status_code == 201, uploaded.text
+    body = uploaded.json()["file"]
+    assert body["kb_document_id"] is None
+    assert body["status"] == "ready"
     with SessionLocal() as session:
         project = session.query(Project).filter_by(slug=slug).one()
-        doc = session.query(KbDocument).filter_by(project_id=project.id, title="manual.txt").one()
-        assert doc.content == "Project-only safety instructions for the heater."
+        assert session.query(KbDocument).filter_by(project_id=project.id).count() == 0
+        stored = session.query(ProjectFile).filter_by(project_id=project.id, filename="manual.txt").one()
+        assert stored.kb_document_id is None
+        assert Path(stored.stored_path).read_bytes() == b"Project-only safety instructions for the heater."
     get_settings.cache_clear()
+
+
 def test_project_file_api_requires_auth_and_owner_scoping(client, make_user):
     owner_id = make_user("project-file-owner-a", "project-files-pass")
     make_user("project-file-owner-b", "project-files-pass")

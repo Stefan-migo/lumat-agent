@@ -47,10 +47,12 @@ def test_resources_lists_available_and_starts_inherited(client, make_user, monke
     assert response.status_code == 200
     body = response.json()
     assert body["inherited"] is True
-    assert body["resources"] == {"project_files": [], "planning_sessions": [], "skills": []}
+    assert body["resources"] == {"project_files": [], "skills": []}
     assert [row["id"] for row in body["available"]["project_files"]] == [file["id"]]
-    assert [row["slug"] for row in body["available"]["planning_sessions"]] == ["plan-1"]
     assert [row["name"] for row in body["available"]["skills"]] == ["local-skill"]
+    with SessionLocal() as session:
+        legacy_thread = session.query(InternalChatThread).filter_by(user_id=owner_id).order_by(InternalChatThread.id.desc()).first()
+        assert legacy_thread.assistant_state["cortex_session"]["slug"] == "plan-1"
     get_settings.cache_clear()
 
 
@@ -65,13 +67,13 @@ def test_put_pins_resources_and_delete_resets(client, make_user, monkeypatch, tm
 
     response = client.put(
         f"/panel/api/chat/threads/{thread_id}/resources",
-        json={"project_files": [file["id"]], "planning_sessions": ["plan-1"], "skills": ["local-skill"]},
+        json={"project_files": [file["id"]], "skills": ["local-skill"]},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["inherited"] is False
-    assert body["resources"] == {"project_files": [file["id"]], "planning_sessions": ["plan-1"], "skills": ["local-skill"]}
+    assert body["resources"] == {"project_files": [file["id"]], "skills": ["local-skill"]}
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         assert thread.assistant_state["resources"]["project_files"] == [file["id"]]
@@ -100,8 +102,6 @@ def test_put_rejects_unknown_and_foreign_resources(client, make_user, monkeypatc
     assert cross_project.status_code == 400
     unknown_skill = client.put(f"/panel/api/chat/threads/{thread_id}/resources", json={"skills": ["missing"]})
     assert unknown_skill.status_code == 400
-    unknown_session = client.put(f"/panel/api/chat/threads/{thread_id}/resources", json={"planning_sessions": ["missing"]})
-    assert unknown_session.status_code == 400
     get_settings.cache_clear()
 
 

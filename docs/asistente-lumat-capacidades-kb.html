@@ -272,18 +272,17 @@
   <div><span class="num">6</span>Escrituras, aprobaciones y verificación</div>
   <div><span class="num">7</span>Memoria Tukulpan</div>
   <div><span class="num">8</span>Proyectos, archivos y artefactos</div>
-  <div><span class="num">9</span>Sesiones de planificación</div>
-  <div><span class="num">10</span>Skills</div>
-  <div><span class="num">11</span>Delegación a subagentes</div>
-  <div><span class="num">12</span>Búsqueda y lectura web</div>
-  <div><span class="num">13</span>Automatizaciones y recetas</div>
-  <div><span class="num">14</span>Adjuntos y contenido multimodal</div>
-  <div><span class="num">15</span>Contexto, compactación y costo</div>
-  <div><span class="num">16</span>Roles y matriz de permisos</div>
-  <div><span class="num">17</span>Comportamiento ante fallos</div>
-  <div><span class="num">18</span>Matriz de pruebas de capacidades</div>
-  <div><span class="num">19</span>Límites explícitos: lo que no puede hacer</div>
-  <div><span class="num">20</span>Referencias de código y glosario</div>
+  <div><span class="num">9</span>Skills</div>
+  <div><span class="num">10</span>Delegación a subagentes</div>
+  <div><span class="num">11</span>Búsqueda y lectura web</div>
+  <div><span class="num">12</span>Automatizaciones y recetas</div>
+  <div><span class="num">13</span>Adjuntos y contenido multimodal</div>
+  <div><span class="num">14</span>Contexto, compactación y costo</div>
+  <div><span class="num">15</span>Roles y matriz de permisos</div>
+  <div><span class="num">16</span>Comportamiento ante fallos</div>
+  <div><span class="num">17</span>Matriz de pruebas de capacidades</div>
+  <div><span class="num">18</span>Límites explícitos: lo que no puede hacer</div>
+  <div><span class="num">19</span>Referencias de código y glosario</div>
 </div>
 
 <!-- ============================ 1 ============================ -->
@@ -334,7 +333,7 @@
   <thead><tr><th style="width:32%">Superficie</th><th>Qué es</th><th>Por qué no es este agente</th></tr></thead>
   <tbody>
     <tr><td>Bot de WhatsApp</td><td>Grafo determinista de atención a clientes: recibe mensajes, captura datos, clasifica, responde desde la KB, detecta emergencias y deriva a humano.</td><td>No tiene tool calling ni memoria Tukulpan. Su comportamiento vive en <span class="mono">app/chat/graph.py</span> y <span class="mono">app/chat/nodes/</span>. Sus capacidades se documentan aparte; este documento no las describe como si fueran del asistente interno.</td></tr>
-    <tr><td>Asistente Lumat del panel</td><td>El agente de este documento.</td><td>Es la superficie con herramientas tipadas, proyectos, skills, planificación y aprobaciones.</td></tr>
+    <tr><td>Asistente Lumat del panel</td><td>El agente de este documento.</td><td>Es la superficie con herramientas tipadas, proyectos, skills y aprobaciones.</td></tr>
     <tr><td>TecnicoLumat</td><td>Agente del rol técnico, con alcance reducido.</td><td>Comparte motor y capas, pero tiene otra persona, otro whitelist (13 herramientas) y solo ve KB con audiencia de cliente.</td></tr>
   </tbody>
 </table>
@@ -433,7 +432,7 @@
       <td>Persona</td>
       <td><span class="mono">agent/personas/*.md</span></td>
       <td>Identidad, tono, reglas de evidencia, límites y formato de respuesta. Es estática: no admite placeholders.</td>
-      <td>Se concatena con instrucciones de proyecto y overlay de planificación.</td>
+      <td>Se concatena con las instrucciones del proyecto.</td>
     </tr>
     <tr>
       <td>Prompts de turno</td>
@@ -477,7 +476,7 @@
 <h2>4.1 Configuración del proyecto</h2>
 <p>El panel permite editar la configuración de un proyecto. El modelo de datos acepta solo tres campos:</p>
 <ul>
-  <li><span class="mono">instructions</span>: texto que se agrega después de la persona y antes del overlay de planificación. Sirve para reglas del espacio de trabajo.</li>
+  <li><span class="mono">instructions</span>: texto que se agrega después de la persona. Sirve para reglas del espacio de trabajo.</li>
   <li><span class="mono">tool_policy.opt_in_enabled</span>: lista de herramientas opt-in habilitadas. Se valida contra el registro; un nombre desconocido se rechaza.</li>
   <li><span class="mono">skills</span>: lista de skills propias con <span class="mono">name</span>, <span class="mono">description</span> y <span class="mono">body</span>. Los nombres deben ser únicos y no pueden colisionar con una skill global.</li>
 </ul>
@@ -486,7 +485,7 @@
 <p>Un hilo puede reemplazar por completo la selección de herramientas opt-in del proyecto. El cambio se guarda en <span class="mono">thread.assistant_state["tool_policy"]</span>. Borrar esa clave restaura la herencia del proyecto. La política de hilo nunca puede incluir una herramienta que el rol tenga denegada.</p>
 
 <h2>4.3 Recursos fijados al hilo</h2>
-<p>Un hilo puede fijar tres tipos de recursos: archivos de proyecto, sesiones de planificación y skills de proyecto. El contexto que recibe el planificador contiene solo una referencia compacta (<span class="mono">&lt;pinned_resources&gt;</span>) con nombres, ids y slugs; el contenido se lee bajo demanda con <span class="mono">read_project_file</span>, <span class="mono">planning.read_report</span> o la carga de la skill. Nunca se inyecta el contenido completo de un archivo fijado en cada turno.</p>
+<p>Un hilo puede fijar dos tipos de recursos: archivos de proyecto y skills de proyecto. El contexto que recibe el planificador contiene solo una referencia compacta (<span class="mono">&lt;pinned_resources&gt;</span>) con nombres, ids y slugs; el contenido se lee bajo demanda con <span class="mono">read_project_file</span> o la carga de la skill. Nunca se inyecta el contenido completo de un archivo fijado en cada turno.</p>
 
 <h2>4.4 Modelo y proveedor</h2>
 <p>El cliente del asistente se resuelve con <span class="mono">ASSISTANT_CHAT_PROVIDER</span> y <span class="mono">ASSISTANT_CHAT_MODEL</span>. Los valores por defecto en código son <span class="mono">openrouter</span> y <span class="mono">google/gemini-2.5-flash</span>. El planificador y el respondedor usan temperatura 0; el verificador también. El campo <span class="mono">model</span> de <span class="mono">registry.yaml</span> es declarativo y no selecciona el cliente en este runtime: la selección efectiva viene de la configuración de entorno.</p>
@@ -604,11 +603,6 @@
 <table>
   <thead><tr><th style="width:20%">Herramienta</th><th>Qué hace</th><th style="width:10%">Tipo</th><th style="width:12%">Aprobación</th><th style="width:20%">Argumentos y límites</th></tr></thead>
   <tbody>
-    <tr><td><span class="mono">planning.open</span></td><td>Abre una sesión de planificación en un hilo nuevo y dedicado, con el tema indicado por el usuario.</td><td><span class="tag write">WRITE</span></td><td><span class="tag auto">AUTO</span></td><td><span class="mono">topic</span> no vacío; requiere dueño autenticado.</td></tr>
-    <tr><td><span class="mono">planning.close</span></td><td>Cierra la sesión y escribe el reporte final con brechas y handoff. Nunca se bloquea por checklist incompleto.</td><td><span class="tag write">WRITE</span></td><td><span class="tag auto">AUTO</span></td><td>Sin argumentos; actúa sobre el hilo de la sesión.</td></tr>
-    <tr><td><span class="mono">planning.record_decision</span></td><td>Registra una decisión confirmada por el usuario.</td><td><span class="tag write">WRITE</span></td><td><span class="tag auto">AUTO</span></td><td><span class="mono">title</span> y <span class="mono">content</span> no vacíos.</td></tr>
-    <tr><td><span class="mono">planning.record_note</span></td><td>Registra una nota confirmada.</td><td><span class="tag write">WRITE</span></td><td><span class="tag auto">AUTO</span></td><td><span class="mono">kind</span> objective/risk/next_step/general; <span class="mono">content</span> no vacío.</td></tr>
-    <tr><td><span class="mono">planning.read_report</span></td><td>Lee el reporte de una sesión cerrada por su slug.</td><td><span class="tag read">READ</span></td><td>—</td><td><span class="mono">slug</span>; solo del dueño autenticado.</td></tr>
   </tbody>
 </table>
 
@@ -626,7 +620,7 @@
     </tr>
     <tr>
       <td><strong>Clase B — autónoma</strong></td>
-      <td><span class="mono">memory.write</span>, <span class="mono">memory.update</span>, <span class="mono">memory.delete</span>, <span class="mono">artifact.save</span>, <span class="mono">planning.open</span>, <span class="mono">planning.close</span>, <span class="mono">planning.record_decision</span>, <span class="mono">planning.record_note</span>.</td>
+      <td><span class="mono">memory.write</span>, <span class="mono">memory.update</span>, <span class="mono">memory.delete</span>, <span class="mono">artifact.save</span>.</td>
       <td>Un hilo de chat autenticado y positivo. No requiere aprobación, pero solo toca el eje de memoria propio o el hilo/artefacto actual.</td>
     </tr>
     <tr>
@@ -749,45 +743,21 @@
 </ul>
 
 <!-- ============================ 9 ============================ -->
-<h1>9. Sesiones de planificación</h1>
-
-<p>Una sesión de planificación es una conversación guiada sobre un tema, en su propio hilo. El agente abre una sesión solo cuando el usuario lo pide explícitamente.</p>
-
-<h2>9.1 Flujo</h2>
-<ol>
-  <li><span class="mono">planning.open</span> con el tema indicado por el usuario. El tema no se parafrasea ni se inventa. La sesión se crea en un hilo nuevo y dedicado; la respuesta devuelve <span class="mono">session</span>, <span class="mono">thread_id</span> y el hilo de origen.</li>
-  <li>Durante la sesión activa, el grafo aplica un overlay de facilitador y <strong>bloquea todas las escrituras de negocio</strong>. Las lecturas siguen disponibles; las únicas escrituras permitidas son <span class="mono">memory.write</span> y las herramientas <span class="mono">planning.*</span>. La sesión no ejecuta acciones de negocio: las acciones concretas se toman después, fuera de ella.</li>
-  <li><span class="mono">planning.record_decision</span> y <span class="mono">planning.record_note</span> registran solo lo que el usuario confirma. El agente no infiere decisiones ni notas desde su propio razonamiento.</li>
-  <li><span class="mono">planning.close</span> cierra la sesión y escribe el reporte final. No se bloquea por checklist incompleto: informa las brechas.</li>
-  <li><span class="mono">planning.read_report</span> lee un reporte cerrado por slug, sin editarlo ni reabrirlo.</li>
-</ol>
-
-<h2>9.2 Reporte de cierre</h2>
-<p>El reporte contiene secciones fijas: <strong>Objective</strong>, <strong>Decisions</strong>, <strong>Risks</strong>, <strong>Next steps</strong>, <strong>Notes</strong> y <strong>Gaps</strong>. Una sección vacía se escribe como <span class="mono">_Not captured._</span>; si no hay brechas, <span class="mono">_None._</span>.</p>
-<ul>
-  <li><strong>Cobertura mínima:</strong> objetivo y al menos una decisión. Si falta algo, se informa como brecha, pero el cierre se completa igual.</li>
-  <li><strong>Handoff:</strong> si existe al menos un <span class="mono">next_step</span> no vacío, el cierre devuelve <span class="mono">{"actions": [contenidos de los next steps]}</span>.</li>
-  <li>El reporte se persiste como memoria y queda disponible para <span class="mono">planning.read_report</span> y para fijarlo como recurso del hilo.</li>
-  <li>La ruta del panel permite listar, consultar, cerrar y reabrir sesiones; reabrir es una acción de panel, no una herramienta del agente.</li>
-</ul>
-
-<!-- ============================ 10 ============================ -->
-<h1>10. Skills</h1>
+<h1>9. Skills</h1>
 
 <p>Una skill es una guía en Markdown. No es una herramienta y no amplía permisos: aporta instrucciones que el planificador declara por nombre y que el respondedor carga en ese turno. El planificador solo ve el índice (<span class="mono">name</span> y <span class="mono">description</span>); el cuerpo se carga cuando la skill se declara.</p>
 
-<h2>10.1 Skills globales</h2>
+<h2>9.1 Skills globales</h2>
 <table>
   <thead><tr><th style="width:22%">Skill</th><th>Para qué sirve</th><th style="width:26%">Archivo</th></tr></thead>
   <tbody>
     <tr><td><span class="mono">memoria-tukulpan</span></td><td>Ejes de memoria, propiedad, formas exactas de los argumentos, visibilidad y handoff. Es la única skill que el respondedor carga siempre, aunque el planificador no la declare.</td><td><span class="mono">agent/skills/assistant/memoria-tukulpan.md</span></td></tr>
-    <tr><td><span class="mono">planning</span></td><td>Flujo de una sesión, contrato de cierre y lectura de un reporte.</td><td><span class="mono">agent/skills/assistant/planning.md</span></td></tr>
     <tr><td><span class="mono">tools</span></td><td>Tiers, aprobación, trabajo multi-turno, paginación de archivos e imágenes.</td><td><span class="mono">agent/skills/assistant/tools.md</span></td></tr>
     <tr><td><span class="mono">kb</span></td><td>Cuándo y cómo usar <span class="mono">kb.retrieve</span> y cómo mantenerse fundamentado.</td><td><span class="mono">agent/skills/assistant/kb.md</span></td></tr>
   </tbody>
 </table>
 
-<h2>10.2 Skills de proyecto</h2>
+<h2>9.2 Skills de proyecto</h2>
 <ul>
   <li>Se guardan en <span class="mono">Project.config.skills</span> con <span class="mono">name</span>, <span class="mono">description</span> y <span class="mono">body</span>.</li>
   <li>Pueden reemplazar una skill global por nombre: la skill del proyecto gana en ese proyecto.</li>
@@ -795,11 +765,11 @@
   <li>Los nombres deben ser únicos dentro del proyecto.</li>
 </ul>
 
-<h2>10.3 Propuesta de una skill</h2>
+<h2>9.3 Propuesta de una skill</h2>
 <p><span class="mono">skill.propose</span> es una escritura de clase A: requiere aprobación del dueño. Al confirmarse, agrega o reemplaza la skill en la configuración del proyecto y registra una auditoría <span class="mono">skill.propose.confirmed</span>. No crea una herramienta nueva ni cambia el catálogo.</p>
 
-<!-- ============================ 11 ============================ -->
-<h1>11. Delegación a subagentes</h1>
+<!-- ============================ 10 ============================ -->
+<h1>10. Delegación a subagentes</h1>
 
 <p>El planificador puede derivar una recolección acotada a un subagente declarado en <span class="mono">agent/registry.yaml</span>. La delegación no responde al usuario: devuelve evidencia para que el agente principal redacte la respuesta.</p>
 
@@ -808,13 +778,13 @@
   <tbody>
     <tr><td><span class="mono">research_triage</span></td><td><span class="mono">kb.retrieve</span></td><td>Sí: el whitelist es no vacío y todas sus herramientas son de lectura.</td></tr>
     <tr><td><span class="mono">retrieval</span></td><td><span class="mono">kb.retrieve</span></td><td>Sí, por la misma regla.</td></tr>
-    <tr><td><span class="mono">customer_records</span></td><td>Siete herramientas de lectura: clientes, conversaciones, citas, casos, historial operacional y memoria.</td><td>Sí. Es el subagente que el prompt de planificación sugiere para recolección de fichas de cliente.</td></tr>
+    <tr><td><span class="mono">customer_records</span></td><td>Siete herramientas de lectura: clientes, conversaciones, citas, casos, historial operacional y memoria.</td><td>Sí. Es el subagente que el planificador sugiere para recolección de fichas de cliente.</td></tr>
     <tr><td><span class="mono">human_handoff</span></td><td>Vacío</td><td>No: un scope vacío se rechaza.</td></tr>
     <tr><td><span class="mono">escalation</span></td><td>Vacío</td><td>No: un scope vacío se rechaza.</td></tr>
   </tbody>
 </table>
 
-<h2>11.1 Límites de la delegación</h2>
+<h2>10.1 Límites de la delegación</h2>
 <ul>
   <li>Máximo <strong>2 pasos</strong> de herramienta dentro del span.</li>
   <li>Solo herramientas de lectura. Una escritura produce <span class="mono">delegation_write_refused</span>.</li>
@@ -824,10 +794,10 @@
   <li>Cada resultado delegado lleva procedencia: <span class="mono">sub_agent</span>, <span class="mono">step</span> y <span class="mono">tool</span>.</li>
 </ul>
 
-<!-- ============================ 12 ============================ -->
-<h1>12. Búsqueda y lectura web</h1>
+<!-- ============================ 11 ============================ -->
+<h1>11. Búsqueda y lectura web</h1>
 
-<h2>12.1 Búsqueda</h2>
+<h2>11.1 Búsqueda</h2>
 <ul>
   <li>Proveedor: Brave Search (<span class="mono">https://api.search.brave.com/res/v1/web/search</span>).</li>
   <li>País <span class="mono">cl</span>, idioma <span class="mono">es</span>, tiempo de espera de 5 segundos y un reintento ante 429 con espera máxima de 2 segundos.</li>
@@ -835,7 +805,7 @@
   <li>Solo se aceptan URLs de resultado <span class="mono">http</span> o <span class="mono">https</span>.</li>
 </ul>
 
-<h2>12.2 Lectura de una página</h2>
+<h2>11.2 Lectura de una página</h2>
 <ul>
   <li>Solo esquemas <span class="mono">http</span> y <span class="mono">https</span>. Rechaza credenciales embebidas, puertos no estándar y direcciones no públicas, multicast o NAT64.</li>
   <li>Sigue como máximo <strong>3 redirecciones</strong> y revalida cada salto contra la política anti-SSRF.</li>
@@ -845,8 +815,8 @@
 </ul>
 <p>Cuando la respuesta usa web, debe citar la URL de la fuente. En una lectura con redirecciones, cita la URL final que reporta la evidencia.</p>
 
-<!-- ============================ 13 ============================ -->
-<h1>13. Automatizaciones y recetas</h1>
+<!-- ============================ 12 ============================ -->
+<h1>12. Automatizaciones y recetas</h1>
 
 <p><span class="mono">automation.create_rule</span> instala y activa una receta existente. No permite escribir una regla arbitraria: el <span class="mono">recipe_id</span> debe pertenecer al catálogo y los parámetros se validan por receta. La operación requiere aprobación de clase A.</p>
 
@@ -869,10 +839,10 @@
 </table>
 <p>Toda receta exige el parámetro <span class="mono">channel</span>. La instalación queda activa y auditada como acción del asistente.</p>
 
-<!-- ============================ 14 ============================ -->
-<h1>14. Adjuntos y contenido multimodal</h1>
+<!-- ============================ 13 ============================ -->
+<h1>13. Adjuntos y contenido multimodal</h1>
 
-<h2>14.1 Adjuntos del hilo</h2>
+<h2>13.1 Adjuntos del hilo</h2>
 <table>
   <thead><tr><th style="width:40%">Límite</th><th>Valor por defecto</th></tr></thead>
   <tbody>
@@ -886,22 +856,22 @@
 </table>
 <p>Los documentos se convierten a texto acotado antes de entrar al contexto. Las imágenes se envían al modelo como partes de imagen en base64. Un mensaje puede combinar adjuntos e imágenes de herramientas.</p>
 
-<h2>14.2 Imágenes bajo demanda</h2>
+<h2>13.2 Imágenes bajo demanda</h2>
 <p><span class="mono">view_image</span> acepta dos fuentes: <span class="mono">project</span> y <span class="mono">thread</span>. Valida que la imagen pertenezca al proyecto del dueño o al hilo del dueño y que no esté borrada. Si supera el límite de visión, responde <span class="mono">image exceeds the vision size limit</span>. El modelo recibe la imagen como parte de visión, no como una URL.</p>
 
-<h2>14.3 Artefactos</h2>
+<h2>13.3 Artefactos</h2>
 <p>Un artefacto es un archivo de salida del asistente, no un adjunto de entrada. Se guarda en el hilo, se descarga por la ruta del panel y queda auditado. No se indexa en la KB ni se convierte en archivo de proyecto automáticamente.</p>
 
-<!-- ============================ 15 ============================ -->
-<h1>15. Contexto, compactación y costo</h1>
+<!-- ============================ 14 ============================ -->
+<h1>14. Contexto, compactación y costo</h1>
 
-<h2>15.1 Armado del contexto</h2>
-<p>El contexto del turno combina, en orden: la persona del agente, las instrucciones del proyecto, el overlay de planificación cuando corresponde, las skills declaradas, los mensajes del hilo, los recursos fijados, los adjuntos y la evidencia de herramientas y KB. La inyección de contexto está acotada a 4.000 tokens; el resto de la ventana se reserva a la conversación.</p>
+<h2>14.1 Armado del contexto</h2>
+<p>El contexto del turno combina, en orden: la persona del agente, las instrucciones del proyecto, las skills declaradas, los mensajes del hilo, los recursos fijados, los adjuntos y la evidencia de herramientas y KB. La inyección de contexto está acotada a 4.000 tokens; el resto de la ventana se reserva a la conversación.</p>
 
-<h2>15.2 Compactación</h2>
+<h2>14.2 Compactación</h2>
 <p>Cuando la ocupación del hilo alcanza el umbral de 4.000 tokens, el historial se compacta: se conservan los mensajes más recientes hasta 2.000 tokens y se escribe un recap en memoria. La compactación mide la historia real del hilo, no el contexto inyectado, porque el contexto inyectado ya viene recortado y nunca alcanzaría el umbral. Un fallo de compactación no inventa un resumen: se registra como fallo y el turno continúa con lo que haya.</p>
 
-<h2>15.3 Costo</h2>
+<h2>14.3 Costo</h2>
 <ul>
   <li>Límite por hilo: <strong>USD 1,50</strong> por defecto.</li>
   <li>Límite diario: <strong>USD 5,00</strong> por defecto, sobre el día UTC.</li>
@@ -911,16 +881,16 @@
   <li>Una herramienta no se ejecuta si el costo está bloqueado: el error es <span class="mono">assistant cost limit blocks tool execution</span>.</li>
 </ul>
 
-<h2>15.4 Idempotencia y reanudación</h2>
+<h2>14.4 Idempotencia y reanudación</h2>
 <p>Cada turno tiene un <span class="mono">run_id</span> y un mensaje de solicitud. La ejecución de herramientas y el registro de costo usan claves derivadas del <span class="mono">run_id</span>, de modo que un reintento no duplique el gasto. Un turno puede reanudarse con el plan, la aprobación y los resultados previos; también puede detenerse de forma cooperativa desde el panel, lo que marca el estado como <span class="mono">cancelled</span> y revoca cualquier aprobación pendiente.</p>
 
-<!-- ============================ 16 ============================ -->
-<h1>16. Roles y matriz de permisos</h1>
+<!-- ============================ 15 ============================ -->
+<h1>15. Roles y matriz de permisos</h1>
 
-<h2>16.1 Regla de intersección</h2>
+<h2>15.1 Regla de intersección</h2>
 <p>La herramienta efectiva es la intersección de tres conjuntos: el whitelist del agente seleccionado para el rol, el allowlist del rol y las herramientas habilitadas por la política del proyecto o del hilo (para las opt-in). Una herramienta denegada por rol no se puede habilitar desde el proyecto ni desde el hilo.</p>
 
-<h2>16.2 Matriz por dominio</h2>
+<h2>15.2 Matriz por dominio</h2>
 <table>
   <thead><tr><th style="width:36%">Capacidad</th><th style="width:12%">admin</th><th style="width:12%">operador</th><th style="width:14%">técnico</th><th>Observación</th></tr></thead>
   <tbody>
@@ -946,7 +916,7 @@
   </tbody>
 </table>
 
-<h2>16.3 Conteos por rol</h2>
+<h2>15.3 Conteos por rol</h2>
 <table>
   <thead><tr><th style="width:28%">Rol</th><th style="width:20%">Herramientas declaradas</th><th>Agente</th></tr></thead>
   <tbody>
@@ -956,8 +926,8 @@
   </tbody>
 </table>
 
-<!-- ============================ 17 ============================ -->
-<h1>17. Comportamiento ante fallos</h1>
+<!-- ============================ 16 ============================ -->
+<h1>16. Comportamiento ante fallos</h1>
 
 <p>El agente no debe presentar un fallo como éxito. Estas son las respuestas y códigos explícitos que conviene usar al probar:</p>
 
@@ -986,8 +956,8 @@
   </tbody>
 </table>
 
-<!-- ============================ 18 ============================ -->
-<h1>18. Matriz de pruebas de capacidades</h1>
+<!-- ============================ 17 ============================ -->
+<h1>17. Matriz de pruebas de capacidades</h1>
 
 <p>Esta matriz permite recorrer todas las capacidades desde el panel. Cada caso indica la acción esperada; el resultado exacto depende de los datos del entorno. Para las pruebas de escritura conviene usar un proyecto desechable y un usuario <span class="mono">admin</span>.</p>
 
@@ -1017,9 +987,7 @@
     <tr><td class="test-id">T21</td><td class="prompt">“Busca en la web el precio del cobre y cita la fuente”</td><td>Se ejecuta <span class="mono">web.search</span> (opt-in habilitado) y la respuesta cita la URL. Si se pide leer una página, <span class="mono">web.fetch</span> respeta la política anti-SSRF.</td></tr>
     <tr><td class="test-id">T22</td><td class="prompt">“Instala la receta de recordatorio de citas”</td><td>Se ejecuta <span class="mono">automation.create_rule</span> con un <span class="mono">recipe_id</span> válido y requiere aprobación. Un id inventado se rechaza.</td></tr>
     <tr><td class="test-id">T23</td><td class="prompt">“Cambia el saludo del chatbot a ‘Hola, ¿en qué te ayudo?’”</td><td>Solo admin. Se ejecuta <span class="mono">settings.update</span> con <span class="mono">messages.greeting</span> y requiere aprobación. Una clave no permitida se rechaza.</td></tr>
-    <tr><td class="test-id">T24</td><td class="prompt">“Abre una sesión de planificación sobre la campaña de invierno”</td><td>Se ejecuta <span class="mono">planning.open</span> y se crea un hilo nuevo. En ese hilo, las escrituras de negocio quedan bloqueadas; solo memoria y planificación están disponibles.</td></tr>
     <tr><td class="test-id">T25</td><td class="prompt">“Registra que decidimos priorizar emergencias” / “Cierra la sesión”</td><td>La decisión se registra solo tras confirmación del usuario. El cierre devuelve reporte, <span class="mono">gaps</span>, <span class="mono">minimum_met</span> y <span class="mono">handoff</span>.</td></tr>
-    <tr><td class="test-id">T26</td><td class="prompt">“Lee el reporte de la sesión campaña-invierno-&lt;id&gt;”</td><td>Se ejecuta <span class="mono">planning.read_report</span> y devuelve el reporte sin reabrirlo ni editarlo.</td></tr>
     <tr><td class="test-id">T27</td><td class="prompt">“Propón una skill para este proyecto que explique el tono de cotización”</td><td>Requiere aprobación. Al confirmar, la skill queda en la configuración del proyecto y aparece en el índice efectivo. Un nombre global colisionante se rechaza.</td></tr>
     <tr><td class="test-id">T28</td><td class="prompt">“Revisa el historial de un cliente” (sesión de técnico)</td><td>La herramienta no existe para el rol: el técnico no puede listar clientes ni leer historiales. Debe responder que está fuera de su alcance.</td></tr>
     <tr><td class="test-id">T29</td><td class="prompt">“Cambia la configuración del chatbot” (sesión de operador)</td><td>La herramienta no está disponible para operador. No debe intentar un rodeo.</td></tr>
@@ -1033,8 +1001,8 @@
   </tbody>
 </table>
 
-<!-- ============================ 19 ============================ -->
-<h1>19. Límites explícitos: lo que no puede hacer</h1>
+<!-- ============================ 18 ============================ -->
+<h1>18. Límites explícitos: lo que no puede hacer</h1>
 
 <p>Estas fronteras son parte del contrato. Si una prueba las cruza, el agente debe negarse o responder que no puede; no debe improvisar.</p>
 
@@ -1051,14 +1019,13 @@
   <li><strong>No archiva el proyecto <span class="mono">default</span></strong> ni fusiona proyectos entre dueños distintos.</li>
   <li><strong>No inventa capacidades.</strong> Si una herramienta no está en el catálogo efectivo, no existe para ese turno.</li>
   <li><strong>No declara éxito sin evidencia.</strong> Si la herramienta falla, la respuesta debe reflejarlo; si la verificación falla, debe decirlo.</li>
-  <li><strong>No convierte una sesión de planificación en ejecución.</strong> Mientras está activa, las escrituras de negocio están bloqueadas; las acciones se ejecutan después, fuera de la sesión.</li>
   <li><strong>No supera los topes de contexto, pasos, adjuntos, archivos ni costo.</strong> Los topes son parte del contrato, no sugerencias.</li>
 </ul>
 
-<!-- ============================ 20 ============================ -->
-<h1>20. Referencias de código y glosario</h1>
+<!-- ============================ 19 ============================ -->
+<h1>19. Referencias de código y glosario</h1>
 
-<h2>20.1 Rutas principales</h2>
+<h2>19.1 Rutas principales</h2>
 <ul class="refs">
   <li><span class="mono">agent/registry.yaml</span> — registro declarativo del agente, subagentes y agentes por rol.</li>
   <li><span class="mono">agent/personas/assistant.md</span> — persona del agente por defecto.</li>
@@ -1066,7 +1033,7 @@
   <li><span class="mono">agent/prompts/assistant_plan.md</span> y <span class="mono">assistant_respond.md</span> — plantillas del planificador y del respondedor.</li>
   <li><span class="mono">agent/skills/assistant/</span> — skills globales.</li>
   <li><span class="mono">app/chat/assistant/graph.py</span> — construcción del grafo y ruteo entre nodos.</li>
-  <li><span class="mono">app/chat/assistant/nodes.py</span> — contexto, planificación, guardrails, ejecución, evidencia y respuesta.</li>
+  <li><span class="mono">app/chat/assistant/nodes.py</span> — contexto, plan del turno, guardrails, ejecución, evidencia y respuesta.</li>
   <li><span class="mono">app/chat/assistant/state.py</span> — contrato estricto del plan y del estado durable.</li>
   <li><span class="mono">app/chat/assistant/tools/registry.py</span> — catálogo de las 38 herramientas, argumentos, tiers y allowlist por rol.</li>
   <li><span class="mono">app/chat/assistant/approval.py</span> — emisión, validación y consumo de aprobaciones exactas.</li>
@@ -1076,7 +1043,6 @@
   <li><span class="mono">app/services/project_config.py</span> — configuración efectiva por proyecto, hilo y rol.</li>
   <li><span class="mono">app/services/thread_resources.py</span> — recursos fijados al hilo.</li>
   <li><span class="mono">app/services/projects.py</span> — ciclo de vida de proyectos y auditoría.</li>
-  <li><span class="mono">app/services/planning.py</span> — sesiones, reporte, brechas y handoff.</li>
   <li><span class="mono">app/services/tukulpan.py</span> — memoria, deduplicación, búsqueda híbrida y recap.</li>
   <li><span class="mono">app/services/assistant_artifacts.py</span> — artefactos descargables del hilo.</li>
   <li><span class="mono">app/services/project_files.py</span> — archivos de proyecto, tipos, tamaños y paginación.</li>
@@ -1086,21 +1052,20 @@
   <li><span class="mono">app/panel/api/routes/chat.py</span> — rutas del panel para hilos, mensajes, aprobaciones, recursos, adjuntos, artefactos y capacidades.</li>
 </ul>
 
-<h2>20.2 Glosario</h2>
+<h2>19.2 Glosario</h2>
 <table>
   <thead><tr><th style="width:26%">Término</th><th>Significado</th></tr></thead>
   <tbody>
     <tr><td><strong>Tukulpan</strong></td><td>Sistema de memoria persistente del agente, con ejes, tipos, visibilidad y búsqueda híbrida.</td></tr>
     <tr><td><strong>Own</strong></td><td>Selector de memoria que une el eje del hilo actual con el eje del proyecto.</td></tr>
-    <tr><td><strong>Handoff</strong></td><td>Marca de una memoria o de un cierre de planificación que deja un punto de continuación para turnos futuros.</td></tr>
+    <tr><td><strong>Handoff</strong></td><td>Marca de una memoria que deja un punto de continuación para turnos futuros.</td></tr>
     <tr><td><strong>Opt-in</strong></td><td>Herramienta habilitada por defecto pero que puede apagarse por proyecto o por hilo.</td></tr>
     <tr><td><strong>Clase A</strong></td><td>Escritura que exige aprobación exacta del dueño.</td></tr>
-    <tr><td><strong>Clase B</strong></td><td>Escritura autónoma permitida por el contrato (memoria propia y artefactos/planificación).</td></tr>
+    <tr><td><strong>Clase B</strong></td><td>Escritura autónoma permitida por el contrato (memoria propia y artefactos).</td></tr>
     <tr><td><strong>Guardrail</strong></td><td>Validación determinista del plan antes de ejecutar: forma, herramienta, argumentos, rol, política y aprobación.</td></tr>
     <tr><td><strong>Evidencia</strong></td><td>Resultado acotado de una herramienta o de la KB que el respondedor puede usar; no es una instrucción.</td></tr>
     <tr><td><strong>Project</strong></td><td>Espacio de trabajo con memoria, archivos, skills e instrucciones propias.</td></tr>
     <tr><td><strong>Artifact</strong></td><td>Archivo de salida descargable, guardado en el hilo actual.</td></tr>
-    <tr><td><strong>Sesión de planificación</strong></td><td>Hilo dedicado a pensar un tema, con registro de decisiones y notas confirmadas y reporte de cierre.</td></tr>
     <tr><td><strong>Delegación</strong></td><td>Span de lectura acotado ejecutado por un subagente declarado, que devuelve evidencia al agente principal.</td></tr>
     <tr><td><strong>Compactación</strong></td><td>Recorte del historial cuando la ventana se llena, con retención de los mensajes más recientes y recap en memoria.</td></tr>
   </tbody>

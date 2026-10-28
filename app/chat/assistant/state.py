@@ -7,7 +7,7 @@ from math import ceil
 from copy import deepcopy
 from typing import Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ASSISTANT_STATE_KEYS = {
     "context_meta",
@@ -74,50 +74,6 @@ class PlannerOutput(BaseModel):
         return self
 
 
-class CortexNote(BaseModel):
-    """One structured planning note captured with explicit user confirmation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["objective", "risk", "next_step", "general"]
-    content: str = Field(min_length=1)
-
-
-class CortexDecision(BaseModel):
-    """One structured planning decision captured with explicit user confirmation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    title: str = Field(min_length=1)
-    content: str = Field(min_length=1)
-
-
-class CortexSession(BaseModel):
-    """Validated thread-scoped Cortex state."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    slug: str = Field(min_length=1)
-    topic: str = Field(min_length=1)
-    status: Literal["active", "closed"]
-    opened_at: str = Field(min_length=1)
-    closed_at: str | None
-    report_key: str | None
-    decisions: list[CortexDecision] = Field(default_factory=list)
-    notes: list[CortexNote] = Field(default_factory=list)
-
-
-def validate_cortex_session(state: object) -> bool:
-    """Return whether a state contains a complete, valid Cortex session."""
-    if not isinstance(state, dict) or "cortex_session" not in state:
-        return False
-    try:
-        CortexSession.model_validate(state["cortex_session"])
-    except (TypeError, ValidationError):
-        return False
-    return True
-
-
 def merge_assistant_state(current: dict, update: dict) -> dict:
     """Recursively merge nested state without replacing sibling mappings."""
     result = deepcopy(current)
@@ -161,7 +117,6 @@ class AssistantState(TypedDict, total=False):
     compaction: dict
     extension_hooks: dict
     kb_chunks: list[dict]
-    cortex_session: dict
     legacy_compat: bool
     resume: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
