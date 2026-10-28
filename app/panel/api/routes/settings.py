@@ -125,6 +125,9 @@ class MessageTemplatesBody(BaseModel):
 class HoursBody(BaseModel):
     timezone: Any
     schedule: Any
+    # No `closure_enabled` here on purpose: this router sets VALUES, never a
+    # switch (tests/functional/test_invariant_contract.py). The status is read
+    # below so the panel can show it; flipping it is an operator action in ops.md.
 
 
 class TarifaBody(BaseModel):
@@ -436,6 +439,7 @@ def settings_get(
         "hours": {
             "timezone": settings_service.get_hours_timezone(session),
             "schedule": settings_service.get_hours_schedule(session),
+            "closure_enabled": settings_service.get_hours_closure_enabled(session),
         },
         "tarifa": settings_service.get_tarifa_precios(session),
         "persona": _persona_payload(session),

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from app.chat.state import ConversationState
 from app.services.settings import (
     MESSAGE_DEFAULTS,
+    get_hours_closure_enabled,
     get_hours_schedule,
     get_hours_timezone,
     get_message,
@@ -104,7 +105,7 @@ def closure_gate(state: ConversationState) -> dict:
                 ]
             }
 
-        if not is_open_at(
+        if get_hours_closure_enabled(session) and not is_open_at(
             schedule=get_hours_schedule(session),
             timezone_name=get_hours_timezone(session),
             now=datetime.now(timezone.utc),

@@ -15,7 +15,11 @@ from app.services.audit import record_audit
 from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
 from app.services.events import publish_event
 from app.services.notifications import notify_admins
-from app.services.settings import get_hours_timezone
+from app.services.settings import (
+    get_hours_schedule,
+    get_hours_timezone,
+    validate_hours_schedule,
+)
 
 
 _OVERLAP_CONSTRAINTS = {
@@ -265,6 +269,55 @@ def _matches_window(slot: tuple[date, time], window: SlotWindow | None) -> bool:
     return True
 
 
+def _minutes_of_day(value: str) -> int:
+    """A `"HH:MM"` clock as minutes since midnight, so an end can never wrap."""
+    hours, minutes = value.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+def business_window(schedule: list[dict]) -> list[tuple[frozenset[int], int, int]]:
+    """Parse `hours.schedule` into (weekdays, open minute, close minute) entries.
+
+    Empty or malformed input returns an empty list, which every caller reads as
+    "no restriction": unreadable legacy data must not empty the calendar, the
+    same fail-open rule `is_open_at` documents.
+    """
+    try:
+        validate_hours_schedule(schedule)
+    except (TypeError, ValueError):
+        return []
+    return [
+        (
+            frozenset(entry["days"]),
+            _minutes_of_day(entry["open"]),
+            _minutes_of_day(entry["close"]),
+        )
+        for entry in schedule
+    ]
+
+
+def fits_business_window(
+    slot: tuple[date, time],
+    duration_minutes: int,
+    window_entries: list[tuple[frozenset[int], int, int]],
+) -> bool:
+    """Whether the WHOLE visit fits inside one configured business-window entry.
+
+    Both bounds are required. Filtering only the start would keep offering 17:30
+    for a 60-minute visit at a business that closes at 18:00 — an offer nobody
+    can honour, which is the incoherence this filter exists to remove.
+    """
+    if not window_entries:
+        return True
+    day, clock = slot
+    start = _minutes_of_day(f"{clock.hour:02d}:{clock.minute:02d}")
+    end = start + duration_minutes
+    return any(
+        day.isoweekday() in days and opens <= start and end <= closes
+        for days, opens, closes in window_entries
+    )
+
+
 def open_slots_for_assignment(
     session: Session,
     *,
@@ -292,6 +345,7 @@ def open_slots_for_assignment(
 
     window_end = now.astimezone(timezone.utc) + timedelta(days=days)
     timezone_name = get_hours_timezone(session)
+    window_entries = business_window(get_hours_schedule(session))
     zone = _zone(timezone_name)
     if window is not None and window.day is not None:
         requested_end = datetime.combine(window.day + timedelta(days=1), time.min, tzinfo=zone)
@@ -344,6 +398,7 @@ def open_slots_for_assignment(
         (slot, coverers)
         for slot, coverers in sorted(candidates.items(), key=lambda item: item[0])
         if _matches_window(slot, window)
+        and fits_business_window(slot, duration_minutes, window_entries)
     ]
     return [
         (_least_loaded(coverers, loads, day, rotation), day, clock)

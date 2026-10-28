@@ -959,7 +959,11 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, "
         "o que te atienda una persona?"
     )
-    assert body["hours"] == {"timezone": "America/Santiago", "schedule": []}
+    assert body["hours"] == {
+        "timezone": "America/Santiago",
+        "schedule": [],
+        "closure_enabled": False,
+    }
     assert body["booking"] == {"lead_hours": 2}
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
@@ -1124,6 +1128,30 @@ def test_settings_update_hours_audited(client, make_user):
         ).all()
     assert {audit.entity_id for audit in audits} == {"hours.timezone", "hours.schedule"}
     assert all(audit.actor == "adm" for audit in audits)
+
+
+def test_settings_hours_route_cannot_flip_the_closure_switch(client, make_user):
+    """The panel sets values, never a switch (invariant: no toggle keys written).
+
+    Pinned here as behaviour, not only as a source scan: the section accepts the
+    payload a curious client would send and simply does not store the switch, so
+    an operator cannot silence the chat by guessing a field name.
+    """
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    schedule = [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}]
+
+    resp = client.post(
+        "/panel/api/settings/hours",
+        json={"timezone": "UTC", "schedule": schedule, "closure_enabled": True},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200, resp.text
+    with SessionLocal() as session:
+        assert session.get(Settings, "hours.closure_enabled") is None
+    # The panel still SEES the state so it can display it.
+    assert client.get("/panel/api/settings").json()["hours"]["closure_enabled"] is False
 
 
 @pytest.mark.parametrize(

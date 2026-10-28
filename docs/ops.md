@@ -396,6 +396,34 @@ needed. **Rule**: verify the JSON is valid before saving — an invalid
 `scope_rules` value makes the classification path fall back to the default
 (marked in logs).
 
+**Opening hours are two decisions on one window.** `hours.schedule` is the only
+source of truth for when a visit can be booked: `open_slots_for_assignment`
+offers nothing outside it, and a visit has to fit entirely before closing (a
+60-minute service is not offered at 17:30 when the window closes at 18:00). An
+empty schedule means "no restriction" and is what every deployment ships with.
+
+Silencing the chat outside those hours is a **separate, opt-in switch**:
+`hours.closure_enabled`, `false` by default. With it off the bot answers at any
+hour and only the booking offers respect the window; with it on, a message
+outside the window gets `messages.out_of_hours` and no conversation runs.
+
+**The panel cannot flip it, on purpose.** The panel sets values, never a switch
+(`tests/functional/test_invariant_contract.py`), and this one changes whether
+customers get an answer at all. It is an operator action, here:
+
+```bash
+# turn the out-of-hours closure on (default is off). Back it up first.
+docker exec lumat-db-1 psql -U lumat -d lumat -c \
+  "SELECT value FROM settings WHERE key='hours.closure_enabled';"
+docker exec lumat-db-1 psql -U lumat -d lumat -c \
+  "INSERT INTO settings (key, value) VALUES ('hours.closure_enabled', 'true'::jsonb)
+   ON CONFLICT (key) DO UPDATE SET value = 'true'::jsonb;"
+```
+
+A psql write bypasses the `settings.change` audit that the panel route records:
+note the change and its reason in the release record (§2.9). The panel still
+SHOWS the current state in `GET /panel/api/settings` under `hours.closure_enabled`.
+
 ### 2.7 Monitoring alert triage
 
 `infra/monitor.sh` (every 5 min) sends an SMTP alert when a check fails.

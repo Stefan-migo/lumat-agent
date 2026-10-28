@@ -461,6 +461,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     MESSAGE_TEMPLATES_KEY: [],
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
+    "hours.closure_enabled": False,
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
     # last N days). Panel-editable via the generic settings KV surface.
     "kpi.window_days": 7,
@@ -788,6 +789,12 @@ def get_hours_schedule(session: Session) -> list[dict[str, Any]]:
     """Return the configured schedule, or the empty feature-off default."""
     schedule = get_setting(session, "hours.schedule", default=[])
     return schedule if isinstance(schedule, list) else []
+
+
+def get_hours_closure_enabled(session: Session) -> bool:
+    """Return whether the chat's out-of-hours closure gate is enabled."""
+    enabled = get_setting(session, "hours.closure_enabled", default=False)
+    return enabled if isinstance(enabled, bool) else False
 
 
 def is_open_at(*, schedule: list, timezone_name: str, now: datetime) -> bool:
