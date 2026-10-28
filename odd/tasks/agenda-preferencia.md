@@ -101,6 +101,24 @@ estaba duplicada (~30 líneas) y se extrajo a `booking.slots_for_window`, que ah
   lunes a sábado 09:00–18:00. `--reset` trunca `technician_availability` pero preserva el weekly
   schedule, así que `ensure_horizon` vuelve a materializar los bloques.
 
+### Verificación con modelo real
+
+Corrida `agenda-pref-4` — sello `e90c5a3d`, corpus `1735bb01b90e`, KB `6fbd06e66d2a`, bot
+`deepseek/deepseek-flash`, juez `deepseek-v4.1-flash`: **2 de 2 escenarios, ningún gate en falla**.
+
+- `simple-dia-especifico`: el cliente pidió "puedo el jueves en la mañana" y la oferta fue
+  **`29/10/2026` 09:00 / 09:30 / 10:00** — jueves por la mañana.
+- **Diferencial contra el código previo**: el harness del main worktree (`conv 37`, código anterior a esta
+  rama) recibió el mismo pedido ("el jueves por la mañana") y ofreció `28/10/2026` 09:00/09:30/10:00 —
+  miércoles. Mismo pedido, mismo formato de respuesta, día distinto: eso es el defecto y su arreglo.
+- `simple-horario-sabado`: el bot responde "agendamos de lunes a sábado, de 09:00 a 18:00", ya no
+  "el sábado se coordina con un asesor".
+
+Corrida `agenda-pref-2` (los cuatro escenarios de agenda, con juez): **2 de 4**; las dos fallas no son de
+esta feature — ver "Hallazgos fuera de alcance". Antes de eso, dos corridas más no midieron nada: una sin
+`DEEPSEEK_API_KEY` (el proveedor no estaba configurado) y una con el escenario propio trabado en el
+consentimiento. Las dos se descartaron y se repitieron, no se reportaron.
+
 ## Log
 
 - **L1** (owner, 2026-10-28): *"hey chat. necesito que revises en servidor solo lectura y revises la ultima
@@ -127,3 +145,24 @@ estaba duplicada (~30 líneas) y se extrajo a `booking.slots_for_window`, que ah
 - **E6**: `technician_availability` del harness tiene bloque el 2026-10-29 (jueves) 09:00–18:00 local,
   `available=true`, sin citas: el pedido de Miguel era servible. `technician_weekly_schedule` del harness
   incluye weekday 7 (domingo); el de prod llega al 6 (sábado).
+
+## Hallazgos fuera de alcance (no se tocan en esta feature)
+
+Encontrados durante la verificación real; se reportan, no se arreglan acá porque son
+otra conducta y merecen su propia feature.
+
+- **El consentimiento acepta negativas compuestas y no afirmativas compuestas.**
+  `app/chat/nodes/capture.py:122` exige que el mensaje completo sea exactamente
+  `si`/`ok`/`claro`/`confirmo`/`acepto`, mientras que `_NO_WORDS` (línea 126) ya incluye
+  `no autorizo`, `no quiero`, `no acepto`, `no gracias`. Resultado: "si, autorizo" no se
+  entiende y el bot vuelve a preguntar (`capture_consent_unclear`), pero "no autorizo" sí.
+  Evidencia en tres conversaciones independientes: harness `conv 37` ("sio"), `conv 38`
+  ("y parsi") y el escenario `simple-dia-especifico` en la corrida `agenda-pref-2`.
+- **`complejo-agendar-calefont` deriva antes de la agenda.** Turno 3: el bot pregunta por la
+  falla y la respuesta ("el calefont es junkers, tiro natural") no la contesta, así que
+  escala con `campo_sin_respuesta`. Es captura y clasificación, no agenda.
+- **`complejo-no-quiere-email` tiene la expectativa vieja.** Declara 4 turnos y espera
+  derivación, pero desde que el email es omitible el flujo avanza y necesita más turnos
+  para llegar a la oferta. Ya estaba registrado como falla de expectativa del corpus el
+  2026-10-27; no es una regresión de este cambio.
+
