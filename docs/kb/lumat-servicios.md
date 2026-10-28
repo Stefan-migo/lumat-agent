@@ -2,7 +2,7 @@
 
 ## Visita técnica
 
-**Visita técnica.** Un técnico especializado de Lumat va a tu domicilio, evalúa el funcionamiento del equipo, identifica las causas de la falla y determina qué se necesita para solucionarla. Dura entre 20 y 30 minutos.
+**Visita técnica.** Un técnico especializado de Lumat va a tu domicilio, evalúa el funcionamiento del equipo, identifica las causas de la falla y determina qué se necesita para solucionarla.
 
 **Visita técnica — qué incluye.** Inspección del equipo, evaluación general de funcionamiento, identificación de fallas, diagnóstico técnico y recomendación de reparación o mantención.
 
@@ -10,7 +10,7 @@
 
 ## Mantención de calefont
 
-**Mantención de calefont.** Servicio preventivo de limpieza y revisión del calefont para conservar su funcionamiento, mejorar su eficiencia y detectar anomalías en el agua caliente y en la seguridad del equipo. Dura entre 45 y 90 minutos.
+**Mantención de calefont.** Servicio preventivo de limpieza y revisión del calefont para conservar su funcionamiento, mejorar su eficiencia y detectar anomalías en el agua caliente y en la seguridad del equipo.
 
 **Mantención de calefont — qué incluye.** Inspección general, limpieza de componentes accesibles, revisión de quemadores y del sistema de encendido, revisión de filtros, revisión de fugas sin cambio de piezas, inspección de conexiones y evacuación de gases, pruebas de funcionamiento y recomendaciones técnicas.
 
@@ -18,7 +18,7 @@
 
 ## Mantención de caldera
 
-**Mantención de caldera.** Servicio preventivo para calderas de calefacción y agua caliente sanitaria. Conserva el funcionamiento del equipo, revisa sus componentes principales y detecta anomalías de operación. Dura entre 45 y 90 minutos.
+**Mantención de caldera.** Servicio preventivo para calderas de calefacción y agua caliente sanitaria. Conserva el funcionamiento del equipo, revisa sus componentes principales y detecta anomalías de operación.
 
 **Mantención de caldera — qué incluye.** Inspección general, revisión de componentes internos accesibles, limpieza preventiva, revisión del sistema de combustión, control de presión, revisión de sistemas de seguridad, verificación de calefacción y agua caliente, revisión de fugas, limpieza de filtros, puesta en marcha y purgado.
 
@@ -26,7 +26,7 @@
 
 ## Lavado de red de calefacción
 
-**Lavado de red de calefacción.** Limpieza profunda del circuito de calefacción central para eliminar lodos, sedimentos, óxido e impurezas de tuberías, radiadores y componentes. Mejora la circulación del agua y recupera la eficiencia térmica. Dura entre 3 y 6 horas, según la extensión de la red y su nivel de suciedad.
+**Lavado de red de calefacción.** Limpieza profunda del circuito de calefacción central para eliminar lodos, sedimentos, óxido e impurezas de tuberías, radiadores y componentes. Mejora la circulación del agua y recupera la eficiencia térmica. El tiempo que toma depende de la extensión de la red y de su nivel de suciedad.
 
 **Lavado de red — qué resuelve.** Radiadores que calientan parcialmente o tienen zonas frías, circulación deficiente, calefacción que demora en alcanzar la temperatura, calor desigual entre radiadores, obstrucciones parciales y ruidos de circulación.
 

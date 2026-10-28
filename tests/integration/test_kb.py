@@ -372,10 +372,11 @@ def test_kb_retrieve_default_project_filter_returns_all_documents(fake_embedder)
             "carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber",
             ["lumat-cobertura-horarios"],
             0.1298,
-            # S5 (agenda-preferencia): the Saturday answer moved from "coordinated
-            # with an advisor" to the booking hours, because the agenda does sell
-            # Saturday and the old heading is the contradiction being removed.
-            "lunes a sábado",
+            # S7 (`agenda-config-fuente`): the days and hours are answered from
+            # `hours.schedule` (`configured_answers.hours_reply`), so the routed
+            # document names the window instead of listing its values. The routing
+            # property this case pins is unchanged.
+            "ventana de atención",
         ),
         (
             "y eso cuanto de garantia tiene?",

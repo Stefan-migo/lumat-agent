@@ -106,25 +106,32 @@ def test_kb_each_service_declares_scope(repo_root):
     assert text.count("qué no incluye") >= 4
 
 
-def test_kb_lists_seven_communes_and_coordinates_outside(repo_root):
-    """S7: exact coverage list, out-of-area coordination, no rejection."""
+def test_kb_keeps_the_out_of_area_policy_without_restating_the_list(repo_root):
+    """S7 (`agenda-config-fuente`, supersedes the list requirement here).
+
+    The covered communes are configuration (`coverage.communes`) and the customer
+    answer comes from `configured_answers.coverage_reply`. A document that lists
+    them is a second source of truth that can contradict the setting, so the KB
+    keeps only the policy: an advisor coordinates, nobody is rejected.
+    """
     text = _read(repo_root, "lumat-cobertura-horarios.md")
     for commune in COMMUNES:
-        assert commune in text, commune
+        assert commune not in text, commune
     assert "un asesor coordina" in text
+    assert "igual podemos ayudarte" in text
 
 
 def test_kb_hours_and_guarantees(repo_root):
-    """S8/S9 + S5 (agenda-preferencia): the agenda is bookable Monday to Saturday.
+    """The schedule is configuration; the KB keeps the weekend policy.
 
-    The KB used to send every Saturday to an advisor while `technician_weekly_schedule`
-    carried Saturday blocks, so the bot denied availability the agenda would honour.
-    The owner resolved the contradiction in favour of the agenda: Saturday is online,
-    Sunday and holidays stay with an advisor.
+    S5 of `agenda-preferencia` resolved the Saturday contradiction in favour of
+    the agenda, and S7 of `agenda-config-fuente` moved the window itself to
+    `hours.schedule`: the days and hours are answered by
+    `configured_answers.hours_reply`, never restated here.
     """
     hours = _read(repo_root, "lumat-cobertura-horarios.md")
-    assert "lunes a sábado" in hours and "09:00 a 18:00" in hours
-    assert "sábados, domingos" not in hours.lower()
+    assert "09:00" not in hours and "18:00" not in hours
+    assert "lunes a sábado" not in hours
     assert "domingos, los festivos" in hours.lower()
     guarantees = _read(repo_root, "lumat-garantias-pagos.md")
     assert "un año o hasta la próxima mantención" in guarantees
