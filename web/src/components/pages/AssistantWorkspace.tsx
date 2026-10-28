@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { BrainCircuit, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, downloadAssistantConversation, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -295,6 +295,14 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
 
+  const exportThread = async (threadId: number) => {
+    try {
+      await downloadAssistantConversation(threadId);
+    } catch (error: unknown) {
+      setThreadActionError(error instanceof ApiError ? error.detail : "No pudimos exportar la conversación.");
+    }
+  };
+
   const deleteThread = async () => {
     if (!deleteTarget) return;
     try {
@@ -576,10 +584,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                 <Menu
                   label={`Acciones de ${thread?.title || "hilo"}`}
                   trigger="icon"
-                  items={[{ value: "rename", label: "Renombrar", icon: Pencil }, { value: "close", label: "Cerrar pestaña", icon: X }, { value: "delete", label: "Eliminar hilo", icon: Trash2, tone: "danger" }]}
+                  items={[{ value: "rename", label: "Renombrar", icon: Pencil }, { value: "export", label: "Exportar conversación", icon: Download }, { value: "close", label: "Cerrar pestaña", icon: X }, { value: "delete", label: "Eliminar hilo", icon: Trash2, tone: "danger" }]}
                   onSelect={(value) => {
                     setThreadActionError(null);
                     if (value === "rename") { setRenameTarget({ id, title: thread?.title ?? null }); setRenameTitle(thread?.title ?? ""); }
+                    else if (value === "export") void exportThread(id);
                     else if (value === "close") closeTab(tab);
                     else setDeleteTarget({ id, title: thread?.title ?? null });
                   }}

@@ -55,7 +55,7 @@ export async function apiFetch<T>(
   return (await res.json()) as T;
 }
 
-async function apiFetchBlob(path: string): Promise<Blob> {
+async function apiFetchBlobResponse(path: string): Promise<Response> {
   const res = await fetch(path, { credentials: 'include' });
   if (!res.ok) {
     const raw = await res.text().catch(() => '');
@@ -68,7 +68,11 @@ async function apiFetchBlob(path: string): Promise<Blob> {
     }
     throw new ApiError(res.status, detail || `${res.status} ${res.statusText}`.trim());
   }
-  return res.blob();
+  return res;
+}
+
+async function apiFetchBlob(path: string): Promise<Blob> {
+  return (await apiFetchBlobResponse(path)).blob();
 }
 
 export function triggerDownload(blob: Blob, filename: string): void {
@@ -370,6 +374,12 @@ export async function downloadProjectFile(slug: string, fileId: number, filename
 }
 export async function downloadAssistantArtifact(threadId: number, artifactId: number, filename: string): Promise<void> {
   triggerDownload(await apiFetchBlob(`/panel/api/chat/threads/${threadId}/artifacts/${artifactId}/download`), filename);
+}
+export async function downloadAssistantConversation(threadId: number): Promise<void> {
+  const res = await apiFetchBlobResponse(`/panel/api/chat/threads/${threadId}/export`);
+  const disposition = res.headers.get('Content-Disposition');
+  const filename = disposition?.match(/filename="([^"]+)"/i)?.[1] ?? `conversation-${threadId}.md`;
+  triggerDownload(await res.blob(), filename);
 }
 
 export const threadAttachmentContentUrl = (threadId: number, attachmentId: number): string => `/panel/api/chat/threads/${threadId}/attachments/${attachmentId}/content`;

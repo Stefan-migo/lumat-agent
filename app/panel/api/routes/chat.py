@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -303,6 +304,37 @@ def delete_chat_thread(
         raise HTTPException(status_code=404, detail="chat thread not found")
     session.delete(thread)
     return {"ok": True}
+
+
+@router.get("/chat/threads/{thread_id}/export")
+def export_chat_thread(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> Response:
+    thread = session.get(InternalChatThread, thread_id)
+    if thread is None or thread.user_id != current.id:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    messages = session.scalars(
+        select(InternalChatMessage)
+        .where(InternalChatMessage.thread_id == thread_id)
+        .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
+    ).all()
+    title = thread.title or "Conversación"
+    markdown = [f"# {title}", ""]
+    for message in messages:
+        markdown.extend([
+            f"## {message.author} · {message.created_at.isoformat()}",
+            "",
+            message.content,
+            "",
+        ])
+    safe_title = re.sub(r"[^A-Za-z0-9._-]+", "-", title).strip(".-") or "conversacion"
+    return Response(
+        content="\n".join(markdown),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.md"'},
+    )
 
 
 @router.get("/chat/threads/{thread_id}")

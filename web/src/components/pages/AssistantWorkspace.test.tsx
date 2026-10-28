@@ -663,6 +663,35 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByText("Conversación rápida")).not.toBeInTheDocument();
   });
 
+  it("exports a conversation from its thread tab menu", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=901");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [
+        { id: 901, title: "Exportable", created_at: null, updated_at: null, run_status: null, approval_status: null },
+      ] }), { status: 200 });
+      if (url.includes("/export")) return new Response("# Exportable", { status: 200, headers: { "Content-Type": "text/markdown", "Content-Disposition": 'attachment; filename="Exportable.md"' } });
+      return new Response(JSON.stringify({ projects: [], active_runs: [], thread: { id: 901, proyecto: "default", status: "open" }, messages: [] }), { status: 200 });
+    });
+    const MockURL = class extends URL {};
+    Object.defineProperty(MockURL, "createObjectURL", { value: vi.fn().mockReturnValue("blob:assistant-export") });
+    Object.defineProperty(MockURL, "revokeObjectURL", { value: vi.fn() });
+    vi.stubGlobal("URL", MockURL);
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<AssistantWorkspace onCreateThread={vi.fn()} role="admin"><p>Thread</p></AssistantWorkspace>);
+
+    const workspace = screen.getByRole("region", { name: "Área del hilo" });
+    await userEvent.setup().click(await within(workspace).findByRole("button", { name: "Acciones de Exportable" }));
+    const exportItem = await screen.findByRole("menuitem", { name: "Exportar conversación" });
+    expect(exportItem.querySelector("svg")).not.toBeNull();
+    await userEvent.setup().click(exportItem);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/901/export",
+      { credentials: "include" },
+    ));
+  });
+
   it("opens selected history threads as tabs and exposes the real create action", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
