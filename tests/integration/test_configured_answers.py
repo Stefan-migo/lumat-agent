@@ -41,3 +41,19 @@ def test_the_answer_does_not_depend_on_the_classified_intent():
         result = respond(_state("que comunas cubren?", intent=intent))
 
         assert result["replies"][0].startswith("Atendemos normalmente en ")
+
+
+def test_respond_answers_an_hours_question_from_the_configuration():
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            "hours.schedule",
+            [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+        )
+        session.commit()
+
+    result = respond(_state("que horario tienen?"))
+
+    assert result["replies"] == [
+        "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+    ]

@@ -137,3 +137,102 @@ def test_respond_answers_a_coverage_question_before_retrieval(monkeypatch):
     )
 
     assert reply is not None and reply.startswith("Atendemos normalmente en ")
+
+
+# --- S5: opening hours from configuration --------------------------------
+
+
+def _schedule(monkeypatch, schedule):
+    monkeypatch.setattr(
+        configured_answers, "get_hours_schedule", lambda _session: schedule
+    )
+
+
+WEEK = [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}]
+
+
+def test_an_hours_question_names_the_configured_days_and_range(monkeypatch):
+    _schedule(monkeypatch, WEEK)
+
+    reply = configured_answers.hours_reply(
+        SESSION, _state("que horario tienen?")
+    )
+
+    assert reply == "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+
+
+def test_the_range_follows_the_configuration(monkeypatch):
+    _schedule(
+        monkeypatch, [{"days": [1, 2, 3, 4, 5, 6, 7], "open": "10:00", "close": "16:00"}]
+    )
+
+    reply = configured_answers.hours_reply(SESSION, _state("hasta que hora atienden?"))
+
+    assert reply == "Las visitas se agendan de lunes a domingo, de 10:00 a 16:00."
+
+
+def test_several_windows_are_all_named(monkeypatch):
+    _schedule(
+        monkeypatch,
+        [
+            {"days": [1, 2, 3, 4, 5], "open": "09:00", "close": "14:00"},
+            {"days": [6], "open": "10:00", "close": "13:00"},
+        ],
+    )
+
+    reply = configured_answers.hours_reply(SESSION, _state("cual es el horario?"))
+
+    assert reply == (
+        "Las visitas se agendan de lunes a viernes, de 09:00 a 14:00 "
+        "y sábado, de 10:00 a 13:00."
+    )
+
+
+def test_days_that_are_not_consecutive_are_listed(monkeypatch):
+    _schedule(
+        monkeypatch, [{"days": [1, 3, 5], "open": "09:00", "close": "18:00"}]
+    )
+
+    reply = configured_answers.hours_reply(SESSION, _state("que dias atienden?"))
+
+    assert reply == "Las visitas se agendan lunes, miércoles y viernes, de 09:00 a 18:00."
+
+
+def test_an_empty_window_invents_no_schedule(monkeypatch):
+    """S5: an empty window keeps the existing path instead of inventing hours."""
+    _schedule(monkeypatch, [])
+
+    assert configured_answers.hours_reply(SESSION, _state("que horario tienen?")) is None
+
+
+def test_a_place_question_does_not_receive_the_schedule(monkeypatch):
+    """The out-of-coverage policy belongs to the KB, not to an hours answer."""
+    _schedule(monkeypatch, WEEK)
+
+    assert (
+        configured_answers.hours_reply(SESSION, _state("atienden en Providencia?"))
+        is None
+    )
+
+
+def test_an_hours_question_is_reached_when_no_commune_is_named(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    _schedule(monkeypatch, WEEK)
+
+    assert configured_answers.configuration_reply(
+        SESSION, _state("hasta que hora atienden?")
+    ) == "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+
+
+def test_the_precedence_is_the_documented_one(monkeypatch):
+    """A turn naming a covered commune AND an hour is a coverage question.
+
+    Pinned so the order stays a decision: duration → coverage → hours, the first
+    answer that recognises the turn owns it.
+    """
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    _schedule(monkeypatch, WEEK)
+
+    assert configured_answers.configuration_reply(
+        SESSION, _state("atienden en Ñuñoa los sábados?")
+    ).startswith("Atendemos normalmente en ")
