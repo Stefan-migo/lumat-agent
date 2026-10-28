@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 import psycopg
 import pytest
@@ -151,6 +151,67 @@ def test_customer_reschedules_through_graph(mock_openai_chat, monkeypatch):
         assert session.query(DomainEvent).filter_by(
             event_type="appointment.rescheduled", entity_id=str(appointment_id)
         ).count() == 1
+
+
+def test_reschedule_filters_requested_day_and_formats_slots(mock_openai_chat, monkeypatch):
+    from app.chat import slot_window
+
+    _classify_reschedule(monkeypatch)
+    conv_id, _, _ = _seed_conversation()
+    from zoneinfo import ZoneInfo
+
+    today = datetime.now(ZoneInfo("America/Santiago")).date()
+    requested_day = today + timedelta(days=4)
+    technician_id = _add_reschedule_availability()
+    observed = {}
+
+    def slots_for_assignment(session, **kwargs):
+        observed.update(kwargs)
+        return [(technician_id, requested_day, time(10, 0))]
+
+    monkeypatch.setattr(scheduling, "open_slots_for_assignment", slots_for_assignment)
+    reply = _invoke(
+        conv_id,
+        _add_message(
+            conv_id,
+            requested_day.strftime("el %d/%m"),
+            "wamid.manage.reschedule.preference",
+        ),
+    )
+
+    assert observed["window"] == slot_window.SlotWindow(day=requested_day)
+    assert "1. " + requested_day.strftime("%d/%m/%Y a las 10:00") in reply[0]
+    # The ISO form is what confused the measured customer (`2026-10-28 10:00:00`).
+    assert requested_day.isoformat() not in reply[0]
+
+
+def test_reschedule_fallback_notifies_when_requested_window_is_empty(mock_openai_chat, monkeypatch):
+    from app.chat import slot_window
+
+    _classify_reschedule(monkeypatch)
+    conv_id, _, _ = _seed_conversation()
+    from zoneinfo import ZoneInfo
+
+    requested_day = datetime.now(ZoneInfo("America/Santiago")).date() + timedelta(days=1)
+    fallback_day = requested_day + timedelta(days=1)
+    technician_id = _add_reschedule_availability()
+    calls = []
+
+    def slots_for_assignment(session, **kwargs):
+        calls.append(kwargs["window"])
+        if kwargs["window"] == slot_window.SlotWindow(day=requested_day):
+            return []
+        return [(technician_id, fallback_day, time(11, 0))]
+
+    monkeypatch.setattr(scheduling, "open_slots_for_assignment", slots_for_assignment)
+    reply = _invoke(
+        conv_id,
+        _add_message(conv_id, "mañana", "wamid.manage.reschedule.fallback"),
+    )
+
+    assert calls == [slot_window.SlotWindow(day=requested_day), slot_window.SlotWindow(day=fallback_day)]
+    assert "Para el" in reply[0] and "no me quedan horarios" in reply[0]
+    assert fallback_day.strftime("%d/%m/%Y a las 11:00") in reply[0]
 
 
 def test_reschedule_ambiguous_slot_reasks_once_then_hands_off(mock_openai_chat, monkeypatch):

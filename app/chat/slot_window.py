@@ -43,6 +43,8 @@ _WEEKDAYS = {
     "domingos": 7,
 }
 
+_WEEKDAY_LABELS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
 _MONTHS = {
     "enero": 1,
     "febrero": 2,
@@ -132,6 +134,21 @@ def _weekday_and_day(today: date, weekday: int, day: int) -> date | None:
             return candidate
         candidate += timedelta(days=7)
     return None
+
+
+def franja_label(franja: tuple[time, time]) -> str:
+    return "la mañana" if franja == MORNING else "la tarde"
+
+
+def window_label(window: SlotWindow) -> str:
+    """Name the window in the customer's own words for the S2 notice."""
+
+    if window.day is None:
+        return franja_label(window.franja or AFTERNOON)
+    label = f"{_WEEKDAY_LABELS[window.day.isoweekday() - 1]} {window.day:%d/%m}"
+    if window.franja is None:
+        return f"el {label}"
+    return f"{franja_label(window.franja)} del {label}"
 
 
 def resolve_window(text: str, *, today: date) -> SlotWindow | None:

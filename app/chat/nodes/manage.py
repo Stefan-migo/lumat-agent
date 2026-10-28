@@ -9,7 +9,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 
 from app.chat.state import ConversationState
-from app.chat.nodes.booking import _resolve
+from app.chat.nodes.booking import _resolve, local_today, slots_for_window
+from app.chat.slot_window import resolve_window, window_label
 from app.chat.nodes.replies import render_reply
 from app.db import session_scope
 from app.models import Appointment, AppointmentStatus, Conversation
@@ -18,6 +19,9 @@ from app.services.settings import get_hours_timezone, get_reply_texts
 
 OFFER_TTL = timedelta(minutes=30)
 MAX_INVALID_REPLIES = 1
+# A reschedule shows one page and no frozen universe: the customer is moving an
+# existing visit, so three options are the offer, not the first page of many.
+RESCHEDULE_SLOTS = 3
 
 
 def _fold(value: str) -> str:
@@ -63,6 +67,7 @@ def _appointment_label(appointment: Appointment) -> str:
 def _start_offer(
     session, state: ConversationState, now: datetime, mode: str, texts: dict[str, str]
 ) -> dict:
+    text = state.window[-1].get("text") or "" if state.window else ""
     appointments = session.scalars(_appointment_query(state.customer_id, now)).all()
     if not appointments:
         _persist_offer(session, state, None)
@@ -77,7 +82,7 @@ def _start_offer(
             texts, "manage_confirm_cancel", visita=_appointment_label(appointment)
         )
         if mode == "reschedule":
-            return _new_reschedule_offer(session, state, appointment, now, texts)
+            return _new_reschedule_offer(session, state, appointment, now, texts, text=text)
     else:
         offer = {"mode": mode, "appointment_ids": [item.id for item in shown], "phase": "select", "attempts": 0, "created_at": now.isoformat()}
         action = "reagendar" if mode == "reschedule" else "cancelar"
@@ -102,9 +107,15 @@ def _new_reschedule_offer(
     texts: dict[str, str],
     *,
     attempts: int = 0,
+    text: str = "",
 ) -> dict:
-    assignments = scheduling.open_slots_for_assignment(
-        session, now=now, days=7, duration_minutes=appointment.duration_minutes, limit=3
+    window = resolve_window(text, today=local_today(session, now))
+    assignments, widened = slots_for_window(
+        session,
+        now=now,
+        duration_minutes=appointment.duration_minutes,
+        window=window,
+        limit=RESCHEDULE_SLOTS,
     )
     if not assignments:
         return _handoff(session, state, "manage_reschedule_unavailable")
@@ -117,13 +128,17 @@ def _new_reschedule_offer(
         "slots": slots, "created_at": now.isoformat(), "attempts": attempts,
     }
     _persist_offer(session, state, offer)
-    prompt = render_reply(
-        texts,
-        "manage_slots_offer",
-        opciones="\n".join(
-            f"{index}. {slot['date']} {slot['time']}" for index, slot in enumerate(slots, 1)
-        ),
+    opciones = "\n".join(
+        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
+        for index, slot in enumerate(slots, 1)
     )
+    if widened:
+        prompt = render_reply(
+            texts, "booking_window_unavailable",
+            momento=window_label(window), opciones=opciones,
+        )
+    else:
+        prompt = render_reply(texts, "manage_slots_offer", opciones=opciones)
     return {"next_step": "end", "replies": [prompt]}
 
 
@@ -176,7 +191,7 @@ def manage(state: ConversationState) -> dict:
             if appointment is None or appointment.customer_id != state.customer_id:
                 return _handoff(session, state, "manage_appointment_unavailable")
             if mode == "reschedule":
-                return _new_reschedule_offer(session, state, appointment, now, texts)
+                return _new_reschedule_offer(session, state, appointment, now, texts, text=text)
             _persist_offer(session, state, offer)
             return {
                 "next_step": "end",
