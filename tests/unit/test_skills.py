@@ -89,27 +89,27 @@ def test_real_registry_indexes_and_lazily_loads_memoria_tukulpan(repo_root):
     assert not {item.name for item in index}.intersection({"emergency", "handoff", "capture"})
 
 
-def test_real_registry_exposes_the_three_global_skills_to_the_planner(repo_root):
+def test_real_registry_exposes_the_global_skills_to_the_planner(repo_root):
     from app.chat.assistant.nodes import _skill_context, _validated_skills
     from app.services.skills import global_skill_index, load_skill_body
 
     index = global_skill_index(load_assistant_config(repo_root / "agent" / "registry.yaml"))
     by_name = {item.name: item for item in index}
 
-    for name in ("planning", "tools", "kb"):
+    for name in ("tools", "kb"):
         skill = by_name[name]
         assert skill.scope == "global"
         assert skill.description.strip()
         assert load_skill_body(skill).strip()
 
     # The planner may declare them (PlannerOutput.skills) and the responder loads their bodies.
+    # `planning` was a third global skill until the planning feature was retired
+    # (odd/tasks/asistente-detalles.md, S15); a planner that still asks for it gets it dropped.
     assert _validated_skills({"plan": {"skills": ["planning", "tools", "kb", "does-not-exist"]}}) == [
-        "planning",
         "tools",
         "kb",
     ]
-    context = _skill_context({"guardrails": {"skills": ["planning", "tools", "kb"]}})
-    assert "### Skill: planning" in context
+    context = _skill_context({"guardrails": {"skills": ["tools", "kb"]}})
     assert "### Skill: tools" in context
     assert "### Skill: kb" in context
 

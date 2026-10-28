@@ -13,7 +13,7 @@ from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.markup import ToolCallMarkupSanitizer
 from app.chat.assistant.planner_json import load_planner_payload
-from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
+from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.db import session_scope
@@ -613,28 +613,11 @@ def memory_bootstrap(state: AssistantState) -> AssistantState:
 def _effective_tools(state) -> tuple[str, ...]:
     effective = state.get("effective")
     if effective:
-        tools = tuple(effective["tools_whitelist"])
-    else:
-        from app.services.prompts import load_assistant_config
+        return tuple(effective["tools_whitelist"])
 
-        tools = load_assistant_config(role=state.get("actor_role")).tools_whitelist
+    from app.services.prompts import load_assistant_config
 
-    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
-        return tools
-    from app.chat.assistant.tools.registry import get_tool
-
-    allowed = []
-    for name in tools:
-        if name == "memory.write" or name.startswith("planning."):
-            allowed.append(name)
-            continue
-        try:
-            definition = get_tool(name)
-        except ValueError:
-            continue
-        if not definition.write:
-            allowed.append(name)
-    return tuple(allowed)
+    return load_assistant_config(role=state.get("actor_role")).tools_whitelist
 
 
 def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
@@ -658,24 +641,12 @@ def _validated_skills(state) -> list[str]:
     return valid
 
 
-def _planning_overlay(state) -> str:
-    """The facilitator overlay, injected only while a planning session is active (S2)."""
-    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
-        return ""
-    from app.services.prompts import load as load_prompt
-
-    return load_prompt("prompts/planning_facilitator.md").strip()
-
-
 def _effective_persona(state, config) -> str:
     effective = state.get("effective") or {}
     instructions = (effective.get("instructions") or "").strip()
     parts = [config.persona]
     if instructions:
         parts.append(instructions)
-    overlay = _planning_overlay(state)
-    if overlay:
-        parts.append(overlay)
     return "\n\n".join(parts)
 
 

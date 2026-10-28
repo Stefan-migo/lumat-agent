@@ -199,3 +199,63 @@ de T3. Evidencia de que es carga y no código: `load average` 66.00 en los 15 mi
   ya refresca `listActiveRuns` cada 5 s mientras la vista de chat está montada, así que durante un run en esa
   vista hay dos pollers. No es incorrecto (el shell cubre las otras secciones) y unificarlos obliga a tocar
   `AssistantWorkspace.tsx`, que T7 modifica igual: se resuelve en T7 o en un follow-up, no acá.
+
+## Delivery
+
+Números reales por slice (`git show --shortstat`, código + docs de cada unidad). El branch es lineal y los
+commits de doc quedaron intercalados, así que partir en varios PRs exige re-slicear con `cherry-pick`.
+
+| Slice | Commits | Diff |
+|---|---|---|
+| S1 planificador (T1) | `3e35c819`, `0905337a`, `ca4ae481` | 6 archivos, +406 / −40 |
+| S2 pestañas (T3) | `fc2b20e2`, `33f95746` | 7 archivos, +313 / −23 |
+| S3 reenganche (T4) | `1fedac79`, `e5721e0c` | 3 archivos, +186 / −7 |
+| S4 avisos (T5) | `42cbfe63`, `e11fd70e` | 6 archivos, +345 / −6 |
+| S5 archivos vs KB (T6) | `c01b9bae`, `6170e466` | 6 archivos, +77 / −110 |
+| S6 retiro de planificación (T7) | `82465575`, `9807867c` | 54 archivos, +231 / −2619 |
+| Doc del feature | `e918555b` | 1 archivo, +124 |
+
+**Recomendación: dos PRs**, cada uno una historia que se revisa de una sentada:
+
+- **PR A — "el asistente no pierde el turno ni la conversación"**: S1 + S2 + S3 + S4. ~+1250 / −76, 22 archivos,
+  un solo relato (JSON robusto, pestañas que sobreviven, reenganche del run, aviso al terminar). Todo el
+  comportamiento nuevo está acá y es lo que el owner pidió probar.
+- **PR B — "dos limpiezas: archivos vs KB y adiós planificación"**: S5 + S6. 60 archivos, ~+308 / −2729. La mayor
+  parte son borrados mecánicos (una feature retirada, una indexación automática que nunca debió existir); se
+  revisa por muestreo y por las dos invariantes: no se destruye data y el handoff SDB queda intacto.
+
+La alternativa es **un solo PR declarando la carga** (4442 líneas autoradas, de las cuales ~2600 son borrados y
+~200 son el registro del feature). Es decisión del owner, no del agente: si elige el PR único, la carga se declara
+en la descripción con esta misma tabla.
+
+- **L8** (2026-10-28, la fuga que solo atrapa un full): `scripts/test.sh full` #1 falló en
+  `tests/functional/test_api_project_files.py::test_upload_text_file_ingests_project_scoped_kb_document`, que seguía
+  afirmando el indexado automático que T6 retiró. Estaba fuera de las superficies que se le permitieron al worker
+  de T6, así que ningún test dirigido podía verlo: habría llegado a CI **después** del merge. Se reescribió al
+  contrato real (201 con `kb_document_id` nulo y `status="ready"`, cero documentos de KB, bytes en disco),
+  commit `e2f4a608`. **Lección de proceso**: la selección dirigida verifica la regla que tocaste, no los
+  consumidores de la regla; el full en el cierre no es ceremonia.
+
+- **L9** (2026-10-28, el `exit 0` que mentía): la corrida #1 reportó `exit 0` con un test en rojo porque el
+  comando terminaba en `| tail -30` y bash devuelve el código del último comando del pipe. La #2 se lanzó con
+  `> log 2>&1; exit $code` y así se cerró. Un gate cuyo código de salida pasa por un pipe no es un gate.
+
+## Cierre
+
+**Verificación final, toda con el código de salida real:**
+
+| Gate | Comando | Resultado |
+|---|---|---|
+| Colección e imports | `bash scripts/test.sh gate` | verde |
+| Contrato unitario | `bash scripts/test.sh quick` | verde, 100% |
+| Backend completo | `bash scripts/test.sh full` (job-2) | **EXIT=0**, 5m02s |
+| Panel completo | `cd web && npm test` (job-3) | **EXIT=0**, 115 archivos / 1337 tests, 1m56s |
+| Superficies de shape | `bash scripts/test.sh shape origin/main` | 3 superficies → full obligatorio, corrido |
+
+La diferencia de la suite del panel cierra la discusión de L7: **1337 tests en 1m56s** con la máquina quieta,
+contra **17 fallas y 1754s** bajo carga. No era el cambio, era la carga.
+
+**Estado del branch**: 17 commits, 4648 líneas autoradas sobre `origin/main`.
+**Pendiente y fuera del alcance del agente**: cortar el o los PRs, pushear y abrir la revisión — decisión del
+owner. El refresh de Graphify (`graphify . --update`, una vez por sesión según `AGENTS.md`) queda para el cierre
+de sesión, cuando decida si el `graphify-out/` regenerado se commitea acá o aparte.

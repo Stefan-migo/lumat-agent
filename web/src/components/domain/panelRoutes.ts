@@ -13,10 +13,7 @@ export type PanelRoute = {
   projectSlug?: string;
   threadId?: number;
   contextProjectSlug?: string;
-  planningSlug?: string;
   historyProjectSlug?: string;
-  sessionsProjectSlug?: string;
-  planningSessionSlug?: string;
 };
 
 export const PANEL_BASE_PATH = '/panel/app/';
@@ -26,8 +23,7 @@ export function isDetailRoute(route: PanelRoute): boolean {
     || (route.view === 'conversations' && route.conversationId !== undefined && Number.isSafeInteger(route.conversationId) && route.conversationId > 0)
     || (route.view === 'kb' && route.kbDocId !== undefined && Number.isSafeInteger(route.kbDocId) && route.kbDocId > 0)
     || (route.view === 'agenda' && route.appointmentId !== undefined && Number.isSafeInteger(route.appointmentId) && route.appointmentId > 0)
-    || (route.view === 'projects' && Boolean(route.projectSlug))
-    || (route.view === 'planning-sessions' && Boolean(route.planningSessionSlug));
+    || (route.view === 'projects' && Boolean(route.projectSlug));
 }
 
 export const PANEL_ROUTES = {
@@ -43,7 +39,6 @@ export const PANEL_ROUTES = {
   users: '/panel/app/users',
   profile: '/panel/app/profile',
   projects: '/panel/app/projects',
-  'planning-sessions': '/panel/app/planning-sessions',
 } as const satisfies Readonly<Partial<Record<PanelView, string>>>;
 
 const COMPATIBILITY_ROUTES: Readonly<Partial<Record<PanelView, string>>> = {
@@ -85,16 +80,12 @@ export function pathForRoute(route: PanelRoute): string {
     return `${base}/${route.appointmentId}`;
   }
   if (route.view === 'projects' && route.projectSlug) return `${base}/${encodeURIComponent(route.projectSlug)}`;
-  if (route.view === 'planning-sessions' && route.planningSessionSlug) return `${base}/${encodeURIComponent(route.planningSessionSlug)}`;
-  if (route.view === 'planning-sessions' && route.projectSlug) return `${base}?proyecto=${encodeURIComponent(route.projectSlug)}`;
-  if (route.view === 'chat' && (route.projectSlug || route.threadId !== undefined || route.contextProjectSlug || route.planningSlug || route.historyProjectSlug || route.sessionsProjectSlug)) {
+  if (route.view === 'chat' && (route.projectSlug || route.threadId !== undefined || route.contextProjectSlug || route.historyProjectSlug)) {
     const params = new URLSearchParams();
     if (route.projectSlug) params.set('proyecto', route.projectSlug);
     if (route.threadId !== undefined) params.set('thread_id', String(route.threadId));
     else if (route.contextProjectSlug) params.set('context', route.contextProjectSlug);
-    else if (route.planningSlug) params.set('planning', route.planningSlug);
     else if (route.historyProjectSlug) params.set('history', route.historyProjectSlug);
-    else if (route.sessionsProjectSlug) params.set('sessions', route.sessionsProjectSlug);
     return `${base}?${params.toString()}`;
   }
   return base;
@@ -137,15 +128,9 @@ export function parsePanelPath(pathname: string): PanelRoute {
       const projectSlug = query.get('proyecto') || undefined;
       const threadId = query.get('thread_id') ? positiveId(query.get('thread_id')!) : null;
       const contextProjectSlug = query.get('context') || undefined;
-      const planningSlug = query.get('planning') || undefined;
       const historyProjectSlug = query.get('history') || undefined;
-      const sessionsProjectSlug = query.get('sessions') || undefined;
-      // Selector precedence: thread > context > planning > history > sessions.
-      return { view, ...(projectSlug ? { projectSlug } : {}), ...(threadId ? { threadId } : {}), ...(!threadId && contextProjectSlug ? { contextProjectSlug } : {}), ...(!threadId && !contextProjectSlug && planningSlug ? { planningSlug } : {}), ...(!threadId && !contextProjectSlug && !planningSlug && historyProjectSlug ? { historyProjectSlug } : {}), ...(!threadId && !contextProjectSlug && !planningSlug && !historyProjectSlug && sessionsProjectSlug ? { sessionsProjectSlug } : {}) };
-    }
-    if (view === 'planning-sessions') {
-      const projectSlug = query.get('proyecto') || undefined;
-      return { view, ...(projectSlug ? { projectSlug } : {}) };
+      // A thread deep link wins, followed by project context and chat history.
+      return { view, ...(projectSlug ? { projectSlug } : {}), ...(threadId ? { threadId } : {}), ...(!threadId && contextProjectSlug ? { contextProjectSlug } : {}), ...(!threadId && !contextProjectSlug && historyProjectSlug ? { historyProjectSlug } : {}) };
     }
     return { view };
   }
@@ -153,7 +138,6 @@ export function parsePanelPath(pathname: string): PanelRoute {
 
   const id = positiveId(segments[3]);
   if (view === 'projects') return { view, projectSlug: segments[3] };
-  if (view === 'planning-sessions') return { view, planningSessionSlug: segments[3] };
   if (id === null || !['clients', 'users', 'conversations', 'automation-rules', 'kb', 'agenda'].includes(view)) return fallback();
   if (view === 'automation-rules') return fallback();
   if (view === 'kb') return { view, kbDocId: id };

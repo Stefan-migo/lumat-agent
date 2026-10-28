@@ -38,17 +38,18 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
     config = load_assistant_config()
     catalog = _planner_tool_catalog(list(config.tools_whitelist))
 
-    # SHA-256 of the serialized assistant catalog at the post-tool-catalog-trim
-    # baseline, plus the planning-facilitator, unit-2 conversation-inspection,
-    # unit-3 settings.update, the planning read-report tools, view_image, the
-    # read_project_file offset/limit paging fields, the T3/T4 appointment
-    # recipes (appointment_reminder, appointment_followup,
-    # appointment_followup_no_show) in automation.create_rule's recipe list, and
-    # the named greeting keys plus messages.smalltalk in settings.update's
-    # valid-key list. Removing only messages.smalltalk reproduces the prior
-    # catalog hash; the new pinned hash is the one-key extension.
+    # SHA-256 of the serialized assistant catalog. This pin exists to catch an
+    # *unintentional* planner-catalog drift, so it is re-pinned on purpose whenever
+    # the catalog is meant to change, with the reason written here.
+    #
+    # Previous pin 721dfa2b…f2f6a covered the planning tools. Baseline below drops
+    # planning.open, planning.close, planning.record_decision, planning.record_note
+    # and planning.read_report, which were retired with the planning feature
+    # (odd/tasks/asistente-detalles.md, S15). Everything else the previous pin
+    # covered is unchanged: conversation inspection, settings.update, view_image,
+    # read_project_file paging, the appointment recipes and the greeting keys.
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "721dfa2bf61f3b9d23a7d474146cd60e9da7b16a1e6dbaaa39ae60fe431f2f6a"
+        "e036f4b071df8d195eb4c1458a963245c420242a710dacce8e6c4487c9bc1263"
     )
 
 

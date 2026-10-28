@@ -237,7 +237,6 @@ describe('AppShell (T6.4)', () => {
        expect(within(drawer).getByRole('button', { name: label })).toBeInTheDocument();
      }
      expect(within(drawer).queryByRole('button', { name: 'Proyectos' })).not.toBeInTheDocument();
-     expect(within(drawer).queryByRole('button', { name: 'Sesiones de planning' })).not.toBeInTheDocument();
     for (const label of ['Notificaciones', 'Notificaciones push', 'Casos', 'Dashboard avanzado']) {
       expect(within(drawer).queryByRole('button', { name: label })).not.toBeInTheDocument();
     }

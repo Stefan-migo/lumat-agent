@@ -2857,12 +2857,12 @@
 .markdown th, .markdown td { padding: var(--space-1) var(--space-2); border: 1px solid var(--corp-border); text-align: left; }
 .markdown th { background: var(--brand-bg-elevated); font-weight: var(--weight-semibold); }
 .markdown input[type="checkbox"] { margin-right: var(--space-1); }
-.assistant-chat__planning-form { display: grid; gap: var(--space-3); }
-.assistant-chat__planning-form label { font-weight: var(--weight-semibold); }
-.assistant-chat__planning-form input { min-height: 40px; padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); background: var(--brand-bg-elevated); color: var(--corp-text); font: inherit; }
-.assistant-chat__planning-form input:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-.assistant-chat__planning-form p { margin: 0; color: var(--danger); }
-.assistant-chat__planning-form > div { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
+.assistant-chat__project-picker { display: grid; gap: var(--space-3); }
+.assistant-chat__project-picker label { font-weight: var(--weight-semibold); }
+.assistant-chat__project-picker input { min-height: 40px; padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); background: var(--brand-bg-elevated); color: var(--corp-text); font: inherit; }
+.assistant-chat__project-picker input:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.assistant-chat__project-picker p { margin: 0; color: var(--danger); }
+.assistant-chat__project-picker > div { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
 @keyframes assistant-cursor { 50% { opacity: 0; } }
 @media (max-width: 40rem) {
   .assistant-chat__conversation { min-height: 60vh; }

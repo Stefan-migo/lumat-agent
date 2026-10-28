@@ -17,7 +17,6 @@ from app.services.project_files import (
     delete_project_folder,
     get_project_file,
     get_project_folder,
-    ingest_project_file,
     list_project_files,
     list_project_folders,
     move_project_file,
@@ -63,7 +62,6 @@ def upload_project_file(
     content = file.file.read(get_settings().project_file_max_bytes + 1)
     try:
         row = store_project_file(session, project, current, filename, file.content_type, content, folder_id)
-        ingest_project_file(session, project, row, content, current.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     session.commit()

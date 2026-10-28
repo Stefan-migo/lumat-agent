@@ -283,6 +283,8 @@ def test_valid_registry_resolves_assistant_runtime_configuration(repo_root):
 
     assert set(reg.assistant.tools_whitelist) == set(TOOL_REGISTRY)
     assert "automation.create_rule" in reg.assistant.tools_whitelist
+    assert not any(name.startswith("planning.") for name in reg.assistant.tools_whitelist)
+    assert not any(skill.name == "planning" for skill in reg.assistant.skills)
 
 
 def test_assistant_whitelist_excludes_removed_aliases(repo_root):

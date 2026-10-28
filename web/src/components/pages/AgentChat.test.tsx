@@ -206,7 +206,7 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
   });
 
@@ -216,7 +216,7 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
   });
 
@@ -328,7 +328,7 @@ describe("AgentChat", () => {
       }),
     );
     render(<AgentChat threadId={4} />);
-    await screen.findByRole("button", { name: "Planificar" });
+    await screen.findByRole("button", { name: /detener ejecución/i });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(toolToggle("Buscar en la web")).not.toBeNull());
     expect(toolToggle("Buscar en la web")).toBeDisabled();
@@ -388,7 +388,6 @@ describe("AgentChat", () => {
     window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
     const available = {
       project_files: [{ id: 12, filename: "manual.pdf", content_type: "application/pdf", size: 100 }],
-      planning_sessions: [{ slug: "plan-1", topic: "Plan de invierno", status: "closed" }],
       skills: [{ name: "local-skill", description: "Local" }],
     };
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -402,7 +401,7 @@ describe("AgentChat", () => {
           const body = JSON.parse(String(init.body));
           return jsonResponse({ resources: body, available, inherited: false });
         }
-        return jsonResponse({ resources: { project_files: [], planning_sessions: [], skills: [] }, available, inherited: true });
+        return jsonResponse({ resources: { project_files: [], skills: [] }, available, inherited: true });
       }
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
@@ -413,7 +412,6 @@ describe("AgentChat", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Recursos del proyecto/ }));
 
     const fileToggle = await screen.findByRole("checkbox", { name: "manual.pdf" });
-    expect(screen.getByRole("checkbox", { name: "Plan de invierno" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "local-skill" })).toBeInTheDocument();
     expect(fileToggle).not.toBeChecked();
 
@@ -423,7 +421,7 @@ describe("AgentChat", () => {
       "/panel/api/chat/threads/4/resources",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ project_files: [12], planning_sessions: [], skills: [] }),
+        body: JSON.stringify({ project_files: [12], skills: [] }),
       }),
     ));
   });
@@ -444,10 +442,9 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     expect(await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveAttribute("placeholder", "Escribe un mensaje al asistente…");
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
@@ -1590,85 +1587,30 @@ describe("AgentChat", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("shows the active Cortex indicator and closes through the planning endpoint", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
-        thread: {
-          ...makeThread(),
-          assistant_state: {
-            cortex_session: {
-              slug: "budget-4",
-              topic: "Budget",
-              status: "active",
-            },
-          },
-        },
-        messages: [],
-      });
-      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
-      if (url === "/panel/api/planning/sessions/budget-4/close" && init?.method === "POST") return jsonResponse({
-        session: {},
-        report: { contenido: "Report" },
-      });
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-
-    render(<AgentChat threadId={4} />);
-    expect(await screen.findByText(/Planificación activa/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /cerrar planificación/i }));
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/planning/sessions/budget-4/close",
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
-    expect(screen.getByText(/Informe de planificación:/i)).toBeInTheDocument();
-    expect(screen.getByText("Report")).toBeInTheDocument();
-  });
-
-  it("treats exact planning commands as lifecycle controls and free text as chat", async () => {
-    const onThreadOpened = vi.fn();
+  it("sends the retired planning command as ordinary chat text", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({ thread: makeThread(), messages: [] });
       if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
-      if (url === "/panel/api/planning/sessions" && init?.method === "POST") {
-        return jsonResponse({ session: { slug: "budget-9" }, thread_id: 9 }, 201);
-      }
       if (url === "/panel/api/chat/threads/4/messages" && init?.method === "POST") {
-        return jsonResponse({ message: { id: 2, author: "admin", content: "planning words", status: "processed" } }, 201);
+        return jsonResponse({ message: { id: 2, author: "admin", content: "/planning budget", status: "processed" } }, 201);
       }
       return jsonResponse({ threads: [] });
     });
 
-    render(<AgentChat threadId={4} onThreadOpened={onThreadOpened} />);
+    render(<AgentChat threadId={4} />);
     const composer = await screen.findByRole("textbox", { name: /mensaje/i });
     fireEvent.change(composer, { target: { value: "/planning budget" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/planning/sessions",
-        expect.objectContaining({
-          body: JSON.stringify({ topic: "budget" }),
-        }),
-      ),
-    );
-    expect(onThreadOpened).toHaveBeenCalledWith(9);
-    fireEvent.change(composer, { target: { value: "please discuss planning" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/chat/threads/4/messages",
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/messages",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ content: "/planning budget", attachment_ids: [] }) }),
+    ));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/planning/sessions"))).toBe(false);
   });
 
-  it("switches to the session thread when a settled run persisted a planning event", async () => {
+  it("keeps the current thread open when a settled run contains a legacy planning event", async () => {
     const onThreadOpened = vi.fn();
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -1706,7 +1648,8 @@ describe("AgentChat", () => {
     fireEvent.change(composer, { target: { value: "Open the session" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
-    await waitFor(() => expect(onThreadOpened).toHaveBeenCalledWith(9));
+    await waitFor(() => expect(screen.getByText("Session opened")).toBeInTheDocument());
+    expect(onThreadOpened).not.toHaveBeenCalled();
   });
 
   it("resubmits a failed message in place and preserves an unsent draft", async () => {

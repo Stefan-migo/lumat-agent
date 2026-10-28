@@ -111,7 +111,7 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None, resume_plan: dict | None = None, resume_approval: dict | None = None, resume_tool_results: list[dict] | None = None, resume_tool_steps: int | None = None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, resume_plan: dict | None = None, resume_approval: dict | None = None, resume_tool_results: list[dict] | None = None, resume_tool_steps: int | None = None) -> AssistantState:
     if project_authorization is not None:
         from app.services.projects import _ProjectAuthorization
         if not isinstance(project_authorization, _ProjectAuthorization):
@@ -134,7 +134,6 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "context_meta": (context or {}).get("meta", {}),
         "projection_evidence": (context or {}).get("meta", {}),
         "compaction": compaction or {},
-        "cortex_session": cortex_session,
         "tool_results": [],
         "tool_steps": 0,
     }
