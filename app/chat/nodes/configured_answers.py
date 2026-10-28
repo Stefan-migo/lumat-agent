@@ -24,11 +24,13 @@ from app.services.settings import (
 )
 
 # Terms that ask WHERE the visits happen, as opposed to a question that merely
-# names a commune. `atienden` alone is not enough: "atienden en Providencia?"
-# names no configured commune, and the out-of-coverage policy stays in the KB
-# (S4), so this answer has nothing to add.
-_COVERAGE_TERMS = frozenset({"comuna", "comunas", "cobertura", "cubren", "cubre"})
-_PLACE_TERMS = frozenset({"atienden", "trabajan", "llegan", "van", "visitan"})
+# names a commune. Deliberately narrow: `cubre`/`cubren` are verbs other questions
+# use ("la garantia cubre algo?" is postventa), so they only count next to a
+# configured commune, through `_PLACE_TERMS` below.
+_COVERAGE_TERMS = frozenset({"comuna", "comunas", "cobertura"})
+_PLACE_TERMS = frozenset(
+    {"atienden", "trabajan", "llegan", "van", "visitan", "cubren", "cubre"}
+)
 
 # A price question that happens to name a commune ("cuanto sale la visita en
 # Nunoa") belongs to the tariff answer, not here.

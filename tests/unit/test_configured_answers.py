@@ -297,3 +297,30 @@ def test_an_empty_duration_map_answers_nothing(monkeypatch):
         configured_answers.duration_reply(SESSION, _state("cuanto dura un calefont?"))
         is None
     )
+
+
+def test_a_verb_that_means_cover_is_not_a_coverage_question(monkeypatch):
+    """`cubre` is also how a guarantee question is asked, and it names no commune.
+
+    Measured: `la garantia cubre algo?` (postventa) was answered with the commune
+    list instead of reaching the KB, because the verb alone matched the detector.
+    """
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+
+    assert (
+        configured_answers.coverage_reply(
+            SESSION, _state("la garantia cubre algo?", intent="postventa")
+        )
+        is None
+    )
+
+
+def test_a_cover_verb_with_a_covered_commune_is_a_coverage_question(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+
+    assert configured_answers.coverage_reply(
+        SESSION, _state("cubren en Ñuñoa?")
+    ) == (
+        "Atendemos normalmente en Las Condes, Ñuñoa, Lo Barnechea, La Reina, "
+        "Peñalolén, Colina y Huechuraba."
+    )
