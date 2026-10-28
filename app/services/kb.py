@@ -287,6 +287,49 @@ def update_document(
     return doc
 
 
+def repair_source_meta(
+    session: Session,
+    doc_id: int,
+    source_meta: dict | None,
+    actor: str = "system",
+) -> KbDocument:
+    """Rewrite the ACTIVE version's routing metadata in place, without re-embedding.
+
+    Metadata is not content. A version whose chunks lost `source_id` cannot be
+    found by topic routing even though its text is intact, and re-versioning to
+    recover the key would pay a new embedding and add a version nobody asked
+    for. Chunk content, count and version pointer are left untouched.
+    """
+    doc = session.get(KbDocument, doc_id)
+    if doc is None:
+        raise ValueError(f"kb document {doc_id} not found")
+    routing = _routing_meta(source_meta)
+    chunks = list(
+        session.scalars(
+            select(KbChunk)
+            .where(KbChunk.document_id == doc.id, KbChunk.version == doc.active_version)
+            .order_by(KbChunk.chunk_index)
+        )
+    )
+    if not chunks:
+        raise ValueError(
+            f"kb document {doc_id} has no chunks for active version {doc.active_version}"
+        )
+    before = _routing_meta(chunks[0].source_meta)
+    for chunk in chunks:
+        chunk.source_meta = {**routing, "chunk_index": chunk.chunk_index}
+    record_audit(
+        session,
+        actor=actor,
+        action="kb.document_metadata",
+        entity="kb_document",
+        entity_id=str(doc.id),
+        before={"source_meta": before},
+        after={"source_meta": routing},
+    )
+    return doc
+
+
 def restore_version(
     session: Session, doc_id: int, version: int, actor: str = "system"
 ) -> KbDocument:

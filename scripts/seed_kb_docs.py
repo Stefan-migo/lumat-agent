@@ -135,11 +135,28 @@ def _chunk_count(session: Session) -> int:
     return session.scalar(select(func.count()).select_from(KbChunk)) or 0
 
 
+def _active_chunk_meta(session: Session, doc: KbDocument) -> dict:
+    """Routing metadata of the ACTIVE version, read off its first chunk."""
+    chunk = session.scalars(
+        select(KbChunk)
+        .where(KbChunk.document_id == doc.id, KbChunk.version == doc.active_version)
+        .order_by(KbChunk.chunk_index)
+        .limit(1)
+    ).first()
+    return dict((chunk.source_meta or {}) if chunk is not None else {})
+
+
+def _has_routing(meta: dict, source_id: str) -> bool:
+    return meta.get("source_id") == source_id
+
+
 def inspect_kb(session: Session, documents: list[LocalDocument] | None = None) -> dict:
     """Compare `docs/kb` against the customer-visible database.
 
     `missing`   local documents with no row whose content matches
     `drifted`   local titles that exist in the database with different content
+    `unrouted`  local documents whose active version lost its routing metadata,
+                so topic routing cannot find them even though the text matches
     `consistent` every local document is present with identical content
     """
     documents = documents if documents is not None else local_documents()
@@ -149,6 +166,13 @@ def inspect_kb(session: Session, documents: list[LocalDocument] | None = None) -
 
     missing = [doc for doc in documents if doc.digest not in digests]
     drifted = [doc for doc in missing if doc.title in titles]
+    unrouted = [
+        doc.source_id
+        for doc in documents
+        if doc.digest in digests
+        and doc.title in titles
+        and not _has_routing(_active_chunk_meta(session, titles[doc.title]), doc.source_id)
+    ]
     fingerprint = hashlib.sha256(
         "".join(sorted(f"{doc.source_id}:{doc.digest}" for doc in documents)).encode("utf-8")
     ).hexdigest()[:12]
@@ -159,15 +183,23 @@ def inspect_kb(session: Session, documents: list[LocalDocument] | None = None) -
         "local": [doc.source_id for doc in documents],
         "missing": [doc.source_id for doc in missing],
         "drifted": [doc.source_id for doc in drifted],
+        "unrouted": unrouted,
         "consistent": not missing,
         "fingerprint": fingerprint,
     }
 
 
 def seed(session: Session, documents: list[LocalDocument], force: bool = False) -> dict:
-    """Create missing documents and, with `force`, re-version drifted ones."""
+    """Create missing documents, re-version drifted ones, repair unrouted ones.
+
+    `force` authorizes both writes that change a stored document: a new version
+    for drifted content, and an in-place rewrite of routing metadata for a
+    document whose text already matches. The second is a metadata repair, not a
+    content change: identical text is never re-embedded.
+    """
     created: list[str] = []
     updated: list[str] = []
+    repaired: list[str] = []
     skipped: list[str] = []
 
     rows = customer_documents(session)
@@ -175,7 +207,19 @@ def seed(session: Session, documents: list[LocalDocument], force: bool = False) 
     digests = {content_digest(row.content or "") for row in rows}
 
     for doc in documents:
+        routing_meta = {"source": "docs/kb", "source_id": doc.source_id}
         if doc.digest in digests:
+            existing = by_title.get(doc.title)
+            if (
+                force
+                and existing is not None
+                and not _has_routing(_active_chunk_meta(session, existing), doc.source_id)
+            ):
+                kb.repair_source_meta(
+                    session, existing.id, source_meta=routing_meta, actor="conv-eval"
+                )
+                repaired.append(doc.source_id)
+                continue
             skipped.append(doc.source_id)
             continue
         existing = by_title.get(doc.title)
@@ -189,6 +233,7 @@ def seed(session: Session, documents: list[LocalDocument], force: bool = False) 
                 new_content=doc.content,
                 title=doc.title,
                 actor="conv-eval",
+                source_meta=routing_meta,
             )
             updated.append(doc.source_id)
             continue
@@ -197,14 +242,19 @@ def seed(session: Session, documents: list[LocalDocument], force: bool = False) 
             title=doc.title,
             fmt=DocumentFormat.MD,
             content=doc.content.encode("utf-8"),
-            source_meta={"source": "docs/kb", "source_id": doc.source_id},
+            source_meta=routing_meta,
             actor="conv-eval",
             visibility=KbVisibility.CUSTOMER,
         )
         created.append(doc.source_id)
 
     session.commit()
-    return {"created": created, "updated": updated, "skipped": skipped}
+    return {
+        "created": created,
+        "updated": updated,
+        "repaired": repaired,
+        "skipped": skipped,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -216,7 +266,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="re-version a document whose content drifted (creates a new version)",
+        help=(
+            "re-version a document whose content drifted, and repair the routing "
+            "metadata of a document that lost it (no re-embed)"
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -231,13 +284,19 @@ def main(argv: list[str] | None = None) -> int:
             f"kb · {before['documents']} documentos customer · {before['chunks']} chunks "
             f"· fingerprint {before['fingerprint']}"
         )
-        if before["consistent"]:
+        if before["consistent"] and not before["unrouted"]:
             print("kb · consistente con docs/kb: nada que hacer")
             return 0
 
-        print(f"kb · faltantes: {', '.join(before['missing'])}")
+        if before["missing"]:
+            print(f"kb · faltantes: {', '.join(before['missing'])}")
         if before["drifted"]:
             print(f"kb · con contenido distinto al archivo: {', '.join(before['drifted'])}")
+        if before["unrouted"]:
+            print(
+                "kb · sin ruteo por tema (source_meta.source_id perdido): "
+                f"{', '.join(before['unrouted'])}"
+            )
         if not args.apply:
             print("kb · sin cambios (pasá --apply para cargar)")
             return 1
@@ -247,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"kb · creados {len(result['created'])} · actualizados {len(result['updated'])} "
-        f"· sin cambios {len(result['skipped'])}"
+        f"· reparados {len(result['repaired'])} · sin cambios {len(result['skipped'])}"
     )
     print(
         f"kb · ahora {after['documents']} documentos · {after['chunks']} chunks "
@@ -257,6 +316,13 @@ def main(argv: list[str] | None = None) -> int:
         still = ", ".join(after["missing"])
         print(
             f"kb · sigue inconsistente ({still}); si el contenido cambió, pasá --force",
+            file=sys.stderr,
+        )
+        return 1
+    if after["unrouted"]:
+        still = ", ".join(after["unrouted"])
+        print(
+            f"kb · sigue sin ruteo ({still}); pasá --force para repararlo",
             file=sys.stderr,
         )
         return 1
