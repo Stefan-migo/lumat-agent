@@ -120,6 +120,14 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "{{opciones}}\n"
         "Responde con el número del horario que prefieres."
     ),
+    # S2 (agenda-preferencia): the requested day or franja has nothing, and the
+    # offer moved forward. Naming what was asked is the "avisar" half of the rule;
+    # a silent jump to another day is exactly what confused the measured customers.
+    "booking_window_unavailable": (
+        "Para {{momento}} no me quedan horarios. Te propongo estos:\n"
+        "{{opciones}}\n"
+        "Responde con el número del horario que prefieres."
+    ),
     "booking_confirmed": "Tu visita técnica quedó confirmada para el {{fecha}} con {{tecnico}}.",
     "manage_no_visits": "No tienes visitas próximas para {{accion}}.",
     "manage_confirm_cancel": (
@@ -201,6 +209,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "booking_offer": frozenset({"opciones"}),
     "booking_unclear": frozenset(),
     "booking_no_more_today": frozenset({"opciones"}),
+    "booking_window_unavailable": frozenset({"momento", "opciones"}),
     "booking_confirmed": frozenset({"fecha", "tecnico"}),
     "manage_no_visits": frozenset({"accion"}),
     "manage_confirm_cancel": frozenset({"visita"}),

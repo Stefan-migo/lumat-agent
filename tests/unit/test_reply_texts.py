@@ -27,6 +27,7 @@ from app.services.settings import (
 EXPECTED_KEYS = {
     "booking_offer",
     "booking_no_more_today",
+    "booking_window_unavailable",
     "booking_unclear",
     "booking_confirmed",
     "manage_no_visits",
@@ -97,7 +98,7 @@ def test_every_default_slot_is_whitelisted_for_its_key():
 def test_the_slot_vocabulary_is_closed():
     assert set().union(*REPLY_TEXT_SLOTS.values()) == {
         "opciones", "fecha", "visita", "accion", "tecnico", "comuna",
-        "nombre", "equipo", "problema", "disponibilidad",
+        "nombre", "equipo", "problema", "disponibilidad", "momento",
     }
 
 

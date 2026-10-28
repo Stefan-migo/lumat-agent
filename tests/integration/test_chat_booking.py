@@ -367,3 +367,126 @@ def test_asking_for_more_slots_without_any_left_hands_off(mock_openai_chat):
     assert any("asesor" in reply.lower() for reply in second)
     with SessionLocal() as session:
         assert session.query(Appointment).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# S1/S2/S4 (agenda-preferencia): the offer hears the day the customer asked for.
+# Measured 2026-10-27: three harness customers asked for Thursday, Saturday and
+# Friday and all three were offered the first day of the window.
+# ---------------------------------------------------------------------------
+
+_SPANISH_WEEKDAYS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
+
+
+def _weekday_name(day):
+    return _SPANISH_WEEKDAYS[day.isoweekday() - 1]
+
+
+def _day_block(session, technician_id, day, hour=9, hours=3):
+    starts = datetime.combine(day, time(hour, 0), tzinfo=timezone.utc)
+    scheduling.add_availability(
+        session, technician_id=technician_id, starts_at=starts,
+        ends_at=starts + timedelta(hours=hours),
+    )
+
+
+def _local_today():
+    return datetime.now(timezone.utc).date()
+
+
+def test_offer_honors_the_day_the_customer_asked_for(mock_openai_chat):
+    """S1: the captured "availability" decides the offered day, not the clock."""
+    wanted = _local_today() + timedelta(days=4)
+    conv_id, _, _, tech_id, _ = _seed_conversation(
+        captured={
+            "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+            "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+            "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+        }
+    )
+    with SessionLocal() as session:
+        _day_block(session, tech_id, _local_today() + timedelta(days=2))
+        _day_block(session, tech_id, wanted)
+        session.commit()
+
+    replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.ask"))
+
+    assert len(replies) == 1
+    assert wanted.strftime("%d/%m/%Y") in replies[0]
+    assert (_local_today() + timedelta(days=2)).strftime("%d/%m/%Y") not in replies[0]
+
+
+def test_offer_says_the_day_is_full_and_offers_the_nearest_later_day(mock_openai_chat):
+    """S2: "Ofrecer el día hábil más cercano y avisar" — later, never earlier."""
+    wanted = _local_today() + timedelta(days=5)
+    later = _local_today() + timedelta(days=6)
+    earlier = _local_today() + timedelta(days=2)
+    conv_id, _, _, tech_id, _ = _seed_conversation(
+        captured={
+            "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+            "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+            "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+        }
+    )
+    with SessionLocal() as session:
+        _day_block(session, tech_id, earlier)
+        _day_block(session, tech_id, later)
+        session.commit()
+
+    replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.full"))
+
+    assert len(replies) == 1
+    assert "no me quedan horarios" in replies[0]
+    assert later.strftime("%d/%m/%Y") in replies[0]
+    assert earlier.strftime("%d/%m/%Y") not in replies[0]
+
+
+def test_question_about_another_day_mid_selection_offers_that_day(mock_openai_chat):
+    """S4: asking for a day is a request to serve, not a failed answer."""
+    wanted = _local_today() + timedelta(days=4)
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        _day_block(session, tech_id, _local_today() + timedelta(days=2))
+        _day_block(session, tech_id, wanted)
+        session.commit()
+
+    first = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.first"))
+    assert any("1." in reply for reply in first)
+
+    second = _invoke(
+        conv_id,
+        _add_message(
+            conv_id, f"y para el {_weekday_name(wanted)} tienes algo?", "wamid.window.question"
+        ),
+    )
+
+    assert len(second) == 1
+    assert "No pude identificar" not in second[0]
+    assert wanted.strftime("%d/%m/%Y") in second[0]
+    assert "asesor" not in second[0].lower()
+
+
+def test_a_franja_that_leaves_nothing_widens_instead_of_dead_ending(mock_openai_chat):
+    """S2: "cualquier dia despues de las 6"-style text must never dead-end.
+
+    The corpus turn asks for an evening the business does not sell; the offer
+    widens instead of looping into a clarification or a handoff.
+    """
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": "cualquier dia en la tarde", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        _day_block(session, tech_id, _local_today() + timedelta(days=2), hour=9, hours=2)
+        session.commit()
+
+    replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.franja"))
+
+    assert len(replies) == 1
+    assert "asesor" not in replies[0].lower()
+    assert "No pude identificar" not in replies[0]
+    # The notice is what proves the widening fired: a plain unfiltered offer would
+    # also print a numbered slot, so "1." alone would be a false pass.
+    assert "Para la tarde no me quedan horarios" in replies[0]
+    assert "1." in replies[0]
