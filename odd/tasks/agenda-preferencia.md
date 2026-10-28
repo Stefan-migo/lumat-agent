@@ -73,7 +73,7 @@ formato que la reserva (`dd/mm/aaaa a las HH:MM`).
 
 La feature se entrega como **siete PRs apilados a `main`**, cada uno ≤400 líneas:
 
-| # | Rama | Líneas | Contenido |
+| # | Rama | Líneas al abrir el stack | Contenido |
 |---|---|---|---|
 | 1 | `odd/agenda-preferencia-1-window-parser` | 309 | parser de ventana + tests unitarios |
 | 2 | `odd/agenda-preferencia-2-assignment-window` | 224 | filtro en `open_slots_for_assignment` + este documento |
@@ -81,7 +81,7 @@ La feature se entrega como **siete PRs apilados a `main`**, cada uno ≤400 lín
 | 4 | `odd/agenda-preferencia-4-offer-precedence` | 96 | precedencia del gate de reclamo |
 | 5 | `odd/agenda-preferencia-5-reschedule-window` | 212 | reagendado con ventana + `slots_for_window` compartido |
 | 6 | `odd/agenda-preferencia-6-kb-saturday` | 118 | KB del sábado + corpus + pins |
-| 7 | `odd/agenda-preferencia-7-record` | 287 | cierre del registro + evidencia real |
+| 7 | `odd/agenda-preferencia-7-record` | 287 | cierre del registro + evidencia real (+ la corrección de hashes que apunta esta tabla a la historia nueva) |
 
 Para armar el stack la historia se rehízo **una sola vez**: el commit original del primitivo (531 líneas) se
 partió en parser (309) y filtro (224), y los slices se reordenaron para que cada rama sea un prefijo del
