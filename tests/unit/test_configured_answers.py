@@ -236,3 +236,64 @@ def test_the_precedence_is_the_documented_one(monkeypatch):
     assert configured_answers.configuration_reply(
         SESSION, _state("atienden en Ñuñoa los sábados?")
     ).startswith("Atendemos normalmente en ")
+
+
+# --- S6: service durations from configuration ----------------------------
+
+
+def _durations(monkeypatch, durations):
+    monkeypatch.setattr(
+        configured_answers, "get_service_durations", lambda _session: durations
+    )
+
+
+@pytest.mark.parametrize(
+    ("minutes", "text"),
+    [(45, "45 minutos"), (60, "1 hora"), (90, "1 hora y 30 minutos"), (180, "3 horas")],
+)
+def test_the_duration_is_rendered_from_the_configured_minutes(minutes, text, monkeypatch):
+    _durations(monkeypatch, {"Calefont": minutes})
+
+    assert (
+        configured_answers.duration_reply(SESSION, _state("cuanto dura un calefont?"))
+        == f"Calefont dura {text}."
+    )
+
+
+def test_a_configured_phrase_matches_the_customer_wording(monkeypatch):
+    _durations(monkeypatch, {"Mantención de calefont": 60})
+
+    assert (
+        configured_answers.duration_reply(
+            SESSION, _state("cuanto dura la mantención de calefont?")
+        )
+        == "Mantención de calefont dura 1 hora."
+    )
+
+
+def test_a_service_without_a_configured_duration_keeps_the_kb_path(monkeypatch):
+    """S6: no duration is invented for a service the configuration does not hold."""
+    _durations(monkeypatch, {"Calefont": 60})
+
+    assert (
+        configured_answers.duration_reply(SESSION, _state("cuanto dura la caldera?"))
+        is None
+    )
+
+
+def test_a_configured_service_without_a_duration_question_is_left_alone(monkeypatch):
+    _durations(monkeypatch, {"Calefont": 60})
+
+    assert (
+        configured_answers.duration_reply(SESSION, _state("cuanto sale un calefont?"))
+        is None
+    )
+
+
+def test_an_empty_duration_map_answers_nothing(monkeypatch):
+    _durations(monkeypatch, {})
+
+    assert (
+        configured_answers.duration_reply(SESSION, _state("cuanto dura un calefont?"))
+        is None
+    )

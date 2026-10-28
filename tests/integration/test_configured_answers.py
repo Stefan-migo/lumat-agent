@@ -57,3 +57,13 @@ def test_respond_answers_an_hours_question_from_the_configuration():
     assert result["replies"] == [
         "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
     ]
+
+
+def test_respond_answers_a_duration_question_from_the_configuration():
+    with SessionLocal() as session:
+        set_setting(session, "booking.service_durations", {"Calefont": 60})
+        session.commit()
+
+    result = respond(_state("cuanto dura un calefont?"))
+
+    assert result["replies"] == ["Calefont dura 1 hora."]

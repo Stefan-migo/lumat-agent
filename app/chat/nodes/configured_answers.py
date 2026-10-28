@@ -17,7 +17,11 @@ import re
 import unicodedata
 
 from app.chat.state import ConversationState
-from app.services.settings import get_coverage_communes, get_hours_schedule
+from app.services.settings import (
+    get_coverage_communes,
+    get_hours_schedule,
+    get_service_durations,
+)
 
 # Terms that ask WHERE the visits happen, as opposed to a question that merely
 # names a commune. `atienden` alone is not enough: "atienden en Providencia?"
@@ -159,6 +163,45 @@ def coverage_reply(session, state: ConversationState) -> str | None:
     return f"Atendemos normalmente en {_join_es(communes)}."
 
 
+# Terms that ask HOW LONG. The service name itself comes from the
+# `booking.service_durations` keys, so this answer needs no phrase table of its
+# own: a service the operator wrote is a service the customer can ask about.
+_DURATION_TERMS = frozenset(
+    {"dura", "duran", "duracion", "demora", "demoran", "tarda", "tardan", "tiempo"}
+)
+
+
+def _minutes_label(minutes: int) -> str:
+    """Minutes as Spanish text: "45 minutos", "1 hora", "1 hora y 30 minutos"."""
+    hours, rest = divmod(minutes, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f"{hours} hora" if hours == 1 else f"{hours} horas")
+    if rest:
+        parts.append(f"{rest} minutos")
+    return " y ".join(parts) or "0 minutos"
+
+
+def duration_reply(session, state: ConversationState) -> str | None:
+    """How long a configured service takes, from `booking.service_durations` (S6).
+
+    Returns ``None`` when the turn does not ask how long something takes or names
+    no configured service: the KB keeps answering, and no duration is invented.
+    """
+    text = _current_text(state)
+    if not text or _asks_price(text) or not (_words(text) & _DURATION_TERMS):
+        return None
+    folded = _fold(text)
+    durations = get_service_durations(session)
+    for service, minutes in durations.items():
+        if not _mentions(folded, service):
+            continue
+        if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes <= 0:
+            continue
+        return f"{service.strip()} dura {_minutes_label(minutes)}."
+    return None
+
+
 def hours_reply(session, state: ConversationState) -> str | None:
     """The configured weekly window, from `hours.schedule` (S5).
 
@@ -180,8 +223,10 @@ def configuration_reply(session, state: ConversationState) -> str | None:
 
     Precedence is explicit and pinned by test: the first answer that recognises
     the turn owns it, so the same text can never be claimed by two of them.
+    Duration comes first because naming a service is the specific case; coverage
+    and hours are the general ones.
     """
-    for answer in (coverage_reply, hours_reply):
+    for answer in (duration_reply, coverage_reply, hours_reply):
         reply = answer(session, state)
         if reply is not None:
             return reply
