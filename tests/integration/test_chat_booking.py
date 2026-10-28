@@ -416,6 +416,33 @@ def test_offer_honors_the_day_the_customer_asked_for(mock_openai_chat):
     assert (_local_today() + timedelta(days=2)).strftime("%d/%m/%Y") not in replies[0]
 
 
+def test_sunday_request_widens_to_weekday_and_names_requested_moment(mock_openai_chat):
+    today = _local_today()
+    sunday = today + timedelta(days=(6 - today.weekday()) % 7 or 7)
+    monday = sunday + timedelta(days=1)
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": "el domingo", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        set_setting(
+            session, "hours.schedule",
+            [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+            actor="test",
+        )
+        _day_block(session, tech_id, sunday)
+        _day_block(session, tech_id, monday)
+        session.commit()
+
+    replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.sunday"))
+
+    assert len(replies) == 1
+    assert replies[0].startswith(f"Para el domingo {sunday:%d/%m} no me quedan horarios.")
+    assert sunday.strftime("%d/%m/%Y") not in replies[0]
+    assert monday.strftime("%d/%m/%Y") in replies[0]
+
+
 def test_offer_says_the_day_is_full_and_offers_the_nearest_later_day(mock_openai_chat):
     """S2: "Ofrecer el día hábil más cercano y avisar" — later, never earlier."""
     wanted = _local_today() + timedelta(days=5)

@@ -464,6 +464,61 @@ def test_open_slots_for_assignment_prefers_the_technician_with_fewer_visits_that
         assert [technician_id for technician_id, _, _ in slots] == [higher.id] * 3
 
 
+def test_open_slots_for_assignment_empty_hours_schedule_preserves_unrestricted_offers(monkeypatch):
+    with SessionLocal() as session:
+        technician = User(username="empty-hours-regression", password_hash="test", role="tecnico")
+        session.add(technician)
+        session.flush()
+        monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+        monkeypatch.setattr(scheduling, "get_hours_schedule", lambda _session: [])
+        now = datetime(2026, 10, 26, 8, 0, tzinfo=timezone.utc)
+        starts = datetime(2026, 10, 26, 9, 0, tzinfo=timezone.utc)
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=starts,
+            ends_at=starts + timedelta(hours=2),
+        )
+
+        assert scheduling.open_slots_for_assignment(
+            session, now=now, days=1, duration_minutes=60, limit=3
+        ) == [
+            (technician.id, date(2026, 10, 26), time(9, 0)),
+            (technician.id, date(2026, 10, 26), time(9, 30)),
+            (technician.id, date(2026, 10, 26), time(10, 0)),
+        ]
+
+
+def test_open_slots_for_assignment_business_window_filters_day_and_visit_fit(monkeypatch):
+    with SessionLocal() as session:
+        technician = User(username="business-window-filter", password_hash="test", role="tecnico")
+        session.add(technician)
+        session.flush()
+        monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+        monkeypatch.setattr(
+            scheduling, "get_hours_schedule",
+            lambda _session: [{"days": [1], "open": "09:00", "close": "18:00"}],
+            raising=False,
+        )
+        monday = datetime(2026, 10, 26, 8, 0, tzinfo=timezone.utc)
+        tuesday = monday + timedelta(days=1)
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=monday,
+            ends_at=monday + timedelta(hours=11),
+        )
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=tuesday,
+            ends_at=tuesday + timedelta(hours=11),
+        )
+
+        slots = scheduling.open_slots_for_assignment(
+            session, now=monday, days=2, duration_minutes=60, limit=20
+        )
+
+        assert slots
+        assert all(day == date(2026, 10, 26) for _, day, _ in slots)
+        assert all(time(9) <= clock and (datetime.combine(day, clock) + timedelta(minutes=60)).time() <= time(18) for _, day, clock in slots)
+        assert (technician.id, date(2026, 10, 26), time(17, 30)) not in slots
+
+
 def test_open_slots_for_assignment_returns_empty_when_no_availability_rows(monkeypatch):
     with SessionLocal() as session:
         technician = User(username="assignment-unconfigured", password_hash="test", role="tecnico")

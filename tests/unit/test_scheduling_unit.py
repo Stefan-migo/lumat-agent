@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
+import app.services.scheduling as scheduling
 from app.services.scheduling import (
     AmbiguousLocalTime,
     InvalidRange,
@@ -174,3 +175,45 @@ def test_open_slots_honours_the_lead_time(monkeypatch):
 def test_the_booking_lead_defaults_to_two_hours():
     """`booking.lead_minutes` is registered with the decided default (120)."""
     assert SETTINGS_DEFAULTS["booking.lead_minutes"] == 120
+
+
+# --- business window (S1, agenda-config-fuente) -----------------------------
+
+
+def test_business_window_is_unrestricted_when_the_schedule_is_empty():
+    assert scheduling.business_window([]) == []
+    assert scheduling.fits_business_window((date(2026, 11, 1), time(3, 0)), 60, []) is True
+
+
+def test_business_window_fails_open_on_malformed_entries():
+    """Unreadable legacy rows must not empty the calendar (same rule as is_open_at)."""
+    malformed = [{"days": [1], "open": "nueve", "close": "18:00"}]
+
+    assert scheduling.business_window(malformed) == []
+
+
+def test_business_window_requires_the_whole_visit_to_fit():
+    entries = scheduling.business_window([{"days": [1], "open": "09:00", "close": "18:00"}])
+    monday = date(2026, 10, 26)
+
+    assert scheduling.fits_business_window((monday, time(9, 0)), 60, entries) is True
+    assert scheduling.fits_business_window((monday, time(17, 0)), 60, entries) is True
+    # 17:30 + 60 minutes ends at 18:30, past closing: the offer nobody can honour.
+    assert scheduling.fits_business_window((monday, time(17, 30)), 60, entries) is False
+    assert scheduling.fits_business_window((monday, time(8, 30)), 60, entries) is False
+
+
+def test_business_window_does_not_wrap_past_midnight():
+    """A late start plus a duration must never 'fit' by wrapping to 00:xx."""
+    entries = scheduling.business_window([{"days": [1], "open": "09:00", "close": "23:59"}])
+
+    assert scheduling.fits_business_window((date(2026, 10, 26), time(23, 30)), 60, entries) is False
+
+
+def test_business_window_excludes_days_outside_the_window():
+    entries = scheduling.business_window(
+        [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}]
+    )
+
+    assert scheduling.fits_business_window((date(2026, 10, 31), time(10, 0)), 60, entries) is True
+    assert scheduling.fits_business_window((date(2026, 11, 1), time(10, 0)), 60, entries) is False
