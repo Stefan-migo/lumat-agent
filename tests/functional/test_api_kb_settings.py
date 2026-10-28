@@ -689,6 +689,54 @@ def test_kb_edit_creates_new_version_and_audits(client, make_user, fake_embedder
     assert audit.after == {"version": 2, "title": "Manual v2"}
 
 
+def test_kb_edit_preserves_topic_routing(client, make_user, fake_embedder):
+    """S2: an edit from the panel must not detach the document from its topic.
+
+    Guards the wiring, not the service: `update_document` already inherits the
+    routing metadata (S1), and this pins that the edit endpoint benefits from it
+    instead of forking a version that the topic filter can no longer see.
+    """
+    from app.chat.nodes import respond as respond_node
+    from app.models import DocumentFormat, KbVisibility
+
+    question = "puede ser este sabado?"
+    with SessionLocal() as session:
+        doc = kb_service.ingest_document(
+            session,
+            "Cobertura y horarios",
+            DocumentFormat.MD,
+            ("Atendemos de lunes a sabado de 09:00 a 18:00. " + question).encode(),
+            source_meta={"source": "docs/kb", "source_id": "lumat-cobertura-horarios"},
+            visibility=KbVisibility.CUSTOMER,
+        )
+        session.commit()
+        doc_id = doc.id
+
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    resp = client.post(
+        f"/panel/api/kb/{doc_id}/edit",
+        json={"content": "Las visitas se agendan de lunes a sabado, de 09:00 a 18:00. " + question},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["doc"]["version"] == 2
+
+    with SessionLocal() as session:
+        chunks = list(
+            session.scalars(
+                select(KbChunk).where(KbChunk.document_id == doc_id, KbChunk.version == 2)
+            )
+        )
+        assert chunks
+        for chunk in chunks:
+            assert (chunk.source_meta or {}).get("source_id") == "lumat-cobertura-horarios"
+        scoped = respond_node.retrieve_for_queries(
+            session, [question], topic_source_ids=["lumat-cobertura-horarios"]
+        )
+    assert scoped, "the edited document must remain eligible for its own topic"
+
+
 def test_kb_edit_missing_doc_404_json(client, make_user):
     make_user("adm", "adm-pass", role="admin")
     _login(client)

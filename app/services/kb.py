@@ -225,25 +225,56 @@ def ingest_document(
     return doc
 
 
+def _routing_meta(source_meta: dict | None) -> dict:
+    """The metadata that identifies a document across versions.
+
+    `chunk_index` is per-chunk and is re-stamped by `_store_chunks`; everything
+    else (notably `source_id`, which topic routing filters on) belongs to the
+    document and must survive a new version.
+    """
+    return {key: value for key, value in (source_meta or {}).items() if key != "chunk_index"}
+
+
+def _active_version_meta(session: Session, doc: KbDocument) -> dict:
+    """Routing metadata of the currently active version, read before it moves."""
+    chunk = session.scalars(
+        select(KbChunk)
+        .where(KbChunk.document_id == doc.id, KbChunk.version == doc.active_version)
+        .order_by(KbChunk.chunk_index)
+        .limit(1)
+    ).first()
+    return _routing_meta(chunk.source_meta if chunk is not None else None)
+
+
 def update_document(
     session: Session,
     doc_id: int,
     new_content: str,
     title: str | None = None,
     actor: str = "system",
+    source_meta: dict | None = None,
 ) -> KbDocument:
-    """Edit a document: new version + re-embed; prior version stays (KB-4)."""
+    """Edit a document: new version + re-embed; prior version stays (KB-4).
+
+    The new version inherits the document's routing metadata unless the caller
+    passes `source_meta` explicitly. Losing it silently broke topic routing:
+    `retrieve(..., source_ids=[...])` filters on `source_meta["source_id"]`, so
+    a re-versioned document stopped being eligible for its own topic and the
+    turn fell through to the similarity threshold (measured: "puede ser este
+    sabado?" answered with the KB-miss offer).
+    """
     doc = session.get(KbDocument, doc_id)
     if doc is None:
         raise ValueError(f"kb document {doc_id} not found")
     new_version = doc.version + 1
+    inherited_meta = _routing_meta(source_meta) if source_meta is not None else _active_version_meta(session, doc)
     doc.content = new_content
     if title is not None:
         doc.title = title
     doc.version = new_version
     doc.active_version = new_version
     doc.active = True
-    _store_chunks(session, doc, version=new_version, source_meta=None)
+    _store_chunks(session, doc, version=new_version, source_meta=inherited_meta)
     record_audit(
         session,
         actor=actor,
@@ -252,6 +283,49 @@ def update_document(
         entity_id=str(doc.id),
         before={"version": new_version - 1},
         after={"version": new_version, "title": doc.title},
+    )
+    return doc
+
+
+def repair_source_meta(
+    session: Session,
+    doc_id: int,
+    source_meta: dict | None,
+    actor: str = "system",
+) -> KbDocument:
+    """Rewrite the ACTIVE version's routing metadata in place, without re-embedding.
+
+    Metadata is not content. A version whose chunks lost `source_id` cannot be
+    found by topic routing even though its text is intact, and re-versioning to
+    recover the key would pay a new embedding and add a version nobody asked
+    for. Chunk content, count and version pointer are left untouched.
+    """
+    doc = session.get(KbDocument, doc_id)
+    if doc is None:
+        raise ValueError(f"kb document {doc_id} not found")
+    routing = _routing_meta(source_meta)
+    chunks = list(
+        session.scalars(
+            select(KbChunk)
+            .where(KbChunk.document_id == doc.id, KbChunk.version == doc.active_version)
+            .order_by(KbChunk.chunk_index)
+        )
+    )
+    if not chunks:
+        raise ValueError(
+            f"kb document {doc_id} has no chunks for active version {doc.active_version}"
+        )
+    before = _routing_meta(chunks[0].source_meta)
+    for chunk in chunks:
+        chunk.source_meta = {**routing, "chunk_index": chunk.chunk_index}
+    record_audit(
+        session,
+        actor=actor,
+        action="kb.document_metadata",
+        entity="kb_document",
+        entity_id=str(doc.id),
+        before={"source_meta": before},
+        after={"source_meta": routing},
     )
     return doc
 
