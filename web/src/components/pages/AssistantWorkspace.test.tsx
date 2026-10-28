@@ -6,6 +6,7 @@ import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
 import { AgentChat } from "./AgentChat";
 import { AssistantWorkspace } from "./AssistantWorkspace";
 import { groupThreadsByDate } from "./threadDateGroups";
+import { writeWorkspaceTabs } from "../domain/assistantTabs";
 
 describe("groupThreadsByDate", () => {
   it("groups by last activity, uses creation as a fallback, and sorts newest first", () => {
@@ -28,6 +29,67 @@ describe("AssistantWorkspace", () => {
     vi.unstubAllGlobals();
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     window.history.replaceState({}, "", "/");
+    localStorage.clear();
+  });
+
+  it("restores open thread tabs after the assistant workspace remounts", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=101");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [{ id: 101, title: "Thread 101", created_at: null, updated_at: null }] }), { status: 200 });
+      return new Response(JSON.stringify({ thread: { id: 101, proyecto: "default", status: "open" }, messages: [] }), { status: 200 });
+    });
+    const props = { role: "admin" as const, userId: 9, onThreadOpened: vi.fn() };
+    const firstMount = render(<AgentChat {...props} />);
+    const firstNav = await screen.findByRole("navigation", { name: "Pestañas abiertas" });
+    expect(within(firstNav).getByRole("button", { name: "Thread 101" })).toHaveAttribute("aria-current", "page");
+
+    firstMount.unmount();
+    window.history.replaceState({}, "", "/panel/app/chat");
+    render(<AgentChat {...props} />);
+
+    const restoredNav = await screen.findByRole("navigation", { name: "Pestañas abiertas" });
+    expect(within(restoredNav).getByRole("button", { name: "Thread 101" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("appends and activates a deep-linked thread without losing restored tabs", async () => {
+    writeWorkspaceTabs(9, [{ kind: "thread", threadId: 201 }]);
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=202");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [
+        { id: 201, title: "Thread 201", created_at: null, updated_at: null },
+        { id: 202, title: "Thread 202", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ thread: { id: 202, proyecto: "default", status: "open" }, messages: [] }), { status: 200 });
+    });
+
+    render(<AgentChat role="admin" userId={9} onThreadOpened={vi.fn()} />);
+
+    const nav = await screen.findByRole("navigation", { name: "Pestañas abiertas" });
+    expect(within(nav).getAllByRole("button").map((button) => button.textContent?.trim()).filter(Boolean)).toEqual(["Thread 201", "Thread 202"]);
+    expect(within(nav).getByRole("button", { name: "Thread 202" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("does not restore a thread after its tab is closed", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=301");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [{ id: 301, title: "Thread 301", created_at: null, updated_at: null }] }), { status: 200 });
+      return new Response(JSON.stringify({ thread: { id: 301, proyecto: "default", status: "open" }, messages: [] }), { status: 200 });
+    });
+    const props = { role: "admin" as const, userId: 9, onThreadOpened: vi.fn() };
+    const firstMount = render(<AgentChat {...props} />);
+    const nav = await screen.findByRole("navigation", { name: "Pestañas abiertas" });
+    await userEvent.setup().click(within(nav).getByRole("button", { name: "Acciones de Thread 301" }));
+    await userEvent.setup().click(await screen.findByRole("menuitem", { name: "Cerrar pestaña" }));
+    expect(screen.queryByRole("navigation", { name: "Pestañas abiertas" })).not.toBeInTheDocument();
+
+    firstMount.unmount();
+    window.history.replaceState({}, "", "/panel/app/chat");
+    render(<AgentChat {...props} />);
+
+    expect(screen.queryByRole("navigation", { name: "Pestañas abiertas" })).not.toBeInTheDocument();
   });
 
   it("renders the three workspace regions with the existing chat in the center", async () => {

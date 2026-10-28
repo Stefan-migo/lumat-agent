@@ -270,12 +270,13 @@ function AgentActivity({
 
 export interface AgentChatProps {
   role: Role;
+  userId?: number;
   userName?: string;
   threadId?: number;
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentChatProps) {
+export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -896,6 +897,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       onCreateThread={() => void newChat()}
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}
+      userId={userId}
       loadThreadTabs={Boolean(onThreadOpened)}
       activeProjectSlug={thread?.proyecto ?? undefined}
       onSelectProject={(slug) => void (thread ? changeProject(slug) : createProjectChat(slug))}
