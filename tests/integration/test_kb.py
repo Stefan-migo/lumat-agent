@@ -25,7 +25,7 @@ from uuid import uuid4
 
 import psycopg
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from app.db import SessionLocal  # noqa: E402
 from app.chat.nodes import respond as respond_node  # noqa: E402
@@ -643,6 +643,102 @@ def test_kb2_min_sim_configurable(fake_embedder):
             session, "como enciendo mi calefont", min_sim=0.0, audience=None
         )
     assert len(relaxed) == 1
+
+
+def _executed_kb_statements(session, action):
+    """Run `action` and return the SQL statements it actually executed."""
+    captured: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        captured.append(statement)
+
+    event.listen(session.get_bind(), "before_cursor_execute", _record)
+    try:
+        action()
+    finally:
+        event.remove(session.get_bind(), "before_cursor_execute", _record)
+    return captured
+
+
+def test_kb_topic_retrieval_does_not_ask_the_index_for_a_top_n_window(fake_embedder):
+    """S-fix: the filtered path ranks AFTER filtering, not through the ANN window.
+
+    Measured in production (2026-10-28, 296 chunks): the topic filter matched 2
+    rows and `retrieve(..., source_ids=[...])` returned 0. The HNSW scan hands
+    back `hnsw.ef_search` (40) neighbours and the WHERE filters apply afterwards,
+    so one 258-chunk document dominating the neighbourhood left nothing; the same
+    query with the index scan disabled returned the 2 rows.
+
+    The starvation is PLAN-dependent — a small test database happily chooses a
+    sequential scan, which is why the bug never showed up here, and why a
+    behavioural test cannot pin it deterministically. This pins the property that
+    removes the dependency: the filtered statement carries no `ORDER BY ... LIMIT`
+    window for the index to fill.
+    """
+    query = "puede ser este sabado?"
+    with SessionLocal() as session:
+        kb.ingest_document(
+            session,
+            title="Cobertura y horarios",
+            fmt=DocumentFormat.MD,
+            content=b"Las visitas se agendan de lunes a sabado de 09:00 a 18:00.",
+            source_meta={"source": "docs/kb", "source_id": "lumat-cobertura-horarios"},
+            visibility=KbVisibility.CUSTOMER,
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        statements = _executed_kb_statements(
+            session,
+            lambda: kb.retrieve(
+                session,
+                query,
+                audience=KbVisibility.CUSTOMER,
+                global_only=True,
+                source_ids=["lumat-cobertura-horarios"],
+            ),
+        )
+
+    retrieval = [sql for sql in statements if "kb_chunks" in sql and "source_meta" in sql]
+    assert retrieval, "the filtered retrieval must hit kb_chunks"
+    for sql in retrieval:
+        normalised = " ".join(sql.lower().split())
+        assert "order by" not in normalised, (
+            "the filtered path must not delegate ranking to the ANN candidate "
+            f"window: {normalised[:200]}"
+        )
+        assert " limit " not in normalised
+
+
+def test_kb_topic_retrieval_ranks_the_matching_rows_by_similarity(fake_embedder):
+    """Behaviour guard: the filtered path still returns the nearest matches, in order."""
+    query = "puede ser este sabado?"
+    vector, _ = kb.embed_texts([query])
+    with SessionLocal() as session:
+        for index in range(3):
+            kb.ingest_document(
+                session,
+                title=f"Documento del tema {index}",
+                fmt=DocumentFormat.MD,
+                content=f"Las visitas se agendan el sabado numero {index}.".encode(),
+                source_meta={"source": "docs/kb", "source_id": "lumat-cobertura-horarios"},
+                visibility=KbVisibility.CUSTOMER,
+            )
+        session.commit()
+
+    with SessionLocal() as session:
+        hits = kb.retrieve(
+            session,
+            query,
+            top_k=2,
+            audience=KbVisibility.CUSTOMER,
+            global_only=True,
+            source_ids=["lumat-cobertura-horarios"],
+        )
+
+    assert len(hits) == 2, "top_k must still cap the ranked matches"
+    similarities = [hit["similarity"] for hit in hits]
+    assert similarities == sorted(similarities, reverse=True)
 
 
 # ---------------------------------------------------------------------------
