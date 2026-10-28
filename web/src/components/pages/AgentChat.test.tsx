@@ -446,6 +446,7 @@ describe("AgentChat", () => {
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
+    expect(screen.queryByText("@ Agente · Próximamente")).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveAttribute("placeholder", "Escribe un mensaje al asistente…");
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archivos 0" })).toBeInTheDocument();
