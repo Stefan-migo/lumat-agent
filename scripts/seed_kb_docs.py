@@ -257,6 +257,22 @@ def seed(session: Session, documents: list[LocalDocument], force: bool = False) 
     }
 
 
+def _print_drift_summary() -> None:
+    """Print the static KB drift summary without affecting seed outcomes."""
+    try:
+        import kb_doc_drift
+
+        tolerated, new = kb_doc_drift.summarize()
+        keys = len({finding.key for finding in tolerated})
+        print(f"kb drift · tolerados: {len(tolerated)} hallazgos ({keys} claves) · nuevos: {len(new)}")
+        for finding in new:
+            print(f"kb drift · nuevo: {finding.source_id}|{finding.kind}|{finding.value}")
+    except Exception as exc:
+        # The seed's database consistency result remains authoritative; drift is
+        # an advisory report and must not alter its exit status.
+        print(f"kb drift · reporte no disponible: {exc}")
+
+
 def main(argv: list[str] | None = None) -> int:
     ensure_dev_env()
     parser = argparse.ArgumentParser(
@@ -284,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
             f"kb · {before['documents']} documentos customer · {before['chunks']} chunks "
             f"· fingerprint {before['fingerprint']}"
         )
+        _print_drift_summary()
         if before["consistent"] and not before["unrouted"]:
             print("kb · consistente con docs/kb: nada que hacer")
             return 0
