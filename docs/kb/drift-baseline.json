@@ -1,0 +1,18 @@
+[
+  "lumat-cobertura-horarios|clock|09:00",
+  "lumat-cobertura-horarios|clock|18:00",
+  "lumat-cobertura-horarios|communes|Colina",
+  "lumat-cobertura-horarios|communes|Huechuraba",
+  "lumat-cobertura-horarios|communes|La Reina",
+  "lumat-cobertura-horarios|communes|Las Condes",
+  "lumat-cobertura-horarios|communes|Lo Barnechea",
+  "lumat-cobertura-horarios|communes|Peñalolén",
+  "lumat-cobertura-horarios|communes|Ñuñoa",
+  "lumat-cobertura-horarios|weekday_range|lunes a sábado",
+  "lumat-servicios|duration|20 minutos",
+  "lumat-servicios|duration|3 horas",
+  "lumat-servicios|duration|30 minutos",
+  "lumat-servicios|duration|45 minutos",
+  "lumat-servicios|duration|6 horas",
+  "lumat-servicios|duration|90 minutos"
+]

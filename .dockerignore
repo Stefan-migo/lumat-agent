@@ -13,6 +13,10 @@ media/
 node_modules/
 tests/
 docs/
+# One docs subtree is runtime input, not build noise: `docs/kb` is the source the
+# deployed release check re-seeds from (ops.md §2.5).
+!docs/kb/
+!docs/kb/**
 openspec/
 infra/*
 !infra/nginx/

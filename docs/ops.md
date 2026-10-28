@@ -172,6 +172,9 @@ put credentials or session cookies in the repository or shell history.
 - [ ] Run the agent checks and record green results:
   `curl -fsS https://agente.lumat.cl/health`, the webhook verification probe
   from §2.1, and `sudo -u deploy /opt/lumat/infra/monitor.sh` (exit 0).
+- [ ] Confirm the deployed KB matches `docs/kb` (§2.5): run the seed in report
+  mode against the release and require `kb · consistente con docs/kb`. A release
+  whose documents drifted ships prose that contradicts the configuration.
 
 Record the tag, timestamp, operator, and any failed check in the release record
 (§2.9). These panel checks require the VPS DNS, TLS certificates, and valid
@@ -330,26 +333,51 @@ recorded in `conversation_events` + `audit_log`). If the customer texts
 
 ### 2.5 KB add/edit
 
-Add a document (KB-1; panel route `POST /panel/kb` or service):
+**Where the customer KB comes from.** The customer-facing knowledge base is
+`docs/kb/*.md` in the repository, seeded into the database by
+`scripts/seed_kb_docs.py`. Production therefore has two copies of the same text
+(the file and the `kb_documents` row) and they drift silently: a deployed
+release can answer with prose that contradicts the settings the rest of the bot
+obeys. Treat the file as the source and the row as a cache.
 
 ```bash
-# via the panel: KB manager (T5.4) — title + content + source url; ingest chunks immediately
-# via CLI on the server (same path the panel calls):
-cd /opt/lumat && .venv/bin/python - <<'EOF'
-from app.db import SessionLocal
-from app.services import kb
-with SessionLocal() as s:
-    kb.ingest_document(s, title="FAQ revision anual", content="La revision anual de calefont cubre...", source_url="https://lumat.cl/faq")
-    s.commit()
-EOF
+# On the server (or in the local harness container). Report only: no writes.
+cd /opt/lumat && sudo -u deploy docker compose --project-name lumat \
+  -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+  exec api uv run python scripts/seed_kb_docs.py
+
+# Apply: create missing documents, re-version drifted ones, repair lost routing.
+cd /opt/lumat && sudo -u deploy docker compose --project-name lumat \
+  -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+  exec api uv run python scripts/seed_kb_docs.py --apply --force
 ```
 
-Every ingest writes an `audit_log` row (`kb.document_ingest`, actor + action +
-timestamp — SH-5) and replaces the previous version's chunks for the same
-title (chunk churn is handled by `ingest_document`, KB-1). Edit = re-ingest
-with the same title; delete = panel KB manager (removes chunks + audit).
+Read the exit code, never the prose alone: `0` means consistent, `1` means the
+report found something to fix. `--force` authorizes both writes that change a
+stored document — a new version for drifted content, and an in-place rewrite of
+routing metadata (`source_meta.source_id`) for a document whose text already
+matches. The second is why a re-seeded document can go from answering to saying
+"No tengo ese dato": topic routing filters on that key, and without it the turn
+falls back to the similarity threshold.
 
-Verify retrieval answers the new content (chat test or `/panel/kb` list).
+Do not hand-edit a seeded document in the panel KB manager. The panel takes the
+same path (`kb.update_document`, which now inherits the routing metadata), but
+the next seed run sees the row as drifted from the file and re-versions it back:
+the edit is lost and the incident costs an hour to reconstruct. Document a new
+fact by editing `docs/kb/*.md` and committing it.
+
+**Values belong to the settings, not to the prose.** Prices
+(`tarifa.precios`), covered communes (`coverage.communes`), opening hours
+(`hours.schedule`) and service durations (`booking.service_durations`) are
+configured in the panel and are read by the deterministic nodes; a KB document
+that restates them becomes a second source of truth. Prices were migrated out
+of the KB for this reason. `scripts/kb_doc_drift.py` lists the remaining
+restatements: it fails on a new one so the debt cannot grow unnoticed.
+
+Other documents (internal visibility, project uploads) still go through the
+panel route `POST /panel/kb`; every ingest writes an `audit_log` row
+(`kb.document_ingest`, actor + action + timestamp — SH-5) and both the panel and
+the seed path record a metadata repair as `kb.document_metadata`.
 
 ### 2.6 Settings change
 
