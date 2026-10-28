@@ -3,6 +3,8 @@ import pytest
 from app.services.settings import (
     ASSISTANT_WRITABLE_SETTINGS,
     MESSAGE_DEFAULTS,
+    SETTINGS_DEFAULTS,
+    get_hours_closure_enabled,
     get_message_templates,
     get_service_duration,
     validate_assistant_setting,
@@ -166,6 +168,12 @@ def test_validate_assistant_setting_accepts_valid_values(key, value):
 def test_validate_assistant_setting_rejects_invalid_values(key, value):
     with pytest.raises(ValueError):
         validate_assistant_setting(key, value)
+
+
+def test_hours_closure_enabled_defaults_to_false_and_reads_stored_boolean():
+    assert SETTINGS_DEFAULTS["hours.closure_enabled"] is False
+    assert get_hours_closure_enabled(FakeSession()) is False
+    assert get_hours_closure_enabled(FakeSession(True)) is True
 
 
 def test_validate_assistant_setting_rejects_keys_outside_the_allowlist():

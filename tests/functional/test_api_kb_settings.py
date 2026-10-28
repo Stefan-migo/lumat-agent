@@ -911,7 +911,11 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, "
         "o que te atienda una persona?"
     )
-    assert body["hours"] == {"timezone": "America/Santiago", "schedule": []}
+    assert body["hours"] == {
+        "timezone": "America/Santiago",
+        "schedule": [],
+        "closure_enabled": False,
+    }
     assert body["booking"] == {"lead_hours": 2}
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
@@ -1076,6 +1080,61 @@ def test_settings_update_hours_audited(client, make_user):
         ).all()
     assert {audit.entity_id for audit in audits} == {"hours.timezone", "hours.schedule"}
     assert all(audit.actor == "adm" for audit in audits)
+
+
+def test_settings_hours_closure_switch_is_opt_in_and_preserved_on_omission(
+    client, make_user
+):
+    """S3: the switch is settable, and a payload without it keeps the stored value.
+
+    The omission rule is the trap this pins: every older panel client posts the
+    hours section without the key, and defaulting it to False on read would
+    silently re-enable or disable the chat's quiet hours.
+    """
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    schedule = [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}]
+
+    # Opting in writes the key and audits it.
+    resp = client.post(
+        "/panel/api/settings/hours",
+        json={"timezone": "UTC", "schedule": schedule, "closure_enabled": True},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200, resp.text
+    with SessionLocal() as session:
+        assert session.get(Settings, "hours.closure_enabled").value is True
+    assert client.get("/panel/api/settings").json()["hours"]["closure_enabled"] is True
+
+    # A payload without the key preserves it instead of resetting it.
+    resp = client.post(
+        "/panel/api/settings/hours",
+        json={"timezone": "UTC", "schedule": schedule},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200, resp.text
+    with SessionLocal() as session:
+        assert session.get(Settings, "hours.closure_enabled").value is True
+
+
+def test_settings_hours_closure_switch_rejects_a_non_boolean(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/settings/hours",
+        json={
+            "timezone": "UTC",
+            "schedule": [{"days": [1], "open": "09:00", "close": "18:00"}],
+            "closure_enabled": "si",
+        },
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert "boolean" in resp.json()["detail"]
+    with SessionLocal() as session:
+        assert session.get(Settings, "hours.closure_enabled") is None
 
 
 @pytest.mark.parametrize(

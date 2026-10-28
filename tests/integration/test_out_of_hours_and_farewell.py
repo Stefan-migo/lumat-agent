@@ -49,6 +49,7 @@ def _set_closed_hours() -> None:
     with SessionLocal() as session:
         settings.set_setting(session, "hours.timezone", "UTC", actor="test")
         settings.set_setting(session, "hours.schedule", _closed_schedule(), actor="test")
+        settings.set_setting(session, "hours.closure_enabled", True, actor="test")
         session.commit()
 
 
@@ -77,6 +78,19 @@ def test_closed_normal_question_gets_notice_without_classification(mock_openai_c
     assert mock_openai_chat == []
     with SessionLocal() as session:
         assert session.scalars(select(ConversationEvent).where(ConversationEvent.event == "unknown_intent")).all() == []
+
+
+def test_closed_schedule_is_ignored_when_closure_is_disabled(mock_openai_chat):
+    with SessionLocal() as session:
+        settings.set_setting(session, "hours.timezone", "UTC", actor="test")
+        settings.set_setting(session, "hours.schedule", _closed_schedule(), actor="test")
+        settings.set_setting(session, "hours.closure_enabled", False, actor="test")
+        session.commit()
+
+    replies = _turn(_start_conversation(), "¿cuánto cuesta la revisión anual?", "wamid.closure.disabled")
+
+    assert OUT_OF_HOURS not in replies
+    assert mock_openai_chat
 
 
 def test_strong_emergency_during_closed_hours_keeps_safety_protocol(mock_openai_chat, monkeypatch):

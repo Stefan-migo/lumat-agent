@@ -368,6 +368,26 @@ needed. **Rule**: verify the JSON is valid before saving — an invalid
 `scope_rules` value makes the classification path fall back to the default
 (marked in logs).
 
+**Opening hours are two decisions on one window.** `hours.schedule` is the only
+source of truth for when a visit can be booked: `open_slots_for_assignment`
+offers nothing outside it, and a visit has to fit entirely before closing (a
+60-minute service is not offered at 17:30 when the window closes at 18:00). An
+empty schedule means "no restriction" and is what every deployment ships with.
+
+Silencing the chat outside those hours is a **separate, opt-in switch**:
+`hours.closure_enabled`, `false` by default. With it off the bot answers at any
+hour and only the booking offers respect the window; with it on, a message
+outside the window gets `messages.out_of_hours` and no conversation runs. Set it
+through the panel (`POST /panel/api/settings/hours`, field `closure_enabled`) or
+psql; a payload without the field preserves the stored value.
+
+```bash
+# turn the out-of-hours closure on, keeping the current window untouched:
+curl -sS -b cookies.txt -H 'content-type: application/json' \
+  -d '{"timezone":"America/Santiago","schedule":[{"days":[1,2,3,4,5,6],"open":"09:00","close":"18:00"}],"closure_enabled":true}' \
+  https://panel.lumat.cl/panel/api/settings/hours
+```
+
 ### 2.7 Monitoring alert triage
 
 `infra/monitor.sh` (every 5 min) sends an SMTP alert when a check fails.
