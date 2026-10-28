@@ -331,6 +331,8 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
   const [fileSearch, setFileSearch] = useState("");
   const watchCancelledRef = useRef(false);
   const watchedRunRef = useRef<string | null>(null);
+  const streamGenerationRef = useRef(0);
+  const streamKeyRef = useRef<string | null>(null);
 
   const loadThread = (result: InternalChatResponse, preserveArtifacts = false) => {
     const state = result.thread.assistant_state;
@@ -386,6 +388,11 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
   const selectedAttachments = attachments.filter((item) => selectedAttachmentIds.includes(item.id));
 
   useEffect(() => {
+    let current = true;
+    const generation = ++streamGenerationRef.current;
+    setProcessing(false);
+    setStream("");
+    setRecoverable(false);
     const request = requestedId
       ? getChatThread(requestedId)
       : requestedProject
@@ -393,18 +400,32 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
         : Promise.resolve(null);
     void request
       .then((result) => {
+        if (!current) return;
         if (result) {
           loadThread(result);
+          const run = [...(result.messages ?? [])].reverse().find(
+            (message) => message.author !== "agent" && message.status === "processing" && message.assistant_metadata?.run_id,
+          )?.assistant_metadata?.run_id;
+          if (run && runStillProcessing(result, run)) {
+            setProcessing(true);
+            void openStream(result.thread.id, run, generation);
+          }
           if (!requestedId && requestedProject) onThreadOpened?.(result.thread.id);
         } else {
           setThread(null);
           setMessages([]);
         }
       })
-      .catch((reason: unknown) =>
-        setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat"),
-      )
-      .finally(() => setLoading(false));
+      .catch((reason: unknown) => {
+        if (current) setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat");
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+      streamGenerationRef.current += 1;
+    };
   }, [requestedId, requestedProject]);
 
   useEffect(() => {
@@ -546,16 +567,26 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
     }
   };
 
-  const openStream = async (id: number, run: string) => {
+  const openStream = async (id: number, run: string, expectedGeneration?: number) => {
+    const generation = expectedGeneration ?? ++streamGenerationRef.current;
+    if (generation !== streamGenerationRef.current) return;
+    const key = `${generation}:${id}:${run}`;
+    if (streamKeyRef.current === key) return;
+    streamKeyRef.current = key;
+    const isCurrent = () => generation === streamGenerationRef.current && streamKeyRef.current === key;
     setRunId(run);
     let gaveUp = false;
     try {
       await streamChatEvents(id, run, (event) => {
+        if (!isCurrent()) return;
         if (event.type === "timeout") gaveUp = true;
         handleEvent(event);
       });
+      if (!isCurrent()) return;
       if (gaveUp) await watchRunToSettle(id, run);
+      if (!isCurrent()) return;
       const persisted = await getChatThread(id);
+      if (!isCurrent()) return;
       loadThread(persisted, true);
       const planningEvent = (persisted.thread.assistant_state?.events ?? []).find(
         (event) =>
@@ -570,6 +601,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
       setStream("");
       setRecoverable(false);
     } catch (reason: unknown) {
+      if (!isCurrent()) return;
       setRecoverable(true);
       setError(
         reason instanceof ApiError
@@ -577,7 +609,10 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
           : "El stream del asistente falló; la ejecución es recuperable.",
       );
     } finally {
-      setProcessing(false);
+      if (isCurrent()) {
+        streamKeyRef.current = null;
+        setProcessing(false);
+      }
     }
   };
 

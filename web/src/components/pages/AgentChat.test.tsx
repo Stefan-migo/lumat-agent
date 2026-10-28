@@ -79,6 +79,101 @@ describe("AgentChat", () => {
   });
   const toolToggle = (name: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
 
+  it("reattaches to the processing run on mount and renders its final response", async () => {
+    const run = "run-reconnect";
+    const streamUrl = `/panel/api/chat/threads/4/stream?run_id=${run}`;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    let threadReads = 0;
+    let sendFinalResponse: () => void = () => undefined;
+    // Once the stream closes, openStream reloads the persisted thread.
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === streamUrl) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            sendFinalResponse = () => {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                type: "response",
+                thread_id: 4,
+                run_id: run,
+                sequence: 0,
+                content: "Respuesta final recuperada",
+              })}\n\n`));
+              controller.close();
+            };
+          },
+        });
+        return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      }
+      threadReads += 1;
+      return jsonResponse(threadReads === 1
+        ? {
+            thread: { ...makeThread(), active_run_id: run, assistant_state: { live: { run_id: run, status: "processing" } } },
+            messages: [{
+              id: 1,
+              author: "admin",
+              content: "Consulta pendiente",
+              status: "processing",
+              assistant_metadata: { run_id: run },
+            }],
+          }
+        : {
+            thread: { ...makeThread(), active_run_id: run },
+            messages: [{
+              id: 2,
+              author: "agent",
+              content: "Respuesta final recuperada",
+              status: "processed",
+              assistant_metadata: { run_id: run },
+            }],
+          });
+    });
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByRole("article", { name: "El agente está trabajando" })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input) === streamUrl)).toHaveLength(1));
+    await act(async () => sendFinalResponse());
+    expect(await screen.findByText("Respuesta final recuperada")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(streamUrl, { credentials: "include" });
+  });
+
+  it("does not reattach to a settled completed run", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy")
+        ? jsonResponse(policy())
+        : jsonResponse({
+            thread: { ...makeThread(), active_run_id: "run-complete", assistant_state: { execution_status: "completed" } },
+            messages: [{
+              id: 1,
+              author: "admin",
+              content: "Consulta terminada",
+              status: "processed",
+              assistant_metadata: { run_id: "run-complete" },
+            }],
+          }),
+    );
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByText("Consulta terminada")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/stream?"))).toBe(false);
+  });
+
+  it("does not open a stream for an empty thread", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy")
+        ? jsonResponse(policy())
+        : jsonResponse({ thread: makeThread(), messages: [] }),
+    );
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/stream?"))).toBe(false);
+  });
+
   it("keeps the desktop welcome greeting and original copy", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
@@ -1965,3 +2060,42 @@ describe("AgentChat", () => {
     ).toBeInTheDocument();
   });
 });
+
+  it("reattaches again after leaving the thread and coming back to it", async () => {
+    const run = "run-back";
+    const streamUrl = `/panel/api/chat/threads/4/stream?run_id=${run}`;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse({ available: [], opt_in_enabled: [], inherited: false });
+      if (url === streamUrl) {
+        // The run stays in flight for the whole test: the stream never closes.
+        return new Response(new ReadableStream<Uint8Array>({ start() {} }), {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      if (url.includes("/chat/threads/5")) {
+        return jsonResponse({ thread: { ...makeThread(5) }, messages: [] });
+      }
+      return jsonResponse({
+        thread: { ...makeThread(), active_run_id: run, assistant_state: { live: { run_id: run, status: "processing" } } },
+        messages: [{
+          id: 1,
+          author: "admin",
+          content: "Consulta pendiente",
+          status: "processing",
+          assistant_metadata: { run_id: run },
+        }],
+      });
+    });
+    const streamCalls = () => fetchMock.mock.calls.filter(([input]) => String(input) === streamUrl);
+
+    const { rerender } = render(<AgentChat threadId={4} />);
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+
+    rerender(<AgentChat threadId={5} />);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/chat/threads/5"))).toBe(true));
+
+    rerender(<AgentChat threadId={4} />);
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
+  });
