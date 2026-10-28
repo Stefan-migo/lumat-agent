@@ -18,6 +18,9 @@ Objetivo: el asistente ejecuta las herramientas que declara, encadenadas en el m
 - **S6** La conversación se mantiene enfocada en el último mensaje: al abrir un hilo, al llegar un mensaje nuevo y mientras se transmite la respuesta, la vista muestra el final. Cita (L1): *"el foco de la conversacion se tiene que mantener abajo. siempre mantener el final solo si el usuario quiere scrollear up para leer mensajes anteriors. pero el foco debe estar en el ultimo mensaje siempre."*
 - **S7** Si el usuario scrollea hacia arriba para leer mensajes anteriores, la vista **no** lo arrastra al final mientras dura ese scroll; vuelve a seguir el final cuando el usuario vuelve al fondo. Cita (L1): *"solo si el usuario quiere scrollear up para leer mensajes anteriors"*.
 - **S8** El menú de la pestaña del hilo ofrece **Exportar conversación** y descarga el hilo completo (todos los mensajes, no solo los 10 visibles) en Markdown. Cita (L1): *"deberiamos agregar una opcion para exportar la conversacion completa"*, sobre el menú *"Renombrar / Cerrar pestaña / Eliminar hilo"*.
+- **S10** El loop de herramientas no gasta dos pasos en el **mismo** `(tool, arguments)`: si el plan siguiente repite exactamente el paso anterior, la cadena se detiene y la causa queda registrada (`repeated_tool_call`), en vez de consumir el tope repitiendo la misma lectura.
+- **S11** Una lectura de listado puede **avanzar**: `customers.list`/`customers.search` aceptan un desplazamiento opcional, y el catálogo del planificador lo expone, para que "listar todos los clientes" no devuelva siempre la misma página y la cadena pueda pasar al siguiente paso.
+- **S12** La actividad que muestra el panel refleja **cada** paso ejecutado, con el nombre de su herramienta; hoy `_execution_events` lee el `tool_result` singular y colapsa una cadena de 4 pasos en un evento con `tool: null`.
 - **S9** El composer del asistente no muestra el chip `@ Agente · Próximamente`. Cita (L1): *"lo que dice en el chatbox del asistente lumat ... agente proximamente. debe ser removido. ya no va."*
 
 ## Tasks
@@ -27,7 +30,8 @@ Objetivo: el asistente ejecuta las herramientas que declara, encadenadas en el m
 | T1 ✅ | S2, S3, S4, S5 | inline (padre): retirar la capa `delegate` del planificador y del grafo, sacar la negación de capacidad del responder | 1 |
 | T2 | S1 | inline: cadena real contra el modelo (heredoc, DB harness) + tope de pasos con evidencia | 1 |
 | T3 ✅ | S6, S7, S9 | worker + cierre del padre: foco al último mensaje + retiro del chip | 2 |
-| T4 | S8 | worker: exportar conversación (endpoint + menú) | 3 |
+| T4 ✅ | S8 | worker + cierre del padre: exportar conversación (endpoint + menú) | 3 |
+| T5 | S10, S11, S12 | worker: el loop avanza y se reporta honesto, con la evidencia de T2 | 4 |
 
 ## Log
 
@@ -58,3 +62,8 @@ Objetivo: el asistente ejecuta las herramientas que declara, encadenadas en el m
 
 - **L7** (corte de entrega, registrado a pedido del harness): el commit 1 (`8511187c`) son 1238 líneas autoradas, de las cuales **1117 son borrado** — la capa delegada, sus 495 líneas de tests y los dos tests de integración que la ejercitaban. Estrategia de entrega: **un PR único**, con el commit 1 como unidad de review autocontenida (retiro de una capa) y T3/T4 como commits aparte. No se apila: el riesgo de una capa retirada no se revisa mejor partido en dos.
 - **L8** (T3, cerrado por el padre): el worker entregó el hook y el retiro del chip, pero sus tests eran **verdes por construcción**: el helper del test no conectaba `onScroll`, así que `fireEvent.scroll()` no hacía nada y "stops following after the user scrolls up" pasaba sin ejercitar la pausa. Además el archivo era `.ts` con JSX, así que ni siquiera compilaba. Y `followingRef` sobrevive al cambio de hilo: scrollear arriba en un hilo dejaba el hilo siguiente abierto arriba, que es exactamente lo que S6 prohíbe. Corregido: test renombrado a `.tsx`, `onScroll` conectado, y el hook recibe `resetKey` (el `threadId`) para volver a seguir al abrir otro hilo, con un test propio. Verificado: `npx vitest run src/components/domain/useStickToBottom.test.tsx src/components/pages/AgentChat.test.tsx` → 82 tests verdes; `npx tsc -b` → 0.
+
+- **L9** (T2, verificación con el modelo real — veredicto **parcial**): `gentle-ai-verify` levantó el harness sirviendo **el árbol del worktree** y repitió el pedido real. Turno 1: `planner.failure.reason=empty_completion` del proveedor → fallback genérico (flake del modelo, no del código: un sondeo directo al proveedor devolvió contenido válido). Turno 2: **S4 cumplido** (la respuesta ya no niega capacidad), pero **S1 incumplido**: `planner.kind=tool`, `guardrails.decision=execute`, `tool_steps=4`, `cap_reached=true`, y las 4 ejecuciones son `customers.list(limit=20)` **idénticas**; ni `customers.search` ni `customers.operational_history` corrieron. La respuesta final pidió autorización para lecturas ("dame la luz verde para correr la búsqueda"), que S1 prohíbe.
+  Causa habilitante medida: `SearchArgs` (`app/chat/assistant/tools/registry.py`) solo tiene `query` y `limit` — sin desplazamiento, "listar todos los clientes" (43 filas) no puede avanzar y el planificador repite la misma llamada hasta el tope.
+  Advisories reproducidos: `_execution_events` (`app/services/agent_chat.py:648`) lee el `tool_result` singular y reporta `tool: null` para una cadena de 4 pasos (es la misma forma que produjo el "Actividad del agente (1 paso)" del hilo 82); `record_llm_cost` deduplica por `call_key`, así que las llamadas repetidas del planificador no se ven en `cost_calls`.
+  Modelo usado: `deepseek-flash` (barato) — un turno de dos se cayó por el proveedor.
