@@ -9,14 +9,12 @@ import {
 import {
   ApiError,
   approveChatPlan,
-  closePlanningSession,
   createChatThread,
   deleteThreadAttachment,
   getChatThread,
   getThreadToolPolicy,
   listProjectFiles,
   listProjects,
-  openPlanningSession,
   resetThreadToolPolicy,
   sendChatMessage,
   stopChatThread,
@@ -27,7 +25,7 @@ import {
   uploadAssistantAttachment,
   threadAttachmentContentUrl,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, Plus, RotateCcw, Square, Workflow, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, Plus, RotateCcw, Square, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -36,12 +34,10 @@ import type {
   AssistantEvidence,
   AssistantEvent,
   AssistantPlan,
-  CortexArtifact,
   InternalChatMessage,
   InternalChatResponse,
   InternalChatThread,
   ThreadToolPolicy,
-  PlanningSession,
   ProjectFile,
   Role,
 } from "../../types";
@@ -88,9 +84,7 @@ const stateLabels: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
-/** Stage copy for the in-flight bubble, so a waiting turn never looks dead.
- *  Deliberately avoids the word "planificar": every turn runs the planner, and
- *  naming it that way collides with the opt-in Cortex planning session. */
+/** Stage copy for the in-flight bubble, so a waiting turn never looks dead. */
 const THINKING_LABELS: Record<string, string> = {
   planning: "Analizando tu solicitud…",
   executing: "Consultando herramientas…",
@@ -108,25 +102,6 @@ const runStillProcessing = (result: InternalChatResponse, run: string) =>
       message.assistant_metadata?.run_id === run &&
       message.status === "processing",
   );
-
-function planningChecklist(cortex: { decisions?: { title: string; content: string }[]; notes?: { kind: string; content: string }[] }): string {
-  const kinds = new Set((cortex.notes ?? []).map((note) => note.kind));
-  return [
-    `Objetivo ${kinds.has("objective") ? "✓" : "—"}`,
-    `${cortex.decisions?.length ?? 0} decisiones`,
-    `Riesgos ${kinds.has("risk") ? "✓" : "—"}`,
-    `Próximos pasos ${kinds.has("next_step") ? "✓" : "—"}`,
-  ].join(" · ");
-}
-
-function planningCommand(value: string) {
-  const match = value.match(/^\/planning(?:\s+(.+))?$/);
-  if (!match) return null;
-  const topic = match[1]?.trim();
-  return topic?.toLowerCase() === "close"
-    ? { action: "close" as const }
-    : { action: "open" as const, topic };
-}
 
 /** Arguments are shown to the operator approving the plan, so values read as
  * text; a nested value falls back to JSON rather than [object Object]. */
@@ -270,12 +245,13 @@ function AgentActivity({
 
 export interface AgentChatProps {
   role: Role;
+  userId?: number;
   userName?: string;
   threadId?: number;
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentChatProps) {
+export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -303,22 +279,17 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
   const [previewFailed, setPreviewFailed] = useState(false);
   const [artifacts, setArtifacts] = useState<AssistantArtifact[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [cortex, setCortex] = useState<PlanningSession | null>(null);
-  const [report, setReport] = useState<CortexArtifact | null>(null);
   const [toolPolicy, setToolPolicy] = useState<ThreadToolPolicy | null>(null);
   const [toolPolicyLoading, setToolPolicyLoading] = useState(false);
   const [toolPolicyError, setToolPolicyError] = useState<string | null>(null);
   const [toolPolicySaving, setToolPolicySaving] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [stopMessage, setStopMessage] = useState<string | null>(null);
-  const [planningOpen, setPlanningOpen] = useState(false);
   // Copy feedback: the icon that was just used swaps to a check and says so,
   // then reverts. Without it the click is silent and reads as a no-op.
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [messagesExpanded, setMessagesExpanded] = useState(false);
   const copyTimer = useRef<number | null>(null);
-  const [topic, setTopic] = useState("");
-  const [topicError, setTopicError] = useState("");
   const [projectChoices, setProjectChoices] = useState<{ slug: string; name: string }[]>([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
@@ -330,6 +301,8 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
   const [fileSearch, setFileSearch] = useState("");
   const watchCancelledRef = useRef(false);
   const watchedRunRef = useRef<string | null>(null);
+  const streamGenerationRef = useRef(0);
+  const streamKeyRef = useRef<string | null>(null);
 
   const loadThread = (result: InternalChatResponse, preserveArtifacts = false) => {
     const state = result.thread.assistant_state;
@@ -355,7 +328,6 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     setRunId(result.thread.active_run_id ?? null);
     setAttachments(result.attachments ?? []);
     setArtifacts(result.artifacts ?? []);
-    setCortex(state?.cortex_session ?? null);
     const persistedHandoff = [...(state?.events ?? [])].reverse().find((event) => event.type === "handoff" && event.handoff);
     setHandoff(persistedHandoff?.handoff ?? null);
   };
@@ -385,6 +357,11 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
   const selectedAttachments = attachments.filter((item) => selectedAttachmentIds.includes(item.id));
 
   useEffect(() => {
+    let current = true;
+    const generation = ++streamGenerationRef.current;
+    setProcessing(false);
+    setStream("");
+    setRecoverable(false);
     const request = requestedId
       ? getChatThread(requestedId)
       : requestedProject
@@ -392,18 +369,32 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
         : Promise.resolve(null);
     void request
       .then((result) => {
+        if (!current) return;
         if (result) {
           loadThread(result);
+          const run = [...(result.messages ?? [])].reverse().find(
+            (message) => message.author !== "agent" && message.status === "processing" && message.assistant_metadata?.run_id,
+          )?.assistant_metadata?.run_id;
+          if (run && runStillProcessing(result, run)) {
+            setProcessing(true);
+            void openStream(result.thread.id, run, generation);
+          }
           if (!requestedId && requestedProject) onThreadOpened?.(result.thread.id);
         } else {
           setThread(null);
           setMessages([]);
         }
       })
-      .catch((reason: unknown) =>
-        setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat"),
-      )
-      .finally(() => setLoading(false));
+      .catch((reason: unknown) => {
+        if (current) setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat");
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+      streamGenerationRef.current += 1;
+    };
   }, [requestedId, requestedProject]);
 
   useEffect(() => {
@@ -545,30 +536,31 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     }
   };
 
-  const openStream = async (id: number, run: string) => {
+  const openStream = async (id: number, run: string, expectedGeneration?: number) => {
+    const generation = expectedGeneration ?? ++streamGenerationRef.current;
+    if (generation !== streamGenerationRef.current) return;
+    const key = `${generation}:${id}:${run}`;
+    if (streamKeyRef.current === key) return;
+    streamKeyRef.current = key;
+    const isCurrent = () => generation === streamGenerationRef.current && streamKeyRef.current === key;
     setRunId(run);
     let gaveUp = false;
     try {
       await streamChatEvents(id, run, (event) => {
+        if (!isCurrent()) return;
         if (event.type === "timeout") gaveUp = true;
         handleEvent(event);
       });
+      if (!isCurrent()) return;
       if (gaveUp) await watchRunToSettle(id, run);
+      if (!isCurrent()) return;
       const persisted = await getChatThread(id);
+      if (!isCurrent()) return;
       loadThread(persisted, true);
-      const planningEvent = (persisted.thread.assistant_state?.events ?? []).find(
-        (event) =>
-          event.type === "planning" &&
-          event.run_id === run &&
-          typeof event.planning_thread_id === "number" &&
-          event.planning_thread_id !== id,
-      );
-      if (typeof planningEvent?.planning_thread_id === "number") {
-        onThreadOpened?.(planningEvent.planning_thread_id);
-      }
       setStream("");
       setRecoverable(false);
     } catch (reason: unknown) {
+      if (!isCurrent()) return;
       setRecoverable(true);
       setError(
         reason instanceof ApiError
@@ -576,7 +568,10 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
           : "El stream del asistente falló; la ejecución es recuperable.",
       );
     } finally {
-      setProcessing(false);
+      if (isCurrent()) {
+        streamKeyRef.current = null;
+        setProcessing(false);
+      }
     }
   };
 
@@ -646,40 +641,12 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
   };
 
-  const closeSession = async () => {
-    if (!cortex?.slug) return;
-    try {
-      const result = await closePlanningSession(cortex.slug);
-      setCortex(result.session);
-      setReport(result.report);
-    } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail : "No pudimos cerrar la planificación");
-    }
-  };
-
   const send = async (value = content, preserveDraft = false, sdbRequested = false) => {
     if (!thread || !value.trim() || processing) return;
     const submitted = value.trim();
     if (!preserveDraft) setContent("");
     setProcessing(true);
     setError(null);
-    const command = planningCommand(submitted);
-    if (command) {
-      try {
-        if (command.action === "open" && command.topic) {
-          const result = await openPlanningSession(command.topic);
-          setCortex(result.session);
-          onThreadOpened?.(result.thread_id);
-        } else if (command.action === "close") {
-          await closeSession();
-        }
-      } catch (reason: unknown) {
-        setError(reason instanceof ApiError ? reason.detail : "No pudimos actualizar la planificación");
-      } finally {
-        setProcessing(false);
-      }
-      return;
-    }
     setLifecycle("planning");
     setPlan(null);
     setApproval(null);
@@ -825,25 +792,6 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
     } finally { setProjectActionLoading(false); }
   };
 
-  const planning = async () => {
-    const trimmed = topic.trim();
-    if (!trimmed) {
-      setTopicError("Ingresa un tema para continuar.");
-      return;
-    }
-    if (!thread) return;
-    try {
-      const result = await openPlanningSession(trimmed);
-      setCortex(result.session);
-      onThreadOpened?.(result.thread_id);
-      setPlanningOpen(false);
-      setTopic("");
-      setTopicError("");
-    } catch (reason: unknown) {
-      setTopicError(reason instanceof ApiError ? reason.detail : "No pudimos iniciar la planificación");
-    }
-  };
-
   const confirmHandoff = () => {
     if (!handoff || processing) return;
     const actions = handoff.actions.join("\n");
@@ -896,6 +844,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       onCreateThread={() => void newChat()}
       onCreateDefaultThread={() => void createDefaultChat()}
       role={role}
+      userId={userId}
       loadThreadTabs={Boolean(onThreadOpened)}
       activeProjectSlug={thread?.proyecto ?? undefined}
       onSelectProject={(slug) => void (thread ? changeProject(slug) : createProjectChat(slug))}
@@ -910,35 +859,10 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       className="assistant-chat"
     >
       <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto">
-        <div className="assistant-chat__planning-form">
+        <div className="assistant-chat__project-picker">
           <p>Elige el proyecto para este chat.</p>
           {projectChoices.map((project) => <Button key={project.slug} variant="secondary" disabled={projectActionLoading} onClick={() => void (thread ? changeProject(project.slug) : createProjectChat(project.slug))}><Icon icon={Folder} size="sm" />{project.name}</Button>)}
           {projectActionError ? <p role="alert">{projectActionError}</p> : null}
-        </div>
-      </Dialog>
-      <Dialog
-        open={planningOpen}
-        onClose={() => {
-          setPlanningOpen(false);
-          setTopicError("");
-        }}
-        title="Tema de planificación"
-      >
-        <div className="assistant-chat__planning-form">
-          <label htmlFor="planning-topic">Tema de planificación</label>
-          <input
-            id="planning-topic"
-            autoFocus
-            required
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-            aria-invalid={topicError ? true : undefined}
-          />
-          {topicError ? <p role="alert">{topicError}</p> : null}
-          <div>
-            <Button variant="secondary" onClick={() => setPlanningOpen(false)}>Cancelar</Button>
-            <Button onClick={() => void planning()}>Iniciar planificación</Button>
-          </div>
         </div>
       </Dialog>
       <div className={`assistant-chat__surface${!processing && !stream && messages.length === 0 ? " assistant-chat__surface--empty" : ""}`} data-tier={commandCenterTier(globalThis.innerWidth || 1024)}>
@@ -961,7 +885,7 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
             {thread && messages.length === 0 && !loading ? (
               <div className="assistant-chat__hero">
                 <h2>¿En qué trabajamos hoy?</h2>
-                <p>Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.</p>
+                <p>Consulta o trabaja en tus proyectos con el asistente Lumat.</p>
               </div>
             ) : null}
             <CollapsibleMessages total={messages.length} previewCount={10} expanded={messagesExpanded} onToggle={() => setMessagesExpanded((value) => !value)}>
@@ -1221,10 +1145,6 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
                     <p className="assistant-chat__popover-footer">La selección se aplica a este hilo.</p>
                   </div>
                 </Popover></div>
-                <Button variant="tertiary" className={`assistant-chat__planning-pill${cortex?.status === "active" ? " assistant-chat__planning-active" : ""}`} onClick={() => setPlanningOpen(true)} disabled={!thread || processing}>
-                  <Icon icon={Workflow} size="sm" />
-                  Planificar
-                </Button>
                 <Button variant="tertiary" disabled title="Próximamente">@ Agente · Próximamente</Button>
                 <button
                   type="button"
@@ -1246,20 +1166,6 @@ export function AgentChat({ role, userName, threadId, onThreadOpened }: AgentCha
       <Dialog open={previewAttachment !== null} onClose={() => setPreviewAttachment(null)} title={previewAttachment?.filename ?? "Vista previa"} size="wide">
         {previewAttachment && thread ? previewFailed ? <p role="alert">No pudimos cargar la vista previa de esta imagen.</p> : <img className="assistant-chat__image-preview" src={threadAttachmentContentUrl(thread.id, previewAttachment.id)} alt={previewAttachment.filename} onError={() => setPreviewFailed(true)} /> : null}
       </Dialog>
-      {cortex?.status === "active" ? (
-        <p role="status">
-          Planificación activa: {cortex.topic} · {planningChecklist(cortex)}{" "}
-          <Button variant="secondary" onClick={() => void closeSession()}>
-            Cerrar planificación
-          </Button>
-        </p>
-      ) : null}
-      {report ? (
-        <div role="status" className="assistant-chat__planning-report">
-          <span>Informe de planificación:</span>
-          <Markdown content={report.contenido} />
-        </div>
-      ) : null}
     </PageFrame>
     </AssistantWorkspace>
   );

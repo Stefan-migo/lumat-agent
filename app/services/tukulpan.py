@@ -72,7 +72,6 @@ __all__ = [
     "REL_MIN_SIM",
     "WRITABLE_PROYECTO",
     "close_conversation",
-    "write_agent_report",
     "delete",
     "update",
     "get_by_key",
@@ -436,33 +435,6 @@ def record_decision(
         proyecto=proyecto,
         producer=MemoryProducer.SYSTEM,
         origin_thread_id=str(thread_id),
-        authorization=authorization,
-    )
-
-
-def write_agent_report(
-    session: Session,
-    *,
-    topic_key: str,
-    title: str,
-    content: str,
-    proyecto: str = WRITABLE_PROYECTO,
-    origin_thread_id: str | None = None,
-    authorization: projects._ProjectAuthorization | None = None,
-) -> Memory:
-    """Write the final planning report on the canonical agent/project axis."""
-    return upsert(
-        session,
-        scope=AGENT_SCOPE,
-        entity_id=agent_memory_entity(proyecto),
-        topic_key=topic_key,
-        tipo=MemoryType.SUMMARY,
-        titulo=title,
-        contenido=content,
-        proyecto=proyecto,
-        producer=MemoryProducer.SYSTEM,
-        origin_thread_id=origin_thread_id,
-        visibility=MemoryVisibility.GLOBAL,
         authorization=authorization,
     )
 

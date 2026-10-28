@@ -73,26 +73,6 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def close_cortex_session(session, thread: InternalChatThread, *, report: str) -> dict:
-    """Persist the final planning report and close its thread lifecycle."""
-    cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
-    slug = cortex["slug"]
-    report_key = f"cortex-session/{slug}:report"
-    proyecto = thread.proyecto or "default"
-    authorization = _thread_project_authorization(session, thread)
-    tukulpan.write_agent_report(
-        session, topic_key=report_key, title=cortex.get("topic", slug),
-        content=report, proyecto=proyecto, origin_thread_id=str(thread.id),
-        authorization=authorization,
-    )
-    thread.assistant_state = merge_assistant_state(
-        thread.assistant_state or {},
-        {"cortex_session": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat(),
-                             "report_key": report_key}},
-    )
-    return {"report_key": report_key, "report": report}
-
-
 def _thread_project_authorization(session: Session, thread: InternalChatThread):
     proyecto = thread.proyecto
     return None if not proyecto or proyecto == "default" else projects.agent_context(
@@ -445,7 +425,6 @@ def _run_agent_turn_session(
             context=context,
             compaction=compaction,
             project_authorization=project_authorization,
-            cortex_session=(thread.assistant_state or {}).get("cortex_session"),
             on_stage=lambda stage: _publish_stage_or_stop(thread.id, run_id, stage),
         )
         publish_live(_session_factory(), thread.id, run_id, preview="".join(preview))
@@ -472,7 +451,6 @@ def _run_agent_turn_session(
             "tool_steps": result.get("tool_steps", 0),
             "cap_reached": result.get("cap_reached", False),
             "compaction": compaction,
-            **({"cortex_session": result["cortex_session"]} if result.get("cortex_session") else {}),
             **({"verification": result["verification"]} if result.get("verification") else {}),
         })
         # The planner snapshot belongs to this turn. Merging it kept an earlier turn's failure
@@ -667,26 +645,6 @@ def _paused_step_events(result: dict, thread_id: int, run_id: str, sequence: int
     return events
 
 
-def _planning_thread_event(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
-    """Emit a `planning` event when this run opened a session on a dedicated thread."""
-    candidates = [*(result.get("tool_results") or [])]
-    if result.get("tool_result"):
-        candidates.append(result["tool_result"])
-    for entry in reversed(candidates):
-        if entry.get("tool") != "planning.open" or entry.get("status") != "completed":
-            continue
-        new_thread_id = (entry.get("result") or {}).get("thread_id")
-        if type(new_thread_id) is int and new_thread_id > 0:
-            return [{
-                "type": "planning",
-                "thread_id": thread_id,
-                "run_id": run_id,
-                "sequence": sequence,
-                "planning_thread_id": new_thread_id,
-            }]
-    return []
-
-
 def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
     tool_result = result.get("tool_result") or {}
     return [
@@ -694,30 +652,7 @@ def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) 
         {"type": "evidence", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 1, "evidence": result.get("evidence", [])},
         {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 2, "status": result.get("status", "completed")},
         {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 3, "content": result.get("response", "")},
-        *_planning_thread_event(result, thread_id, run_id, sequence + 4),
-        *_handoff_event(result, thread_id, run_id, sequence + 5),
     ]
-
-
-def _handoff_event(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
-    """Emit a `handoff` event when this run closed a session with a concrete action."""
-    candidates = [*(result.get("tool_results") or [])]
-    if result.get("tool_result"):
-        candidates.append(result["tool_result"])
-    for entry in reversed(candidates):
-        if entry.get("tool") != "planning.close" or entry.get("status") != "completed":
-            continue
-        handoff = (entry.get("result") or {}).get("handoff")
-        if isinstance(handoff, dict) and handoff.get("actions"):
-            return [{
-                "type": "handoff",
-                "thread_id": thread_id,
-                "run_id": run_id,
-                "sequence": sequence,
-                "handoff": handoff,
-            }]
-    return []
-
 
 _TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending", "cancelled", "rejected"}
 
@@ -854,7 +789,6 @@ def _run_approved_plan(session: Session, thread: InternalChatThread, user: User,
             actor=user.username,
             actor_role=actor_role,
             project_authorization=_thread_project_authorization(session, thread),
-            cortex_session=(thread.assistant_state or {}).get("cortex_session"),
             resume_plan=plan,
             resume_approval=approval,
             # The chain's accumulated evidence rides through the pause: the continuation

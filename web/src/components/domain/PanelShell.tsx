@@ -55,7 +55,7 @@ const NOTIFICATION_SOURCE_ICONS: Record<string, { icon: LucideIcon; tone: string
   customer: { icon: Users, tone: "customer" },
 };
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "chatbot-metrics" | "users" | "projects" | "planning-sessions" | "profile";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "chatbot-metrics" | "users" | "projects" | "profile";
 
 interface NavigationItem {
   label: string;
@@ -67,7 +67,7 @@ function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
   return <Icon icon={collapsed ? ChevronRight : ChevronLeft} />;
 }
 
-const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions" | "profile">, NavigationItem> = {
+const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "profile">, NavigationItem> = {
   dashboard: { label: "Panel unificado", icon: PanelLeft },
   chat: { label: "Asistente Lumat", icon: Bot },
   conversations: { label: "Conversaciones", icon: MessageSquare },
@@ -106,7 +106,6 @@ const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
   "advanced-dashboard": "Panel avanzado",
   profile: "Mi perfil",
   projects: "Proyectos",
-  "planning-sessions": "Sesiones de planificación",
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;

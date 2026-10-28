@@ -6,7 +6,7 @@ import { StateMessage } from "../shared/StateMessage";
 
 type GroupKey = keyof ThreadResourcesSelection;
 
-/** Pins project-level resources (files, planning sessions, skills) to a thread. */
+/** Pins project files and skills to a thread. */
 export function ThreadProjectResources({ threadId, expanded }: { threadId?: number; expanded: boolean }) {
   const enabled = expanded && typeof threadId === "number";
   const fetchResources = useCallback(() => getThreadResources(threadId as number), [threadId]);
@@ -52,12 +52,6 @@ export function ThreadProjectResources({ threadId, expanded }: { threadId?: numb
       title: "Archivos del proyecto",
       rows: available.project_files.map((file) => ({ value: file.id, label: file.filename })),
       empty: "Este proyecto no tiene archivos.",
-    },
-    {
-      key: "planning_sessions" as const,
-      title: "Sesiones de planning",
-      rows: available.planning_sessions.map((session) => ({ value: session.slug, label: session.topic ?? session.slug })),
-      empty: "Este proyecto no tiene sesiones de planning.",
     },
     {
       key: "skills" as const,
