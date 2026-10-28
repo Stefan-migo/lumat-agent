@@ -16,13 +16,20 @@ PRESET = "Atendemos en Ñuñoa, Las Condes y Lo Barnechea."
 
 
 def _state(**overrides) -> ConversationState:
+    """A turn with no configuration answer and no KB match.
+
+    The text used to be "¿atienden en Ñuñoa?", which is now answered from
+    `coverage.communes` (S4 of `agenda-config-fuente`) before retrieval. The
+    contract these tests pin is the single-reply shape of the miss path, so the
+    vehicle moved to a question the configuration does not answer.
+    """
     return ConversationState(
         customer_id=1,
         conversation_id=1,
         phone="+56912345678",
         turn=2,
         intent="consulta",
-        window=[{"id": 1, "text": "¿atienden en Ñuñoa?"}],
+        window=[{"id": 1, "text": "¿hacen mantencion de estufas?"}],
         **overrides,
     )
 
