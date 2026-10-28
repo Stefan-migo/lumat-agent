@@ -29,9 +29,8 @@ class PlannerOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["tool", "respond", "complex", "delegate"]
+    kind: Literal["tool", "respond", "complex"]
     tool: str | None = None
-    sub_agent: str | None = None
     arguments: dict = Field(default_factory=dict)
     summary: str = Field(min_length=1, max_length=200)
     success_criterion: str | None = Field(default=None, min_length=1, max_length=300)
@@ -67,10 +66,6 @@ class PlannerOutput(BaseModel):
             raise ValueError("tool is required when kind is tool")
         if self.kind != "tool" and self.tool is not None:
             raise ValueError("tool is only allowed when kind is tool")
-        if self.kind == "delegate" and not self.sub_agent:
-            raise ValueError("sub_agent is required when kind is delegate")
-        if self.kind != "delegate" and self.sub_agent is not None:
-            raise ValueError("sub_agent is only allowed when kind is delegate")
         return self
 
 
@@ -96,7 +91,6 @@ class AssistantState(TypedDict, total=False):
     tool_result: dict | None
     tool_results: list[dict]
     tool_steps: int
-    delegation: dict
     cap_reached: bool
     evidence: list[dict]
     status: str

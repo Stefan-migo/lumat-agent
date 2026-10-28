@@ -974,7 +974,7 @@ def test_legacy_cortex_state_does_not_filter_effective_tool_catalog():
     assert _effective_tools(state) == effective["tools_whitelist"]
 
 
-def test_no_tool_prompt_keeps_non_invoking_statement(monkeypatch):
+def test_no_tool_prompt_keeps_the_markup_rule_without_denying_capability(monkeypatch):
     calls = []
     monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls, "Text reply"))
 
@@ -990,5 +990,8 @@ def test_no_tool_prompt_keeps_non_invoking_statement(monkeypatch):
     )
 
     prompt = calls[0]["messages"][-1]["content"]
-    assert "cannot invoke" in prompt
     assert "must not emit tool-call markup" in prompt
+    # S4: the model repeated the old denial back to the user ("este turno es solo texto"),
+    # so the no-tool branch must never claim the panel tools cannot be executed.
+    assert "cannot invoke" not in prompt
+    assert "never state that you cannot use or execute them" in prompt

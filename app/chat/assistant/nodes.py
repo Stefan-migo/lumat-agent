@@ -41,10 +41,6 @@ _TOOL_EVIDENCE_LIMIT = 4_000
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 MAX_ASSISTANT_TOOL_STEPS = 4
-DELEGATION_SPAN_MAX_STEPS = 2
-DELEGATION_WRITE_REFUSED = "delegation_write_refused"
-DELEGATION_TOOL_REFUSED = "delegation_tool_refused"
-DELEGATION_MEMORY_SCOPE_REFUSED = "delegation_memory_scope_refused"
 # Bodies loaded for the responder every turn, even when the planner does not
 # declare them. Scoped to the responder: the planner keeps seeing only the
 # skill index ({name, description}), never these bodies (D8).
@@ -57,7 +53,6 @@ PANEL_KB_UNAVAILABLE = (
     "La base de conocimiento no está disponible para esta consulta. "
     "No pude consultarla; un operador deberá revisarla."
 )
-PANEL_DELEGATION_REFUSAL = "I cannot safely delegate that request."
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
     "dias", "estas", "esta", "excelente", "gracias", "hello", "hi", "hola", "hasta",
@@ -81,15 +76,7 @@ def _project_slug(state: AssistantState) -> str:
 
 def extension_hook_metadata() -> dict[str, str]:
     """Describe deferred extensions without loading or executing their internals."""
-    from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
-
-    try:
-        resolve_delegation_scope("customer_records")
-    except DelegationScopeError:
-        wired = False
-    else:
-        wired = True
-    return {"panel_subagents": "implemented" if wired else "not_implemented"}
+    return {"panel_subagents": "retired"}
 
 
 def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
@@ -339,112 +326,6 @@ def _planner_tool_catalog(whitelist: list[str]) -> str:
     )
 
 
-def _delegation_plan(state: AssistantState, scope) -> PlannerOutput:
-    """Plan one delegated read against only the resolved sub-agent catalog."""
-    from app.chat.assistant.delegation import DelegationScope
-
-    if not isinstance(scope, DelegationScope):
-        raise TypeError("delegation requires a resolved DelegationScope")
-    prompt = (
-        f"{scope.persona}\n\nReturn one JSON tool plan or a respond plan. "
-        f"Available tools: {_planner_tool_catalog(list(scope.tools_whitelist))}\n"
-        f"Request: {state['content']}\nContext: {_context_text(state)}\n"
-        f"Prior delegated results: {_render_tool_evidence(state)}"
-    )
-    completion = _assistant_client().chat.completions.create(
-        model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
-        messages=[{"role": "system", "content": "Return evidence-gathering tool plans only."},
-                  {"role": "user", "content": prompt}],
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
-    _record_usage(state, f"delegation:{scope.key}", completion)
-    raw = json.loads(_completion_text(completion))
-    planner, valid, _ = parse_planner_output(raw)
-    return planner if valid else bounded_fallback("delegation planner output invalid")
-
-
-def delegation_span(state: AssistantState, scope) -> AssistantState:
-    """Run a bounded read-only evidence span; it never creates a user-facing answer."""
-    results = list(state.get("tool_results") or [])
-    evidence = list(state.get("evidence") or [])
-    decisions: list[str] = []
-    steps = 0
-    while steps < DELEGATION_SPAN_MAX_STEPS:
-        planner = _delegation_plan({**state, "tool_results": results}, scope)
-        if isinstance(planner, dict):
-            planner, _, _ = parse_planner_output(planner)
-        if planner.kind != "tool" or not planner.tool:
-            break
-        steps += 1
-        tool_name = planner.tool
-        try:
-            definition = get_tool(tool_name)
-        except ToolValidationError:
-            decisions.append(DELEGATION_TOOL_REFUSED)
-            continue
-        if not definition.read_only:
-            decisions.append(DELEGATION_WRITE_REFUSED)
-            continue
-        if tool_name not in scope.tools_whitelist:
-            decisions.append(DELEGATION_TOOL_REFUSED)
-            continue
-        arguments = planner.arguments
-        if tool_name in {"memory.read", "memory.search"} and scope.memoria_scope == "customer" and arguments.get("scope") != "customer":
-            decisions.append(DELEGATION_MEMORY_SCOPE_REFUSED)
-            continue
-        try:
-            result = execute_tool(
-                state.get("session"), tool_name, arguments,
-                whitelist=set(scope.tools_whitelist),
-                cost_allowed=True,
-                role=state.get("actor_role"),
-                trusted_thread_id=state.get("thread_id"),
-                owner_id=state.get("user_id"),
-                proyecto=_project_slug(state),
-                project_id=(state.get("effective") or {}).get("project_id"),
-            )
-        except (ToolExecutionError, ToolValidationError) as exc:
-            result = {"tool": tool_name, "status": "error", "error": str(exc), "result": {"unavailable": True}}
-        provenance = {"sub_agent": scope.key, "step": steps, "tool": tool_name}
-        results.append({**result, "provenance": provenance})
-        evidence.append(
-            make_evidence(
-                tool=tool_name,
-                status=result.get("status", "completed"),
-                detail="Delegated tool result",
-            )
-            | {"provenance": provenance}
-        )
-    return {
-        "tool_results": results,
-        "evidence": evidence,
-        "delegation": {
-            "sub_agent": scope.key,
-            "steps": steps,
-            "cap": DELEGATION_SPAN_MAX_STEPS,
-            "cap_reached": steps >= DELEGATION_SPAN_MAX_STEPS,
-            "decisions": decisions,
-        },
-    }
-
-
-def delegation_node(state: AssistantState) -> AssistantState:
-    """Run the delegated span on the read-only scope guardrails already validated.
-
-    Guardrails resolves the scope and carries it in ``state["delegation"]``; resolving it
-    again here would reopen a window where a registry or persona change between the two
-    nodes lets ``DelegationScopeError`` escape the turn instead of ending it. The graph
-    reaches this node only through the ``delegate`` decision, which is set in the same
-    branch that writes the carried scope, so it is always present.
-    """
-    from app.chat.assistant.delegation import DelegationScope
-
-    scope = DelegationScope(**state["delegation"])
-    result = delegation_span(state, scope)
-    return {**result, "tool_steps": state.get("tool_steps", 0) + 1, "status": "completed"}
-
-
 # Stages where the model's own output was unusable in a way a second answer can fix. A provider or
 # instrumentation failure is not repaired by asking again: it only doubles the paid call.
 _REPAIRABLE_PLAN_STAGES = frozenset({"parse", "validation"})
@@ -454,7 +335,7 @@ _REPAIRABLE_PLAN_STAGES = frozenset({"parse", "validation"})
 # field has to be dropped by the model, not by the trust boundary.
 PLANNER_REPAIR_DIRECTIVE = (
     "Your previous answer was not a usable plan. Reply with ONLY one JSON object, no prose, no code "
-    "fence, and no keys other than these: kind, tool, sub_agent, arguments, summary, "
+    "fence, and no keys other than these: kind, tool, arguments, summary, "
     "success_criterion, requires_approval, follow_up, skills. Escape every newline and tab inside a "
     "string as \\n and \\t."
 )
@@ -697,45 +578,6 @@ def guardrails(state: AssistantState) -> AssistantState:
     if not state.get("planner", {}).get("valid", True):
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
     validated_skills = _validated_skills(state)
-    if plan_data.get("kind") == "delegate":
-        from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
-
-        try:
-            scope = resolve_delegation_scope(plan_data.get("sub_agent", ""))
-        except DelegationScopeError as exc:
-            return {
-                "guardrails": {
-                    "whitelisted": False,
-                    "arguments_valid": False,
-                    "scope_valid": False,
-                    "cost_allowed": True,
-                    "approval_required": False,
-                    "decision": "delegate_refused",
-                    "reason": str(exc),
-                },
-                "response": PANEL_DELEGATION_REFUSAL,
-                "status": "completed",
-            }
-        return {
-            # The delegation node consumes this scope before delegation_span overwrites
-            # `delegation` with its run summary, so it must carry every field the span
-            # enforces -- including the worker's memoria_scope.
-            "delegation": {
-                "key": scope.key,
-                "persona": scope.persona,
-                "tools_whitelist": scope.tools_whitelist,
-                "memoria_scope": scope.memoria_scope,
-            },
-            "guardrails": {
-                "whitelisted": True,
-                "arguments_valid": True,
-                "scope_valid": True,
-                "cost_allowed": True,
-                "approval_required": False,
-                "decision": "delegate",
-                "skills": validated_skills,
-            },
-        }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
@@ -1127,8 +969,9 @@ def execute(state: AssistantState) -> AssistantState:
             "A panel tool has already run for this request. Use its evidence to answer with text only; "
             "you must not emit tool-call markup."
             if state.get("tool_result") is not None
-            else "The listed tools are panel capabilities only. This reply cannot invoke them. "
-            "Answer with text only; you must not emit tool-call markup."
+            else "No panel tool ran for this request in this turn. The listed tools are available "
+            "to this assistant; never state that you cannot use or execute them. Answer with text "
+            "only; you must not emit tool-call markup."
         )
         for key, value in {
             "user_input": state["content"],

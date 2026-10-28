@@ -7,7 +7,6 @@ from langgraph.graph import END, START, StateGraph
 from app.chat.assistant.nodes import (
     assemble_context_node,
     collect_evidence,
-    delegation_node,
     execute,
     guardrails,
     memory_bootstrap,
@@ -42,10 +41,8 @@ def _after_guardrails(state: AssistantState) -> str:
     if _is_terminal_plan_failure(state):
         return END
     decision = (state.get("guardrails") or {}).get("decision")
-    if decision in {"grounding_refusal", "delegate_refused"}:
+    if decision == "grounding_refusal":
         return END
-    if decision == "delegate":
-        return "delegation_span"
     if decision == "retrieve_kb":
         return "retrieve_kb"
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
@@ -85,7 +82,6 @@ def build_assistant_graph():
     builder.add_node("memory_bootstrap", memory_bootstrap)
     builder.add_node("plan_llm", plan_llm)
     builder.add_node("guardrails", guardrails)
-    builder.add_node("delegation_span", delegation_node)
     builder.add_node("retrieve_kb", retrieve_kb)
     builder.add_node("execute_tool", execute)
     builder.add_node("tool_loop_head", tool_loop_head)
@@ -100,8 +96,7 @@ def build_assistant_graph():
         "plan_llm", _after_plan,
         {"guardrails": "guardrails"},
     )
-    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "delegation_span": "delegation_span", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
-    builder.add_edge("delegation_span", "respond_stream")
+    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("execute_tool", _after_execute, {"tool_loop_head": "tool_loop_head", END: END})
     builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "verify_effects": "verify_effects"})

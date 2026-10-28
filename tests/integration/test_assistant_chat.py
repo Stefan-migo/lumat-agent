@@ -863,7 +863,7 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
         assert float(request.cost_llm) == pytest.approx(0.000012)
 
 
-def test_non_delegating_turn_keeps_pre_wiring_state_and_cost_contract(client, monkeypatch):
+def test_a_plain_respond_turn_keeps_the_state_and_cost_contract(client, monkeypatch):
     _user("assistant-normal-turn-baseline", "admin")
     _login(client, "assistant-normal-turn-baseline")
     thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
@@ -890,29 +890,24 @@ def test_non_delegating_turn_keeps_pre_wiring_state_and_cost_contract(client, mo
                     return planner if not kwargs.get("stream") else iter(response_chunks)
 
     monkeypatch.setattr("app.services.llm.openai_client", lambda: Client())
-    monkeypatch.setattr(
-        "app.chat.assistant.graph.delegation_node",
-        lambda state: pytest.fail("non-delegating turn entered delegation span"),
-    )
 
     posted = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
     settled = _wait_for_run(client, thread_id, posted.json()["message"]["assistant_metadata"]["run_id"])
     request_message = next(item for item in settled["messages"] if item["author"] == "admin")
 
-    # Pre-wiring baseline: normal respond plans do not acquire delegation state or parent steps.
+    # A plain respond plan acquires no tool steps and no capped chain.
     with SessionLocal() as session:
         state = session.get(InternalChatThread, thread_id).assistant_state
         request = session.get(InternalChatMessage, request_message["id"])
     assert state["planner"] == {
         "kind": "respond",
-        "tool": None, "sub_agent": None, "arguments": {}, "summary": "planned",
+        "tool": None, "arguments": {}, "summary": "planned",
         "requires_approval": False, "follow_up": False, "skills": [], "valid": True,
         "success_criterion": None,
     }
     assert state["tool_steps"] == 0
     assert state["cap_reached"] is False
     assert state["guardrails"]["decision"] == "respond"
-    assert "delegation" not in state
     cost_calls = request_message["assistant_metadata"]["cost_calls"]
     run_id = request_message["assistant_metadata"]["run_id"]
     assert set(cost_calls) == {run_id + ":planner", run_id + ":response"}
@@ -1092,6 +1087,10 @@ def test_a_chained_read_only_turn_persists_tool_steps_and_cap_state(client, monk
         state = session.get(InternalChatThread, thread_id).assistant_state
     assert state["tool_steps"] == 2
     assert state["cap_reached"] is False
+    # S3: what ran must stay auditable after the turn, without re-reading the events log.
+    assert [item["tool"] for item in state["tool_results"]] == ["customers.search", "memory.search"]
+    assert {item["status"] for item in state["tool_results"]} == {"completed"}
+    assert state["guardrails"]["decision"] == "execute"
 
 
 def test_a_chained_read_only_turn_responder_receives_combined_tool_evidence(client, monkeypatch):

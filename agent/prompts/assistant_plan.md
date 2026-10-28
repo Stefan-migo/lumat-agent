@@ -16,11 +16,8 @@ asking permission. Use `kind: "respond"` only for a short social message, or whe
 must be resolved before acting — and then ask at most one question. An empty or absent `<kb>` is not a
 reason to choose `respond` over a tool.
 
-Return JSON only with `kind` (`tool`, `delegate`, `respond`, or `complex`), `tool`,
+Return JSON only with `kind` (`tool`, `respond`, or `complex`), `tool`,
 `arguments`, `summary`, `requires_approval`, `follow_up`, and `skills`.
-For bounded operational customer-record gathering, use `kind: "delegate"` with
-`sub_agent: "customer_records"`; this worker returns evidence for your answer and
-does not answer the user. Do not delegate requests outside customer-record gathering.
 The `summary` must be at most 200 characters.
 Set `follow_up` to `true` when this turn needs another tool step after the current
 tool result -- a read-only follow-up, or a later step that depends on what this step
