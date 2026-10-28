@@ -127,12 +127,14 @@ conversations:
       kb_answered: true
       must_include_any: ["sabado", "sábado", "asesor", "coordina"]
     hard_fails:
-      - "Prometer una visita en sábado como si estuviera en el horario de agendamiento normal"
+      - "Prometer el sábado sin consultar la agenda real de técnicos"
     notes: >
-      La KB separa el horario de agendamiento (lun-vie 09:00-18:00) de los sábados,
-      que se coordinan con un asesor según disponibilidad. El guion declara una comuna
-      cubierta (Ñuñoa) y el equipo: sin esos datos el bot tiene que preguntarlos, y con
-      el cliente simulado apagado en este tier (S2) la conversación nunca llegaría a la
+      S5 (agenda-preferencia): la agenda manda sobre la KB. El sábado está en el
+      horario de agendamiento, así que la respuesta correcta lo ofrece en línea en vez
+      de derivarlo a un asesor; lo que sigue siendo un fallo es prometerlo sin mirar la
+      agenda, o prometer un domingo o un festivo. El guion declara una comuna cubierta
+      (Ñuñoa) y el equipo: sin esos datos el bot tiene que preguntarlos, y con el
+      cliente simulado apagado en este tier (S2) la conversación nunca llegaría a la
       pregunta que el escenario mide.
 
   - id: simple-despedida
