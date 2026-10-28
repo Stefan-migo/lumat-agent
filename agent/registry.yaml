@@ -62,9 +62,6 @@ assistant:
     - name: memoria-tukulpan
       description: "Tukulpan memory: own vs customer axis, when to read/write, and correct memory.* argument shapes."
       path: skills/assistant/memoria-tukulpan.md
-    - name: planning
-      description: "Guided planning sessions: the open/record/close flow, the close contract, and how to read a session report."
-      path: skills/assistant/planning.md
     - name: tools
       description: "Assistant tools: default vs opt-in tiers, owner approval for writes, and multi-turn/partial-read usage."
       path: skills/assistant/tools.md
@@ -103,11 +100,6 @@ assistant:
     - view_image
     - skill.propose
     - artifact.save
-    - planning.open
-    - planning.close
-    - planning.record_decision
-    - planning.record_note
-    - planning.read_report
     - project.create
     - project.rename
     - project.archive

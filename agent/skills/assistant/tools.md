@@ -29,7 +29,6 @@ use the exact argument shape the catalog gives you.
   `next_offset`; continue from it until `next_offset` is `null`.
 - Discover file ids with `list_project_files`; read a project or thread image on
   demand with `view_image(source, id)` instead of asking for a re-attach.
-- Read a closed planning session's report with `planning.read_report(slug)`.
 
 ## Gotchas
 

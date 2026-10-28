@@ -605,19 +605,19 @@ def test_thread_list_rejects_unbounded_or_oversized_requests(client):
     assert client.get("/panel/api/chat/threads?limit=51").status_code == 422
 
 
-def test_active_run_list_is_owner_scoped_and_excludes_terminal_and_cortex_threads(client):
+def test_active_run_list_is_owner_scoped_and_includes_legacy_cortex_threads(client):
     _user("active-run-owner", "admin")
     _user("active-run-other", "admin")
     _login(client, "active-run-owner")
     running = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     terminal = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
-    planning = client.post("/panel/api/planning/sessions", json={"topic": "Planning only"}).json()["thread_id"]
     with SessionLocal() as session:
         running_thread = session.get(InternalChatThread, running)
         running_thread.title = "Running work"
         running_thread.proyecto = "workspace"
         running_thread.assistant_state = {
             "live": {"run_id": "live-run", "stage": "planning", "status": "running"},
+            "cortex_session": {"slug": "legacy-session", "status": "active"},
         }
         terminal_thread = session.get(InternalChatThread, terminal)
         terminal_thread.proyecto = "workspace"
@@ -656,7 +656,6 @@ def test_active_run_list_is_owner_scoped_and_excludes_terminal_and_cortex_thread
     }
     assert datetime.fromisoformat(rows[0]["updated_at"]).tzinfo is not None
     assert terminal not in [row["thread_id"] for row in rows]
-    assert planning not in [row["thread_id"] for row in rows]
     assert other_running not in [row["thread_id"] for row in rows]
 
 
@@ -668,20 +667,29 @@ def test_active_run_list_limit_is_bounded(client):
     assert client.get("/panel/api/chat/active-runs?limit=101").status_code == 422
 
 
-def test_thread_list_does_not_fabricate_planning_sessions(client):
-    _user("thread-list-planning", "admin")
-    _login(client, "thread-list-planning")
+def test_thread_list_includes_legacy_cortex_threads_as_normal_chats(client):
+    _user("thread-list-legacy", "admin")
+    _login(client, "thread-list-legacy")
     regular = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
-    planning = client.post("/panel/api/planning/sessions", json={"topic": "Planning only"}).json()["thread_id"]
     with SessionLocal() as session:
-        session.add(InternalChatMessage(thread_id=regular, author="admin", content="regular", status="processed"))
+        owner_id = session.scalar(select(User.id).where(User.username == "thread-list-legacy"))
+        legacy = InternalChatThread(
+            user_id=owner_id, proyecto="default",
+            assistant_state={"cortex_session": {"slug": "legacy-session", "status": "closed"}},
+        )
+        session.add(legacy)
+        session.flush()
+        session.add_all([
+            InternalChatMessage(thread_id=regular, author="admin", content="regular", status="processed"),
+            InternalChatMessage(thread_id=legacy.id, author="admin", content="legacy", status="processed"),
+        ])
+        legacy_id = legacy.id
         session.commit()
 
     response = client.get("/panel/api/chat/threads?limit=10")
 
     assert response.status_code == 200
-    assert [row["id"] for row in response.json()["threads"]] == [regular]
-    assert planning not in [row["id"] for row in response.json()["threads"]]
+    assert {row["id"] for row in response.json()["threads"]} == {regular, legacy_id}
 
 
 def test_thread_list_excludes_empty_threads_and_orders_message_ties_by_id(client):
