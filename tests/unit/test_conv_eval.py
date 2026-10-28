@@ -89,17 +89,17 @@ def corpus():
     return ev.load_corpus(CORPUS_PATH)
 
 
-def test_shipped_corpus_loads_with_fourteen_scenarios(corpus):
+def test_shipped_corpus_loads_with_fifteen_scenarios(corpus):
     assert corpus.version == 1
-    assert len(corpus.scenarios) == 14
-    assert len({s.id for s in corpus.scenarios}) == 14
+    assert len(corpus.scenarios) == 15
+    assert len({s.id for s in corpus.scenarios}) == 15
 
 
 def test_shipped_corpus_covers_the_three_tiers(corpus):
     counts = {}
     for scn in corpus.scenarios:
         counts[scn.tier] = counts.get(scn.tier, 0) + 1
-    assert counts == {"simple": 5, "complejo": 4, "supercomplejo": 5}
+    assert counts == {"simple": 6, "complejo": 4, "supercomplejo": 5}
 
 
 def test_shipped_corpus_declares_an_expectation_per_scenario(corpus):
@@ -985,7 +985,8 @@ def test_write_report_writes_both_files(tmp_path):
 def test_validate_only_accepts_the_shipped_corpus(capsys):
     assert ev.main(["--validate-only"]) == 0
     captured = capsys.readouterr()
-    assert "14" in captured.out
+    assert "15" in captured.out
+    assert "simple 6" in captured.out
     assert "supercomplejo 5" in captured.out
     assert captured.err == ""
 
