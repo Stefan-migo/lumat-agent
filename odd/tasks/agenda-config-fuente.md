@@ -31,9 +31,9 @@ Cierra lo que `odd/kb-drift` dejó enumerado: el motor de agenda no conoce la ve
 
 | # | Tarea | Specs | Ruta | Commit |
 |---|---|---|---|---|
-| A1 | Ventana comercial como filtro en `open_slots_for_assignment`, con `hours.schedule` vacío = sin restricción | S1 | worker | — |
-| A2 | Día pedido fuera de ventana: ampliación y mensaje existentes, sin domingos | S2 | worker | — |
-| A3 | `hours.closure_enabled` (opt-in, default false) + configurar y verificar la ventana en el harness + procedimiento para prod | S3 | worker | — |
+| A1 | Ventana comercial como filtro en `open_slots_for_assignment`, con `hours.schedule` vacío = sin restricción | S1 | worker + revisión | `7bb2114c` |
+| A2 | Día pedido fuera de ventana: ampliación y mensaje existentes, sin domingos | S2 | worker + revisión | `7bb2114c` |
+| A3 | `hours.closure_enabled` (opt-in, default false) + panel + procedimiento en ops | S3 | worker + revisión | `55e31083` |
 | B1 | `coverage_reply` determinista desde `coverage.communes` | S4 | por decidir | — |
 | B2 | `hours_reply` determinista desde `hours.schedule` | S5 | por decidir | — |
 | B3 | `duration_reply` determinista desde `booking.service_durations` | S6 | por decidir | — |
@@ -46,3 +46,5 @@ Cierra lo que `odd/kb-drift` dejó enumerado: el motor de agenda no conoce la ve
 - **L3 (contexto heredado de `odd/kb-drift`):** la contradicción de sábado de la conversación 42 se arregló en la prosa y en el ruteo (`odd/kb-drift`, PRs #717/#718), pero la clase de defecto sobrevive al domingo: la KB manda domingo a un asesor y el motor ofrece domingo 01/11 09:00, 09:30, 10:00 (verificado contra la base del harness el 2026-10-28). El motor obedece `technician_weekly_schedule` y no lee la KB ni `hours.schedule`.
 - **L4 (detalle de motor):** la oferta se arma en `open_slots_for_assignment` (`app/services/scheduling.py:268`) recorriendo bloques de `TechnicianAvailability` materializados desde la agenda semanal; el filtro por día/franja pedidos es `_matches_window`. El cierre del chat es `closure_gate.closure_gate` → `is_open_at(schedule=get_hours_schedule(...))`.
 - **L5 (decisión, verbatim):** "Ventana sólo para agendar" — escribir un domingo a las 22:00 el bot contesta normalmente; pedir domingo para visitar no ofrece domingo. Se implementa con `hours.closure_enabled` en `false` por defecto, no con una segunda clave.
+- **L6 (revisión del entregable del worker):** cuatro correcciones antes de commitear. (1) `hours.closure_enabled` estaba en `ASSISTANT_WRITABLE_SETTINGS`, lo que cambiaba el catálogo serializado del planificador y rompía el hash pinneado de `tests/unit/test_assistant_delegation.py`: el modelo no debe decidir sus propias horas de silencio, así que la clave sale del allowlist y queda escribible sólo por panel. (2) El ajuste de la ventana se hacía con `datetime.combine(...) + timedelta` dentro de `open_slots_for_assignment`; una visita que cruzaba medianoche podía "entrar" envolviéndose a las 00:xx. Ahora es aritmética en minutos (`business_window`, `fits_business_window`), con tests unitarios propios, incluido el caso de envoltura. (3) El campo del panel es opcional al escribir: un payload sin `closure_enabled` **conserva** el valor guardado, la misma regla que el interruptor de redacción. (4) `docs/ops.md` §2.6 documenta las dos decisiones sobre una sola ventana.
+- **L7 (verificación de slice A, 2026-10-28):** `focused` unitario de settings/closure_gate/scheduling_unit/hours verde; `db` de `test_scheduling.py`, `test_chat_booking.py`, `test_out_of_hours_and_farewell.py` y `test_api_kb_settings.py` verde; `bash scripts/test.sh quick` verde (el hash del catálogo del planificador vuelve a coincidir).
