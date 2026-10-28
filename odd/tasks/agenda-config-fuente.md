@@ -23,13 +23,17 @@ Cierra lo que `odd/kb-drift` dejó enumerado: el motor de agenda no conoce la ve
 
 - **D1 — ¿Una ventana o dos?** `hours.schedule` hoy hace dos cosas potenciales: acotar la oferta (S1) y cerrar el chat fuera de horario (`app/chat/nodes/closure_gate.py`, que responde `out_of_hours`). Configurarla para S1 también hace que el bot deje de responder de noche y los domingos. Hay que decidir si eso es lo buscado (una sola ventana, coherente con la KB) o si la oferta debe tener su propia clave y el chat sigue contestando siempre. Slice A no arranca hasta resolverlo.
 
+**Resuelta (L5): ventana sólo para agendar.** Una sola ventana (`hours.schedule`) sigue siendo la única verdad para lo que se puede ofrecer, y el cierre del chat deja de ser un efecto implícito: pasa a estar detrás de un interruptor propio, `hours.closure_enabled`, con `false` por defecto — el comportamiento de hoy (el bot contesta siempre) no cambia hasta que el owner lo active. Dos claves serían dos verdades a sincronizar; un interruptor es una decisión explícita sobre una sola. Consecuencia directa:
+
+- **S3 — La ventana tiene que existir, y el cierre es opt-in.** La ventana real (lunes a sábado, 09:00–18:00) queda configurada y verificable en el harness y documentada para producción. `hours.closure_enabled` decide si el chat además se cierra fuera de esa ventana; por defecto `false`, y con `false` el gate de cierre se comporta exactamente como hoy.
+
 ## Tasks
 
 | # | Tarea | Specs | Ruta | Commit |
 |---|---|---|---|---|
-| A1 | Ventana comercial como filtro en `open_slots_for_assignment`, con `hours.schedule` vacío = sin restricción | S1 | por decidir | — |
-| A2 | Día pedido fuera de ventana: ampliación y mensaje existentes, sin domingos | S2 | por decidir | — |
-| A3 | Configurar y verificar la ventana en el harness + procedimiento para prod | S3 | por decidir | — |
+| A1 | Ventana comercial como filtro en `open_slots_for_assignment`, con `hours.schedule` vacío = sin restricción | S1 | worker | — |
+| A2 | Día pedido fuera de ventana: ampliación y mensaje existentes, sin domingos | S2 | worker | — |
+| A3 | `hours.closure_enabled` (opt-in, default false) + configurar y verificar la ventana en el harness + procedimiento para prod | S3 | worker | — |
 | B1 | `coverage_reply` determinista desde `coverage.communes` | S4 | por decidir | — |
 | B2 | `hours_reply` determinista desde `hours.schedule` | S5 | por decidir | — |
 | B3 | `duration_reply` determinista desde `booking.service_durations` | S6 | por decidir | — |
@@ -40,3 +44,5 @@ Cierra lo que `odd/kb-drift` dejó enumerado: el motor de agenda no conoce la ve
 - **L1 (pedido original, verbatim):** "si la abrimos como feature aparte/. puedes explicarmela?"
 - **L2 (decisión, verbatim):** "Abrir E3 + E2, E3 primero (recomendado)" — un doc con los dos slices, E3 (motor y ventana comercial) primero; E2 (valores deterministas desde configuración) después.
 - **L3 (contexto heredado de `odd/kb-drift`):** la contradicción de sábado de la conversación 42 se arregló en la prosa y en el ruteo (`odd/kb-drift`, PRs #717/#718), pero la clase de defecto sobrevive al domingo: la KB manda domingo a un asesor y el motor ofrece domingo 01/11 09:00, 09:30, 10:00 (verificado contra la base del harness el 2026-10-28). El motor obedece `technician_weekly_schedule` y no lee la KB ni `hours.schedule`.
+- **L4 (detalle de motor):** la oferta se arma en `open_slots_for_assignment` (`app/services/scheduling.py:268`) recorriendo bloques de `TechnicianAvailability` materializados desde la agenda semanal; el filtro por día/franja pedidos es `_matches_window`. El cierre del chat es `closure_gate.closure_gate` → `is_open_at(schedule=get_hours_schedule(...))`.
+- **L5 (decisión, verbatim):** "Ventana sólo para agendar" — escribir un domingo a las 22:00 el bot contesta normalmente; pedir domingo para visitar no ofrece domingo. Se implementa con `hours.closure_enabled` en `false` por defecto, no con una segunda clave.
