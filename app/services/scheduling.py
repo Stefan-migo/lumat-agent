@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.chat.slot_window import SlotWindow
 from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability, User, UserRole
 from app.services.audit import record_audit
 from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
@@ -251,6 +252,19 @@ def _least_loaded(
     return tied[rotation % len(tied)]
 
 
+def _matches_window(slot: tuple[date, time], window: SlotWindow | None) -> bool:
+    """Whether a local slot satisfies the day and franja a customer asked for."""
+
+    if window is None:
+        return True
+    day, clock = slot
+    if window.day is not None and day != window.day:
+        return False
+    if window.franja is not None and not (window.franja[0] <= clock < window.franja[1]):
+        return False
+    return True
+
+
 def open_slots_for_assignment(
     session: Session,
     *,
@@ -259,6 +273,7 @@ def open_slots_for_assignment(
     duration_minutes: int = 60,
     limit: int = 3,
     lead_minutes: int = 0,
+    window: SlotWindow | None = None,
 ) -> list[tuple[int, date, time]]:
     """Return deterministic slots assigned by the day's load, not by id.
 
@@ -266,6 +281,11 @@ def open_slots_for_assignment(
     with the fewest visits already booked that local day wins, and a tie
     alternates by id so two idle technicians share the offers instead of the
     lowest id absorbing all of them.
+
+    ``window`` (S1 agenda-preferencia) narrows the candidates to the day and
+    franja the customer asked for. A named day past ``days`` is still reachable:
+    the request itself is what extends the search, so "para el viernes 30" is
+    answered instead of silently ignored.
     """
     if now.tzinfo is None or now.utcoffset() is None or days <= 0 or limit <= 0:
         raise InvalidRange("now must be aware and days/limit must be positive")
@@ -273,6 +293,9 @@ def open_slots_for_assignment(
     window_end = now.astimezone(timezone.utc) + timedelta(days=days)
     timezone_name = get_hours_timezone(session)
     zone = _zone(timezone_name)
+    if window is not None and window.day is not None:
+        requested_end = datetime.combine(window.day + timedelta(days=1), time.min, tzinfo=zone)
+        window_end = max(window_end, requested_end.astimezone(timezone.utc))
     candidates: dict[tuple[date, time], set[int]] = {}
     technicians = session.scalars(
         select(User).where(User.role == UserRole.TECNICO).order_by(User.id)
@@ -289,6 +312,13 @@ def open_slots_for_assignment(
             .order_by(TechnicianAvailability.starts_at, TechnicianAvailability.id)
         ).all()
         for block in blocks:
+            # The block scan must be wide enough to survive the window filter: the
+            # filter runs *after* the scan, so capping the scan at the panel limit
+            # would hide an afternoon that starts past the first `limit` starts.
+            # One candidate per minute bounds every grid start the block allows.
+            scan_limit = limit
+            if window is not None:
+                scan_limit = max(limit, int((block.ends_at - block.starts_at).total_seconds() // 60))
             slots = open_slots(
                 session,
                 technician_id=technician.id,
@@ -296,7 +326,7 @@ def open_slots_for_assignment(
                 window_end=min(window_end, block.ends_at),
                 duration_minutes=duration_minutes,
                 timezone_name=timezone_name,
-                limit=limit,
+                limit=scan_limit,
                 lead_minutes=lead_minutes,
                 now=now,
             )
@@ -310,7 +340,11 @@ def open_slots_for_assignment(
         now=now,
         window_end=window_end,
     )
-    ordered = sorted(candidates.items(), key=lambda item: item[0])
+    ordered = [
+        (slot, coverers)
+        for slot, coverers in sorted(candidates.items(), key=lambda item: item[0])
+        if _matches_window(slot, window)
+    ]
     return [
         (_least_loaded(coverers, loads, day, rotation), day, clock)
         for rotation, ((day, clock), coverers) in enumerate(ordered[:limit])

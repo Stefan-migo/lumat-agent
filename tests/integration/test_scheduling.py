@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
 from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, AutomationRule, Case, Conversation, Customer, DomainEvent, TechnicianAvailability, User
+from app.chat import slot_window
+from app.chat.slot_window import SlotWindow
 from app.services import scheduling
 
 
@@ -472,3 +474,90 @@ def test_open_slots_for_assignment_returns_empty_when_no_availability_rows(monke
         assert scheduling.open_slots_for_assignment(
             session, now=datetime.now(timezone.utc), days=7
         ) == []
+
+
+def _window_technician(session, monkeypatch, name):
+    technician = User(username=name, password_hash="test", role="tecnico")
+    session.add(technician)
+    session.flush()
+    monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+    return technician
+
+
+def test_open_slots_for_assignment_offers_only_the_requested_day(monkeypatch):
+    """S1 (agenda-preferencia): a day the customer asked for beats the earliest day.
+
+    Measured: three harness customers asked for Thursday, Saturday and Friday and
+    all three were offered the first day of the window, because the assignment
+    query had no way to hear the request.
+    """
+    with SessionLocal() as session:
+        technician = _window_technician(session, monkeypatch, "window-day")
+        first = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
+            minute=0, second=0, microsecond=0
+        )
+        wanted = first + timedelta(days=2)
+        for start in (first, wanted):
+            scheduling.add_availability(
+                session, technician_id=technician.id, starts_at=start,
+                ends_at=start + timedelta(hours=2),
+            )
+        session.flush()
+
+        unconstrained = scheduling.open_slots_for_assignment(
+            session, now=first - timedelta(minutes=1), days=7, limit=3
+        )
+        requested = scheduling.open_slots_for_assignment(
+            session, now=first - timedelta(minutes=1), days=7, limit=3,
+            window=SlotWindow(day=wanted.date()),
+        )
+
+        assert {day for _, day, _ in unconstrained} == {first.date()}
+        assert requested
+        assert {day for _, day, _ in requested} == {wanted.date()}
+
+
+def test_open_slots_for_assignment_offers_only_the_requested_franja(monkeypatch):
+    """S1: "viernes en la tarde" must not answer with the morning."""
+    with SessionLocal() as session:
+        technician = _window_technician(session, monkeypatch, "window-franja")
+        starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
+            hour=9, minute=0, second=0, microsecond=0
+        )
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=starts,
+            ends_at=starts + timedelta(hours=9),
+        )
+        session.flush()
+
+        afternoon = scheduling.open_slots_for_assignment(
+            session, now=starts - timedelta(minutes=1), days=7, limit=3,
+            window=SlotWindow(day=starts.date(), franja=slot_window.AFTERNOON),
+        )
+        morning = scheduling.open_slots_for_assignment(
+            session, now=starts - timedelta(minutes=1), days=7, limit=3,
+            window=SlotWindow(day=starts.date(), franja=slot_window.MORNING),
+        )
+
+        assert afternoon and all(clock >= time(13, 0) for _, _, clock in afternoon)
+        assert morning and all(clock < time(13, 0) for _, _, clock in morning)
+
+
+def test_open_slots_for_assignment_reaches_a_day_beyond_the_day_count(monkeypatch):
+    """S1: a day 10 days out is still a day the customer asked for."""
+    with SessionLocal() as session:
+        technician = _window_technician(session, monkeypatch, "window-far")
+        today = datetime.now(timezone.utc).replace(hour=9, minute=0, second=0, microsecond=0)
+        far = today + timedelta(days=10)
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=far,
+            ends_at=far + timedelta(hours=2),
+        )
+        session.flush()
+
+        slots = scheduling.open_slots_for_assignment(
+            session, now=today, days=7, limit=3, window=SlotWindow(day=far.date())
+        )
+
+        assert slots
+        assert {day for _, day, _ in slots} == {far.date()}
