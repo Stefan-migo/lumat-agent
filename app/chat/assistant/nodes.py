@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 _TOOL_EVIDENCE_LIMIT = 4_000
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
-MAX_ASSISTANT_TOOL_STEPS = 4
+MAX_ASSISTANT_TOOL_STEPS = 6
 # Bodies loaded for the responder every turn, even when the planner does not
 # declare them. Scoped to the responder: the planner keeps seeing only the
 # skill index ({name, description}), never these bodies (D8).
@@ -581,11 +581,17 @@ def guardrails(state: AssistantState) -> AssistantState:
     tool_name = plan_data.get("tool")
     prior_results = state.get("tool_results") or []
     previous = prior_results[-1] if prior_results and state.get("tool_steps", 0) else {}
-    if (
-        plan_data.get("kind") == "tool"
-        and previous.get("tool") == tool_name
-        and previous.get("arguments", {}) == plan_data.get("arguments", {})
-    ):
+    repeated_call = False
+    if plan_data.get("kind") == "tool" and previous.get("tool") == tool_name and tool_name:
+        try:
+            args_model = get_tool(tool_name).args_model
+            previous_arguments = args_model.model_validate(previous.get("arguments", {})).model_dump()
+            planned_arguments = args_model.model_validate(plan_data.get("arguments", {})).model_dump()
+            repeated_call = previous_arguments == planned_arguments
+        except Exception:
+            # Invalid calls are handled by the normal validation path below.
+            pass
+    if repeated_call:
         return {
             "plan": {**plan_data, "kind": "respond", "tool": None, "arguments": {}, "follow_up": False},
             "execution_stall": "repeated_tool_call",
@@ -654,7 +660,23 @@ def _render_tool_evidence(state: AssistantState) -> str:
     for result in results:
         payload = result.get("result") if isinstance(result, dict) else None
         if payload is not None:
-            rendered_results.append(json.dumps(payload, ensure_ascii=False))
+            rendered = json.dumps(payload, ensure_ascii=False)
+            if isinstance(result, dict) and result.get("tool") in {"customers.list", "customers.search"} and isinstance(payload, list):
+                try:
+                    args = get_tool(result["tool"]).args_model.model_validate(result.get("arguments") or {})
+                    limit, offset = args.limit, args.offset
+                    page_cue = f"Customer page: limit={limit}, offset={offset}, returned={len(payload)}. "
+                    if len(payload) == limit:
+                        page_cue += (
+                            f"There may be more; next offset={offset + limit}. "
+                            "Repeating the same page advances nothing."
+                        )
+                    else:
+                        page_cue += "This is a short page; no next offset is suggested."
+                    rendered += "\n" + page_cue
+                except (AttributeError, TypeError, ValueError):
+                    pass
+            rendered_results.append(rendered)
     if not rendered_results:
         return ""
     # Newest first, and the omission marker is budgeted *with* the results. The newest result

@@ -1,7 +1,7 @@
 """Independent verifier probes for T6 / S7 (raised tool-loop budget).
 
-Each assertion fails if the raised budget does not fit a 3-step chain, if the cap stops
-cutting a runaway chain, or if a blocked cost mode fails to end the turn.
+Each assertion fails if the raised budget does not fit the measured 5-step chain, if the cap
+stops cutting a runaway chain, or if a blocked cost mode fails to end the turn.
 """
 
 import json
@@ -45,7 +45,7 @@ def _wire(monkeypatch, plans):
 
 
 def test_s7_surplus_plans_do_not_extend_a_read_only_chain(monkeypatch):
-    """The budget must cut a runaway chain at 4 executions even when plans keep coming."""
+    """The budget must cut a runaway chain at 6 executions even when plans keep coming."""
     plans = []
     for step in range(8):
         plan = json.loads(_plan("customers.search", follow_up=True, summary=f"s{step}"))
@@ -90,23 +90,23 @@ def test_s7_blocked_cost_gate_stops_the_loop_regardless_of_budget(monkeypatch):
 
 
 def test_s7_cap_boundary_is_exactly_the_budget():
-    """At 3 steps the loop continues; at the budget it caps -- the exact S7 boundary."""
+    """At 5 steps the loop continues; at 6 it caps -- the exact S7 boundary."""
     base = {"thread_id": 7, "guardrails": {"cost_allowed": True}, "session": None}
-    at_three = tool_loop_head({
-        **base, "tool_steps": 3,
+    at_five = tool_loop_head({
+        **base, "tool_steps": 5,
         "plan": {"kind": "tool", "tool": "customers.search", "follow_up": True},
     })
-    assert at_three.get("status") == "planned"
-    assert at_three.get("cap_reached") is None
+    assert at_five.get("status") == "planned"
+    assert at_five.get("cap_reached") is None
 
-    at_four = tool_loop_head({
+    at_six = tool_loop_head({
         **base, "tool_steps": MAX_ASSISTANT_TOOL_STEPS,
         "plan": {"kind": "tool", "tool": "customers.search", "follow_up": True},
     })
-    assert at_four["cap_reached"] is True
-    assert at_four["status"] == "completed"
+    assert at_six["cap_reached"] is True
+    assert at_six["status"] == "completed"
 
 
-def test_s7_budget_fits_a_three_step_chain_and_is_bounded():
-    assert MAX_ASSISTANT_TOOL_STEPS >= 3
-    assert MAX_ASSISTANT_TOOL_STEPS == 4
+def test_s7_budget_fits_a_five_step_chain_and_is_bounded():
+    assert MAX_ASSISTANT_TOOL_STEPS >= 5
+    assert MAX_ASSISTANT_TOOL_STEPS == 6

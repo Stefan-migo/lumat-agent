@@ -397,6 +397,44 @@ def test_three_step_chain_completes_within_the_budget(monkeypatch):
     assert final.get("cap_reached", False) is False
 
 
+def test_five_step_customer_read_chain_completes_without_reaching_the_cap(monkeypatch):
+    calls = []
+    executed = []
+    steps = [
+        ("customers.list", {"limit": 20, "offset": offset})
+        for offset in (0, 20, 40)
+    ] + [
+        ("customers.search", {"query": "Marcela Fuentes"}),
+        ("customers.operational_history", {"customer_id": 1}),
+    ]
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": tool, "arguments": arguments,
+            "summary": f"step {index}", "requires_approval": False,
+            "follow_up": index < len(steps) - 1,
+        })
+        for index, (tool, arguments) in enumerate(steps)
+    ]
+
+    def execute_tool(_session, tool, arguments, **_kwargs):
+        executed.append((tool, arguments))
+        return {"tool": tool, "status": "completed", "result": []}
+
+    monkeypatch.setattr("app.chat.assistant.nodes.execute_tool", execute_tool)
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    final = run_assistant(
+        thread_id=7, user_id=1, content="List and search customers", run_id="run-five-steps",
+        on_token=lambda _token: None,
+    )
+
+    assert executed == steps, (final.get("plan"), final.get("execution_stall"), final.get("tool_steps"), final.get("guardrails"))
+    assert final["tool_steps"] == 5
+    assert final.get("cap_reached", False) is False
+
+
 def test_cap_is_recorded_only_when_follow_up_is_still_requested():
     completed_state = _tool_state(
         tool_steps=MAX_ASSISTANT_TOOL_STEPS,
@@ -563,6 +601,38 @@ def test_identical_repeated_tool_plan_stops_and_records_stall():
     assert result["status"] == "responding"
 
 
+def test_repeat_guard_treats_explicit_default_offset_as_the_same_call():
+    state = _tool_state(
+        tool_steps=1,
+        tool_results=[{"tool": "customers.list", "arguments": {"limit": 20}, "status": "completed"}],
+        plan={
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20, "offset": 0},
+            "requires_approval": False, "follow_up": True,
+        },
+    )
+
+    result = guardrails(state)
+
+    assert result["execution_stall"] == "repeated_tool_call"
+    assert result["status"] == "responding"
+
+
+def test_repeat_guard_allows_a_different_customer_page():
+    state = _tool_state(
+        tool_steps=1,
+        tool_results=[{"tool": "customers.list", "arguments": {"limit": 20}, "status": "completed"}],
+        plan={
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20, "offset": 20},
+            "requires_approval": False, "follow_up": True,
+        },
+    )
+
+    result = guardrails(state)
+
+    assert result.get("execution_stall") is None
+    assert result["status"] == "executing"
+
+
 def test_advanced_tool_plan_continues_even_with_prior_tool_results():
     state = _tool_state(
         tool_steps=1,
@@ -574,25 +644,62 @@ def test_advanced_tool_plan_continues_even_with_prior_tool_results():
     assert tool_loop_head(state)["status"] == "planned"
 
 
-def test_customer_search_offset_pages_forward_and_omission_keeps_first_page(monkeypatch):
+@pytest.mark.parametrize("tool_name", ["customers.list", "customers.search"])
+def test_customer_search_payload_remains_a_list_of_public_rows(monkeypatch, tool_name):
     from app.chat.assistant.tools.registry import SearchArgs, _search_customers
 
-    def page(_session, _query, limit):
-        return [SimpleNamespace(id=index, name=f"Customer {index}", state="active") for index in range(limit)]
+    matching = [
+        SimpleNamespace(id=index, name=f"Customer {index}", state="active", phone_e164="private")
+        for index in range(3)
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.customers.search_customers",
+        lambda _session, _query, limit: matching[:limit],
+    )
 
-    monkeypatch.setattr("app.chat.assistant.tools.registry.customers.search_customers", page)
+    rows = _search_customers(None, SearchArgs(limit=2, offset=1))
 
-    first = _search_customers(None, SearchArgs(limit=2))
-    second = _search_customers(None, SearchArgs(limit=2, offset=2))
-
-    assert first == [
-        {"id": 0, "name": "Customer 0", "state": "active"},
+    assert isinstance(rows, list)
+    assert rows == [
         {"id": 1, "name": "Customer 1", "state": "active"},
-    ]
-    assert second == [
         {"id": 2, "name": "Customer 2", "state": "active"},
-        {"id": 3, "name": "Customer 3", "state": "active"},
     ]
+    assert set(rows[0]) == {"id", "name", "state"}
+
+
+def test_planner_evidence_explains_full_customer_page_advancement():
+    from app.chat.assistant.nodes import _render_tool_evidence
+
+    evidence = _render_tool_evidence({
+        "tool_results": [{
+            "tool": "customers.list",
+            "arguments": {"limit": 2},
+            "result": [{"id": 1}, {"id": 2}],
+        }],
+    })
+
+    assert '"id": 1' in evidence
+    assert "limit=2" in evidence
+    assert "offset=0" in evidence
+    assert "returned=2" in evidence
+    assert "next offset=2" in evidence
+    assert "Repeating the same page advances nothing" in evidence
+
+
+def test_planner_evidence_does_not_suggest_advancement_for_short_customer_page():
+    from app.chat.assistant.nodes import _render_tool_evidence
+
+    evidence = _render_tool_evidence({
+        "tool_results": [{
+            "tool": "customers.search",
+            "arguments": {"query": "Ana", "limit": 2, "offset": 2},
+            "result": [{"id": 3}],
+        }],
+    })
+
+    assert "returned=1" in evidence
+    assert "short page" in evidence
+    assert "next offset=" not in evidence
 
 
 def test_step_two_write_plan_gets_its_own_approval(monkeypatch):

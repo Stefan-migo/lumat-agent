@@ -1101,6 +1101,36 @@ def test_a_customer_read_chain_persists_three_named_steps_and_events(client, mon
     assert [event["status"] for event in tool_events] == ["completed"] * 3
 
 
+def test_a_paged_read_chain_advances_instead_of_stalling_as_a_repeat(client, monkeypatch):
+    """S1 + S10 + S11: paging forward is progress, not the repeated call the guard stops."""
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20},
+            "summary": "first page", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20, "offset": 20},
+            "summary": "next page", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.operational_history",
+            "arguments": {"customer_id": 1, "limit": 20},
+            "summary": "history", "requires_approval": False,
+        }),
+    ]
+    _, _, thread_id = _turn_with_plan(client, monkeypatch, "paged-read-chain", plans)
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    assert state["tool_steps"] == 3
+    assert [item["tool"] for item in state["tool_results"]] == [
+        "customers.list", "customers.list", "customers.operational_history",
+    ]
+    assert [item["status"] for item in state["tool_results"]] == ["completed"] * 3
+    assert state["execution_stall"] is None
+    assert state["cap_reached"] is False
+
+
 def test_repeated_customer_read_persists_stall_without_spending_cap(client, monkeypatch):
     repeated = json.dumps({
         "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20},
