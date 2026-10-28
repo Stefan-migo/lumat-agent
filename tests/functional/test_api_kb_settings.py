@@ -1082,59 +1082,28 @@ def test_settings_update_hours_audited(client, make_user):
     assert all(audit.actor == "adm" for audit in audits)
 
 
-def test_settings_hours_closure_switch_is_opt_in_and_preserved_on_omission(
-    client, make_user
-):
-    """S3: the switch is settable, and a payload without it keeps the stored value.
+def test_settings_hours_route_cannot_flip_the_closure_switch(client, make_user):
+    """The panel sets values, never a switch (invariant: no toggle keys written).
 
-    The omission rule is the trap this pins: every older panel client posts the
-    hours section without the key, and defaulting it to False on read would
-    silently re-enable or disable the chat's quiet hours.
+    Pinned here as behaviour, not only as a source scan: the section accepts the
+    payload a curious client would send and simply does not store the switch, so
+    an operator cannot silence the chat by guessing a field name.
     """
     make_user("adm", "adm-pass", role="admin")
     _login(client)
     schedule = [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}]
 
-    # Opting in writes the key and audits it.
     resp = client.post(
         "/panel/api/settings/hours",
         json={"timezone": "UTC", "schedule": schedule, "closure_enabled": True},
         follow_redirects=False,
     )
+
     assert resp.status_code == 200, resp.text
-    with SessionLocal() as session:
-        assert session.get(Settings, "hours.closure_enabled").value is True
-    assert client.get("/panel/api/settings").json()["hours"]["closure_enabled"] is True
-
-    # A payload without the key preserves it instead of resetting it.
-    resp = client.post(
-        "/panel/api/settings/hours",
-        json={"timezone": "UTC", "schedule": schedule},
-        follow_redirects=False,
-    )
-    assert resp.status_code == 200, resp.text
-    with SessionLocal() as session:
-        assert session.get(Settings, "hours.closure_enabled").value is True
-
-
-def test_settings_hours_closure_switch_rejects_a_non_boolean(client, make_user):
-    make_user("adm", "adm-pass", role="admin")
-    _login(client)
-
-    resp = client.post(
-        "/panel/api/settings/hours",
-        json={
-            "timezone": "UTC",
-            "schedule": [{"days": [1], "open": "09:00", "close": "18:00"}],
-            "closure_enabled": "si",
-        },
-        follow_redirects=False,
-    )
-
-    assert resp.status_code == 400
-    assert "boolean" in resp.json()["detail"]
     with SessionLocal() as session:
         assert session.get(Settings, "hours.closure_enabled") is None
+    # The panel still SEES the state so it can display it.
+    assert client.get("/panel/api/settings").json()["hours"]["closure_enabled"] is False
 
 
 @pytest.mark.parametrize(

@@ -125,10 +125,9 @@ class MessageTemplatesBody(BaseModel):
 class HoursBody(BaseModel):
     timezone: Any
     schedule: Any
-    # Optional on purpose: a payload without the key PRESERVES the stored value
-    # (the same rule the conduct switch follows), so an older panel client cannot
-    # silently silence the chat by omitting it.
-    closure_enabled: Any | None = None
+    # No `closure_enabled` here on purpose: this router sets VALUES, never a
+    # switch (tests/functional/test_invariant_contract.py). The status is read
+    # below so the panel can show it; flipping it is an operator action in ops.md.
 
 
 class TarifaBody(BaseModel):
@@ -413,8 +412,6 @@ def _parse_hours(body: HoursBody) -> tuple[str, list[dict[str, Any]]]:
         settings_service.validate_hours_schedule(body.schedule)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    if body.closure_enabled is not None and not isinstance(body.closure_enabled, bool):
-        raise HTTPException(status_code=400, detail="closure_enabled must be a boolean")
     return body.timezone, body.schedule
 
 
@@ -634,8 +631,6 @@ def settings_hours(
     timezone_name, schedule = _parse_hours(body)
     _save(session, "hours.timezone", timezone_name, current)
     _save(session, "hours.schedule", schedule, current)
-    if body.closure_enabled is not None:
-        _save(session, "hours.closure_enabled", body.closure_enabled, current)
     session.commit()
     return {"ok": True}
 
