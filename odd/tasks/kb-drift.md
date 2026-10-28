@@ -17,12 +17,19 @@ Fuera de alcance (decidido con el owner, no es este feature): migrar horarios/co
 
 | # | Tarea | Specs | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | `kb.update_document` propaga `source_meta` (explícito o heredado) + tests de ruteo tras actualizar | S1 | inline (parent) | — |
-| T2 | Endpoint de edición del panel conserva el ruteo + test funcional | S2 | inline (parent) | — |
-| T3 | Seed pasa `source_meta` en re-versión, repara en el lugar y reporta documentos sin ruteo | S3 | inline (parent) | — |
-| T4 | `scripts/kb_doc_drift.py` + línea base `docs/kb/drift-baseline.json` + tests | S4 | inline (parent) | — |
+| T1 | `kb.update_document` propaga `source_meta` (explícito o heredado) + tests de ruteo tras actualizar | S1 | inline (parent) | `f30be554` |
+| T2 | Endpoint de edición del panel conserva el ruteo + test funcional | S2 | inline (parent) | `f30be554` |
+| T3 | Seed pasa `source_meta` en re-versión, repara en el lugar y reporta documentos sin ruteo | S3 | inline (parent) | `c782c4f3` |
+| T4 | `scripts/kb_doc_drift.py` + línea base `docs/kb/drift-baseline.json` + tests | S4 | worker (`gentle-ai-worker`) | — |
 | T5 | `docs/ops.md`: origen de las KB y check de release | S5 | inline (parent) | — |
 | T6 | Verificación de cierre: `quick`, focused por unidad, `full` + `shape` | S1–S5 | inline (parent) | — |
+
+### Slices de entrega
+
+Presupuesto de review ~400 líneas autoradas por slice, apilados a `main`.
+
+- **Slice 1 — ruteo (S1–S3):** commits `8e6e66f2` (doc), `f30be554`, `c782c4f3`; 493 líneas autoradas (mayormente tests). Cierra el bug que rompe la respuesta y habilita actualizar la KB de producción.
+- **Slice 2 — control (S4–S5):** el lint, su línea base y el procedimiento de ops. Abre solo cuando el slice 1 está mergeado o en review.
 
 ## Log
 
@@ -31,3 +38,6 @@ Fuera de alcance (decidido con el owner, no es este feature): migrar horarios/co
 - **L3 (alcance, verbatim):** "Solo el cinturón: E1 + lint" — re-seed del harness, KB de producción y lint de deriva; sin tocar el camino de respuesta determinista.
 - **L4 (evidencia, 2026-10-28):** al re-sembrar el harness, `kb_documents` id 1 pasó a v2 ("lunes a sábado", 2 chunks) y la consulta "puede ser este sabado?" devolvió `kb_miss_offer`. Causa: chunks de v2 con `source_meta={"chunk_index": 0}` contra v1 con `{"source": "docs/kb", "source_id": "lumat-cobertura-horarios", "chunk_index": 0}`; `app/services/kb.py:246` pasa `source_meta=None` y `app/services/kb.py:428` filtra por `source_meta["source_id"]`. `POST /panel/kb` nunca pasa `source_meta`, y los tests de ruteo solo ejercitan `ingest_document`.
 - **L5 (decisión, verbatim):** "Worktree + doc ODD (recomendado)" — el bug de `source_meta` entra al feature; la KB de producción no se toca antes del fix.
+- **L6 (evidencia, 2026-10-28):** harness reparado y verificado de punta a punta. `kb_documents` id 1 v2 con `source_meta` restaurado; conversación #44 (`+56900610003`) pregunta "puede ser este sabado?" y responde "Sí, atendemos sábado de 09:00 a 18:00, siempre según la disponibilidad de técnicos. ¿Qué horario te acomoda dentro de ese rango?" — sin asesor y sin `kb_miss_offer`. Antes de la reparación, la misma pregunta devolvía el miss.
+- **L7 (decisión, delivery):** el chequeo de release de S5 sólo es ejecutable si la imagen publica `scripts/` y `docs/kb/`, así que slice 2 toca superficie de delivery: `Dockerfile` (dos `COPY`) y `.dockerignore` (excepción `!docs/kb/**`, porque `docs/` estaba excluido y el build fallaba con `"/docs/kb": not found`). Sin CI que construya la imagen prod, la verificación es un `docker build` local más el smoke de release, que falla ruidosamente si el script no está. Riesgo: item 5 (delivery), más item 6 para el `COPY` — ningún test lo cubre.
+- **L8 (hallazgo, prod):** la KB de producción se cargó por el panel, así que sus documentos no tienen `source_meta.source_id` y dependen sólo del umbral global; y la imagen de `v2026.10.7` no incluye `scripts/` ni `docs/kb/`. Actualizar prod requiere, en este orden: desplegar este fix, inspeccionar en read-only los títulos y versiones de los documentos de prod (si un título no coincide con el `# H1` de `docs/kb`, la siembra crearía un duplicado en vez de re-versionar), y recién entonces sembrar o editar con binding explícito.

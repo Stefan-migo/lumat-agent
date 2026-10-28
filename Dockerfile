@@ -34,6 +34,12 @@ COPY app/ app/
 # runtime. Without it the registry load raises and prompts silently fall back.
 COPY agent/ agent/
 COPY db/ db/
+# `scripts/seed_kb_docs.py` and the `docs/kb` it seeds ship in the image so the
+# release check in ops.md §2.5 can run inside the deployed container. The KB row
+# is a cache of those files; a release that cannot compare them ships customer
+# prose nobody verified against the configuration.
+COPY scripts/ scripts/
+COPY docs/kb/ docs/kb/
 # Pre-create the writable mount points with appuser ownership so a fresh named
 # volume at either path inherits writable perms: /app/media (SH-2 — WhatsApp
 # media) and /home/appuser/.cache (odd/prod-embedder-cache — the local embedding
