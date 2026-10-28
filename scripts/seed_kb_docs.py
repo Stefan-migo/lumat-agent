@@ -78,10 +78,12 @@ KB_DIR = _REPO_ROOT / "docs" / "kb"
 def _normalise(text: str) -> str:
     """Compare content by meaning-preserving shape, not by byte identity.
 
-    Line order matters; surrounding and repeated blank lines do not. A file that
-    was re-wrapped by an editor is the same document.
+    Every whitespace run collapses to one space, so a document the panel
+    textarea re-wrapped — hard breaks mid-sentence, indented lines, doubled
+    blank lines — is still the same document. Words and their order are what a
+    real edit changes, and those are untouched.
     """
-    return "\n".join(line.strip() for line in text.strip().splitlines() if line.strip())
+    return " ".join(text.split())
 
 
 def content_digest(text: str) -> str:
