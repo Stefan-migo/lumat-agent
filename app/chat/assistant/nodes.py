@@ -584,10 +584,16 @@ def guardrails(state: AssistantState) -> AssistantState:
     repeated_call = False
     if plan_data.get("kind") == "tool" and previous.get("tool") == tool_name and tool_name:
         try:
-            args_model = get_tool(tool_name).args_model
-            previous_arguments = args_model.model_validate(previous.get("arguments", {})).model_dump()
-            planned_arguments = args_model.model_validate(plan_data.get("arguments", {})).model_dump()
-            repeated_call = previous_arguments == planned_arguments
+            definition = get_tool(tool_name)
+            # A write has its own gate: its approval is bound to one exact plan and consumed when
+            # it runs, so a repeated write is refused there. This guard exists to stop a read loop
+            # from burning the step budget on the same page, and rewriting a write here detaches
+            # the plan its approval belongs to.
+            if definition.read_only:
+                args_model = definition.args_model
+                previous_arguments = args_model.model_validate(previous.get("arguments", {})).model_dump()
+                planned_arguments = args_model.model_validate(plan_data.get("arguments", {})).model_dump()
+                repeated_call = previous_arguments == planned_arguments
         except Exception:
             # Invalid calls are handled by the normal validation path below.
             pass

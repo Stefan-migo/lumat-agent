@@ -1151,3 +1151,28 @@ def test_no_tool_prompt_keeps_the_markup_rule_without_denying_capability(monkeyp
     # so the no-tool branch must never claim the panel tools cannot be executed.
     assert "cannot invoke" not in prompt
     assert "never state that you cannot use or execute them" in prompt
+
+
+def test_repeat_guard_leaves_a_repeated_write_to_its_own_gate():
+    """S10: the read-loop guard must not rewrite a write.
+
+    A write approval is bound to one exact plan and consumed on execution, so a repeated write is
+    refused there. Rewriting it here removed the plan the approval belonged to and broke five
+    cross-approval chain tests.
+    """
+    arguments = {
+        "titulo": "Repeated write", "contenido": "same content",
+        "topic_key": "agent:repeat-write", "tipo": "decision",
+    }
+    state = _tool_state(
+        tool_steps=1,
+        tool_results=[{"tool": "memory.write", "arguments": arguments, "status": "completed"}],
+        plan={
+            "kind": "tool", "tool": "memory.write", "arguments": arguments,
+            "requires_approval": True, "follow_up": True,
+        },
+    )
+
+    result = guardrails(state)
+
+    assert result.get("execution_stall") is None
