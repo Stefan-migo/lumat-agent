@@ -486,6 +486,14 @@ def retrieve(
     and is passed only explicitly by internal surfaces (the Lumat assistant and
     the admin probe).
 
+    A ``source_ids`` search ranks in Python instead of asking the index for a
+    top-N window. The HNSW scan hands back ``hnsw.ef_search`` neighbours and the
+    filters apply afterwards, so a corpus with one dominant document can starve
+    a valid filtered search to zero rows (measured in production on 2026-10-28:
+    the filter matched 2 rows, ``retrieve`` returned 0, and the same query with
+    the index scan disabled returned 2). The filtered set is one document, so
+    reading it whole costs what it must and never depends on the planner.
+
     """
     query_embedding, _ = embed_texts([query])
     if not query_embedding:
@@ -508,13 +516,20 @@ def retrieve(
         filters.append(
             or_(KbDocument.project_id.is_(None), KbDocument.project_id == project_id)
         )
-    rows = session.execute(
+    statement = (
         select(KbChunk, distance.label("distance"))
         .join(KbDocument, KbChunk.document_id == KbDocument.id)
         .where(*filters)
-        .order_by(distance.asc())
-        .limit(top_k)
-    ).all()
+    )
+    if source_ids is not None:
+        # Rank AFTER filtering: never through the index's candidate window.
+        rows = sorted(
+            session.execute(statement).all(), key=lambda row: float(row[1])
+        )[:top_k]
+    else:
+        rows = session.execute(
+            statement.order_by(distance.asc()).limit(top_k)
+        ).all()
     return [
         {
             "document_id": chunk.document_id,

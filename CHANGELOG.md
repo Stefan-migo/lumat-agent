@@ -6,6 +6,30 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.9] - 2026-10-28
+
+A patch release for one defect that the previous deploy's own verification found:
+a knowledge-base search filtered by topic could return nothing while rows matched
+the filter.
+
+### Fixed
+
+- **A filtered KB search cannot come back empty while its filter matches rows.**
+  `retrieve(..., source_ids=[...])` returned 0 chunks in production with 2 rows
+  matching: pgvector's HNSW scan hands back `hnsw.ef_search` neighbours and the
+  `WHERE` applies afterwards, so one 258-chunk document dominating the
+  neighbourhood left nothing for the topic filter to keep. The filtered path now
+  filters in SQL and ranks in Python — the matching set is one document — so the
+  answer no longer depends on which plan the planner picks. The unfiltered path
+  keeps the index, where the ordering is the selection itself.
+
+### Changed
+
+- **The release record carries what verification found.** `docs/ops.md` gains the
+  `v2026.10.8` row and change-log entry, including the operator action that left no
+  audit trail (the four customer KB documents were renamed with `psql`) and the
+  retrieval defect this release fixes.
+
 ## [2026.10.8] - 2026-10-28
 
 This release makes the bot's words and the bot's calendar come from the same
