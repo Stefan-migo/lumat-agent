@@ -228,6 +228,21 @@ def _more_slots(session, state: ConversationState, offer: dict, texts: dict[str,
     return {"next_step": "end", "replies": [_offer_text(page, texts)]}
 
 
+def is_offer_answer(text: str, slots: list[dict], *, today: date) -> bool:
+    """Whether ``text`` answers an open offer: a choice, a day, or a page request.
+
+    S3 (agenda-preferencia): the handoff gate and this node must agree on what
+    counts as answering the offer. Before this, "no me sirve" was a page request
+    here and a complaint in the gate, and the gate ran first.
+    """
+
+    if _resolve(text, slots) is not None:
+        return True
+    if resolve_window(text, today=today) is not None:
+        return True
+    return _requests_more_slots(text)
+
+
 def _resolve(text: str, slots: list[dict]) -> int | None:
     match = re.fullmatch(r"\s*(?:(?:opcion|horario)\s*)?(\d+)\s*", _fold(text))
     if match:
