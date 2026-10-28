@@ -5,7 +5,7 @@ import type { ActiveRun, NotificationsResponse, PanelNotification } from '../../
 import type { User } from '../../types';
 import type { NotificationState, PanelView } from './PanelShell';
 import { PanelShell, isAdminOnlyView } from './PanelShell';
-import { isDetailRoute, parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
+import { isDetailRoute, parsePanelPath, pathForRoute, type PanelRoute } from './panelRoutes';
 import { canOpen, defaultViewForRole } from './panelAccess';
 import { Dashboard } from '../pages/Dashboard';
 import { ClientesList } from '../pages/ClientesList';
@@ -26,7 +26,6 @@ import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { ChatbotMetrics } from '../pages/ChatbotMetrics';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
-import { PlanningSessions } from '../pages/PlanningSessions';
 import { SelfProfile } from '../pages/SelfProfile';
 import { UserFicha } from '../pages/UserFicha';
 import { realtimeClient } from '../../realtime';
@@ -206,7 +205,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const onBack = isDetailRoute(route)
     ? () => navigateToRoute({ view, ...(view === 'conversations' && route.conversationTab ? { conversationTab: route.conversationTab } : {}) })
     : undefined;
-  const shellView = view === 'cases' ? 'conversations' : view === 'projects' || view === 'planning-sessions' ? 'chat' : view;
+  const shellView = view === 'cases' ? 'conversations' : view === 'projects' ? 'chat' : view;
   const clientId = route.clientId ?? null;
   const userId = route.userId ?? null;
   const conversationId = route.conversationId ?? null;
@@ -227,7 +226,6 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
         : view === 'users' ? user.role !== 'admin' ? <div role="alert">No tienes permiso para ver este panel</div> : userId !== null ? <UserFicha userId={userId} /> : <UserManagement currentUser={user} onOpenUser={(id) => navigateToRoute({ view: 'users', userId: id })} />
        : view === 'profile' ? <SelfProfile />
             : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} role={user.role} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} onOpenThread={(threadId) => navigateToRoute({ view: 'chat', threadId })} onOpenHistory={(slug) => navigateToRoute({ view: 'chat', historyProjectSlug: slug })} />
-         : view === 'planning-sessions' ? <PlanningSessions projectSlug={route.projectSlug} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
       : <Settings />;
 
   return (
