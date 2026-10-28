@@ -704,6 +704,79 @@ def test_kb4_restore_previous_version_flip_no_reembed(fake_embedder):
     assert results[0]["version"] == 1
 
 
+def _ingest_seeded(session, text: str, *, source_id: str = "lumat-cobertura-horarios") -> int:
+    """A seeded customer document, exactly as `scripts/seed_kb_docs.py` creates it."""
+    doc = kb.ingest_document(
+        session,
+        title="Cobertura y horarios de Lumat",
+        fmt=DocumentFormat.MD,
+        content=text.encode(),
+        source_meta={"source": "docs/kb", "source_id": source_id},
+        visibility=KbVisibility.CUSTOMER,
+    )
+    session.flush()
+    return doc.id
+
+
+def test_kb4_update_preserves_source_meta_so_topic_routing_survives(fake_embedder):
+    """S1: a new version must keep the document's routing metadata.
+
+    Measured failure this pins: re-seeding `docs/kb` wrote v2 chunks with
+    `source_meta={"chunk_index": 0}` only, so `retrieve(source_ids=[...])`
+    matched nothing and "puede ser este sabado?" became a KB miss.
+    """
+    question = "puede ser este sabado?"
+    with SessionLocal() as session:
+        doc_id = _ingest_seeded(
+            session,
+            "Atendemos de lunes a sabado de 09:00 a 18:00. " + question,
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        kb.update_document(
+            session,
+            doc_id,
+            "Las visitas se agendan de lunes a sabado, de 09:00 a 18:00. " + question,
+        )
+        session.commit()
+
+    v2 = [c for c in _chunk_rows(doc_id) if c.version == 2]
+    assert v2, "update must write chunks for the new version"
+    for chunk in v2:
+        assert (chunk.source_meta or {}).get("source_id") == "lumat-cobertura-horarios"
+
+    with SessionLocal() as session:
+        scoped = respond_node.retrieve_for_queries(
+            session,
+            [question],
+            topic_source_ids=["lumat-cobertura-horarios"],
+        )
+    assert scoped, "topic routing must still find the updated document"
+    assert {chunk["version"] for chunk in scoped} == {2}
+
+
+def test_kb4_update_accepts_explicit_source_meta(fake_embedder):
+    """S1: the caller that knows the routing metadata can set it on the new version."""
+    with SessionLocal() as session:
+        doc_id = _ingest_seeded(session, "contenido uno", source_id="lumat-servicios")
+        session.commit()
+
+    with SessionLocal() as session:
+        kb.update_document(
+            session,
+            doc_id,
+            "contenido dos",
+            source_meta={"source": "docs/kb", "source_id": "lumat-cobertura-horarios"},
+        )
+        session.commit()
+
+    v2 = [c for c in _chunk_rows(doc_id) if c.version == 2]
+    assert v2
+    for chunk in v2:
+        assert (chunk.source_meta or {}).get("source_id") == "lumat-cobertura-horarios"
+
+
 # ---------------------------------------------------------------------------
 # Topic-scope retirement guard
 # ---------------------------------------------------------------------------
