@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
+from app.chat.nodes.configured_answers import configuration_reply
 from app.chat.state import ConversationState, conversation_transcript
 from app.db import session_scope
 from app.models import Conversation, KbVisibility, Message
@@ -453,6 +454,15 @@ def respond(state: ConversationState) -> dict:
     template_reply = _render_template_reply(state)
     if template_reply is not None:
         return {"replies": [template_reply]}
+
+    # S4-S6: a value the configuration already holds is answered from it, ahead of
+    # the KB path. Two reasons: the requirement is a deterministic answer with no
+    # model call (the retrieval path would pay an embed for it), and the answer
+    # must not depend on which intent the classifier returned.
+    with session_scope() as session:
+        configured_reply = configuration_reply(session, state)
+    if configured_reply is not None:
+        return {"replies": [configured_reply]}
 
     if state.intent == "unknown":
         # Deterministic path — no LLM spend (design Cost Guardrails).
