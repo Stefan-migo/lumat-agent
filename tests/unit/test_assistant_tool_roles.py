@@ -94,7 +94,7 @@ def test_missing_role_denies_every_tool():
 
 def test_all_execution_call_sites_pass_actor_role():
     expected = {
-        "app/chat/assistant/nodes.py": {"delegation_span", "execute"},
+        "app/chat/assistant/nodes.py": {"execute"},
     }
     root = Path(__file__).resolve().parents[2]
     for filename, function_names in expected.items():
@@ -110,27 +110,3 @@ def test_all_execution_call_sites_pass_actor_role():
         assert all(any(keyword.arg == "role" for keyword in call.keywords) for call in calls)
 
 
-def test_delegated_read_scope_executes_an_allowed_tool_and_passes_role(monkeypatch):
-    from app.chat.assistant import nodes
-    from app.chat.assistant.delegation import resolve_delegation_scope
-
-    plans = iter([
-        {"kind": "tool", "tool": "customers.search", "arguments": {"query": "Ana"},
-         "summary": "Find customer", "requires_approval": False},
-        {"kind": "respond", "summary": "Found no records."},
-    ])
-    monkeypatch.setattr(nodes, "_delegation_plan", lambda *_args, **_kwargs: next(plans))
-    seen = []
-
-    def execute(*args, **kwargs):
-        seen.append(kwargs.get("role"))
-        return {"tool": args[1], "status": "completed", "result": []}
-
-    monkeypatch.setattr(nodes, "execute_tool", execute)
-    result = nodes.delegation_span(
-        {"content": "Find Ana", "thread_id": 1, "actor_role": "admin"},
-        resolve_delegation_scope("customer_records"),
-    )
-
-    assert result["evidence"]
-    assert seen == ["admin"]

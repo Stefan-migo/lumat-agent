@@ -57,6 +57,7 @@ import { Icon } from "../primitives/Icon";
 import { SearchInput } from "../primitives/SearchInput";
 import { AssistantWorkspace } from "./AssistantWorkspace";
 import { assistantFileIcon } from "./assistantFileIcon";
+import { useStickToBottom } from "../domain/useStickToBottom";
 import "./AgentChat.css";
 
 export const COMMAND_CENTER_BREAKPOINTS = {
@@ -816,6 +817,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
   };
 
   const activeConversation = messages.length > 0;
+  const stickToBottom = useStickToBottom(threadId, messages, stream, settledStream, processing, handoff, messagesExpanded);
   const isRunActive = processing || messages.some((message) => message?.status === "processing") || approval?.status === "pending";
   const toolControlsDisabled = isRunActive || toolPolicySaving;
   const webToolsAvailable = toolPolicy?.available.includes("web.search") && toolPolicy.available.includes("web.fetch");
@@ -874,7 +876,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
             if (!thread || isRunActive || uploading) return;
             for (const file of Array.from(event.dataTransfer.files)) void attach(file);
           }}>
-          <div className="assistant-chat__messages" aria-live="polite">
+          <div ref={stickToBottom.scrollRef} onScroll={stickToBottom.onScroll} className="assistant-chat__messages" aria-live="polite">
             {!thread && !loading ? (
               <div className="assistant-chat__hero assistant-chat__hero--welcome">
                 <h2>{`${new Date().getHours() < 12 ? "Buenos días" : new Date().getHours() < 20 ? "Buenas tardes" : "Buenas noches"}${userName ? `, ${userName}` : ""}`}</h2>
@@ -1145,7 +1147,6 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
                     <p className="assistant-chat__popover-footer">La selección se aplica a este hilo.</p>
                   </div>
                 </Popover></div>
-                <Button variant="tertiary" disabled title="Próximamente">@ Agente · Próximamente</Button>
                 <button
                   type="button"
                   className="assistant-chat__send"

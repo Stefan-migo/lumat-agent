@@ -673,7 +673,7 @@ def test_complex_plan_exposes_metadata_only_hook():
     assert result.kind == "complex"
     assert result.tool is None
     state = plan({"content": "complex request", "planner_output": result.model_dump()})
-    assert state["extension_hooks"] == {"panel_subagents": "implemented"}
+    assert state["extension_hooks"] == {"panel_subagents": "retired"}
     assert state["status"] == "planned"
 
 
@@ -940,3 +940,41 @@ def test_plan_llm_does_not_retry_a_provider_failure(monkeypatch):
 
     assert len(calls) == 1
     assert result["planner"]["failure"]["reason"] == "provider_call_failed"
+
+
+def test_planner_boundary_rejects_the_retired_delegate_kind():
+    """S2: the assistant delegation layer is retired; the trust boundary must not accept it again."""
+    with pytest.raises(ValidationError):
+        PlannerOutput.model_validate(
+            {
+                "kind": "delegate",
+                "sub_agent": "customer_records",
+                "arguments": {},
+                "summary": "Delegate the read to the customer-records worker.",
+            }
+        )
+
+
+def test_planner_output_has_no_sub_agent_selector():
+    assert "sub_agent" not in PlannerOutput.model_fields
+
+
+def test_assistant_graph_has_no_delegation_span_node():
+    from app.chat.assistant.graph import build_assistant_graph
+
+    assert "delegation_span" not in build_assistant_graph().get_graph().nodes
+
+
+def test_planner_prompt_does_not_advertise_delegation():
+    from pathlib import Path
+
+    prompt = Path("agent/prompts/assistant_plan.md").read_text(encoding="utf-8")
+
+    assert "delegate" not in prompt.casefold()
+
+
+def test_assistant_delegation_module_is_gone():
+    import importlib
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("app.chat.assistant.delegation")

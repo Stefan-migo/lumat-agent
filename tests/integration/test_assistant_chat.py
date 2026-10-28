@@ -863,7 +863,7 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
         assert float(request.cost_llm) == pytest.approx(0.000012)
 
 
-def test_non_delegating_turn_keeps_pre_wiring_state_and_cost_contract(client, monkeypatch):
+def test_a_plain_respond_turn_keeps_the_state_and_cost_contract(client, monkeypatch):
     _user("assistant-normal-turn-baseline", "admin")
     _login(client, "assistant-normal-turn-baseline")
     thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
@@ -890,29 +890,24 @@ def test_non_delegating_turn_keeps_pre_wiring_state_and_cost_contract(client, mo
                     return planner if not kwargs.get("stream") else iter(response_chunks)
 
     monkeypatch.setattr("app.services.llm.openai_client", lambda: Client())
-    monkeypatch.setattr(
-        "app.chat.assistant.graph.delegation_node",
-        lambda state: pytest.fail("non-delegating turn entered delegation span"),
-    )
 
     posted = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
     settled = _wait_for_run(client, thread_id, posted.json()["message"]["assistant_metadata"]["run_id"])
     request_message = next(item for item in settled["messages"] if item["author"] == "admin")
 
-    # Pre-wiring baseline: normal respond plans do not acquire delegation state or parent steps.
+    # A plain respond plan acquires no tool steps and no capped chain.
     with SessionLocal() as session:
         state = session.get(InternalChatThread, thread_id).assistant_state
         request = session.get(InternalChatMessage, request_message["id"])
     assert state["planner"] == {
         "kind": "respond",
-        "tool": None, "sub_agent": None, "arguments": {}, "summary": "planned",
+        "tool": None, "arguments": {}, "summary": "planned",
         "requires_approval": False, "follow_up": False, "skills": [], "valid": True,
         "success_criterion": None,
     }
     assert state["tool_steps"] == 0
     assert state["cap_reached"] is False
     assert state["guardrails"]["decision"] == "respond"
-    assert "delegation" not in state
     cost_calls = request_message["assistant_metadata"]["cost_calls"]
     run_id = request_message["assistant_metadata"]["run_id"]
     assert set(cost_calls) == {run_id + ":planner", run_id + ":response"}
@@ -1075,6 +1070,81 @@ def test_a_successful_tool_plan_still_executes_and_responds(client, monkeypatch)
     assert guardrails_state["decision"] == "execute"
 
 
+def test_a_customer_read_chain_persists_three_named_steps_and_events(client, monkeypatch):
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 2},
+            "summary": "list customers", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "Ana"},
+            "summary": "search customer", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.operational_history", "arguments": {"customer_id": 1},
+            "summary": "read history", "requires_approval": False,
+        }),
+    ]
+    _, _, thread_id = _turn_with_plan(client, monkeypatch, "three-customer-reads", plans)
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    assert state["tool_steps"] == 3
+    assert [item["tool"] for item in state["tool_results"]] == [
+        "customers.list", "customers.search", "customers.operational_history",
+    ]
+    assert [item["status"] for item in state["tool_results"]] == ["completed"] * 3
+    tool_events = [event for event in state["events"] if event["type"] == "tool"]
+    assert [event["tool"] for event in tool_events] == [
+        "customers.list", "customers.search", "customers.operational_history",
+    ]
+    assert [event["status"] for event in tool_events] == ["completed"] * 3
+
+
+def test_a_paged_read_chain_advances_instead_of_stalling_as_a_repeat(client, monkeypatch):
+    """S1 + S10 + S11: paging forward is progress, not the repeated call the guard stops."""
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20},
+            "summary": "first page", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20, "offset": 20},
+            "summary": "next page", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.operational_history",
+            "arguments": {"customer_id": 1, "limit": 20},
+            "summary": "history", "requires_approval": False,
+        }),
+    ]
+    _, _, thread_id = _turn_with_plan(client, monkeypatch, "paged-read-chain", plans)
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    assert state["tool_steps"] == 3
+    assert [item["tool"] for item in state["tool_results"]] == [
+        "customers.list", "customers.list", "customers.operational_history",
+    ]
+    assert [item["status"] for item in state["tool_results"]] == ["completed"] * 3
+    assert state["execution_stall"] is None
+    assert state["cap_reached"] is False
+
+
+def test_repeated_customer_read_persists_stall_without_spending_cap(client, monkeypatch):
+    repeated = json.dumps({
+        "kind": "tool", "tool": "customers.list", "arguments": {"limit": 20},
+        "summary": "list customers", "requires_approval": False, "follow_up": True,
+    })
+    _, _, thread_id = _turn_with_plan(client, monkeypatch, "repeated-customer-read", [repeated, repeated])
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    assert state["tool_steps"] == 1
+    assert state["execution_stall"] == "repeated_tool_call"
+    assert state["cap_reached"] is False
+
+
 def test_a_chained_read_only_turn_persists_tool_steps_and_cap_state(client, monkeypatch):
     plans = [
         json.dumps({
@@ -1092,6 +1162,10 @@ def test_a_chained_read_only_turn_persists_tool_steps_and_cap_state(client, monk
         state = session.get(InternalChatThread, thread_id).assistant_state
     assert state["tool_steps"] == 2
     assert state["cap_reached"] is False
+    # S3: what ran must stay auditable after the turn, without re-reading the events log.
+    assert [item["tool"] for item in state["tool_results"]] == ["customers.search", "memory.search"]
+    assert {item["status"] for item in state["tool_results"]} == {"completed"}
+    assert state["guardrails"]["decision"] == "execute"
 
 
 def test_a_chained_read_only_turn_responder_receives_combined_tool_evidence(client, monkeypatch):
@@ -1116,10 +1190,10 @@ def test_a_chained_read_only_turn_responder_receives_combined_tool_evidence(clie
 def test_a_chained_read_only_turn_persists_the_tool_step_cap(client, monkeypatch):
     plans = [
         json.dumps({
-            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": f"ana {step}"},
             "summary": "find customer", "requires_approval": False, "follow_up": True,
         })
-        for _ in range(MAX_ASSISTANT_TOOL_STEPS)
+        for step in range(MAX_ASSISTANT_TOOL_STEPS)
     ]
     _, _, thread_id = _turn_with_plan(client, monkeypatch, "capped-read-only", plans)
 

@@ -253,7 +253,7 @@ def test_s6_resume_requires_executing_stage_and_runs_once(migrated_db, monkeypat
 
 def test_s7_cap_and_blocked_cost_gate_bound_the_loop(monkeypatch):
     from app.chat.assistant import nodes as n
-    assert MAX_ASSISTANT_TOOL_STEPS == 4
+    assert MAX_ASSISTANT_TOOL_STEPS == 6
     plan = {"kind": "tool", "tool": "assistant.capabilities", "arguments": {}, "follow_up": True}
     state = {"thread_id": 7, "plan": plan, "tool_steps": MAX_ASSISTANT_TOOL_STEPS, "guardrails": {}}
     assert tool_loop_head(state) == {"cap_reached": True, "status": "completed"}
