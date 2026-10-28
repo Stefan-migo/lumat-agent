@@ -450,6 +450,7 @@ def _run_agent_turn_session(
             "tool_results": result.get("tool_results") or [],
             "tool_steps": result.get("tool_steps", 0),
             "cap_reached": result.get("cap_reached", False),
+            "execution_stall": result.get("execution_stall") or (result.get("guardrails") or {}).get("execution_stall"),
             "compaction": compaction,
             **({"verification": result["verification"]} if result.get("verification") else {}),
         })
@@ -645,14 +646,29 @@ def _paused_step_events(result: dict, thread_id: int, run_id: str, sequence: int
     return events
 
 
-def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
-    tool_result = result.get("tool_result") or {}
-    return [
-        {"type": "tool", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "tool": tool_result.get("tool"), "status": tool_result.get("status", result.get("status", "completed"))},
-        {"type": "evidence", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 1, "evidence": result.get("evidence", [])},
-        {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 2, "status": result.get("status", "completed")},
-        {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 3, "content": result.get("response", "")},
+def _execution_events(
+    result: dict, thread_id: int, run_id: str, sequence: int, *, reported: int = 0,
+) -> list[dict]:
+    tool_results = result.get("tool_results") or []
+    if tool_results:
+        tool_results = tool_results[reported:]
+    else:
+        tool_results = [result.get("tool_result") or {}]
+    events = [
+        {
+            "type": "tool", "thread_id": thread_id, "run_id": run_id,
+            "sequence": sequence + index, "tool": entry.get("tool"),
+            "status": entry.get("status", result.get("status", "completed")),
+        }
+        for index, entry in enumerate(tool_results)
     ]
+    sequence += len(events)
+    events.extend([
+        {"type": "evidence", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "evidence": result.get("evidence", [])},
+        {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 1, "status": result.get("status", "completed")},
+        {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 2, "content": result.get("response", "")},
+    ])
+    return events
 
 _TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending", "cancelled", "rejected"}
 
@@ -828,6 +844,7 @@ def _persist_resumed_result(thread: InternalChatThread, result: dict, run_id: st
         "tool_results": result.get("tool_results") or [],
         "tool_steps": result.get("tool_steps", 0),
         "cap_reached": result.get("cap_reached", False),
+        "execution_stall": result.get("execution_stall") or (result.get("guardrails") or {}).get("execution_stall"),
         "guardrails": result.get("guardrails", {}),
         "verification": result.get("verification"),
     })
@@ -951,7 +968,10 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         **thread.assistant_state,
         "events": [
             *(thread.assistant_state.get("events") or []),
-            *_execution_events(result, thread.id, run_id, len(thread.assistant_state.get("events") or [])),
+            *_execution_events(
+                result, thread.id, run_id, len(thread.assistant_state.get("events") or []),
+                reported=already_reported,
+            ),
         ],
     }
     session.flush()
@@ -1094,7 +1114,10 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         **thread.assistant_state,
         "events": [
             *(thread.assistant_state.get("events") or []),
-            *_execution_events(result, thread.id, run_id, len(thread.assistant_state.get("events") or [])),
+            *_execution_events(
+                result, thread.id, run_id, len(thread.assistant_state.get("events") or []),
+                reported=already_reported,
+            ),
         ],
     }
     session.flush()

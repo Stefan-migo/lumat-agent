@@ -46,7 +46,11 @@ def _wire(monkeypatch, plans):
 
 def test_s7_surplus_plans_do_not_extend_a_read_only_chain(monkeypatch):
     """The budget must cut a runaway chain at 4 executions even when plans keep coming."""
-    plans = [_plan("customers.search", follow_up=True, summary=f"s{i}") for i in range(8)]
+    plans = []
+    for step in range(8):
+        plan = json.loads(_plan("customers.search", follow_up=True, summary=f"s{step}"))
+        plan["arguments"]["query"] = f"Ana {step}"
+        plans.append(json.dumps(plan))
     _completions, handler_calls = _wire(monkeypatch, plans)
 
     final = run_assistant(thread_id=7, user_id=1, content="go", run_id="run-surplus", on_token=lambda _t: None)

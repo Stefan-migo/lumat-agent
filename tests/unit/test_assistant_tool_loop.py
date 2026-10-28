@@ -339,8 +339,11 @@ def test_cap_refuses_the_step_after_the_budget(monkeypatch):
     # One follow-up-requesting plan per allowed step, so the chain runs the whole
     # budget and only the step *after* it is refused.
     plans = [
-        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}'
-        for _ in range(MAX_ASSISTANT_TOOL_STEPS)
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": f"Ana {step}"},
+            "summary": "Find Ana", "requires_approval": False, "follow_up": True,
+        })
+        for step in range(MAX_ASSISTANT_TOOL_STEPS)
     ]
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
@@ -544,6 +547,52 @@ def test_read_only_tool_with_follow_up_still_chains():
 
     assert result["status"] == "planned"
     assert _after_tool_loop(result) == "plan_llm"
+
+
+def test_identical_repeated_tool_plan_stops_and_records_stall():
+    state = _tool_state(
+        tool_steps=1,
+        tool_results=[{"tool": "customers.search", "arguments": {"query": "Ana"}, "status": "completed"}],
+        plan={**_tool_state()["plan"], "follow_up": True},
+    )
+
+    result = guardrails(state)
+
+    assert result["execution_stall"] == "repeated_tool_call"
+    assert result["plan"]["kind"] == "respond"
+    assert result["status"] == "responding"
+
+
+def test_advanced_tool_plan_continues_even_with_prior_tool_results():
+    state = _tool_state(
+        tool_steps=1,
+        tool_results=[{"tool": "customers.search", "arguments": {"query": "Ana"}, "status": "completed"}],
+        plan={"kind": "tool", "tool": "memory.search", "arguments": {"query": "Ana"}, "follow_up": True},
+    )
+
+    assert guardrails(state)["status"] == "executing"
+    assert tool_loop_head(state)["status"] == "planned"
+
+
+def test_customer_search_offset_pages_forward_and_omission_keeps_first_page(monkeypatch):
+    from app.chat.assistant.tools.registry import SearchArgs, _search_customers
+
+    def page(_session, _query, limit):
+        return [SimpleNamespace(id=index, name=f"Customer {index}", state="active") for index in range(limit)]
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.customers.search_customers", page)
+
+    first = _search_customers(None, SearchArgs(limit=2))
+    second = _search_customers(None, SearchArgs(limit=2, offset=2))
+
+    assert first == [
+        {"id": 0, "name": "Customer 0", "state": "active"},
+        {"id": 1, "name": "Customer 1", "state": "active"},
+    ]
+    assert second == [
+        {"id": 2, "name": "Customer 2", "state": "active"},
+        {"id": 3, "name": "Customer 3", "state": "active"},
+    ]
 
 
 def test_step_two_write_plan_gets_its_own_approval(monkeypatch):

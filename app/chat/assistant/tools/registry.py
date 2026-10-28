@@ -55,6 +55,7 @@ class SearchArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str | None = Field(default=None, max_length=200)
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+    offset: int = Field(default=0, ge=0, le=10_000)
 
 
 class QueryArgs(BaseModel):
@@ -328,9 +329,10 @@ def _search_customers(session, args: SearchArgs):
         return item
 
     fields = ("id", "name", "state")
+    rows = customers.search_customers(session, args.query, args.limit + args.offset)
     return [
         {field: json_value(getattr(row, field)) for field in fields}
-        for row in customers.search_customers(session, args.query, args.limit)
+        for row in rows[args.offset : args.offset + args.limit]
     ]
 
 
@@ -805,8 +807,8 @@ class ToolDefinition:
 
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "assistant.capabilities": ToolDefinition("assistant.capabilities", CapabilitiesArgs, True, _assistant_capabilities, "List the assistant's own available tools and their purpose.", tier="default"),
-    "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers, "Search customer records.", tier="default"),
-    "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers, "List customer records.", tier="default"),
+    "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers, "Search customer records. Use offset to page forward through results.", tier="default"),
+    "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers, "List customer records. Use offset to page forward through results.", tier="default"),
     "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations, "Search panel conversations.", tier="default"),
     "conversations.list": ToolDefinition("conversations.list", QueryArgs, True, _search_conversations, "List panel conversations.", tier="default"),
     "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments, "List upcoming appointments.", tier="default"),

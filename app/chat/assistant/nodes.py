@@ -579,6 +579,21 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
     validated_skills = _validated_skills(state)
     tool_name = plan_data.get("tool")
+    prior_results = state.get("tool_results") or []
+    previous = prior_results[-1] if prior_results and state.get("tool_steps", 0) else {}
+    if (
+        plan_data.get("kind") == "tool"
+        and previous.get("tool") == tool_name
+        and previous.get("arguments", {}) == plan_data.get("arguments", {})
+    ):
+        return {
+            "plan": {**plan_data, "kind": "respond", "tool": None, "arguments": {}, "follow_up": False},
+            "execution_stall": "repeated_tool_call",
+            "guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True,
+                           "approval_required": False, "decision": "respond", "skills": validated_skills,
+                           "execution_stall": "repeated_tool_call"},
+            "status": "responding",
+        }
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
         return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
