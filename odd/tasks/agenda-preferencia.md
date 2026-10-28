@@ -61,20 +61,33 @@ formato que la reserva (`dd/mm/aaaa a las HH:MM`).
 
 | ID | Spec | Qué | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | S1 | Parser determinista de ventana (día / weekday / franja) en módulo propio + tests unitarios | inline | `5377a458` |
-| T2 | S1 | `scheduling.open_slots_for_assignment` acepta filtro de ventana + tests unit | inline | `5377a458` |
-| T3 | S1, S2, S4 | `booking._new_offer` lee `availability`; fallback al día más cercano con texto nuevo; `_more_slots` atiende día pedido | inline | `80fd4bcc` |
-| T4 | S3 | Precedencia: `handoff_gate` y `_after_handoff_gate` ceden ante oferta activa | inline | `ba8b1b4e` |
-| T5 | S6 | `manage._new_reschedule_offer` con ventana y formato legible | writer | `8a7c1a58` |
-| T6 | S5 | KB de horarios, corpus `simple-horario-sabado`, pin de la KB | inline | `1658e588` |
+| T1 | S1 | Parser determinista de ventana (día / weekday / franja) en módulo propio + tests unitarios | inline | `02fc240c` |
+| T2 | S1 | `scheduling.open_slots_for_assignment` acepta filtro de ventana + tests unit | inline | `bcf54727` |
+| T3 | S1, S2, S4 | `booking._new_offer` lee `availability`; fallback al día más cercano con texto nuevo; `_more_slots` atiende día pedido | inline | `b236476b` |
+| T4 | S3 | Precedencia: `handoff_gate` y `_after_handoff_gate` ceden ante oferta activa | inline | `c6f880d7` |
+| T5 | S6 | `manage._new_reschedule_offer` con ventana y formato legible | writer | `a325d36c` |
+| T6 | S5 | KB de horarios, corpus `simple-horario-sabado`, pin de la KB | inline | `0d0cc3a8`, `263bfd00`, `d03eb506`, `ec60fd19` |
 | T7 | S1–S6 | Verificación de cierre: focused + `quick`, `full` al cerrar, y corpus real-model de los escenarios de agenda | inline | — |
 
 ### Slices de revisión
 
-El presupuesto de ~400 líneas por commit se pasó en el commit 3 (acumulado 776 líneas tras `80fd4bcc`).
-Los cortes ya hechos son revisables por separado: `5377a458` es el primitivo puro (parser + filtro),
-`80fd4bcc` es el flujo de reserva, `ba8b1b4e` es la precedencia del gate, `1658e588` es contenido de KB.
-El PR se abre con esta acumulación declarada; no se reescribe historia para partirla.
+La feature se entrega como **siete PRs apilados a `main`**, cada uno ≤400 líneas:
+
+| # | Rama | Líneas | Contenido |
+|---|---|---|---|
+| 1 | `odd/agenda-preferencia-1-window-parser` | 309 | parser de ventana + tests unitarios |
+| 2 | `odd/agenda-preferencia-2-assignment-window` | 224 | filtro en `open_slots_for_assignment` + este documento |
+| 3 | `odd/agenda-preferencia-3-booking-preference` | 243 | la oferta lee `availability` y cae hacia adelante |
+| 4 | `odd/agenda-preferencia-4-offer-precedence` | 96 | precedencia del gate de reclamo |
+| 5 | `odd/agenda-preferencia-5-reschedule-window` | 212 | reagendado con ventana + `slots_for_window` compartido |
+| 6 | `odd/agenda-preferencia-6-kb-saturday` | 118 | KB del sábado + corpus + pins |
+| 7 | `odd/agenda-preferencia-7-record` | 287 | cierre del registro + evidencia real |
+
+Para armar el stack la historia se rehízo **una sola vez**: el commit original del primitivo (531 líneas) se
+partió en parser (309) y filtro (224), y los slices se reordenaron para que cada rama sea un prefijo del
+stack —el reagendado quedó antes del cambio de KB—. El árbol final es **byte-idéntico** al de la historia
+previa: `git diff` contra ella da 0 líneas. Los sellos de las corridas de evaluación se tomaron sobre la
+historia anterior, por eso `agenda-pref-4` cita `e90c5a3d`.
 
 El trabajo de T5 volvió de un writer y se revisó antes de aceptarlo: la búsqueda con fallback hacia adelante
 estaba duplicada (~30 líneas) y se extrajo a `booking.slots_for_window`, que ahora usan los dos caminos;
@@ -103,7 +116,7 @@ estaba duplicada (~30 líneas) y se extrajo a `booking.slots_for_window`, que ah
 
 ### Verificación con modelo real
 
-Corrida `agenda-pref-4` — sello `e90c5a3d`, corpus `1735bb01b90e`, KB `6fbd06e66d2a`, bot
+Corrida `agenda-pref-4` — sello `e90c5a3d` (historia previa al stack; árbol idéntico a `ec60fd19`), corpus `1735bb01b90e`, KB `6fbd06e66d2a`, bot
 `deepseek/deepseek-flash`, juez `deepseek-v4.1-flash`: **2 de 2 escenarios, ningún gate en falla**.
 
 - `simple-dia-especifico`: el cliente pidió "puedo el jueves en la mañana" y la oferta fue
