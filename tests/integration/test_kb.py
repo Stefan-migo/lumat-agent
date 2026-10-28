@@ -372,7 +372,10 @@ def test_kb_retrieve_default_project_filter_returns_all_documents(fake_embedder)
             "carlos. pero dime altiro si atienden sabado, eso es lo que necesito saber",
             ["lumat-cobertura-horarios"],
             0.1298,
-            "Fuera de horario, fines de semana y festivos",
+            # S5 (agenda-preferencia): the Saturday answer moved from "coordinated
+            # with an advisor" to the booking hours, because the agenda does sell
+            # Saturday and the old heading is the contradiction being removed.
+            "lunes a sábado",
         ),
         (
             "y eso cuanto de garantia tiene?",

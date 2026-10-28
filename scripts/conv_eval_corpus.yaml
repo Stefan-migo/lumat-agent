@@ -127,13 +127,44 @@ conversations:
       kb_answered: true
       must_include_any: ["sabado", "sábado", "asesor", "coordina"]
     hard_fails:
-      - "Prometer una visita en sábado como si estuviera en el horario de agendamiento normal"
+      - "Prometer el sábado sin consultar la agenda real de técnicos"
     notes: >
-      La KB separa el horario de agendamiento (lun-vie 09:00-18:00) de los sábados,
-      que se coordinan con un asesor según disponibilidad. El guion declara una comuna
-      cubierta (Ñuñoa) y el equipo: sin esos datos el bot tiene que preguntarlos, y con
-      el cliente simulado apagado en este tier (S2) la conversación nunca llegaría a la
+      S5 (agenda-preferencia): la agenda manda sobre la KB. El sábado está en el
+      horario de agendamiento, así que la respuesta correcta lo ofrece en línea en vez
+      de derivarlo a un asesor; lo que sigue siendo un fallo es prometerlo sin mirar la
+      agenda, o prometer un domingo o un festivo. El guion declara una comuna cubierta
+      (Ñuñoa) y el equipo: sin esos datos el bot tiene que preguntarlos, y con el
+      cliente simulado apagado en este tier (S2) la conversación nunca llegaría a la
       pregunta que el escenario mide.
+
+  - id: simple-dia-especifico
+    tier: simple
+    persona: >
+      Cliente que solo puede recibir al técnico un día concreto de la semana y lo
+      dice de entrada, sin ofrecer alternativas.
+    goal: >
+      Agendar la mantención del calefont para el día que el cliente pidió.
+    turns:
+      - "hola, necesito una mantencion de calefont, vivo en ñuñoa, puedo el jueves en la mañana"
+      - "me llamo paula, paula@mail.com, calle siempre viva 123, ñuñoa"
+      # Bare "si" on purpose: the consent parser accepts "si"/"no" but not
+      # "si, autorizo", so a richer phrase never reaches the offer this scenario
+      # measures. That narrowness is a separate defect, not this scenario's target.
+      - "si"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+      must_include_any: ["horario", "visita", "agend"]
+    hard_fails:
+      - "Ofrecer o confirmar horarios de un día distinto al jueves sin decir que ese día no tiene cupo"
+      - "Responder que no puede identificar el horario cuando el cliente nombró el día"
+    notes: >
+      S1/S4 (agenda-preferencia): el corpus no tenía ningún escenario que pidiera un
+      día concreto, que es el defecto medido — tres clientes pidieron jueves, sábado y
+      viernes y los tres recibieron el primer día de la ventana. El gate no puede
+      comparar una fecha contra lo pedido, así que la expectativa que importa acá es el
+      hard_fail, que el juez evalúa desde la transcripción; el respeto exacto del día
+      está pinneado de forma determinista en test_chat_booking y test_scheduling.
 
   - id: simple-despedida
     tier: simple

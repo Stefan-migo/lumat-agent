@@ -115,10 +115,17 @@ def test_kb_lists_seven_communes_and_coordinates_outside(repo_root):
 
 
 def test_kb_hours_and_guarantees(repo_root):
-    """S8/S9: weekday hours, weekend coordination, guarantee terms."""
+    """S8/S9 + S5 (agenda-preferencia): the agenda is bookable Monday to Saturday.
+
+    The KB used to send every Saturday to an advisor while `technician_weekly_schedule`
+    carried Saturday blocks, so the bot denied availability the agenda would honour.
+    The owner resolved the contradiction in favour of the agenda: Saturday is online,
+    Sunday and holidays stay with an advisor.
+    """
     hours = _read(repo_root, "lumat-cobertura-horarios.md")
-    assert "lunes a viernes" in hours and "09:00 a 18:00" in hours
-    assert "sábados, domingos, festivos" in hours.lower()
+    assert "lunes a sábado" in hours and "09:00 a 18:00" in hours
+    assert "sábados, domingos" not in hours.lower()
+    assert "domingos, los festivos" in hours.lower()
     guarantees = _read(repo_root, "lumat-garantias-pagos.md")
     assert "un año o hasta la próxima mantención" in guarantees
     assert "6 meses" in guarantees

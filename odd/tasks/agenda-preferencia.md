@@ -61,13 +61,45 @@ formato que la reserva (`dd/mm/aaaa a las HH:MM`).
 
 | ID | Spec | Qué | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | S1 | Parser determinista de ventana (día / weekday / franja) en módulo propio + tests unitarios | inline | — |
-| T2 | S1 | `scheduling.open_slots_for_assignment` acepta filtro de ventana + tests unit | inline | — |
-| T3 | S1, S2, S4 | `booking._new_offer` lee `availability`; fallback al día más cercano con texto nuevo; `_more_slots` atiende día pedido | inline | — |
-| T4 | S3 | Precedencia: `handoff_gate` y `_after_handoff_gate` ceden ante oferta activa | inline | — |
-| T5 | S6 | `manage._new_reschedule_offer` con ventana y formato legible | inline | — |
-| T6 | S5 | KB de horarios, corpus `simple-horario-sabado`, alineación de datos de agenda (domingo) | inline | — |
+| T1 | S1 | Parser determinista de ventana (día / weekday / franja) en módulo propio + tests unitarios | inline | `5377a458` |
+| T2 | S1 | `scheduling.open_slots_for_assignment` acepta filtro de ventana + tests unit | inline | `5377a458` |
+| T3 | S1, S2, S4 | `booking._new_offer` lee `availability`; fallback al día más cercano con texto nuevo; `_more_slots` atiende día pedido | inline | `80fd4bcc` |
+| T4 | S3 | Precedencia: `handoff_gate` y `_after_handoff_gate` ceden ante oferta activa | inline | `ba8b1b4e` |
+| T5 | S6 | `manage._new_reschedule_offer` con ventana y formato legible | writer | `8a7c1a58` |
+| T6 | S5 | KB de horarios, corpus `simple-horario-sabado`, pin de la KB | inline | `1658e588` |
 | T7 | S1–S6 | Verificación de cierre: focused + `quick`, `full` al cerrar, y corpus real-model de los escenarios de agenda | inline | — |
+
+### Slices de revisión
+
+El presupuesto de ~400 líneas por commit se pasó en el commit 3 (acumulado 776 líneas tras `80fd4bcc`).
+Los cortes ya hechos son revisables por separado: `5377a458` es el primitivo puro (parser + filtro),
+`80fd4bcc` es el flujo de reserva, `ba8b1b4e` es la precedencia del gate, `1658e588` es contenido de KB.
+El PR se abre con esta acumulación declarada; no se reescribe historia para partirla.
+
+El trabajo de T5 volvió de un writer y se revisó antes de aceptarlo: la búsqueda con fallback hacia adelante
+estaba duplicada (~30 líneas) y se extrajo a `booking.slots_for_window`, que ahora usan los dos caminos;
+`window_label` se movió junto al parser en vez de importarse como privado; y un assert que concatenaba
+`"202"` con `"-10-31"` (nunca podía coincidir con un ISO) se corrigió a `isodate not in reply`.
+
+### Verificación (T7)
+
+- `bash scripts/test.sh full` — primera corrida: **1 falla**, `tests/integration/test_kb.py:375`
+  (`test_topic_routing_recovers_named_answers_below_global_cutoff`), porque el caso parametrizado
+  esperaba el encabezado que S5 renombra. La expectativa correcta para la pregunta por el sábado pasó
+  a ser el horario de agendamiento (`"lunes a sábado"`), no el encabezado viejo. Reintento: `EXIT=0`,
+  sin `FAILED` ni `ERROR`.
+- **Aviso de proceso**: la primera corrida reportó `exit 0` porque el comando terminaba en
+  `| tail -40` sin `pipefail`, así que el código de salida era el de `tail`. Un job verde no prueba un
+  suite verde; el re-run escribe a un log y reporta `EXIT=$?` real.
+- Tests preexistentes modificados en toda la rama: exactamente dos, los dos porque la spec los cambia —
+  `test_kb_hours_and_guarantees` (regla vieja de la KB) y `test_the_slot_vocabulary_is_closed` (el
+  vocabulario cerrado gana `momento`). Ninguna aserción preexistente se borró ni se debilitó.
+- Corpus: **no existía ningún escenario que pidiera un día concreto** — el defecto medido no tenía
+  guarda. Se agregó `simple-dia-especifico` (tier simple, con hard_fail sobre ofrecer otro día sin
+  avisar) y se actualizaron los dos pins de conteo (14 → 15 escenarios, simple 5 → 6).
+- Entorno de la corrida real: KB sembrada (4 documentos, 22 chunks) y un técnico con weekly schedule
+  lunes a sábado 09:00–18:00. `--reset` trunca `technician_availability` pero preserva el weekly
+  schedule, así que `ensure_horizon` vuelve a materializar los bloques.
 
 ## Log
 
