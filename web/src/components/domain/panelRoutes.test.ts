@@ -17,7 +17,6 @@ describe('panel routes', () => {
     expect(isDetailRoute({ view: 'kb', kbDocId: 3 })).toBe(true);
     expect(isDetailRoute({ view: 'agenda', appointmentId: 9 })).toBe(true);
     expect(isDetailRoute({ view: 'projects', projectSlug: 'ops' })).toBe(true);
-    expect(isDetailRoute({ view: 'planning-sessions', planningSessionSlug: 'review' })).toBe(true);
     expect(isDetailRoute({ view: 'chat', projectSlug: 'ops', threadId: 4 })).toBe(false);
   });
 
@@ -36,7 +35,7 @@ describe('panel routes', () => {
         projects: '/panel/app/projects',
     });
     expect(Object.keys(PANEL_ROUTES)).toEqual([
-        'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'chatbot-metrics', 'users', 'profile', 'projects', 'planning-sessions',
+        'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'chatbot-metrics', 'users', 'profile', 'projects',
     ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
@@ -119,12 +118,9 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/automation-rules/12')).toEqual({ view: 'dashboard' });
   });
 
-  it('builds and parses planning session routes', () => {
-    expect(parsePanelPath('/panel/app/planning-sessions')).toEqual({ view: 'planning-sessions' });
-    expect(parsePanelPath('/panel/app/planning-sessions/budget-review-8')).toEqual({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' });
-    expect(pathForRoute({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' })).toBe('/panel/app/planning-sessions/budget-review-8');
-    expect(pathForRoute({ view: 'planning-sessions', projectSlug: 'project a' })).toBe('/panel/app/planning-sessions?proyecto=project%20a');
-    expect(parsePanelPath('/panel/app/planning-sessions?proyecto=ops')).toEqual({ view: 'planning-sessions', projectSlug: 'ops' });
+  it('falls back for retired planning-session routes', () => {
+    expect(parsePanelPath('/panel/app/planning-sessions')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/planning-sessions/budget-review-8')).toEqual({ view: 'dashboard' });
   });
 
   it('keeps project and thread chat deep links URL-addressable', () => {
@@ -134,19 +130,17 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/chat?thread_id=4')).toEqual({ view: 'chat', threadId: 4 });
   });
 
-  it('round-trips context and planning workspace tab selectors with thread precedence', () => {
+  it('round-trips context and history workspace selectors with thread precedence', () => {
     expect(pathForRoute({ view: 'chat', contextProjectSlug: 'ops' })).toBe('/panel/app/chat?context=ops');
     expect(parsePanelPath('/panel/app/chat?context=ops')).toEqual({ view: 'chat', contextProjectSlug: 'ops' });
-    expect(pathForRoute({ view: 'chat', planningSlug: 'budget-review' })).toBe('/panel/app/chat?planning=budget-review');
-    expect(parsePanelPath('/panel/app/chat?planning=budget-review')).toEqual({ view: 'chat', planningSlug: 'budget-review' });
-    expect(pathForRoute({ view: 'chat', sessionsProjectSlug: 'ops' })).toBe('/panel/app/chat?sessions=ops');
-    expect(parsePanelPath('/panel/app/chat?sessions=ops')).toEqual({ view: 'chat', sessionsProjectSlug: 'ops' });
-    expect(parsePanelPath('/panel/app/chat?planning=plan&history=old&sessions=ops')).toEqual({ view: 'chat', planningSlug: 'plan' });
-    expect(parsePanelPath('/panel/app/chat?history=old&sessions=ops')).toEqual({ view: 'chat', historyProjectSlug: 'old' });
-    expect(parsePanelPath('/panel/app/chat?planning=budget-review&sessions=ops')).toEqual({ view: 'chat', planningSlug: 'budget-review' });
+    expect(pathForRoute({ view: 'chat', historyProjectSlug: 'ops' })).toBe('/panel/app/chat?history=ops');
+    expect(parsePanelPath('/panel/app/chat?history=ops')).toEqual({ view: 'chat', historyProjectSlug: 'ops' });
+    expect(parsePanelPath('/panel/app/chat?planning=plan&history=old&sessions=ops')).toEqual({ view: 'chat', historyProjectSlug: 'old' });
+    expect(parsePanelPath('/panel/app/chat?sessions=ops')).toEqual({ view: 'chat' });
+    expect(parsePanelPath('/panel/app/chat?planning=plan&sessions=ops')).toEqual({ view: 'chat' });
     expect(parsePanelPath('/panel/app/chat?thread_id=7&context=ops&planning=plan')).toEqual({ view: 'chat', threadId: 7 });
     expect(parsePanelPath('/panel/app/chat?context=ops&planning=plan')).toEqual({ view: 'chat', contextProjectSlug: 'ops' });
-    expect(pathForRoute({ view: 'chat', threadId: 7, contextProjectSlug: 'ops', planningSlug: 'plan' })).toBe('/panel/app/chat?thread_id=7');
+    expect(pathForRoute({ view: 'chat', threadId: 7, contextProjectSlug: 'ops' })).toBe('/panel/app/chat?thread_id=7');
   });
 
   it('falls back to dashboard for legacy automation detail paths', () => {

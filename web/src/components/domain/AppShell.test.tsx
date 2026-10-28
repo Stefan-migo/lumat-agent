@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import type { User } from '../../types';
 import { realtimeClient } from '../../realtime';
+import { ToastProvider } from '../primitives/Toast';
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
@@ -36,7 +37,163 @@ function headerActions(container: HTMLElement) {
   return within(container.querySelector('.panel-shell__header-actions') as HTMLElement);
 }
 
+async function finishBackgroundRun(permission: NotificationPermission, outcome: 'completed' | 'failed') {
+  window.history.replaceState({}, '', '/panel/app/clients');
+  const requestPermission = vi.fn();
+  const webNotification = vi.fn();
+  class TestNotification {
+    constructor(title: string, options?: NotificationOptions) {
+      webNotification(title, options);
+    }
+  }
+  Object.defineProperty(TestNotification, 'permission', { value: permission });
+  Object.defineProperty(TestNotification, 'requestPermission', { value: requestPermission });
+  vi.stubGlobal('Notification', TestNotification);
+
+  let activeRunRequests = 0;
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const path = new URL(String(input), 'http://localhost').pathname;
+    if (path === '/panel/api/chat/active-runs') {
+      activeRunRequests += 1;
+      return new Response(JSON.stringify({ active_runs: activeRunRequests === 1 ? [{
+        thread_id: 42,
+        run_id: 'run-background',
+        title: 'Hilo de fondo',
+        proyecto: 'default',
+        agent: 'assistant',
+        stage: 'streaming',
+        updated_at: null,
+      }] : [] }), { status: 200 });
+    }
+    if (path === '/panel/api/chat/threads/42') {
+      return new Response(JSON.stringify({
+        thread: { id: 42, title: 'Hilo de fondo', status: 'open', assistant_state: { execution_status: outcome } },
+        messages: [],
+      }), { status: 200 });
+    }
+    if (path === '/panel/api/clients') return new Response(JSON.stringify({ clients: [] }), { status: 200 });
+    if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+    return new Response('{}', { status: 200 });
+  });
+
+  render(<ToastProvider><AppShell user={admin} /></ToastProvider>);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5_000);
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  // A live counter, not a snapshot: a captured number would assert the same value forever.
+  return { requestPermission, webNotification, activeRunRequests: () => activeRunRequests };
+}
+
+describe('AppShell run alerts after an idle gap', () => {
+  it('still alerts for a run that ends after the shell sat idle with no active runs', async () => {
+    vi.useFakeTimers();
+    try {
+      window.history.replaceState({}, '', '/panel/app/clients');
+      let activeRunRequests = 0;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        const path = new URL(String(input), 'http://localhost').pathname;
+        if (path === '/panel/api/chat/active-runs') {
+          activeRunRequests += 1;
+          // Nothing, nothing, a run appears, then it is gone.
+          const snapshot = activeRunRequests === 3
+            ? [{ thread_id: 77, run_id: 'run-late', title: 'Hilo tardío', proyecto: 'default', agent: 'assistant', stage: 'streaming', updated_at: null }]
+            : [];
+          return new Response(JSON.stringify({ active_runs: snapshot }), { status: 200 });
+        }
+        if (path === '/panel/api/chat/threads/77') {
+          return new Response(JSON.stringify({
+            thread: { id: 77, title: 'Hilo tardío', status: 'open', assistant_state: { execution_status: 'completed' } },
+            messages: [],
+          }), { status: 200 });
+        }
+        if (path === '/panel/api/clients') return new Response(JSON.stringify({ clients: [] }), { status: 200 });
+        if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+        return new Response('{}', { status: 200 });
+      });
+
+      render(<ToastProvider><AppShell user={admin} /></ToastProvider>);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      // Two idle heartbeats before the run ever appears.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40_000);
+      });
+      expect(activeRunRequests).toBeGreaterThanOrEqual(3);
+      expect(document.querySelector('.toast')).toBeNull();
+
+      // The run starts while idle and then disappears.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const toast = document.querySelector('.toast');
+      expect(toast).toHaveTextContent('Hilo tardío');
+      expect(toast).toHaveClass('toast--success');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('AppShell (T6.4)', () => {
+  it('alerts when a background run disappears without requesting notification permission', async () => {
+    vi.useFakeTimers();
+    try {
+      const { requestPermission, webNotification, activeRunRequests } = await finishBackgroundRun('default', 'failed');
+      expect(activeRunRequests()).toBe(2);
+      const toast = document.querySelector('.toast')!;
+      expect(toast).toHaveTextContent('Hilo de fondo');
+      expect(toast).toHaveClass('toast--danger');
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(webNotification).not.toHaveBeenCalled();
+      // An idle panel keeps a slow heartbeat instead of going silent, so a run that
+      // starts elsewhere can still be seen to end.
+      for (let round = 0; round < 3; round += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(20_000);
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      }
+      expect(activeRunRequests()).toBeGreaterThan(2);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('emits a web notification when permission was already granted', async () => {
+    vi.useFakeTimers();
+    try {
+      const { requestPermission, webNotification } = await finishBackgroundRun('granted', 'completed');
+      const toast = document.querySelector('.toast')!;
+      expect(toast).toHaveTextContent('Hilo de fondo');
+      expect(toast).toHaveClass('toast--success');
+      expect(webNotification).toHaveBeenCalledWith('Asistente Lumat', { body: expect.stringContaining('Hilo de fondo') });
+      expect(requestPermission).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+
   it('shows the authenticated user (username + role) and the app name', () => {
     const { container } = render(<AppShell user={admin} />);
     expect(sidebar(container).getByLabelText('Lumat, panel operativo').querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/app/brand/lumat-logo.png');
@@ -80,7 +237,6 @@ describe('AppShell (T6.4)', () => {
        expect(within(drawer).getByRole('button', { name: label })).toBeInTheDocument();
      }
      expect(within(drawer).queryByRole('button', { name: 'Proyectos' })).not.toBeInTheDocument();
-     expect(within(drawer).queryByRole('button', { name: 'Sesiones de planning' })).not.toBeInTheDocument();
     for (const label of ['Notificaciones', 'Notificaciones push', 'Casos', 'Dashboard avanzado']) {
       expect(within(drawer).queryByRole('button', { name: label })).not.toBeInTheDocument();
     }

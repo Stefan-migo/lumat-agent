@@ -79,6 +79,101 @@ describe("AgentChat", () => {
   });
   const toolToggle = (name: string) => document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
 
+  it("reattaches to the processing run on mount and renders its final response", async () => {
+    const run = "run-reconnect";
+    const streamUrl = `/panel/api/chat/threads/4/stream?run_id=${run}`;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    let threadReads = 0;
+    let sendFinalResponse: () => void = () => undefined;
+    // Once the stream closes, openStream reloads the persisted thread.
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === streamUrl) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            sendFinalResponse = () => {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                type: "response",
+                thread_id: 4,
+                run_id: run,
+                sequence: 0,
+                content: "Respuesta final recuperada",
+              })}\n\n`));
+              controller.close();
+            };
+          },
+        });
+        return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      }
+      threadReads += 1;
+      return jsonResponse(threadReads === 1
+        ? {
+            thread: { ...makeThread(), active_run_id: run, assistant_state: { live: { run_id: run, status: "processing" } } },
+            messages: [{
+              id: 1,
+              author: "admin",
+              content: "Consulta pendiente",
+              status: "processing",
+              assistant_metadata: { run_id: run },
+            }],
+          }
+        : {
+            thread: { ...makeThread(), active_run_id: run },
+            messages: [{
+              id: 2,
+              author: "agent",
+              content: "Respuesta final recuperada",
+              status: "processed",
+              assistant_metadata: { run_id: run },
+            }],
+          });
+    });
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByRole("article", { name: "El agente está trabajando" })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input) === streamUrl)).toHaveLength(1));
+    await act(async () => sendFinalResponse());
+    expect(await screen.findByText("Respuesta final recuperada")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(streamUrl, { credentials: "include" });
+  });
+
+  it("does not reattach to a settled completed run", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy")
+        ? jsonResponse(policy())
+        : jsonResponse({
+            thread: { ...makeThread(), active_run_id: "run-complete", assistant_state: { execution_status: "completed" } },
+            messages: [{
+              id: 1,
+              author: "admin",
+              content: "Consulta terminada",
+              status: "processed",
+              assistant_metadata: { run_id: "run-complete" },
+            }],
+          }),
+    );
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByText("Consulta terminada")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/stream?"))).toBe(false);
+  });
+
+  it("does not open a stream for an empty thread", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).endsWith("/tool-policy")
+        ? jsonResponse(policy())
+        : jsonResponse({ thread: makeThread(), messages: [] }),
+    );
+
+    render(<AgentChat threadId={4} />);
+
+    expect(await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/stream?"))).toBe(false);
+  });
+
   it("keeps the desktop welcome greeting and original copy", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ threads: [] }));
@@ -111,7 +206,7 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
   });
 
@@ -121,7 +216,7 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     await screen.findByRole("heading", { name: "¿En qué trabajamos hoy?" });
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
   });
 
@@ -233,7 +328,7 @@ describe("AgentChat", () => {
       }),
     );
     render(<AgentChat threadId={4} />);
-    await screen.findByRole("button", { name: "Planificar" });
+    await screen.findByRole("button", { name: /detener ejecución/i });
     fireEvent.click(screen.getByRole("button", { name: "+" }));
     await waitFor(() => expect(toolToggle("Buscar en la web")).not.toBeNull());
     expect(toolToggle("Buscar en la web")).toBeDisabled();
@@ -293,7 +388,6 @@ describe("AgentChat", () => {
     window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
     const available = {
       project_files: [{ id: 12, filename: "manual.pdf", content_type: "application/pdf", size: 100 }],
-      planning_sessions: [{ slug: "plan-1", topic: "Plan de invierno", status: "closed" }],
       skills: [{ name: "local-skill", description: "Local" }],
     };
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -307,7 +401,7 @@ describe("AgentChat", () => {
           const body = JSON.parse(String(init.body));
           return jsonResponse({ resources: body, available, inherited: false });
         }
-        return jsonResponse({ resources: { project_files: [], planning_sessions: [], skills: [] }, available, inherited: true });
+        return jsonResponse({ resources: { project_files: [], skills: [] }, available, inherited: true });
       }
       return jsonResponse({ thread: makeThread(), messages: [] });
     });
@@ -318,7 +412,6 @@ describe("AgentChat", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Recursos del proyecto/ }));
 
     const fileToggle = await screen.findByRole("checkbox", { name: "manual.pdf" });
-    expect(screen.getByRole("checkbox", { name: "Plan de invierno" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "local-skill" })).toBeInTheDocument();
     expect(fileToggle).not.toBeChecked();
 
@@ -328,7 +421,7 @@ describe("AgentChat", () => {
       "/panel/api/chat/threads/4/resources",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ project_files: [12], planning_sessions: [], skills: [] }),
+        body: JSON.stringify({ project_files: [12], skills: [] }),
       }),
     ));
   });
@@ -349,10 +442,9 @@ describe("AgentChat", () => {
     render(<AgentChat threadId={4} />);
 
     expect(await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ })).toBeInTheDocument();
-    expect(screen.getByText("Consulta, planifica o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
+    expect(screen.getByText("Consulta o trabaja en tus proyectos con el asistente Lumat.")).toBeInTheDocument();
     expect(document.querySelector(".assistant-chat__hero-icon")).toBeNull();
     expect(screen.getByRole("button", { name: "+" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Planificar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Mensaje" })).toHaveAttribute("placeholder", "Escribe un mensaje al asistente…");
     expect(screen.getByRole("button", { name: "General" })).toBeInTheDocument();
@@ -1495,85 +1587,30 @@ describe("AgentChat", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("shows the active Cortex indicator and closes through the planning endpoint", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
-        thread: {
-          ...makeThread(),
-          assistant_state: {
-            cortex_session: {
-              slug: "budget-4",
-              topic: "Budget",
-              status: "active",
-            },
-          },
-        },
-        messages: [],
-      });
-      if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
-      if (url === "/panel/api/planning/sessions/budget-4/close" && init?.method === "POST") return jsonResponse({
-        session: {},
-        report: { contenido: "Report" },
-      });
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-
-    render(<AgentChat threadId={4} />);
-    expect(await screen.findByText(/Planificación activa/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /cerrar planificación/i }));
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/planning/sessions/budget-4/close",
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
-    expect(screen.getByText(/Informe de planificación:/i)).toBeInTheDocument();
-    expect(screen.getByText("Report")).toBeInTheDocument();
-  });
-
-  it("treats exact planning commands as lifecycle controls and free text as chat", async () => {
-    const onThreadOpened = vi.fn();
+  it("sends the retired planning command as ordinary chat text", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({ thread: makeThread(), messages: [] });
       if (url === "/panel/api/chat/threads/4/tool-policy") return jsonResponse(policy());
-      if (url === "/panel/api/planning/sessions" && init?.method === "POST") {
-        return jsonResponse({ session: { slug: "budget-9" }, thread_id: 9 }, 201);
-      }
       if (url === "/panel/api/chat/threads/4/messages" && init?.method === "POST") {
-        return jsonResponse({ message: { id: 2, author: "admin", content: "planning words", status: "processed" } }, 201);
+        return jsonResponse({ message: { id: 2, author: "admin", content: "/planning budget", status: "processed" } }, 201);
       }
       return jsonResponse({ threads: [] });
     });
 
-    render(<AgentChat threadId={4} onThreadOpened={onThreadOpened} />);
+    render(<AgentChat threadId={4} />);
     const composer = await screen.findByRole("textbox", { name: /mensaje/i });
     fireEvent.change(composer, { target: { value: "/planning budget" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/planning/sessions",
-        expect.objectContaining({
-          body: JSON.stringify({ topic: "budget" }),
-        }),
-      ),
-    );
-    expect(onThreadOpened).toHaveBeenCalledWith(9);
-    fireEvent.change(composer, { target: { value: "please discuss planning" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/panel/api/chat/threads/4/messages",
-        expect.objectContaining({ method: "POST" }),
-      ),
-    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/messages",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ content: "/planning budget", attachment_ids: [] }) }),
+    ));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/planning/sessions"))).toBe(false);
   });
 
-  it("switches to the session thread when a settled run persisted a planning event", async () => {
+  it("keeps the current thread open when a settled run contains a legacy planning event", async () => {
     const onThreadOpened = vi.fn();
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -1611,7 +1648,8 @@ describe("AgentChat", () => {
     fireEvent.change(composer, { target: { value: "Open the session" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
 
-    await waitFor(() => expect(onThreadOpened).toHaveBeenCalledWith(9));
+    await waitFor(() => expect(screen.getByText("Session opened")).toBeInTheDocument());
+    expect(onThreadOpened).not.toHaveBeenCalled();
   });
 
   it("resubmits a failed message in place and preserves an unsent draft", async () => {
@@ -1965,3 +2003,42 @@ describe("AgentChat", () => {
     ).toBeInTheDocument();
   });
 });
+
+  it("reattaches again after leaving the thread and coming back to it", async () => {
+    const run = "run-back";
+    const streamUrl = `/panel/api/chat/threads/4/stream?run_id=${run}`;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse({ available: [], opt_in_enabled: [], inherited: false });
+      if (url === streamUrl) {
+        // The run stays in flight for the whole test: the stream never closes.
+        return new Response(new ReadableStream<Uint8Array>({ start() {} }), {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      if (url.includes("/chat/threads/5")) {
+        return jsonResponse({ thread: { ...makeThread(5) }, messages: [] });
+      }
+      return jsonResponse({
+        thread: { ...makeThread(), active_run_id: run, assistant_state: { live: { run_id: run, status: "processing" } } },
+        messages: [{
+          id: 1,
+          author: "admin",
+          content: "Consulta pendiente",
+          status: "processing",
+          assistant_metadata: { run_id: run },
+        }],
+      });
+    });
+    const streamCalls = () => fetchMock.mock.calls.filter(([input]) => String(input) === streamUrl);
+
+    const { rerender } = render(<AgentChat threadId={4} />);
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+
+    rerender(<AgentChat threadId={5} />);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/chat/threads/5"))).toBe(true));
+
+    rerender(<AgentChat threadId={4} />);
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
+  });

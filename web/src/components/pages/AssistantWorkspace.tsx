@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrainCircuit, CalendarDays, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, getAssistantCapabilities, listActiveRuns, listChatThreads, listPlanningSessions, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
-import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, PlanningSession, Project, Role } from "../../types";
+import { BrainCircuit, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
+import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
+import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -17,21 +17,26 @@ import { PageFrame } from "../shared/PageFrame";
 import { Input } from "../primitives/Input";
 import { Textarea } from "../primitives/Textarea";
 import { Avatar } from "../primitives/Avatar";
-import { projectStatusLabel, projectStatusTone, sessionStatusLabel, sessionStatusTone } from "../shared/toneMaps";
+import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
+import { mergeWorkspaceTabs, readWorkspaceTabState, workspaceTabIdentity, writeWorkspaceTabs } from "../domain/assistantTabs";
+import type { WorkspaceTab } from "../domain/assistantTabs";
 import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
-import { PlanningSessions } from "./PlanningSessions";
 import { ThreadProjectResources } from "./ThreadResources";
 import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
-export type WorkspaceTab =
-  | { kind: "thread"; threadId: number }
-  | { kind: "planning"; slug: string }
-  | { kind: "context"; projectSlug: string }
-  | { kind: "history"; projectSlug: string }
-  | { kind: "sessions"; projectSlug: string };
+export type { WorkspaceTab } from "../domain/assistantTabs";
+
+function routeWorkspaceTabs(): WorkspaceTab[] {
+  const params = new URLSearchParams(window.location.search);
+  const threadId = Number(params.get("thread_id"));
+  if (Number.isInteger(threadId) && threadId > 0) return [{ kind: "thread", threadId }];
+  if (params.get("context")) return [{ kind: "context", projectSlug: params.get("context")! }];
+  if (params.get("history")) return [{ kind: "history", projectSlug: params.get("history")! }];
+  return [];
+}
 
 function useDesktopWorkspace() {
   const [desktop, setDesktop] = useState(() => window.matchMedia?.("(min-width: 64rem)").matches ?? window.innerWidth > 1024);
@@ -51,7 +56,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, userId, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; userId?: number; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -62,9 +67,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [search, setSearch] = useState("");
   const [expandedProjectSlug, setExpandedProjectSlug] = useState<string | null>(() => new URLSearchParams(window.location.search).get("proyecto"));
   const [projectThreads, setProjectThreads] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; threads: InternalChatThreadSummary[] }>>({});
-  const [projectSessions, setProjectSessions] = useState<Record<string, { state: "loading" | "ready" | "empty" | "error" | "denied"; sessions: PlanningSession[] }>>({});
-  const [sessionSearch, setSessionSearch] = useState<Record<string, string>>({});
-  const [expandedSessions, setExpandedSessions] = useState<Record<string, boolean>>({});
   const [historySearch, setHistorySearch] = useState<Record<string, string>>({});
   const [defaultHistoryOpen, setDefaultHistoryOpen] = useState(false);
   const [agentsExpanded, setAgentsExpanded] = useState(true);
@@ -72,11 +74,19 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [activeRuns, setActiveRuns] = useState<{ state: "loading" | "ready" | "empty" | "error"; runs: ActiveRun[] }>({ state: "loading", runs: [] });
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [threadTitles, setThreadTitles] = useState<Record<number, string>>({});
-  const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const threadId = Number(params.get("thread_id"));
-    return threadId ? [{ kind: "thread", threadId }] : params.get("context") ? [{ kind: "context", projectSlug: params.get("context")! }] : params.get("planning") ? [{ kind: "planning", slug: params.get("planning")! }] : params.get("history") ? [{ kind: "history", projectSlug: params.get("history")! }] : params.get("sessions") ? [{ kind: "sessions", projectSlug: params.get("sessions")! }] : [];
+  const [restoredWorkspace] = useState(() => {
+    const persisted = userId === undefined ? { tabs: [], activeTab: null } : readWorkspaceTabState(userId);
+    const routeTabs = routeWorkspaceTabs();
+    return {
+      tabs: mergeWorkspaceTabs(persisted.tabs, routeTabs),
+      activeTab: routeTabs[0] ?? persisted.activeTab,
+    };
   });
+  const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(restoredWorkspace.tabs);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab | null>(restoredWorkspace.activeTab);
+  useEffect(() => {
+    if (userId !== undefined) writeWorkspaceTabs(userId, openTabs, activeTab);
+  }, [activeTab, openTabs, userId]);
   const [threadListError, setThreadListError] = useState<string | null>(null);
   const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
   const [renameTarget, setRenameTarget] = useState<{ id: number; title: string | null } | null>(null);
@@ -115,9 +125,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
   const activeContextSlug = !activeThreadId ? route.get("context") || undefined : undefined;
-  const activePlanningSlug = !activeThreadId && !activeContextSlug ? route.get("planning") || undefined : undefined;
-  const activeHistorySlug = !activeThreadId && !activeContextSlug && !activePlanningSlug ? route.get("history") || undefined : undefined;
-  const activeSessionsSlug = !activeThreadId && !activeContextSlug && !activePlanningSlug && !activeHistorySlug ? route.get("sessions") || undefined : undefined;
+  const activeHistorySlug = !activeThreadId && !activeContextSlug ? route.get("history") || undefined : undefined;
   const routeProjectSlug = route.get("proyecto") || undefined;
   const panelProjectSlug = activeContextSlug ?? activeProjectSlug ?? routeProjectSlug;
   const downloadArtifact = async (artifact: AssistantArtifact) => {
@@ -175,16 +183,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     }
   };
 
-  const loadProjectSessions = async (slug: string) => {
-    setProjectSessions((current) => ({ ...current, [slug]: { state: "loading", sessions: [] } }));
-    try {
-      const result = await listPlanningSessions(slug);
-      setProjectSessions((current) => ({ ...current, [slug]: { state: result.sessions.length ? "ready" : "empty", sessions: result.sessions } }));
-    } catch (error: unknown) {
-      setProjectSessions((current) => ({ ...current, [slug]: { state: error instanceof ApiError && error.status === 403 ? "denied" : "error", sessions: [] } }));
-    }
-  };
-
   const loadDefaultThreads = async () => {
     setDefaultThreads({ state: "loading", threads: [] });
     try {
@@ -219,13 +217,11 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   useEffect(() => {
     const onPopState = () => {
       setLocationKey(`${window.location.pathname}${window.location.search}`);
-      const threadId = Number(new URLSearchParams(window.location.search).get("thread_id"));
-      const params = new URLSearchParams(window.location.search);
-      if (threadId) setOpenTabs((current) => current.some((tab) => tab.kind === "thread" && tab.threadId === threadId) ? current : [...current, { kind: "thread", threadId }]);
-      else if (params.get("context")) setOpenTabs((current) => current.some((tab) => tab.kind === "context" && tab.projectSlug === params.get("context")) ? current : [...current, { kind: "context", projectSlug: params.get("context")! }]);
-      else if (params.get("planning")) setOpenTabs((current) => current.some((tab) => tab.kind === "planning" && tab.slug === params.get("planning")) ? current : [...current, { kind: "planning", slug: params.get("planning")! }]);
-      else if (params.get("history")) setOpenTabs((current) => current.some((tab) => tab.kind === "history" && tab.projectSlug === params.get("history")) ? current : [...current, { kind: "history", projectSlug: params.get("history")! }]);
-      else if (params.get("sessions")) setOpenTabs((current) => current.some((tab) => tab.kind === "sessions" && tab.projectSlug === params.get("sessions")) ? current : [...current, { kind: "sessions", projectSlug: params.get("sessions")! }]);
+      const routeTab = routeWorkspaceTabs()[0];
+      if (routeTab) {
+        setActiveTab(routeTab);
+        setOpenTabs((current) => mergeWorkspaceTabs(current, [routeTab]));
+      }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -245,32 +241,36 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
-  const navigateToTab = (tab: WorkspaceTab) => {
+  const navigateToTab = (tab: WorkspaceTab, replace = false) => {
     const thread = tab.kind === "thread" ? [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === tab.threadId) : undefined;
     const target = tab.kind === "thread"
       ? pathForRoute({ view: "chat", ...((thread?.proyecto ?? routeProjectSlug) ? { projectSlug: thread?.proyecto ?? routeProjectSlug } : {}), threadId: tab.threadId })
       : tab.kind === "context"
         ? pathForRoute({ view: "chat", contextProjectSlug: tab.projectSlug })
-        : tab.kind === "planning"
-          ? pathForRoute({ view: "chat", planningSlug: tab.slug })
-          : tab.kind === "history" ? pathForRoute({ view: "chat", historyProjectSlug: tab.projectSlug }) : pathForRoute({ view: "chat", sessionsProjectSlug: tab.projectSlug });
-    window.history.pushState({}, "", target);
+        : pathForRoute({ view: "chat", historyProjectSlug: tab.projectSlug });
+    window.history[replace ? "replaceState" : "pushState"]({}, "", target);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
+
+  useEffect(() => {
+    if (!routeWorkspaceTabs().length && activeTab && openTabs.some((tab) => workspaceTabIdentity(tab) === workspaceTabIdentity(activeTab))) {
+      navigateToTab(activeTab, true);
+    }
+  }, [activeTab, openTabs]);
 
   const closeTab = (tab: WorkspaceTab) => {
     const sameTab = (candidate: WorkspaceTab) => {
       if (candidate.kind !== tab.kind) return false;
       if (candidate.kind === "thread" && tab.kind === "thread") return candidate.threadId === tab.threadId;
-      if (candidate.kind === "planning" && tab.kind === "planning") return candidate.slug === tab.slug;
-      return (candidate.kind === "context" || candidate.kind === "history" || candidate.kind === "sessions") && (tab.kind === "context" || tab.kind === "history" || tab.kind === "sessions") && candidate.projectSlug === tab.projectSlug;
+      return (candidate.kind === "context" || candidate.kind === "history") && (tab.kind === "context" || tab.kind === "history") && candidate.projectSlug === tab.projectSlug;
     };
     const remaining = openTabs.filter((candidate) => !sameTab(candidate));
     setOpenTabs(remaining);
-    const active = tab.kind === "thread" ? tab.threadId === activeThreadId : tab.kind === "context" ? tab.projectSlug === activeContextSlug : tab.kind === "planning" ? tab.slug === activePlanningSlug : tab.kind === "history" ? tab.projectSlug === activeHistorySlug : tab.projectSlug === activeSessionsSlug;
+    const active = tab.kind === "thread" ? tab.threadId === activeThreadId : tab.kind === "context" ? tab.projectSlug === activeContextSlug : tab.projectSlug === activeHistorySlug;
     if (!active) return;
     if (remaining.length) navigateToTab(remaining[remaining.length - 1]);
     else {
+      setActiveTab(null);
       window.history.pushState({}, "", pathForRoute({ view: "chat" }));
       window.dispatchEvent(new PopStateEvent("popstate"));
     }
@@ -279,18 +279,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const navigateToHistory = (slug: string) => {
     setOpenTabs((current) => current.some((tab) => tab.kind === "history" && tab.projectSlug === slug) ? current : [...current, { kind: "history", projectSlug: slug }]);
     window.history.pushState({}, "", pathForRoute({ view: "chat", historyProjectSlug: slug }));
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
-  const navigateToPlanning = (slug: string) => {
-    setOpenTabs((current) => current.some((tab) => tab.kind === "planning" && tab.slug === slug) ? current : [...current, { kind: "planning", slug }]);
-    window.history.pushState({}, "", pathForRoute({ view: "chat", planningSlug: slug }));
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
-  const navigateToSessions = (slug: string) => {
-    setOpenTabs((current) => current.some((tab) => tab.kind === "sessions" && tab.projectSlug === slug) ? current : [...current, { kind: "sessions", projectSlug: slug }]);
-    window.history.pushState({}, "", pathForRoute({ view: "chat", sessionsProjectSlug: slug }));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
@@ -319,6 +307,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         const nextTab = openTabs.filter((tab) => tab.kind !== "thread" || tab.threadId !== deleteTarget.id).at(-1);
         if (nextTab) navigateToTab(nextTab);
         else {
+          setActiveTab(null);
           window.history.pushState({}, "", pathForRoute({ view: "chat" }));
           window.dispatchEvent(new PopStateEvent("popstate"));
         }
@@ -406,7 +395,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             {projectsData.state === "ready" && visibleProjects.length === 0 ? <EmptyState title={projects.length ? "No encontramos proyectos" : "No hay proyectos"} description={projects.length ? "Prueba con otro nombre." : "No hay espacios de proyecto registrados para mostrar."} /> : null}
             {projectsData.state === "ready" ? visibleProjects.map((project) => {
               const selected = selectedProject?.slug === project.slug;
-              return <button type="button" key={project.slug} className={`assistant-workspace__project-sheet-option${selected ? " is-selected" : ""}`} aria-pressed={selected} onClick={() => { setExpandedProjectSlug(project.slug); if (!projectSessions[project.slug]) void loadProjectSessions(project.slug); }}>
+              return <button type="button" key={project.slug} className={`assistant-workspace__project-sheet-option${selected ? " is-selected" : ""}`} aria-pressed={selected} onClick={() => { setExpandedProjectSlug(project.slug); }}>
                 <span>{project.name}</span>{selected ? <span aria-label="Seleccionado">✓</span> : null}
               </button>;
             }) : null}
@@ -415,7 +404,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <h3>{selectedProject.name}</h3>
             <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setProjectSheetOpen(false); navigateToProject(selectedProject, "context"); }}>Contexto y archivos <Icon icon={ChevronRight} size="sm" /></button>
             <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setProjectSheetOpen(false); navigateToHistory(selectedProject.slug); }}>Historial de hilos <Icon icon={ChevronRight} size="sm" /></button>
-            <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setProjectSheetOpen(false); navigateToSessions(selectedProject.slug); }}>Sesiones de planificación <Icon icon={ChevronRight} size="sm" /></button>
           </section> : null}
           <Button variant="secondary" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} size="sm" />Crear proyecto</Button>
         </div> : null}
@@ -499,7 +487,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                       className="assistant-workspace__project-select"
                       aria-label={`${expanded ? "Contraer" : "Expandir"} ${project.name}`}
                       aria-expanded={expanded}
-                      onClick={() => { setExpandedProjectSlug(expanded ? null : project.slug); if (!expanded && !projectSessions[project.slug]) void loadProjectSessions(project.slug); }}
+                      onClick={() => { setExpandedProjectSlug(expanded ? null : project.slug); }}
                     >
                       <Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
                       <Icon icon={Folder} size="sm" />
@@ -519,13 +507,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                             {projectThreads[project.slug].state === "ready" ? <GroupedThreadList projectName={project.name} threads={projectThreads[project.slug].threads} search={historySearch[project.slug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [project.slug]: value }))} onOpen={(thread) => navigateToThread(thread.id, project.slug)} onThreadAction={(thread, action) => { setThreadActionError(null); if (action === "rename") { setRenameTarget({ id: thread.id, title: thread.title }); setRenameTitle(thread.title ?? ""); } else setDeleteTarget({ id: thread.id, title: thread.title }); }} /> : null}
                             {projectThreads[project.slug].state === "error" ? <Button variant="secondary" onClick={() => void loadProjectThreads(project.slug)}>Reintentar</Button> : null}
                             <a className="assistant-workspace__view-all-history" href={pathForRoute({ view: "chat", historyProjectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToHistory(project.slug); }}>Ver todos los hilos →</a>
-                          </div> : null}
-                          <button type="button" className="assistant-workspace__history-trigger" aria-expanded={expandedSessions[project.slug] ?? false} onClick={() => { const expanded = !(expandedSessions[project.slug] ?? false); setExpandedSessions((current) => ({ ...current, [project.slug]: expanded })); if (expanded && !projectSessions[project.slug]) void loadProjectSessions(project.slug); }}><Icon icon={CalendarDays} size="sm" />Sesiones de planificación</button>
-                          {expandedSessions[project.slug] ? <div className="assistant-workspace__project-history" aria-label={`Sesiones de planificación de ${project.name}`}>
-                            {projectSessions[project.slug]?.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando sesiones de planificación" /> : null}
-                            {projectSessions[project.slug]?.state === "error" || projectSessions[project.slug]?.state === "denied" ? <><StateMessage tone="danger" role="alert" title={projectSessions[project.slug].state === "denied" ? "No tienes permiso para ver estas sesiones." : "No pudimos cargar las sesiones de planificación."} />{projectSessions[project.slug].state === "error" ? <Button variant="secondary" onClick={() => void loadProjectSessions(project.slug)}>Reintentar</Button> : null}</> : null}
-                            {projectSessions[project.slug]?.state === "empty" ? <p className="assistant-workspace__inline-empty">No hay sesiones de planificación. Este proyecto aún no tiene sesiones.</p> : null}
-                            {projectSessions[project.slug]?.state === "ready" ? <><SearchInput aria-label={`Buscar sesiones de ${project.name}`} placeholder="Buscar sesión" onSearch={(value) => setSessionSearch((current) => ({ ...current, [project.slug]: value }))} /><ul>{projectSessions[project.slug].sessions.filter((session) => session.topic.toLocaleLowerCase().includes((sessionSearch[project.slug] ?? "").trim().toLocaleLowerCase())).map((session) => <li key={session.slug} className="assistant-workspace__thread-row"><button type="button" className="assistant-workspace__thread-row-open" onClick={() => navigateToPlanning(session.slug)}><Icon icon={CalendarDays} size="sm" /><span>{session.topic}</span><Badge tone={sessionStatusTone(session.status)}>{sessionStatusLabel(session.status)}</Badge><small>Hilo {session.thread_id}</small></button></li>)}</ul>{projectSessions[project.slug].sessions.every((session) => !session.topic.toLocaleLowerCase().includes((sessionSearch[project.slug] ?? "").trim().toLocaleLowerCase())) ? <p className="assistant-workspace__inline-empty">No encontramos sesiones. Prueba con otro tema.</p> : null}<a className="assistant-workspace__view-all-history" href={pathForRoute({ view: "chat", sessionsProjectSlug: project.slug })} onClick={(event) => { event.preventDefault(); navigateToSessions(project.slug); }}>Ver todas las sesiones →</a></> : null}
                           </div> : null}
                       </nav>
                     </div>
@@ -578,13 +559,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                   <Menu label={`Acciones de ${label}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
                 </div>;
               }
-              if (tab.kind === "planning") {
-                const topic = Object.values(projectSessions).flatMap((entry) => entry.sessions).find((session) => session.slug === tab.slug)?.topic ?? tab.slug;
-                return <div className="assistant-workspace__thread-tab" key={`planning:${tab.slug}`} data-active={tab.slug === activePlanningSlug}>
-                <button type="button" aria-current={tab.slug === activePlanningSlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{topic}</button>
-                <Menu label={`Acciones de ${topic}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
-              </div>;
-              }
               if (tab.kind === "history") {
                 const project = projects.find((item) => item.slug === tab.projectSlug);
                 const label = `Historial · ${project?.name ?? tab.projectSlug}`;
@@ -592,11 +566,6 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                   <button type="button" aria-current={tab.projectSlug === activeHistorySlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{label}</button>
                   <Menu label={`Acciones de ${label}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} />
                 </div>;
-              }
-              if (tab.kind === "sessions") {
-                const project = projects.find((item) => item.slug === tab.projectSlug);
-                const label = `Sesiones · ${project?.name ?? tab.projectSlug}`;
-                return <div className="assistant-workspace__thread-tab" key={`sessions:${tab.projectSlug}`} data-active={tab.projectSlug === activeSessionsSlug}><button type="button" aria-current={tab.projectSlug === activeSessionsSlug ? "page" : undefined} onClick={() => navigateToTab(tab)}>{label}</button><Menu label={`Acciones de ${label}`} trigger="icon" items={[{ value: "close", label: "Cerrar pestaña", icon: X }]} onSelect={(value) => { if (value === "close") closeTab(tab); }} /></div>;
               }
               const id = tab.threadId;
               const thread = [...threads, ...defaultThreads.threads, ...Object.values(projectThreads).flatMap((entry) => entry.threads)].find((item) => item.id === id);
@@ -637,7 +606,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
           </div>
         </Dialog>
-        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} onOpenThread={(threadId, slug) => navigateToThread(threadId, slug)} onOpenHistory={navigateToHistory} embedded /> : activeHistorySlug ? <ProjectHistory projectSlug={activeHistorySlug} projectName={projects.find((item) => item.slug === activeHistorySlug)?.name ?? activeHistorySlug} history={projectThreads[activeHistorySlug]} search={historySearch[activeHistorySlug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [activeHistorySlug]: value }))} onOpen={(thread) => navigateToThread(thread.id, activeHistorySlug)} onThreadAction={(thread, action) => { setThreadActionError(null); if (action === "rename") { setRenameTarget({ id: thread.id, title: thread.title }); setRenameTitle(thread.title ?? ""); } else setDeleteTarget({ id: thread.id, title: thread.title }); }} onRetry={() => void loadProjectThreads(activeHistorySlug, 50)} /> : activePlanningSlug ? <PlanningSessions sessionSlug={activePlanningSlug} onOpenThread={(id) => navigateToThread(id)} onBack={(slug) => { const projectSlug = slug ?? activeProjectSlug ?? routeProjectSlug; if (projectSlug) navigateToSessions(projectSlug); else window.history.back(); }} /> : activeSessionsSlug ? <PlanningSessions projectSlug={activeSessionsSlug} onOpenSession={navigateToPlanning} onOpenThread={(id) => navigateToThread(id)} /> : children}
+        {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} onOpenThread={(threadId, slug) => navigateToThread(threadId, slug)} onOpenHistory={navigateToHistory} embedded /> : activeHistorySlug ? <ProjectHistory projectSlug={activeHistorySlug} projectName={projects.find((item) => item.slug === activeHistorySlug)?.name ?? activeHistorySlug} history={projectThreads[activeHistorySlug]} search={historySearch[activeHistorySlug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [activeHistorySlug]: value }))} onOpen={(thread) => navigateToThread(thread.id, activeHistorySlug)} onThreadAction={(thread, action) => { setThreadActionError(null); if (action === "rename") { setRenameTarget({ id: thread.id, title: thread.title }); setRenameTitle(thread.title ?? ""); } else setDeleteTarget({ id: thread.id, title: thread.title }); }} onRetry={() => void loadProjectThreads(activeHistorySlug, 50)} /> : children}
       </section>
 
       <aside

@@ -12,7 +12,8 @@ from pydantic import ValidationError
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.markup import ToolCallMarkupSanitizer
-from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
+from app.chat.assistant.planner_json import load_planner_payload
+from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.db import session_scope
@@ -444,6 +445,55 @@ def delegation_node(state: AssistantState) -> AssistantState:
     return {**result, "tool_steps": state.get("tool_steps", 0) + 1, "status": "completed"}
 
 
+# Stages where the model's own output was unusable in a way a second answer can fix. A provider or
+# instrumentation failure is not repaired by asking again: it only doubles the paid call.
+_REPAIRABLE_PLAN_STAGES = frozenset({"parse", "validation"})
+
+# The repair turn names the exact contract instead of repeating the long planning prompt: the model
+# already answered, it just wrapped the answer badly. `extra="forbid"` stays strict, so an invented
+# field has to be dropped by the model, not by the trust boundary.
+PLANNER_REPAIR_DIRECTIVE = (
+    "Your previous answer was not a usable plan. Reply with ONLY one JSON object, no prose, no code "
+    "fence, and no keys other than these: kind, tool, sub_agent, arguments, summary, "
+    "success_criterion, requires_approval, follow_up, skills. Escape every newline and tab inside a "
+    "string as \\n and \\t."
+)
+
+
+def _planner_call(messages: list[dict], state: AssistantState, call_key: str) -> tuple[str, object, dict[str, str] | None]:
+    """Run one paid planner call and read its text, keeping today's bounded diagnoses."""
+    try:
+        completion = _assistant_client().chat.completions.create(
+            model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
+            messages=messages,
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+    except Exception as exc:
+        return "", None, _planner_failure("provider_call_failed", "provider", exc)
+    try:
+        _record_usage(state, call_key, completion)
+    except Exception as exc:
+        return "", completion, _planner_failure("usage_recording_failed", "instrumentation", exc)
+    try:
+        return _completion_text(completion), completion, None
+    except Exception as exc:
+        return "", completion, _planner_failure("completion_extraction_failed", "extraction", exc)
+
+
+def _read_planner_plan(raw_text: str) -> tuple[PlannerOutput | None, bool, dict[str, str] | None]:
+    """Read one plan out of a provider answer, tolerating the payload damage seen in production."""
+    if not raw_text.strip():
+        return None, False, _planner_failure(
+            "empty_completion", "completion", ValueError("provider returned no structured planner message")
+        )
+    try:
+        raw = load_planner_payload(raw_text)
+    except json.JSONDecodeError as exc:
+        return None, False, _planner_failure("invalid_json", "parse", exc, raw_text)
+    return parse_planner_output(raw, raw_text=raw_text)
+
+
 def plan_llm(state: AssistantState) -> AssistantState:
     """Ask the configured provider for a strict plan on every production turn."""
     from app.services.prompts import load_assistant_config
@@ -463,43 +513,26 @@ def plan_llm(state: AssistantState) -> AssistantState:
         user_prompt += "\n\n" + state["cost_directive"]
     tool_images = _tool_image_parts(state)
     user_content: object = [{"type": "text", "text": user_prompt}, *tool_images] if tool_images else user_prompt
-    completion = None
-    raw_text = ""
-    diagnosis = None
-    try:
-        completion = _assistant_client().chat.completions.create(
-            model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
-            messages=[{"role": "system", "content": _effective_persona(state, config)}, {"role": "user", "content": user_content}],
-            temperature=0,
-            response_format={"type": "json_object"},
+    messages: list[dict] = [
+        {"role": "system", "content": _effective_persona(state, config)},
+        {"role": "user", "content": user_content},
+    ]
+    raw_text, completion, diagnosis = _planner_call(messages, state, "planner")
+    planner: PlannerOutput | None = None
+    valid = False
+    if diagnosis is None:
+        planner, valid, diagnosis = _read_planner_plan(raw_text)
+    if diagnosis is not None and diagnosis["stage"] in _REPAIRABLE_PLAN_STAGES:
+        # One bounded repair turn: the model already answered, it only wrapped the answer badly.
+        repair_text, _, repair_diagnosis = _planner_call(
+            [*messages, {"role": "assistant", "content": raw_text}, {"role": "user", "content": PLANNER_REPAIR_DIRECTIVE}],
+            state,
+            "planner_repair",
         )
-    except Exception as exc:
-        diagnosis = _planner_failure("provider_call_failed", "provider", exc)
-
-    if diagnosis is None:
-        try:
-            _record_usage(state, "planner", completion)
-        except Exception as exc:
-            diagnosis = _planner_failure("usage_recording_failed", "instrumentation", exc)
-
-    if diagnosis is None:
-        try:
-            raw_text = _completion_text(completion)
-        except Exception as exc:
-            diagnosis = _planner_failure("completion_extraction_failed", "extraction", exc)
-
-    if diagnosis is None:
-        if not raw_text.strip():
-            diagnosis = _planner_failure(
-                "empty_completion", "completion", ValueError("provider returned no structured planner message")
-            )
-        else:
-            try:
-                raw = json.loads(raw_text)
-            except json.JSONDecodeError as exc:
-                diagnosis = _planner_failure("invalid_json", "parse", exc, raw_text)
-            else:
-                planner, valid, diagnosis = parse_planner_output(raw, raw_text=raw_text)
+        if repair_diagnosis is None:
+            repair_planner, repair_valid, repair_diagnosis = _read_planner_plan(repair_text)
+            if repair_valid:
+                planner, valid, diagnosis, raw_text = repair_planner, repair_valid, repair_diagnosis, repair_text
     if diagnosis is not None:
         _log_planner_failure(diagnosis)
         # Compatibility for older injected clients that only implement response
@@ -580,28 +613,11 @@ def memory_bootstrap(state: AssistantState) -> AssistantState:
 def _effective_tools(state) -> tuple[str, ...]:
     effective = state.get("effective")
     if effective:
-        tools = tuple(effective["tools_whitelist"])
-    else:
-        from app.services.prompts import load_assistant_config
+        return tuple(effective["tools_whitelist"])
 
-        tools = load_assistant_config(role=state.get("actor_role")).tools_whitelist
+    from app.services.prompts import load_assistant_config
 
-    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
-        return tools
-    from app.chat.assistant.tools.registry import get_tool
-
-    allowed = []
-    for name in tools:
-        if name == "memory.write" or name.startswith("planning."):
-            allowed.append(name)
-            continue
-        try:
-            definition = get_tool(name)
-        except ValueError:
-            continue
-        if not definition.write:
-            allowed.append(name)
-    return tuple(allowed)
+    return load_assistant_config(role=state.get("actor_role")).tools_whitelist
 
 
 def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
@@ -625,24 +641,12 @@ def _validated_skills(state) -> list[str]:
     return valid
 
 
-def _planning_overlay(state) -> str:
-    """The facilitator overlay, injected only while a planning session is active (S2)."""
-    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
-        return ""
-    from app.services.prompts import load as load_prompt
-
-    return load_prompt("prompts/planning_facilitator.md").strip()
-
-
 def _effective_persona(state, config) -> str:
     effective = state.get("effective") or {}
     instructions = (effective.get("instructions") or "").strip()
     parts = [config.persona]
     if instructions:
         parts.append(instructions)
-    overlay = _planning_overlay(state)
-    if overlay:
-        parts.append(overlay)
     return "\n\n".join(parts)
 
 

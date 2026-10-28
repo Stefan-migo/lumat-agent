@@ -819,3 +819,124 @@ def test_context_text_omits_recap_cue_when_compaction_did_not_rotate():
     }
 
     assert _context_text(state) == "Recent message"
+
+
+# --- Real payloads that lost a turn (threads 79 and 80 of the local main-worktree stack) ---
+
+# A prose answer inside an invented `response` field, with real newlines: `json.loads` rejected it
+# with "Invalid control character at: line 1 column 541 (char 540)".
+_THREAD_79_PAYLOAD = (
+    '{"kind":"respond","tool":null,"arguments":null,'
+    '"summary":"Sí: métricas, conversaciones con señal de falla y transcripciones.",'
+    '"requires_approval":false,"follow_up":false,"skills":[],'
+    '"response":"Sí, tengo con qué hacerla en serio: analytics.chatbot_metrics.\n\n'
+    'Y ya hay algo que mirar: últimos 30 días, 12 conversaciones."}'
+)
+
+# A valid object followed by prose: 'Extra data: line 3 column 1 (char 168)'.
+_THREAD_80_PAYLOAD = (
+    '{"kind":"respond","summary":"Confirmo que estamos en sesión de planificación.",'
+    '"requires_approval":false,"skills":["planning"]}\n\n'
+    "Sí, estamos en una sesión de planificación."
+)
+
+_STRICT_PLAN = '{"kind":"respond","arguments":{},"summary":"Listo","requires_approval":false}'
+
+
+def _sequenced_planner_client(contents):
+    """A fake provider answering `contents` in order and recording every call."""
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        content = contents[min(len(calls) - 1, len(contents) - 1)]
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))), calls
+
+
+def _planner_config(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda **_kwargs: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
+    )
+
+
+def test_plan_llm_reads_a_raw_newline_inside_a_string(monkeypatch):
+    """S7: one stray newline must not cost the turn its plan."""
+    _planner_config(monkeypatch)
+    client, calls = _sequenced_planner_client(
+        ['{"kind":"respond","arguments":{},"summary":"Línea uno\nLínea dos","requires_approval":false}']
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    result = plan_llm({"content": "Analiza el chatbot", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is True
+    assert result["plan"]["summary"] == "Línea uno\nLínea dos"
+    assert result["response"] is None
+    assert len(calls) == 1
+
+
+def test_plan_llm_reads_the_object_when_prose_follows(monkeypatch):
+    """S8: a trailing prose paragraph must not cost the turn its plan."""
+    _planner_config(monkeypatch)
+    client, calls = _sequenced_planner_client([_THREAD_80_PAYLOAD])
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    result = plan_llm({"content": "Analiza el chatbot", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is True
+    assert result["plan"]["summary"] == "Confirmo que estamos en sesión de planificación."
+    assert len(calls) == 1
+
+
+def test_plan_llm_repairs_one_invalid_plan_with_a_bounded_retry(monkeypatch):
+    """S9: the exact thread-79 payload fails validation on its invented field, then one retry fixes it."""
+    _planner_config(monkeypatch)
+    client, calls = _sequenced_planner_client([_THREAD_79_PAYLOAD, _STRICT_PLAN])
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    result = plan_llm({"content": "Analiza el chatbot", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is True
+    assert result["plan"]["summary"] == "Listo"
+    assert len(calls) == 2
+    retry_messages = calls[1]["messages"]
+    assert retry_messages[-2] == {"role": "assistant", "content": _THREAD_79_PAYLOAD}
+    assert "JSON" in retry_messages[-1]["content"]
+    assert calls[1]["response_format"] == {"type": "json_object"}
+
+
+def test_plan_llm_gives_up_after_one_repair_and_keeps_the_bounded_message(monkeypatch, caplog):
+    """S10: two bad answers degrade the turn, keep its exact message, and cost at most two calls."""
+    _planner_config(monkeypatch)
+    client, calls = _sequenced_planner_client([_THREAD_79_PAYLOAD, _THREAD_79_PAYLOAD])
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = plan_llm({"content": "Analiza el chatbot", "context": {"items": []}})
+
+    assert len(calls) == 2
+    assert result["planner"]["valid"] is False
+    assert result["planner"]["failure"]["reason"] == "planner_output_validation_failed"
+    assert result["plan"]["summary"] == "No pude planificar esa solicitud de forma segura. Inténtalo nuevamente."
+    assert caplog.records[-1].diagnosis == result["planner"]["failure"]
+
+
+def test_plan_llm_does_not_retry_a_provider_failure(monkeypatch):
+    """A provider outage is not the model's output; it must not double the paid calls."""
+    _planner_config(monkeypatch)
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        raise ConnectionError("down")
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    assert len(calls) == 1
+    assert result["planner"]["failure"]["reason"] == "provider_call_failed"

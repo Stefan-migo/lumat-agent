@@ -180,10 +180,10 @@ export function ProjectResources({
   };
   const folderMatches = (folder: ProjectFolder) => q === "" || matches(folder.name) || subtreeMatches(folder.id);
 
-  const kbState = (row: ProjectFile): { label: string; tone: "success" | "danger" | "neutral" } =>
-    row.kb_document_id != null ? { label: "En la KB", tone: "success" }
-      : row.status === "failed" ? { label: "Falló", tone: "danger" }
-        : { label: "No indexado", tone: "neutral" };
+  // Legacy rows may still point at a KB document created by the former auto-ingestion path, and
+  // deleting the file removes that document too, so the confirmation says so. Nothing else about
+  // the file's state is worth showing: uploads now always store locally and stay "ready".
+  const kbNote = (row: ProjectFile): string => (row.kb_document_id != null ? " · también en la KB" : "");
 
   const download = async (row: ProjectFile) => {
     setBusyFileId(row.id);
@@ -206,8 +206,7 @@ export function ProjectResources({
   };
 
   // Add a document straight to the project-scoped KB (POST /kb with project_id).
-  // Unlike a project file, this does not create a ProjectFile, so it only shows
-  // in the knowledge card; project files are indexed automatically instead.
+  // Project files stay local and are not indexed automatically.
   const uploadToKb = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -401,7 +400,6 @@ export function ProjectResources({
 
   const renderFile = (file: ProjectFile) => {
     if (!fileMatches(file)) return null;
-    const state = kbState(file);
     return (
       <li
         key={`file-${file.id}`}
@@ -413,7 +411,6 @@ export function ProjectResources({
         <Icon icon={fileIcon(file)} size="sm" />
         <span className="file-tree__name">{file.filename}</span>
         <span className="file-tree__size">{formatBytes(file.size)}</span>
-        <Badge tone={state.tone}>{state.label}</Badge>
         <Button variant="tertiary" aria-label={`Descargar ${file.filename}`} disabled={busyFileId === file.id} onClick={() => void download(file)}><Icon icon={Download} /></Button>
         <Button variant="tertiary" className="file-tree__danger" aria-label={`Eliminar ${file.filename}`} onClick={() => { setDeleteError(null); setDeleteTarget({ kind: "file", file }); }}><Icon icon={Trash2} /></Button>
       </li>
@@ -472,10 +469,9 @@ export function ProjectResources({
           : "ready";
   const isEmpty = loadState === "ready" && projectFiles.length === 0 && projectFolders.length === 0;
 
-  // Documents already surfaced by the file card (auto-indexed uploads) are not
-  // repeated here; this card owns what was added straight to the project KB.
-  const indexedDocIds = new Set(projectFiles.map((file) => file.kb_document_id).filter((id): id is number => id != null));
-  const directDocs = (docs.data?.docs ?? []).filter((doc) => doc.project_id === projectId && !indexedDocIds.has(doc.id));
+  // Keep every project-scoped KB document visible, including documents from
+  // the former project-file auto-ingestion path.
+  const directDocs = (docs.data?.docs ?? []).filter((doc) => doc.project_id === projectId);
   const docStatus = (doc: Doc) => (doc.active ? "activo" : "deshabilitado");
   const dq = docQuery.trim().toLowerCase();
   const filteredDocs = dq === "" ? directDocs : directDocs.filter((doc) => `${doc.title} ${doc.format} ${doc.id}`.toLowerCase().includes(dq));
@@ -543,7 +539,7 @@ export function ProjectResources({
         {docsState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conocimiento" /> : null}
         {docsState === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el conocimiento del proyecto" /><Button variant="secondary" onClick={docs.retry}>Reintentar</Button></> : null}
         {docsState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver el conocimiento del proyecto." /> : null}
-        {docsState === "empty" ? <EmptyState variant="dashed" icon={FileSearch} title="Sin documentos agregados a la KB" description="Sube un documento directo a la KB del proyecto; los archivos del proyecto se indexan solos arriba." /> : null}
+        {docsState === "empty" ? <EmptyState variant="dashed" icon={FileSearch} title="Sin documentos agregados a la KB" description="Sube un documento directo a la KB del proyecto; los archivos del proyecto se guardan localmente." /> : null}
         {docsState === "ready" ? <ul className="project-knowledge__list" aria-label="Documentos de la base de conocimiento">
           {filteredDocs.map((doc) => <li className="file-tree__row" key={doc.id}>
             <Icon icon={FileText} size="sm" />
@@ -627,7 +623,7 @@ export function ProjectResources({
             <p className="file-tree__dialog-preview-name">{deleteTarget.kind === "file" ? deleteTarget.file.filename : deleteTarget.folder.name}</p>
             <p className="file-tree__dialog-preview-meta">
               {deleteTarget.kind === "file"
-                ? `${formatBytes(deleteTarget.file.size)} · ${kbState(deleteTarget.file).label}`
+                ? `${formatBytes(deleteTarget.file.size)}${kbNote(deleteTarget.file)}`
                 : `${fileCount.get(deleteTarget.folder.id) ?? 0} archivos`}
             </p>
           </div>

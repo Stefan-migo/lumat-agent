@@ -1,4 +1,5 @@
 import hashlib
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -6,14 +7,13 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import AuditLog, KbChunk, KbDocument, KbVisibility, Project, ProjectFile, User
+from app.models import AuditLog, KbDocument, Project, ProjectFile, User
 from app.services.project_files import (
     allowed_project_file,
     create_project_folder,
     delete_project_file,
     delete_project_folder,
     get_project_file,
-    ingest_project_file,
     list_project_files,
     list_project_folders,
     move_project_file,
@@ -88,59 +88,60 @@ def test_list_orders_newest_first_and_get_scopes_project(monkeypatch, tmp_path):
     get_settings.cache_clear()
 
 
-def test_ingest_project_text_file_creates_project_scoped_internal_kb_document(fake_embedder, tmp_path):
+def test_upload_project_text_file_stays_local_without_creating_kb_document(tmp_path):
+    from fastapi import UploadFile
     from app.config import get_settings
+    from app.panel.api.routes.project_files import upload_project_file
+
     get_settings.cache_clear()
     with SessionLocal() as session:
-        owner, project = _seed_project(session, "files-ingest-text")
+        owner, project = _seed_project(session, "files-upload-local")
         content = ("Project-specific operational notes and safety instructions. " * 20).encode()
-        row = store_project_file(session, project, owner, "notes.txt", "text/plain", content)
-        doc = ingest_project_file(session, project, row, content, owner.username)
-        session.commit()
-
-        assert doc is not None
-        assert doc.project_id == project.id
-        assert doc.visibility == KbVisibility.INTERNAL
-        assert doc.content == content.decode()
-        assert row.kb_document_id == doc.id
-        chunks = list(session.scalars(select(KbChunk).where(KbChunk.document_id == doc.id)))
-        assert chunks
-        assert all(chunk.content for chunk in chunks)
-    get_settings.cache_clear()
-
-
-def test_ingest_project_image_skips_kb_and_keeps_ready_status(tmp_path):
-    from app.config import get_settings
-    get_settings.cache_clear()
-    with SessionLocal() as session:
-        owner, project = _seed_project(session, "files-ingest-image")
-        content = b"image bytes"
-        row = store_project_file(session, project, owner, "photo.png", "image/png", content)
-        assert ingest_project_file(session, project, row, content, owner.username) is None
+        response = upload_project_file(
+            project.slug,
+            UploadFile(filename="notes.txt", file=BytesIO(content), headers={"content-type": "text/plain"}),
+            folder_id=None,
+            session=session,
+            current=owner,
+        )
+        row = session.get(ProjectFile, response["file"]["id"])
+        assert response["file"]["kb_document_id"] is None
+        assert row is not None
         assert row.status == "ready"
         assert row.kb_document_id is None
+        assert Path(row.stored_path).read_bytes() == content
         assert session.scalar(select(KbDocument).where(KbDocument.project_id == project.id)) is None
-        session.rollback()
+        audit = session.query(AuditLog).filter_by(action="project_file.uploaded", entity_id=str(row.id)).one()
+        assert audit.actor == owner.username
+        assert audit.after == {"project_id": project.id, "filename": "notes.txt", "size": len(content)}
     get_settings.cache_clear()
 
 
-def test_ingest_corrupt_docx_marks_failed_and_keeps_stored_file(tmp_path):
+def test_rejected_project_file_upload_does_not_change_file_or_audit_counters(monkeypatch, tmp_path):
+    from fastapi import HTTPException, UploadFile
     from app.config import get_settings
+    from app.panel.api.routes.project_files import upload_project_file
+
+    monkeypatch.setenv("PROJECT_FILE_MAX_BYTES", "2")
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
     get_settings.cache_clear()
     with SessionLocal() as session:
-        owner, project = _seed_project(session, "files-ingest-corrupt-docx")
-        content = b"not a valid docx"
-        row = store_project_file(
-            session, project, owner,
-            "broken.docx",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            content,
-        )
-        assert ingest_project_file(session, project, row, content, owner.username) is None
-        assert row.status == "failed"
-        assert row.kb_document_id is None
-        assert Path(row.stored_path).read_bytes() == content
-        assert session.get(ProjectFile, row.id) is row
+        owner, project = _seed_project(session, "files-upload-rejected")
+        before_files = session.query(ProjectFile).count()
+        before_audits = session.query(AuditLog).count()
+        with pytest.raises(HTTPException) as error:
+            upload_project_file(
+                project.slug,
+                UploadFile(filename="notes.txt", file=BytesIO(b"too large"), headers={"content-type": "text/plain"}),
+                folder_id=None,
+                session=session,
+                current=owner,
+            )
+        assert error.value.status_code == 400
+        assert session.query(ProjectFile).count() == before_files
+        assert session.query(AuditLog).count() == before_audits
+        assert list(tmp_path.rglob("*")) == []
+        assert session.scalar(select(KbDocument).where(KbDocument.project_id == project.id)) is None
         session.rollback()
     get_settings.cache_clear()
 

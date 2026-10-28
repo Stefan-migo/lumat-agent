@@ -17,19 +17,22 @@ describe("ProjectResources", () => {
     vi.unstubAllGlobals();
   });
 
-  it("marks a file as indexed and does not repeat its KB document in the knowledge list", async () => {
-    const linkedDoc = { ...projectDoc, id: 1, title: "manual.pdf" };
-    const directDoc = { ...projectDoc, id: 3, title: "Politica interna" };
+  it("does not show a KB badge for project files and lists existing project KB documents", async () => {
+    const localFile = { ...projectFile, kb_document_id: 1 };
+    const oldPathDoc = { ...projectDoc, id: 1, title: "Manual anterior" };
+    const directDoc = { ...projectDoc, id: 4, title: "Politica interna" };
     vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(response({ files: [projectFile] }))
+      .mockResolvedValueOnce(response({ files: [localFile] }))
       .mockResolvedValueOnce(response({ folders: [] }))
-      .mockResolvedValueOnce(response({ docs: [linkedDoc, directDoc, globalDoc] }));
+      .mockResolvedValueOnce(response({ docs: [oldPathDoc, directDoc, globalDoc] }));
     renderResources("admin");
 
     expect(await screen.findByText("manual.pdf")).toBeInTheDocument();
     expect(screen.getByText("2.0 KB")).toBeInTheDocument();
-    expect((await screen.findAllByText("En la KB")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("Politica interna")).length).toBeGreaterThan(0);
+    const fileRow = screen.getByText("manual.pdf").closest("li");
+    expect(fileRow).not.toHaveTextContent("En la KB");
+    expect(await screen.findByText("Manual anterior")).toBeInTheDocument();
+    expect(screen.getByText("Politica interna")).toBeInTheDocument();
     expect(screen.queryByText("Global")).not.toBeInTheDocument();
   });
 
