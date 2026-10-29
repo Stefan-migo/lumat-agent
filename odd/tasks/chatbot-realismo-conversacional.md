@@ -213,7 +213,7 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | a15e0edb |
 | B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | 0a7914cd |
 | B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | 0a7914cd |
-| B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | |
+| B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | 4871dc62 |
 | B4 | S11 | `state.booking` ignores appointments that already started | inline | |
 | B5 | S12 | `reagendar_visita` routes to `manage` | inline | |
 | C3 | S13 | One question per turn after a KB deviation | inline | |
@@ -303,6 +303,20 @@ Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/
 tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
 64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
 stays unclear and gets one confirmation instead of being guessed.
+
+**L12** — B3 done (`4871dc62`). RED reproduced the loop on the harness: the same three-slot page came
+back verbatim and the conversation never left `state=bot`. Two changes: `_new_offer` takes
+`unchanged_against` and refuses to persist a page identical to the one on screen, and the rebuild path
+carries `attempts + 1` instead of restarting at zero, so `MAX_INVALID_REPLIES` is finally reachable and
+the second unservable preference hands off with `booking_unclear` (the reply the generic handoff text
+provides, since no reply key invented here). A first attempt placed `attempts` after its use and the
+integration run caught an `UnboundLocalError` across three tests, which is exactly why the DB tier runs
+this file: the unit tier stubs the session and never enters `booking()`.
+
+Verified: `bash scripts/test.sh db tests/integration/test_chat_booking.py` → exit 0 (all 24 cases,
+including the six pre-existing window/offer cases); `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_handoff.py` →
+exit 0.
 
 **L11** — owner decisions, verbatim: `1. push y abre prs. el merge lo guardamos para despues.` and
 `2. c1. salto en silencio al bookign con el consentimiento ya dado.`
