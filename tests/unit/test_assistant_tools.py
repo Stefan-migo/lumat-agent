@@ -325,7 +325,11 @@ def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncatio
         lambda **_kwargs: SimpleNamespace(tools_whitelist=whitelist),
     )
     result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
-    names = [line.split(" — ", 1)[0] for line in result["capabilities"].splitlines()]
+    names = [
+        line.split(" — ", 1)[0]
+        for line in result["capabilities"].splitlines()
+        if " — " in line
+    ]
 
     assert result["tool_count"] == len(whitelist)
     assert result["tool_count"] > MAX_ITEMS
@@ -344,6 +348,50 @@ def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypa
     assert result["tool_count"] == 1
     assert "customers.search" in result["capabilities"]
     assert "project.list" not in result["capabilities"]
+
+
+def test_assistant_capabilities_omits_opt_in_tools_outside_effective_whitelist():
+    result = execute_tool(
+        SimpleNamespace(), "assistant.capabilities", {},
+        whitelist={"assistant.capabilities", "customers.search"}, role="admin",
+    )
+
+    assert result["status"] == "completed"
+    assert result["result"]["tool_count"] == 2
+    assert "web.search" not in result["result"]["capabilities"]
+    assert "project.create" not in result["result"]["capabilities"]
+    assert "Available in this turn's scope" in result["result"]["capabilities"]
+
+
+def test_assistant_capabilities_lists_enabled_opt_in_tool():
+    result = execute_tool(
+        SimpleNamespace(), "assistant.capabilities", {},
+        whitelist={"assistant.capabilities", "customers.search", "web.search"}, role="admin",
+    )
+
+    assert result["status"] == "completed"
+    assert result["result"]["tool_count"] == 3
+    assert "web.search" in result["result"]["capabilities"]
+
+
+def test_assistant_capabilities_without_whitelist_keeps_global_catalog_shape(monkeypatch):
+    assert get_tool("assistant.capabilities").tier == "default"
+    assert get_tool("assistant.capabilities").read_only is True
+    whitelist = load_assistant_config().tools_whitelist
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda **_kwargs: SimpleNamespace(tools_whitelist=whitelist),
+    )
+
+    result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
+
+    assert set(result) == {"tool_count", "capabilities"}
+    assert result["tool_count"] == len(whitelist)
+    assert "web.search" in result["capabilities"]
+    # A caller with no turn context reports the global catalog, so it must not claim
+    # the list is scoped to this turn: that header would be a lie in exactly the case
+    # where the list is widest.
+    assert "turn's scope" not in result["capabilities"]
 
 
 def test_memory_kpis_is_not_a_registered_tool():
