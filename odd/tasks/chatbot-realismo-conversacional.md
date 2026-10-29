@@ -304,6 +304,13 @@ tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price
 64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
 stays unclear and gets one confirmation instead of being guessed.
 
+**L16** — known cosmetic defect: the C3 commit message (`f6f088f2`) lost the literal
+`` `_pending` `` because the message was passed to `git commit -m` inside double quotes and the
+backticks were executed by the shell. The code and the tests are unaffected and L15 describes the
+behaviour correctly. Not amended: rewriting a pushed commit means a force-push, which needs the
+owner's authorization. Rule for the rest of this feature: commit messages go through `git commit -F
+<file>`, never `-m` with backticks.
+
 **L15** — C3 done, on a new stacked branch `odd/chatbot-realismo-flujo` (base
 `odd/chatbot-realismo-conversacional`) because #741 already carries 1250 authored lines and stopped
 being reviewable. RED pinned the routing decision: `_after_research_triage` returned `capture` for a KB
