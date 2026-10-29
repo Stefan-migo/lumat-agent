@@ -119,7 +119,16 @@ _SKIP_WORDS = (
 _REFUSAL_FIELDS: tuple[tuple[str, str], ...] = (
     ("no te voy a dar mi correo", "email"),
 )
-_YES_WORDS = ("si", "sí", "yes", "ok", "claro", "confirmo", "acepto")
+_YES_WORDS = (
+    "si", "sí", "yes", "ok", "oka", "claro", "dale",
+)
+# S7 (chatbot-realismo-conversacional): the explicit first-person verbs are what a
+# customer says when they decide. They are accepted inside a short sentence, which
+# is what production #23 never got. The bare affirmatives above are accepted only
+# when the whole message is just that, because a false positive here writes
+# personal data without consent — the risk runs one way, so the rule is
+# asymmetric on purpose.
+_CONSENT_VERBS = ("autorizo", "autorizar", "consiento", "acepto", "confirmo")
 # An explicit refusal phrase is a decision, not confusion: matching only the
 # bare "no" made "no autorizo" fall into the unclear path and the customer
 # was asked again (replay T9, conversation #26).
@@ -206,12 +215,32 @@ def refused_field(text: str) -> str | None:
 
 
 def _answer_consent(value: str) -> bool | None:
-    """True/False only for an exact allowlisted answer; otherwise unclear."""
+    """Resolve a consent answer; a negation, a doubt or a question is never consent.
+
+    S7: production asked again after "no se que marca es realmente el calefont. si
+    autorizo" because only an exact allowlisted word counted. The old exact match
+    was safe but deaf; this keeps the safety (nothing is inferred from prose) and
+    adds the two shapes a real customer uses: an explicit consent verb inside a
+    short sentence, and a bare affirmative that is the whole message.
+    """
     normalized = _normalize(value)
-    if normalized in {_normalize(word) for word in _YES_WORDS}:
-        return True
+    if not normalized:
+        return None
     if normalized in {_normalize(word) for word in _NO_WORDS}:
         return False
+    if len(normalized) > 120 or len(normalized.split()) > 20:
+        return None
+    if re.search(r"\bno\s+(?:autorizo|autorizar|acepto|consiento|doy)\b", normalized):
+        return False
+    # Thinking out loud is not deciding, and a question is never an answer.
+    if re.search(r"\bno\s+se\s+si\b", normalized) or _looks_like_question(value):
+        return None
+    verbs = "|".join(re.escape(_normalize(word)) for word in _CONSENT_VERBS)
+    if re.search(rf"\b(?:{verbs})\b", normalized):
+        return True
+    bare = {_normalize(word) for word in _YES_WORDS}
+    if len(normalized.split()) <= 3 and any(word in bare for word in normalized.split()):
+        return True
     return None
 
 
@@ -504,7 +533,7 @@ def capture(state: ConversationState) -> dict:
                 consent = _phrase_reply(session, get_reply_texts(session), "capture_consent", captured, pending=["consent"])
             return {"capture_paused": False, "replies": [consent]}
         answer = _current_text(state)
-        consent = None if is_skip(answer) else _answer_consent(answer)
+        consent = _answer_consent(answer)
         if consent is True:
             captured["consent"] = answer
             captured.pop("_pending", None)

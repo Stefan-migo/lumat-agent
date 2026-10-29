@@ -57,3 +57,83 @@ def test_an_explicit_refusal_phrase_is_a_decline_not_an_unclear_answer(capture_h
     assert result["escalate_reason"] == "consent_declined"
     assert result["replies"] == [REPLY_TEXT_DEFAULTS["capture_consent_refused"]]
     assert calls == []
+
+
+def test_short_natural_affirmative_consent_is_recorded(capture_harness, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record")
+    )
+
+    result = capture_node.capture(
+        state("no se que marca es realmente el calefont. si autorizo")
+    )
+
+    assert result["next_step"] == "booking"
+    assert result["captured"]["consent"] == "no se que marca es realmente el calefont. si autorizo"
+    assert calls == ["record"]
+
+
+@pytest.mark.parametrize("answer", ["no autorizo", "no, gracias"])
+def test_consent_negation_wins_over_affirmative_tokens(capture_harness, monkeypatch, answer):
+    calls = []
+    monkeypatch.setattr(
+        capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record")
+    )
+
+    result = capture_node.capture(state(answer))
+
+    assert result["next_step"] == "handoff"
+    assert calls == []
+
+
+def test_ambiguous_typo_sio_is_not_recorded_as_consent(capture_harness, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record")
+    )
+
+    result = capture_node.capture(state("sio"))
+
+    assert result.get("next_step") != "booking"
+    assert result["replies"] == [REPLY_TEXT_DEFAULTS["capture_consent_unclear"]]
+    assert calls == []
+
+
+def test_a_question_is_never_consent(capture_harness, monkeypatch):
+    """A question about authorization is not authorization (S7 safety floor)."""
+    calls = []
+    monkeypatch.setattr(
+        capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record")
+    )
+
+    result = capture_node.capture(state("¿necesito autorización?"))
+
+    assert result.get("next_step") != "booking"
+    assert calls == []
+
+
+def test_uncertainty_is_not_consent(capture_harness, monkeypatch):
+    """\"no sé si autorizo\" is the customer thinking out loud, not a decision."""
+    calls = []
+    monkeypatch.setattr(
+        capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record")
+    )
+
+    result = capture_node.capture(state("no se si autorizo"))
+
+    assert result.get("next_step") != "booking"
+    assert calls == []
+
+
+def test_a_bare_affirmative_inside_a_sentence_is_not_consent(capture_harness, monkeypatch):
+    """Only an explicit consent verb carries a long answer; a bare \"si\" does not."""
+    calls = []
+    monkeypatch.setattr(
+        capture_node, "_apply_consent_and_customer", lambda *_args: calls.append("record")
+    )
+
+    result = capture_node.capture(state("no estoy seguro, si"))
+
+    assert result.get("next_step") != "booking"
+    assert calls == []
