@@ -216,7 +216,7 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | 4871dc62 |
 | B4 | S11 | `state.booking` ignores appointments that already started | inline | see L13 |
 | B5 | S12 | `reagendar_visita` routes to `manage` | inline | see L14 |
-| C3 | S13 | One question per turn after a KB deviation | inline | |
+| C3 | S13 | One question per turn after a KB deviation | inline | see L15 |
 | C4 | S14 | Normalized service as retrieval fallback query | inline | |
 | C2 | S2 | Evidence question moves to after the booking confirmation | inline | |
 | C1 | S3 | Seed capture from the customer record (consent + data) | inline | faaed3dc | blocked on L5.1 for the data half |
@@ -303,6 +303,15 @@ Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/
 tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
 64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
 stays unclear and gets one confirmation instead of being guessed.
+
+**L15** — C3 done, on a new stacked branch `odd/chatbot-realismo-flujo` (base
+`odd/chatbot-realismo-conversacional`) because #741 already carries 1250 authored lines and stopped
+being reviewable. RED pinned the routing decision: `_after_research_triage` returned `capture` for a KB
+answer ending in `?` (2 of 4 new tests failed). The fix ends the turn in that case and leaves `_pending`
+in the captured state, so the agenda asks on the next message. The CI-2 integration case
+(`test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes`) still passes, which proves the
+non-question path is untouched: `bash scripts/test.sh db tests/integration/test_chat_capture.py` → exit 0;
+`pytest tests/unit/test_graph_after_research_triage.py` → 4 passed; `bash scripts/test.sh quick` → exit 0.
 
 **L14** — B5 done. The cause was not a missing route: `_dispatch` already sent
 `reagendar_visita` to `manage`. It was the CI-2 rule that folds cancel/reschedule into
