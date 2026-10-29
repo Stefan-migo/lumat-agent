@@ -86,6 +86,7 @@ __all__ = [
     "upsert",
     "agent_memory_entity",
     "thread_memory_entity",
+    "user_memory_entity",
     "visibility_target",
 ]
 
@@ -110,8 +111,17 @@ def thread_memory_entity(thread_id: int) -> str:
     return f"thread:{thread_id}"
 
 
+def user_memory_entity(owner_id: int) -> str:
+    """Canonical user-axis entity for one authenticated owner."""
+    return f"user:{owner_id}"
+
+
 def visibility_target(
-    visibility: MemoryVisibility | str, *, thread_id: int, proyecto: str
+    visibility: MemoryVisibility | str,
+    *,
+    thread_id: int,
+    proyecto: str,
+    owner_id: int | None = None,
 ) -> tuple[str, str]:
     """Derive the persisted axis from the declared visibility and its project."""
     value = visibility.value if isinstance(visibility, MemoryVisibility) else visibility
@@ -119,6 +129,10 @@ def visibility_target(
         return "panel", thread_memory_entity(thread_id)
     if value == MemoryVisibility.GLOBAL.value:
         return AGENT_SCOPE, agent_memory_entity(proyecto)
+    if value == "user":
+        if type(owner_id) is not int or owner_id <= 0:
+            raise ValueError("user memory visibility requires a positive integer owner_id")
+        return "user", user_memory_entity(owner_id)
     raise ValueError(f"unknown memory visibility: {visibility!r}")
 
 
