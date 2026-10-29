@@ -340,3 +340,18 @@ def test_a_window_covering_every_day_and_hour_is_not_announced_as_hours(monkeypa
     reply = configured_answers.hours_reply(SESSION, _state("cual es el horario?"))
 
     assert reply == "Las visitas se agendan según la disponibilidad de los técnicos."
+
+
+def test_a_configured_name_with_stray_whitespace_still_matches(monkeypatch):
+    """Measured in production: "Mantención de  calefont" (double space) answered
+    nothing, because the name is matched as a phrase. A typo in a panel field must
+    not silence a customer answer.
+    """
+    _durations(monkeypatch, {"Mantención de  calefont": 60})
+
+    assert (
+        configured_answers.duration_reply(
+            SESSION, _state("cuanto dura la mantención de calefont?")
+        )
+        == "Mantención de  calefont dura 1 hora."
+    )
