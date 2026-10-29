@@ -718,6 +718,36 @@ def test_migration_056_adds_the_technician_visit_state_axis(tmp_path):
         assert status_labels == [("booked",), ("cancelled",), ("completed",), ("no_show",)]
 
 
+def test_migration_059_allows_user_global_and_preserves_visibility_coherence(tmp_path):
+    with _scratch_migration_db(tmp_path, 58, 59) as (conn, apply_059, _):
+        result = apply_059()
+        assert result.returncode == 0, f"059 failed:\n{result.stdout}\n{result.stderr}"
+        embedding = "[" + ",".join("0.1" for _ in range(384)) + "]"
+
+        conn.execute(
+            "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+            "VALUES ('user', 'user:7', 'user fact', 'accepted', %s::vector, 'global')",
+            (embedding,),
+        )
+        conn.execute(
+            "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+            "VALUES ('customer', 'customer:7', 'customer fact', 'accepted', %s::vector, 'thread')",
+            (embedding,),
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+                "VALUES ('panel', 'thread:bad', 'bad', 'rejected', %s::vector, 'global')",
+                (embedding,),
+            )
+        constraint = conn.execute(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+            "WHERE conname = 'memories_visibility_scope_coherence'"
+        ).fetchone()[0]
+        assert "visibility = 'global'" in constraint
+        assert "agent" in constraint and "user" in constraint
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -780,6 +810,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("056_appointment_technician_state",),
         ("057_grant_automation_installation_delete",),
         ("058_message_media",),
+        ("059_memory_user_scope",),
     ]
 
 
