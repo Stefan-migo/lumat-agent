@@ -23,9 +23,12 @@ this tool writes only assistant-owned memory.
   not by the model. Own-axis access is bound to the trusted thread/project; own
   reads/searches use the project's owner, and writes/updates/deletes enforce it.
   Do not supply an owner, project, thread, or write target.
-- `memory.write` writes agent-authored memory to the thread or project axis; it
-  cannot create customer-axis memories. Customer records belong on the customer
-  axis and are not editable through this tool.
+- `memory.write` writes assistant-authored memory to the thread, project, or
+  user axis; it cannot create customer-axis memories. Customer records belong
+  on the customer axis and are not editable through this tool.
+- Use `visibility="user"` for a person's memory. It is readable across projects
+  and is never another user's memory; the server binds it to the authenticated
+  user, not to a project's owner. Project facts remain on the project axis.
 
 ## Tool arguments
 
