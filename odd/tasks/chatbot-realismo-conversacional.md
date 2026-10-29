@@ -206,7 +206,7 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 
 | ID | Spec | Task | Route | Commit |
 | --- | --- | --- | --- | --- |
-| A1 | S1 | Ack only with a delivered data point; `Entiendo.`; name at most once; guarded migration for the stored `capture_ack` | inline | |
+| A1 | S1 | Ack only with a delivered data point; `Entiendo.`; name at most once; guarded migration for the stored `capture_ack` | inline | f7a6162b |
 | A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | |
 | A3 | S6 | `is_farewell` closes a long courtesy closing | inline | |
 | A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | |
@@ -270,6 +270,18 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 list, because `manutención`, `mantenimiento` and `mantnecion` are the same business request and a
 keyword list will always lag one typo behind. `capture.preventive_keywords` stays as an explicit
 override so no configured value loses its reader.
+
+**L6** — A1 done (`f7a6162b`). RED reproduced production turn 285 verbatim:
+`Gracias Stefan. Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de
+error?`. The fix needed three parts, not one: (1) the acknowledgement now requires a field on record
+as asked; (2) the old guard `if not available or not any({{...}} for key in available)` made a
+placeholder-free text unrenderable, which is *why* the only shape the ack could ever take was
+`Gracias {{nombre}}. ` — fixed so a plain phrase renders; (3) `059` rewrites the stored override only
+when it equals the old default. Verified: `pytest tests/unit/test_capture_validation.py
+tests/unit/test_capture_phrasing.py tests/unit/test_reply_texts.py` → 65 passed;
+`bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db tests/integration/test_migrations.py`
+→ 38 passed, including two new tests that prove 059 rewrites the old default, keeps the other keys in
+the same JSON, and leaves a panel-edited text alone.
 
 **L5** — open product decisions (owner):
 1. Consent already given: silent skip to booking, or a short confirmation (`¿mantengo los datos de tu
