@@ -773,18 +773,31 @@ def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = No
     }
 
 
-def _assistant_capabilities(_session, _args: CapabilitiesArgs, *, role: str | None = None):
+def _assistant_capabilities(
+    _session,
+    _args: CapabilitiesArgs,
+    *,
+    role: str | None = None,
+    whitelist: set[str] | frozenset[str] | None = None,
+):
     from app.services.prompts import load_assistant_config
 
-    whitelist = load_assistant_config(role=role).tools_whitelist
+    global_whitelist = load_assistant_config(role=role).tools_whitelist
+    # Direct callers without turn context retain the historical global catalog.
+    tool_names = global_whitelist if whitelist is None else [
+        name for name in global_whitelist if name in whitelist
+    ]
     lines = []
-    for name in whitelist:
+    for name in tool_names:
         definition = TOOL_REGISTRY[name]
         access = "read-only" if definition.read_only else "write"
         lines.append(f"{name} — {definition.description} ({access})")
     return {
-        "tool_count": len(whitelist),
-        "capabilities": "\n".join(lines),
+        "tool_count": len(tool_names),
+        # The scope header only holds when the turn actually supplied its catalog; a direct
+        # caller falls back to the global list, where claiming this turn's scope would lie.
+        "capabilities": ("Available in this turn's scope:\n" if whitelist is not None else "")
+        + "\n".join(lines),
     }
 
 
@@ -1025,7 +1038,7 @@ def execute_tool(
         elif name == "kb.retrieve":
             result = _plain(definition.handler(session, parsed, project_id=project_id, role=role))
         elif name == "assistant.capabilities":
-            result = _plain(definition.handler(session, parsed, role=role))
+            result = _plain(definition.handler(session, parsed, role=role, whitelist=whitelist))
         elif name == "appointments.upcoming":
             result = _plain(definition.handler(session, parsed, role=role, owner_id=owner_id))
         else:
