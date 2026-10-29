@@ -21,6 +21,8 @@ from app.services.agent_chat import approve_plan, resume_thread
 from app.services.settings import MESSAGE_DEFAULTS, get_setting, set_setting
 from app.services.users import hash_password
 
+from tests.integration._capture_aware import planner_only
+
 DEFAULT_FAREWELL = MESSAGE_DEFAULTS["farewell"]
 _PLANNER_JSON = '{"kind": "respond", "summary": "hola", "requires_approval": false}'
 
@@ -128,7 +130,7 @@ def test_approved_write_executes_once_and_persists_responder_text(migrated_db, f
             agent = _agent_message(session, thread.id)
             assert agent is not None and agent.content == "Listo, actualicé la despedida."
             # plan_llm is skipped on resume, so the planner (response_format) is never called.
-            assert sum(1 for call in client.calls if "response_format" in call) == 0
+            assert sum(1 for call in planner_only(client.calls) if "response_format" in call) == 0
             assert (
                 session.query(AuditLog)
                 .filter_by(action="internal_chat.execution", entity_id=str(thread.id))
