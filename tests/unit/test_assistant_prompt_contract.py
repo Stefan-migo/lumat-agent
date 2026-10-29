@@ -63,3 +63,44 @@ def test_tools_skill_documents_the_per_write_approval():
     skill = _read("skills/assistant/tools.md")
     assert "Each write of a chain is approved on its own" in skill
     assert "an approval never carries over to the following plan" in skill
+
+
+def test_persona_lists_durable_memory_capture_triggers_and_runtime_capture():
+    persona = _read("personas/assistant.md")
+    for trigger in (
+        "completed fix",
+        "decision",
+        "discovery",
+        "configuration change",
+        "established pattern",
+        "owner preference",
+    ):
+        assert trigger in persona
+    assert "runtime also captures turns deterministically" in persona
+    assert "write what is durable, not transcripts" in persona
+    assert "You are the Lumat internal executive operator, LumatAgent" in persona
+    assert "approval before any write operation except" in persona
+    for tool in ("memory.write", "memory.update", "memory.delete", "artifact.save"):
+        assert f"`{tool}`" in persona
+    assert "When `web.fetch` evidence is present, state only what the fetched page text says and cite the URL that evidence reports after redirects." in persona
+
+
+def test_memory_skill_lists_write_triggers_and_defers_person_facts_to_user_axis():
+    skill = _read("skills/assistant/memoria-tukulpan.md")
+    for trigger in (
+        "completed fix",
+        "decision",
+        "discovery",
+        "configuration change",
+        "established pattern",
+        "owner preference",
+    ):
+        assert trigger in skill
+    assert "person-level fact belongs to the user axis later" in skill
+    assert "user-axis tool" not in skill
+
+
+def test_plan_prompt_allows_memory_write_and_follow_up_together():
+    prompt = _read("prompts/assistant_plan.md")
+    assert "`memory.write` runs without approval" in prompt
+    assert "A turn can both write memory and answer by setting `follow_up: true`" in prompt
