@@ -291,3 +291,8 @@ the same JSON, and leaves a panel-edited text alone.
 3. Evidence question when the customer already sent a photo earlier in the conversation.
 4. Price in the out-of-coverage reply: never, or only when the customer asked for a price.
 5. Customer name in the acknowledgement: once per conversation, or never.
+
+**L7** — delivery strategy and slice boundary (411 authored lines at `8536f71f`). Slice 1 = the ODD
+document + A1 (`f7a6162b`). Slice 2 = A2–A5, slice 3 = B1–B5, slice 4 = C3/C4/C2, slice 5 = C1 once
+L5.1 is decided. Each slice stays reviewable on its own, so the PR can be chained without rewriting
+history. Nothing is pushed: push, PR and merge stay the owner's decision.
