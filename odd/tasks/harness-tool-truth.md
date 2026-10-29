@@ -33,7 +33,7 @@ serializer import never loads it.
 ## Tasks
 - T1 — S1 cold-import regression and narrow cycle fix — commit: `e6c69ac4`
 - T2 — S2 effective capabilities and compatibility coverage — commit: `4a53b744`
-- T3 — S3 lazy router assembly plus the dashboard cold-import regression — commit: TBD
+- T3 — S3 lazy router assembly plus the dashboard cold-import regression — commit: `8abf7f43`
 
 ## Log
 
@@ -86,3 +86,4 @@ The same focused command passed: 107 passed in 4.15s (exit code 0). The cold sub
   `api_router` through a module `__getattr__`, still built once and still the object
   `app/panel/routes/__init__.py` re-exports. Two new RED tests: importing `app.panel.api` must leave
   `app.panel.api.routes.*` unloaded, and importing `app.services.dashboard` first must still run its tool.
+- **L8** (S3 gates): `bash scripts/test.sh full` → exit 0 on the final tree, again with only the two pre-existing warnings. Router smoke: `api_router` builds 20 routes, is a singleton across accesses, and is the identical object `app/panel/routes/__init__.py` re-exports.
