@@ -259,6 +259,11 @@ class ConversationState:
             .where(
                 Appointment.customer_id == conversation.customer_id,
                 Appointment.status == AppointmentStatus.BOOKED,
+                # S11 (chatbot-realismo-conversacional): "the visit the customer has"
+                # means one that has not started. Without this filter production #23
+                # answered a 2026-10-29 conversation with "Tienes una visita agendada
+                # para el 28/10": yesterday, injected into the KB prompt as current.
+                Appointment.starts_at > datetime.now(timezone.utc),
             )
             .order_by(Appointment.starts_at.desc())
             .limit(1)
