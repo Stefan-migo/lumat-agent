@@ -420,3 +420,66 @@ the same page the node must answer with an existing catalogue text (the loop can
 reply key while `app/services/settings.py` is being edited by another unit, and a new key needs panel
 validation anyway). Preferred: count it as an invalid attempt and let `MAX_INVALID_REPLIES` hand off
 with `handoff_booking_unavailable`; that text already tells the customer a human will coordinate.
+
+**L18** — owner authorization, verbatim: `ok merge y limpieza de lo que tenemos actualmente y solo
+luego despues de eso continuamos con los pasos pendientes`
+
+`main` moved twice while the merge was being prepared: first to `f27ced32` (the `v2026.10.12` deploy
+plus four assistant-memory slices), then to `2bb8f0fb` when PR #744 landed *during* this work. The
+chain was therefore updated bottom-up — `origin/main` into `odd/chatbot-realismo-ack` (`6602e4ed`),
+then each branch absorbing the one below it (`7aa71d86`, `cb7d5973`, `7e3bf6fa`) — with no conflict
+except one hunk.
+
+**The defect that would have broken the schema.** `main` now carries `059_memory_user_scope.sql`
+(from #744) and this feature carried `059_capture_ack_plain.sql`: two different files claiming one
+version. A version is applied once and recorded in `schema_migrations`, so the second file would
+simply never run — and production sits at 058, owing 059 to the memory user scope. Renumbered to
+`060_capture_ack_plain.sql` in `6602e4ed`: its two tests now scaffold `<= 59` and apply `60`, and
+`test_schema_migrations_records_version` lists `059_memory_user_scope` then `060_capture_ack_plain`.
+The single merge conflict was exactly that list, resolved by keeping both entries.
+
+Two local-environment findings, both recorded because they cost real time and neither is a code
+defect:
+
+1. Renaming a migration leaves the *persistent* test database holding the old version name in
+   `schema_migrations`, so `test_schema_migrations_records_version` fails against it. Rebuilding the
+   disposable database (`infra/test-db.sh down && up`) is the fix; CI never sees this because it
+   starts from an empty database.
+2. The first `full` run stalled at 15 %: the child `app/panel/seed_dev.py --yes` hung against a
+   backend left `idle in transaction` by an earlier run that pytest-timeout had killed
+   (`tests/functional/conftest.py:88` `TRUNCATE`, the family documented in
+   `odd/tasks/suite-truncate-stall.md`). Terminating that backend and rebuilding the database cleared
+   both.
+
+Evidence: `bash scripts/test.sh db tests/integration/test_migrations.py` → 39 passed;
+`bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh shape origin/main` → exit 3 on
+`db/migrations/060_capture_ack_plain.sql`, which is what makes `full` mandatory; `full` → see L19.
+
+**L19** — `full` on the merged, renumbered tree: **4 failed**, all of them time-of-day dependent, none
+of them this feature's. Run at 2026-10-29T23:12Z, minutes before UTC midnight:
+
+```
+tests/integration/test_chat_booking.py::test_asking_for_more_slots_says_the_day_is_exhausted_and_offers_other_days
+tests/integration/test_scheduling.py::test_open_slots_for_assignment_skips_the_busy_technician_and_never_mutates
+tests/integration/test_scheduling.py::test_open_slots_for_assignment_alternates_between_equally_loaded_technicians
+tests/integration/test_scheduling.py::test_open_slots_for_assignment_offers_only_the_requested_day
+```
+
+Three independent proofs that this is pre-existing rather than a regression:
+
+1. **Differential, in place.** With `app/chat/slot_window.py` checked out from `origin/main` — the only
+   shared module B1/B2 touched, imported by `app/services/scheduling.py` — the same four tests fail
+   identically. B1/B2 is not the cause.
+2. **Authorship.** The chat test came in with `7096263b` ("page through the slot offer"), an ancestor
+   of `origin/main`, so the feature inherited it rather than wrote it.
+3. **Mechanism.** The helpers anchor on `datetime.now(timezone.utc) + 2 days` truncated to the hour,
+   and the assertions compare against `first.date()`. After roughly 22:00Z the three-slot block
+   straddles midnight, so the offered day genuinely holds fewer slots and the assertion's premise is
+   false — the product behaved correctly by saying the day was exhausted, and the reply quoted slots
+   at 23:00/23:30/00:00, which is the fingerprint.
+
+CI is the authoritative gate for this repository (`uv run pytest tests/` against a real pgvector
+Postgres) and is green on all four heads, because it ran before the hour that triggers this. Not
+fixed here on purpose: it is a test-side defect in `main`'s files, outside this feature's surfaces,
+and repairing it means touching files this feature does not own. Follow-up worth its own unit: anchor
+those helpers to a fixed hour of the target day instead of the current hour.
