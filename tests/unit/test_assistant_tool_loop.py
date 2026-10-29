@@ -10,6 +10,7 @@ from app.chat.assistant.nodes import (
     MAX_ASSISTANT_TOOL_STEPS,
     _TOOL_EVIDENCE_LIMIT,
     _context_text,
+    _render_tool_evidence,
     execute,
     memory_bootstrap,
     guardrails,
@@ -85,7 +86,7 @@ def test_memory_bootstrap_is_on_initial_plan_path_only():
     assert _after_cost_gate({"cost_mode": "normal"}) == "memory_bootstrap"
 
 
-def test_memory_bootstrap_adds_bounded_code_initiated_read_as_planner_evidence(monkeypatch):
+def test_memory_bootstrap_adds_bounded_own_memory_context_not_tool_evidence(monkeypatch):
     calls = []
 
     def read(_session, name, arguments, **kwargs):
@@ -100,17 +101,27 @@ def test_memory_bootstrap_adds_bounded_code_initiated_read_as_planner_evidence(m
     assert len(calls) == 1
     assert calls[0][0] == "memory.read"
     assert calls[0][1]["scope"] == "own"
-    assert len(merged["tool_results"]) == 1
-    assert merged["tool_results"][0]["code_initiated"] is True
+    assert merged["tool_results"] == []
+    assert len(merged["context"]["items"]) == 1
+    memory_context = merged["context"]["items"][0]
+    assert memory_context["source"] == "own_memory"
+    assert "project/thread memory read by the harness before this turn" in memory_context["content"].lower()
+    assert "not the result of any tool of this turn" in memory_context["content"].lower()
+    assert "remembered" in memory_context["content"]
+    assert _render_tool_evidence(merged) == ""
     client = _client(calls, ['{"kind":"respond","tool":null,"arguments":{},"summary":"Done","requires_approval":false}'])
     monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
     plan_llm({**merged, "content": "What do you remember?", "plan": None})
     assert "remembered" in calls[-1]["messages"][-1]["content"]
     assert merged.get("tool_steps", 0) == 0
     assert "tool_result" not in result
-    assert "context" not in result
-    monkeypatch.setattr("app.chat.assistant.nodes.run_verification", lambda **_kwargs: pytest.fail("read must not require verification"))
+    monkeypatch.setattr("app.chat.assistant.nodes.run_verification", lambda **_kwargs: pytest.fail("bootstrap read must not require verification"))
     assert verify_effects(merged) == {}
+
+    from app.chat.assistant.verification import verification_required
+
+    assert verification_required(dispatched_tools=[]) == (False, "not-required")
+    assert verification_required(dispatched_tools=["memory.update"]) == (True, "effect-tool")
 
 
 def test_memory_bootstrap_empty_and_missing_scope_are_noop(monkeypatch):
@@ -665,6 +676,51 @@ def test_customer_search_payload_remains_a_list_of_public_rows(monkeypatch, tool
         {"id": 2, "name": "Customer 2", "state": "active"},
     ]
     assert set(rows[0]) == {"id", "name", "state"}
+
+
+def test_tool_evidence_headers_name_tool_status_and_arguments():
+    from app.chat.assistant.nodes import _render_tool_evidence
+
+    evidence = _render_tool_evidence({"tool_results": [{
+        "tool": "customers.search", "status": "completed", "arguments": {"query": "Ana"},
+        "result": [{"name": "Ana"}],
+    }]})
+
+    assert "tool=customers.search" in evidence
+    assert "status=completed" in evidence
+    assert 'arguments={"query": "Ana"}' in evidence
+    assert '[{"name": "Ana"}]' in evidence
+
+
+def test_tool_evidence_keeps_inventory_for_omitted_payloads():
+    from app.chat.assistant.nodes import _render_tool_evidence
+
+    evidence = _render_tool_evidence({"tool_results": [
+        {"tool": "project.find", "status": "completed", "arguments": {"query": "A"}, "result": {"padding": "x" * 5_000}},
+        {"tool": "appointments.upcoming", "status": "degraded", "arguments": {"limit": 3}, "result": [{"appointment": 1}]},
+        {"tool": "memory.search", "status": "completed", "arguments": {"query": "B"}, "result": [{"memory": 1}]},
+    ]})
+
+    assert "project.find" in evidence
+    assert "appointments.upcoming" in evidence
+    assert "memory.search" in evidence
+    assert "status=completed" in evidence
+    assert "status=degraded" in evidence
+    assert "earlier tool result(s) omitted" in evidence
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
+
+
+def test_stalled_chain_is_explained_with_tools_already_run():
+    from app.chat.assistant.nodes import _render_tool_evidence
+
+    evidence = _render_tool_evidence({
+        "execution_stall": "repeated_tool_call",
+        "tool_results": [{"tool": "project.find", "status": "completed", "arguments": {}, "result": [{"id": 1}]}],
+    })
+
+    assert "chain stopped" in evidence.lower()
+    assert "repeated_tool_call" in evidence
+    assert "project.find" in evidence
 
 
 def test_planner_evidence_explains_full_customer_page_advancement():
