@@ -527,6 +527,22 @@ describe("AgentChat", () => {
     ));
   });
 
+  it("locks the workspace project control once the thread has messages", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      return jsonResponse({
+        thread: { ...makeThread(), proyecto: "default" },
+        messages: [{ id: 1, author: "admin", content: "Hola", status: "processed" }],
+      });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByText("Hola");
+
+    expect(screen.getByRole("button", { name: /^Elegir proyecto:/ })).toBeDisabled();
+  });
+
   it("keeps the stop control off while only the tool policy is saving", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).endsWith("/tool-policy")) {

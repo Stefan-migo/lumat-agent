@@ -115,9 +115,10 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detalle del hilo" })).toBeInTheDocument();
     expect(screen.getByText("Sin título")).toBeInTheDocument();
-    for (const title of ["Proyecto", "Recursos del proyecto", "Capacidades del asistente", "Archivos del hilo", "Artefactos del hilo", "Fuentes del hilo"]) {
+    for (const title of ["Proyecto", "Recursos del proyecto", "Capacidades del asistente", "Archivos del hilo", "Artefactos del hilo"]) {
       expect(screen.getByRole("button", { name: new RegExp(title) })).toHaveAttribute("aria-controls");
     }
+    expect(screen.queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Proyecto" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Los adjuntos y resultados pertenecen a este hilo.")).toBeInTheDocument();
     const resourcesToggle = screen.getByRole("button", { name: /Recursos del proyecto/ });
@@ -217,9 +218,25 @@ describe("AssistantWorkspace", () => {
     const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
     expect(within(detail).getByRole("button", { name: /Archivos del hilo 1/ })).toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: /Artefactos del hilo 0/ })).toBeInTheDocument();
-    expect(within(detail).getByRole("button", { name: /Fuentes del hilo 0/ })).toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
     fireEvent.click(within(detail).getByRole("button", { name: "Cambiar" }));
     expect(onChangeProject).toHaveBeenCalledOnce();
+  });
+
+  it("locks the thread project once the thread has messages", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
+    const onChangeProject = vi.fn();
+    render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted onChangeProject={onChangeProject}><p>Thread</p></AssistantWorkspace>);
+
+    expect(await screen.findByRole("button", { name: /^Elegir proyecto:/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
+    const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
+    const change = within(detail).getByRole("button", { name: "Cambiar" });
+    expect(change).toBeDisabled();
+    fireEvent.click(change);
+    expect(onChangeProject).not.toHaveBeenCalled();
   });
 
   it("changes the active thread project from the lean mobile picker", async () => {

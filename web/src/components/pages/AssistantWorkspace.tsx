@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BrainCircuit, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Link, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
+import { BrainCircuit, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, downloadAssistantConversation, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -56,7 +56,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, userId, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; userId?: number; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, userId, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, threadStarted = false, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; userId?: number; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; threadStarted?: boolean; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -124,6 +124,10 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [contextSections, setContextSections] = useState<Record<string, boolean>>({ project: true });
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
+  // The thread's project is fixed once the thread has messages: the owner wants
+  // the choice only before the first message, so every project control in the
+  // workspace locks from there on.
+  const projectLocked = threadStarted;
   const activeContextSlug = !activeThreadId ? route.get("context") || undefined : undefined;
   const activeHistorySlug = !activeThreadId && !activeContextSlug ? route.get("history") || undefined : undefined;
   const routeProjectSlug = route.get("proyecto") || undefined;
@@ -379,7 +383,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         {threadDetailOpen ? <div className="assistant-workspace__thread-detail-sheet">
           <div className="assistant-workspace__thread-project-row">
             <span>{activeProject?.name ?? (activeProjectSlug === "default" ? "General" : activeProjectSlug ?? "Sin proyecto")}</span>
-            <Button variant="tertiary" onClick={() => { setThreadDetailOpen(false); onChangeProject?.(); }}>Cambiar</Button>
+            <Button variant="tertiary" disabled={projectLocked} onClick={() => { setThreadDetailOpen(false); onChangeProject?.(); }}>Cambiar</Button>
           </div>
           <ThreadContextSections activeProject={activeProject} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
         </div> : null}
@@ -426,7 +430,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       {projectsVisible || contextVisible ? <button type="button" className="assistant-workspace__scrim" aria-label="Cerrar paneles" onClick={() => { setProjectsVisible(false); setContextVisible(false); }} /> : null}
       <header className="assistant-workspace__mobile-header" aria-label="Controles del asistente">
         <button type="button" aria-label="Abrir navegación del asistente" aria-haspopup="dialog" onClick={() => setNavigationOpen(true)}><MenuIcon aria-hidden="true" /></button>
-        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${headerProjectName}`} onClick={() => setProjectPickerOpen(true)}>
+        <button type="button" className="assistant-workspace__mobile-project" aria-label={`Elegir proyecto: ${headerProjectName}`} disabled={projectLocked} onClick={() => setProjectPickerOpen(true)}>
           <Icon icon={Folder} size="sm" />
           <span>{headerProjectName}</span>
           <Icon icon={ChevronDown} size="sm" />
@@ -700,7 +704,6 @@ function ThreadContextSections({ activeProject, threadId, capabilities, capabili
       {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <li key={artifact.id}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="sm" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(artifact.filename)}`} /><span className="assistant-workspace__file-copy"><strong title={artifact.filename}>{artifact.filename}</strong><small>Generado en este hilo</small></span><Button variant="tertiary" aria-label={`Descargar ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => void downloadArtifact(artifact)}><Icon icon={Download} size="sm" /></Button></li>)}</ul> : <div className="assistant-workspace__context-box">Los archivos que el asistente genere aparecerán aquí.</div>}
       {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
     </ContextSection>
-    <ContextSection id={mobile ? "mobile-sources" : "sources"} title="Fuentes del hilo" icon={Link} count={0} expanded={contextSections.sources ?? false} onToggle={() => toggleContextSection("sources")}><div className="assistant-workspace__context-box">El hilo no entrega fuentes asociadas a sus respuestas.</div></ContextSection>
     <p className="assistant-workspace__context-note"><Icon icon={Info} size="sm" />Los adjuntos y resultados pertenecen a este hilo.</p>
   </div>;
 }

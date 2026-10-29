@@ -849,6 +849,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
       userId={userId}
       loadThreadTabs={Boolean(onThreadOpened)}
       activeProjectSlug={thread?.proyecto ?? undefined}
+      threadStarted={messages.length > 0}
       onSelectProject={(slug) => void (thread ? changeProject(slug) : createProjectChat(slug))}
       attachments={attachments}
       artifacts={artifacts}
