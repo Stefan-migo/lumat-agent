@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any, Literal
 
 from pydantic import ValidationError
@@ -32,7 +32,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.chat.assistant.tools.registry import MemoryWriteArgs
-from app.models import InternalChatMessage, Memory
+from app.models import (
+    InternalChatMessage,
+    InternalChatThread,
+    Memory,
+    MemoryProducer,
+    MemoryType,
+    User,
+)
 from app.services.prompts import load
 
 
@@ -47,6 +54,10 @@ logger = logging.getLogger(__name__)
 
 CAPTURE_TURN_INTERVAL = 4
 CAPTURE_DAILY_LIMIT = 6
+IDLE_MINUTES = 120
+SWEEP_LIMIT = 3
+SWEEP_TAIL_MESSAGES = 10
+SWEEP_TAIL_CHARS = 300
 
 # The assistant's own messages carry this author; every other author is a human
 # turn (the panel stamps the acting user's role, e.g. `admin` or `operador`).
@@ -118,6 +129,29 @@ def _planner_call(messages: list[dict], state: Any, call_key: str) -> tuple[str,
     return paid_planner_call(messages, state, call_key)
 
 
+def _validate_candidates(raw_text: object, error: object) -> list[dict[str, Any]]:
+    """Parse and strictly validate the planner's memory candidate envelope."""
+    if error or not isinstance(raw_text, str):
+        return []
+    try:
+        payload = json.loads(raw_text)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return []
+    if not isinstance(payload, dict) or set(payload) != {"memories"}:
+        return []
+    items = payload["memories"]
+    if not isinstance(items, list):
+        return []
+    candidates: list[dict[str, Any]] = []
+    for item in items[:3]:
+        try:
+            validated = MemoryWriteArgs.model_validate(item)
+        except (ValidationError, TypeError, ValueError):
+            continue
+        candidates.append(validated.model_dump())
+    return candidates
+
+
 def extract_candidates(
     *,
     state: Any,
@@ -143,25 +177,26 @@ def extract_candidates(
         raw_text, _completion, error = _planner_call(messages, state, "memory_capture")
     except Exception:
         return []
-    if error or not isinstance(raw_text, str):
-        return []
+    return _validate_candidates(raw_text, error)
+
+
+def extract_thread_candidates(*, state: Any, payload: dict) -> list[dict[str, Any]]:
+    """Extract strict candidates from an idle thread tail; never raises."""
+    messages = [
+        {"role": "system", "content": load(_CAPTURE_PROMPT)},
+        {
+            "role": "user",
+            "content": json.dumps(
+                {"mode": "idle_thread", "thread_tail": payload.get("thread_tail", [])},
+                ensure_ascii=False,
+            ),
+        },
+    ]
     try:
-        payload = json.loads(raw_text)
-    except (json.JSONDecodeError, TypeError, ValueError):
+        raw_text, _completion, error = _planner_call(messages, state, "memory_capture")
+    except Exception:
         return []
-    if not isinstance(payload, dict) or set(payload) != {"memories"}:
-        return []
-    items = payload["memories"]
-    if not isinstance(items, list):
-        return []
-    candidates: list[dict[str, Any]] = []
-    for item in items[:3]:
-        try:
-            validated = MemoryWriteArgs.model_validate(item)
-        except (ValidationError, TypeError, ValueError):
-            continue
-        candidates.append(validated.model_dump())
-    return candidates
+    return _validate_candidates(raw_text, error)
 
 
 def capture_decision(
@@ -344,6 +379,123 @@ def capture_turn(state: Any) -> dict[str, Any]:
             "degraded_reason": "memory capture unavailable",
         }
     return {"written": written, "reason": reason}
+
+
+def sweep_idle_threads(
+    session: Session, *, now: datetime | None = None, limit: int = SWEEP_LIMIT
+) -> int:
+    """Capture bounded summaries from idle open threads, checkpointing each pass."""
+    current = now or datetime.now(timezone.utc)
+    cutoff = current - timedelta(minutes=IDLE_MINUTES)
+    try:
+        threads = session.scalars(
+            select(InternalChatThread)
+            .where(
+                InternalChatThread.status == "open",
+                InternalChatThread.updated_at <= cutoff,
+            )
+            .order_by(InternalChatThread.updated_at.asc())
+            .limit(max(0, limit))
+        ).all()
+    except Exception:
+        logger.exception("idle memory capture sweep query failed")
+        return 0
+
+    processed = 0
+    from app.services import tukulpan
+
+    for thread in threads:
+        try:
+            # Bounded reads: a long thread must not be loaded to find its tail.
+            last_id = session.scalar(
+                select(func.max(InternalChatMessage.id)).where(
+                    InternalChatMessage.thread_id == thread.id
+                )
+            ) or 0
+            topic_key = f"assistant-capture:{thread.id}:{last_id}"
+            entity_id = f"thread:{thread.id}"
+            if tukulpan.get_by_key(
+                session, scope="panel", entity_id=entity_id,
+                topic_key=topic_key, proyecto=thread.proyecto,
+            ) is not None:
+                continue
+
+            owner = session.get(User, thread.user_id)
+            if owner is None:
+                continue
+            from app.chat.assistant.nodes import _cost_snapshot
+
+            cost_allowed = _cost_snapshot(session, thread.id).get("mode") != "blocked"
+            if not cost_allowed:
+                continue
+
+            tail_rows = session.scalars(
+                select(InternalChatMessage)
+                .where(InternalChatMessage.thread_id == thread.id)
+                .order_by(InternalChatMessage.id.desc())
+                .limit(SWEEP_TAIL_MESSAGES)
+            ).all()
+            tail = [
+                {"author": message.author, "content": message.content[:SWEEP_TAIL_CHARS]}
+                for message in reversed(tail_rows)
+            ]
+            candidates = extract_thread_candidates(
+                state={"session": session, "thread_id": thread.id},
+                payload={"thread_tail": tail},
+            )
+            from app.chat.assistant.tools.registry import execute_tool
+
+            failed = False
+            for candidate in candidates:
+                try:
+                    outcome = execute_tool(
+                        session,
+                        "memory.write",
+                        candidate,
+                        whitelist={"memory.write"},
+                        cost_allowed=cost_allowed,
+                        role=owner.role.value if hasattr(owner.role, "value") else owner.role,
+                        trusted_thread_id=thread.id,
+                        owner_id=thread.user_id,
+                        proyecto=thread.proyecto,
+                    )
+                except Exception:
+                    logger.exception("idle memory capture write failed for thread %s", thread.id)
+                    failed = True
+                    continue
+                result = outcome.get("result") if isinstance(outcome, dict) else None
+                if (
+                    not isinstance(outcome, dict)
+                    or outcome.get("status") != "completed"
+                    or (isinstance(result, dict) and result.get("written") is False)
+                ):
+                    logger.warning("idle memory capture write degraded for thread %s", thread.id)
+                    failed = True
+
+            if failed:
+                # No checkpoint on a failed write: the same tail must be retried
+                # on the next tick instead of being marked as captured.
+                continue
+
+            try:
+                tukulpan.upsert(
+                    session,
+                    scope="panel",
+                    entity_id=entity_id,
+                    topic_key=topic_key,
+                    tipo=MemoryType.SUMMARY,
+                    titulo=f"Resumen de hilo {thread.id}",
+                    contenido=f"Captura de inactividad para el hilo {thread.id}.",
+                    producer=MemoryProducer.PIPELINE,
+                    origin_thread_id=str(thread.id),
+                    proyecto=thread.proyecto,
+                )
+            except Exception:
+                logger.exception("idle memory capture checkpoint failed for thread %s", thread.id)
+            processed += 1
+        except Exception:
+            logger.exception("idle memory capture failed for thread %s", thread.id)
+    return processed
 
 
 def memory_capture_node(state: Any) -> dict[str, Any]:
