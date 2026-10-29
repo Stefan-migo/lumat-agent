@@ -176,6 +176,7 @@ def _new_offer(
     *,
     attempts: int = 0,
     window: SlotWindow | None = None,
+    unchanged_against: dict | None = None,
 ) -> dict:
     case = session.scalar(
         select(Case).where(
@@ -196,6 +197,11 @@ def _new_offer(
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}
     universe = _slot_entries(assignments)
     slots = universe[:PAGE_SIZE]
+    # S10: a preference the parser cannot read rebuilds the offer for the day it did
+    # read, which can be the very page already on screen. Printing it again is the
+    # loop production #23 sat in for four turns, so the caller is told instead.
+    if unchanged_against is not None and slots == (unchanged_against.get("slots") or []):
+        return {"next_step": "end", "_unchanged_offer": True}
     offer = {
         "slots": slots, "universe": universe, "shown": len(slots),
         "created_at": now.isoformat(), "attempts": attempts,
@@ -209,6 +215,23 @@ def _new_offer(
             )
         ]}
     return {"next_step": "end", "replies": [_offer_text(slots, texts)]}
+
+
+def _invalid_offer(
+    session, state: ConversationState, offer: dict, texts: dict[str, str], attempts: int
+) -> dict:
+    """Count a preference the offer could not serve; the limit hands off.
+
+    S10: the counter used to restart every time the offer was rebuilt, so
+    `MAX_INVALID_REPLIES` was unreachable and the customer could be shown the same
+    list indefinitely.
+    """
+    if attempts > MAX_INVALID_REPLIES:
+        _persist_offer(session, state, None)
+        return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unclear"}
+    offer = {**offer, "attempts": attempts}
+    _persist_offer(session, state, offer)
+    return {"next_step": "end", "replies": [render_reply(texts, "booking_unclear")]}
 
 
 def _more_slots(session, state: ConversationState, offer: dict, texts: dict[str, str]) -> dict:
@@ -296,6 +319,7 @@ def booking(state: ConversationState) -> dict:
             return _new_offer(session, state, now, texts)
 
         slots = offer.get("slots") or []
+        attempts = int(offer.get("attempts", 0))
         selected = _resolve(text, slots)
         if selected is None:
             # S1/S4: naming a day — or asking whether one has room — is a request
@@ -303,10 +327,15 @@ def booking(state: ConversationState) -> dict:
             # spending the single clarification the handoff sits behind.
             requested = resolve_window(text, today=local_today(session, now))
             if requested is not None:
-                return _new_offer(session, state, now, texts, window=requested)
+                rebuilt = _new_offer(
+                    session, state, now, texts,
+                    window=requested, attempts=attempts + 1, unchanged_against=offer,
+                )
+                if rebuilt.pop("_unchanged_offer", False):
+                    return _invalid_offer(session, state, offer, texts, attempts + 1)
+                return rebuilt
             if _requests_more_slots(text):
                 return _more_slots(session, state, offer, texts)
-            attempts = int(offer.get("attempts", 0))
             if attempts >= MAX_INVALID_REPLIES:
                 _persist_offer(session, state, None)
                 return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unclear"}
