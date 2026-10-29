@@ -219,7 +219,7 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | C3 | S13 | One question per turn after a KB deviation | inline | |
 | C4 | S14 | Normalized service as retrieval fallback query | inline | |
 | C2 | S2 | Evidence question moves to after the booking confirmation | inline | |
-| C1 | S3 | Seed capture from the customer record (consent + data) | inline | blocked: L5 |
+| C1 | S3 | Seed capture from the customer record (consent + data) | inline | faaed3dc | blocked on L5.1 for the data half |
 | D1 | D | Investigate the message-less escalations | inline | |
 | D2 | D | Expired `booked` appointments | inline | |
 
@@ -304,10 +304,25 @@ tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price
 64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
 stays unclear and gets one confirmation instead of being guessed.
 
+**L11** — owner decisions, verbatim: `1. push y abre prs. el merge lo guardamos para despues.` and
+`2. c1. salto en silencio al bookign con el consentimiento ya dado.`
+
+Consequences:
+
+- **Chained delivery.** ~1000 authored lines do not fit one reviewable PR, so the branch is split into
+  three stacked PRs, base chain `main ← odd/chatbot-realismo-ack ← odd/chatbot-realismo-agenda-window ←
+  odd/chatbot-realismo-conversacional`: **#738** (spec + A1), **#740** (B1 + B2), **#741** (A2–A5).
+  Merge stays the owner's decision.
+- **C1 delivered as the consent half only** (`faaed3dc`). Owner chose the silent skip: when
+  `customers.consent_status` is true the question is not asked again, the flow goes straight to booking,
+  and `captured["_consent_previously_granted"]` records that nobody was asked in this conversation. The
+  ficha write moved with it, otherwise booking would drop the address the customer just gave. The data
+  half of S3 (reusing name/comuna/email/address from the record) stays open on L5.2 — an old address
+  sending a technician to the wrong place is a worse failure than one extra question.
+
 **L5** — open product decisions (owner):
 1. Consent already given: silent skip to booking, or a short confirmation (`¿mantengo los datos de tu
-   última visita?`), and does a "no" withdraw consent globally or only for this visit?
-2. TTL for stored customer data before it is offered back (e.g. 90 days), so an old address is not
+   última visita?`), and does a "no" withdraw consent globally or only for this visit?2. TTL for stored customer data before it is offered back (e.g. 90 days), so an old address is not
    reused as if it were current.
 3. Evidence question when the customer already sent a photo earlier in the conversation.
 4. Price in the out-of-coverage reply: never, or only when the customer asked for a price.
