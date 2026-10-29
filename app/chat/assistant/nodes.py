@@ -470,7 +470,7 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
 
 
 def memory_bootstrap(state: AssistantState) -> AssistantState:
-    """Add bounded own-memory rows as code-initiated prior tool evidence."""
+    """Add bounded own-memory rows as labelled harness context, not tool evidence."""
     if state.get("session") is None or type(state.get("thread_id")) is not int or state["thread_id"] <= 0:
         return {}
     try:
@@ -487,8 +487,19 @@ def memory_bootstrap(state: AssistantState) -> AssistantState:
     rows = result.get("result") if isinstance(result, dict) else None
     if not rows:
         return {}
-    entry = {**result, "arguments": {"scope": "own", "limit": 3}, "code_initiated": True}
-    return {"tool_results": [*(state.get("tool_results") or []), entry]}
+    serialized = json.dumps(rows, ensure_ascii=False, default=str)
+    if len(serialized) > _TOOL_EVIDENCE_LIMIT:
+        serialized = serialized[:_TOOL_EVIDENCE_LIMIT - 1] + "…"
+    context = state.get("context") or {"items": [], "meta": {}}
+    items = list(context.get("items") or [])
+    items.append({
+        "source": "own_memory",
+        "content": (
+            "Project/thread memory read by the harness before this turn; "
+            "not the result of any tool of this turn.\n" + serialized
+        ),
+    })
+    return {"context": {**context, "items": items}}
 
 
 def _effective_tools(state) -> tuple[str, ...]:
@@ -662,14 +673,23 @@ def _omission_marker(omitted: int) -> str:
 
 def _render_tool_evidence(state: AssistantState) -> str:
     results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
+    if not results:
+        return ""
     rendered_results = []
     for result in results:
-        payload = result.get("result") if isinstance(result, dict) else None
+        if not isinstance(result, dict):
+            continue
+        tool = str(result.get("tool") or "unknown")
+        status = str(result.get("status") or "unknown")
+        arguments = json.dumps(result.get("arguments") or {}, ensure_ascii=False, sort_keys=True, default=str)
+        header = f"tool={tool} status={status} arguments={arguments}"
+        payload = result.get("result")
+        rendered = header
         if payload is not None:
-            rendered = json.dumps(payload, ensure_ascii=False)
-            if isinstance(result, dict) and result.get("tool") in {"customers.list", "customers.search"} and isinstance(payload, list):
+            rendered += "\n" + json.dumps(payload, ensure_ascii=False, default=str)
+            if tool in {"customers.list", "customers.search"} and isinstance(payload, list):
                 try:
-                    args = get_tool(result["tool"]).args_model.model_validate(result.get("arguments") or {})
+                    args = get_tool(tool).args_model.model_validate(result.get("arguments") or {})
                     limit, offset = args.limit, args.offset
                     page_cue = f"Customer page: limit={limit}, offset={offset}, returned={len(payload)}. "
                     if len(payload) == limit:
@@ -682,31 +702,51 @@ def _render_tool_evidence(state: AssistantState) -> str:
                     rendered += "\n" + page_cue
                 except (AttributeError, TypeError, ValueError):
                     pass
-            rendered_results.append(rendered)
+        rendered_results.append(rendered)
     if not rendered_results:
         return ""
-    # Newest first, and the omission marker is budgeted *with* the results. The newest result
-    # is what the planner decides from, so it must never be the part a final cut removes --
-    # prepending the marker after budgeting is exactly how it used to disappear.
+
+    # Retain every executed step's identity/status even when its payload is omitted.
+    inventory = ""
+    stall = state.get("execution_stall")
+    if stall:
+        ran = ", ".join(str(item.get("tool") or "unknown") for item in results if isinstance(item, dict))
+        inventory = f"Execution chain stopped ({stall}); tools already run: {ran}.\n"
     newest_first = list(reversed(rendered_results))
     kept: list[str] = []
-    used = 0
-    for index, item in enumerate(newest_first):
-        older = len(newest_first) - index - 1
-        reserve = len(_omission_marker(older)) if older else 0
-        if kept and used + len(item) + 1 + reserve > _TOOL_EVIDENCE_LIMIT:
+    for item in newest_first:
+        candidate = "\n".join(reversed([*kept, item]))
+        omitted = len(rendered_results) - len(kept) - 1
+        marker = _omission_marker(omitted) if omitted else ""
+        inventory_lines = ""
+        if omitted:
+            inventory_lines = "Executed tools:\n" + "\n".join(
+                f"- tool={result.get('tool') or 'unknown'} status={result.get('status') or 'unknown'}"
+                for result in results if isinstance(result, dict)
+            ) + "\n"
+        if len(inventory) + len(inventory_lines) + len(marker) + len(candidate) <= _TOOL_EVIDENCE_LIMIT:
+            kept.append(item)
+        elif not kept:
+            # Preserve the newest result's provenance and as much payload as the bound permits.
+            reserve = len(inventory) + len(inventory_lines) + len(marker) + 2
+            kept.append(item[:max(0, _TOOL_EVIDENCE_LIMIT - reserve)] + "…")
             break
-        kept.append(item)
-        used += len(item) + 1
-    omitted = len(newest_first) - len(kept)
+        else:
+            break
+    omitted = len(rendered_results) - len(kept)
     body = "\n".join(reversed(kept))
-    # Dropping older results must not be silent: the planner decides "I have enough" from this
-    # rendering, so it has to know when evidence was left out of it.
-    prefix = _omission_marker(omitted) if omitted else ""
+    marker = _omission_marker(omitted) if omitted else ""
+    inventory_lines = ""
+    if omitted:
+        inventory_lines = "Executed tools:\n" + "\n".join(
+            f"- tool={result.get('tool') or 'unknown'} status={result.get('status') or 'unknown'}"
+            for result in results if isinstance(result, dict)
+        ) + "\n"
+    prefix = inventory + inventory_lines + marker
     if len(prefix) + len(body) <= _TOOL_EVIDENCE_LIMIT:
         return prefix + body
-    # A single result larger than the whole budget: truncate it, never the marker.
-    return prefix + body[: _TOOL_EVIDENCE_LIMIT - len(prefix) - 1] + "…"
+    # If the newest payload alone exceeds the budget, retain its header and cut only payload text.
+    return prefix + body[: max(0, _TOOL_EVIDENCE_LIMIT - len(prefix) - 1)] + "…"
 
 
 def _resolve_tool_image(state: AssistantState, handle: dict) -> dict | None:

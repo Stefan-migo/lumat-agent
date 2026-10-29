@@ -21,6 +21,8 @@ from app.services.agent_chat import (
 from app.services.settings import get_setting
 from app.services.users import hash_password
 
+from tests.integration._capture_aware import planner_only
+
 
 def _user(username, role="admin"):
     with SessionLocal() as session:
@@ -136,7 +138,7 @@ def test_s2_spent_token_cannot_authorize_an_identical_next_write(migrated_db, mo
         session.commit()
         assert done.status == "processed"
         session.refresh(thread)
-        assert thread.assistant_state["tool_steps"] == 2 and len(provider.planner_calls) == 1
+        assert thread.assistant_state["tool_steps"] == 2 and len(planner_only(provider.planner_calls)) == 1
 
 
 def test_s2_other_plan_token_is_refused(migrated_db, monkeypatch):
@@ -282,7 +284,7 @@ def test_s7_cap_bounds_a_write_chain_across_approvals(migrated_db, monkeypatch):
             approval = thread.assistant_state["approval"]
         assert thread.assistant_state["tool_steps"] == MAX_ASSISTANT_TOOL_STEPS
         assert thread.assistant_state["cap_reached"] is True and message.status == "processed"
-        assert len(provider.planner_calls) == MAX_ASSISTANT_TOOL_STEPS - 1
+        assert len(planner_only(provider.planner_calls)) == MAX_ASSISTANT_TOOL_STEPS - 1
 
 
 def test_t7_paused_step_events_is_a_delta_only():
