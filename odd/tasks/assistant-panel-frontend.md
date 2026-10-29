@@ -34,8 +34,8 @@ globales; "Capacidades del agente" con mejor UI.
 
 ## Tasks
 
-T1 — DONE. Remove the "Fuentes del hilo" section and its dead assertions. S1. `web/src/components/pages/AssistantWorkspace.tsx`, `web/src/components/pages/AssistantWorkspace.test.tsx`.
-T2 — DONE. Fix the thread project once the thread has messages. S2. `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AssistantWorkspace.tsx`, both `*.test.tsx`.
+T1 — DONE (`2f66b9e3`). Remove the "Fuentes del hilo" section and its dead assertions. S1. `web/src/components/pages/AssistantWorkspace.tsx`, `web/src/components/pages/AssistantWorkspace.test.tsx`.
+T2 — DONE (`2f66b9e3`). Fix the thread project once the thread has messages. S2. `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AssistantWorkspace.tsx`, both `*.test.tsx`.
 T3 — Redesign and reposition "Ver todos" and check the stick-to-bottom baseline. S3.
 T4 — Render a short, downloadable artifact link in the chat. S4.
 T5 — Redesign the right sidebar. S5.
