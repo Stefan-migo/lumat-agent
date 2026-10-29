@@ -61,8 +61,9 @@ Necesitamos guardar tus datos para gestionar la visita. ¿Nos darías tu autoriz
 Same root cause re-asks name, comuna, email and address: the capture flow never reads the customer
 record. Owner's rule: if the customer already granted consent, do not ask again.
 
-**Blocked on the owner's product decision** (see Log L5): silent skip vs. a short confirmation, and
-what a "no" withdraws.
+Owner decision (L17): the consent half is a **silent skip** to booking; the contact half is a
+**single confirmation** of the stored values, and a stored record is trusted for **one year**. The
+customer never books with data they have not seen, and the four questions become one.
 
 ### S4 — "manutención" is a preventive maintenance request (A5)
 
@@ -219,7 +220,7 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | C3 | S13 | One question per turn after a KB deviation | inline | see L15 |
 | C4 | S14 | Normalized service as retrieval fallback query | inline | |
 | C2 | S2 | Evidence question moves to after the booking confirmation | inline | |
-| C1 | S3 | Seed capture from the customer record (consent + data) | inline | faaed3dc | blocked on L5.1 for the data half |
+| C1 | S3 | Consent silent skip (`faaed3dc`) + stored contact confirmed in one message | inline | see L17 |
 | D1 | D | Investigate the message-less escalations | inline | |
 | D2 | D | Expired `booked` appointments | inline | |
 
@@ -303,6 +304,29 @@ Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/
 tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
 64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
 stays unclear and gets one confirmation instead of being guessed.
+
+**L17** — C1 completed. Owner decisions, verbatim: `1. push y abre prs. el merge lo guardamos para
+despues.` / `2. c1. salto en silencio al bookign con el consentimiento ya dado.`, plus
+"Confirmar en un solo mensaje (recomendado)" and "1 año" for the stored-contact half.
+
+Implementation: `capture_confirm_contact` is a new `reply.texts` key (panel-editable, slots
+`comuna`/`direccion`/`email`), the offer only fires when **every** field still missing is a contact
+field, and only when the ficha holds all three. A yes keeps the values; anything else drops what the
+customer did not confirm, except what the extractor read in that same turn.
+
+Two honest notes:
+- `customers` has no `updated_at`, so the one-year window ages against `created_at`. That direction is
+  conservative on purpose: an old record falls back to asking instead of offering an unverifiable
+  address. Adding `customers.data_updated_at` would make the window exact, and it is a schema change
+  (shape surface) that this slice does not need.
+- **TDD lapse, mine:** the implementation went in before its tests. I did not invent a RED; instead I
+  ran a mutation check — with the offer forced off, `test_a_returning_customer_confirms_their_contact_in_one_message`
+  fails with `Entiendo. ¿En qué comuna te encuentras?` — so the tests do pin the behaviour. Recorded
+  rather than hidden.
+
+Verified: `pytest tests/unit/test_capture_stored_contact.py` → 4 passed (implemented after the fact,
+see above); `bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db
+tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py` → exit 0.
 
 **L16** — known cosmetic defect: the C3 commit message (`f6f088f2`) lost the literal
 `` `_pending` `` because the message was passed to `git commit -m` inside double quotes and the

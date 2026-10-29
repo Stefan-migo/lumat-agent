@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
 
 from app.chat.nodes.handoff_gate import is_media_evidence
 from app.chat.phrasing import facts as phrase_facts
@@ -588,6 +589,8 @@ def capture(state: ConversationState) -> dict:
             captured, state.extracted, [], state, get_coverage_communes(session)
         )
     pending = captured.get("_pending")
+    if pending == "confirm_contact":
+        return _answer_contact_confirmation(captured, state)
     refused = refused_field(_current_text(state))
     if refused is not None and refused not in captured:
         # S6: honour the refusal for the field it names, then keep the capture
@@ -801,6 +804,83 @@ def _render_capture_question(
     return ask
 
 
+# S3: the three fields a returning customer should not have to retype. `name` is
+# deliberately absent: the greeting already used it, and a wrong name is cheaper to
+# carry than a wrong address.
+_STORED_CONTACT_FIELDS = ("comuna", "email", "address")
+# One year, the owner's decision: an annual maintenance customer should not repeat
+# their address, and `customers` has no `updated_at`, so the only timestamp to age
+# against is the ficha's creation. The failure direction is deliberately
+# conservative: an older record falls back to asking.
+_STORED_CONTACT_MAX_AGE = timedelta(days=365)
+
+
+def _stored_contact(session, state: ConversationState) -> dict[str, str]:
+    """S3: contact data the customer already gave, while it is still trusted."""
+    customer = session.get(Customer, state.customer_id)
+    if customer is None:
+        return {}
+    created_at = getattr(customer, "created_at", None)
+    if created_at is not None:
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - created_at > _STORED_CONTACT_MAX_AGE:
+            return {}
+    values = {field: getattr(customer, field, None) for field in _STORED_CONTACT_FIELDS}
+    stored = {
+        field: value.strip()
+        for field, value in values.items()
+        if isinstance(value, str) and value.strip()
+    }
+    # The confirmation sentence names all three, so a partial record asks normally
+    # instead of reading "Tengo tu comuna y …, con correo tu correo".
+    return stored if len(stored) == len(_STORED_CONTACT_FIELDS) else {}
+
+
+def _offer_stored_contact(session, state: ConversationState, captured: dict) -> str | None:
+    """Seed the captured contact from the ficha and ask for one confirmation (S3)."""
+    stored = _stored_contact(session, state)
+    if not stored or any(captured.get(field) for field in _STORED_CONTACT_FIELDS):
+        return None
+    captured.update(stored)
+    captured["_seeded_contact"] = list(_STORED_CONTACT_FIELDS)
+    captured["_contact_offered"] = True
+    captured["_pending"] = "confirm_contact"
+    return render_reply(
+        get_reply_texts(session),
+        "capture_confirm_contact",
+        comuna=captured["comuna"],
+        direccion=captured["address"],
+        email=captured["email"],
+    )
+
+
+def _is_affirmative(text: str) -> bool:
+    """A short yes for a confirmation; the same asymmetry consent uses."""
+    normalized = _normalize(text)
+    if not normalized or _looks_like_question(text):
+        return False
+    if re.search(r"\bno\b", normalized) and not re.search(
+        r"\bno\s+(?:cambio|cambió|nada)\b", normalized
+    ):
+        return False
+    bare = {_normalize(word) for word in _YES_WORDS}
+    return any(word in bare for word in normalized.split())
+
+
+def _answer_contact_confirmation(captured: dict, state: ConversationState) -> dict:
+    """Handle the single confirmation: keep the seeded values, or drop what changed."""
+    seeded = list(captured.pop("_seeded_contact", []) or [])
+    captured.pop("_pending", None)
+    if not _is_affirmative(_current_text(state)):
+        # A correction, not an approval: whatever the extractor read this turn stays,
+        # everything else the customer did not confirm is asked again.
+        for field in seeded:
+            if not state.extracted.get(field):
+                captured.pop(field, None)
+    return _ask_next(captured, state)
+
+
 def _customer_already_consented(session, state: ConversationState) -> bool:
     """S3: consent is a property of the customer, not of the conversation.
 
@@ -824,6 +904,18 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             _persist_captured(session, state, captured)
             return _derive(captured, COVERAGE_DERIVATION)
         missing = _missing_fields(captured, conduct["orden"])
+        contact_missing = [
+            field for field in missing if field in _STORED_CONTACT_FIELDS
+        ]
+        if (
+            contact_missing
+            and len(contact_missing) == len(missing)
+            and not captured.get("_contact_offered")
+        ):
+            offer = _offer_stored_contact(session, state, captured)
+            if offer is not None:
+                _persist_captured(session, state, captured)
+                return {"captured": captured, "replies": [offer]}
         if not missing:
             if _answer_consent(captured.get("consent", "")) is True:
                 _persist_captured(session, state, captured)
