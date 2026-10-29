@@ -155,6 +155,9 @@ def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
     assert calls == [
         {"scope": "panel", "entity_id": "thread:7", "proyecto": "default", "owner_id": None},
         {"scope": "agent", "entity_id": "agent:default", "proyecto": "default", "owner_id": None},
+        # MEM-14: the own read adds the user axis, bound to the authenticated owner
+        # (never to the project's authorization owner) and project-independent.
+        {"scope": "user", "entity_id": "user:7", "proyecto": "default", "owner_id": 7},
     ]
 
     result = execute_tool(
