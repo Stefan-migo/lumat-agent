@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import os
+import logging
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -12,6 +13,8 @@ from app.db import session_scope
 from app.models import DomainEvent
 from app.services.automation import evaluate_event
 from app.services.time_triggers import evaluate_time_triggers
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_SIZE = 50
 LEASE_SECONDS = 60
@@ -52,6 +55,12 @@ def run_cycle(limit: int = DEFAULT_BATCH_SIZE, owner: str = "h4-worker") -> int:
     processed = 0
     with session_scope() as session:
         evaluate_time_triggers(session, now)
+        try:
+            from app.chat.assistant.memory_capture import sweep_idle_threads
+
+            sweep_idle_threads(session, now=now)
+        except Exception:
+            logger.warning("idle assistant memory capture sweep failed", exc_info=True)
         session.flush()
         for event_id in _claim(session, limit, owner, now):
             event = session.get(DomainEvent, event_id)

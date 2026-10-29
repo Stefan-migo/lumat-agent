@@ -12,6 +12,8 @@ from app.services.agent_chat import approve_plan, reap_orphaned_runs, reap_stale
 from app.services.settings import get_setting
 from app.services.users import hash_password
 
+from tests.integration._capture_aware import planner_only
+
 
 class _Completions:
     def __init__(self, plans, text="Listo."):
@@ -174,7 +176,7 @@ def test_s7_cap_bounds_chain_across_pause(migrated_db, monkeypatch):
                 assert message.status == "approval_pending"
         assert message.status == "processed"
         assert thread.assistant_state["cap_reached"] is True
-        assert len(c.planner_calls) == MAX_ASSISTANT_TOOL_STEPS - 1
+        assert len(planner_only(c.planner_calls)) == MAX_ASSISTANT_TOOL_STEPS - 1
 
 
 def test_s7_cost_gate_stops_the_loop(monkeypatch):
