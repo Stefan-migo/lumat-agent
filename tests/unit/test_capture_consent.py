@@ -137,3 +137,61 @@ def test_a_bare_affirmative_inside_a_sentence_is_not_consent(capture_harness, mo
 
     assert result.get("next_step") != "booking"
     assert calls == []
+
+
+class _ConsentedCustomer:
+    consent_status = True
+
+
+@pytest.fixture
+def already_consented_harness(capture_harness, monkeypatch):
+    """A returning customer whose consent is already on the customer record."""
+
+    @contextmanager
+    def session_scope():
+        yield _ConsentedSession()
+
+    class _ConsentedSession(_Session):
+        def get(self, model, *_args):
+            return _ConsentedCustomer() if model.__name__ == "Customer" else None
+
+    monkeypatch.setattr(capture_node, "session_scope", session_scope)
+    return capture_harness
+
+
+def test_consent_already_on_the_record_is_not_asked_again(already_consented_harness):
+    """S3: production #23 turn 301 asked a customer whose consent was granted on 10-27."""
+    result = capture_node.capture(state("Rey de reyes 765", captured={
+        "failure": "no enciende", "equipment": "calefont", "comuna": "Ñuñoa",
+        "availability": "3 de noviembre", "name": "Stefan", "email": "stefan@mail.com",
+        "address": "Rey de reyes 765",
+    }))
+
+    assert result["next_step"] == "booking"
+    assert result.get("replies") is None or not any(
+        "autoriz" in reply.lower() for reply in result.get("replies", [])
+    )
+    assert result["captured"]["_consent_previously_granted"] is True
+
+
+def test_a_customer_without_consent_is_still_asked(capture_harness):
+    """The skip is a property of the record, never a default."""
+    result = capture_node.capture(state("Rey de reyes 765", captured={
+        "failure": "no enciende", "equipment": "calefont", "comuna": "Ñuñoa",
+        "availability": "mañana", "name": "Ana", "email": "ana@example.cl",
+        "address": "Calle 1",
+    }))
+
+    assert result.get("next_step") != "booking"
+    assert result["replies"] == [REPLY_TEXT_DEFAULTS["capture_consent"]]
+
+
+def test_granted_consent_on_the_record_still_writes_the_captured_ficha(monkeypatch):
+    """Booking without the ficha write would lose the new address the customer just gave."""
+    calls = []
+    monkeypatch.setattr(capture_node, "_sync_customer_fields", lambda *_args: calls.append("sync"))
+    captured = {"name": "Stefan", "address": "Rey de reyes 765", "_consent_previously_granted": True}
+
+    capture_node._persist_captured(MagicMock(), state("ok"), captured)
+
+    assert calls == ["sync"]

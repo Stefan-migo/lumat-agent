@@ -258,7 +258,12 @@ def _persist_captured(session, state: ConversationState, captured: dict) -> None
     # S1 canvas: consent is asked BEFORE email/address, so a single ficha write at
     # the consent step would leave the customer record missing every field captured
     # after it (CI functional flows caught exactly that). The sync is idempotent.
-    if _answer_consent(captured.get("consent", "")) is True:
+    # S3: a consent already on record enables the same write, otherwise skipping the
+    # question would book a visit and drop the address the customer just gave.
+    if (
+        _answer_consent(captured.get("consent", "")) is True
+        or captured.get("_consent_previously_granted")
+    ):
         _sync_customer_fields(session, state, captured)
 
 
@@ -796,6 +801,17 @@ def _render_capture_question(
     return ask
 
 
+def _customer_already_consented(session, state: ConversationState) -> bool:
+    """S3: consent is a property of the customer, not of the conversation.
+
+    Production #23 turn 301 asked a customer whose consent had been recorded on
+    2026-10-27: the flow only ever looked at `captured["consent"]`, so every new
+    conversation started the consent step from zero. The ficha is the source.
+    """
+    customer = session.get(Customer, state.customer_id)
+    return bool(customer is not None and customer.consent_status)
+
+
 def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = False) -> dict:
     """Ask the next missing fields, or the consent step when none remain."""
     with session_scope() as session:
@@ -810,6 +826,13 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
         missing = _missing_fields(captured, conduct["orden"])
         if not missing:
             if _answer_consent(captured.get("consent", "")) is True:
+                _persist_captured(session, state, captured)
+                return {"captured": captured, "next_step": "booking"}
+            if _customer_already_consented(session, state):
+                # S3: silent skip, decided by the owner. The marker keeps the trace
+                # honest for the panel: nobody asked in this conversation.
+                captured.pop("_pending", None)
+                captured["_consent_previously_granted"] = True
                 _persist_captured(session, state, captured)
                 return {"captured": captured, "next_step": "booking"}
             captured["_pending"] = "consent"
