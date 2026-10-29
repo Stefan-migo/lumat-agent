@@ -279,7 +279,15 @@ def _render_capture_ack(session, captured: dict) -> str:
     An acknowledgement marks a transition; repeating the same sentence before
     every later question turns it back into the tic this feature removes, so the
     last one used is remembered and an identical replay is suppressed.
+
+    S1 (chatbot-realismo-conversacional): it also thanks for something only once
+    something has been asked. Production turn 285 opened the capture with
+    "Gracias Stefan. Stefan, cuéntame qué pasa con la caldera…" — the customer had
+    given nothing yet, and the name arrived twice in one message. The trigger is a
+    fact the flow already tracks: a field is on record as asked.
     """
+    if not captured.get("_asked"):
+        return ""
     text = get_capture_ack(session)
     facts = {
         "nombre": captured.get("name"),
@@ -289,7 +297,12 @@ def _render_capture_ack(session, captured: dict) -> str:
         "disponibilidad": captured.get("availability"),
     }
     available = {key: value for key, value in facts.items() if isinstance(value, str) and value and value != "unknown"}
-    if not available or not any(re.search(r"{{\s*" + key + r"\s*}}", text) for key in available):
+    declared = set(re.findall(r"{{\s*(\w+)\s*}}", text))
+    # S1: a text with no placeholders is renderable on its own ("Entiendo. ").
+    # Requiring an interpolated fact made "Gracias {{nombre}}. " the only shape the
+    # acknowledgement could ever take, so the shipped default could not be a plain
+    # phrase until this guard stopped demanding a fact.
+    if declared and not declared <= set(available):
         return ""
     rendered = re.sub(
         r"{{\s*(\w+)\s*}}",

@@ -780,7 +780,48 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("056_appointment_technician_state",),
         ("057_grant_automation_installation_delete",),
         ("058_message_media",),
+        ("059_capture_ack_plain",),
     ]
+
+
+def test_migration_059_rewrites_only_the_shipped_acknowledgement(tmp_path):
+    """059 fixes the stored copy of the old default and touches nothing else."""
+    with _scratch_migration_db(tmp_path, 58, 59) as (conn, apply_059, _):
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (%s, %s::jsonb), (%s, %s::jsonb)",
+            (
+                "reply.texts",
+                '{"capture_ack": "Gracias {{nombre}}. ", "handoff": "sigue igual"}',
+                "capture.preventive_keywords",
+                '["mantencion"]',
+            ),
+        )
+
+        result = apply_059()
+        assert result.returncode == 0, f"059 failed:\n{result.stdout}\n{result.stderr}"
+
+        texts = conn.execute("SELECT value FROM settings WHERE key='reply.texts'").fetchone()[0]
+        assert texts["capture_ack"] == "Entiendo. "
+        assert texts["handoff"] == "sigue igual"
+        keywords = conn.execute(
+            "SELECT value FROM settings WHERE key='capture.preventive_keywords'"
+        ).fetchone()[0]
+        assert keywords == ["mantencion"]
+
+
+def test_migration_059_leaves_a_hand_edited_acknowledgement_alone(tmp_path):
+    """The rewrite is guarded by the old default: a panel edit is never overwritten."""
+    with _scratch_migration_db(tmp_path, 58, 59) as (conn, apply_059, _):
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (%s, %s::jsonb)",
+            ("reply.texts", '{"capture_ack": "Listo {{nombre}}: "}'),
+        )
+
+        result = apply_059()
+        assert result.returncode == 0, f"059 failed:\n{result.stdout}\n{result.stderr}"
+
+        texts = conn.execute("SELECT value FROM settings WHERE key='reply.texts'").fetchone()[0]
+        assert texts["capture_ack"] == "Listo {{nombre}}: "
 
 
 def test_memory_dedup_index_includes_owner_and_allows_cross_owner_duplicates(migrated_db, admin_conn):
