@@ -1209,6 +1209,37 @@ def test_no_tool_prompt_keeps_the_markup_rule_without_denying_capability(monkeyp
     assert "never state that you cannot use or execute them" in prompt
 
 
+def test_responder_prompt_names_context_as_a_source_for_harness_memory(monkeypatch):
+    """S1 moved own memory out of `<tool_evidence>`.
+
+    The responder is told to answer from `<tool_evidence>` and `<kb>` and to say it could not find
+    anything when neither has it. Without naming `<context>` as a source, moving own memory there
+    would trade a false "no tool arrived" for a false "I could not find it".
+    """
+    calls = []
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls, "Text reply"))
+
+    execute(
+        {
+            "thread_id": 7,
+            "run_id": "run-memory-context",
+            "content": "¿qué recordás de este proyecto?",
+            "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
+            "context": {"items": [{
+                "source": "own_memory",
+                "content": "Project/thread memory read by the harness before this turn; not the result of any tool of this turn.\n[]",
+            }]},
+            "on_token": lambda _token: None,
+        }
+    )
+
+    prompt = calls[0]["messages"][-1]["content"]
+    assert "Treat it as\na source too" in prompt
+    assert "never present it as the result of a tool call of this turn" in prompt
+    tool_evidence = prompt.split("<tool_evidence>")[1].split("</tool_evidence>")[0]
+    assert "Project/thread memory read by the harness" not in tool_evidence
+
+
 def test_repeat_guard_leaves_a_repeated_write_to_its_own_gate():
     """S10: the read-loop guard must not rewrite a write.
 
