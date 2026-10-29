@@ -22,6 +22,7 @@ budget is "no".
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from typing import Any, Literal
@@ -41,6 +42,8 @@ _MAX_TOOL_RESULT_CHARS = 2000
 _MAX_USER_REQUEST_CHARS = 4000
 _MAX_PLAN_SUMMARY_CHARS = 2000
 _MAX_FINAL_RESPONSE_CHARS = 3000
+
+logger = logging.getLogger(__name__)
 
 CAPTURE_TURN_INTERVAL = 4
 CAPTURE_DAILY_LIMIT = 6
@@ -269,3 +272,87 @@ def should_capture(state: Any) -> CaptureDecision | None:
         durable_write=durable_write_in(state.get("tool_results") or [], AUTONOMOUS_WRITE_ALLOWLIST),
         compacted=bool((state.get("compaction") or {}).get("rotated")),
     )
+
+
+def capture_turn(state: Any) -> dict[str, Any]:
+    """Capture durable memories for a finished turn when its deterministic gate fires."""
+    reason = None
+    written = 0
+    try:
+        decision = should_capture(state)
+        if decision is None:
+            return {"written": 0, "reason": None}
+        reason = decision.reason
+        candidates = extract_candidates(
+            state=state,
+            user_request=state.get("content"),
+            plan_summary=(state.get("plan") or {}).get("summary"),
+            tool_results=state.get("tool_results"),
+            final_response=state.get("response"),
+        )
+        if not candidates:
+            return {"written": 0, "reason": reason}
+
+        from app.chat.assistant.tools.registry import execute_tool
+        from app.services.projects import _ProjectAuthorization
+
+        authorization = state.get("project_authorization")
+        if authorization is None:
+            project_slug = "default"
+        elif isinstance(authorization, _ProjectAuthorization):
+            project_slug = authorization.slug
+        else:
+            raise ValueError("SDB project selection requires an authorized project capability")
+
+        for candidate in candidates:
+            outcome = execute_tool(
+                state.get("session"),
+                "memory.write",
+                candidate,
+                # A workspace that narrows its tool list also narrows capture; an
+                # unconfigured workspace keeps the default memory.write path.
+                whitelist=set(
+                    (state.get("effective") or {}).get("tools_whitelist") or {"memory.write"}
+                ),
+                cost_allowed=True,
+                role=state.get("actor_role"),
+                trusted_thread_id=state.get("thread_id"),
+                owner_id=state.get("user_id"),
+                proyecto=project_slug,
+            )
+            result = outcome.get("result") if isinstance(outcome, dict) else None
+            if (
+                not isinstance(outcome, dict)
+                or outcome.get("status") != "completed"
+                or (isinstance(result, dict) and result.get("written") is False)
+            ):
+                return {
+                    "written": written,
+                    "reason": reason,
+                    "degraded_reason": (
+                        result.get("degraded_reason")
+                        if isinstance(result, dict) and result.get("degraded_reason")
+                        else "memory capture unavailable"
+                    ),
+                }
+            written += 1
+    except Exception as exc:
+        logger.warning("memory capture degraded for thread %s: %s", state.get("thread_id"), exc)
+        return {
+            "written": written,
+            "reason": reason,
+            "degraded_reason": "memory capture unavailable",
+        }
+    return {"written": written, "reason": reason}
+
+
+def memory_capture_node(state: Any) -> dict[str, Any]:
+    """LangGraph adapter that keeps optional capture failures off the turn path."""
+    try:
+        result = capture_turn(state)
+    except Exception as exc:
+        logger.warning(
+            "memory capture node degraded for thread %s: %s", state.get("thread_id"), exc
+        )
+        result = {"written": 0, "reason": None, "degraded_reason": "memory capture unavailable"}
+    return {"memory_capture": result}

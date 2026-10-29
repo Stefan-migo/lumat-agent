@@ -8,6 +8,8 @@ decision depends on nothing else.
 
 from __future__ import annotations
 
+import pytest
+
 from app.chat.assistant import memory_capture
 from app.chat.assistant.memory_capture import (
     CAPTURE_DAILY_LIMIT,
@@ -218,3 +220,123 @@ def test_extract_candidates_returns_none_when_provider_fails(monkeypatch):
 
     result, _ = _extract(monkeypatch, json.dumps({"memories": [_candidate()]}), error={"kind": "provider"})
     assert result == []
+
+
+def test_capture_turn_skips_paid_calls_when_gate_is_closed(monkeypatch):
+    monkeypatch.setattr(memory_capture, "should_capture", lambda _state: None)
+    monkeypatch.setattr(memory_capture, "extract_candidates", lambda **_kwargs: pytest.fail("unexpected paid call"))
+
+    result = memory_capture.capture_turn({"thread_id": 7})
+
+    assert result == {"written": 0, "reason": None}
+
+
+def test_capture_turn_writes_one_candidate_for_an_eligible_turn(monkeypatch):
+    from app.chat.assistant.tools import registry
+
+    state = {
+        "content": "Keep this decision",
+        "plan": {"summary": "Decision summary"},
+        "tool_results": [{"tool": "customers.search", "result": ["Ana"]}],
+        "response": "We will keep it.",
+        "thread_id": 7,
+        "user_id": 3,
+        "session": object(),
+        "actor_role": "admin",
+        "project_authorization": None,
+    }
+    calls = []
+    monkeypatch.setattr(memory_capture, "should_capture", lambda _state: CaptureDecision("durable_write"))
+    monkeypatch.setattr(
+        memory_capture,
+        "extract_candidates",
+        lambda **kwargs: calls.append(("extract", kwargs)) or [_candidate(handoff=False)],
+    )
+    monkeypatch.setattr(
+        registry,
+        "execute_tool",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or {"status": "completed"},
+    )
+
+    result = memory_capture.capture_turn(state)
+
+    assert result == {"written": 1, "reason": "durable_write"}
+    assert calls[0] == (
+        "extract",
+        {
+            "state": state,
+            "user_request": "Keep this decision",
+            "plan_summary": "Decision summary",
+            "tool_results": state["tool_results"],
+            "final_response": "We will keep it.",
+        },
+    )
+    args, kwargs = calls[1]
+    assert args == (state["session"], "memory.write", _candidate(handoff=False))
+    assert kwargs == {
+        "whitelist": {"memory.write"},
+        "cost_allowed": True,
+        "role": "admin",
+        "trusted_thread_id": 7,
+        "owner_id": 3,
+        "proyecto": "default",
+    }
+
+
+def test_capture_turn_writes_nothing_when_extractor_returns_no_candidates(monkeypatch):
+    from app.chat.assistant.tools import registry
+
+    monkeypatch.setattr(memory_capture, "should_capture", lambda _state: CaptureDecision("turns"))
+    monkeypatch.setattr(memory_capture, "extract_candidates", lambda **_kwargs: [])
+    monkeypatch.setattr(registry, "execute_tool", lambda *_args, **_kwargs: pytest.fail("unexpected write"))
+
+    assert memory_capture.capture_turn({"thread_id": 7}) == {"written": 0, "reason": "turns"}
+
+
+def test_capture_turn_degrades_when_memory_write_raises(monkeypatch):
+    from app.chat.assistant.tools import registry
+
+    monkeypatch.setattr(memory_capture, "should_capture", lambda _state: CaptureDecision("compaction"))
+    monkeypatch.setattr(memory_capture, "extract_candidates", lambda **_kwargs: [_candidate(handoff=False)])
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("storage unavailable")
+
+    monkeypatch.setattr(registry, "execute_tool", fail)
+
+    result = memory_capture.capture_turn({"thread_id": 7})
+
+    assert result == {
+        "written": 0,
+        "reason": "compaction",
+        "degraded_reason": "memory capture unavailable",
+    }
+
+
+def test_capture_turn_counts_only_successful_memory_writes(monkeypatch):
+    from app.chat.assistant.tools import registry
+
+    monkeypatch.setattr(memory_capture, "should_capture", lambda _state: CaptureDecision("turns"))
+    monkeypatch.setattr(memory_capture, "extract_candidates", lambda **_kwargs: [_candidate(handoff=False)])
+    monkeypatch.setattr(
+        registry,
+        "execute_tool",
+        lambda *_args, **_kwargs: {
+            "status": "completed",
+            "result": {"written": False, "degraded_reason": "Memory write unavailable"},
+        },
+    )
+
+    assert memory_capture.capture_turn({"thread_id": 7}) == {
+        "written": 0,
+        "reason": "turns",
+        "degraded_reason": "Memory write unavailable",
+    }
+
+
+def test_memory_capture_node_never_raises(monkeypatch):
+    monkeypatch.setattr(memory_capture, "capture_turn", lambda _state: (_ for _ in ()).throw(RuntimeError("failure")))
+
+    assert memory_capture.memory_capture_node({}) == {
+        "memory_capture": {"written": 0, "reason": None, "degraded_reason": "memory capture unavailable"}
+    }
