@@ -1,6 +1,6 @@
 """Assistant loop keeps legacy Cortex state out and preserves the SDB handoff."""
 
-from app.chat.assistant.graph import run_assistant
+from app.chat.assistant.graph import END, build_assistant_graph, run_assistant
 from app.chat.assistant.nodes import _effective_tools
 
 
@@ -15,3 +15,12 @@ def test_effective_tools_are_not_filtered_by_legacy_cortex_state():
 def test_sdb_requested_remains_a_turn_state_field():
     # The graph's public entry point continues accepting the SDB handoff signal.
     assert "sdb_requested" in run_assistant.__annotations__ or "sdb_requested" in run_assistant.__code__.co_varnames
+
+
+def test_memory_capture_is_between_evidence_and_end():
+    graph = build_assistant_graph()
+    edges = {(edge.source, edge.target) for edge in graph.get_graph().edges}
+
+    assert ("evidence", "memory_capture") in edges
+    assert ("memory_capture", END) in edges
+    assert ("evidence", END) not in edges

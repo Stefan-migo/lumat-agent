@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
+from app.chat.assistant.memory_capture import memory_capture_node
 from app.chat.assistant.nodes import (
     assemble_context_node,
     collect_evidence,
@@ -88,6 +89,7 @@ def build_assistant_graph():
     builder.add_node("verify_effects", verify_effects)
     builder.add_node("respond_stream", execute)
     builder.add_node("evidence", collect_evidence)
+    builder.add_node("memory_capture", memory_capture_node)
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"memory_bootstrap": "memory_bootstrap", "evidence": "evidence"})
@@ -102,7 +104,8 @@ def build_assistant_graph():
     builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "verify_effects": "verify_effects"})
     builder.add_edge("verify_effects", "respond_stream")
     builder.add_edge("respond_stream", "evidence")
-    builder.add_edge("evidence", END)
+    builder.add_edge("evidence", "memory_capture")
+    builder.add_edge("memory_capture", END)
     return builder.compile()
 
 
