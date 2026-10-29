@@ -21,14 +21,26 @@ budget is "no".
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from typing import Any, Literal
 
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.chat.assistant.tools.registry import MemoryWriteArgs
 from app.models import InternalChatMessage, Memory
+from app.services.prompts import load
+
+
+_CAPTURE_PROMPT = "prompts/assistant_memory_capture.md"
+_MAX_TOOL_RESULTS = 3
+_MAX_TOOL_RESULT_CHARS = 2000
+_MAX_USER_REQUEST_CHARS = 4000
+_MAX_PLAN_SUMMARY_CHARS = 2000
+_MAX_FINAL_RESPONSE_CHARS = 3000
 
 CAPTURE_TURN_INTERVAL = 4
 CAPTURE_DAILY_LIMIT = 6
@@ -45,6 +57,108 @@ class CaptureDecision:
     """One fired gate. The reason is recorded as capture evidence."""
 
     reason: CaptureReason
+
+
+def _bounded_text(value: object, limit: int) -> str:
+    if isinstance(value, str):
+        return value[:limit]
+    if value is None:
+        return ""
+    try:
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        text = str(value)
+    return text[:limit]
+
+
+def _capture_payload(
+    *,
+    user_request: object,
+    plan_summary: object,
+    tool_results: object,
+    final_response: object,
+) -> str:
+    executed_tools = []
+    if isinstance(tool_results, list):
+        for entry in tool_results[:_MAX_TOOL_RESULTS]:
+            if not isinstance(entry, dict):
+                continue
+            executed_tools.append(
+                {
+                    "tool": _bounded_text(entry.get("tool", ""), 120),
+                    "result": _bounded_text(
+                        entry.get("result", entry.get("output", "")),
+                        _MAX_TOOL_RESULT_CHARS,
+                    ),
+                }
+            )
+    return json.dumps(
+        {
+            "user_request": _bounded_text(user_request, _MAX_USER_REQUEST_CHARS),
+            "plan_summary": _bounded_text(plan_summary, _MAX_PLAN_SUMMARY_CHARS),
+            "executed_tools": executed_tools,
+            "final_response_excerpt": _bounded_text(final_response, _MAX_FINAL_RESPONSE_CHARS),
+        },
+        ensure_ascii=False,
+    )
+
+
+def _planner_call(messages: list[dict], state: Any, call_key: str) -> tuple[str, object, dict[str, str] | None]:
+    """Resolve the paid planner seam lazily.
+
+    `nodes` imports this module for the capture node, so importing the seam at
+    module level would close the cycle at graph build time. Keeping the module
+    attribute also gives tests one patch point that never touches `nodes`.
+    """
+    from app.chat.assistant.nodes import _planner_call as paid_planner_call
+
+    return paid_planner_call(messages, state, call_key)
+
+
+def extract_candidates(
+    *,
+    state: Any,
+    user_request: object,
+    plan_summary: object,
+    tool_results: object,
+    final_response: object,
+) -> list[dict[str, Any]]:
+    """Extract up to three strictly validated memory candidates from a finished turn."""
+    messages = [
+        {"role": "system", "content": load(_CAPTURE_PROMPT)},
+        {
+            "role": "user",
+            "content": _capture_payload(
+                user_request=user_request,
+                plan_summary=plan_summary,
+                tool_results=tool_results,
+                final_response=final_response,
+            ),
+        },
+    ]
+    try:
+        raw_text, _completion, error = _planner_call(messages, state, "memory_capture")
+    except Exception:
+        return []
+    if error or not isinstance(raw_text, str):
+        return []
+    try:
+        payload = json.loads(raw_text)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return []
+    if not isinstance(payload, dict) or set(payload) != {"memories"}:
+        return []
+    items = payload["memories"]
+    if not isinstance(items, list):
+        return []
+    candidates: list[dict[str, Any]] = []
+    for item in items[:3]:
+        try:
+            validated = MemoryWriteArgs.model_validate(item)
+        except (ValidationError, TypeError, ValueError):
+            continue
+        candidates.append(validated.model_dump())
+    return candidates
 
 
 def capture_decision(
