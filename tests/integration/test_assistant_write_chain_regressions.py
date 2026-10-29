@@ -17,6 +17,8 @@ from app.services.agent_chat import approve_plan
 from app.services.settings import get_setting
 from app.services.users import hash_password
 
+from tests.integration._capture_aware import planner_only
+
 
 class _Completions:
     """The responder only: a single write must not trigger a re-plan."""
@@ -85,7 +87,7 @@ def test_single_write_turn_issues_one_approval_and_never_chains(migrated_db, mon
         assert message.status == "processed"
         assert get_setting(session, "messages.farewell") == "Nos vemos."
         assert client.stream_calls == 1
-        assert client.planner_calls == []  # no re-plan: the turn ended at the write
+        assert planner_only(client.planner_calls) == []  # no re-plan: the turn ended at the write
         assert issued == []  # no fresh approval was requested
         session.refresh(thread)
         assert thread.assistant_state["stage"] == "completed"

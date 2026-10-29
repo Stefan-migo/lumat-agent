@@ -7,6 +7,8 @@ embedder. Companion integration coverage lives in the S2..S4 suites (context
 injection, close memo, panel).
 """
 
+from pathlib import Path
+
 import psycopg
 import pytest
 from uuid import uuid4
@@ -25,7 +27,7 @@ from app.models import (
 )
 from app.services import memory, tukulpan  # noqa: F401  (services under test)
 
-pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9 MEM-10 MEM-12")
+pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9 MEM-10 MEM-12 MEM-13")
 
 
 # ---------------------------------------------------------------------------
@@ -1080,6 +1082,44 @@ def test_mem9_coherence_constraint_rejects_global_panel_row(migrated_db, admin_c
 # ---------------------------------------------------------------------------
 # MEM-12 — Handoff Marker
 # ---------------------------------------------------------------------------
+
+
+def test_mem13_spec_defines_deterministic_autonomous_capture():
+    spec = Path("openspec/specs/memory/spec.md").read_text()
+    mem13 = spec.split("### Requirement: MEM-13 — Deterministic Autonomous Capture", 1)[1]
+    assert "### Requirement:" not in mem13
+
+    for clause in (
+        "runtime, not the user and not the model",
+        "turn interval",
+        "durable write outcome",
+        "rotation",
+        "blocked cost budget",
+        "untrusted thread",
+        "per-thread daily budget",
+        "no capture and no paid call",
+        "at most three items",
+        "strict schema",
+        "does not validate is dropped",
+        "canonical Tukulpan write seam",
+        "producer=agent",
+        "origin_thread_id",
+        "content-hash deduplication",
+        "relation judging",
+        "failed capture",
+        "never fails or blocks the turn",
+        "never injects or mutates the assembled panel context",
+        "idle-thread sweep",
+        "idempotently by its last message",
+    ):
+        assert clause in mem13, f"MEM-13 is missing: {clause}"
+
+    assert "(MEM-9)" in mem13
+    assert "(MEM-1)" in mem13
+    assert "(MEM-11)" in mem13
+    assert "(MEM-3 stays intact)" in mem13
+    assert "#### Scenario:" in mem13
+    assert "- GIVEN " in mem13 and "- WHEN " in mem13 and "- THEN " in mem13
 
 
 def test_mem12_default_handoff_is_false(fake_embedder, migrated_db):

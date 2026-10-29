@@ -311,6 +311,39 @@ The assistant MAY mark an agent-authored memory as a **handoff** — a continuat
 - WHEN it is upserted with `handoff: false`
 - THEN the stored `handoff` becomes false
 
+### Requirement: MEM-13 — Deterministic Autonomous Capture
+
+The runtime, not the user and not the model, MUST decide when autonomous memory capture runs. Capture MUST be gated by the configured turn interval, a durable write outcome, or a rotation; it MUST NOT run on every turn. A blocked cost budget, an untrusted thread, or an exhausted per-thread daily budget MUST produce no capture and no paid call. The model MUST only produce candidates under a strict schema of at most three items, and any candidate that does not validate MUST be dropped rather than written. Each accepted capture MUST be persisted through the canonical Tukulpan write seam with `producer=agent` and `origin_thread_id` (MEM-9), so content-hash deduplication (MEM-1) and relation judging (MEM-11) apply unchanged. A failed capture MUST degrade as evidence and MUST never fail or block the turn. Capture MUST never inject or mutate the assembled panel context (MEM-3 stays intact). An idle-thread sweep MUST capture a thread that stopped without a rotation, idempotently by its last message.
+
+#### Scenario: Runtime gates decide capture
+- GIVEN a trusted thread with available cost budget and remaining per-thread daily budget
+- WHEN the configured turn interval, a durable write outcome, or a rotation is reached
+- THEN the runtime decides whether capture runs without requiring a user request or model decision
+- AND a blocked cost budget, an untrusted thread, or an exhausted per-thread daily budget produces no capture and no paid call
+
+#### Scenario: Candidate schema is strict and bounded
+- GIVEN the runtime has deterministically decided to capture
+- WHEN the model produces candidates
+- THEN it produces no more than three items under the strict candidate schema
+- AND each candidate that does not validate is dropped rather than written
+
+#### Scenario: Capture uses the canonical write seam
+- GIVEN a candidate validates for a trusted thread
+- WHEN the runtime persists the capture
+- THEN it uses the canonical Tukulpan write seam with `producer=agent` and `origin_thread_id`
+- AND content-hash deduplication and relation judging apply unchanged
+
+#### Scenario: Capture failure and panel context remain isolated
+- GIVEN capture fails or a panel turn assembles its context
+- WHEN the turn continues or context is assembled
+- THEN failure is surfaced as degraded evidence and never fails or blocks the turn
+- AND capture never injects or mutates the assembled panel context
+
+#### Scenario: Idle-thread sweep captures without rotation idempotently
+- GIVEN a thread has stopped after its last message without a rotation
+- WHEN the idle-thread sweep processes it more than once
+- THEN it captures the thread idempotently by its last message
+
 ## MODIFIED Requirements
 
 ## Boundary
