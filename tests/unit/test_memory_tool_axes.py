@@ -422,3 +422,88 @@ def test_memory_write_handoff_defaults_to_false():
     )
 
     assert args.handoff is False
+
+
+def test_user_memory_write_uses_authenticated_user_axis_not_project_owner(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(registry.projects, "agent_context", lambda *_args, **_kwargs: pytest.fail("user axis must not resolve project authorization"))
+    monkeypatch.setattr(registry.memory, "upsert", lambda _session, **kwargs: captured.update(kwargs) or Mock(id=12))
+    args = registry.MemoryWriteArgs(
+        titulo="Person fact", contenido="Prefers concise updates", topic_key="agent:preference",
+        tipo="preference", visibility="user",
+    )
+
+    result = registry._write_memory(MagicMock(), args, trusted_thread_id=3, proyecto="acme", owner_id=7)
+
+    assert result == {"written": True, "id": 12, "topic_key": "agent:preference"}
+    assert captured["scope"] == "user"
+    assert captured["entity_id"] == "user:7"
+    assert captured["proyecto"] == "default"
+    assert captured["owner_id"] == 7
+    assert captured["visibility"] == tukulpan.MemoryVisibility.GLOBAL
+    assert captured["authorization"] is None
+
+
+def test_user_memory_write_requires_positive_integer_owner_before_persistence(monkeypatch):
+    writes = []
+    monkeypatch.setattr(registry.memory, "upsert", lambda *_args, **_kwargs: writes.append(True))
+    args = registry.MemoryWriteArgs(
+        titulo="Person fact", contenido="Prefers concise updates", topic_key="agent:preference",
+        tipo="preference", visibility="user",
+    )
+
+    for owner_id in (None, 0, -1, "7", True):
+        with pytest.raises(registry.ToolValidationError, match="authenticated owner"):
+            registry._write_memory(MagicMock(), args, trusted_thread_id=3, proyecto="default", owner_id=owner_id)
+    assert writes == []
+
+
+def test_user_memory_read_has_separate_budget_and_interleaves_three_axes(monkeypatch):
+    calls = []
+    def rows_for(scope, entity_id):
+        return [Mock(
+            id=f"{scope}-{i}", scope=scope, entity_id=entity_id, topic_key=f"{scope}-{i}",
+            titulo="", tipo="decision", contenido="", created_at=None, updated_at=None,
+        ) for i in range(5)]
+    def list_axis(_session, *, scope, entity_id, proyecto, owner_id):
+        calls.append((scope, entity_id, proyecto, owner_id))
+        return rows_for(scope, entity_id)
+    monkeypatch.setattr(registry.memory, "list_for_entity", list_axis)
+    monkeypatch.setattr(registry.projects, "agent_context", lambda *_args, **kwargs: SimpleNamespace(owner_id=999))
+
+    result = registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({"limit": 3}), trusted_thread_id=42,
+        proyecto="acme", owner_id=7,
+    )
+
+    assert calls == [
+        ("panel", "thread:42", "acme", 999),
+        ("agent", "agent:acme", "acme", 999),
+        ("user", "user:7", "default", 7),
+    ]
+    assert registry.USER_AXIS_LIMIT == 2
+    assert len(result) == 3
+    assert sum(row["scope"] == "user" for row in result) <= 2
+    assert any(row["scope"] in {"panel", "agent"} for row in result)
+
+
+def test_user_memory_search_has_separate_budget_and_interleaves_axes(monkeypatch):
+    calls = []
+    def search_axis(_session, query, *, scope, entity_id, proyecto, owner_id, top_k):
+        calls.append((scope, entity_id, proyecto, owner_id, top_k))
+        return [{"scope": scope, "entity_id": entity_id, "score": 1.0 - i / 10} for i in range(4)]
+    monkeypatch.setattr(registry.memory, "hybrid_search", search_axis)
+    monkeypatch.setattr(registry.projects, "agent_context", lambda *_args, **kwargs: SimpleNamespace(owner_id=999))
+
+    result = registry._search_memory(
+        MagicMock(), registry.MemorySearchArgs.model_validate({"query": "fact", "limit": 3}),
+        trusted_thread_id=42, proyecto="acme", owner_id=7,
+    )
+
+    assert calls == [
+        ("panel", "thread:42", "acme", 999, 3),
+        ("agent", "agent:acme", "acme", 999, 3),
+        ("user", "user:7", "default", 7, registry.USER_AXIS_LIMIT),
+    ]
+    assert len(result) == 3
+    assert any(row["scope"] != "user" for row in result)
