@@ -25,4 +25,4 @@ returns; omit it or set it to `false` when one tool is enough. For example, set 
 `true` when the current search finds a customer and a second lookup is needed to answer
 the request, or when a change must follow the record this step just updated. A write
 step still pauses for the owner's approval before it runs, and the chain continues once
-it is approved. A plan that omits `follow_up` keeps the normal single-tool path.
+it is approved. A plan that omits `follow_up` keeps the normal single-tool path. `memory.write` runs without approval. A turn can both write memory and answer by setting `follow_up: true`.

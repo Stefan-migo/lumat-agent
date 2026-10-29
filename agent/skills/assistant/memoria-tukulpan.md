@@ -3,6 +3,13 @@
 Use memory tools only for relevant durable context. Read before relying on prior
 decisions or facts; write only when the information is likely to matter later.
 
+## When to write
+
+Capture durable learning immediately after: (1) a completed fix, (2) a decision,
+(3) a discovery, (4) a configuration change, (5) an established pattern, or
+(6) a stated owner preference. A person-level fact belongs to the user axis later;
+this tool writes only assistant-owned memory.
+
 ## Axes and ownership
 
 - `scope="own"` is the default for `memory.read` and `memory.search`. It combines

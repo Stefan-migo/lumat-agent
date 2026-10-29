@@ -11,6 +11,8 @@ from app.models import InternalChatMessage, InternalChatThread, User
 from app.services.agent_chat import approve_plan
 from app.services.users import hash_password
 
+from tests.integration._capture_aware import CAPTURE_SYSTEM, planner_only
+
 
 class _Completions:
     def __init__(self, plans):
@@ -20,6 +22,11 @@ class _Completions:
         if kwargs.get("stream"):
             self.stream_calls += 1
             return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Listo."))])]
+        if (kwargs.get("messages") or [{}])[0].get("content") == CAPTURE_SYSTEM:
+            # The post-turn capture is not a plan: answer it without consuming the queue.
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"memories": []}'))]
+            )
         self.planner_calls.append(kwargs)
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=self.plans.pop(0)))])
 
@@ -81,7 +88,7 @@ def test_s7_across_pause_cuts_at_budget_with_surplus_plans(migrated_db, monkeypa
         assert thread.assistant_state["cap_reached"] is True
 
     # A continuation is planned only for steps 2..4; the 5th/6th plans are never consumed.
-    assert len(c.planner_calls) == MAX_ASSISTANT_TOOL_STEPS - 1
+    assert len(planner_only(c.planner_calls)) == MAX_ASSISTANT_TOOL_STEPS - 1
     assert len(c.plans) == (MAX_ASSISTANT_TOOL_STEPS + 2) - (MAX_ASSISTANT_TOOL_STEPS - 1)
 
 
