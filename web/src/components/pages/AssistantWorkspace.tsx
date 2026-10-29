@@ -24,6 +24,7 @@ import type { WorkspaceTab } from "../domain/assistantTabs";
 import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
 import { ThreadProjectResources } from "./ThreadResources";
+import { UserMemories } from "../domain/UserMemories";
 import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
@@ -95,6 +96,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [threadActionError, setThreadActionError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [userMemoriesOpen, setUserMemoriesOpen] = useState(false);
   const [projectSheetOpen, setProjectSheetOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [threadDetailOpen, setThreadDetailOpen] = useState(false);
@@ -387,12 +389,16 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       <Dialog open={navigationOpen} onClose={() => setNavigationOpen(false)} title="Navegación" variant="sheet">
         <div className="assistant-workspace__navigation-sheet">
           {(role === "admin" || role === "operador") ? <Button variant="primary" onClick={() => { setNavigationOpen(false); onCreateDefaultThread?.(); }}>Nueva conversación</Button> : null}
+          <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); setUserMemoriesOpen(true); }}>Memorias sobre ti <Icon icon={ChevronRight} size="sm" /></button>
           <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); navigateToHistory(routeProjectSlug ?? "default"); }}>Historial de conversaciones <Icon icon={ChevronRight} size="sm" /></button>
           <section aria-labelledby="assistant-navigation-workspace-title">
             <h3 id="assistant-navigation-workspace-title">Espacio de trabajo</h3>
             <button type="button" className="assistant-workspace__history-trigger" onClick={() => { setNavigationOpen(false); setProjectSheetOpen(true); }}>Proyectos ({projects.length}) <Icon icon={ChevronRight} size="sm" /></button>
           </section>
         </div>
+      </Dialog>
+      <Dialog open={userMemoriesOpen} onClose={() => setUserMemoriesOpen(false)} title="Memorias sobre ti" variant="sheet">
+        {userMemoriesOpen ? <UserMemories /> : null}
       </Dialog>
       <Dialog open={projectSheetOpen} onClose={() => setProjectSheetOpen(false)} title="Proyecto" variant="sheet">
         {projectSheetOpen ? <div className="assistant-workspace__project-sheet">
