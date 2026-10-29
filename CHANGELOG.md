@@ -6,6 +6,39 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.12] - 2026-10-29
+
+A release for one operator-visible failure of the panel assistant and the two defect
+classes behind it, plus the instrument that measures tool health.
+
+### Fixed
+
+- **The assistant no longer reports that a tool never arrived when it did.** The turn
+  bootstrap ran `memory.read(scope=own)` and appended the result to the tool-results list,
+  so the planner saw a fake "Prior tool evidence" block on its first plan and the responder
+  saw that memory blob inside `<tool_evidence>` as the output of whatever tool the operator
+  had asked for. Production said "project.find never arrived" while `audit_log` shows it
+  completed three times. Own memory is now labelled context that states the harness read it
+  before the turn, rendered tool results carry tool, status and arguments, a budget-truncated
+  chain still lists every executed step, and a recorded execution stall reaches the responder.
+- **A cold import cycle no longer kills the first `conversations.*` tool call of a process.**
+  `app.services.conversations` imported a panel serializer at module level, which loaded every
+  route module, which imported the conversation service back.
+- **The panel API router assembles on first access.** `app.services.dashboard` had the same
+  cycle, intermittently, because the same eager package init dragged all 20 route modules
+  behind any serializer import. Two occurrences made it a class, so it is fixed at the
+  amplifier instead of per service.
+- **`assistant.capabilities` reports the turn's effective catalog** (role allowlist and
+  enabled opt-in tools) instead of the global 33, so it no longer claims tools that
+  `guardrails` will refuse.
+
+### Added
+
+- `scripts/probe_assistant_tools.py` reports, tool by tool, what actually works in a given
+  environment: status, latency and a shape-only summary, never row values. Writes are never
+  executed and report `requires-approval`. A test ties its fixtures to the live registry so
+  coverage cannot rot silently.
+
 ## [2026.10.9] - 2026-10-28
 
 A patch release for one defect that the previous deploy's own verification found:
