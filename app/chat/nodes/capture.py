@@ -49,6 +49,9 @@ from app.services.settings import (
     get_conduct,
     get_coverage_communes,
     get_reply_texts,
+    get_service_durations,
+    get_tarifa_precios,
+    TARIFA_LABELS,
 )
 
 logger = logging.getLogger(__name__)
@@ -363,6 +366,89 @@ def _looks_like_question(text: str) -> bool:
     return _normalize(stripped).startswith(tuple(_normalize(word) for word in _INTERROGATIVES))
 
 
+def _edit_distance_at_most_one(left: str, right: str) -> bool:
+    """Match one-word typos with a bounded Levenshtein distance of one."""
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    previous = list(range(len(right) + 1))
+    for row, left_char in enumerate(left, start=1):
+        current = [row]
+        for column, right_char in enumerate(right, start=1):
+            current.append(min(
+                current[-1] + 1,
+                previous[column] + 1,
+                previous[column - 1] + (left_char != right_char),
+            ))
+        if min(current) > 1:
+            return False
+        previous = current
+    return previous[-1] <= 1
+
+
+def _matches_catalogue_phrase(text: str, phrase: str) -> bool:
+    words = _normalize(phrase.replace("_", " ")).split()
+    tokens = _normalize(text).split()
+    if not words:
+        return False
+    for start, token in enumerate(tokens):
+        if not _edit_distance_at_most_one(token, words[0]):
+            continue
+        cursor = start + 1
+        for word in words[1:]:
+            match_at = next(
+                (
+                    index for index in range(cursor, min(cursor + 3, len(tokens)))
+                    if _edit_distance_at_most_one(tokens[index], word)
+                ),
+                None,
+            )
+            if match_at is None:
+                break
+            cursor = match_at + 1
+        else:
+            return True
+    return False
+
+
+# S4 (chatbot-realismo-conversacional): only the services the business sells as
+# preventive maintenance skip the fault question. "Visita técnica" is the generic
+# repair visit: skipping there would leave a broken boiler with no diagnosis at
+# all, so the catalogue is narrowed instead of trusted whole.
+_PREVENTIVE_CATALOGUE_WORDS = (
+    "mantencion", "mantenimiento", "lavado", "limpieza", "preventiva", "revision",
+)
+
+
+def _preventive_services(session) -> list[str]:
+    """The configured services whose own name says preventive."""
+    services = [
+        *get_service_durations(session),
+        *get_tarifa_precios(session),
+        *TARIFA_LABELS.values(),
+    ]
+    return [
+        service for service in services
+        if any(
+            word in _normalize(str(service).replace("_", " "))
+            for word in _PREVENTIVE_CATALOGUE_WORDS
+        )
+    ]
+
+
+def _is_preventive_request(session, text: str, overrides: list[str]) -> bool:
+    normalized = _normalize(text)
+    if re.search(r"\bno\s+(?:quiero|necesito|busco|solicito)\b", normalized):
+        return False
+    if any(_normalize(keyword) in normalized for keyword in overrides):
+        return True
+    return any(
+        _matches_catalogue_phrase(text, service)
+        for service in _preventive_services(session)
+    )
+
+
 def _phrase_reply(session, texts: dict[str, str], key: str, captured: dict, *, pending) -> str:
     """Render one capture reply and optionally rephrase it (S5).
 
@@ -468,12 +554,6 @@ def capture(state: ConversationState) -> dict:
     # S4: evaluate the preventive intent once against the entire inbound window,
     # before any path can ask or re-ask the failure field.
     if "failure" not in captured:
-        with session_scope() as session:
-            preventive = {
-                _normalize(keyword)
-                for keyword in get_capture_preventive_keywords(session)
-                if _normalize(keyword)
-            }
         # A QUESTION is not a request: "¿cuánto cuesta la revisión anual?" is a
         # price question, not a maintenance order, and reading the keyword out of
         # it silently marked `failure` as skipped (S14/S16 integration tests).
@@ -484,7 +564,12 @@ def capture(state: ConversationState) -> dict:
             and not _looks_like_question(item.get("text") or "")
         )
         normalized_window = _normalize(inbound)
-        if any(keyword in normalized_window for keyword in preventive):
+        with session_scope() as session:
+            preventive_keywords = get_capture_preventive_keywords(session)
+            is_preventive = _is_preventive_request(
+                session, normalized_window, preventive_keywords
+            )
+        if is_preventive:
             skipped = list(captured.get("_skipped") or [])
             if "failure" not in skipped:
                 skipped.append("failure")
