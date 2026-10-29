@@ -18,27 +18,40 @@ confirmó: sin mensajes = selector (reusar el del chatbox); con el primer mensaj
 S3 — Botón "Ver todos" del chat principal: rediseñarlo y reposicionarlo (al owner no le gusta el
 diseño ni el borde de hover), y la conversación debe mantenerse siempre en el último mensaje salvo
 que el usuario scrollee arriba. Ojo: `useStickToBottom` ya existe y ya tiene ese comportamiento (con
-`resetKey` por `threadId`) — verificar antes de reescribirlo.
+`resetKey` por `threadId`) — verificar antes de reescribirlo. Owner's choice on 2026-10-29, verbatim:
+"Fila arriba del primer mensaje".
 
 S4 — Artefacto en el chat: el agente dice "descargable" pero no se puede descargar desde el chat, y
 muestra la ruta completa. Debe ser un link corto y descargable.
 
 S5 — Sidebar derecha completa (rediseño): sacar el borde de hover del toggle, separarlo del
 subtítulo; reordenar secciones dejando "Capacidades del asistente" antes de "Fuentes del hilo" (que
-se elimina, así que queda al final); "Recursos del proyecto" como versión reducida del árbol de
-archivos + KB de la configuración, con upload por botón y por drag&drop, crear y eliminar carpetas;
-"Archivos del hilo" y "Artefactos del hilo" con ícono más grande y apertura por click en la fila
-(cursor mano + tooltip); arrastrar archivos del proyecto y del hilo al chat para incorporarlos al
-contexto del turno (los de KB son solo lectura, no manipulables); skills solo lectura mostrando las
+se elimina, así que queda al final); "Archivos del hilo" y "Artefactos del hilo" con ícono más
+grande y apertura por click en la fila (cursor mano + tooltip); skills solo lectura mostrando las
 globales; "Capacidades del agente" con mejor UI.
+
+S6 — "Recursos del proyecto" en el sidebar, per the owner on 2026-10-29 (verbatim): "los archivos
+del proyecto debe ser completo. crear carpetas, subir archivos, tambie poder agregar archivos
+arrastrando a worktree de archivos de proyecto.  los checkboxes se eliminan. en cambio vamos a
+permitir que estos archivos sean arrastables y que se puedan agregar manualmente al chat del hilo.
+si el usuario quiere referenciar estos archivos. seria casi completo. lo de la kb puede quedar como
+solo lectura en el sidebar menu. y que se peuda configurar solo desde configuracion". So: the full
+project file tree (folders, upload, dropping files onto the tree), the thread checkboxes removed in
+favour of dragging files into the chat, and the project KB read-only in the sidebar, configured only
+from Configuración.
+
+S7 — Delivery, per the owner on 2026-10-29: four chained slices ("Slices encadenados (4 PRs)").
 
 ## Tasks
 
 T1 — DONE (`2f66b9e3`). Remove the "Fuentes del hilo" section and its dead assertions. S1. `web/src/components/pages/AssistantWorkspace.tsx`, `web/src/components/pages/AssistantWorkspace.test.tsx`.
 T2 — DONE (`2f66b9e3`). Fix the thread project once the thread has messages. S2. `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AssistantWorkspace.tsx`, both `*.test.tsx`.
-T3 — Redesign and reposition "Ver todos" and check the stick-to-bottom baseline. S3.
-T4 — Render a short, downloadable artifact link in the chat. S4.
-T5 — Redesign the right sidebar. S5.
+T3 — DONE (`87305e9a`). Short, downloadable artifact link inside the agent message. S4. `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AgentChat.test.tsx`.
+T4 — DONE. "Ver todos" as a quiet line above the first visible message. S3. `web/src/components/shared/CollapsibleMessages.tsx`.
+T5 — Slice 2: sidebar shell — the toggle separated from the subtitle with no hover border, section order, capabilities UI. S5.
+T6 — Slice 3: thread files and artifacts open from the whole row, larger icon, pointer cursor and tooltip. S5.
+T7 — Slice 4: full project resources — folder tree with upload and drop, KB read-only, files draggable into the chat, skills read-only, thread checkboxes removed. S6.
+T8 — Slice 1 PR: the chat work (T3 + T4) together. S7.
 
 ## Log
 
@@ -68,3 +81,20 @@ the mobile header picker and the "Cambiar" action of the thread detail sheet. T2
 `threadStarted` flag from `AgentChat` into `AssistantWorkspace` and disables both from the first
 message, which is what S2 asks for. The existing test that changes the project on a message-less
 thread stays green, so the pre-first-message behaviour is pinned.
+
+L7 — T4 interpretation: the disclosure line counts the messages it hides (`total - previewCount`),
+not the thread total, because "26 mensajes anteriores" while ten are visible would be false. The
+component is shared with the WhatsApp thread page, so its copy changed there too and both existing
+tests were updated; the collapse/expand behaviour itself is unchanged.
+
+L8 — The owner supplied the nine screenshots the previous thread lost with `/tmp`; all of them record
+the current state, not a design.
+
+L9 — Owner decisions on 2026-10-29 that rewrote S3 and S5 and added S6–S7 (verbatim): "ok en este
+caso. los archivos del proyecto debe ser completo. crear carpetas, subir archivos, tambie poder
+agregar archivos arrastrando a worktree de archivos de proyecto.  los checkboxes se eliminan. en
+cambio vamos a permitir que estos archivos sean arrastables y que se puedan agregar manualmente al
+chat del hilo. si el usuario quiere referenciar estos archivos. seria casi completo. lo de la kb
+puede quedar como solo lectura en el sidebar menu. y que se peuda configurar solo desde
+configuracion". Chosen options: "Fila arriba del primer mensaje" for S3 and "Slices encadenados (4
+PRs)" for S7.
