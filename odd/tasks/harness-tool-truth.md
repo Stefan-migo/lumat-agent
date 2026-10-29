@@ -22,9 +22,18 @@ When the handler falls back to the global catalog because no turn whitelist reac
 claim the list is scoped to this turn: the fallback is the widest list, which is exactly where that header
 would mislead.
 
+### S3 — End the cold-import class at the amplifier, not per service
+`app/services/dashboard.py` reproduced S1 exactly (`cannot import name 'compute_kpis' from partially
+initialized module 'app.services.dashboard'`), found by the tool probe. Two occurrences make it a class: any
+service importing `app.panel.api.serializers` at module level drags all 20 route modules because
+`app/panel/api/__init__.py` assembled the router on import. The package init must stay free of routes and
+build `api_router` on first access, so the router is still assembled exactly once for the app and a
+serializer import never loads it.
+
 ## Tasks
 - T1 — S1 cold-import regression and narrow cycle fix — commit: `e6c69ac4`
 - T2 — S2 effective capabilities and compatibility coverage — commit: `4a53b744`
+- T3 — S3 lazy router assembly plus the dashboard cold-import regression — commit: TBD
 
 ## Log
 
@@ -69,3 +78,11 @@ The same focused command passed: 107 passed in 4.15s (exit code 0). The cold sub
   subprocesses with `os.environ.copy()`, so the subprocess-based regression follows the repository pattern
   rather than inventing one.
 - **L6** (gates and delivery state): `bash scripts/test.sh full` → exit 0 on the final tree (the two warnings are pre-existing and outside this diff: an unawaited `_publish_all` coroutine in `tests/integration/test_webhook_ingest.py` and the FastEmbed mean-pooling notice in `tests/spec/test_projects_spec.py`). Focused unit run → 0; the assistant chat/guardrails integration files → 0. Delivered as two commits, `e6c69ac4` (S1, 44 authored lines) and `4a53b744` (S2, 75). Not pushed at the time this entry was written; push and PR stay the owner's decision.
+- **L7** (S3, found by the new tool probe): `scripts/probe_assistant_tools.py` reported `dashboard.summary`
+  failing with `cannot import name 'compute_kpis' from partially initialized module 'app.services.dashboard'`.
+  It is S1's defect at a second site, and it is order-dependent: the same probe call had reported `ok` in an
+  earlier run where something else had already imported the routes. Fixed at the amplifier instead of a
+  second per-service deferral: `app/panel/api/__init__.py` now exposes `build_api_router()` and resolves
+  `api_router` through a module `__getattr__`, still built once and still the object
+  `app/panel/routes/__init__.py` re-exports. Two new RED tests: importing `app.panel.api` must leave
+  `app.panel.api.routes.*` unloaded, and importing `app.services.dashboard` first must still run its tool.
