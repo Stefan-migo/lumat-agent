@@ -207,10 +207,10 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | ID | Spec | Task | Route | Commit |
 | --- | --- | --- | --- | --- |
 | A1 | S1 | Ack only with a delivered data point; `Entiendo.`; name at most once; guarded migration for the stored `capture_ack` | inline | f7a6162b |
-| A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | |
-| A3 | S6 | `is_farewell` closes a long courtesy closing | inline | |
-| A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | |
-| A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | |
+| A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | 04b993c9 |
+| A3 | S6 | `is_farewell` closes a long courtesy closing | inline | 63b890ec |
+| A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | 9c63dc20 |
+| A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | a15e0edb |
 | B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | 0a7914cd |
 | B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | 0a7914cd |
 | B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | |
@@ -282,6 +282,27 @@ tests/unit/test_capture_phrasing.py tests/unit/test_reply_texts.py` → 65 passe
 `bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db tests/integration/test_migrations.py`
 → 38 passed, including two new tests that prove 059 rewrites the old default, keeps the other keys in
 the same JSON, and leaves a panel-edited text alone.
+
+**L10** — A2–A5 delivered by `gentle-ai-worker` and committed as four units (`04b993c9`, `63b890ec`,
+`9c63dc20`, `a15e0edb`). The writer's evidence was independent per unit, but parent review of the diff
+found two defects that the delegated spec did not cover, both fixed before commit with four new failing
+tests written first:
+
+1. **The consent widen accepted questions and doubts.** With `_YES_WORDS` scanned anywhere in prose,
+   `¿necesito autorización?` and `no se si autorizo` returned `True` — that is personal data stored
+   without consent. Fixed by splitting the vocabulary: explicit first-person verbs inside a short
+   sentence, bare affirmatives only when the whole message is just that, and a question or a doubt is
+   never consent. `autorización` (a noun that appears in questions) was dropped from the allowlist.
+2. **The catalogue match made a technical visit preventive.** `Visita técnica` is the generic repair
+   visit; matching the whole catalogue meant "necesito una visita tecnica, mi caldera no enciende"
+   skipped the fault question and the case would reach a technician with no symptom. Fixed by
+   narrowing the catalogue to services whose own name says preventive.
+
+Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/test_capture_validation.py`
+→ 33 passed; `bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db tests/integration/test_handoff.py
+tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
+64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
+stays unclear and gets one confirmation instead of being guessed.
 
 **L5** — open product decisions (owner):
 1. Consent already given: silent skip to booking, or a short confirmation (`¿mantengo los datos de tu
