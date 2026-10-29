@@ -15,9 +15,16 @@ from app.chat.state import set_conversation_state
 from app.config import get_settings
 from app.models import AuditLog, Conversation, ConversationEvent, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
-from app.panel.api.serializers import to_conversation_dict
 from app.services.send import deliver_message
 from app.webhook.ingest import _safe_filename
+
+
+def _to_conversation_dict(conversation: Conversation) -> dict:
+    # Defer the serializer -> project_config -> tool-registry cycle back to conversations.
+    from app.panel.api.serializers import to_conversation_dict
+
+    return to_conversation_dict(conversation)
+
 
 LEGAL_TRANSITIONS = {
     ConversationState.BOT: {ConversationState.HUMAN},
@@ -131,7 +138,7 @@ def _duplicate(
 def _reject(session: Session, conversation: Conversation, actor: User, action: str, request_id: str, detail: str, payload: dict, status: int | None = None):
     record_audit(
         session, actor=actor.username, action=action, entity="conversation",
-        entity_id=str(conversation.id), before=to_conversation_dict(conversation),
+        entity_id=str(conversation.id), before=_to_conversation_dict(conversation),
         after={"request_id": request_id, "operation": action, "payload": payload, "detail": detail},
     )
     session.commit()
@@ -150,7 +157,7 @@ def change_state(session: Session, conversation_id: int, actor: User, state: Con
     if state not in LEGAL_TRANSITIONS.get(conversation.state, set()):
         _reject(session, conversation, actor, "conversation.state_rejected", request_id, "illegal conversation state transition", payload)
 
-    before = to_conversation_dict(conversation)
+    before = _to_conversation_dict(conversation)
     set_conversation_state(session, conversation, state, cause=f"panel:{request_id}", actor=actor.username)
     if state == ConversationState.HUMAN and conversation.responsible_id is None:
         conversation.responsible_id = actor.id
@@ -160,7 +167,7 @@ def change_state(session: Session, conversation_id: int, actor: User, state: Con
     record_audit(
         session, actor=actor.username, action="conversation.state_changed", entity="conversation",
         entity_id=str(conversation.id), before=before,
-        after={**to_conversation_dict(conversation), "request_id": request_id, "operation": "state", "payload": payload},
+        after={**_to_conversation_dict(conversation), "request_id": request_id, "operation": "state", "payload": payload},
     )
     session.flush()
     return conversation
@@ -183,13 +190,13 @@ def assign(session: Session, conversation_id: int, actor: User, responsible_id: 
     if responsible_id is not None and (target is None or not target.active or target.role.value != "operador"):
         _reject(session, conversation, actor, "conversation.assignment_rejected", request_id, "assignment target must be an active operator", payload, 422)
 
-    before = to_conversation_dict(conversation)
+    before = _to_conversation_dict(conversation)
     conversation.responsible_id = responsible_id
     conversation.version += 1
     record_audit(
         session, actor=actor.username, action="conversation.assignment_changed", entity="conversation",
         entity_id=str(conversation.id), before=before,
-        after={**to_conversation_dict(conversation), "request_id": request_id, "operation": "assignment", "payload": payload},
+        after={**_to_conversation_dict(conversation), "request_id": request_id, "operation": "assignment", "payload": payload},
     )
     session.flush()
     return conversation
