@@ -215,7 +215,7 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | 0a7914cd |
 | B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | 4871dc62 |
 | B4 | S11 | `state.booking` ignores appointments that already started | inline | see L13 |
-| B5 | S12 | `reagendar_visita` routes to `manage` | inline | |
+| B5 | S12 | `reagendar_visita` routes to `manage` | inline | see L14 |
 | C3 | S13 | One question per turn after a KB deviation | inline | |
 | C4 | S14 | Normalized service as retrieval fallback query | inline | |
 | C2 | S2 | Evidence question moves to after the booking confirmation | inline | |
@@ -303,6 +303,17 @@ Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/
 tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
 64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
 stays unclear and gets one confirmation instead of being guessed.
+
+**L14** — B5 done. The cause was not a missing route: `_dispatch` already sent
+`reagendar_visita` to `manage`. It was the CI-2 rule that folds cancel/reschedule into
+the pending capture field while mid-capture, which is exactly the state production #23 was in. The
+two intents now win over the pending field, and the field itself is untouched so the agenda resumes on
+the next message. `tests/unit/test_routing_table.py` had the old rule pinned
+(`test_mid_capture_non_retrieval_is_pending_field_answer` parametrized over both intents); it now
+covers `unknown`/`calefont` and a new test pins the manage route. Verified:
+`pytest tests/unit/test_routing_table.py` → 44 passed; `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py
+tests/integration/test_chat_manage.py` → exit 0.
 
 **L13** — B4 done. RED reproduced the production prompt verbatim: the state carried
 `{'service': 'Visita técnica', 'label': '28/10/2026 a las 21:42', 'status': 'booked'}` for a visit that
