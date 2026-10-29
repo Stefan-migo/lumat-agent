@@ -11,6 +11,7 @@ import {
   approveChatPlan,
   createChatThread,
   deleteThreadAttachment,
+  downloadAssistantArtifact,
   getChatThread,
   getThreadToolPolicy,
   listProjectFiles,
@@ -25,7 +26,7 @@ import {
   uploadAssistantAttachment,
   threadAttachmentContentUrl,
 } from "../../api";
-import { ArrowUp, Check, ChevronDown, Copy, Folder, Globe, Paperclip, Plus, RotateCcw, Square, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy, Download, Folder, Globe, Paperclip, Plus, RotateCcw, Square, Wrench, X } from "lucide-react";
 import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
@@ -108,6 +109,23 @@ const runStillProcessing = (result: InternalChatResponse, run: string) =>
  * text; a nested value falls back to JSON rather than [object Object]. */
 function displayArgumentValue(value: unknown) {
   return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "—");
+}
+
+function resolveArtifactReferences(content: string, artifacts: AssistantArtifact[]) {
+  const byId = new Map(artifacts.map((artifact) => [String(artifact.id), artifact]));
+  const referenced = new Map<number, AssistantArtifact>();
+  const renderedContent = content.replace(
+    /`?(\/panel\/api\/chat\/threads\/\d+\/artifacts\/(\d+)\/download)`?/g,
+    (match, _path: string, id: string) => {
+      const artifact = byId.get(id);
+      if (!artifact) return match;
+      referenced.set(artifact.id, artifact);
+      // Keep the operator-visible code span the agent used; only the internal
+      // path inside it is replaced, so the prose keeps its monospace filename.
+      return match.startsWith("`") ? `\`${artifact.filename}\`` : artifact.filename;
+    },
+  );
+  return { content: renderedContent, artifacts: [...referenced.values()] };
 }
 
 export function PlanCard({
@@ -279,6 +297,8 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
   const [previewAttachment, setPreviewAttachment] = useState<AssistantAttachment | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [artifacts, setArtifacts] = useState<AssistantArtifact[]>([]);
+  const [downloadingArtifacts, setDownloadingArtifacts] = useState<number[]>([]);
+  const [artifactDownloadErrors, setArtifactDownloadErrors] = useState<Record<number, string>>({});
   const [uploading, setUploading] = useState(false);
   const [toolPolicy, setToolPolicy] = useState<ThreadToolPolicy | null>(null);
   const [toolPolicyLoading, setToolPolicyLoading] = useState(false);
@@ -709,6 +729,22 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
     }
   };
 
+  const downloadArtifact = async (artifact: AssistantArtifact) => {
+    if (!thread || downloadingArtifacts.includes(artifact.id)) return;
+    setDownloadingArtifacts((current) => [...current, artifact.id]);
+    setArtifactDownloadErrors((current) => ({ ...current, [artifact.id]: "" }));
+    try {
+      await downloadAssistantArtifact(thread.id, artifact.id, artifact.filename);
+    } catch (reason: unknown) {
+      setArtifactDownloadErrors((current) => ({
+        ...current,
+        [artifact.id]: reason instanceof ApiError ? reason.detail : "No pudimos descargar el artefacto.",
+      }));
+    } finally {
+      setDownloadingArtifacts((current) => current.filter((id) => id !== artifact.id));
+    }
+  };
+
   const copyMessage = (message: InternalChatMessage) => {
     void navigator.clipboard?.writeText(message.content);
     setCopiedId(message.id);
@@ -894,6 +930,9 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
             <CollapsibleMessages total={messages.length} previewCount={10} expanded={messagesExpanded} onToggle={() => setMessagesExpanded((value) => !value)}>
             {(messages.length > 10 && !messagesExpanded ? messages.slice(-10) : messages).map((message) => {
               const outbound = message.author !== "agent";
+              const artifactReferences = !outbound
+                ? resolveArtifactReferences(message.content, artifacts)
+                : { content: message.content, artifacts: [] as AssistantArtifact[] };
               const messageRunId = message.assistant_metadata?.run_id;
               // Outbound messages only render the run's artifacts when no agent
               // reply exists for that run (see `runsWithReply` above).
@@ -947,9 +986,30 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
                     ) : (
                       <Markdown
                         className="assistant-chat__message-content"
-                        content={message.content}
+                        content={artifactReferences.content}
                       />
                     )}
+                    {artifactReferences.artifacts.length > 0 ? (
+                      <div className="assistant-chat__message-actions assistant-chat__artifact-downloads">
+                        {artifactReferences.artifacts.map((artifact) => (
+                          <div key={artifact.id}>
+                            <Button
+                              variant="secondary"
+                              aria-label={`Descargar ${artifact.filename}`}
+                              disabled={downloadingArtifacts.includes(artifact.id)}
+                              onClick={() => void downloadArtifact(artifact)}
+                            >
+                              <Icon icon={Download} size="sm" />Descargar
+                            </Button>
+                            {artifactDownloadErrors[artifact.id] ? (
+                              <p className="assistant-chat__message-error" role="alert">
+                                {artifactDownloadErrors[artifact.id]}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {message.status === "failed" ? (
                       <p className="assistant-chat__message-error" role="alert">
                         No se pudo procesar el mensaje

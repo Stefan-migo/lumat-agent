@@ -67,6 +67,7 @@ describe("AgentChat", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.history.replaceState({}, "", "/");
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   });
@@ -1978,6 +1979,38 @@ describe("AgentChat", () => {
     expect(screen.getByText("Analizando tu solicitud…")).toBeInTheDocument();
     closeStream();
     await waitFor(() => expect(composer).toBeEnabled());
+  });
+
+  it("renders known artifact references as downloadable filenames only", async () => {
+    const downloadPath = "/panel/api/chat/threads/4/artifacts/9/download";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/tool-policy")) return jsonResponse(policy());
+      if (String(input) === downloadPath) return new Response(new Blob(["artifact"]));
+      return jsonResponse({
+        thread: makeThread(),
+        artifacts: [{ id: 9, thread_id: 4, filename: "resultado.md", content_type: "text/markdown", size: 8 }],
+        messages: [
+          { id: 1, author: "agent", content: `Descarga \`${downloadPath}\``, status: "processed" },
+          { id: 2, author: "agent", content: "Respuesta sin artefactos", status: "processed" },
+        ],
+      });
+    });
+    const TestURL = class extends globalThis.URL {};
+    Object.assign(TestURL, {
+      createObjectURL: vi.fn().mockReturnValue("blob:artifact"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.stubGlobal("URL", TestURL);
+
+    render(<AgentChat threadId={4} />);
+    const [message, plainMessage] = await screen.findAllByRole("article", { name: "Mensaje de agente" });
+    expect(within(message).queryByText(downloadPath)).not.toBeInTheDocument();
+    expect(within(message).getByText("resultado.md")).toBeInTheDocument();
+    const download = within(message).getByRole("button", { name: "Descargar resultado.md" });
+    fireEvent.click(download);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(downloadPath, { credentials: "include" }));
+    expect(plainMessage).not.toHaveTextContent("Descargar");
+    expect(screen.getAllByRole("button", { name: /Descargar/ })).toHaveLength(1);
   });
 
   it("renders agent replies as markdown and leaves the operator text literal", async () => {
