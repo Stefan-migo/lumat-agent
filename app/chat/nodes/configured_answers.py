@@ -75,9 +75,15 @@ _WEEKDAY_NAMES = (
 
 
 def _fold(text: str) -> str:
-    """Casefold and drop diacritics, the same folding the commune lookup uses."""
+    """Casefold, drop diacritics and collapse spacing, so matching is by words.
+
+    Spacing is collapsed because a configured name can arrive with a stray space
+    ("Mantención de  calefont", measured in production) and it is matched as a
+    phrase against this text.
+    """
     decomposed = unicodedata.normalize("NFKD", text.casefold())
-    return "".join(char for char in decomposed if not unicodedata.combining(char))
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(without_accents.split())
 
 
 def _words(text: str) -> set[str]:

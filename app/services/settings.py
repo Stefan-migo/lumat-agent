@@ -478,6 +478,15 @@ def get_setting(session: Session, key: str, default: Any = None) -> Any:
     return default
 
 
+def _collapse_whitespace(value: str) -> str:
+    """Collapse runs of whitespace so a stray space cannot create a second name.
+
+    Kept separate from `normalize_comuna`, which also folds case and accents: a
+    service name is stored as the operator typed it, only its spacing is cleaned.
+    """
+    return " ".join(value.split())
+
+
 def validate_service_durations(value: Any) -> dict[str, int]:
     """Validate the service -> minutes map before persistence.
 
@@ -485,20 +494,26 @@ def validate_service_durations(value: Any) -> dict[str, int]:
     free text: what matters is that no two keys collapse under the same
     normalization, or one would silently shadow the other in
     `get_service_duration`.
+
+    Whitespace is collapsed on the way in. A name is matched as a phrase against
+    the customer's message, so "Mantención de  calefont" (a stray space, measured
+    in production on 2026-10-29) answered nothing at all.
     """
     if not isinstance(value, dict):
         raise ValueError("booking.service_durations must be an object")
 
+    normalized: dict[str, int] = {}
     seen: set[str] = set()
     for service, minutes in value.items():
         if not isinstance(service, str) or not service.strip():
             raise ValueError("booking.service_durations keys must be non-empty strings")
-        normalized = normalize_comuna(service)
-        if normalized in seen:
+        name = _collapse_whitespace(service)
+        key = normalize_comuna(name)
+        if key in seen:
             raise ValueError(
                 f"booking.service_durations has a duplicate service: {service!r}"
             )
-        seen.add(normalized)
+        seen.add(key)
         if (
             not isinstance(minutes, int)
             or isinstance(minutes, bool)
@@ -508,7 +523,8 @@ def validate_service_durations(value: Any) -> dict[str, int]:
                 "booking.service_durations values must be integers between 1 and "
                 f"{MAX_SERVICE_DURATION_MINUTES} minutes"
             )
-    return value
+        normalized[name] = minutes
+    return normalized
 
 
 def get_service_durations(session: Session) -> dict[str, int]:
@@ -532,7 +548,7 @@ def get_service_duration(
         return default
 
     def normalize(value: str) -> str:
-        decomposed = unicodedata.normalize("NFKD", value.casefold().strip())
+        decomposed = unicodedata.normalize("NFKD", _collapse_whitespace(value).casefold())
         return "".join(char for char in decomposed if not unicodedata.combining(char))
 
     service_key = normalize(service)

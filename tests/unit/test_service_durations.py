@@ -51,3 +51,16 @@ def test_validate_rejects_a_duration_above_the_cap():
 def test_validate_rejects_malformed_durations(value):
     with pytest.raises(ValueError):
         validate_service_durations(value)
+
+
+def test_keys_are_stored_without_stray_whitespace():
+    """Collapsing on write keeps one key per service, not one per typo."""
+    assert validate_service_durations({"Mantención de  calefont": 60}) == {
+        "Mantención de calefont": 60
+    }
+    assert validate_service_durations({" Visión  de red ": 45}) == {"Visión de red": 45}
+
+
+def test_duplicate_after_whitespace_normalization_is_rejected():
+    with pytest.raises(ValueError):
+        validate_service_durations({"Calefont": 60, " Calefont ": 90})
