@@ -157,3 +157,25 @@ def test_cli_runs_without_a_configured_database():
 
     assert result.returncode == 0, result.stderr
     assert "drift · tolerados:" in result.stdout
+
+
+def test_the_shipped_kb_restates_no_configured_value():
+    """S7: the shipped documents keep the policy, never the configured values.
+
+    The values are answered from `settings` (see `configured_answers`), so a
+    document that restates them is a second source of truth. `scripts/kb_doc_drift.py`
+    stays the gate that consults the live configuration; this test pins the state
+    the repository ships, against the default communes.
+    """
+    from app.services.settings import DEFAULT_COVERAGE_COMMUNES
+
+    findings = kb_doc_drift.find_duplicated_values(
+        kb_doc_drift.KB_DIR, communes=DEFAULT_COVERAGE_COMMUNES
+    )
+
+    assert [finding.key for finding in findings] == []
+
+
+def test_the_shipped_baseline_is_empty():
+    """Tolerance zero: with an empty baseline every finding fails the control."""
+    assert kb_doc_drift.read_baseline(kb_doc_drift.BASELINE_PATH) == set()

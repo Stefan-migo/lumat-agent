@@ -369,10 +369,21 @@ fact by editing `docs/kb/*.md` and committing it.
 **Values belong to the settings, not to the prose.** Prices
 (`tarifa.precios`), covered communes (`coverage.communes`), opening hours
 (`hours.schedule`) and service durations (`booking.service_durations`) are
-configured in the panel and are read by the deterministic nodes; a KB document
-that restates them becomes a second source of truth. Prices were migrated out
-of the KB for this reason. `scripts/kb_doc_drift.py` lists the remaining
-restatements: it fails on a new one so the debt cannot grow unnoticed.
+configured in the panel and are read by the deterministic nodes
+(`app/chat/nodes/configured_answers.py` for coverage, hours and durations;
+`respond.tariff_price_reply` for prices). Prices were migrated out of the KB
+first; `odd/agenda-config-fuente` finished the job for the other three, so the
+customer documents now hold the **policy** (an advisor coordinates Sundays,
+holidays and out-of-hours visits, what each service includes, emergencies) and
+no configured value.
+
+`scripts/kb_doc_drift.py` is the control, and its baseline
+(`docs/kb/drift-baseline.json`) is now **empty**, which is what "tolerance zero"
+means: any restatement is a new finding and the command exits 1. When you add a
+service duration or a commune in the panel, do not write it into a KB document —
+the answer already comes from the setting. A value the configuration does not
+hold is never invented: an empty window, or a service with no configured
+duration, keeps the KB path for that question.
 
 Other documents (internal visibility, project uploads) still go through the
 panel route `POST /panel/kb`; every ingest writes an `audit_log` row
