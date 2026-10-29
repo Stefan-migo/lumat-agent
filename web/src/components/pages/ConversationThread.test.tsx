@@ -19,7 +19,7 @@ it('loads a bounded preview and fetches the full thread when expanded', async ()
 
   expect(await screen.findByText('Hola')).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/9?messages_limit=10', expect.anything());
-  await user.click(screen.getByRole('button', { name: 'Ver todos (12)' }));
+  await user.click(screen.getByRole('button', { name: '2 mensajes anteriores · Ver todos' }));
   expect(await screen.findByRole('button', { name: 'Ver menos' })).toBeInTheDocument();
   expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations/9', expect.anything());
 });
