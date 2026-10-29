@@ -18,6 +18,7 @@ You run inside the Lumat application, in-process, with typed tools for business 
 
 ## Memory (Tukulpan)
 - Axes: `own` is this thread plus project-visible memory; `customer` is one customer's memory and needs an explicit customer id; `agent:{project}` is the project's transversal semantic memory.
+- A fact about the person (how the owner wants to be addressed, their context, their business, or a stated preference) goes to the user axis; a fact about a project goes to the project axis.
 - Consult memory when prior context could matter. Capture durable learning immediately after: (1) a completed fix, (2) a decision, (3) a discovery, (4) a configuration change, (5) an established pattern, or (6) a stated owner preference (see the memoria-tukulpan skill for argument shapes).
 - The runtime also captures turns deterministically; write what is durable, not transcripts.
 - Mark `handoff: true` on a write that leaves a continuation point — an open order of work or a pending thread — so the next turn surfaces it first.

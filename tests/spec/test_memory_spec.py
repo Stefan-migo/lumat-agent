@@ -1084,10 +1084,37 @@ def test_mem9_coherence_constraint_rejects_global_panel_row(migrated_db, admin_c
 # ---------------------------------------------------------------------------
 
 
+def test_mem14_spec_defines_user_axis():
+    spec = Path("openspec/specs/memory/spec.md").read_text()
+    mem14 = spec.split("### Requirement: MEM-14 — User Axis", 1)[1].split("\n### Requirement:", 1)[0]
+
+    for clause in (
+        "MAY be written to a `user` axis",
+        "user:<owner_id>",
+        "proyecto='default'",
+        "no project filter on read",
+        "default project and from every named project that user owns",
+        "authenticated user",
+        "project's owner",
+        "another user's read",
+        "thread and project axes",
+        "dedicated budget",
+        "without an authenticated user",
+        "before persistence",
+        "visibility='global'",
+        "scope='user'",
+        "default project's agent axis stays team-visible and unchanged",
+    ):
+        assert clause in mem14, f"MEM-14 is missing: {clause}"
+
+    assert "MEM-3" in mem14 and "MEM-9" in mem14
+    assert "#### Scenario:" in mem14
+    assert "- GIVEN " in mem14 and "- WHEN " in mem14 and "- THEN " in mem14
+
+
 def test_mem13_spec_defines_deterministic_autonomous_capture():
     spec = Path("openspec/specs/memory/spec.md").read_text()
-    mem13 = spec.split("### Requirement: MEM-13 — Deterministic Autonomous Capture", 1)[1]
-    assert "### Requirement:" not in mem13
+    mem13 = spec.split("### Requirement: MEM-13 — Deterministic Autonomous Capture", 1)[1].split("\n### Requirement:", 1)[0]
 
     for clause in (
         "runtime, not the user and not the model",

@@ -85,7 +85,7 @@ def test_persona_lists_durable_memory_capture_triggers_and_runtime_capture():
     assert "When `web.fetch` evidence is present, state only what the fetched page text says and cite the URL that evidence reports after redirects." in persona
 
 
-def test_memory_skill_lists_write_triggers_and_defers_person_facts_to_user_axis():
+def test_memory_skill_lists_write_triggers_and_documents_user_axis():
     skill = _read("skills/assistant/memoria-tukulpan.md")
     for trigger in (
         "completed fix",
@@ -96,8 +96,19 @@ def test_memory_skill_lists_write_triggers_and_defers_person_facts_to_user_axis(
         "owner preference",
     ):
         assert trigger in skill
-    assert "person-level fact belongs to the user axis later" in skill
-    assert "user-axis tool" not in skill
+    assert 'visibility="user"' in skill
+    assert "person's memory" in skill
+    assert "readable across projects" in skill
+    assert "never another user's memory" in skill
+    assert '"handoff":false' in skill
+
+
+def test_persona_routes_person_facts_to_user_axis_and_project_facts_to_project_axis():
+    persona = _read("personas/assistant.md")
+    assert "A fact about the person" in persona
+    assert "user axis" in persona
+    assert "fact about a project" in persona
+    assert "project axis" in persona
 
 
 def test_plan_prompt_allows_memory_write_and_follow_up_together():
