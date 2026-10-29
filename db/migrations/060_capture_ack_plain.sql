@@ -1,4 +1,7 @@
--- 059_capture_ack_plain.sql — S1: stop thanking the customer before they gave anything.
+-- 060_capture_ack_plain.sql — S1: stop thanking the customer before they gave anything.
+--
+-- Numbered 060, not 059: `059_memory_user_scope` landed on main while this slice was in
+-- review. Production reaches 058, so the order is 059 (memory user scope) then 060 (this).
 --
 -- The shipped default for `reply.texts.capture_ack` was `Gracias {{nombre}}. `, and production
 -- keeps an explicit copy of it in `settings`. `db/seed.sh` is idempotent (it inserts missing rows and

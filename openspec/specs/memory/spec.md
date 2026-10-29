@@ -344,6 +344,45 @@ The runtime, not the user and not the model, MUST decide when autonomous memory 
 - WHEN the idle-thread sweep processes it more than once
 - THEN it captures the thread idempotently by its last message
 
+### Requirement: MEM-14 — User Axis
+
+A memory MAY be written to a `user` axis whose entity MUST be derived server-side from the authenticated user as `user:<owner_id>`. The user axis MUST be stored with `proyecto='default'` and MUST use no project filter on read, so a fact about the person is readable from the default project and from every named project that user owns. The user axis MUST be filtered by the authenticated user and MUST never be reachable through a project's owner or through another user's read. An `own` read MUST union the user axis with the thread and project axes under a dedicated budget so no axis hides another. Writing to the user axis without an authenticated user MUST fail before persistence. The database coherence constraint between `visibility` and `scope` MUST accept `scope='user'` with `visibility='global'` — the persisted `visibility` enum has no `user` value, and the axis is named by `scope` — while still rejecting incoherent rows. MEM-3's explicit-read and no-context-injection semantics and MEM-9's server-derived-target semantics MUST remain intact. The default project's agent axis MUST stay team-visible and unchanged.
+
+#### Scenario: User facts are readable across the owner's projects
+- GIVEN a memory is written to the `user` axis for an authenticated user
+- WHEN that user reads from the default project and from every named project they own
+- THEN the same user memory is readable without a project filter
+- AND the entity is derived server-side as `user:<owner_id>` and stored with `proyecto='default'`
+
+#### Scenario: User-axis reads are isolated by authenticated user
+- GIVEN a user-axis memory belongs to one authenticated user
+- WHEN another user reads it, or a project's owner is used as the read identity
+- THEN the memory is never reachable through that project's owner or through another user's read
+- AND the read is filtered by the authenticated user
+
+#### Scenario: Own reads include each axis under a dedicated budget
+- GIVEN memories exist on the user, thread, and project axes
+- WHEN an `own` read runs
+- THEN it unions the user axis with the thread and project axes under a dedicated budget
+- AND no axis hides another
+
+#### Scenario: User-axis writes require authentication
+- GIVEN a write targets the user axis without an authenticated user
+- WHEN persistence is attempted
+- THEN the write fails before persistence
+
+#### Scenario: User visibility and global scope are coherent
+- GIVEN a row declares `visibility='user'` and `scope='global'`, or declares an incoherent visibility and scope
+- WHEN the row is inserted
+- THEN the user/global row is accepted and the incoherent row is rejected
+
+#### Scenario: Existing memory boundaries remain unchanged
+- GIVEN memory is read or written on the user axis
+- WHEN the operation runs
+- THEN memory remains explicit through the tool and is never injected into context (MEM-3)
+- AND the server derives the target rather than accepting it from the model (MEM-9)
+- AND the default project's agent axis stays team-visible and unchanged
+
 ## MODIFIED Requirements
 
 ## Boundary

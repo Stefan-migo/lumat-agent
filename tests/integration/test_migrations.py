@@ -718,6 +718,36 @@ def test_migration_056_adds_the_technician_visit_state_axis(tmp_path):
         assert status_labels == [("booked",), ("cancelled",), ("completed",), ("no_show",)]
 
 
+def test_migration_059_allows_user_global_and_preserves_visibility_coherence(tmp_path):
+    with _scratch_migration_db(tmp_path, 58, 59) as (conn, apply_059, _):
+        result = apply_059()
+        assert result.returncode == 0, f"059 failed:\n{result.stdout}\n{result.stderr}"
+        embedding = "[" + ",".join("0.1" for _ in range(384)) + "]"
+
+        conn.execute(
+            "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+            "VALUES ('user', 'user:7', 'user fact', 'accepted', %s::vector, 'global')",
+            (embedding,),
+        )
+        conn.execute(
+            "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+            "VALUES ('customer', 'customer:7', 'customer fact', 'accepted', %s::vector, 'thread')",
+            (embedding,),
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+                "VALUES ('panel', 'thread:bad', 'bad', 'rejected', %s::vector, 'global')",
+                (embedding,),
+            )
+        constraint = conn.execute(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+            "WHERE conname = 'memories_visibility_scope_coherence'"
+        ).fetchone()[0]
+        assert "visibility = 'global'" in constraint
+        assert "agent" in constraint and "user" in constraint
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -780,13 +810,14 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("056_appointment_technician_state",),
         ("057_grant_automation_installation_delete",),
         ("058_message_media",),
-        ("059_capture_ack_plain",),
+        ("059_memory_user_scope",),
+        ("060_capture_ack_plain",),
     ]
 
 
-def test_migration_059_rewrites_only_the_shipped_acknowledgement(tmp_path):
-    """059 fixes the stored copy of the old default and touches nothing else."""
-    with _scratch_migration_db(tmp_path, 58, 59) as (conn, apply_059, _):
+def test_migration_060_rewrites_only_the_shipped_acknowledgement(tmp_path):
+    """060 fixes the stored copy of the old default and touches nothing else."""
+    with _scratch_migration_db(tmp_path, 59, 60) as (conn, apply_060, _):
         conn.execute(
             "INSERT INTO settings (key, value) VALUES (%s, %s::jsonb), (%s, %s::jsonb)",
             (
@@ -797,8 +828,8 @@ def test_migration_059_rewrites_only_the_shipped_acknowledgement(tmp_path):
             ),
         )
 
-        result = apply_059()
-        assert result.returncode == 0, f"059 failed:\n{result.stdout}\n{result.stderr}"
+        result = apply_060()
+        assert result.returncode == 0, f"060 failed:\n{result.stdout}\n{result.stderr}"
 
         texts = conn.execute("SELECT value FROM settings WHERE key='reply.texts'").fetchone()[0]
         assert texts["capture_ack"] == "Entiendo. "
@@ -809,16 +840,16 @@ def test_migration_059_rewrites_only_the_shipped_acknowledgement(tmp_path):
         assert keywords == ["mantencion"]
 
 
-def test_migration_059_leaves_a_hand_edited_acknowledgement_alone(tmp_path):
+def test_migration_060_leaves_a_hand_edited_acknowledgement_alone(tmp_path):
     """The rewrite is guarded by the old default: a panel edit is never overwritten."""
-    with _scratch_migration_db(tmp_path, 58, 59) as (conn, apply_059, _):
+    with _scratch_migration_db(tmp_path, 59, 60) as (conn, apply_060, _):
         conn.execute(
             "INSERT INTO settings (key, value) VALUES (%s, %s::jsonb)",
             ("reply.texts", '{"capture_ack": "Listo {{nombre}}: "}'),
         )
 
-        result = apply_059()
-        assert result.returncode == 0, f"059 failed:\n{result.stdout}\n{result.stderr}"
+        result = apply_060()
+        assert result.returncode == 0, f"060 failed:\n{result.stdout}\n{result.stderr}"
 
         texts = conn.execute("SELECT value FROM settings WHERE key='reply.texts'").fetchone()[0]
         assert texts["capture_ack"] == "Listo {{nombre}}: "
