@@ -94,6 +94,14 @@ def _dispatch(
         # Courtesy is understood even during capture; never research, capture,
         # or escalate it as a side effect of a pending field.
         return {"next_step": "respond"}
+    if intent in {"cancelar_visita", "reagendar_visita"}:
+        # S12 (chatbot-realismo-conversacional): asking to reschedule is a request,
+        # not an answer. Production #23 turn 289 asked "Quiero reagendar la visita
+        # es posible?" mid-capture and read "¿En qué comuna te encuentras?" back — CI-2
+        # used to fold these two intents into the pending field, and the customer's
+        # own visit was never offered. The pending field is untouched, so the capture
+        # agenda resumes with its next message.
+        return {"next_step": "manage"}
     if mid_capture:
         if intent in RETRIEVAL_INTENTS or question:
             # Answer the deviation from KB, then resume the pending field (CI-2).
@@ -102,7 +110,7 @@ def _dispatch(
                 "active_sub_agent": RESEARCH_TRIAGE,
                 "capture_paused": True,
             }
-        # Cancel/reschedule are intentionally treated as field answers in CI-2.
+        # Remaining intents are field answers in CI-2.
         return {"next_step": "capture"}
     if intent in {"cancelar_visita", "reagendar_visita"}:
         return {"next_step": "manage"}
