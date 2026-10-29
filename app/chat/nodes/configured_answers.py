@@ -58,6 +58,10 @@ _HOURS_TERMS = frozenset(
     }
 )
 
+# S9: a window that exists only because the offer filter reads it, covering every
+# weekday and the whole day, is not a business-hours statement.
+_NO_RESTRICTION_REPLY = "Las visitas se agendan según la disponibilidad de los técnicos."
+
 # Stored accented: they are rendered to the customer, and matched folded.
 _WEEKDAY_NAMES = (
     "lunes",
@@ -204,8 +208,26 @@ def duration_reply(session, state: ConversationState) -> str | None:
     return None
 
 
+def _covers_every_hour(entry) -> bool:
+    """True when this window restricts nothing: every weekday, 00:00 to 23:59.
+
+    A configuration that has to exist (the offer filter reads it) but is not a
+    business-hours statement. Rendering it literally would tell a customer the
+    business takes visits at any hour, while the technicians' agenda is what
+    actually bounds the calendar.
+    """
+    if not isinstance(entry, dict):
+        return False
+    days = entry.get("days") or []
+    return (
+        set(days) == {1, 2, 3, 4, 5, 6, 7}
+        and entry.get("open") == "00:00"
+        and entry.get("close") == "23:59"
+    )
+
+
 def hours_reply(session, state: ConversationState) -> str | None:
-    """The configured weekly window, from `hours.schedule` (S5).
+    """The configured weekly window, from `hours.schedule` (S5, S9).
 
     Returns ``None`` when the turn does not ask about hours, or when no window is
     configured: the KB keeps the policy and no opening time is ever invented.
@@ -213,8 +235,10 @@ def hours_reply(session, state: ConversationState) -> str | None:
     text = _current_text(state)
     if not text or _asks_price(text) or not (_words(text) & _HOURS_TERMS):
         return None
-    windows = [_window_label(entry) for entry in get_hours_schedule(session)]
-    labels = [label for label in windows if label]
+    schedule = get_hours_schedule(session)
+    if any(_covers_every_hour(entry) for entry in schedule):
+        return _NO_RESTRICTION_REPLY
+    labels = [label for label in map(_window_label, schedule) if label]
     if not labels:
         return None
     return f"Las visitas se agendan {' y '.join(labels)}."

@@ -67,3 +67,20 @@ def test_respond_answers_a_duration_question_from_the_configuration():
     result = respond(_state("cuanto dura un calefont?"))
 
     assert result["replies"] == ["Calefont dura 1 hora."]
+
+
+def test_respond_reports_availability_instead_of_a_24_7_window():
+    """S9: production configures every day 00:00-23:59 as "no restriction"."""
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            "hours.schedule",
+            [{"days": [1, 2, 3, 4, 5, 6, 7], "open": "00:00", "close": "23:59"}],
+        )
+        session.commit()
+
+    result = respond(_state("cual es el horario de atencion?"))
+
+    assert result["replies"] == [
+        "Las visitas se agendan según la disponibilidad de los técnicos."
+    ]

@@ -324,3 +324,19 @@ def test_a_cover_verb_with_a_covered_commune_is_a_coverage_question(monkeypatch)
         "Atendemos normalmente en Las Condes, Ñuñoa, Lo Barnechea, La Reina, "
         "Peñalolén, Colina y Huechuraba."
     )
+
+
+def test_a_window_covering_every_day_and_hour_is_not_announced_as_hours(monkeypatch):
+    """A no-restriction window means technician availability decides, not a clock.
+
+    Measured in production: the configured window is every day 00:00-23:59, so
+    rendering it literally would tell a customer the business takes visits at any
+    hour, when what actually bounds the calendar is the technicians' agenda.
+    """
+    _schedule(
+        monkeypatch, [{"days": [1, 2, 3, 4, 5, 6, 7], "open": "00:00", "close": "23:59"}]
+    )
+
+    reply = configured_answers.hours_reply(SESSION, _state("cual es el horario?"))
+
+    assert reply == "Las visitas se agendan según la disponibilidad de los técnicos."
