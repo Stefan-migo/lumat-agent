@@ -188,9 +188,17 @@ def test_mid_capture_retrieval_intents_answer_then_resume(intent):
     }
 
 
-@pytest.mark.parametrize("intent", ["unknown", "calefont", "cancelar_visita", "reagendar_visita"])
+@pytest.mark.parametrize("intent", ["unknown", "calefont"])
 def test_mid_capture_non_retrieval_is_pending_field_answer(intent):
     assert _dispatch(intent, mid_capture=True) == {"next_step": "capture"}
+
+
+@pytest.mark.parametrize("intent", ["cancelar_visita", "reagendar_visita"])
+def test_mid_capture_visit_management_is_not_a_field_answer(intent):
+    """S12: production #23 turn 289 asked "¿Quiero reagendar la visita es posible?" and
+    got "¿En qué comuna te encuentras?" back, because CI-2 treated the request as an
+    answer to the pending field."""
+    assert _dispatch(intent, mid_capture=True) == {"next_step": "manage"}
 
 
 def test_mid_capture_persona_still_escalates():

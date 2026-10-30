@@ -49,6 +49,9 @@ from app.services.settings import (
     get_conduct,
     get_coverage_communes,
     get_reply_texts,
+    get_service_durations,
+    get_tarifa_precios,
+    TARIFA_LABELS,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,7 +122,16 @@ _SKIP_WORDS = (
 _REFUSAL_FIELDS: tuple[tuple[str, str], ...] = (
     ("no te voy a dar mi correo", "email"),
 )
-_YES_WORDS = ("si", "sí", "yes", "ok", "claro", "confirmo", "acepto")
+_YES_WORDS = (
+    "si", "sí", "yes", "ok", "oka", "claro", "dale",
+)
+# S7 (chatbot-realismo-conversacional): the explicit first-person verbs are what a
+# customer says when they decide. They are accepted inside a short sentence, which
+# is what production #23 never got. The bare affirmatives above are accepted only
+# when the whole message is just that, because a false positive here writes
+# personal data without consent — the risk runs one way, so the rule is
+# asymmetric on purpose.
+_CONSENT_VERBS = ("autorizo", "autorizar", "consiento", "acepto", "confirmo")
 # An explicit refusal phrase is a decision, not confusion: matching only the
 # bare "no" made "no autorizo" fall into the unclear path and the customer
 # was asked again (replay T9, conversation #26).
@@ -206,12 +218,32 @@ def refused_field(text: str) -> str | None:
 
 
 def _answer_consent(value: str) -> bool | None:
-    """True/False only for an exact allowlisted answer; otherwise unclear."""
+    """Resolve a consent answer; a negation, a doubt or a question is never consent.
+
+    S7: production asked again after "no se que marca es realmente el calefont. si
+    autorizo" because only an exact allowlisted word counted. The old exact match
+    was safe but deaf; this keeps the safety (nothing is inferred from prose) and
+    adds the two shapes a real customer uses: an explicit consent verb inside a
+    short sentence, and a bare affirmative that is the whole message.
+    """
     normalized = _normalize(value)
-    if normalized in {_normalize(word) for word in _YES_WORDS}:
-        return True
+    if not normalized:
+        return None
     if normalized in {_normalize(word) for word in _NO_WORDS}:
         return False
+    if len(normalized) > 120 or len(normalized.split()) > 20:
+        return None
+    if re.search(r"\bno\s+(?:autorizo|autorizar|acepto|consiento|doy)\b", normalized):
+        return False
+    # Thinking out loud is not deciding, and a question is never an answer.
+    if re.search(r"\bno\s+se\s+si\b", normalized) or _looks_like_question(value):
+        return None
+    verbs = "|".join(re.escape(_normalize(word)) for word in _CONSENT_VERBS)
+    if re.search(rf"\b(?:{verbs})\b", normalized):
+        return True
+    bare = {_normalize(word) for word in _YES_WORDS}
+    if len(normalized.split()) <= 3 and any(word in bare for word in normalized.split()):
+        return True
     return None
 
 
@@ -226,7 +258,12 @@ def _persist_captured(session, state: ConversationState, captured: dict) -> None
     # S1 canvas: consent is asked BEFORE email/address, so a single ficha write at
     # the consent step would leave the customer record missing every field captured
     # after it (CI functional flows caught exactly that). The sync is idempotent.
-    if _answer_consent(captured.get("consent", "")) is True:
+    # S3: a consent already on record enables the same write, otherwise skipping the
+    # question would book a visit and drop the address the customer just gave.
+    if (
+        _answer_consent(captured.get("consent", "")) is True
+        or captured.get("_consent_previously_granted")
+    ):
         _sync_customer_fields(session, state, captured)
 
 
@@ -334,6 +371,89 @@ def _looks_like_question(text: str) -> bool:
     return _normalize(stripped).startswith(tuple(_normalize(word) for word in _INTERROGATIVES))
 
 
+def _edit_distance_at_most_one(left: str, right: str) -> bool:
+    """Match one-word typos with a bounded Levenshtein distance of one."""
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    previous = list(range(len(right) + 1))
+    for row, left_char in enumerate(left, start=1):
+        current = [row]
+        for column, right_char in enumerate(right, start=1):
+            current.append(min(
+                current[-1] + 1,
+                previous[column] + 1,
+                previous[column - 1] + (left_char != right_char),
+            ))
+        if min(current) > 1:
+            return False
+        previous = current
+    return previous[-1] <= 1
+
+
+def _matches_catalogue_phrase(text: str, phrase: str) -> bool:
+    words = _normalize(phrase.replace("_", " ")).split()
+    tokens = _normalize(text).split()
+    if not words:
+        return False
+    for start, token in enumerate(tokens):
+        if not _edit_distance_at_most_one(token, words[0]):
+            continue
+        cursor = start + 1
+        for word in words[1:]:
+            match_at = next(
+                (
+                    index for index in range(cursor, min(cursor + 3, len(tokens)))
+                    if _edit_distance_at_most_one(tokens[index], word)
+                ),
+                None,
+            )
+            if match_at is None:
+                break
+            cursor = match_at + 1
+        else:
+            return True
+    return False
+
+
+# S4 (chatbot-realismo-conversacional): only the services the business sells as
+# preventive maintenance skip the fault question. "Visita técnica" is the generic
+# repair visit: skipping there would leave a broken boiler with no diagnosis at
+# all, so the catalogue is narrowed instead of trusted whole.
+_PREVENTIVE_CATALOGUE_WORDS = (
+    "mantencion", "mantenimiento", "lavado", "limpieza", "preventiva", "revision",
+)
+
+
+def _preventive_services(session) -> list[str]:
+    """The configured services whose own name says preventive."""
+    services = [
+        *get_service_durations(session),
+        *get_tarifa_precios(session),
+        *TARIFA_LABELS.values(),
+    ]
+    return [
+        service for service in services
+        if any(
+            word in _normalize(str(service).replace("_", " "))
+            for word in _PREVENTIVE_CATALOGUE_WORDS
+        )
+    ]
+
+
+def _is_preventive_request(session, text: str, overrides: list[str]) -> bool:
+    normalized = _normalize(text)
+    if re.search(r"\bno\s+(?:quiero|necesito|busco|solicito)\b", normalized):
+        return False
+    if any(_normalize(keyword) in normalized for keyword in overrides):
+        return True
+    return any(
+        _matches_catalogue_phrase(text, service)
+        for service in _preventive_services(session)
+    )
+
+
 def _phrase_reply(session, texts: dict[str, str], key: str, captured: dict, *, pending) -> str:
     """Render one capture reply and optionally rephrase it (S5).
 
@@ -439,12 +559,6 @@ def capture(state: ConversationState) -> dict:
     # S4: evaluate the preventive intent once against the entire inbound window,
     # before any path can ask or re-ask the failure field.
     if "failure" not in captured:
-        with session_scope() as session:
-            preventive = {
-                _normalize(keyword)
-                for keyword in get_capture_preventive_keywords(session)
-                if _normalize(keyword)
-            }
         # A QUESTION is not a request: "¿cuánto cuesta la revisión anual?" is a
         # price question, not a maintenance order, and reading the keyword out of
         # it silently marked `failure` as skipped (S14/S16 integration tests).
@@ -455,7 +569,12 @@ def capture(state: ConversationState) -> dict:
             and not _looks_like_question(item.get("text") or "")
         )
         normalized_window = _normalize(inbound)
-        if any(keyword in normalized_window for keyword in preventive):
+        with session_scope() as session:
+            preventive_keywords = get_capture_preventive_keywords(session)
+            is_preventive = _is_preventive_request(
+                session, normalized_window, preventive_keywords
+            )
+        if is_preventive:
             skipped = list(captured.get("_skipped") or [])
             if "failure" not in skipped:
                 skipped.append("failure")
@@ -504,7 +623,7 @@ def capture(state: ConversationState) -> dict:
                 consent = _phrase_reply(session, get_reply_texts(session), "capture_consent", captured, pending=["consent"])
             return {"capture_paused": False, "replies": [consent]}
         answer = _current_text(state)
-        consent = None if is_skip(answer) else _answer_consent(answer)
+        consent = _answer_consent(answer)
         if consent is True:
             captured["consent"] = answer
             captured.pop("_pending", None)
@@ -682,6 +801,17 @@ def _render_capture_question(
     return ask
 
 
+def _customer_already_consented(session, state: ConversationState) -> bool:
+    """S3: consent is a property of the customer, not of the conversation.
+
+    Production #23 turn 301 asked a customer whose consent had been recorded on
+    2026-10-27: the flow only ever looked at `captured["consent"]`, so every new
+    conversation started the consent step from zero. The ficha is the source.
+    """
+    customer = session.get(Customer, state.customer_id)
+    return bool(customer is not None and customer.consent_status)
+
+
 def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = False) -> dict:
     """Ask the next missing fields, or the consent step when none remain."""
     with session_scope() as session:
@@ -696,6 +826,13 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
         missing = _missing_fields(captured, conduct["orden"])
         if not missing:
             if _answer_consent(captured.get("consent", "")) is True:
+                _persist_captured(session, state, captured)
+                return {"captured": captured, "next_step": "booking"}
+            if _customer_already_consented(session, state):
+                # S3: silent skip, decided by the owner. The marker keeps the trace
+                # honest for the panel: nobody asked in this conversation.
+                captured.pop("_pending", None)
+                captured["_consent_previously_granted"] = True
                 _persist_captured(session, state, captured)
                 return {"captured": captured, "next_step": "booking"}
             captured["_pending"] = "consent"

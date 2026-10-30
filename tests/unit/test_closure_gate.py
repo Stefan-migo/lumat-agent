@@ -123,3 +123,14 @@ def test_a_closing_phrase_surrounded_by_courtesy_still_closes(phrase):
 def test_courtesy_alone_or_around_content_does_not_close(phrase):
     """The courtesy allowance only applies when a closing phrase matched."""
     assert not is_farewell(phrase)
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "eso seria todo muchas gracias! que tengas buen dia",
+        "eso seria todo. gracias nuevament",
+    ],
+)
+def test_long_closing_with_courtesy_is_still_a_farewell(phrase):
+    assert is_farewell(phrase)

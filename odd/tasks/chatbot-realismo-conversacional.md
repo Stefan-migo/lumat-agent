@@ -207,19 +207,19 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | ID | Spec | Task | Route | Commit |
 | --- | --- | --- | --- | --- |
 | A1 | S1 | Ack only with a delivered data point; `Entiendo.`; name at most once; guarded migration for the stored `capture_ack` | inline | f7a6162b |
-| A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | |
-| A3 | S6 | `is_farewell` closes a long courtesy closing | inline | |
-| A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | |
-| A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | |
+| A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | 04b993c9 |
+| A3 | S6 | `is_farewell` closes a long courtesy closing | inline | 63b890ec |
+| A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | 9c63dc20 |
+| A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | a15e0edb |
 | B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | 0a7914cd |
 | B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | 0a7914cd |
-| B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | |
-| B4 | S11 | `state.booking` ignores appointments that already started | inline | |
-| B5 | S12 | `reagendar_visita` routes to `manage` | inline | |
+| B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | 4871dc62 |
+| B4 | S11 | `state.booking` ignores appointments that already started | inline | see L13 |
+| B5 | S12 | `reagendar_visita` routes to `manage` | inline | see L14 |
 | C3 | S13 | One question per turn after a KB deviation | inline | |
 | C4 | S14 | Normalized service as retrieval fallback query | inline | |
 | C2 | S2 | Evidence question moves to after the booking confirmation | inline | |
-| C1 | S3 | Seed capture from the customer record (consent + data) | inline | blocked: L5 |
+| C1 | S3 | Seed capture from the customer record (consent + data) | inline | faaed3dc | blocked on L5.1 for the data half |
 | D1 | D | Investigate the message-less escalations | inline | |
 | D2 | D | Expired `booked` appointments | inline | |
 
@@ -283,10 +283,77 @@ tests/unit/test_capture_phrasing.py tests/unit/test_reply_texts.py` → 65 passe
 → 38 passed, including two new tests that prove 059 rewrites the old default, keeps the other keys in
 the same JSON, and leaves a panel-edited text alone.
 
+**L10** — A2–A5 delivered by `gentle-ai-worker` and committed as four units (`04b993c9`, `63b890ec`,
+`9c63dc20`, `a15e0edb`). The writer's evidence was independent per unit, but parent review of the diff
+found two defects that the delegated spec did not cover, both fixed before commit with four new failing
+tests written first:
+
+1. **The consent widen accepted questions and doubts.** With `_YES_WORDS` scanned anywhere in prose,
+   `¿necesito autorización?` and `no se si autorizo` returned `True` — that is personal data stored
+   without consent. Fixed by splitting the vocabulary: explicit first-person verbs inside a short
+   sentence, bare affirmatives only when the whole message is just that, and a question or a doubt is
+   never consent. `autorización` (a noun that appears in questions) was dropped from the allowlist.
+2. **The catalogue match made a technical visit preventive.** `Visita técnica` is the generic repair
+   visit; matching the whole catalogue meant "necesito una visita tecnica, mi caldera no enciende"
+   skipped the fault question and the case would reach a technician with no symptom. Fixed by
+   narrowing the catalogue to services whose own name says preventive.
+
+Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/test_capture_validation.py`
+→ 33 passed; `bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db tests/integration/test_handoff.py
+tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
+64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
+stays unclear and gets one confirmation instead of being guessed.
+
+**L14** — B5 done. The cause was not a missing route: `_dispatch` already sent
+`reagendar_visita` to `manage`. It was the CI-2 rule that folds cancel/reschedule into
+the pending capture field while mid-capture, which is exactly the state production #23 was in. The
+two intents now win over the pending field, and the field itself is untouched so the agenda resumes on
+the next message. `tests/unit/test_routing_table.py` had the old rule pinned
+(`test_mid_capture_non_retrieval_is_pending_field_answer` parametrized over both intents); it now
+covers `unknown`/`calefont` and a new test pins the manage route. Verified:
+`pytest tests/unit/test_routing_table.py` → 44 passed; `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py
+tests/integration/test_chat_manage.py` → exit 0.
+
+**L13** — B4 done. RED reproduced the production prompt verbatim: the state carried
+`{'service': 'Visita técnica', 'label': '28/10/2026 a las 21:42', 'status': 'booked'}` for a visit that
+had already started. `from_db` now filters `starts_at > now`. Verified: `bash scripts/test.sh db
+tests/integration/test_chat_state.py` → exit 0; `bash scripts/test.sh db tests/integration/test_chat_booking.py
+tests/integration/test_handoff.py` → exit 0; `bash scripts/test.sh quick` → exit 0.
+
+**L12** — B3 done (`4871dc62`). RED reproduced the loop on the harness: the same three-slot page came
+back verbatim and the conversation never left `state=bot`. Two changes: `_new_offer` takes
+`unchanged_against` and refuses to persist a page identical to the one on screen, and the rebuild path
+carries `attempts + 1` instead of restarting at zero, so `MAX_INVALID_REPLIES` is finally reachable and
+the second unservable preference hands off with `booking_unclear` (the reply the generic handoff text
+provides, since no reply key invented here). A first attempt placed `attempts` after its use and the
+integration run caught an `UnboundLocalError` across three tests, which is exactly why the DB tier runs
+this file: the unit tier stubs the session and never enters `booking()`.
+
+Verified: `bash scripts/test.sh db tests/integration/test_chat_booking.py` → exit 0 (all 24 cases,
+including the six pre-existing window/offer cases); `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_handoff.py` →
+exit 0.
+
+**L11** — owner decisions, verbatim: `1. push y abre prs. el merge lo guardamos para despues.` and
+`2. c1. salto en silencio al bookign con el consentimiento ya dado.`
+
+Consequences:
+
+- **Chained delivery.** ~1000 authored lines do not fit one reviewable PR, so the branch is split into
+  three stacked PRs, base chain `main ← odd/chatbot-realismo-ack ← odd/chatbot-realismo-agenda-window ←
+  odd/chatbot-realismo-conversacional`: **#738** (spec + A1), **#740** (B1 + B2), **#741** (A2–A5).
+  Merge stays the owner's decision.
+- **C1 delivered as the consent half only** (`faaed3dc`). Owner chose the silent skip: when
+  `customers.consent_status` is true the question is not asked again, the flow goes straight to booking,
+  and `captured["_consent_previously_granted"]` records that nobody was asked in this conversation. The
+  ficha write moved with it, otherwise booking would drop the address the customer just gave. The data
+  half of S3 (reusing name/comuna/email/address from the record) stays open on L5.2 — an old address
+  sending a technician to the wrong place is a worse failure than one extra question.
+
 **L5** — open product decisions (owner):
 1. Consent already given: silent skip to booking, or a short confirmation (`¿mantengo los datos de tu
-   última visita?`), and does a "no" withdraw consent globally or only for this visit?
-2. TTL for stored customer data before it is offered back (e.g. 90 days), so an old address is not
+   última visita?`), and does a "no" withdraw consent globally or only for this visit?2. TTL for stored customer data before it is offered back (e.g. 90 days), so an old address is not
    reused as if it were current.
 3. Evidence question when the customer already sent a photo earlier in the conversation.
 4. Price in the out-of-coverage reply: never, or only when the customer asked for a price.

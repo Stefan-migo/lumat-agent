@@ -195,6 +195,27 @@ def test_preventive_request_skips_failure_and_marks_it(harness):
     assert "qué pasa con el equipo" not in result["replies"][0].lower()
 
 
+def test_catalogue_typo_manutencion_is_a_preventive_request(harness):
+    result = capture_node.capture(make_state(
+        "Necesito hacerle manutención a la caldera en casa", captured={},
+    ))
+
+    assert result["captured"].get("failure") is None
+    assert "failure" in result["captured"]["_skipped"]
+    assert result["captured"]["_pending"] == ["equipment"]
+    assert "¿no enciende" not in result["replies"][0].lower()
+
+
+def test_preventive_price_question_and_negated_request_do_not_skip_failure(harness):
+    for text in (
+        "¿cuánto cuesta la revisión anual?",
+        "no quiero mantención",
+    ):
+        result = capture_node.capture(make_state(text, captured={}))
+        assert "failure" not in result["captured"].get("_skipped", [])
+        assert result["captured"].get("_pending") == ["failure"]
+
+
 def test_full_capture_window_preventive_request_skips_pending_failure(harness):
     first = capture_node.capture(make_state("hola", captured={}))
     state = ConversationState(
@@ -270,3 +291,14 @@ def test_ack_has_a_single_source_and_it_is_the_reply_catalog(monkeypatch):
     )
 
     assert settings_module.get_capture_ack(object()) == "Listo {{nombre}}: "
+
+
+def test_a_technical_visit_request_still_asks_about_the_failure(harness):
+    """S4 boundary: \"Visita técnica\" is the generic repair visit, not a preventive
+    service, so it must never skip the one question that describes the fault."""
+    result = capture_node.capture(make_state(
+        "necesito una visita tecnica, mi caldera no enciende", captured={},
+    ))
+
+    assert "failure" not in result["captured"].get("_skipped", [])
+    assert result["captured"].get("_pending") == ["failure"]
