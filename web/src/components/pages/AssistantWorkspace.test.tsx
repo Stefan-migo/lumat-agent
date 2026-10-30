@@ -297,6 +297,45 @@ describe("AssistantWorkspace", () => {
     expect(onChangeProject).not.toHaveBeenCalled();
   });
 
+  it("searches and selects a project from the context panel picker", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "ops", name: "Operaciones", purpose: "Trabajo de terreno", status: "active" },
+        { id: 2, slug: "conocimiento", name: "Conocimiento", purpose: "Documentos", status: "active" },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    const onSelectProject = vi.fn();
+    render(<AssistantWorkspace onCreateThread={vi.fn()} onSelectProject={onSelectProject}><p>Thread</p></AssistantWorkspace>);
+
+    const trigger = await screen.findByRole("button", { name: "Cambiar proyecto: General / Sin proyecto" });
+    expect(screen.getByText("El proyecto define el contexto de este hilo.")).toBeInTheDocument();
+    fireEvent.click(trigger);
+
+    const panel = screen.getByRole("dialog", { name: "Elegir proyecto" });
+    expect(within(panel).getByRole("button", { name: "General / Sin proyecto" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(panel).getByRole("button", { name: "Operaciones" })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.change(within(panel).getByLabelText("Buscar proyecto"), { target: { value: "conoc" } });
+    await waitFor(() => expect(within(panel).queryByRole("button", { name: "Operaciones" })).not.toBeInTheDocument());
+    fireEvent.click(within(panel).getByRole("button", { name: "Conocimiento" }));
+
+    expect(onSelectProject).toHaveBeenCalledWith("conocimiento");
+  });
+
+  it("keeps the context panel project as information once the thread has messages", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
+    render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
+
+    expect(await screen.findByText("El proyecto queda fijo desde el primer mensaje.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Cambiar proyecto:/ })).not.toBeInTheDocument();
+  });
+
   it("changes the active thread project from the lean mobile picker", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {

@@ -437,6 +437,25 @@
    summary or empty copy while it is closed. Aligned with the title text, past
    the leading icon. */
 .assistant-workspace__context-secondary { margin: 0 0 var(--space-2); padding: 0 var(--space-2) 0 calc(var(--space-2) + var(--icon-sm) + var(--space-2)); color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+/* Project selector inside the context panel: the trigger reads like a field,
+   the panel searches and marks the current choice, and a locked thread keeps
+   the same shape as plain information. */
+.assistant-workspace__context-project { display: grid; gap: var(--space-2); }
+.assistant-workspace__context-project .popover { display: block; width: 100%; }
+.assistant-workspace__context-project .popover__trigger,
+.assistant-workspace__context-project-trigger { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.5rem; margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-md); background: var(--corp-surface); color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
+.assistant-workspace__context-project-trigger { color: var(--text-muted); cursor: default; }
+.assistant-workspace__context-project-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-workspace__context-project-hint { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+.assistant-workspace__context-project-options { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
+.assistant-workspace__context-project-option { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.5rem; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
+.assistant-workspace__context-project-option > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-workspace__context-project-option:hover,
+.assistant-workspace__context-project-option:focus-visible { background: var(--brand-bg); }
+.assistant-workspace__context-project-option.is-selected { background: var(--brand-bg-elevated); font-weight: 600; }
+.assistant-workspace__context-project-empty { margin: var(--space-2) 0 0; padding: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.assistant-workspace__context-project-purpose { display: flex; align-items: flex-start; gap: var(--space-2); margin: var(--space-1) 0 0; padding: 0 var(--space-2); }
+.assistant-workspace__context-project-purpose p { margin: 0; color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .assistant-workspace__context-section-content { padding: 0 var(--space-2) var(--space-3); }
 .assistant-workspace__context-section-content[hidden] { display: none; }
 .assistant-workspace__context-box { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-md); background: var(--corp-surface); overflow-wrap: anywhere; }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BookOpen, BrainCircuit, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Lock, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, Wrench, X } from "lucide-react";
+import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Lock, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, Wrench, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, downloadAssistantConversation, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -8,6 +8,7 @@ import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Icon } from "../primitives/Icon";
 import { Menu } from "../primitives/Menu";
+import { Popover } from "../primitives/Popover";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { EmptyState } from "../shared/EmptyState";
@@ -643,7 +644,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }]}
         >
-          {() => <ThreadContextSections activeProject={activeProject} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
+          {() => <ThreadContextSections activeProject={activeProject} projects={projects} activeProjectSlug={activeProjectSlug} projectLocked={threadStarted} onSelectProject={onSelectProject} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
         </Tabs>
         </> : null}
       </aside>
@@ -694,11 +695,11 @@ function activityTime(thread: InternalChatThreadSummary): number {
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
-function ThreadContextSections({ activeProject, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
+function ThreadContextSections({ activeProject, projects = [], activeProjectSlug, projectLocked = false, onSelectProject, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; projects?: Project[]; activeProjectSlug?: string; projectLocked?: boolean; onSelectProject?: (slug: string) => void; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
   const threadNote = "Los adjuntos y resultados pertenecen a este hilo.";
   return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
     <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} summary={activeProject ? activeProject.name : "General / Sin proyecto"} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
-      {activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
+      {mobile ? (activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />) : <ContextProjectPicker projects={projects} activeSlug={activeProjectSlug} activeName={activeProject?.name} locked={projectLocked} project={activeProject} onSelect={onSelectProject} />}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ProjectResourcesPanel project={activeProject} threadId={threadId} expanded={contextSections.resources ?? false} /></ContextSection>
     <ContextSection id={mobile ? "mobile-attachments" : "attachments"} title="Archivos del hilo" icon={Paperclip} count={attachments.length} subtitle={threadNote} summary={threadNote} expanded={contextSections.attachments ?? false} onToggle={() => toggleContextSection("attachments")}>
@@ -711,6 +712,52 @@ function ThreadContextSections({ activeProject, threadId, capabilities, capabili
     <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} subtitle="Información de solo lectura." expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
       {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__context-box"><p className="assistant-workspace__capability-row"><Icon icon={Wrench} size="sm" /><span>{capabilities.tools?.length ?? 0} herramientas disponibles</span></p><p className="assistant-workspace__capability-row"><Icon icon={BookOpen} size="sm" /><span>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</span></p></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
     </ContextSection>
+  </div>;
+}
+
+interface ContextProjectOption { slug: string; name: string }
+
+/** The reference's project selector: a disclosure trigger with a searchable
+ *  list, the current choice tinted and checked, and the hint that explains what
+ *  the choice means. A thread locks its project on the first message, so a
+ *  locked thread shows the same trigger as plain information instead of a
+ *  control that would quietly refuse the change. */
+function ContextProjectPicker({ projects, activeSlug, activeName, project, locked = false, onSelect }: { projects: Project[]; activeSlug?: string; activeName?: string; project?: Project; locked?: boolean; onSelect?: (slug: string) => void }) {
+  const [opened, setOpened] = useState(false);
+  const [query, setQuery] = useState("");
+  const general: ContextProjectOption = { slug: "default", name: "General / Sin proyecto" };
+  const currentSlug = activeSlug ?? "default";
+  const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
+  const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
+    .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
+  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+
+  if (locked) {
+    return <div className="assistant-workspace__context-project" data-locked="true">
+      <p className="assistant-workspace__context-project-trigger">{trigger}</p>
+      <p className="assistant-workspace__context-project-hint">El proyecto queda fijo desde el primer mensaje.</p>
+    </div>;
+  }
+
+  const choose = (slug: string, element: HTMLElement) => {
+    onSelect?.(slug);
+    (element.closest("[popover]") as (HTMLElement & { hidePopover?: () => void }) | null)?.hidePopover?.();
+  };
+
+  return <div className="assistant-workspace__context-project" onClick={(event) => { if ((event.target as HTMLElement).closest(".popover__trigger")) setOpened(true); }}>
+    <Popover title="Elegir proyecto" triggerLabel={`Cambiar proyecto: ${currentName}`} trigger={trigger} hideTitle>
+      {opened ? <>
+        <SearchInput onSearch={setQuery} delay={0} placeholder="Buscar proyecto…" aria-label="Buscar proyecto" />
+        {options.length
+          ? <ul className="assistant-workspace__context-project-options" aria-label="Proyectos disponibles">{options.map((option) => {
+            const selected = option.slug === currentSlug;
+            return <li key={option.slug}><button type="button" className={`assistant-workspace__context-project-option${selected ? " is-selected" : ""}`} aria-pressed={selected} onClick={(event) => choose(option.slug, event.currentTarget)}><Icon icon={Folder} size="sm" /><span>{option.name}</span>{selected ? <Icon icon={Check} size="sm" /> : null}</button></li>;
+          })}</ul>
+          : <p className="assistant-workspace__context-project-empty" role="status">No encontramos proyectos</p>}
+      </> : null}
+      <p className="assistant-workspace__context-project-hint">El proyecto define el contexto de este hilo.</p>
+    </Popover>
+    {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
   </div>;
 }
 
