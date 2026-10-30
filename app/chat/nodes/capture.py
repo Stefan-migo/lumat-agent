@@ -877,9 +877,6 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
         captured["_asked"] = asked
         texts = get_reply_texts(session)
         ask = _render_capture_question(session, captured, batch)
-        if len(missing) <= len(batch) and not captured.get("_evidence_asked"):
-            ask = f"{ask} {render_reply(texts, 'capture_evidence')}"
-            captured["_evidence_asked"] = True
         _persist_captured(session, state, captured)
     updates: dict = {"captured": captured, "replies": [ask]}
     if clear_paused:

@@ -159,6 +159,10 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     assert captured["comuna"] == "Ñuñoa"
     assert captured["availability"] == "mañanas"
     assert captured["name"] == "Juan Perez"
+    address_replies = _turn(conv_id, "juan@example.com", "wamid.cap7")
+    assert len(address_replies) == 1
+    assert "¿Cuál es tu dirección?" in address_replies[0]
+    assert REPLY_TEXT_DEFAULTS["capture_evidence"] not in address_replies[0]
     # S14: the configured max is 1 by default, so the booking data is asked one
     # field per message too (it used to ride a 2–3 field batch).
     assert captured["_pending"] == ["email"]
@@ -302,7 +306,7 @@ def test_configured_capture_questions_are_the_fallback_text(mock_openai_chat):
     assert all("Cuéntame qué pasa con el equipo" not in reply for reply in replies)
 
 
-def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
+def test_capture_does_not_ask_optional_evidence_before_booking(mock_openai_chat):
     from app.chat.nodes.capture import EVIDENCE_QUESTION
     conv_id = _start_conversation()
     all_replies = []
@@ -314,8 +318,8 @@ def test_optional_evidence_ask_is_not_mandatory(mock_openai_chat):
         replies = _turn(conv_id, text, f"wamid.optional{index}")
         all_replies.extend(replies)
 
-    # the optional evidence ask rides the last booking batch, never gates it
-    assert any(EVIDENCE_QUESTION in reply for reply in all_replies)
+    # Evidence is asked after booking, not bundled with captured contact data.
+    assert all(EVIDENCE_QUESTION not in reply for reply in all_replies)
     captured = _conversation_captured(conv_id)
     assert "evidence" not in captured
     assert captured["_pending"] == "consent"
