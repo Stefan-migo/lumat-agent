@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 from datetime import datetime, timedelta, timezone
 
 from app.chat.nodes.handoff_gate import is_media_evidence
@@ -34,6 +33,12 @@ from app.chat.phrasing import facts as phrase_facts
 from app.chat.phrasing import phrase
 from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
+from app.chat.service_catalogue import (
+    _PREVENTIVE_CATALOGUE_WORDS,
+    _matches_catalogue_phrase,
+    _normalize,
+    _preventive_services,
+)
 from app.db import session_scope
 from app.models import Conversation, Customer
 from app.services.customers import (
@@ -50,9 +55,6 @@ from app.services.settings import (
     get_conduct,
     get_coverage_communes,
     get_reply_texts,
-    get_service_durations,
-    get_tarifa_precios,
-    TARIFA_LABELS,
 )
 
 logger = logging.getLogger(__name__)
@@ -189,13 +191,6 @@ _EQUIPMENT_LABELS = {
     "caldera": "caldera",
     "calefaccion": "sistema de calefacción",
 }
-
-
-def _normalize(text: str) -> str:
-    """Lower-case, accent-folded, non-alphanumerics collapsed to one space."""
-    folded = unicodedata.normalize("NFD", (text or "").casefold())
-    folded = "".join(char for char in folded if unicodedata.category(char) != "Mn")
-    return re.sub(r"[^a-z0-9]+", " ", folded).strip()
 
 
 def is_social_only(text: str) -> bool:
@@ -372,77 +367,8 @@ def _looks_like_question(text: str) -> bool:
     return _normalize(stripped).startswith(tuple(_normalize(word) for word in _INTERROGATIVES))
 
 
-def _edit_distance_at_most_one(left: str, right: str) -> bool:
-    """Match one-word typos with a bounded Levenshtein distance of one."""
-    if left == right:
-        return True
-    if abs(len(left) - len(right)) > 1:
-        return False
-    previous = list(range(len(right) + 1))
-    for row, left_char in enumerate(left, start=1):
-        current = [row]
-        for column, right_char in enumerate(right, start=1):
-            current.append(min(
-                current[-1] + 1,
-                previous[column] + 1,
-                previous[column - 1] + (left_char != right_char),
-            ))
-        if min(current) > 1:
-            return False
-        previous = current
-    return previous[-1] <= 1
-
-
-def _matches_catalogue_phrase(text: str, phrase: str) -> bool:
-    words = _normalize(phrase.replace("_", " ")).split()
-    tokens = _normalize(text).split()
-    if not words:
-        return False
-    for start, token in enumerate(tokens):
-        if not _edit_distance_at_most_one(token, words[0]):
-            continue
-        cursor = start + 1
-        for word in words[1:]:
-            match_at = next(
-                (
-                    index for index in range(cursor, min(cursor + 3, len(tokens)))
-                    if _edit_distance_at_most_one(tokens[index], word)
-                ),
-                None,
-            )
-            if match_at is None:
-                break
-            cursor = match_at + 1
-        else:
-            return True
-    return False
-
-
-# S4 (chatbot-realismo-conversacional): only the services the business sells as
-# preventive maintenance skip the fault question. "Visita técnica" is the generic
-# repair visit: skipping there would leave a broken boiler with no diagnosis at
-# all, so the catalogue is narrowed instead of trusted whole.
-_PREVENTIVE_CATALOGUE_WORDS = (
-    "mantencion", "mantenimiento", "lavado", "limpieza", "preventiva", "revision",
-)
-
-
-def _preventive_services(session) -> list[str]:
-    """The configured services whose own name says preventive."""
-    services = [
-        *get_service_durations(session),
-        *get_tarifa_precios(session),
-        *TARIFA_LABELS.values(),
-    ]
-    return [
-        service for service in services
-        if any(
-            word in _normalize(str(service).replace("_", " "))
-            for word in _PREVENTIVE_CATALOGUE_WORDS
-        )
-    ]
-
-
+# Shared catalogue matcher; capture keeps its local request guards and explicit
+# `capture.preventive_keywords` override below.
 def _is_preventive_request(session, text: str, overrides: list[str]) -> bool:
     normalized = _normalize(text)
     if re.search(r"\bno\s+(?:quiero|necesito|busco|solicito)\b", normalized):
