@@ -196,7 +196,9 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     ),
     "capture_consent_refused": "De acuerdo, no guardaremos tus datos ni agendaremos una visita.",
     "capture_consent_unclear": "Necesito que me confirmes si autorizas guardar tus datos. Responde sí o no.",
-    "capture_ack": "Gracias {{nombre}}. ",
+    # S1 (chatbot-realismo-conversacional): thanks for a data point, not for
+    # showing up, and never with the name glued on — the greeting already used it.
+    "capture_ack": "Entiendo. ",
 }
 
 # S8: the slots each reply may use. The owner can drop a slot from a text, never
