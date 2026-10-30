@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.db import SessionLocal
 from app.models import (
@@ -12,6 +13,7 @@ from app.models import (
     Case,
     Conversation,
     Customer,
+    DomainEvent,
     TechnicianAvailability,
     TechnicianVisitState,
     User,
@@ -387,6 +389,219 @@ def test_close_rejects_non_booked_and_unknown_appointments(client, make_user):
     missing = client.post("/panel/api/appointments/999999999/close", json={"outcome": "completed"})
     assert missing.status_code == 404
     assert missing.json()["detail"] == "appointment not found"
+
+
+def _overdue_test_rows(session):
+    technician = User(username="overdue-tech", password_hash="unused")
+    session.add(technician)
+    session.flush()
+    now = datetime.now(timezone.utc)
+    rows = []
+    for index, (offset_days, status) in enumerate((
+        (5, AppointmentStatus.BOOKED),
+        (2, AppointmentStatus.BOOKED),
+        (-2, AppointmentStatus.BOOKED),
+        (8, AppointmentStatus.COMPLETED),
+        (7, AppointmentStatus.CANCELLED),
+        (6, AppointmentStatus.NO_SHOW),
+    )):
+        customer = Customer(phone_e164=f"+569800000{index:03d}", name=f"Customer {index}")
+        session.add(customer)
+        session.flush()
+        case = Case(customer_id=customer.id, service="calefont")
+        session.add(case)
+        session.flush()
+        starts_at = now - timedelta(days=offset_days)
+        appointment = Appointment(
+            service=f"overdue-{index}", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_start=starts_at.replace(tzinfo=None),
+            timezone="UTC", starts_at=starts_at, ends_at=starts_at + timedelta(hours=1),
+            duration_minutes=60, status=status,
+        )
+        session.add(appointment)
+        rows.append(appointment)
+    session.commit()
+    return [row.id for row in rows]
+
+
+def test_overdue_appointments_only_lists_past_booked_oldest_first(client, make_user):
+    make_user("overdue-oper", "overdue-pass", role="operador")
+    with SessionLocal() as session:
+        ids = _overdue_test_rows(session)
+    assert client.post("/panel/api/login", json={
+        "username": "overdue-oper", "password": "overdue-pass"
+    }).status_code == 200
+
+    response = client.get("/panel/api/appointments/overdue")
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["appointments"]] == [ids[0], ids[1]]
+    assert [row["service"] for row in response.json()["appointments"]] == ["overdue-0", "overdue-1"]
+    assert response.json()["appointments"][0].get("customer_name") == "Customer 0"
+
+
+def test_bulk_close_reports_database_failure_and_continues(client, make_user, monkeypatch):
+    from app.services import scheduling
+
+    make_user("bulk-oper", "bulk-pass", role="operador")
+    with SessionLocal() as session:
+        ids = _overdue_test_rows(session)[:2]
+    assert client.post("/panel/api/login", json={
+        "username": "bulk-oper", "password": "bulk-pass"
+    }).status_code == 200
+
+    close = scheduling.close
+
+    def close_with_one_failure(session, appointment, *, outcome, actor, reason=None):
+        if appointment.id == ids[0]:
+            raise SQLAlchemyError("injected database failure")
+        return close(session, appointment, outcome=outcome, actor=actor, reason=reason)
+
+    monkeypatch.setattr(scheduling, "close", close_with_one_failure)
+    client._transport.raise_server_exceptions = False
+
+    response = client.post("/panel/api/appointments/bulk-close", json={
+        "appointment_ids": ids, "outcome": "completed",
+    })
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "closed": 1, "failed": 1,
+        "results": [
+            {"id": ids[0], "ok": False, "outcome": "completed", "error": "database error while closing appointment"},
+            {"id": ids[1], "ok": True, "outcome": "completed", "error": None},
+        ],
+    }
+    with SessionLocal() as session:
+        assert session.get(Appointment, ids[0]).status is AppointmentStatus.BOOKED
+        assert session.get(Appointment, ids[1]).status is AppointmentStatus.COMPLETED
+
+
+@pytest.mark.parametrize("outcome", ["completed", "no_show"])
+def test_bulk_close_closes_each_row_with_history_and_audit(client, make_user, outcome):
+    make_user("bulk-oper", "bulk-pass", role="operador")
+    with SessionLocal() as session:
+        ids = _overdue_test_rows(session)[:2]
+    assert client.post("/panel/api/login", json={
+        "username": "bulk-oper", "password": "bulk-pass"
+    }).status_code == 200
+
+    response = client.post("/panel/api/appointments/bulk-close", json={
+        "appointment_ids": ids, "outcome": outcome,
+    })
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "closed": 2, "failed": 0,
+        "results": [{"id": item_id, "ok": True, "outcome": outcome, "error": None} for item_id in ids],
+    }
+    with SessionLocal() as session:
+        for item_id in ids:
+            appointment = session.get(Appointment, item_id)
+            history = session.query(AppointmentHistory).filter_by(appointment_id=item_id).one()
+            audit = session.query(AuditLog).filter_by(
+                action=f"appointment.{outcome}", entity_id=str(item_id)
+            ).one()
+            event = session.query(DomainEvent).filter_by(
+                event_type=f"appointment.{outcome}", entity_id=str(item_id)
+            ).one()
+            assert appointment.status.value == outcome
+            assert history.action == outcome and history.actor == "bulk-oper"
+            assert audit.actor == "bulk-oper"
+            assert event.event_type == f"appointment.{outcome}"
+
+
+def test_bulk_close_reports_closed_row_and_continues_other_rows(client, make_user):
+    make_user("bulk-oper", "bulk-pass", role="operador")
+    with SessionLocal() as session:
+        ids = _overdue_test_rows(session)[:3]
+        session.query(Appointment).filter_by(id=ids[1]).update({"status": AppointmentStatus.COMPLETED})
+        session.commit()
+    assert client.post("/panel/api/login", json={
+        "username": "bulk-oper", "password": "bulk-pass"
+    }).status_code == 200
+
+    response = client.post("/panel/api/appointments/bulk-close", json={
+        "appointment_ids": ids, "outcome": "no_show",
+    })
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (payload["closed"], payload["failed"]) == (2, 1)
+    assert [result["ok"] for result in payload["results"]] == [True, False, True]
+    assert payload["results"][1]["id"] == ids[1]
+    assert payload["results"][1]["error"] == "only booked appointments can be closed"
+    with SessionLocal() as session:
+        assert [session.get(Appointment, item_id).status.value for item_id in ids] == [
+            "no_show", "completed", "no_show"
+        ]
+
+
+def test_bulk_close_rejects_invalid_outcome_without_mutation(client, make_user):
+    make_user("bulk-oper", "bulk-pass", role="operador")
+    with SessionLocal() as session:
+        ids = _overdue_test_rows(session)[:2]
+    assert client.post("/panel/api/login", json={
+        "username": "bulk-oper", "password": "bulk-pass"
+    }).status_code == 200
+    with SessionLocal() as session:
+        audit_count = session.query(AuditLog).count()
+
+    response = client.post("/panel/api/appointments/bulk-close", json={
+        "appointment_ids": ids, "outcome": "guess",
+    })
+
+    assert response.status_code == 422
+    with SessionLocal() as session:
+        assert [session.get(Appointment, item_id).status for item_id in ids] == [
+            AppointmentStatus.BOOKED, AppointmentStatus.BOOKED
+        ]
+        assert session.query(AuditLog).count() == audit_count
+
+
+@pytest.mark.parametrize("ids", [[], list(range(1, 102))])
+def test_bulk_close_rejects_empty_and_oversized_batches(client, make_user, ids):
+    make_user("bulk-oper", "bulk-pass", role="operador")
+    assert client.post("/panel/api/login", json={
+        "username": "bulk-oper", "password": "bulk-pass"
+    }).status_code == 200
+
+    response = client.post("/panel/api/appointments/bulk-close", json={
+        "appointment_ids": ids, "outcome": "completed",
+    })
+
+    assert response.status_code == 422
+
+
+def test_bulk_close_is_operator_only(client, make_user):
+    make_user("bulk-tech", "bulk-tech-pass", role="tecnico")
+    assert client.post("/panel/api/login", json={
+        "username": "bulk-tech", "password": "bulk-tech-pass"
+    }).status_code == 200
+
+    response = client.post("/panel/api/appointments/bulk-close", json={
+        "appointment_ids": [1], "outcome": "completed",
+    })
+
+    assert response.status_code == 403
+
+
+def test_appointment_detail_and_single_close_behaviour_remains_available(client, make_user):
+    make_user("preserve-oper", "preserve-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *_ = _appointment_detail_rows(session)
+    assert client.post("/panel/api/login", json={
+        "username": "preserve-oper", "password": "preserve-pass"
+    }).status_code == 200
+
+    detail = client.get(f"/panel/api/appointments/{appointment_id}")
+    assert detail.status_code == 200
+    assert detail.json()["appointment"]["id"] == appointment_id
+    closed = client.post(f"/panel/api/appointments/{appointment_id}/close", json={
+        "outcome": "completed",
+    })
+    assert closed.status_code == 200
+    assert closed.json()["appointment"]["status"] == "completed"
 
 
 def test_operator_can_reschedule_appointment_through_patch(client, make_user):
