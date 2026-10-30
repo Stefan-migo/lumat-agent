@@ -67,6 +67,7 @@ describe("AgentChat", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.history.replaceState({}, "", "/");
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   });
@@ -383,49 +384,6 @@ describe("AgentChat", () => {
     expect(screen.queryByText("Sin datos")).not.toBeInTheDocument();
   });
 
-  it("pins project resources from the context sidebar", async () => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
-    window.history.replaceState({}, "", "/panel/app/chat?thread_id=4");
-    const available = {
-      project_files: [{ id: 12, filename: "manual.pdf", content_type: "application/pdf", size: 100 }],
-      skills: [{ name: "local-skill", description: "Local" }],
-    };
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
-      if (url.includes("/assistant/capabilities")) {
-        return jsonResponse({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: true });
-      }
-      if (url.endsWith("/resources")) {
-        if (init?.method === "PUT") {
-          const body = JSON.parse(String(init.body));
-          return jsonResponse({ resources: body, available, inherited: false });
-        }
-        return jsonResponse({ resources: { project_files: [], skills: [] }, available, inherited: true });
-      }
-      return jsonResponse({ thread: makeThread(), messages: [] });
-    });
-
-    render(<AgentChat threadId={4} />);
-    await screen.findByRole("heading", { name: /¿En qué trabajamos hoy\?|Buenos días|Buenas tardes|Buenas noches/ });
-
-    fireEvent.click(await screen.findByRole("button", { name: /Recursos del proyecto/ }));
-
-    const fileToggle = await screen.findByRole("checkbox", { name: "manual.pdf" });
-    expect(screen.getByRole("checkbox", { name: "local-skill" })).toBeInTheDocument();
-    expect(fileToggle).not.toBeChecked();
-
-    fireEvent.click(fileToggle);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/panel/api/chat/threads/4/resources",
-      expect.objectContaining({
-        method: "PUT",
-        body: JSON.stringify({ project_files: [12], skills: [] }),
-      }),
-    ));
-  });
-
   it("does not show stop when no run is active", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).endsWith("/tool-policy") ? jsonResponse(policy()) : jsonResponse({ thread: makeThread(), messages: [] }),
@@ -524,6 +482,48 @@ describe("AgentChat", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads/4",
       expect.objectContaining({ method: "PATCH", body: JSON.stringify({ proyecto: "ops-private-slug" }) }),
+    ));
+  });
+
+  it("locks the workspace project control once the thread has messages", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      return jsonResponse({
+        thread: { ...makeThread(), proyecto: "default" },
+        messages: [{ id: 1, author: "admin", content: "Hola", status: "processed" }],
+      });
+    });
+    render(<AgentChat threadId={4} />);
+    await screen.findByText("Hola");
+
+    expect(screen.getByRole("button", { name: /^Elegir proyecto:/ })).toBeDisabled();
+  });
+
+  it("attaches a project file dropped from the project resources panel", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/attachments/from-project") && init?.method === "POST") {
+        return jsonResponse({ attachment: { id: 12, thread_id: 4, filename: "plan.pdf", kind: "document", content_type: "application/pdf", size: 20 } });
+      }
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      return jsonResponse({ thread: { ...makeThread(), proyecto: "ops" }, messages: [] });
+    });
+    render(<AgentChat threadId={4} />);
+    const zone = await screen.findByRole("region", { name: "Conversación" });
+
+    fireEvent.drop(zone, {
+      dataTransfer: {
+        types: ["application/x-lumat-project-file"],
+        getData: () => JSON.stringify({ slug: "ops", fileId: 31, filename: "plan.pdf" }),
+      },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/attachments/from-project",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ project_file_id: 31 }) }),
     ));
   });
 
@@ -1962,6 +1962,38 @@ describe("AgentChat", () => {
     expect(screen.getByText("Analizando tu solicitud…")).toBeInTheDocument();
     closeStream();
     await waitFor(() => expect(composer).toBeEnabled());
+  });
+
+  it("renders known artifact references as downloadable filenames only", async () => {
+    const downloadPath = "/panel/api/chat/threads/4/artifacts/9/download";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/tool-policy")) return jsonResponse(policy());
+      if (String(input) === downloadPath) return new Response(new Blob(["artifact"]));
+      return jsonResponse({
+        thread: makeThread(),
+        artifacts: [{ id: 9, thread_id: 4, filename: "resultado.md", content_type: "text/markdown", size: 8 }],
+        messages: [
+          { id: 1, author: "agent", content: `Descarga \`${downloadPath}\``, status: "processed" },
+          { id: 2, author: "agent", content: "Respuesta sin artefactos", status: "processed" },
+        ],
+      });
+    });
+    const TestURL = class extends globalThis.URL {};
+    Object.assign(TestURL, {
+      createObjectURL: vi.fn().mockReturnValue("blob:artifact"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.stubGlobal("URL", TestURL);
+
+    render(<AgentChat threadId={4} />);
+    const [message, plainMessage] = await screen.findAllByRole("article", { name: "Mensaje de agente" });
+    expect(within(message).queryByText(downloadPath)).not.toBeInTheDocument();
+    expect(within(message).getByText("resultado.md")).toBeInTheDocument();
+    const download = within(message).getByRole("button", { name: "Descargar resultado.md" });
+    fireEvent.click(download);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(downloadPath, { credentials: "include" }));
+    expect(plainMessage).not.toHaveTextContent("Descargar");
+    expect(screen.getAllByRole("button", { name: /Descargar/ })).toHaveLength(1);
   });
 
   it("renders agent replies as markdown and leaves the operator text literal", async () => {

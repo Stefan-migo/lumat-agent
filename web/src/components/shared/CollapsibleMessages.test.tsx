@@ -17,17 +17,20 @@ describe("CollapsibleMessages", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("shows the total and calls onToggle when clicked", () => {
+  it("shows how many messages stay hidden, above the rows, and calls onToggle", () => {
     const onToggle = vi.fn();
-    render(<CollapsibleMessages total={12} expanded={false} onToggle={onToggle}>Rows</CollapsibleMessages>);
+    render(<CollapsibleMessages total={12} expanded={false} onToggle={onToggle}><p>Rows</p></CollapsibleMessages>);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ver todos (12)" }));
+    const control = screen.getByRole("button", { name: "2 mensajes anteriores · Ver todos" });
+    expect(control).toHaveAttribute("aria-expanded", "false");
+    expect(control.compareDocumentPosition(screen.getByText("Rows")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(control);
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
   it("shows the collapse label when expanded", () => {
     render(<CollapsibleMessages total={12} expanded onToggle={vi.fn()}>Rows</CollapsibleMessages>);
 
-    expect(screen.getByRole("button", { name: "Ver menos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver menos" })).toHaveAttribute("aria-expanded", "true");
   });
 });

@@ -50,7 +50,7 @@ describe("ConversationThread", () => {
 
   it("shows the message disclosure in the many-messages story", () => {
     render(<ConversationThreadWithManyMessagesView />);
-    expect(screen.getByRole("button", { name: "Ver todos (12)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "2 mensajes anteriores · Ver todos" })).toBeInTheDocument();
   });
 
   it("renders the interactive story inspector content", () => {
