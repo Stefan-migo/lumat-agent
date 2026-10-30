@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, ChevronDown, ChevronRight, Download, FileText, Folder, FolderPlus, Lock, Sparkles, Trash2, Upload } from "lucide-react";
-import { ApiError, createProjectFolder, deleteProjectFolder, downloadProjectFile, getThreadResources, listProjectFiles, listProjectFolders, refreshKbDocuments, uploadProjectFile } from "../../api";
+import { ApiError, createProjectFolder, deleteProjectFolder, downloadProjectFile, getThreadResources, listProjectFiles, listProjectFolders, moveProjectFile, refreshKbDocuments, uploadProjectFile } from "../../api";
 import type { Doc, Project, ProjectFile, ProjectFolder, ThreadResourceSkill } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -17,6 +17,10 @@ interface ProjectResourcesPanelProps {
   onSummary?: (summary: string) => void;
 }
 
+/** Tree drags carry their own type so a folder drop can tell "move this file"
+ *  apart from "upload these OS files". */
+const PROJECT_FILE_MOVE_TYPE = "application/x-lumat-project-file-move";
+
 const pluralize = (count: number, singular: string, plural: string) => `${count} ${count === 1 ? singular : plural}`;
 
 export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }: ProjectResourcesPanelProps) {
@@ -32,6 +36,7 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<ProjectFolder | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const uploadFolder = useRef<number | null>(null);
   const onSummaryRef = useRef(onSummary);
   onSummaryRef.current = onSummary;
 
@@ -107,10 +112,37 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
     catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar la carpeta."); }
     finally { setBusy(false); }
   };
+  /** Remember the destination before opening the picker: the browser gives no
+   *  per-dialog context once the native file chooser returns. */
+  const openUpload = (folderId: number | null) => {
+    uploadFolder.current = folderId;
+    fileInput.current?.click();
+  };
   const onDrop = (event: React.DragEvent, folderId: number | null) => {
     event.preventDefault();
+    event.stopPropagation();
     const file = event.dataTransfer.files?.[0];
     if (file) void upload(file, folderId);
+  };
+  const moveFile = async (fileId: number, folderId: number | null) => {
+    if (!project) return;
+    setError(null);
+    try { await moveProjectFile(project.slug, fileId, folderId); await reloadTree(); }
+    catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "No pudimos mover el archivo."); }
+  };
+  /** A drop zone accepts two different things: OS files to upload and a tree
+   *  file being dragged to a new folder. The payload type decides, never the
+   *  presence of `files`, so a move never turns into an accidental copy. */
+  const onDropZone = (event: React.DragEvent, folderId: number | null) => {
+    const types = Array.from(event.dataTransfer.types);
+    if (types.includes(PROJECT_FILE_MOVE_TYPE)) {
+      event.preventDefault();
+      event.stopPropagation();
+      const fileId = Number(event.dataTransfer.getData(PROJECT_FILE_MOVE_TYPE));
+      if (Number.isInteger(fileId) && fileId > 0) void moveFile(fileId, folderId);
+      return;
+    }
+    onDrop(event, folderId);
   };
   const folderFileCount = (folderId: number): number => {
     const childIds = folders.filter((folder) => folder.parent_id === folderId).map((folder) => folder.id);
@@ -121,7 +153,7 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
     const parent = folders.find((folder) => folder.id === folderId);
     return parent?.parent_id === ancestorId || (parent ? folderContains(ancestorId, parent.parent_id) : false);
   };
-  const fileRow = (file: ProjectFile) => <li key={`file-${file.id}`} className="assistant-project-resources__file" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-project-file", JSON.stringify({ slug: project?.slug, fileId: file.id, filename: file.filename })); event.dataTransfer.effectAllowed = "copy"; }}>
+  const fileRow = (file: ProjectFile) => <li key={`file-${file.id}`} className="assistant-project-resources__file" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-project-file", JSON.stringify({ slug: project?.slug, fileId: file.id, filename: file.filename })); event.dataTransfer.setData(PROJECT_FILE_MOVE_TYPE, String(file.id)); event.dataTransfer.effectAllowed = "copyMove"; }}>
     <Icon icon={FileText} size="sm" />
     <span>{file.filename}</span>
     <Menu label={`Acciones de ${file.filename}`} trigger="icon" align="end" items={[{ value: "download", label: "Descargar", icon: Download }]} onSelect={() => void download(file)} />
@@ -130,21 +162,21 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
     const isOpen = open.has(folder.id);
     const folderCount = folderFileCount(folder.id);
     return <li key={folder.id}>
-      <div className="assistant-project-resources__folder" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDrop(event, folder.id)}>
+      <div className="assistant-project-resources__folder" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDropZone(event, folder.id)}>
         <button type="button" aria-expanded={isOpen} onClick={() => setOpen((value) => { const next = new Set(value); isOpen ? next.delete(folder.id) : next.add(folder.id); return next; })}>
           <Icon icon={isOpen ? ChevronDown : ChevronRight} size="sm" />
           <Icon icon={Folder} size="sm" />
           <span>{folder.name}</span>
           <Badge>{folderCount}</Badge>
         </button>
-        <Menu label={`Acciones de carpeta ${folder.name}`} trigger="icon" align="end" items={[{ value: "delete", label: "Eliminar carpeta", icon: Trash2, tone: "danger" }]} onSelect={() => setFolderToDelete(folder)} />
+        <Menu label={`Acciones de carpeta ${folder.name}`} trigger="icon" align="end" items={[{ value: "upload", label: "Subir aquí", icon: Upload }, { value: "delete", label: "Eliminar carpeta", icon: Trash2, tone: "danger" }]} onSelect={(value) => { if (value === "upload") openUpload(folder.id); else setFolderToDelete(folder); }} />
       </div>
       {isOpen ? <>{tree(folder.id)}{files.filter((file) => file.folder_id === folder.id).map(fileRow)}</> : null}
     </li>;
   })}{files.filter((file) => file.folder_id === parentId).map(fileRow)}</ul>;
   const fileCount = files.length + folders.length;
   const folderMenuAction = (value: string) => {
-    if (value === "upload") fileInput.current?.click();
+    if (value === "upload") openUpload(null);
     if (value === "folder") { setFolderName(""); setCreateFolderOpen(true); }
   };
 
@@ -153,17 +185,17 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
 
   return <div className="assistant-project-resources">
     {error ? <StateMessage tone="danger" role="alert" title={error} /> : null}
-    <section className="assistant-project-resources__card" aria-label="Archivos del proyecto">
+    <section className="assistant-project-resources__card" aria-label="Archivos del proyecto" onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={(event) => onDropZone(event, null)}>
       <header className="assistant-project-resources__card-header">
         <div className="assistant-project-resources__heading"><h3>Archivos</h3><Badge>{fileCount}</Badge></div>
         <div className="assistant-project-resources__actions">
-          <Button variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}><Icon icon={Upload} size="sm" />Subir archivo</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => openUpload(null)}><Icon icon={Upload} size="sm" />Subir archivo</Button>
           <Menu label="Acciones de archivos" trigger="icon" align="end" disabled={busy} items={[{ value: "upload", label: "Subir archivo", icon: Upload }, { value: "folder", label: "Crear carpeta", icon: FolderPlus }]} onSelect={folderMenuAction} />
         </div>
       </header>
       <p className="assistant-project-resources__subtitle">Documentos compartidos del proyecto</p>
-      <input ref={fileInput} type="file" hidden aria-label="Archivo del proyecto" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void upload(file); }} />
-      <div className="assistant-project-resources__drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDrop(event, null)}>
+      <input ref={fileInput} type="file" hidden aria-label="Archivo del proyecto" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void upload(file, uploadFolder.current); }} />
+      <div className="assistant-project-resources__drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDropZone(event, null)}>
         {folders.length === 0 && files.length === 0 ? <p className="assistant-project-resources__empty">Sin archivos del proyecto.</p> : tree(null)}
       </div>
     </section>

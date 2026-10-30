@@ -731,7 +731,7 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, locke
   const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
   const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
     .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
-  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+  const trigger = <><Icon icon={Folder} size="md" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
 
   if (locked) {
     return <div className="assistant-workspace__context-project" data-locked="true">

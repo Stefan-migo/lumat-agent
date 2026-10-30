@@ -83,6 +83,36 @@ S10 — **Mobile**: the same sections render in the thread-detail sheet (`mobile
 `ThreadContextSections`); no fixed pixel widths, no hover-only affordance. Every action reachable by
 touch, and the section rows keep 44px targets.
 
+S11 — **Selected project, closer to the reference.** The owner's crop of the reference shows the
+selected project as a tall, quiet field: the folder glyph at `md` scale, the project name reading as the
+value, generous padding, a hairline border on a light surface, and the chevron at the far right. The
+current trigger is smaller and plainer than that (owner: "el formato de como se muestra el proyecto
+seleccionado se ve muy sencillo"). The collapsed `Proyecto` row keeps its summary line.
+
+S12 — **Upload destination.** Today every upload lands in the root because the UI always sends
+`folder_id: null` (`ProjectResourcesPanel.tsx`), even though `POST /projects/{slug}/files` accepts a
+folder. The owner must be able to choose the folder a file goes into: each folder row offers `Subir
+aquí`, the card header keeps `Subir archivo` for the root, and dropping OS files anywhere on the
+Archivos card uploads to the root. Owner, verbatim: "no se puede seleccionar a que carpeta se sube el
+archivo" and "tampoco se pueden subir archivos arrastrandolos directamente al menu recursos del
+proyecto".
+
+S13 — **Move files between folders by dragging** (owner: "tampoco esta el drag and drop para mover
+archivos entre el worktree"). Dragging a file row onto a folder row moves that file into the folder;
+dragging it onto the card's root area moves it back to the root. The backend already supports it:
+`PATCH /projects/{slug}/files/{file_id}` with `FileMoveBody{folder_id}`. A drop of OS files and a drop
+of a tree file must never be confused: the tree drag carries its own payload type.
+
+S14 — **Drag from the sidebar into the chat** (owner definition, verbatim): "los archivos disponibles
+en los menus del sidebar derecho. deben ser drag and drop para el chat del hilo. o sea el usuario puede
+referenciar y cargar estos archivos al contexto cuando lo considere necesario. esto seria para: los
+archivos del proyecto. archivos del hilo, artefactos del hilo". Project files attach to the thread
+through the existing `application/x-lumat-project-file` payload and
+`POST /chat/threads/{id}/attachments/from-project`. Thread files and artifacts are already thread
+context and have no attach endpoint, so dropping one adds a **reference chip** to the message being
+written (owner's choice on 2026-10-30: "Ficha de referencia en el compositor"); the reference is
+visible in the sent message and can be removed before sending. No new backend behaviour.
+
 ## Tasks
 
 T1 — DONE (`c694b8be`). Section shell per reference: `ContextSection` gains subtitle/summary/lock,
@@ -112,6 +142,18 @@ Slice boundary: 686 authored lines over 6 commits, past the ~400-line review sli
 standing decision recorded in `odd/tasks/assistant-panel-frontend.md` L10 — slices land as commits and
 the PR opens when the assistant frontend is complete — the boundary is recorded here instead of
 opening a PR mid-feature.
+
+T6 — Project trigger presentation per the reference crop, and the upload destination: `Subir aquí`
+per folder, root upload from the card header, and OS-file drops anywhere on the Archivos card. S11,
+S12. `ProjectResourcesPanel.tsx`, `AssistantWorkspace.tsx`, `AssistantWorkspace.css`, tests. Commit
+`feat(assistant): …`.
+T7 — Move project files between folders by dragging a file row onto a folder row or the card root, via
+`PATCH /projects/{slug}/files/{file_id}`. S13. `ProjectResourcesPanel.tsx`, `api.ts`,
+`AssistantWorkspace.test.tsx`. Commit `feat(assistant): …`.
+T8 — Reference chips: dragging a thread file or an artifact from the sidebar into the composer adds a
+reference to the message being written, removable before sending and visible in the sent text. S14.
+`AgentChat.tsx`, `AssistantWorkspace.tsx`, `AssistantWorkspace.css`, tests. Commit
+`feat(assistant): …`.
 
 ## Log
 
@@ -177,3 +219,23 @@ card nested a dashed drop box inside the card, removed — the card is the root 
 Conocimiento card said `Solo lectura` twice and printed `0 documentos disponibles` next to `Sin
 documentos disponibles`, so the count row only renders when there are documents. The mobile sheet
 renders the same sections and showed the loading state, which is the S10 evidence.
+
+L9 — Owner review of the implemented sidebar (verbatim):
+"ok referencias cortaS:\n\n- menu proyecto.:\nes ok. cuando esta cerrado se ve asi: [captura], el
+formato de como se muestra el proyecto seleccionado se ve muy sencillo en la referencia se ve asi:
+[captura]\n\n- menu Recursos del proyecto:\n\nanda bastante bien. se pueden subir archivos y crear
+carpetas. sin embargo. no se puede seleccionar a que carpeta se sube el archivo. \ntampoco esta el
+drag and drop para mover archivos entre el worktree\ntampoco se pueden subir archivos arrastrandolos
+directamente al menu recursos del proyecto.\n\n---\n\n 1. Arrastrar attachments del hilo al chat —
+falta definir qué significa. significa eso. que los archivos disponibles en los menus del sidebar
+derecho. deben ser drag and drop para el chat del hilo. o sea el usuario puede referenciar y cargar
+estos archivos al contexto cuando lo considere necesario. tiene sentido? esto seria para: los
+archivos del proyecto. archivos del hilo, artefactos del hilo. \n\nel resto esta bien."
+This reopens nothing: T1-T5 stay done, and S11-S14 plus T6-T8 are added above.
+
+L10 — Scope check before writing (measured in the backend, not assumed): B, C and D need no backend.
+`POST /projects/{slug}/files` already accepts a folder, `PATCH /projects/{slug}/files/{file_id}` takes
+`FileMoveBody{folder_id}` (`app/panel/api/routes/project_files.py:94-107`), and the chat already
+handles `application/x-lumat-project-file` (`AgentChat.tsx:909-929`). `PATCH
+/projects/{slug}/folders/{folder_id}` also renames folders, which the owner did not ask for and this
+feature does not add.

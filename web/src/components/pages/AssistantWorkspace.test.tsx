@@ -55,7 +55,7 @@ describe("AssistantWorkspace", () => {
     const dataTransfer = { setData: vi.fn(), effectAllowed: "" };
     fireEvent.dragStart(fileRow.closest("li")!, { dataTransfer });
     expect(dataTransfer.setData).toHaveBeenCalledWith("application/x-lumat-project-file", JSON.stringify({ slug: "ops", fileId: 31, filename: "plan.pdf" }));
-    expect(dataTransfer.effectAllowed).toBe("copy");
+    expect(dataTransfer.effectAllowed).toBe("copyMove");
 
     expect(await screen.findByText("Manual")).toBeInTheDocument();
     expect(screen.getByText(/PDF · v2 · Activo/)).toBeInTheDocument();
@@ -157,6 +157,33 @@ describe("AssistantWorkspace", () => {
     expect(within(capabilitiesSection).getByText("Base de conocimiento")).toBeInTheDocument();
     expect(within(capabilitiesSection).getByText("Disponible")).toBeInTheDocument();
     expect(within(capabilitiesSection).getByText("Información de solo lectura.")).toBeInTheDocument();
+  });
+
+  it("moves a project file into a folder when its row is dropped on that folder", async () => {
+    const { ProjectResourcesPanel } = await import("./ProjectResourcesPanel");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/projects/ops/files") && init?.method === "PATCH") return new Response(JSON.stringify({ file: { id: 31 } }), { status: 200 });
+      if (url.endsWith("/projects/ops/files")) return new Response(JSON.stringify({ files: [{ id: 31, project_id: 5, filename: "plan.pdf", content_type: "application/pdf", size: 20, sha256: "hash", status: "ready", kb_document_id: null, folder_id: null, created_at: null }] }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders")) return new Response(JSON.stringify({ folders: [{ id: 9, project_id: 5, parent_id: null, name: "Informes", created_at: null }] }), { status: 200 });
+      if (url.endsWith("/kb?project_id=5")) return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+      return new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [] }, inherited: true }), { status: 200 });
+    });
+    const project = { id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectResourcesPanel project={project} threadId={77} expanded />);
+
+    const fileRow = (await screen.findByText("plan.pdf")).closest("li")!;
+    const folderRow = screen.getByRole("button", { name: /^Informes/ });
+    const dragData = {
+      types: ["application/x-lumat-project-file", "application/x-lumat-project-file-move"],
+      getData: (type: string) => (type === "application/x-lumat-project-file-move" ? "31" : JSON.stringify({ slug: "ops", fileId: 31, filename: "plan.pdf" })),
+      setData: vi.fn(),
+      effectAllowed: "",
+    };
+    fireEvent.dragStart(fileRow, { dataTransfer: dragData });
+    fireEvent.drop(folderRow.closest("div")!, { dataTransfer: dragData });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/files/31", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ folder_id: 9 }) })));
   });
 
   it("restores open thread tabs after the assistant workspace remounts", async () => {
