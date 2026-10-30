@@ -83,10 +83,16 @@ def test_unknown_turn_does_not_append_service_fallback(monkeypatch):
     ) == ["¿Atienden sábado?"]
 
 
-def test_no_catalogue_disables_service_steering(monkeypatch):
+def test_no_catalogue_keeps_the_classifier_fallback(monkeypatch):
+    """Without a catalogue there is nothing to normalize, but nothing to lose either.
+
+    Returning the value unchanged keeps the pre-existing contract: a raw miss
+    still falls back to the classified service. Only the preventive/generic
+    resolution needs a catalogue.
+    """
     _catalogue(monkeypatch)
 
-    assert canonical_service(_Session(), "calefont") is None
+    assert canonical_service(_Session(), "calefont") == "calefont"
     assert respond.retrieval_queries(
         _Session(), _state("¿Atienden sábado?", service="calefont")
-    ) == ["¿Atienden sábado?"]
+    ) == ["¿Atienden sábado?", "calefont"]

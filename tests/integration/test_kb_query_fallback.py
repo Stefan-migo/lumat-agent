@@ -34,6 +34,9 @@ ADMIN_DB_URL = admin_database_url()
 
 RAW = "me dieron tu contacto para una mantencion de caldera"
 SERVICE = "mantención de caldera"
+# S14 (chatbot-realismo-conversacional): the fallback query is the catalogue's own
+# label, not the classifier's spacing and casing, so every phrasing converges.
+CANONICAL = "Mantención de caldera"
 
 RETRIEVED = {
     "document_id": 1,
@@ -106,11 +109,11 @@ def _patch_answer(monkeypatch) -> dict:
 def test_a_raw_miss_falls_back_to_the_classified_service(monkeypatch):
     """The regression: polite filler made the raw query miss and derive to a human."""
     state = _state(intent="consulta", service=SERVICE)
-    calls = _patch_retrieve(monkeypatch, {SERVICE: [RETRIEVED]})
+    calls = _patch_retrieve(monkeypatch, {CANONICAL: [RETRIEVED]})
 
     result = research_triage._kb_check(state)
 
-    assert calls == [RAW, SERVICE]
+    assert calls == [RAW, CANONICAL]
     assert result["next_step"] == "respond", result
     assert result.get("escalate") is not True, result
 
@@ -180,7 +183,7 @@ def test_a_recorded_miss_is_offered_without_a_second_retrieval(monkeypatch):
 
     result = respond_node.respond(state)
 
-    assert calls == [RAW, SERVICE]
+    assert calls == [RAW, CANONICAL]
     assert seen == {}
     assert len(result["replies"]) == 1
 

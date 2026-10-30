@@ -103,8 +103,13 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
 
     post_message(client, "wamid.ci5.book.91", "1")
     with SessionLocal() as session:
-        confirmation = _outbound_texts(session)[-1]
+        booking_replies = _outbound_texts(session)
         appointment = session.scalars(select(Appointment)).one()
+    # C2: the booking turn now carries the confirmation and then the optional
+    # evidence invitation, so the confirmation is no longer the last message.
+    confirmation = next(
+        (reply for reply in booking_replies if "confirm" in reply.lower()), ""
+    )
     assert "confirm" in confirmation.lower()
     assert appointment.technician_id == technician_id
 

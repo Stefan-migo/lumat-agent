@@ -97,12 +97,17 @@ def _preventive_services(session) -> list[str]:
     ]
 
 
-def canonical_service(session, value: str) -> str | None:
+def canonical_service(session, value: str) -> str:
     """Resolve a classifier service to a catalogue label safe for retrieval.
 
     Preventive labels are selected only when the supplied value expresses that
     preventive service. A device noun alone therefore resolves to the generic
     repair visit rather than a similarly-named maintenance service.
+
+    An unresolvable value comes back unchanged, so the classifier's own fallback
+    query survives a tree with no catalogue. Dropping it would answer less than
+    before the normalization existed, which is a regression the KB fallback tests
+    pin.
     """
     catalogue = _catalogue_services(session)
     normalized = _normalize(value)
@@ -126,4 +131,4 @@ def canonical_service(session, value: str) -> str | None:
         ),
         None,
     )
-    return TARIFA_LABELS.get(generic_visit, generic_visit) if generic_visit else None
+    return TARIFA_LABELS.get(generic_visit, generic_visit) if generic_visit else value
