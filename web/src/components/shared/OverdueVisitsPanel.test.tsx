@@ -110,4 +110,40 @@ describe('OverdueVisitsPanel', () => {
 
     expect(screen.getByRole('checkbox', { name: 'Seleccionar visita de Cliente 101' })).toBeDisabled();
   }, 60000);
+
+  it('sends only the visits the confirmation still shows after a refetch', async () => {
+    const user = userEvent.setup();
+    const onBulkClose = vi.fn().mockResolvedValue({
+      closed: 1,
+      failed: 0,
+      results: [{ id: 1, ok: true, outcome: 'completed', error: null }],
+    });
+    const onCloseAppointment = vi.fn();
+    const { rerender } = renderPanel(
+      [visit(1, 'Camila Soto'), visit(2, 'Diego Rojas')], onCloseAppointment, onBulkClose,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Camila Soto' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Diego Rojas' }));
+    await user.click(screen.getByRole('button', { name: 'Cerrar visitas seleccionadas' }));
+    expect(screen.getByRole('dialog', { name: 'Cerrar 2 visitas' })).toHaveTextContent('Diego Rojas');
+
+    // The agenda refetches while the dialog is open and Diego's visit is gone: the
+    // preview no longer shows him, so nothing may close his visit behind the confirmation.
+    rerender(
+      <OverdueVisitsPanel
+        appointments={[visit(1, 'Camila Soto')]}
+        onCloseAppointment={onCloseAppointment}
+        onBulkClose={onBulkClose}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Cerrar 1 visita' });
+    expect(dialog).not.toHaveTextContent('Diego Rojas');
+
+    await user.click(within(dialog).getByRole('radio', { name: /Completada/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar cierre' }));
+
+    expect(onBulkClose).toHaveBeenCalledWith([1], 'completed');
+  });
 });

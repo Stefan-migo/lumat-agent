@@ -51,11 +51,15 @@ export function OverdueVisitsPanel({ appointments, onCloseAppointment, onBulkClo
   };
 
   const submitBulkClose = async () => {
-    if (!bulkOutcome || selectedIds.length === 0 || selectedIds.length > 100 || bulkBusy) return;
+    // Send exactly what the confirmation dialog showed. A refetch while the dialog
+    // is open can drop a row from `appointments`; sending `selectedIds` would close
+    // a visit the operator no longer sees in the preview.
+    const ids = selectedAppointments.map((appointment) => appointment.id);
+    if (!bulkOutcome || ids.length === 0 || ids.length > 100 || bulkBusy) return;
     setBulkBusy(true);
     setBulkError(null);
     try {
-      const response = await onBulkClose(selectedIds, bulkOutcome);
+      const response = await onBulkClose(ids, bulkOutcome);
       const namesById = new Map(selectedAppointments.map((appointment) => [appointment.id, customerName(appointment)]));
       setDisplayedResults(response.results.map((result) => ({
         id: result.id,
@@ -158,7 +162,7 @@ export function OverdueVisitsPanel({ appointments, onCloseAppointment, onBulkClo
         {bulkError ? <StateMessage tone="danger" role="alert" title={bulkError} /> : null}
         <div className="appointment-detail__dialog-footer">
           <Button variant="secondary" disabled={bulkBusy} onClick={() => setBulkOpen(false)}>Cancelar</Button>
-          <Button disabled={!bulkOutcome || selectedIds.length === 0 || selectedIds.length > 100 || bulkBusy} onClick={() => void submitBulkClose()}>
+          <Button disabled={!bulkOutcome || selectedAppointments.length === 0 || selectedAppointments.length > 100 || bulkBusy} onClick={() => void submitBulkClose()}>
             {bulkBusy ? "Guardando…" : "Confirmar cierre"}
           </Button>
         </div>
