@@ -129,6 +129,36 @@ describe("AssistantWorkspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/folders/9", expect.objectContaining({ method: "DELETE" })));
   });
 
+  it("labels thread files, artifacts and capabilities with the reference copy", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [], threads: [] }), { status: 200 }));
+    const tool = { name: "agenda", description: "Consulta agenda", read_only: true, write: false };
+    render(<AssistantWorkspace
+      onCreateThread={vi.fn()}
+      capabilities={{ tools: [tool, { ...tool, name: "web.search" }, { ...tool, name: "web.fetch" }], personas: [], prompts: [], kb_available: true, memory_available: false }}
+      attachments={[{ id: 3, thread_id: 7, filename: "captura.png", kind: "upload", content_type: "image/png", size: 10 }]}
+      artifacts={[{ id: 4, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 10 }]}
+    ><p>Thread</p></AssistantWorkspace>);
+
+    fireEvent.click(screen.getByRole("button", { name: /Archivos del hilo/ }));
+    expect(await screen.findByText("PNG · Adjunto a este hilo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de captura.png" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("CSV · Generado en este hilo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de reporte.csv" })).toBeInTheDocument();
+
+    const capabilitiesRow = screen.getByRole("button", { name: /Capacidades del asistente/ });
+    fireEvent.click(capabilitiesRow);
+    const capabilitiesSection = capabilitiesRow.closest("section") as HTMLElement;
+    expect(within(capabilitiesSection).getByText("Herramientas")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("3 disponibles")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Base de conocimiento")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Disponible")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Información de solo lectura.")).toBeInTheDocument();
+  });
+
   it("restores open thread tabs after the assistant workspace remounts", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?thread_id=101");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

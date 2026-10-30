@@ -99,6 +99,11 @@ T4 — Thread files, thread artifacts and capabilities cards per reference. S6, 
 T5 — Verification and close: focused suites, `npm run build`, `npm test`, Storybook story, mobile
 sweep, and the rendered comparison against the reference. S8, S10. Commit `test(assistant): …`.
 
+Slice boundary: 610 authored lines over 3 commits (T1–T3), past the ~400-line review slice. Per the
+owner's standing decision recorded in `odd/tasks/assistant-panel-frontend.md` L10 — slices land as
+commits and the PR opens when the assistant frontend is complete — the boundary is recorded here
+instead of opening a PR mid-feature.
+
 ## Log
 
 L1 — Owner request that opened this feature (verbatim), with the reference image attached
