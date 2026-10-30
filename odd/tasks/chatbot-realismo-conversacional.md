@@ -537,3 +537,25 @@ tests/integration/test_chat_state.py tests/integration/test_handoff.py` → exit
 tests/integration/test_migrations.py` → exit 0. New trap for the handoff: two DB suites launched
 concurrently in the same worktree contend for the shared test database and time out — the writer hit
 exactly that before the sequential reruns passed.
+
+**L23** — the first `full` run after C4 + C2 failed three tests, and all three were ours. This is the
+part of L19 that did *not* repeat: the clock-window failures need the suite to run after ~22:00Z, and
+this run happened at 11:37Z, so everything it reports is ours to answer for.
+
+1. `canonical_service()` returned `None` when no catalogue is configured, so the service fallback query
+   disappeared — fewer answers than before the normalization existed. That was my instruction to the
+   writer ("no catalogue → do not steer"), not the owner's decision, and it contradicted
+   `test_kb_query_fallback`, which pins a raw miss falling back to the classified service. Fixed:
+   an unresolvable value comes back unchanged. The normalization only substitutes when it has a
+   catalogue to substitute with.
+2. `test_kb_query_fallback` pinned the classifier's own spelling (`mantención de caldera`) and keyed
+   its retrieval double by that string. The fallback is now the catalogue's label
+   (`Mantención de caldera`) — the point of S14 — so both the expectation and the double follow it.
+3. `tests/functional/test_golden_threads.py` read the booking confirmation from the last outbound
+   message, and C2 now sends the evidence invitation after it. The test looks for the confirmation
+   reply instead of assuming its position.
+
+Verified after the fixes (`5ede1c6e`): `kb_query_fallback` 7 passed, `test_service_catalogue` 6 passed,
+`test_golden_threads` 5 passed, `quick` exit 0, and **`full` exit 0 with zero failures**. Lesson worth
+keeping: the delegated brief invented a rule ("no catalogue → no steering") that the existing suite
+already had an opinion about, and only the widest tier could say so.
