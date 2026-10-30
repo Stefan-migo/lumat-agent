@@ -524,10 +524,13 @@ describe("AgentChat", () => {
       },
     });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+    // The owner chose the artifact chip as the default affordance: a project file
+    // dragged in is named for the message, not copied into the thread.
+    expect(await screen.findByRole("button", { name: "Quitar referencia plan.pdf" })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
       "/panel/api/chat/threads/4/attachments/from-project",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ project_file_id: 31 }) }),
-    ));
+      expect.anything(),
+    );
   });
 
   it("keeps the stop control off while only the tool policy is saving", async () => {

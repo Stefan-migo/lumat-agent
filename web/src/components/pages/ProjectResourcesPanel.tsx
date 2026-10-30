@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, ChevronDown, ChevronRight, Download, FileText, Folder, FolderPlus, Lock, Sparkles, Trash2, Upload } from "lucide-react";
-import { ApiError, createProjectFolder, deleteProjectFolder, downloadProjectFile, getThreadResources, listProjectFiles, listProjectFolders, moveProjectFile, refreshKbDocuments, uploadProjectFile } from "../../api";
+import { ApiError, createProjectFolder, deleteProjectFile, deleteProjectFolder, downloadProjectFile, getThreadResources, listProjectFiles, listProjectFolders, moveProjectFile, refreshKbDocuments, uploadProjectFile } from "../../api";
 import type { Doc, Project, ProjectFile, ProjectFolder, ThreadResourceSkill } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -35,6 +35,7 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
   const [folderName, setFolderName] = useState("");
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<ProjectFolder | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<ProjectFile | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadFolder = useRef<number | null>(null);
   const onSummaryRef = useRef(onSummary);
@@ -118,6 +119,14 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
     uploadFolder.current = folderId;
     fileInput.current?.click();
   };
+  const removeFile = async () => {
+    if (!project || !fileToDelete) return;
+    setBusy(true);
+    setError(null);
+    try { await deleteProjectFile(project.slug, fileToDelete.id); setFileToDelete(null); await reloadTree(); }
+    catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el archivo."); }
+    finally { setBusy(false); }
+  };
   const onDrop = (event: React.DragEvent, folderId: number | null) => {
     event.preventDefault();
     event.stopPropagation();
@@ -155,13 +164,13 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
   };
   const fileRow = (file: ProjectFile) => <li key={`file-${file.id}`} className="assistant-project-resources__file" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-project-file", JSON.stringify({ slug: project?.slug, fileId: file.id, filename: file.filename })); event.dataTransfer.setData(PROJECT_FILE_MOVE_TYPE, String(file.id)); event.dataTransfer.effectAllowed = "copyMove"; }}>
     <Icon icon={FileText} size="sm" />
-    <span>{file.filename}</span>
-    <Menu label={`Acciones de ${file.filename}`} trigger="icon" align="end" items={[{ value: "download", label: "Descargar", icon: Download }]} onSelect={() => void download(file)} />
+    <span className="assistant-project-resources__file-name" title={file.filename}>{file.filename}</span>
+    <Menu label={`Acciones de ${file.filename}`} trigger="icon" align="end" items={[{ value: "download", label: "Descargar", icon: Download }, { value: "delete", label: "Eliminar archivo", icon: Trash2, tone: "danger" }]} onSelect={(value) => { if (value === "delete") setFileToDelete(file); else void download(file); }} />
   </li>;
   const tree = (parentId: number | null): React.ReactNode => <ul className="assistant-project-resources__tree">{folders.filter((folder) => folder.parent_id === parentId).map((folder) => {
     const isOpen = open.has(folder.id);
     const folderCount = folderFileCount(folder.id);
-    return <li key={folder.id}>
+    return <li key={`folder-${folder.id}`} className="assistant-project-resources__branch">
       <div className="assistant-project-resources__folder" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDropZone(event, folder.id)}>
         <button type="button" aria-expanded={isOpen} onClick={() => setOpen((value) => { const next = new Set(value); isOpen ? next.delete(folder.id) : next.add(folder.id); return next; })}>
           <Icon icon={isOpen ? ChevronDown : ChevronRight} size="sm" />
@@ -171,7 +180,7 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
         </button>
         <Menu label={`Acciones de carpeta ${folder.name}`} trigger="icon" align="end" items={[{ value: "upload", label: "Subir aquí", icon: Upload }, { value: "delete", label: "Eliminar carpeta", icon: Trash2, tone: "danger" }]} onSelect={(value) => { if (value === "upload") openUpload(folder.id); else setFolderToDelete(folder); }} />
       </div>
-      {isOpen ? <>{tree(folder.id)}{files.filter((file) => file.folder_id === folder.id).map(fileRow)}</> : null}
+      {isOpen ? tree(folder.id) : null}
     </li>;
   })}{files.filter((file) => file.folder_id === parentId).map(fileRow)}</ul>;
   const fileCount = files.length + folders.length;
@@ -220,6 +229,9 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
         <Input label="Nombre de la carpeta" value={folderName} onChange={(event) => setFolderName(event.target.value)} disabled={busy} />
         <div className="assistant-project-resources__dialog-actions"><Button variant="secondary" disabled={busy} onClick={() => setCreateFolderOpen(false)}>Cancelar</Button><Button disabled={busy || !folderName.trim()} onClick={() => void createFolder()}>{busy ? "Creando…" : "Crear carpeta"}</Button></div>
       </div>
+    </Dialog>
+    <Dialog open={fileToDelete !== null} onClose={() => { if (!busy) setFileToDelete(null); }} title={fileToDelete ? `Eliminar archivo ${fileToDelete.filename}` : "Eliminar archivo"} icon={Trash2} description={fileToDelete ? `Se eliminará ${fileToDelete.filename} del proyecto.` : undefined}>
+      <div className="assistant-project-resources__dialog-actions"><Button variant="secondary" disabled={busy} onClick={() => setFileToDelete(null)}>Cancelar</Button><Button variant="danger" disabled={busy} onClick={() => void removeFile()}>{busy ? "Eliminando…" : "Eliminar archivo"}</Button></div>
     </Dialog>
     <Dialog open={folderToDelete !== null} onClose={() => { if (!busy) setFolderToDelete(null); }} title={folderToDelete ? `Eliminar carpeta ${folderToDelete.name}` : "Eliminar carpeta"} icon={Trash2} description={folderToDelete ? `Se eliminará la carpeta ${folderToDelete.name} y su contenido.` : undefined}>
       <div className="assistant-project-resources__dialog-actions"><Button variant="secondary" disabled={busy} onClick={() => setFolderToDelete(null)}>Cancelar</Button><Button variant="danger" disabled={busy} onClick={() => void removeFolder()}>{busy ? "Eliminando…" : "Eliminar carpeta"}</Button></div>

@@ -83,11 +83,13 @@ S10 — **Mobile**: the same sections render in the thread-detail sheet (`mobile
 `ThreadContextSections`); no fixed pixel widths, no hover-only affordance. Every action reachable by
 touch, and the section rows keep 44px targets.
 
-S11 — **Selected project, closer to the reference.** The owner's crop of the reference shows the
-selected project as a tall, quiet field: the folder glyph at `md` scale, the project name reading as the
-value, generous padding, a hairline border on a light surface, and the chevron at the far right. The
-current trigger is smaller and plainer than that (owner: "el formato de como se muestra el proyecto
-seleccionado se ve muy sencillo"). The collapsed `Proyecto` row keeps its summary line.
+S11 — **Selected project, both states.** Corrected by the owner on 2026-10-30 (L11): the roomy field
+belongs to the **collapsed** section, which keeps the folder glyph and the current project with real
+spacing instead of a bare label — "cuando esta cerrado debe tener el glifo de carpeta y mostrarte mas
+espaciado. pareciera que esta todo sin respirar cuando esta cerrado". The **expanded** trigger is the
+opposite: smaller glyph and smaller font — "cuando esta abierto ahora es muy grande. disminuye el tamaño
+tanto del glifo como de la fuente". The collapsed field is a button that opens the section, so its
+chevron is not decoration.
 
 S12 — **Upload destination.** Today every upload lands in the root because the UI always sends
 `folder_id: null` (`ProjectResourcesPanel.tsx`), even though `POST /projects/{slug}/files` accepts a
@@ -241,3 +243,26 @@ L10 — Scope check before writing (measured in the backend, not assumed): B, C 
 handles `application/x-lumat-project-file` (`AgentChat.tsx:909-929`). `PATCH
 /projects/{slug}/folders/{folder_id}` also renames folders, which the owner did not ask for and this
 feature does not add.
+
+L11 — Owner corrections after the first implementation pass (verbatim, abridged to the operative part):
+"1. entendiste todo al reves. cuando esta cerrado debe tener el glifo de carpeta y mostrarte mas
+espaciado. pareciera que esta todo sin respirar cuando esta cerrado. y cuando esta abierto ahora es muy
+grande. disminuye el tama;o tanto del glifo como de la fuente. 2. ok anda mejor pero se rompe el dise;o
+cuando cargo archivos dentro de una carpeta. Ademas no existe eliminar arcihivo desde el sidebar. ...
+4. funciona bien. pero se rompe el dise;o lo que mencionaba antes. 5. se carga correctamente. pero mira
+esta inconsistencia. cuando se carga un archivo de los artifact del hilo. se carga de una forma. si
+agrego arrastrando archivos desde recursos del proyecto se adjunta de una forma distinta. me gusta ma la
+fersion de los artefactos. dejaremos esa version como default."
+Consequences: S11 rewritten above; the file tree nests each level and truncates names so the row menu
+stays inside the card; file rows gain `Eliminar archivo` through a named dialog; and S14's project-file
+path changes from "attach to the thread" to the same reference chip the artifacts use (owner's chosen
+default). The `attachments/from-project` action stays reachable from the composer's "Agregar del
+proyecto" control.
+
+L12 — Two new features the owner asked for at the end of L11 are **not** part of this feature and are
+not implemented here: (1) in-panel file viewer with real previews (markdown, pdf, html, images); (2) an
+assistant tool to revise an artifact it already created instead of writing another one, which needs
+artifact revisions. Measured starting point for (2): `assistant_artifacts`
+(`app/models.py:979-990`) is immutable — `thread_id, filename, content_type, size, sha256,
+stored_path, created_at`, no version and no parent — and `store_artifact`
+(`app/services/assistant_artifacts.py:40`) always inserts a new row. Both need their own ODD feature.

@@ -699,7 +699,7 @@ function activityTime(thread: InternalChatThreadSummary): number {
 function ThreadContextSections({ activeProject, projects = [], activeProjectSlug, projectLocked = false, onSelectProject, resourcesSummary, onResourcesSummary, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; projects?: Project[]; activeProjectSlug?: string; projectLocked?: boolean; onSelectProject?: (slug: string) => void; resourcesSummary?: string; onResourcesSummary?: (summary: string) => void; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
   const threadNote = "Los adjuntos y resultados pertenecen a este hilo.";
   return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
-    <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} summary={activeProject ? activeProject.name : "General / Sin proyecto"} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
+    <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} summary={activeProject ? activeProject.name : "General / Sin proyecto"} collapsedContent={mobile ? undefined : <ContextProjectPicker mode="static" projects={projects} activeSlug={activeProjectSlug} activeName={activeProject?.name} project={activeProject} onExpand={() => toggleContextSection("project")} />} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
       {mobile ? (activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />) : <ContextProjectPicker projects={projects} activeSlug={activeProjectSlug} activeName={activeProject?.name} locked={projectLocked} project={activeProject} onSelect={onSelectProject} />}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} summary={resourcesSummary} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ProjectResourcesPanel project={activeProject} threadId={threadId} expanded={contextSections.resources ?? false} onSummary={onResourcesSummary} /></ContextSection>
@@ -723,7 +723,7 @@ interface ContextProjectOption { slug: string; name: string }
  *  the choice means. A thread locks its project on the first message, so a
  *  locked thread shows the same trigger as plain information instead of a
  *  control that would quietly refuse the change. */
-function ContextProjectPicker({ projects, activeSlug, activeName, project, locked = false, onSelect }: { projects: Project[]; activeSlug?: string; activeName?: string; project?: Project; locked?: boolean; onSelect?: (slug: string) => void }) {
+function ContextProjectPicker({ projects, activeSlug, activeName, project, mode = "interactive", locked = false, onExpand, onSelect }: { projects: Project[]; activeSlug?: string; activeName?: string; project?: Project; mode?: "interactive" | "static"; locked?: boolean; onExpand?: () => void; onSelect?: (slug: string) => void }) {
   const [opened, setOpened] = useState(false);
   const [query, setQuery] = useState("");
   const general: ContextProjectOption = { slug: "default", name: "General / Sin proyecto" };
@@ -731,7 +731,16 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, locke
   const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
   const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
     .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
-  const trigger = <><Icon icon={Folder} size="md" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+
+  if (mode === "static") {
+    // The field keeps the chevron, so it must do something: it opens the section
+    // where the searchable list lives.
+    return <div className="assistant-workspace__context-project" data-static="true">
+      <button type="button" className="assistant-workspace__context-project-trigger" aria-expanded={false} aria-label={`Ver proyectos. Actual: ${currentName}`} onClick={() => onExpand?.()}>{trigger}</button>
+      {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+    </div>;
+  }
 
   if (locked) {
     return <div className="assistant-workspace__context-project" data-locked="true">
@@ -762,16 +771,17 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, locke
   </div>;
 }
 
-function ContextSection({ id, title, icon, count, subtitle, summary, readOnly = false, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; subtitle?: ReactNode; summary?: ReactNode; readOnly?: boolean; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {
+function ContextSection({ id, title, icon, count, subtitle, summary, collapsedContent, readOnly = false, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; subtitle?: ReactNode; summary?: ReactNode; collapsedContent?: ReactNode; readOnly?: boolean; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {
   const panelId = `assistant-context-${id}`;
   // The secondary line carries the section's subtitle while it is open and its
   // one-line summary (or empty copy) while it is closed, so a collapsed section
   // still says something useful instead of only a count.
-  const secondary = expanded ? subtitle : summary;
+  const secondary = expanded ? subtitle : (collapsedContent ? undefined : summary);
   return <section className="assistant-workspace__context-section">
     <button type="button" className="assistant-workspace__context-row" aria-expanded={expanded} aria-controls={panelId} onClick={() => onToggle(id)}>
       <Icon icon={icon} size="sm" /><span>{title}</span>{count !== undefined ? <span className="assistant-workspace__context-count">{count}</span> : null}{readOnly ? <Icon icon={Lock} size="sm" className="assistant-workspace__context-lock" /> : null}<Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
     </button>
+    {!expanded && collapsedContent ? <div className="assistant-workspace__context-collapsed">{collapsedContent}</div> : null}
     {secondary ? <p className="assistant-workspace__context-secondary">{secondary}</p> : null}
     <div id={panelId} className="assistant-workspace__context-section-content" hidden={!expanded}>{children}</div>
   </section>;

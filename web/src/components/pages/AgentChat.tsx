@@ -270,6 +270,10 @@ export interface AgentChatProps {
   onThreadOpened?: (id: number) => void;
 }
 
+/** Where a reference chip came from. `project` files are named in the message and
+ *  read by the assistant with its own tool, so they are not re-uploaded. */
+type ReferenceKind = "attachment" | "artifact" | "project";
+
 export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
@@ -294,7 +298,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
   const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<number[]>([]);
   /** Files dragged in from the context sidebar. They already belong to this
    *  thread, so they are a reference for the next message, not a new upload. */
-  const [references, setReferences] = useState<Array<{ kind: "attachment" | "artifact"; id: number; filename: string }>>([]);
+  const [references, setReferences] = useState<Array<{ kind: ReferenceKind; id: number; filename: string }>>([]);
   const [attachmentDeleteError, setAttachmentDeleteError] = useState<string | null>(null);
   const [attachmentDeletingId, setAttachmentDeletingId] = useState<number | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<AssistantAttachment | null>(null);
@@ -665,6 +669,11 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
     element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
   };
 
+  /** A dragged file becomes one chip: the same affordance whichever menu it came
+   *  from, deduplicated by kind and id. */
+  const addReference = (kind: ReferenceKind, id: number, filename: string) => {
+    setReferences((current) => current.some((item) => item.kind === kind && item.id === id) ? current : [...current, { kind, id, filename }]);
+  };
   const send = async (value = content, preserveDraft = false, sdbRequested = false) => {
     if (!thread || !value.trim() || processing) return;
     const referenceLine = references.length ? `Referencia: ${references.map((item) => item.filename).join(", ")}\n\n` : "";
@@ -921,10 +930,10 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
               event.preventDefault();
               if (!thread || isRunActive) return;
               try {
-                const payload = JSON.parse(event.dataTransfer.getData("application/x-lumat-project-file")) as { fileId?: unknown };
-                if (typeof payload.fileId === "number") void attachProjectFile(payload.fileId);
+                const payload = JSON.parse(event.dataTransfer.getData("application/x-lumat-project-file")) as { fileId?: unknown; filename?: unknown };
+                if (typeof payload.fileId === "number" && typeof payload.filename === "string") addReference("project", payload.fileId, payload.filename);
               } catch {
-                setProjectActionError("No pudimos adjuntar el archivo del proyecto.");
+                setError("No pudimos agregar esa referencia.");
               }
               return;
             }
@@ -934,11 +943,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
               try {
                 const payload = JSON.parse(event.dataTransfer.getData("application/x-lumat-thread-reference")) as { kind?: unknown; id?: unknown; filename?: unknown };
                 const kind = payload.kind === "attachment" || payload.kind === "artifact" ? payload.kind : null;
-                if (kind && typeof payload.id === "number" && typeof payload.filename === "string") {
-                  setReferences((current) => current.some((item) => item.kind === kind && item.id === payload.id)
-                    ? current
-                    : [...current, { kind, id: payload.id as number, filename: payload.filename as string }]);
-                }
+                if (kind && typeof payload.id === "number" && typeof payload.filename === "string") addReference(kind, payload.id, payload.filename);
               } catch {
                 setError("No pudimos agregar esa referencia.");
               }
@@ -1203,7 +1208,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
             <div className="assistant-chat__composer-wrap">
             {stopMessage ? <p role="status">{stopMessage}</p> : null}
             <div className="assistant-chat__composer">
-              {references.length ? <ul className="assistant-chat__references" aria-label="Referencias del mensaje">{references.map((item) => <li key={`${item.kind}-${item.id}`} className="assistant-chat__reference"><Icon icon={item.kind === "artifact" ? Download : Paperclip} size="sm" /><span>{item.filename}</span><button type="button" aria-label={`Quitar referencia ${item.filename}`} onClick={() => setReferences((current) => current.filter((ref) => !(ref.kind === item.kind && ref.id === item.id)))}><Icon icon={X} size="sm" /></button></li>)}</ul> : null}
+              {references.length ? <ul className="assistant-chat__references" aria-label="Referencias del mensaje">{references.map((item) => <li key={`${item.kind}-${item.id}`} className="assistant-chat__reference"><Icon icon={item.kind === "artifact" ? Download : item.kind === "project" ? Folder : Paperclip} size="sm" /><span>{item.filename}</span><button type="button" aria-label={`Quitar referencia ${item.filename}`} onClick={() => setReferences((current) => current.filter((ref) => !(ref.kind === item.kind && ref.id === item.id)))}><Icon icon={X} size="sm" /></button></li>)}</ul> : null}
               <input className="assistant-chat__file-picker" id="assistant-chat-file-picker" aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt,.docx,.xlsx,.md" onChange={handleAttachmentChange} disabled={!thread || isRunActive || uploading} />
               <Textarea
                 label="Mensaje"

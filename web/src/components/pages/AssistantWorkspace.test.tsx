@@ -283,11 +283,11 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Proyecto" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Los adjuntos y resultados pertenecen a este hilo.")).toBeInTheDocument();
-    // S3: a closed section explains itself; the row's accessible name stays the bare title.
+    // S3/S11: a closed project section keeps its field, with the current choice.
     const projectRow = screen.getByRole("button", { name: "Proyecto" });
-    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toBeNull();
+    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-collapsed")).toBeNull();
     fireEvent.click(projectRow);
-    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toHaveTextContent("General / Sin proyecto");
+    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-collapsed")).toHaveTextContent("General / Sin proyecto");
     fireEvent.click(projectRow);
     const artifactsRow = screen.getByRole("button", { name: /Artefactos del hilo/ });
     expect(artifactsRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toHaveTextContent("Aquí aparecerán los archivos generados.");
