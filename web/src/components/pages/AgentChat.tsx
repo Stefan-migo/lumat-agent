@@ -906,9 +906,24 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
       </Dialog>
       <div className={`assistant-chat__surface${!processing && !stream && messages.length === 0 ? " assistant-chat__surface--empty" : ""}`} data-tier={commandCenterTier(globalThis.innerWidth || 1024)}>
         <section className="assistant-chat__conversation" aria-label="Conversación"
-          onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }}
+          onDragOver={(event) => { const types = Array.from(event.dataTransfer.types); if (types.includes("Files") || types.includes("application/x-lumat-project-file")) event.preventDefault(); }}
           onDrop={(event) => {
-            if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+            const types = Array.from(event.dataTransfer.types);
+            // The project resources panel drags a project file in with a private
+            // type; it becomes a thread attachment, the same as the composer's
+            // "Agregar del proyecto" action.
+            if (types.includes("application/x-lumat-project-file")) {
+              event.preventDefault();
+              if (!thread || isRunActive) return;
+              try {
+                const payload = JSON.parse(event.dataTransfer.getData("application/x-lumat-project-file")) as { fileId?: unknown };
+                if (typeof payload.fileId === "number") void attachProjectFile(payload.fileId);
+              } catch {
+                setProjectActionError("No pudimos adjuntar el archivo del proyecto.");
+              }
+              return;
+            }
+            if (!types.includes("Files")) return;
             event.preventDefault();
             if (!thread || isRunActive || uploading) return;
             for (const file of Array.from(event.dataTransfer.files)) void attach(file);
