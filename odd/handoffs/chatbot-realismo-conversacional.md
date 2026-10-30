@@ -136,3 +136,8 @@ CI (`test` + `panel`) verde en las cuatro PRs sobre el árbol combinado.
 5. Al desplegar: la migración `060` corre en el arranque de la api; verificar después que
    `reply.texts.capture_ack` quedó en `Entiendo. ` y que `capture_confirm_contact` aparece con su
    default. Ojo que **`059_memory_user_scope` se aplica antes** y también está pendiente en producción.
+
+14. **`graphify-out/` lives in the worktree, not in the repo.** Al recrear el worktree el gráfico se
+    pierde, y el Graph Check que `AGENTS.md` exige es entonces un bloqueo legítimo para cualquier
+    subagente. Copiarlo desde el worktree principal (`cp -a ../lumat-agent/graphify-out .`) alcanza
+    mientras el commit sea el mismo; reconstruirlo con `graphify .` es el paso de cierre de sesión.

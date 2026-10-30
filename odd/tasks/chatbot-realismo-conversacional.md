@@ -496,3 +496,22 @@ those helpers to a fixed hour of the target day instead of the current hour.
   entries); otherwise the generic repair visit; otherwise no steering at all.
 - **C2 / L5.3 — evidence when a photo already arrived.** If the customer already sent a photo or audio in
   the conversation, the evidence question is not asked again: it is an invitation, not a formality.
+
+**L21** — C4 done (`a7574c3c`). The matcher A5 needed moved out of `capture.py` into
+`app/chat/service_catalogue.py` (`_normalize`, `_edit_distance_at_most_one`, `_matches_catalogue_phrase`,
+`_preventive_services`), and a new `canonical_service(session, value)` resolves a classifier service
+before it becomes a retrieval query. `turn_queries()` stays pure — it has no session — so the
+resolution happens in `retrieval_queries()`, which now takes the session, and `scripts/kb_fidelity.py`
+calls the same resolver so the instrument cannot drift from production.
+
+The rule follows L20 literally: a preventive catalogue label only when the value reads as a preventive
+request; otherwise the generic repair visit; otherwise nothing. `calefont` is a substring of
+`Mantenci\u00f3n de calefont`, so any match against the whole catalogue would have answered maintenance
+hours to a customer with a broken boiler — the trap L10 fix 2 already closed once.
+
+Verified: pytest on the four touched unit files → 77 passed; `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py`
+→ 58 passed. The worker's RED was a collection error (`ModuleNotFoundError`), which proves nothing
+about the assertions, so the parent ran a mutation check instead: with `canonical_service()` returning
+the raw value, 5 of the 6 new tests fail. Honest limit: retrieval equivalence is pinned at the query,
+not at the answer — proving the answers converge needs the real embedder and was not run.
