@@ -216,7 +216,14 @@ describe("AssistantWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
     const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
-    expect(within(detail).getByRole("button", { name: /Archivos del hilo 1/ })).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: /Archivos del hilo 1/ }));
+    const attachmentLink = within(detail).getByRole("link", { name: "Abrir brief.pdf" });
+    expect(attachmentLink).toHaveAttribute("href", "/panel/api/chat/threads/7/attachments/1/content");
+    expect(attachmentLink).toHaveAttribute("target", "_blank");
+    expect(attachmentLink).toHaveAttribute("title", "Abrir brief.pdf");
+    expect(attachmentLink.querySelector("svg")).toHaveClass("icon--md");
+    expect(attachmentLink.querySelector("a, button")).toBeNull();
+    expect(within(detail).queryByText("Abrir", { selector: ".assistant-workspace__file-action" })).not.toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: /Artefactos del hilo 0/ })).toBeInTheDocument();
     expect(within(detail).queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
     fireEvent.click(within(detail).getByRole("button", { name: "Cambiar" }));
@@ -881,7 +888,12 @@ describe("AssistantWorkspace", () => {
 
     await userEvent.setup().click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
     expect(await screen.findByText("reporte.csv")).toBeInTheDocument();
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".assistant-workspace__file-list button")!);
+    const artifactRow = screen.getByRole("button", { name: "Descargar reporte.csv" });
+    expect(artifactRow).toHaveAttribute("title", "Descargar reporte.csv");
+    expect(artifactRow.querySelector("svg")).toHaveClass("icon--md");
+    expect(artifactRow.querySelector("a, button")).toBeNull();
+    expect(artifactRow).toHaveClass("assistant-workspace__file-row");
+    fireEvent.click(artifactRow);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download", expect.anything()));
   });
 
