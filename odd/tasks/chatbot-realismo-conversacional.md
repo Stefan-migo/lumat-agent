@@ -559,3 +559,32 @@ Verified after the fixes (`5ede1c6e`): `kb_query_fallback` 7 passed, `test_servi
 `test_golden_threads` 5 passed, `quick` exit 0, and **`full` exit 0 with zero failures**. Lesson worth
 keeping: the delegated brief invented a rule ("no catalogue → no steering") that the existing suite
 already had an opinion about, and only the widest tier could say so.
+
+**L24** — the independent verifier could not deliver a verdict. `gentle-ai-verify` failed with an
+opaque "assistant reported an error" and no output; per the delegation contract that is reported as
+unavailable and not retried into extra ceremony. The parent therefore probed the riskiest part by hand
+(`canonical_service` with the real matcher and a catalogue of the four configured services):
+
+```
+'calefont'                    -> 'Visita técnica'
+'Calefont'                    -> 'Visita técnica'
+'reparación de calefont'      -> 'Visita técnica'      <- #43 and #44 converge (S14)
+'mantencion calefont'         -> 'Visita técnica'
+'mantención de calefont'      -> 'Mantención de calefont'
+'manutencion de calefont'     -> 'Mantención de calefont'
+'lavado de red'               -> 'Lavado de red'
+'lavado de la red'            -> 'Lavado de red'
+'necesito una visita tecnica' -> 'Visita técnica'
+'no quiero mantencion'        -> 'Visita técnica'
+'xyz'                         -> 'Visita técnica'
+sin catálogo: 'calefont'      -> 'calefont'            <- el fallback no se pierde (L23 fix)
+```
+
+The trap holds: no device noun reaches a maintenance label, including `Calefont` capitalised and
+`mantencion calefont` without the `de`. **Known limit, recorded not fixed**: every value that is not a
+preventive request collapses to the generic repair visit, so a specific repair phrase loses its
+specificity in the fallback query (`xyz` included). With today's catalogue that is lossless — the only
+non-preventive entry *is* `Visita técnica` — but if the catalogue grows an entry that is neither
+preventive nor a repair visit (say an installation), this rule would route it to the visit. Follow-up,
+not a defect of this slice: prefer an exact normalized catalogue match before falling back to the
+generic visit.
