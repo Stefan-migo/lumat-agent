@@ -24,6 +24,7 @@ from sqlalchemy import select
 
 from app.chat.nodes.configured_answers import configuration_reply
 from app.chat.state import ConversationState, conversation_transcript
+from app.chat.service_catalogue import canonical_service
 from app.db import session_scope
 from app.models import Conversation, KbVisibility, Message
 from app.services import kb, prompts
@@ -253,12 +254,17 @@ def turn_queries(text: str, *, intent: str | None, service: str | None) -> list[
     return queries
 
 
-def retrieval_queries(state: ConversationState) -> list[str]:
-    """`turn_queries` read off the conversation state."""
+def retrieval_queries(session, state: ConversationState) -> list[str]:
+    """Resolve the case service in-session before building the pure query list."""
+    service = (getattr(state, "case", None) or {}).get("service")
+    if state.intent not in (None, "unknown") and isinstance(service, str):
+        service = canonical_service(session, service)
+    else:
+        service = None
     return turn_queries(
         _current_text(state),
         intent=state.intent,
-        service=(getattr(state, "case", None) or {}).get("service"),
+        service=service,
     )
 
 
@@ -320,7 +326,7 @@ def retrieve_chunks(session, state: ConversationState) -> list[dict]:
     """Route the current text by topic, then use turn queries with safe fallback."""
     return retrieve_for_queries(
         session,
-        retrieval_queries(state),
+        retrieval_queries(session, state),
         topic_source_ids=topic_document_ids(_current_text(state)),
     )
 

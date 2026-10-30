@@ -483,3 +483,108 @@ Postgres) and is green on all four heads, because it ran before the hour that tr
 fixed here on purpose: it is a test-side defect in `main`'s files, outside this feature's surfaces,
 and repairing it means touching files this feature does not own. Follow-up worth its own unit: anchor
 those helpers to a fixed hour of the target day instead of the current hour.
+
+**L20** — owner decisions closing the last two open questions, verbatim answers: "Device suelto →
+`Visita técnica`" and "No preguntar si ya hay evidencia".
+
+- **C4 / S14 — what "normalized against the catalogue" means.** A `case.service` value that names no
+  service (`calefont`) resolves to the generic repair visit (`Visita técnica`), so #43 and #44 converge.
+  The dangerous reading was the tempting one: `calefont` is a substring of `Mantención de calefont`, so a
+  naive catalogue match would answer maintenance hours to somebody with a broken boiler — the same
+  mistake L10 fix 2 already corrected once. The rule is therefore: a preventive catalogue label only
+  when the value itself reads as a preventive request (the A5 matcher over preventive-named catalogue
+  entries); otherwise the generic repair visit; otherwise no steering at all.
+- **C2 / L5.3 — evidence when a photo already arrived.** If the customer already sent a photo or audio in
+  the conversation, the evidence question is not asked again: it is an invitation, not a formality.
+
+**L21** — C4 done (`a7574c3c`). The matcher A5 needed moved out of `capture.py` into
+`app/chat/service_catalogue.py` (`_normalize`, `_edit_distance_at_most_one`, `_matches_catalogue_phrase`,
+`_preventive_services`), and a new `canonical_service(session, value)` resolves a classifier service
+before it becomes a retrieval query. `turn_queries()` stays pure — it has no session — so the
+resolution happens in `retrieval_queries()`, which now takes the session, and `scripts/kb_fidelity.py`
+calls the same resolver so the instrument cannot drift from production.
+
+The rule follows L20 literally: a preventive catalogue label only when the value reads as a preventive
+request; otherwise the generic repair visit; otherwise nothing. `calefont` is a substring of
+`Mantenci\u00f3n de calefont`, so any match against the whole catalogue would have answered maintenance
+hours to a customer with a broken boiler — the trap L10 fix 2 already closed once.
+
+Verified: pytest on the four touched unit files → 77 passed; `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py`
+→ 58 passed. The worker's RED was a collection error (`ModuleNotFoundError`), which proves nothing
+about the assertions, so the parent ran a mutation check instead: with `canonical_service()` returning
+the raw value, 5 of the 6 new tests fail. Honest limit: retrieval equivalence is pinned at the query,
+not at the answer — proving the answers converge needs the real embedder and was not run.
+
+**L22** — C2 done. `capture_evidence` left the capture field list in
+`capture.py::_ask_next`; the post-confirmation seam is `booking()`, which creates the appointment and
+already renders the confirmation, so the invitation is appended there as its own reply and never as a
+second question in the confirmation message. The skip is owner decision L20: the lookup is
+`conversation_id`-scoped and counts only **inbound** media (image, video, audio, document, sticker),
+and `captured_data["_evidence_asked"]` makes it once-per-conversation. No new `reply.texts` key: the
+existing `capture_evidence` is reused, so the closed slot vocabulary is untouched.
+
+The delegated writer reported honestly that it had no assertion-level RED — its first run died on
+`psycopg.errors.InsufficientPrivilege: permission denied to alter role` in fixture setup — so the
+parent established the RED by mutation, which is stronger than the collection error C4 had to work
+with: forcing the ask to never fire fails five booking tests; putting the ask back into capture
+reproduces the production turn 296 verbatim (`¿Cuál es tu dirección? ¿Tienes algo más para pasarle al
+técnico? (una foto, un audio…)`) and fails two capture tests.
+
+Verified sequentially, one suite at a time: `quick` → exit 0; `db
+tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py` → exit 0; `db
+tests/integration/test_chat_state.py tests/integration/test_handoff.py` → exit 0; `db
+tests/integration/test_migrations.py` → exit 0. New trap for the handoff: two DB suites launched
+concurrently in the same worktree contend for the shared test database and time out — the writer hit
+exactly that before the sequential reruns passed.
+
+**L23** — the first `full` run after C4 + C2 failed three tests, and all three were ours. This is the
+part of L19 that did *not* repeat: the clock-window failures need the suite to run after ~22:00Z, and
+this run happened at 11:37Z, so everything it reports is ours to answer for.
+
+1. `canonical_service()` returned `None` when no catalogue is configured, so the service fallback query
+   disappeared — fewer answers than before the normalization existed. That was my instruction to the
+   writer ("no catalogue → do not steer"), not the owner's decision, and it contradicted
+   `test_kb_query_fallback`, which pins a raw miss falling back to the classified service. Fixed:
+   an unresolvable value comes back unchanged. The normalization only substitutes when it has a
+   catalogue to substitute with.
+2. `test_kb_query_fallback` pinned the classifier's own spelling (`mantención de caldera`) and keyed
+   its retrieval double by that string. The fallback is now the catalogue's label
+   (`Mantención de caldera`) — the point of S14 — so both the expectation and the double follow it.
+3. `tests/functional/test_golden_threads.py` read the booking confirmation from the last outbound
+   message, and C2 now sends the evidence invitation after it. The test looks for the confirmation
+   reply instead of assuming its position.
+
+Verified after the fixes (`5ede1c6e`): `kb_query_fallback` 7 passed, `test_service_catalogue` 6 passed,
+`test_golden_threads` 5 passed, `quick` exit 0, and **`full` exit 0 with zero failures**. Lesson worth
+keeping: the delegated brief invented a rule ("no catalogue → no steering") that the existing suite
+already had an opinion about, and only the widest tier could say so.
+
+**L24** — the independent verifier could not deliver a verdict. `gentle-ai-verify` failed with an
+opaque "assistant reported an error" and no output; per the delegation contract that is reported as
+unavailable and not retried into extra ceremony. The parent therefore probed the riskiest part by hand
+(`canonical_service` with the real matcher and a catalogue of the four configured services):
+
+```
+'calefont'                    -> 'Visita técnica'
+'Calefont'                    -> 'Visita técnica'
+'reparación de calefont'      -> 'Visita técnica'      <- #43 and #44 converge (S14)
+'mantencion calefont'         -> 'Visita técnica'
+'mantención de calefont'      -> 'Mantención de calefont'
+'manutencion de calefont'     -> 'Mantención de calefont'
+'lavado de red'               -> 'Lavado de red'
+'lavado de la red'            -> 'Lavado de red'
+'necesito una visita tecnica' -> 'Visita técnica'
+'no quiero mantencion'        -> 'Visita técnica'
+'xyz'                         -> 'Visita técnica'
+sin catálogo: 'calefont'      -> 'calefont'            <- el fallback no se pierde (L23 fix)
+```
+
+The trap holds: no device noun reaches a maintenance label, including `Calefont` capitalised and
+`mantencion calefont` without the `de`. **Known limit, recorded not fixed**: every value that is not a
+preventive request collapses to the generic repair visit, so a specific repair phrase loses its
+specificity in the fallback query (`xyz` included). With today's catalogue that is lossless — the only
+non-preventive entry *is* `Visita técnica` — but if the catalogue grows an entry that is neither
+preventive nor a repair visit (say an installation), this rule would route it to the visit. Follow-up,
+not a defect of this slice: prefer an exact normalized catalogue match before falling back to the
+generic visit.

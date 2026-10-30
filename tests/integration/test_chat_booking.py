@@ -77,6 +77,18 @@ def _invoke(conv_id, message_id):
         return replies
 
 
+def _add_media(conv_id, media_type, wamid):
+    with SessionLocal() as session:
+        message = Message(
+            wamid=wamid, conversation_id=conv_id,
+            direction=MessageDirection.INBOUND, msg_type=media_type,
+            status=MessageStatus.RECEIVED,
+        )
+        session.add(message)
+        session.commit()
+        return message.id
+
+
 def _available_slot(session, technician_id, now):
     starts = now + timedelta(days=2)
     starts = starts.replace(hour=9, minute=0, second=0, microsecond=0)
@@ -106,6 +118,9 @@ def test_customer_confirms_numbered_offer_and_books_with_audit_and_history(
     confirmation = _invoke(conv_id, confirm_id)
 
     assert any("confirm" in reply.lower() for reply in confirmation)
+    assert sum(reply.count("?") for reply in confirmation) == 1
+    assert confirmation[-1] == REPLY_TEXT_DEFAULTS["capture_evidence"]
+    assert confirmation[0] != confirmation[-1]
     with SessionLocal() as session:
         appointment = session.scalar(select(Appointment).where(Appointment.customer_id == customer_id))
         assert appointment is not None and appointment.status.value == "booked"
@@ -156,7 +171,8 @@ def test_booking_confirmation_names_the_selected_technician(mock_openai_chat):
         )
         fecha = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
     assert confirmation == [
-        f"Tu visita técnica quedó confirmada para el {fecha} con Camila Rojas."
+        f"Tu visita técnica quedó confirmada para el {fecha} con Camila Rojas.",
+        REPLY_TEXT_DEFAULTS["capture_evidence"],
     ]
 
 
@@ -181,7 +197,8 @@ def test_booking_confirmation_uses_team_fallback_when_technician_has_no_name(
         )
         fecha = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
     assert confirmation == [
-        f"Tu visita técnica quedó confirmada para el {fecha} con nuestro equipo técnico."
+        f"Tu visita técnica quedó confirmada para el {fecha} con nuestro equipo técnico.",
+        REPLY_TEXT_DEFAULTS["capture_evidence"],
     ]
 
 
@@ -207,9 +224,28 @@ def test_configured_booking_texts_render_their_slots(mock_openai_chat):
 
     confirmation = _invoke(conv_id, _add_message(conv_id, "1", "wamid.custom.confirm"))
 
-    assert len(confirmation) == 1
+    assert len(confirmation) == 2
     assert confirmation[0].startswith("Quedaste agendado para el ")
+    assert confirmation[1] == REPLY_TEXT_DEFAULTS["capture_evidence"]
     assert "{{" not in confirmation[0]
+
+
+@pytest.mark.parametrize("media_type", [MessageType.IMAGE, MessageType.AUDIO])
+def test_booking_does_not_ask_for_evidence_already_received(mock_openai_chat, media_type):
+    conv_id, _, _, tech_id, _ = _seed_conversation()
+    with SessionLocal() as session:
+        _available_slot(session, tech_id, datetime.now(timezone.utc))
+        session.commit()
+    _add_media(conv_id, media_type, f"wamid.booking.media.{media_type.value}")
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.booking.media.ask"))
+    confirmation = _invoke(
+        conv_id, _add_message(conv_id, "1", "wamid.booking.media.confirm")
+    )
+
+    assert len(confirmation) == 1
+    assert "confirm" in confirmation[0].lower()
+    assert REPLY_TEXT_DEFAULTS["capture_evidence"] not in confirmation
 
 
 def test_no_confirmation_does_not_book(mock_openai_chat):

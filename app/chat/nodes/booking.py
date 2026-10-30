@@ -12,7 +12,7 @@ from app.chat.nodes.replies import render_reply
 from app.chat.slot_window import SlotWindow, resolve_window, window_label
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import Case, Conversation, User
+from app.models import Case, Conversation, Message, MessageDirection, MessageType, User
 from app.services import scheduling
 from app.services import technician_schedule
 from app.services.settings import (
@@ -370,11 +370,27 @@ def booking(state: ConversationState) -> dict:
         _persist_offer(session, state, None)
         slot_label = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
         technician_name = _technician_name(session, appointment.technician_id)
-        return {
-            "next_step": "summary",
-            "replies": [
-                render_reply(
-                    texts, "booking_confirmed", fecha=slot_label, tecnico=technician_name
-                )
-            ],
-        }
+        confirmation = render_reply(
+            texts, "booking_confirmed", fecha=slot_label, tecnico=technician_name
+        )
+        # C2: booking confirmation is the point at which the appointment is real;
+        # ask for optional evidence immediately afterwards, never during capture.
+        # L20: a photo/audio (or other evidence media) already received makes the
+        # invitation unnecessary.
+        has_evidence = session.scalar(
+            select(Message.id).where(
+                Message.conversation_id == state.conversation_id,
+                Message.direction == MessageDirection.INBOUND,
+                Message.msg_type.in_(
+                    [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO,
+                     MessageType.DOCUMENT, MessageType.STICKER]
+                ),
+            ).limit(1)
+        ) is not None
+        replies = [confirmation]
+        captured = dict(conversation.captured_data or {})
+        if not has_evidence and not captured.get("_evidence_asked"):
+            replies.append(render_reply(texts, "capture_evidence"))
+            captured["_evidence_asked"] = True
+            conversation.captured_data = captured
+        return {"next_step": "summary", "replies": replies}

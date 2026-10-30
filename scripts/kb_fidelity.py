@@ -327,8 +327,15 @@ def _retrieved_chunks(
     """
     from app.chat.nodes import respond as respond_node
 
+    from app.chat.service_catalogue import canonical_service
+
+    canonical = (
+        canonical_service(session, service)
+        if intent not in (None, "unknown") and isinstance(service, str)
+        else None
+    )
     return respond_node.retrieve_for_queries(
-        session, respond_node.turn_queries(text, intent=intent, service=service)
+        session, respond_node.turn_queries(text, intent=intent, service=canonical)
     )
 
 

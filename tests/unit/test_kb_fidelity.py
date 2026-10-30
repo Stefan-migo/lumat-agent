@@ -350,6 +350,8 @@ def test_the_instrument_makes_the_retrieval_production_makes(monkeypatch):
     are pinned here as one contract: same queries, same arguments.
     """
     calls = _recording_retrieve(monkeypatch, hit=SERVICE)
+    monkeypatch.setattr(_respond, "canonical_service", lambda _session, service: service)
+    monkeypatch.setattr("app.chat.service_catalogue.canonical_service", lambda _session, service: service)
     state = ConversationState(
         customer_id=1,
         conversation_id=1,
