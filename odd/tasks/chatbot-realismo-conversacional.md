@@ -483,3 +483,16 @@ Postgres) and is green on all four heads, because it ran before the hour that tr
 fixed here on purpose: it is a test-side defect in `main`'s files, outside this feature's surfaces,
 and repairing it means touching files this feature does not own. Follow-up worth its own unit: anchor
 those helpers to a fixed hour of the target day instead of the current hour.
+
+**L20** — owner decisions closing the last two open questions, verbatim answers: "Device suelto →
+`Visita técnica`" and "No preguntar si ya hay evidencia".
+
+- **C4 / S14 — what "normalized against the catalogue" means.** A `case.service` value that names no
+  service (`calefont`) resolves to the generic repair visit (`Visita técnica`), so #43 and #44 converge.
+  The dangerous reading was the tempting one: `calefont` is a substring of `Mantención de calefont`, so a
+  naive catalogue match would answer maintenance hours to somebody with a broken boiler — the same
+  mistake L10 fix 2 already corrected once. The rule is therefore: a preventive catalogue label only
+  when the value itself reads as a preventive request (the A5 matcher over preventive-named catalogue
+  entries); otherwise the generic repair visit; otherwise no steering at all.
+- **C2 / L5.3 — evidence when a photo already arrived.** If the customer already sent a photo or audio in
+  the conversation, the evidence question is not asked again: it is an invitation, not a formality.
