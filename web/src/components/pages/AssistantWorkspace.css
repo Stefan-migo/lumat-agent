@@ -413,7 +413,7 @@
   margin-top: var(--space-3);
 }
 
-.assistant-workspace__context-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.assistant-workspace__context-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
 .assistant-workspace__context-header .assistant-workspace__pane-toggle,
 .assistant-workspace__context-header .assistant-workspace__pane-toggle:hover,
 .assistant-workspace__context-header .assistant-workspace__pane-toggle:focus-visible { border: 0; color: var(--corp-text); background: transparent; }
@@ -423,9 +423,13 @@
 .assistant-workspace__context[data-collapsed="true"] .assistant-workspace__context-title p { display: none; }
 .assistant-workspace__context-content { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .assistant-workspace__context-section { min-width: 0; border-bottom: 1px solid var(--corp-border); }
-.assistant-workspace__context-row { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.75rem; padding: var(--space-2); border: 0; color: var(--corp-text); background: transparent; text-align: left; font: inherit; cursor: pointer; }
-.assistant-workspace__context-row:hover, .assistant-workspace__context-row:focus-visible { background: var(--brand-bg); }
-.assistant-workspace__context-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.assistant-workspace__context-row { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.75rem; padding: var(--space-2); border: 0; border-radius: var(--radius-sm); color: var(--corp-text); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.assistant-workspace__context-row:hover { background: var(--brand-bg); }
+/* The focus indicator is a leading inset bar, not a box around the row: the
+   outline rectangle read as a permanent border in the owner's screenshots. */
+.assistant-workspace__context-row:focus-visible { outline: none; background: var(--brand-bg); box-shadow: inset 3px 0 0 var(--focus-ring); }
+.assistant-workspace__capability-row { display: flex; align-items: center; gap: var(--space-2); }
+.assistant-workspace__capability-row > svg { flex: 0 0 auto; color: var(--text-muted); }
 .assistant-workspace__context-row > span:first-of-type { flex: 1; min-width: 0; }
 .assistant-workspace__context-count { flex: 0 0 auto; padding: 0 var(--space-2); border-radius: 999px; color: var(--text-muted); background: var(--brand-bg); font-size: var(--text-xs); }
 .assistant-workspace__context-section-content { padding: 0 var(--space-2) var(--space-3); }

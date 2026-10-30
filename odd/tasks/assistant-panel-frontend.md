@@ -40,7 +40,10 @@ project file tree (folders, upload, dropping files onto the tree), the thread ch
 favour of dragging files into the chat, and the project KB read-only in the sidebar, configured only
 from Configuración.
 
-S7 — Delivery, per the owner on 2026-10-29: four chained slices ("Slices encadenados (4 PRs)").
+S7 — Delivery, per the owner on 2026-10-29: four slices, and publication deferred until the whole
+assistant frontend is done ("esto lo dejaremos para despues. cuando ya este listo le frontendo del
+asistente"). Work stays on `odd/assistant-panel-frontend` as separate slices; push, PR and merge
+happen once the frontend is complete, not slice by slice.
 
 ## Tasks
 
@@ -98,3 +101,8 @@ chat del hilo. si el usuario quiere referenciar estos archivos. seria casi compl
 puede quedar como solo lectura en el sidebar menu. y que se peuda configurar solo desde
 configuracion". Chosen options: "Fila arriba del primer mensaje" for S3 and "Slices encadenados (4
 PRs)" for S7.
+
+L10 — Owner on publication, verbatim: "esto lo dejaremos para despues. cuando ya este listo le
+frontendo del asistente". So S7 no longer means one PR per slice: the slices land as
+commits on `odd/assistant-panel-frontend` and the PR opens when the assistant frontend is
+complete. P3 (Resend) stays parked for the same reason.
