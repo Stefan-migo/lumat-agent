@@ -1,0 +1,19 @@
+/* In-panel file viewer. The content area scrolls, the dialog keeps its header
+   and the download action in place. */
+.file-viewer__markdown,
+.file-viewer__text { max-height: min(70vh, 44rem); margin: 0; overflow: auto; }
+.file-viewer__text { padding: var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); background: var(--surface); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.file-viewer__frame { width: 100%; height: min(70vh, 44rem); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); background: var(--surface); }
+.file-viewer__image { display: block; max-width: 100%; max-height: min(70vh, 44rem); margin: 0 auto; border-radius: var(--radius-sm); }
+.file-viewer__table-wrap { max-height: min(70vh, 44rem); overflow: auto; }
+.file-viewer__table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.file-viewer__table th,
+.file-viewer__table td { padding: var(--space-2); border-bottom: 1px solid var(--corp-border); text-align: left; vertical-align: top; }
+.file-viewer__table th { position: sticky; top: 0; background: var(--table-head-bg); font-weight: var(--weight-semibold); }
+.file-viewer__note { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+.file-viewer__unsupported { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-6) var(--space-3); color: var(--text-muted); text-align: center; }
+.file-viewer__unsupported p { margin: 0; max-width: 34ch; }
+.file-viewer__actions { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+.file-viewer__download { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2.5rem; padding: var(--space-2) var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--corp-radius); background: var(--corp-surface); color: var(--corp-text); font: inherit; cursor: pointer; }
+.file-viewer__download:hover,
+.file-viewer__download:focus-visible { background: var(--brand-bg); }
