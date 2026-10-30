@@ -628,6 +628,20 @@ def to_memory_dict(memory: Memory) -> dict:
     }
 
 
+def to_assistant_memory_dict(memory: Memory) -> dict:
+    """Allow-listed user-axis memory shape for the assistant audit API."""
+    return {
+        "id": memory.id,
+        "titulo": memory.titulo,
+        "contenido": memory.contenido,
+        "tipo": memory.tipo.value,
+        "topic_key": memory.topic_key,
+        "created_at": _iso(memory.created_at),
+        "updated_at": _iso(memory.updated_at),
+        "review_after": _iso(memory.review_after),
+    }
+
+
 def to_memory_relation_dict(
     relation: MemoryRelation, memory_a: Memory, memory_b: Memory
 ) -> dict:
