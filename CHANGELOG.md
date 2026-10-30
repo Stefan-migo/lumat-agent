@@ -50,6 +50,24 @@ it remembers. One default that reached production wrong is corrected in the same
 - `060_capture_ack_plain.sql` — the guarded settings rewrite described above, with its reverse
   `UPDATE` documented in the file.
 
+### Also in this release (merged while it was being cut)
+
+Three chatbot-realism branches landed between `v2026.10.12` and this tag. Summarized from their
+commit subjects by the release cut; not re-verified one by one here.
+
+- **A returning customer confirms their contact data once** instead of being asked again.
+- **The capture and consent flow answers what the customer actually wrote**: consent answers a real
+  customer sends are accepted, the consent question is skipped when consent was already granted, a
+  reschedule request escapes the capture question, and "manutención" reads as a preventive request
+  while a technical visit does not.
+- **Offers and coverage say only what they can honour**: slot offers read the afternoon window and
+  abbreviated month names, a preference the offer cannot serve is no longer answered with the same
+  list, the out-of-coverage reply drops what it was overstating, and the state only counts visits
+  that have not started.
+- **Answer shape**: a knowledge-base answer that itself asks something no longer carries a second
+  question, a long courtesy closing still closes, and an acknowledgement follows a delivered answer
+  rather than the opening capture turn.
+
 ## [2026.10.12] - 2026-10-29
 
 A release for one operator-visible failure of the panel assistant and the two defect
