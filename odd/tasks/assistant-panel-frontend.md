@@ -52,9 +52,13 @@ T2 — DONE (`2f66b9e3`). Fix the thread project once the thread has messages. S
 T3 — DONE (`87305e9a`). Short, downloadable artifact link inside the agent message. S4. `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AgentChat.test.tsx`.
 T4 — DONE. "Ver todos" as a quiet line above the first visible message. S3. `web/src/components/shared/CollapsibleMessages.tsx`.
 T5 — DONE (`b6f204c7`). Slice 2: sidebar shell — the toggle separated from the subtitle with no hover border, section order, capabilities UI. S5.
-T6 — IN PROGRESS. Slice 3: thread files and artifacts open from the whole row, larger icon, pointer cursor and tooltip. S5.
-T7 — Slice 4: full project resources — folder tree with upload and drop, KB read-only, files draggable into the chat, skills read-only, thread checkboxes removed. S6.
+T6 — DONE (`42daabf9`). Slice 3: thread files and artifacts open from the whole row, larger icon, pointer cursor and tooltip. S5.
+T7 — DONE (`e2f3a004`, `9ee3a35f`). Slice 4: full project resources — folder tree with upload and drop, KB read-only, files draggable into the chat, skills read-only, thread checkboxes removed, and the chat accepts the dropped project file. S6.
 T8 — Slice 1 PR: the chat work (T3 + T4) together. S7.
+
+Slice boundary: 684 authored lines over 10 commits. The ~400-line review slice is past, and per L10 the
+boundary is recorded here instead of opening a PR: slices land as commits and the PR opens when the
+assistant frontend is complete.
 
 ## Log
 
@@ -108,3 +112,5 @@ commits on `odd/assistant-panel-frontend` and the PR opens when the assistant fr
 complete. P3 (Resend) stays parked for the same reason.
 
 L11 — The full-suite gate for slice 2 reported 22 failures across 7 files (UserManagement, Settings, ClientesList, AppShell, AgendaPage, ClientFicha, AppointmentDetail) with 17-29 s per test, while `npm run build` stayed green. The machine was saturated at the time — load average 62/72 and a `pytest` process from another worktree plus three test containers. The four affected files I re-ran in isolation (AppShell, AgendaPage, ClientFicha, ClientesList) passed 187/187. Not a regression, but the full suite must be re-run under a quiet machine before the frontend is declared complete.
+
+L12 — Slice 4 closed. The thread "pin" checkboxes and their component are gone because the owner replaced pinning with dragging a file into the chat (L9); the chat now accepts the `application/x-lumat-project-file` payload and attaches the project file to the thread. The test that pinned the old `PUT /resources` behaviour was removed with it, and the new panel tests assert there are no checkboxes left.
