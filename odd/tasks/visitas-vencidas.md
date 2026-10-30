@@ -84,3 +84,57 @@ real appointments) and **crosses a permission boundary** (operator vs technician
 orchestrator's risk list that is items 1 (data effects) and 2 (security), so each unit lands as its own
 commit and gets an independent verifier before delivery. The bulk endpoint must never accept an
 appointment the caller could not close individually.
+
+**L4** — T1/T2 done (`9d65e826`, merged as PR #754 → `82edf2b1`). `scheduling.list_overdue()` filters
+`booked` with `starts_at` in the past, oldest first, joined with customer, case and technician; all three
+FKs are `nullable=False`, so the inner joins cannot silently drop an overdue visit. `GET
+/appointments/overdue` projects through the same agenda serializer the day view uses, and is declared
+**before** `/appointments/{appointment_id}`: declared after, the path parameter swallows it and the
+request answers 422 — which is exactly the first RED this unit produced (the bulk answered 405 for the
+same shape reason). `POST /appointments/bulk-close` takes one outcome for the batch, validated by
+`Literal["completed","no_show"]`, never inferred; it reports per row, caps at 100 ids, keeps
+`require_operator_json`, and reuses `scheduling.close()` so history, `audit_log`, the
+`appointment.completed` / `appointment.no_show` event and the no-show notification stay identical to the
+single-visit path.
+
+Two defects the parent review caught before the commit, both fixed with a failing test first:
+
+1. The overdue projection returned `to_appointment_dict()`, which carries `customer_id` but **no
+   customer name** — S2 asks the batch to show which customers are affected, and raw ids cannot. It now
+   goes through the agenda projection.
+2. A database-level error during `scheduling.close()` left the session poisoned, so the next
+   `session.get()` raised and the endpoint answered 500 — losing the per-row reporting S2 requires. It
+   now catches `SQLAlchemyError`, rolls the row back and continues.
+
+Verified: `quick` → exit 0; `db tests/functional/test_api_scheduling.py` → 30 passed; `db
+tests/functional/test_api_technician.py` → 44 passed.
+
+**L5** — T3/T4 done. `OverdueVisitsPanel` renders the overdue set with per-row close through the
+existing `AppointmentClosureDialog` and the batch flow; `api.ts` gained the two typed clients;
+`AgendaPage` fetches the set only when not driven by props (so Storybook stays offline) and refetches
+after either close, with the bulk refresh wrapped on its own so a failed refresh cannot hide the
+per-row report.
+
+The S2 invariants were verified in the code before delivery: the batch outcome starts unselected and is
+reset when the dialog opens; the confirmation lists the affected customers; results are attributed per
+row to their own customer; the 100 cap is enforced in three places; nothing renders when the set is
+empty.
+
+**The independent verifier could not be produced.** `gentle-ai-verify` failed twice and `jd-judge-a`
+once, all with the same opaque "assistant reported an error" and no output — three attempts across two
+roles, so the runtime for those read-only reviewers is broken rather than the brief. Per the delegation
+contract that is reported as unavailable, not retried further, and the parent ran the adversarial pass
+itself. Recorded here so the gap is visible instead of implied.
+
+That pass found one real defect: the batch sent `selectedIds` — the raw selection — while the dialog
+names the visits it will close. A refetch while the dialog is open drops a row, so the preview showed
+fewer customers than the batch would close, and a visit the operator could no longer see went through.
+The batch now sends exactly the appointments the dialog is showing (`f013d433`), with a guard test that
+selects two visits, drops one from the list while the dialog is open, confirms, and asserts only the
+visible one is sent. Proven by mutation: restoring `selectedIds` makes that test fail.
+
+**Deliberate non-change, recorded rather than hidden**: the single-visit close inherits the shared
+dialog's `"completed"` default. That is the pre-existing behaviour S3 protects, and changing it here
+would make the overdue panel behave differently from the agenda and the appointment detail. It still
+deserves its own decision, because for a visit that is overdue by definition, `completed` is the
+optimistic guess and `no_show` is at least as likely.
