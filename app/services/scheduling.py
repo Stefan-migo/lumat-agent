@@ -537,6 +537,24 @@ def add_availability(session: Session, *, technician_id: int, starts_at: datetim
     return block
 
 
+def list_overdue(session: Session, *, now: datetime | None = None) -> list[tuple[Appointment, str | None, str | None, str | None, str | None, str | None, AppointmentCalendarSync | None]]:
+    """Return booked appointments and their agenda projection, oldest first."""
+    cutoff = now or datetime.now(timezone.utc)
+    statement = (
+        select(Appointment, Customer.name, Customer.address, Customer.comuna, Case.service, User.username, AppointmentCalendarSync)
+        .join(Customer, Customer.id == Appointment.customer_id)
+        .join(Case, Case.id == Appointment.case_id)
+        .join(User, User.id == Appointment.technician_id)
+        .outerjoin(AppointmentCalendarSync, AppointmentCalendarSync.appointment_id == Appointment.id)
+        .where(
+            Appointment.status == AppointmentStatus.BOOKED,
+            Appointment.starts_at < cutoff,
+        )
+        .order_by(Appointment.starts_at, Appointment.id)
+    )
+    return list(session.execute(statement).all())
+
+
 def list_for_customer(session: Session, customer_id: int) -> list[Appointment]:
     return list(session.scalars(select(Appointment).where(Appointment.customer_id == customer_id).order_by(Appointment.starts_at, Appointment.id)))
 

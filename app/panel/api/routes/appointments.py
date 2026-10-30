@@ -5,6 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models import AppointmentStatus, Case, Conversation, Customer, User
@@ -41,6 +42,12 @@ class CloseBody(BaseModel):
     reason: str | None = None
 
 
+class BulkCloseBody(BaseModel):
+    appointment_ids: list[int] = Field(min_length=1, max_length=100)
+    outcome: Literal["completed", "no_show"]
+    reason: str | None = None
+
+
 class RescheduleBody(BaseModel):
     local_date: date
     local_time: time
@@ -68,6 +75,54 @@ def list_appointments(from_date: date = Query(alias="from"), to_date: date = Que
     except scheduling.InvalidRange as exc:
         raise HTTPException(status_code=400, detail={"code": "invalid_range", "message": str(exc)}) from exc
     return {"appointments": [to_agenda_dict(appointment, customer_name=customer_name, customer_address=customer_address, customer_comuna=customer_comuna, case_name=case_name, technician_name=technician_name, timezone_name=timezone_name, sync=sync) for appointment, customer_name, customer_address, customer_comuna, case_name, technician_name, sync in rows]}
+
+
+@router.get("/appointments/overdue")
+def list_overdue_appointments(session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
+    rows = scheduling.list_overdue(session)
+    return {"appointments": [
+        to_agenda_dict(
+            appointment, customer_name=customer_name, customer_address=customer_address,
+            customer_comuna=customer_comuna, case_name=case_name,
+            technician_name=technician_name, timezone_name=appointment.timezone, sync=sync,
+        )
+        for appointment, customer_name, customer_address, customer_comuna, case_name, technician_name, sync in rows
+    ]}
+
+
+@router.post("/appointments/bulk-close")
+def bulk_close_appointments(body: BulkCloseBody, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
+    outcome = AppointmentStatus(body.outcome)
+    results = []
+    for appointment_id in body.appointment_ids:
+        try:
+            appointment = session.get(scheduling.Appointment, appointment_id)
+            if appointment is None:
+                results.append({
+                    "id": appointment_id, "ok": False, "outcome": body.outcome,
+                    "error": "appointment not found",
+                })
+                continue
+            scheduling.close(
+                session, appointment, outcome=outcome, actor=current.username, reason=body.reason
+            )
+            session.commit()
+        except ValueError as exc:
+            results.append({
+                "id": appointment_id, "ok": False, "outcome": body.outcome,
+                "error": str(exc),
+            })
+            continue
+        except SQLAlchemyError:
+            session.rollback()
+            results.append({
+                "id": appointment_id, "ok": False, "outcome": body.outcome,
+                "error": "database error while closing appointment",
+            })
+            continue
+        results.append({"id": appointment_id, "ok": True, "outcome": body.outcome, "error": None})
+    closed = sum(result["ok"] for result in results)
+    return {"closed": closed, "failed": len(results) - closed, "results": results}
 
 
 @router.get("/availability/{technician_id}")
