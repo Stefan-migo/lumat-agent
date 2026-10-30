@@ -208,8 +208,20 @@ def _after_research_triage(state: ConversationState) -> str:
     Only when a mid-capture deviation was routed here (capture_paused) and the
     sub-graph did not itself escalate/hand off. A KB miss sets `escalate` inside
     the sub-graph and must terminate, never resume.
+
+    S13 (chatbot-realismo-conversacional): not when the answer already asked
+    something. Production #23 turns 287 and 288 arrived in the same second — a KB
+    answer ending in "¿Quieres que esa misma visita se use para la mantención?" plus
+    "¿En qué comuna te encuentras?" — so the customer read two questions at once,
+    against `chat.conduct.max_preguntas_por_mensaje` (1). The capture question is
+    not lost: `_pending` stays in the captured state, so the agenda asks it on the
+    customer's next message.
     """
-    return "capture" if state.capture_paused and not state.escalate else END
+    if not state.capture_paused or state.escalate:
+        return END
+    if state.replies and state.replies[-1].rstrip().endswith("?"):
+        return END
+    return "capture"
 
 
 def _triage_node(subgraph):

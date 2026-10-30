@@ -191,6 +191,12 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "directamente."
     ),
     "capture_evidence": "¿Tienes algo más para pasarle al técnico? (una foto, un audio…)",
+    # S3 (chatbot-realismo-conversacional): one confirmation instead of four questions
+    # when the customer record already holds the contact data.
+    "capture_confirm_contact": (
+        "Tengo {{comuna}} y {{direccion}}, con correo {{email}}. "
+        "¿Sigue todo igual o cambió algo?"
+    ),
     "capture_consent": (
         "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
     ),
@@ -233,6 +239,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_campo_sin_respuesta": frozenset(),
     "handoff_booking_unavailable": frozenset(),
     "capture_evidence": frozenset(),
+    "capture_confirm_contact": frozenset({"comuna", "direccion", "email"}),
     "capture_consent": frozenset(),
     "capture_consent_refused": frozenset(),
     "capture_consent_unclear": frozenset(),
