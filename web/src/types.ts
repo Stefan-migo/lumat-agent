@@ -709,6 +709,23 @@ export interface AgendaResponse {
   appointments: AgendaAppointment[];
 }
 
+export interface OverdueAppointmentsResponse {
+  appointments: AgendaAppointment[];
+}
+
+export type AppointmentClosureOutcome = 'completed' | 'no_show';
+export interface BulkAppointmentCloseResult {
+  id: number;
+  ok: boolean;
+  outcome: AppointmentClosureOutcome;
+  error: string | null;
+}
+export interface BulkAppointmentCloseResponse {
+  closed: number;
+  failed: number;
+  results: BulkAppointmentCloseResult[];
+}
+
 export interface AppointmentCreateRequest {
   service: string;
   customer_id: number;

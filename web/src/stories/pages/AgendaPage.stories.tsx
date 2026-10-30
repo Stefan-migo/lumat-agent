@@ -58,7 +58,7 @@ const DATA: AgendaAppointment[] = [
 export function AgendaPageStory({ width, ...props }: AgendaPageStoryProps) {
   return (
     <div style={{ maxWidth: width ? `${width}px` : undefined, width: "100%" }}>
-      <AgendaPage {...props} />
+      <AgendaPage {...props} overdueAppointments={props.overdueAppointments ?? []} />
     </div>
   );
 }
@@ -77,6 +77,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Data: Story = { args: { data: DATA, state: "ready", width: 1280 } };
+export const OverdueVisits: Story = {
+  args: {
+    data: DATA,
+    state: "ready",
+    width: 1280,
+    overdueAppointments: [appointment({ id: 5, service: "Mantención de calefón", local_start: "2026-08-12T10:00:00-04:00", starts_at: "2026-08-12T14:00:00+00:00" })],
+  },
+};
 export const CreateVisit: Story = { args: { data: [], state: "empty", width: 1280 } };
 export const Loading: Story = { args: { data: null, state: "loading", width: 1280 } };
 export const Empty: Story = { args: { data: [], state: "empty", width: 1280 } };
