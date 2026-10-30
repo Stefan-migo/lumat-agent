@@ -327,7 +327,32 @@ def test_weekly_schedule_alone_produces_chat_slot_offer(mock_openai_chat):
 
 
 def _aligned_start(now, days=2):
-    return (now + timedelta(days=days)).replace(minute=0, second=0, microsecond=0)
+    """A start pinned to a business hour of the target day.
+
+    The hour is fixed on purpose: inheriting the hour the suite runs at made the
+    slot block cross midnight late in the UTC day, and the day assertions in this
+    file then compared one day against two. `test_aligned_start_keeps_the_slot_block_inside_one_calendar_day`
+    pins it.
+    """
+    return (now + timedelta(days=days)).replace(
+        hour=9, minute=0, second=0, microsecond=0
+    )
+
+
+def test_aligned_start_keeps_the_slot_block_inside_one_calendar_day():
+    """Guard: the fixture anchor must not depend on the hour the suite runs.
+
+    Measured 2026-10-29 23:12Z: `now + 2 days` inherited the current hour, so the
+    three-slot block ran 23:00-01:00 and crossed midnight. The day assertion in
+    `test_asking_for_more_slots_says_the_day_is_exhausted_and_offers_other_days`
+    then compared one day against two and failed, which made CI red for `main`
+    itself between roughly 22:00Z and 00:00Z.
+    """
+    for hour in range(24):
+        now = datetime(2026, 10, 29, hour, 37, tzinfo=timezone.utc)
+        starts = _aligned_start(now)
+        block = [starts + timedelta(minutes=30 * offset) for offset in range(7)]
+        assert {slot.date() for slot in block} == {starts.date()}, f"hora {hour}"
 
 
 def test_asking_for_more_slots_offers_the_next_page_on_the_same_day(mock_openai_chat):
