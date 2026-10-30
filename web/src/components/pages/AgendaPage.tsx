@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { CalendarDays, CalendarPlus, CalendarX, Check, Clock3, ExternalLink, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
-import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
+import { ApiError, bulkCloseAppointments, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, listOverdueAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
+import type { AgendaAppointment, AppointmentClosureOutcome, Case, Customer, UserRef } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Button } from "../primitives/Button";
@@ -15,7 +15,8 @@ import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
-import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "../shared/AppointmentClosureDialog";
+import { AppointmentClosureDialog } from "../shared/AppointmentClosureDialog";
+import { OverdueVisitsPanel } from "../shared/OverdueVisitsPanel";
 import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from "../shared/AppointmentRescheduleDialog";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -32,6 +33,7 @@ export interface AgendaPageProps {
   state?: AgendaPageState;
   onRetry?: () => void;
   timezone?: string;
+  overdueAppointments?: AgendaAppointment[] | null;
 }
 
 type ActionFeedback = { id: number; tone: "success" | "danger"; title: string; detail?: string };
@@ -58,8 +60,9 @@ function stateMessage(state: AgendaPageState, retry: () => void) {
   return null;
 }
 
-export function AgendaPage({ data: controlledData, state: controlledState, onRetry, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }: AgendaPageProps) {
+export function AgendaPage({ data: controlledData, state: controlledState, onRetry, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone, overdueAppointments: controlledOverdue }: AgendaPageProps) {
   const [updatedData, setUpdatedData] = useState<AgendaAppointment[] | null>(null);
+  const [updatedOverdue, setUpdatedOverdue] = useState<AgendaAppointment[] | null>(null);
   const [cancelTarget, setCancelTarget] = useState<AgendaAppointment | null>(null);
   const [closeTarget, setCloseTarget] = useState<AgendaAppointment | null>(null);
   const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>("completed");
@@ -89,6 +92,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     return listAppointments(from, to, timezone).then((response) => response.appointments);
   }, [from, to, timezone]);
   const fetched = useAsyncData(fetchAgenda, controlledData === undefined, Date.parse(from));
+  const fetchedOverdue = useAsyncData(() => listOverdueAppointments().then((response) => response.appointments), controlledOverdue === undefined && controlledData === undefined);
+  const overdueRows = updatedOverdue ?? (controlledOverdue === undefined ? fetchedOverdue.data : controlledOverdue);
   const data = updatedData ?? (controlledData === undefined ? fetched.data : controlledData);
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
@@ -100,6 +105,19 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const refreshAgenda = async () => {
     const response = await listAppointments(from, to, timezone);
     setUpdatedData(response.appointments);
+  };
+  const refreshOverdue = async () => {
+    const response = await listOverdueAppointments();
+    setUpdatedOverdue(response.appointments);
+  };
+  const closeOverdue = async (id: number, outcome: AppointmentClosureOutcome) => {
+    await closeAppointment(id, outcome);
+    await refreshOverdue();
+  };
+  const bulkCloseOverdue = async (ids: number[], outcome: AppointmentClosureOutcome) => {
+    const response = await bulkCloseAppointments(ids, outcome);
+    try { await refreshOverdue(); } catch { /* Preserve and show each submitted row's result. */ }
+    return response;
   };
   const cancel = async () => {
     if (!cancelTarget || mutatingId !== null) return;
@@ -295,6 +313,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {closeFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={closeFeedback.title} /> : null}
     {rescheduleFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={rescheduleFeedback.title} /> : null}
+    <OverdueVisitsPanel appointments={overdueRows ?? []} onCloseAppointment={closeOverdue} onBulkClose={bulkCloseOverdue} />
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><a href="/panel/app/settings#schedule">Configurar horarios de técnicos</a><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={selectRegisterTab} ariaLabel="Registro de agenda">{() => showEmpty ? <EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /> : register}</Tabs></section>

@@ -5,11 +5,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
-import { cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, getTechnicianSchedule, listAppointments, rescheduleAppointment, retryCalendarSync } from '../../api';
+import { cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, getTechnicianSchedule, listAppointments, listOverdueAppointments, rescheduleAppointment, retryCalendarSync } from '../../api';
 import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
 
 vi.mock('../../api', () => ({
   listAppointments: vi.fn(),
+  listOverdueAppointments: vi.fn(),
+  bulkCloseAppointments: vi.fn(),
   cancelAppointment: vi.fn(),
   closeAppointment: vi.fn(),
   rescheduleAppointment: vi.fn(),
@@ -60,9 +62,25 @@ describe('AgendaPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
+    vi.mocked(listOverdueAppointments).mockResolvedValue({ appointments: [] });
   });
 
   /** S9: the office board reads the technician's field state, and how long ago. */
+  it('renders overdue visits in the agenda without navigating to a past day', () => {
+    render(<AgendaPage data={[]} state="empty" overdueAppointments={[appointment({ local_start: '2026-08-12T10:00:00-04:00' })]} />);
+
+    const section = screen.getByRole('region', { name: 'Visitas vencidas' });
+    expect(section).toHaveTextContent('Camila Soto');
+    expect(section).toHaveTextContent('Mantención');
+    expect(within(section).getByRole('button', { name: 'Cerrar visita de Camila Soto' })).toBeInTheDocument();
+  });
+
+  it('renders no overdue section when the overdue list is empty', () => {
+    render(<AgendaPage data={[]} state="empty" overdueAppointments={[]} />);
+
+    expect(screen.queryByRole('region', { name: 'Visitas vencidas' })).not.toBeInTheDocument();
+  });
+
   it('shows the technician field state with its age on a visit row', () => {
     render(<AgendaPage data={[appointment({ technician_state: 'en_route', technician_state_at: '2026-09-05T11:55:00-04:00' })]} state="ready" />);
 

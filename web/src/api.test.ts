@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { apiFetch, ApiError, postJson, deleteKbDocument, deleteUser, archiveCase, unarchiveCase, getClientFicha, listConversations, sendMessage, sendMedia, acknowledgeCase, takeConversation, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser, listProjectFiles, uploadProjectFile, downloadProjectFile, downloadAssistantArtifact, deleteProjectFile, moveProjectFile, listProjectFolders, createProjectFolder, renameProjectFolder, deleteProjectFolder, listGlobalSkills, listAutomationRecipes, listAutomationInstallations, createAutomationInstallation, updateAutomationInstallation, enableAutomationInstallation, disableAutomationInstallation, listProjectAgents, setChatThreadProject, attachProjectFileToThread, deleteThreadAttachment, threadAttachmentContentUrl, getTechnicianSchedule, saveTechnicianSchedule, getModelApiKeyStatus, saveModelApiKey, deleteModelApiKey } from './api';
+import * as apiModule from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -159,6 +160,34 @@ describe('client API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ customer: {} }), { status: 200 }));
     await updateCustomerConsent(4, true);
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients/4/consent', expect.objectContaining({ method: 'POST', body: JSON.stringify({ consent: true }) }));
+  });
+});
+
+describe('overdue appointment API contracts', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('gets the overdue agenda projection from the operator endpoint', async () => {
+    const payload = { appointments: [{ id: 17, customer_name: 'Camila Soto', service: 'Mantención' }] };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+
+    const listOverdue = (apiModule as Record<string, unknown>).listOverdueAppointments as () => Promise<unknown>;
+    expect(listOverdue).toBeTypeOf('function');
+    await expect(listOverdue()).resolves.toEqual(payload);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/appointments/overdue', expect.objectContaining({ credentials: 'include' }));
+  });
+
+  it('posts the selected ids and one explicit outcome to bulk close', async () => {
+    const payload = { closed: 2, failed: 0, results: [{ id: 17, ok: true, outcome: 'completed', error: null }] };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+
+    const bulkClose = (apiModule as Record<string, unknown>).bulkCloseAppointments as (ids: number[], outcome: 'completed' | 'no_show') => Promise<unknown>;
+    expect(bulkClose).toBeTypeOf('function');
+    await expect(bulkClose([17, 23], 'completed')).resolves.toEqual(payload);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/appointments/bulk-close', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ appointment_ids: [17, 23], outcome: 'completed', reason: null }),
+      credentials: 'include',
+    }));
   });
 });
 
