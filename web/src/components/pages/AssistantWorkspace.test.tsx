@@ -65,6 +65,68 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     const skillsSection = screen.getByRole("region", { name: "Habilidades" });
     expect(within(skillsSection).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Archivos del proyecto" })).toHaveTextContent("Documentos compartidos del proyecto");
+    expect(screen.getByRole("region", { name: "Conocimiento del proyecto" })).toHaveTextContent("Información que el asistente puede consultar");
+    expect(skillsSection).toHaveTextContent("Skills disponibles · Solo lectura");
+    expect(within(skillsSection).getByText("Proyecto")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de plan.pdf" })).toBeInTheDocument();
+  });
+
+  it("shows the project resources loading state and reports a summary after the initial load", async () => {
+    const { ProjectResourcesPanel } = await import("./ProjectResourcesPanel");
+    let resolveFiles!: (response: Response) => void;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/projects/ops/files")) return new Promise((resolve) => { resolveFiles = resolve; });
+      if (url.endsWith("/projects/ops/folders")) return Promise.resolve(new Response(JSON.stringify({ folders: [] }), { status: 200 }));
+      if (url.endsWith("/kb?project_id=5")) return Promise.resolve(new Response(JSON.stringify({ docs: [{ id: 6, project_id: 5, title: "Manual", format: "pdf", version: 1, active_version: 1, active: true, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: null }] }), { status: 200 }));
+      if (url.endsWith("/chat/threads/77/resources")) return Promise.resolve(new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [{ name: "agenda", description: "Consulta agenda" }] }, inherited: true }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    });
+    const onSummary = vi.fn();
+    const project = { id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectResourcesPanel project={project} threadId={77} expanded onSummary={onSummary} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando recursos del proyecto");
+    expect(onSummary).not.toHaveBeenCalled();
+    resolveFiles(new Response(JSON.stringify({ files: [{ id: 31, project_id: 5, filename: "plan.pdf", content_type: "application/pdf", size: 20, sha256: "hash", status: "ready", kb_document_id: null, folder_id: null, created_at: null }] }), { status: 200 }));
+    expect(await screen.findByRole("region", { name: "Habilidades" })).toBeInTheDocument();
+    await waitFor(() => expect(onSummary).toHaveBeenCalledWith("1 archivo · 1 documento · 1 habilidad"));
+  });
+
+  it("creates and confirms folder deletion through named dialogs", async () => {
+    const { ProjectResourcesPanel } = await import("./ProjectResourcesPanel");
+    let folders = [{ id: 9, project_id: 5, parent_id: null, name: "Informes", created_at: null }];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/projects/ops/files")) return new Response(JSON.stringify({ files: [] }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders") && init?.method === "POST") {
+        folders.push({ id: 10, project_id: 5, parent_id: null, name: JSON.parse(String(init.body)).name, created_at: null });
+        return new Response(JSON.stringify({ folder: folders.at(-1) }), { status: 201 });
+      }
+      if (url.endsWith("/projects/ops/folders")) return new Response(JSON.stringify({ folders }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders/9") && init?.method === "DELETE") { folders = []; return new Response(null, { status: 204 }); }
+      if (url.endsWith("/kb?project_id=5")) return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+      if (url.endsWith("/chat/threads/77/resources")) return new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [] }, inherited: true }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const project = { id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectResourcesPanel project={project} threadId={77} expanded />);
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Acciones de archivos" }));
+    await userEvent.setup().click(screen.getByRole("menuitem", { name: "Crear carpeta" }));
+    const createDialog = screen.getByRole("dialog", { name: "Nueva carpeta" });
+    fireEvent.change(within(createDialog).getByLabelText("Nombre de la carpeta"), { target: { value: "Actas" } });
+    await userEvent.setup().click(within(createDialog).getByRole("button", { name: "Crear carpeta" }));
+    expect(await screen.findByText("Actas")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/folders", expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Actas", parent_id: null }) }));
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de carpeta Informes" }));
+    await userEvent.setup().click(screen.getByRole("menuitem", { name: "Eliminar carpeta" }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Eliminar carpeta Informes" });
+    expect(deleteDialog).toHaveTextContent("Informes");
+    await userEvent.setup().click(within(deleteDialog).getByRole("button", { name: "Eliminar carpeta" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/folders/9", expect.objectContaining({ method: "DELETE" })));
   });
 
   it("restores open thread tabs after the assistant workspace remounts", async () => {

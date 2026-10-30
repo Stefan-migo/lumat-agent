@@ -131,3 +131,22 @@ button's accessible name stays the bare title (`AssistantWorkspace.test.tsx` pin
 `Proyecto`); (2) for `Archivos del hilo` the same sentence is passed as both subtitle and summary,
 because the reference shows it whether the section is open or closed. T1 also removed the old
 bottom-of-panel note and moved its sentence into that section's secondary line.
+
+L6 — Measured before writing T3, because the reference shows `Global` and `Proyecto` skill badges:
+`app/services/thread_resources.py:41` returns skills as `{name, description}` built from
+`config.skills`, so every skill the endpoint lists is project scope. The `Proyecto` badge is real; a
+`Global` badge would be invented, so it is not rendered and the reference's split waits for a backend
+change (out of scope: this feature adds no backend behaviour). T3 also moves folder creation from the
+always-visible "Nueva carpeta" input into a `Dialog`, because the reference shows a compact action in
+the card header rather than a bare input in the middle of the tree.
+
+L7 — The T3 worker stopped before editing because the worktree's `graphify-out/GRAPH_REPORT.md` was
+built from an older commit than `HEAD`, and the project rule says to rebuild a stale graph first.
+Resolved without a refresh, because two project facts override it: `graphify-out/` is gitignored and
+local to whichever worktree holds it (the canonical graph is the main worktree's, which is where the
+mandatory queries ran for this feature), and AGENTS.md schedules `graphify . --update` **once per work
+session, at close — never after every batch or commit**. The consultations that satisfy the gate for
+this feature are recorded here: `graphify query "assistant workspace sidebar sections project picker
+resources"` (nodes `AssistantWorkspace.tsx`, `ProjectResources.tsx`, `Icon.tsx`, `Badge.tsx`,
+`StateMessage.tsx`, `Button.tsx`, `api.ts`, `services/projects.py`, `assistantTabs.ts`) plus the
+worker's own `graphify query "AssistantWorkspace"`. The graph refresh stays on the session-close list.
