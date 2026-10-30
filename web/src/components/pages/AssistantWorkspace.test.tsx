@@ -32,6 +32,41 @@ describe("AssistantWorkspace", () => {
     localStorage.clear();
   });
 
+  it("shows draggable project files, read-only KB documents, and read-only skills in project resources", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=ops&thread_id=77");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [{ id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" }] }), { status: 200 });
+      if (url.endsWith("/projects/ops/files")) return new Response(JSON.stringify({ files: [{ id: 31, project_id: 5, filename: "plan.pdf", content_type: "application/pdf", size: 20, sha256: "hash", status: "ready", kb_document_id: null, folder_id: null, created_at: null }] }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders")) return new Response(JSON.stringify({ folders: [] }), { status: 200 });
+      if (url.endsWith("/kb?project_id=5")) return new Response(JSON.stringify({ docs: [{ id: 6, project_id: 5, title: "Manual", format: "pdf", version: 2, active_version: 2, active: true, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: null }] }), { status: 200 });
+      if (url.endsWith("/chat/threads/77/resources")) return new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [{ name: "agenda", description: "Consulta agenda" }] }, inherited: true }), { status: 200 });
+      if (url.includes("/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({ thread: { id: 77, proyecto: "ops", status: "open" }, messages: [], active_runs: [] }), { status: 200 });
+    });
+
+    render(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="ops"><p>Thread</p></AssistantWorkspace>);
+    const resourcesToggle = await screen.findByRole("button", { name: /Recursos del proyecto/ });
+    fireEvent.click(resourcesToggle);
+
+    const fileRow = await screen.findByText("plan.pdf");
+    expect(fileRow.closest("li")).toHaveAttribute("draggable", "true");
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "" };
+    fireEvent.dragStart(fileRow.closest("li")!, { dataTransfer });
+    expect(dataTransfer.setData).toHaveBeenCalledWith("application/x-lumat-project-file", JSON.stringify({ slug: "ops", fileId: 31, filename: "plan.pdf" }));
+    expect(dataTransfer.effectAllowed).toBe("copy");
+
+    expect(await screen.findByText("Manual")).toBeInTheDocument();
+    expect(screen.getByText(/PDF · v2 · Activo/)).toBeInTheDocument();
+    expect(screen.getByText(/Configurado en Configuración/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Subir.*KB|Eliminar Manual/ })).not.toBeInTheDocument();
+    expect(await screen.findByText("agenda")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    const skillsSection = screen.getByRole("region", { name: "Habilidades" });
+    expect(within(skillsSection).queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
   it("restores open thread tabs after the assistant workspace remounts", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?thread_id=101");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

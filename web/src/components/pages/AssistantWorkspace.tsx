@@ -23,7 +23,7 @@ import { mergeWorkspaceTabs, readWorkspaceTabState, workspaceTabIdentity, writeW
 import type { WorkspaceTab } from "../domain/assistantTabs";
 import { assistantFileIcon } from "./assistantFileIcon";
 import { ProjectsPage } from "./ProjectsPage";
-import { ThreadProjectResources } from "./ThreadResources";
+import { ProjectResourcesPanel } from "./ProjectResourcesPanel";
 import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
@@ -693,7 +693,7 @@ function ThreadContextSections({ activeProject, threadId, capabilities, capabili
     <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
       {activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
     </ContextSection>
-    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ThreadProjectResources threadId={threadId} expanded={contextSections.resources ?? false} /></ContextSection>
+    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ProjectResourcesPanel project={activeProject} threadId={threadId} expanded={contextSections.resources ?? false} /></ContextSection>
     <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
       {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__context-box"><p className="assistant-workspace__capability-row"><Icon icon={Wrench} size="sm" /><span>{capabilities.tools?.length ?? 0} herramientas disponibles</span></p><p className="assistant-workspace__capability-row"><Icon icon={BookOpen} size="sm" /><span>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</span></p></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
     </ContextSection>
