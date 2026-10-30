@@ -85,26 +85,33 @@ touch, and the section rows keep 44px targets.
 
 ## Tasks
 
-T1 — Section shell per reference: `ContextSection` gains subtitle/summary/lock, keeps disclosure
-semantics, and the section order changes to S4. S3, S4. `AssistantWorkspace.tsx`,
-`AssistantWorkspace.css`, `AssistantWorkspace.test.tsx`. Commit `refactor(assistant): …`.
-T2 — Project picker: Popover + SearchInput + tinted selected row with check + hint copy. S2, S8.
-`AssistantWorkspace.tsx`, `AssistantWorkspace.css`, `AssistantWorkspace.test.tsx`. Commit
-`feat(assistant): …`.
-T3 — Recursos del proyecto as three cards (Archivos / Conocimiento / Habilidades) with the `⋮` file
-menu, `Dialog` confirmation, `Icon` scale and the loading state. S5, S8, S9.
-`ProjectResourcesPanel.tsx`, `AssistantWorkspace.css`, `ProjectResourcesPanel.test.tsx`. Commit
-`feat(assistant): …`.
-T4 — Thread files, thread artifacts and capabilities cards per reference. S6, S7.
-`AssistantWorkspace.tsx`, `AssistantWorkspace.css`, `AssistantWorkspace.test.tsx`. Commit
-`feat(assistant): …`.
-T5 — Verification and close: focused suites, `npm run build`, `npm test`, Storybook story, mobile
-sweep, and the rendered comparison against the reference. S8, S10. Commit `test(assistant): …`.
+T1 — DONE (`c694b8be`). Section shell per reference: `ContextSection` gains subtitle/summary/lock,
+keeps disclosure semantics, and the order changes to S4. S3, S4. `AssistantWorkspace.tsx`,
+`AssistantWorkspace.css`, `AssistantWorkspace.test.tsx`. 36/36 focused tests, `npm run build` clean.
+T2 — DONE (`dac68d15`). Project picker: Popover + SearchInput + tinted selected row with check + hint
+copy, and a locked variant for a thread that already has messages. S2, S8. `AssistantWorkspace.tsx`,
+`AssistantWorkspace.css`, `AssistantWorkspace.test.tsx`. 38/38 focused tests, build clean.
+T3 — DONE (`e1ca2b92`). Recursos del proyecto as three cards (Archivos / Conocimiento / Habilidades)
+with the file `⋮` menu, named `Dialog`s for folder creation and deletion, `Icon` scale, the loading
+state and the count summary. S5, S8, S9. `ProjectResourcesPanel.tsx`, `AssistantWorkspace.css`,
+`AssistantWorkspace.test.tsx`. 40/40 focused tests, `tsc -b` clean.
+T4 — DONE (`30c72997`, `dfd8ff6f`). Thread files, thread artifacts and capabilities cards per
+reference, with the resources summary wired into the collapsed row. S6, S7.
+`AssistantWorkspace.tsx`, `AssistantWorkspace.css`, `AssistantWorkspace.test.tsx` (plus the
+capabilities copy assertions in `AgentChat.test.tsx`). 41/41 focused, 121/121 with AgentChat.
+T5 — DONE (this commit). Verification and close. Evidence, all measured on this worktree:
+`npx vitest run` → **118 files / 1357 tests, exit 0** (2 min 39 s, machine load ~4);
+`npm run build` (`tsc -b` + `vite build`) → exit 0; rendered comparison against the reference through
+a worktree Vite on `:5175` with a real login, at 1440px and 390px, including the mobile sheet — see L8
+for the four defects that pass found. No Storybook story: this page has none today and the workspace
+needs a mock harness its `stories/pages/_shared/mockData` does not provide, so the rendered captures
+are the state-matrix evidence instead. A throwaway debug test that slipped into `dac68d15` is removed
+in `dfd8ff6f`.
 
-Slice boundary: 610 authored lines over 3 commits (T1–T3), past the ~400-line review slice. Per the
-owner's standing decision recorded in `odd/tasks/assistant-panel-frontend.md` L10 — slices land as
-commits and the PR opens when the assistant frontend is complete — the boundary is recorded here
-instead of opening a PR mid-feature.
+Slice boundary: 686 authored lines over 6 commits, past the ~400-line review slice. Per the owner's
+standing decision recorded in `odd/tasks/assistant-panel-frontend.md` L10 — slices land as commits and
+the PR opens when the assistant frontend is complete — the boundary is recorded here instead of
+opening a PR mid-feature.
 
 ## Log
 
