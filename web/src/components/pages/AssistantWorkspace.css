@@ -447,6 +447,9 @@
 .assistant-workspace__context-project-trigger { color: var(--text-muted); cursor: default; }
 .assistant-workspace__context-project-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .assistant-workspace__context-project-hint { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+/* The primitive panel is 22rem wide, which overflows the context pane; anchor it
+   to a width the pane can hold. */
+.assistant-workspace__context-project .popover__panel { width: min(19rem, calc(100vw - var(--space-6))); }
 .assistant-workspace__context-project-options { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
 .assistant-workspace__context-project-option { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 2.5rem; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
 .assistant-workspace__context-project-option > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -625,7 +628,7 @@
 .assistant-project-resources h3 { margin: 0; color: var(--corp-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .assistant-project-resources p { margin: 0; color: var(--text-muted); }
 .assistant-project-resources__card { gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-lg); background: var(--corp-surface); }
-.assistant-project-resources__card-header, .assistant-project-resources__heading, .assistant-project-resources__actions, .assistant-project-resources__folder, .assistant-project-resources__folder > button:first-child, .assistant-project-resources__file, .assistant-project-resources__root-label, .assistant-project-resources__readonly-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.assistant-project-resources__card-header, .assistant-project-resources__heading, .assistant-project-resources__actions, .assistant-project-resources__folder, .assistant-project-resources__folder > button:first-child, .assistant-project-resources__file, .assistant-project-resources__readonly-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .assistant-project-resources__card-header { justify-content: space-between; }
 .assistant-project-resources__heading { flex: 1; }
 .assistant-project-resources__actions { flex-wrap: wrap; justify-content: flex-end; }
@@ -635,8 +638,8 @@
 .assistant-project-resources__readonly-note { font-size: var(--text-xs); }
 .assistant-project-resources button { min-height: calc(var(--space-8) + var(--space-2)); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-sm); color: var(--corp-text); background: transparent; font: inherit; cursor: pointer; }
 .assistant-project-resources button:hover { background: var(--surface-subtle); }
-.assistant-project-resources__drop { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px dashed var(--corp-border); border-radius: var(--radius-sm); }
-.assistant-project-resources__root-label { font-weight: var(--weight-semibold); }
+.assistant-project-resources__drop { display: grid; gap: var(--space-1); min-width: 0; }
+.assistant-project-resources__empty { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
 .assistant-project-resources__tree { display: grid; gap: var(--space-1); margin: 0; padding: 0 0 0 var(--space-3); list-style: none; }
 .assistant-project-resources__folder { justify-content: space-between; }
 .assistant-project-resources__folder > button:first-child { flex: 1; overflow: hidden; text-align: left; }

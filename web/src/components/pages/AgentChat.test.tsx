@@ -379,8 +379,11 @@ describe("AgentChat", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Capacidades del asistente/ }));
 
-    expect(await screen.findByText("1 herramientas disponibles")).toBeInTheDocument();
-    expect(screen.getByText("Base de conocimientos: Disponible")).toBeInTheDocument();
+    expect(await screen.findByText("1 disponible")).toBeInTheDocument();
+    const capabilitiesSection = screen.getByRole("button", { name: /Capacidades del asistente/ }).closest("section") as HTMLElement;
+    expect(within(capabilitiesSection).getByText("Herramientas")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Base de conocimiento")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Disponible")).toBeInTheDocument();
     expect(screen.queryByText("Sin datos")).not.toBeInTheDocument();
   });
 

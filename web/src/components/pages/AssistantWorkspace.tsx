@@ -711,7 +711,7 @@ function ThreadContextSections({ activeProject, projects = [], activeProjectSlug
       {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} subtitle="Información de solo lectura." expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
-      {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__capability-card"><div className="assistant-workspace__capability-row"><Icon icon={Wrench} size="md" /><span className="assistant-workspace__capability-copy"><strong>Herramientas</strong><small>{capabilities.tools?.length ?? 0} disponibles</small></span></div><div className="assistant-workspace__capability-row"><Icon icon={BookOpen} size="md" /><span className="assistant-workspace__capability-copy"><strong>Base de conocimiento</strong><small className={capabilities.kb_available ? "assistant-workspace__capability-state is-available" : "assistant-workspace__capability-state"}>{capabilities.kb_available ? "Disponible" : "No disponible"}</small></span></div></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
+      {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__capability-card"><div className="assistant-workspace__capability-row"><Icon icon={Wrench} size="md" /><span className="assistant-workspace__capability-copy"><strong>Herramientas</strong><small>{availableLabel(capabilities.tools?.length ?? 0)}</small></span></div><div className="assistant-workspace__capability-row"><Icon icon={BookOpen} size="md" /><span className="assistant-workspace__capability-copy"><strong>Base de conocimiento</strong><small className={capabilities.kb_available ? "assistant-workspace__capability-state is-available" : "assistant-workspace__capability-state"}>{capabilities.kb_available ? "Disponible" : "No disponible"}</small></span></div></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
     </ContextSection>
   </div>;
 }
@@ -775,6 +775,10 @@ function ContextSection({ id, title, icon, count, subtitle, summary, readOnly = 
     {secondary ? <p className="assistant-workspace__context-secondary">{secondary}</p> : null}
     <div id={panelId} className="assistant-workspace__context-section-content" hidden={!expanded}>{children}</div>
   </section>;
+}
+
+function availableLabel(count: number): string {
+  return `${count} ${count === 1 ? "disponible" : "disponibles"}`;
 }
 
 function fileTypeLabel(filename: string, contentType?: string | null): string {

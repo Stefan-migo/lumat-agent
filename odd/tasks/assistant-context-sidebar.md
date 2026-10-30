@@ -73,8 +73,10 @@ height. Destructive folder deletion goes through `Dialog` naming the folder — 
 Spanish, never voseo.
 
 S9 — **States**: the resources panel shows a loading state while it fetches (today it renders an
-empty tree and fills in later), plus empty, filtered-empty and error states via `StateMessage`. Icons
-use the `Icon` primitive with `sm`/`md` scale; fixed lucide `size={14|15}` props are removed
+empty tree and fills in later) and an error state, both through `StateMessage`. Empty content inside a
+card (no files, no documents, no skills) is a quiet muted line, not a `StateMessage` banner: an empty
+card is routine information, and a tinted alert box for it shouted louder than the data. Icons use the
+`Icon` primitive with `sm`/`md` scale; fixed lucide `size={14|15}` props are removed
 (`ProjectResourcesPanel.tsx:65-79`).
 
 S10 — **Mobile**: the same sections render in the thread-detail sheet (`mobile` variant of
@@ -155,3 +157,16 @@ this feature are recorded here: `graphify query "assistant workspace sidebar sec
 resources"` (nodes `AssistantWorkspace.tsx`, `ProjectResources.tsx`, `Icon.tsx`, `Badge.tsx`,
 `StateMessage.tsx`, `Button.tsx`, `api.ts`, `services/projects.py`, `assistantTabs.ts`) plus the
 worker's own `graphify query "AssistantWorkspace"`. The graph refresh stays on the session-close list.
+
+L8 — The rendered result was verified, not assumed. A second Vite (`:5175`) serving this worktree's own
+code was started against the dev API, and a throwaway Playwright script logged in through
+`POST /panel/api/login` and captured the context pane at 1440px, the open project picker, the collapsed
+sections, 390px mobile, and the mobile sheet with its loading state. The screenshots are in
+`/tmp/assistant-shots` and the script was deleted; nothing was added to the repository. Four defects
+that no test caught came out of that pass and are fixed: (1) the project popover panel is 22rem wide in
+the primitive and overflowed the pane, so the picker scopes it to `min(19rem, …)`; (2) empty cards
+rendered a full `StateMessage` alert box, replaced by a muted line (S9 now says so); (3) the Archivos
+card nested a dashed drop box inside the card, removed — the card is the root drop target; (4) the
+Conocimiento card said `Solo lectura` twice and printed `0 documentos disponibles` next to `Sin
+documentos disponibles`, so the count row only renders when there are documents. The mobile sheet
+renders the same sections and showed the loading state, which is the S10 evidence.

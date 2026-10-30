@@ -164,8 +164,7 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
       <p className="assistant-project-resources__subtitle">Documentos compartidos del proyecto</p>
       <input ref={fileInput} type="file" hidden aria-label="Archivo del proyecto" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void upload(file); }} />
       <div className="assistant-project-resources__drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDrop(event, null)}>
-        <div className="assistant-project-resources__root-label"><Icon icon={Folder} size="sm" />{project.name}</div>
-        {folders.length === 0 && files.length === 0 ? <StateMessage tone="info" role="status" title="Sin archivos del proyecto" /> : tree(null)}
+        {folders.length === 0 && files.length === 0 ? <p className="assistant-project-resources__empty">Sin archivos del proyecto.</p> : tree(null)}
       </div>
     </section>
     <section className="assistant-project-resources__card" aria-label="Conocimiento del proyecto">
@@ -173,9 +172,8 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
         <div className="assistant-project-resources__heading"><Icon icon={BookOpen} size="md" /><h3>Conocimiento</h3><Badge>{docs.length}</Badge><Icon icon={Lock} size="sm" /></div>
       </header>
       <p className="assistant-project-resources__subtitle">Información que el asistente puede consultar</p>
-      <div className="assistant-project-resources__readonly-row"><span>{pluralize(docs.length, "documento disponible", "documentos disponibles")}</span><span>Solo lectura</span></div>
-      <p className="assistant-project-resources__readonly-note">Configurado en Configuración.</p>
-      {docs.length ? docs.map((doc) => <div className="assistant-project-resources__doc" key={doc.id}><span>{doc.title}</span><small>{doc.format.toUpperCase()} · v{doc.active_version} · {doc.active ? "Activo" : "Deshabilitado"}</small></div>) : <StateMessage tone="info" role="status" title="Sin documentos disponibles" />}
+      {docs.length ? <div className="assistant-project-resources__readonly-row"><span>{pluralize(docs.length, "documento disponible", "documentos disponibles")}</span><span>Solo lectura</span></div> : null}
+      <p className="assistant-project-resources__readonly-note">Configurado en Configuración.</p>      {docs.length ? docs.map((doc) => <div className="assistant-project-resources__doc" key={doc.id}><span>{doc.title}</span><small>{doc.format.toUpperCase()} · v{doc.active_version} · {doc.active ? "Activo" : "Deshabilitado"}</small></div>) : <p className="assistant-project-resources__empty">Sin documentos disponibles.</p>}
     </section>
     <section className="assistant-project-resources__card" aria-label="Habilidades">
       <header className="assistant-project-resources__card-header">
@@ -183,7 +181,7 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
       </header>
       <p className="assistant-project-resources__subtitle">Skills disponibles · Solo lectura</p>
       {skills.map((skill) => <div className="assistant-project-resources__skill" key={skill.name}><Icon icon={Sparkles} size="sm" /><strong>{skill.name}</strong><Badge>Proyecto</Badge><small>{skill.description}</small></div>)}
-      {skills.length === 0 ? <StateMessage tone="info" role="status" title="Sin habilidades disponibles" /> : null}
+      {skills.length === 0 ? <p className="assistant-project-resources__empty">Sin habilidades disponibles.</p> : null}
     </section>
     <Dialog open={createFolderOpen} onClose={() => setCreateFolderOpen(false)} title="Nueva carpeta" icon={FolderPlus} description="Crea una carpeta para organizar los archivos del proyecto.">
       <div className="assistant-project-resources__dialog-form">
