@@ -1563,6 +1563,48 @@ describe("AgentChat", () => {
     await waitFor(() => expect(container.querySelector(".assistant-chat__attachment-tray")).not.toBeInTheDocument());
   });
 
+  it("adds a thread file dragged from the sidebar as a message reference and sends it", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return jsonResponse({ projects: [] });
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url === "/panel/api/chat/threads/4/messages" && init?.method === "POST") {
+        return jsonResponse({ message: { id: 3, author: "admin", content: "Revisá esto", status: "processed" } }, 201);
+      }
+      if (url === "/panel/api/chat/threads/4" && !init?.method) {
+        return jsonResponse({ thread: makeThread(), messages: [], artifacts: [{ id: 5, thread_id: 4, filename: "reporte.csv", content_type: "text/csv", size: 10 }] });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const { container } = render(<AgentChat threadId={4} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    const conversation = container.querySelector(".assistant-chat__conversation")!;
+    const dragData = {
+      types: ["application/x-lumat-thread-reference"],
+      getData: () => JSON.stringify({ kind: "artifact", id: 5, filename: "reporte.csv" }),
+      setData: vi.fn(),
+      effectAllowed: "",
+      files: [],
+    };
+    fireEvent.drop(conversation, { dataTransfer: dragData });
+
+    const chip = await screen.findByRole("button", { name: "Quitar referencia reporte.csv" });
+    expect(chip).toBeInTheDocument();
+
+    fireEvent.change(composer, { target: { value: "Revisá esto" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([url]) => String(url) === "/panel/api/chat/threads/4/messages");
+      expect(call).toBeTruthy();
+      const body = JSON.parse(String((call![1] as RequestInit).body)) as { content: string };
+      expect(body.content).toBe("Referencia: reporte.csv\n\nRevisá esto");
+    });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Quitar referencia reporte.csv" })).not.toBeInTheDocument());
+  });
+
   it("does not render an attachment tray for an empty thread", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input).endsWith("/tool-policy")
       ? jsonResponse(policy())

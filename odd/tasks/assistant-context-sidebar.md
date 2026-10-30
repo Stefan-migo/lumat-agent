@@ -138,20 +138,22 @@ needs a mock harness its `stories/pages/_shared/mockData` does not provide, so t
 are the state-matrix evidence instead. A throwaway debug test that slipped into `dac68d15` is removed
 in `dfd8ff6f`.
 
-Slice boundary: 686 authored lines over 6 commits, past the ~400-line review slice. Per the owner's
+Slice boundary: 896 authored lines over 9 commits, past the ~400-line review slice. Per the owner's
 standing decision recorded in `odd/tasks/assistant-panel-frontend.md` L10 — slices land as commits and
 the PR opens when the assistant frontend is complete — the boundary is recorded here instead of
 opening a PR mid-feature.
 
-T6 — Project trigger presentation per the reference crop, and the upload destination: `Subir aquí`
-per folder, root upload from the card header, and OS-file drops anywhere on the Archivos card. S11,
-S12. `ProjectResourcesPanel.tsx`, `AssistantWorkspace.tsx`, `AssistantWorkspace.css`, tests. Commit
+T6/T7 — DONE (`6a67a19d`). Project trigger presentation per the reference crop, the upload destination
+(`Subir aquí` per folder, root upload from the card header, OS-file drops anywhere on the Archivos
+card), and moving a file between folders by dragging its row. S11, S12, S13. `ProjectResourcesPanel.tsx`, `AssistantWorkspace.tsx`, `AssistantWorkspace.css`, tests. Commit
 `feat(assistant): …`.
 T7 — Move project files between folders by dragging a file row onto a folder row or the card root, via
 `PATCH /projects/{slug}/files/{file_id}`. S13. `ProjectResourcesPanel.tsx`, `api.ts`,
 `AssistantWorkspace.test.tsx`. Commit `feat(assistant): …`.
-T8 — Reference chips: dragging a thread file or an artifact from the sidebar into the composer adds a
-reference to the message being written, removable before sending and visible in the sent text. S14.
+T8 — DONE (this commit). Reference chips: dragging a thread file or an artifact from the sidebar into the
+composer adds a reference to the message being written, removable before sending and visible in the
+sent text as `Referencia: <archivo>`. Rendered evidence: the chip, the folder menu with `Subir aquí`,
+and a synthetic drop in a real browser.
 `AgentChat.tsx`, `AssistantWorkspace.tsx`, `AssistantWorkspace.css`, tests. Commit
 `feat(assistant): …`.
 
