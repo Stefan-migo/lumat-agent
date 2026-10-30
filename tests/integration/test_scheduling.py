@@ -160,7 +160,7 @@ def test_open_slots_returns_only_bookable_slots_inside_availability():
         other_case = Case(conversation_id=case.conversation_id, customer_id=other_customer.id, service="calefont")
         session.add(other_case)
         session.flush()
-        start = (datetime.now(timezone.utc) + timedelta(days=2)).replace(minute=0, second=0, microsecond=0)
+        start = (datetime.now(timezone.utc) + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
         available_end = start + timedelta(hours=2)
         scheduling.add_availability(
             session, technician_id=technician.id, starts_at=start, ends_at=available_end
@@ -359,7 +359,7 @@ def test_open_slots_for_assignment_skips_the_busy_technician_and_never_mutates(m
         session.flush()
         monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
         starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
-            minute=0, second=0, microsecond=0
+            hour=9, minute=0, second=0, microsecond=0
         )
         ends = starts + timedelta(hours=2)
         for technician in (lower, higher):
@@ -407,7 +407,7 @@ def test_open_slots_for_assignment_alternates_between_equally_loaded_technicians
         session.flush()
         monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
         starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
-            minute=0, second=0, microsecond=0
+            hour=9, minute=0, second=0, microsecond=0
         )
         for technician in (lower, higher):
             scheduling.add_availability(
@@ -441,7 +441,7 @@ def test_open_slots_for_assignment_prefers_the_technician_with_fewer_visits_that
         session.flush()
         monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
         starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
-            minute=0, second=0, microsecond=0
+            hour=9, minute=0, second=0, microsecond=0
         )
         for technician in (lower, higher):
             scheduling.add_availability(
@@ -549,7 +549,7 @@ def test_open_slots_for_assignment_offers_only_the_requested_day(monkeypatch):
     with SessionLocal() as session:
         technician = _window_technician(session, monkeypatch, "window-day")
         first = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
-            minute=0, second=0, microsecond=0
+            hour=9, minute=0, second=0, microsecond=0
         )
         wanted = first + timedelta(days=2)
         for start in (first, wanted):
