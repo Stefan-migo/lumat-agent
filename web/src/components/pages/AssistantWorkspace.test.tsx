@@ -150,12 +150,28 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detalle del hilo" })).toBeInTheDocument();
     expect(screen.getByText("Sin título")).toBeInTheDocument();
-    for (const title of ["Proyecto", "Recursos del proyecto", "Capacidades del asistente", "Archivos del hilo", "Artefactos del hilo"]) {
+    for (const title of ["Proyecto", "Recursos del proyecto", "Archivos del hilo", "Artefactos del hilo", "Capacidades del asistente"]) {
       expect(screen.getByRole("button", { name: new RegExp(title) })).toHaveAttribute("aria-controls");
     }
+    // S4: the reference orders capabilities last, after the thread files and artifacts.
+    expect(Array.from(document.querySelectorAll(".assistant-workspace__context-section")).map((section) => section.querySelector("button")?.getAttribute("aria-controls"))).toStrictEqual([
+      "assistant-context-project",
+      "assistant-context-resources",
+      "assistant-context-attachments",
+      "assistant-context-artifacts",
+      "assistant-context-capabilities",
+    ]);
     expect(screen.queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Proyecto" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Los adjuntos y resultados pertenecen a este hilo.")).toBeInTheDocument();
+    // S3: a closed section explains itself; the row's accessible name stays the bare title.
+    const projectRow = screen.getByRole("button", { name: "Proyecto" });
+    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toBeNull();
+    fireEvent.click(projectRow);
+    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toHaveTextContent("General / Sin proyecto");
+    fireEvent.click(projectRow);
+    const artifactsRow = screen.getByRole("button", { name: /Artefactos del hilo/ });
+    expect(artifactsRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toHaveTextContent("Aquí aparecerán los archivos generados.");
     const resourcesToggle = screen.getByRole("button", { name: /Recursos del proyecto/ });
     fireEvent.click(resourcesToggle);
     expect(resourcesToggle).toHaveAttribute("aria-expanded", "true");
@@ -962,6 +978,6 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
-    expect(await screen.findByText("Los archivos que el asistente genere aparecerán aquí.")).toBeInTheDocument();
+    expect(await screen.findByText("Aquí aparecerán los archivos generados.")).toBeInTheDocument();
   });
 });
