@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, ChevronDown, ChevronRight, Download, FileText, Folder, FolderPlus, Lock, Sparkles, Trash2, Upload } from "lucide-react";
-import { ApiError, createProjectFolder, deleteProjectFile, deleteProjectFolder, downloadProjectFile, getThreadResources, listProjectFiles, listProjectFolders, moveProjectFile, refreshKbDocuments, uploadProjectFile } from "../../api";
+import type { ViewerSource } from "./FileViewer";
+import { ApiError, createProjectFolder, deleteProjectFile, deleteProjectFolder, downloadProjectFile, getThreadResources, listProjectFiles, listProjectFolders, moveProjectFile, projectFileContentUrl, refreshKbDocuments, uploadProjectFile } from "../../api";
 import type { Doc, Project, ProjectFile, ProjectFolder, ThreadResourceSkill } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -15,6 +16,7 @@ interface ProjectResourcesPanelProps {
   threadId?: number;
   expanded: boolean;
   onSummary?: (summary: string) => void;
+  onOpenFile?: (source: ViewerSource) => void;
 }
 
 /** Tree drags carry their own type so a folder drop can tell "move this file"
@@ -23,7 +25,7 @@ const PROJECT_FILE_MOVE_TYPE = "application/x-lumat-project-file-move";
 
 const pluralize = (count: number, singular: string, plural: string) => `${count} ${count === 1 ? singular : plural}`;
 
-export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }: ProjectResourcesPanelProps) {
+export function ProjectResourcesPanel({ project, threadId, expanded, onSummary, onOpenFile }: ProjectResourcesPanelProps) {
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [folders, setFolders] = useState<ProjectFolder[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -162,10 +164,14 @@ export function ProjectResourcesPanel({ project, threadId, expanded, onSummary }
     const parent = folders.find((folder) => folder.id === folderId);
     return parent?.parent_id === ancestorId || (parent ? folderContains(ancestorId, parent.parent_id) : false);
   };
+  const openFile = (file: ProjectFile) => {
+    if (!project) return;
+    onOpenFile?.({ url: projectFileContentUrl(project.slug, file.id), filename: file.filename, contentType: file.content_type });
+  };
   const fileRow = (file: ProjectFile) => <li key={`file-${file.id}`} className="assistant-project-resources__file" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-project-file", JSON.stringify({ slug: project?.slug, fileId: file.id, filename: file.filename })); event.dataTransfer.setData(PROJECT_FILE_MOVE_TYPE, String(file.id)); event.dataTransfer.effectAllowed = "copyMove"; }}>
     <Icon icon={FileText} size="sm" />
-    <span className="assistant-project-resources__file-name" title={file.filename}>{file.filename}</span>
-    <Menu label={`Acciones de ${file.filename}`} trigger="icon" align="end" items={[{ value: "download", label: "Descargar", icon: Download }, { value: "delete", label: "Eliminar archivo", icon: Trash2, tone: "danger" }]} onSelect={(value) => { if (value === "delete") setFileToDelete(file); else void download(file); }} />
+    <button type="button" className="assistant-project-resources__file-name" title={file.filename} onClick={() => openFile(file)}>{file.filename}</button>
+    <Menu label={`Acciones de ${file.filename}`} trigger="icon" align="end" items={[{ value: "open", label: "Abrir", icon: FileText }, { value: "download", label: "Descargar", icon: Download }, { value: "delete", label: "Eliminar archivo", icon: Trash2, tone: "danger" }]} onSelect={(value) => { if (value === "delete") setFileToDelete(file); else if (value === "open") openFile(file); else void download(file); }} />
   </li>;
   const tree = (parentId: number | null): React.ReactNode => <ul className="assistant-project-resources__tree">{folders.filter((folder) => folder.parent_id === parentId).map((folder) => {
     const isOpen = open.has(folder.id);

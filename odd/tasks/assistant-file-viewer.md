@@ -47,12 +47,18 @@ keep the 40px minimum height, product copy in neutral Chilean Spanish.
 
 ## Tasks
 
-T1 — `FileViewer` component: format detection, per-format rendering, loading/error/unsupported states.
-S3, S5, S6, S7. `web/src/components/pages/FileViewer.tsx` (+ test, + css). Commit `feat(assistant): …`.
-T2 — Wire the three row families in the sidebar to open it, with `Abrir` in every `⋮`. S2.
-`ProjectResourcesPanel.tsx`, `AssistantWorkspace.tsx`, tests. Commit `feat(assistant): …`.
-T3 — Verification: focused suites, `npm run build`, full `npm test`, and a rendered capture of at least
-markdown, csv and a sandboxed html. S5, S7. Commit `test(assistant): …`.
+T1 — DONE (`737c5477`). `FileViewer` component: extension-first format detection, per-format rendering,
+loading/error/unsupported states, and an in-house RFC-4180 reader for delimited files.
+`FileViewer.tsx` (+ `FileViewer.css`, + `FileViewer.test.tsx`, 10 tests). S3, S5, S6, S7.
+T2 — DONE. The three row families open it and every `⋮` offers `Abrir`; thread files and artifacts now
+open the viewer instead of a new tab / a download, and download moved one menu item away. S2.
+`AssistantWorkspace.tsx`, `ProjectResourcesPanel.tsx`, `api.ts` (`assistantArtifactContentUrl`,
+`projectFileContentUrl`), both test files. `AssistantWorkspace` stays at 42 tests.
+T3 — DONE. Verification, all measured on this worktree: focused `FileViewer` 10/10 and
+`AssistantWorkspace` 42/42; full `npx vitest run` **118 files / 1368 tests, exit 0**; `npm run build`
+(`tsc -b` + `vite build`) exit 0; and a rendered capture of the markdown preview in Chrome against a
+Vite of this worktree (`:5176`), showing headings, bold, inline code and a GFM table read from the real
+file. xlsx keeps the S4 fallback.
 
 ## Log
 
@@ -71,3 +77,16 @@ same-origin, so the viewer needs no backend work — `/panel/api/projects/{slug}
 `threadAttachmentContentUrl(threadId, attachmentId)` (`api.ts:385`), and
 `/panel/api/chat/threads/{id}/artifacts/{id}/download` (`api.ts:376`). `react-markdown` and `remark-gfm`
 are already dependencies because the chat renders with them.
+
+L4 — Branch shape, decided when the first commit turned out to be built on `main`: the sidebar rows this
+viewer wires into only exist on `odd/assistant-context-sidebar`, which is not merged. The viewer commit
+was therefore cherry-picked onto `odd/assistant-file-viewer-stacked`, branching from that feature's tip
+(`5da6065c`), so the stack reads `main → odd/assistant-context-sidebar → odd/assistant-file-viewer-stacked`.
+The main-based `odd/assistant-file-viewer` branch is left as an unreferenced first attempt; it holds no
+work the stacked branch lacks.
+
+L5 — Behaviour changes worth naming, because they rewrite what the previous feature pinned: a thread file
+and an artifact row used to open a new tab and download respectively; both now open the viewer, and the
+download lives in the row menu. The two assertions that pinned the old roles were updated with a comment
+that says why. The attachment row stopped being an anchor, which also removes the risk of a nested
+interactive element inside a draggable row.

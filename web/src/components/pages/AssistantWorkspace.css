@@ -650,7 +650,9 @@
 .assistant-project-resources__branch > .assistant-project-resources__tree,
 .assistant-project-resources__tree .assistant-project-resources__tree { padding-left: var(--space-4); }
 .assistant-project-resources__file { width: 100%; }
-.assistant-project-resources__file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-project-resources__file-name { flex: 1; min-width: 0; padding: 0; border: 0; overflow: hidden; color: var(--corp-text); background: transparent; font: inherit; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.assistant-project-resources__file-name:hover,
+.assistant-project-resources__file-name:focus-visible { text-decoration: underline; }
 .assistant-project-resources__folder { justify-content: space-between; }
 .assistant-project-resources__folder > button:first-child { flex: 1; overflow: hidden; text-align: left; }
 .assistant-project-resources__folder > button:first-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

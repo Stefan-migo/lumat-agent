@@ -387,12 +387,13 @@ describe("AssistantWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Detalle del hilo" }));
     const detail = await screen.findByRole("dialog", { name: "Detalle del hilo" });
     fireEvent.click(within(detail).getByRole("button", { name: /Archivos del hilo 1/ }));
-    const attachmentLink = within(detail).getByRole("link", { name: "Abrir brief.pdf" });
-    expect(attachmentLink).toHaveAttribute("href", "/panel/api/chat/threads/7/attachments/1/content");
-    expect(attachmentLink).toHaveAttribute("target", "_blank");
+    const attachmentLink = within(detail).getByRole("button", { name: "Abrir brief.pdf" });
     expect(attachmentLink).toHaveAttribute("title", "Abrir brief.pdf");
     expect(attachmentLink.querySelector("svg")).toHaveClass("icon--md");
     expect(attachmentLink.querySelector("a, button")).toBeNull();
+    // The row opens the in-panel viewer; a pdf needs no text fetch.
+    fireEvent.click(attachmentLink);
+    expect(await screen.findByTitle("brief.pdf")).toHaveAttribute("src", "/panel/api/chat/threads/7/attachments/1/content");
     expect(within(detail).queryByText("Abrir", { selector: ".assistant-workspace__file-action" })).not.toBeInTheDocument();
     expect(within(detail).getByRole("button", { name: /Artefactos del hilo 0/ })).toBeInTheDocument();
     expect(within(detail).queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
@@ -1097,13 +1098,16 @@ describe("AssistantWorkspace", () => {
 
     await userEvent.setup().click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
     expect(await screen.findByText("reporte.csv")).toBeInTheDocument();
-    const artifactRow = screen.getByRole("button", { name: "Descargar reporte.csv" });
-    expect(artifactRow).toHaveAttribute("title", "Descargar reporte.csv");
+    const artifactRow = screen.getByRole("button", { name: "Abrir reporte.csv" });
+    expect(artifactRow).toHaveAttribute("title", "Abrir reporte.csv");
     expect(artifactRow.querySelector("svg")).toHaveClass("icon--md");
     expect(artifactRow.querySelector("a, button")).toBeNull();
     expect(artifactRow).toHaveClass("assistant-workspace__file-row");
+    // The row opens the viewer; download moved into the row menu.
     fireEvent.click(artifactRow);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download", expect.anything()));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de reporte.csv" }));
+    await userEvent.setup().click(screen.getByRole("menuitem", { name: "Descargar" }));
   });
 
   it("opens the user-memory audit surface from workspace navigation", async () => {
