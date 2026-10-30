@@ -55,7 +55,7 @@ describe("AssistantWorkspace", () => {
     const dataTransfer = { setData: vi.fn(), effectAllowed: "" };
     fireEvent.dragStart(fileRow.closest("li")!, { dataTransfer });
     expect(dataTransfer.setData).toHaveBeenCalledWith("application/x-lumat-project-file", JSON.stringify({ slug: "ops", fileId: 31, filename: "plan.pdf" }));
-    expect(dataTransfer.effectAllowed).toBe("copy");
+    expect(dataTransfer.effectAllowed).toBe("copyMove");
 
     expect(await screen.findByText("Manual")).toBeInTheDocument();
     expect(screen.getByText(/PDF · v2 · Activo/)).toBeInTheDocument();
@@ -65,6 +65,125 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     const skillsSection = screen.getByRole("region", { name: "Habilidades" });
     expect(within(skillsSection).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Archivos del proyecto" })).toHaveTextContent("Documentos compartidos del proyecto");
+    expect(screen.getByRole("region", { name: "Conocimiento del proyecto" })).toHaveTextContent("Información que el asistente puede consultar");
+    expect(skillsSection).toHaveTextContent("Skills disponibles · Solo lectura");
+    expect(within(skillsSection).getByText("Proyecto")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de plan.pdf" })).toBeInTheDocument();
+  });
+
+  it("shows the project resources loading state and reports a summary after the initial load", async () => {
+    const { ProjectResourcesPanel } = await import("./ProjectResourcesPanel");
+    let resolveFiles!: (response: Response) => void;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/projects/ops/files")) return new Promise((resolve) => { resolveFiles = resolve; });
+      if (url.endsWith("/projects/ops/folders")) return Promise.resolve(new Response(JSON.stringify({ folders: [] }), { status: 200 }));
+      if (url.endsWith("/kb?project_id=5")) return Promise.resolve(new Response(JSON.stringify({ docs: [{ id: 6, project_id: 5, title: "Manual", format: "pdf", version: 1, active_version: 1, active: true, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: null }] }), { status: 200 }));
+      if (url.endsWith("/chat/threads/77/resources")) return Promise.resolve(new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [{ name: "agenda", description: "Consulta agenda" }] }, inherited: true }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    });
+    const onSummary = vi.fn();
+    const project = { id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectResourcesPanel project={project} threadId={77} expanded onSummary={onSummary} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando recursos del proyecto");
+    expect(onSummary).not.toHaveBeenCalled();
+    resolveFiles(new Response(JSON.stringify({ files: [{ id: 31, project_id: 5, filename: "plan.pdf", content_type: "application/pdf", size: 20, sha256: "hash", status: "ready", kb_document_id: null, folder_id: null, created_at: null }] }), { status: 200 }));
+    expect(await screen.findByRole("region", { name: "Habilidades" })).toBeInTheDocument();
+    await waitFor(() => expect(onSummary).toHaveBeenCalledWith("1 archivo · 1 documento · 1 habilidad"));
+  });
+
+  it("creates and confirms folder deletion through named dialogs", async () => {
+    const { ProjectResourcesPanel } = await import("./ProjectResourcesPanel");
+    let folders = [{ id: 9, project_id: 5, parent_id: null, name: "Informes", created_at: null }];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/projects/ops/files")) return new Response(JSON.stringify({ files: [] }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders") && init?.method === "POST") {
+        folders.push({ id: 10, project_id: 5, parent_id: null, name: JSON.parse(String(init.body)).name, created_at: null });
+        return new Response(JSON.stringify({ folder: folders.at(-1) }), { status: 201 });
+      }
+      if (url.endsWith("/projects/ops/folders")) return new Response(JSON.stringify({ folders }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders/9") && init?.method === "DELETE") { folders = []; return new Response(null, { status: 204 }); }
+      if (url.endsWith("/kb?project_id=5")) return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+      if (url.endsWith("/chat/threads/77/resources")) return new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [] }, inherited: true }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const project = { id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectResourcesPanel project={project} threadId={77} expanded />);
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Acciones de archivos" }));
+    await userEvent.setup().click(screen.getByRole("menuitem", { name: "Crear carpeta" }));
+    const createDialog = screen.getByRole("dialog", { name: "Nueva carpeta" });
+    fireEvent.change(within(createDialog).getByLabelText("Nombre de la carpeta"), { target: { value: "Actas" } });
+    await userEvent.setup().click(within(createDialog).getByRole("button", { name: "Crear carpeta" }));
+    expect(await screen.findByText("Actas")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/folders", expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Actas", parent_id: null }) }));
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de carpeta Informes" }));
+    await userEvent.setup().click(screen.getByRole("menuitem", { name: "Eliminar carpeta" }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Eliminar carpeta Informes" });
+    expect(deleteDialog).toHaveTextContent("Informes");
+    await userEvent.setup().click(within(deleteDialog).getByRole("button", { name: "Eliminar carpeta" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/folders/9", expect.objectContaining({ method: "DELETE" })));
+  });
+
+  it("labels thread files, artifacts and capabilities with the reference copy", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [], threads: [] }), { status: 200 }));
+    const tool = { name: "agenda", description: "Consulta agenda", read_only: true, write: false };
+    render(<AssistantWorkspace
+      onCreateThread={vi.fn()}
+      capabilities={{ tools: [tool, { ...tool, name: "web.search" }, { ...tool, name: "web.fetch" }], personas: [], prompts: [], kb_available: true, memory_available: false }}
+      attachments={[{ id: 3, thread_id: 7, filename: "captura.png", kind: "upload", content_type: "image/png", size: 10 }]}
+      artifacts={[{ id: 4, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 10 }]}
+    ><p>Thread</p></AssistantWorkspace>);
+
+    fireEvent.click(screen.getByRole("button", { name: /Archivos del hilo/ }));
+    expect(await screen.findByText("PNG · Adjunto a este hilo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de captura.png" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("CSV · Generado en este hilo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Acciones de reporte.csv" })).toBeInTheDocument();
+
+    const capabilitiesRow = screen.getByRole("button", { name: /Capacidades del asistente/ });
+    fireEvent.click(capabilitiesRow);
+    const capabilitiesSection = capabilitiesRow.closest("section") as HTMLElement;
+    expect(within(capabilitiesSection).getByText("Herramientas")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("3 disponibles")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Base de conocimiento")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Disponible")).toBeInTheDocument();
+    expect(within(capabilitiesSection).getByText("Información de solo lectura.")).toBeInTheDocument();
+  });
+
+  it("moves a project file into a folder when its row is dropped on that folder", async () => {
+    const { ProjectResourcesPanel } = await import("./ProjectResourcesPanel");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/projects/ops/files") && init?.method === "PATCH") return new Response(JSON.stringify({ file: { id: 31 } }), { status: 200 });
+      if (url.endsWith("/projects/ops/files")) return new Response(JSON.stringify({ files: [{ id: 31, project_id: 5, filename: "plan.pdf", content_type: "application/pdf", size: 20, sha256: "hash", status: "ready", kb_document_id: null, folder_id: null, created_at: null }] }), { status: 200 });
+      if (url.endsWith("/projects/ops/folders")) return new Response(JSON.stringify({ folders: [{ id: 9, project_id: 5, parent_id: null, name: "Informes", created_at: null }] }), { status: 200 });
+      if (url.endsWith("/kb?project_id=5")) return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+      return new Response(JSON.stringify({ resources: { project_files: [], skills: [] }, available: { project_files: [], skills: [] }, inherited: true }), { status: 200 });
+    });
+    const project = { id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectResourcesPanel project={project} threadId={77} expanded />);
+
+    const fileRow = (await screen.findByText("plan.pdf")).closest("li")!;
+    const folderRow = screen.getByRole("button", { name: /^Informes/ });
+    const dragData = {
+      types: ["application/x-lumat-project-file", "application/x-lumat-project-file-move"],
+      getData: (type: string) => (type === "application/x-lumat-project-file-move" ? "31" : JSON.stringify({ slug: "ops", fileId: 31, filename: "plan.pdf" })),
+      setData: vi.fn(),
+      effectAllowed: "",
+    };
+    fireEvent.dragStart(fileRow, { dataTransfer: dragData });
+    fireEvent.drop(folderRow.closest("div")!, { dataTransfer: dragData });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/files/31", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ folder_id: 9 }) })));
   });
 
   it("restores open thread tabs after the assistant workspace remounts", async () => {
@@ -150,12 +269,28 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("tab", { name: "Actividad" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detalle del hilo" })).toBeInTheDocument();
     expect(screen.getByText("Sin título")).toBeInTheDocument();
-    for (const title of ["Proyecto", "Recursos del proyecto", "Capacidades del asistente", "Archivos del hilo", "Artefactos del hilo"]) {
+    for (const title of ["Proyecto", "Recursos del proyecto", "Archivos del hilo", "Artefactos del hilo", "Capacidades del asistente"]) {
       expect(screen.getByRole("button", { name: new RegExp(title) })).toHaveAttribute("aria-controls");
     }
+    // S4: the reference orders capabilities last, after the thread files and artifacts.
+    expect(Array.from(document.querySelectorAll(".assistant-workspace__context-section")).map((section) => section.querySelector("button")?.getAttribute("aria-controls"))).toStrictEqual([
+      "assistant-context-project",
+      "assistant-context-resources",
+      "assistant-context-attachments",
+      "assistant-context-artifacts",
+      "assistant-context-capabilities",
+    ]);
     expect(screen.queryByRole("button", { name: /Fuentes del hilo/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Proyecto" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Los adjuntos y resultados pertenecen a este hilo.")).toBeInTheDocument();
+    // S3/S11: a closed project section keeps its field, with the current choice.
+    const projectRow = screen.getByRole("button", { name: "Proyecto" });
+    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-collapsed")).toBeNull();
+    fireEvent.click(projectRow);
+    expect(projectRow.closest("section")?.querySelector(".assistant-workspace__context-collapsed")).toHaveTextContent("General / Sin proyecto");
+    fireEvent.click(projectRow);
+    const artifactsRow = screen.getByRole("button", { name: /Artefactos del hilo/ });
+    expect(artifactsRow.closest("section")?.querySelector(".assistant-workspace__context-secondary")).toHaveTextContent("Aquí aparecerán los archivos generados.");
     const resourcesToggle = screen.getByRole("button", { name: /Recursos del proyecto/ });
     fireEvent.click(resourcesToggle);
     expect(resourcesToggle).toHaveAttribute("aria-expanded", "true");
@@ -279,6 +414,45 @@ describe("AssistantWorkspace", () => {
     expect(change).toBeDisabled();
     fireEvent.click(change);
     expect(onChangeProject).not.toHaveBeenCalled();
+  });
+
+  it("searches and selects a project from the context panel picker", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "ops", name: "Operaciones", purpose: "Trabajo de terreno", status: "active" },
+        { id: 2, slug: "conocimiento", name: "Conocimiento", purpose: "Documentos", status: "active" },
+      ] }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    const onSelectProject = vi.fn();
+    render(<AssistantWorkspace onCreateThread={vi.fn()} onSelectProject={onSelectProject}><p>Thread</p></AssistantWorkspace>);
+
+    const trigger = await screen.findByRole("button", { name: "Cambiar proyecto: General / Sin proyecto" });
+    expect(screen.getByText("El proyecto define el contexto de este hilo.")).toBeInTheDocument();
+    fireEvent.click(trigger);
+
+    const panel = screen.getByRole("dialog", { name: "Elegir proyecto" });
+    expect(within(panel).getByRole("button", { name: "General / Sin proyecto" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(panel).getByRole("button", { name: "Operaciones" })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.change(within(panel).getByLabelText("Buscar proyecto"), { target: { value: "conoc" } });
+    await waitFor(() => expect(within(panel).queryByRole("button", { name: "Operaciones" })).not.toBeInTheDocument());
+    fireEvent.click(within(panel).getByRole("button", { name: "Conocimiento" }));
+
+    expect(onSelectProject).toHaveBeenCalledWith("conocimiento");
+  });
+
+  it("keeps the context panel project as information once the thread has messages", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
+    render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
+
+    expect(await screen.findByText("El proyecto queda fijo desde el primer mensaje.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Cambiar proyecto:/ })).not.toBeInTheDocument();
   });
 
   it("changes the active thread project from the lean mobile picker", async () => {
@@ -962,6 +1136,6 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
-    expect(await screen.findByText("Los archivos que el asistente genere aparecerán aquí.")).toBeInTheDocument();
+    expect(await screen.findByText("Aquí aparecerán los archivos generados.")).toBeInTheDocument();
   });
 });

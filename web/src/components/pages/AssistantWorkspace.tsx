@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BookOpen, BrainCircuit, ChevronDown, ChevronRight, Download, FileText, Folder, History, Info, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, Wrench, X } from "lucide-react";
+import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, Folder, History, Info, Lock, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, Wrench, X } from "lucide-react";
 import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, downloadAssistantConversation, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
@@ -8,6 +8,7 @@ import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Icon } from "../primitives/Icon";
 import { Menu } from "../primitives/Menu";
+import { Popover } from "../primitives/Popover";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { EmptyState } from "../shared/EmptyState";
@@ -124,6 +125,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [busyArtifactId, setBusyArtifactId] = useState<number | null>(null);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [contextSections, setContextSections] = useState<Record<string, boolean>>({ project: true });
+  const [resourcesSummary, setResourcesSummary] = useState<string | undefined>();
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
   // The thread's project is fixed once the thread has messages: the owner wants
@@ -643,7 +645,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }]}
         >
-          {() => <ThreadContextSections activeProject={activeProject} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
+          {() => <ThreadContextSections activeProject={activeProject} projects={projects} activeProjectSlug={activeProjectSlug} projectLocked={threadStarted} onSelectProject={onSelectProject} resourcesSummary={resourcesSummary} onResourcesSummary={setResourcesSummary} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
         </Tabs>
         </> : null}
       </aside>
@@ -694,34 +696,105 @@ function activityTime(thread: InternalChatThreadSummary): number {
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
-function ThreadContextSections({ activeProject, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
+function ThreadContextSections({ activeProject, projects = [], activeProjectSlug, projectLocked = false, onSelectProject, resourcesSummary, onResourcesSummary, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; projects?: Project[]; activeProjectSlug?: string; projectLocked?: boolean; onSelectProject?: (slug: string) => void; resourcesSummary?: string; onResourcesSummary?: (summary: string) => void; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
+  const threadNote = "Los adjuntos y resultados pertenecen a este hilo.";
   return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
-    <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
-      {activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
+    <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} summary={activeProject ? activeProject.name : "General / Sin proyecto"} collapsedContent={mobile ? undefined : <ContextProjectPicker mode="static" projects={projects} activeSlug={activeProjectSlug} activeName={activeProject?.name} project={activeProject} onExpand={() => toggleContextSection("project")} />} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
+      {mobile ? (activeProject ? <div className="assistant-workspace__context-box"><div className="assistant-workspace__project-summary"><Icon icon={Folder} size="sm" /><strong>{activeProject.name}</strong><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></div><p>{activeProject.purpose}</p></div> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />) : <ContextProjectPicker projects={projects} activeSlug={activeProjectSlug} activeName={activeProject?.name} locked={projectLocked} project={activeProject} onSelect={onSelectProject} />}
     </ContextSection>
-    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ProjectResourcesPanel project={activeProject} threadId={threadId} expanded={contextSections.resources ?? false} /></ContextSection>
-    <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
-      {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__context-box"><p className="assistant-workspace__capability-row"><Icon icon={Wrench} size="sm" /><span>{capabilities.tools?.length ?? 0} herramientas disponibles</span></p><p className="assistant-workspace__capability-row"><Icon icon={BookOpen} size="sm" /><span>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</span></p></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
+    <ContextSection id={mobile ? "mobile-resources" : "resources"} title="Recursos del proyecto" icon={Share2} summary={resourcesSummary} expanded={contextSections.resources ?? false} onToggle={() => toggleContextSection("resources")}><ProjectResourcesPanel project={activeProject} threadId={threadId} expanded={contextSections.resources ?? false} onSummary={onResourcesSummary} /></ContextSection>
+    <ContextSection id={mobile ? "mobile-attachments" : "attachments"} title="Archivos del hilo" icon={Paperclip} count={attachments.length} subtitle={threadNote} summary={threadNote} expanded={contextSections.attachments ?? false} onToggle={() => toggleContextSection("attachments")}>
+      {attachments.length ? <ul className="assistant-workspace__file-list">{attachments.map((attachment) => <li key={attachment.id} className="assistant-workspace__file-item" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-thread-reference", JSON.stringify({ kind: "attachment", id: attachment.id, filename: attachment.filename })); event.dataTransfer.effectAllowed = "copy"; }}><a className="assistant-workspace__file-row" href={threadAttachmentContentUrl(attachment.thread_id, attachment.id)} target="_blank" rel="noreferrer" aria-label={`Abrir ${attachment.filename}`} title={`Abrir ${attachment.filename}`}><span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(attachment.filename)}`}><Icon icon={assistantFileIcon(attachment.filename, attachment.content_type)} size="md" /></span><span className="assistant-workspace__file-copy"><strong>{attachment.filename}</strong><small>{fileTypeLabel(attachment.filename, attachment.content_type)} · Adjunto a este hilo</small></span></a><Menu label={`Acciones de ${attachment.filename}`} trigger="icon" align="end" items={[{ value: "open", label: "Abrir", icon: ExternalLink }]} onSelect={() => window.open(threadAttachmentContentUrl(attachment.thread_id, attachment.id), "_blank", "noopener,noreferrer")} /></li>)}</ul> : <div className="assistant-workspace__context-box assistant-workspace__context-box--empty"><Icon icon={Paperclip} size="sm" />Aún no hay archivos adjuntos.</div>}
     </ContextSection>
-    <ContextSection id={mobile ? "mobile-attachments" : "attachments"} title="Archivos del hilo" icon={Paperclip} count={attachments.length} expanded={contextSections.attachments ?? false} onToggle={() => toggleContextSection("attachments")}>
-      {attachments.length ? <ul className="assistant-workspace__file-list">{attachments.map((attachment) => <li key={attachment.id}><a className="assistant-workspace__file-row" href={threadAttachmentContentUrl(attachment.thread_id, attachment.id)} target="_blank" rel="noreferrer" aria-label={`Abrir ${attachment.filename}`} title={`Abrir ${attachment.filename}`}><Icon icon={assistantFileIcon(attachment.filename, attachment.content_type)} size="md" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(attachment.filename)}`} /><span className="assistant-workspace__file-copy"><strong>{attachment.filename}</strong><small>{attachment.content_type?.split("/").at(-1)?.toLocaleUpperCase("es-CL") ?? "Archivo"} · Adjunto</small></span></a></li>)}</ul> : <div className="assistant-workspace__context-box assistant-workspace__context-box--empty"><Icon icon={Paperclip} size="sm" />Aún no hay archivos adjuntos.</div>}
-    </ContextSection>
-    <ContextSection id={mobile ? "mobile-artifacts" : "artifacts"} title="Artefactos del hilo" icon={FileText} count={artifacts.length} expanded={contextSections.artifacts ?? false} onToggle={() => toggleContextSection("artifacts")}>
-      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <li key={artifact.id}><button type="button" className="assistant-workspace__file-row" aria-label={`Descargar ${artifact.filename}`} title={`Descargar ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => void downloadArtifact(artifact)}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="md" className={`assistant-workspace__file-icon assistant-workspace__file-icon--${fileTone(artifact.filename)}`} /><span className="assistant-workspace__file-copy"><strong>{artifact.filename}</strong><small>Generado en este hilo</small></span></button></li>)}</ul> : <div className="assistant-workspace__context-box">Los archivos que el asistente genere aparecerán aquí.</div>}
+    <ContextSection id={mobile ? "mobile-artifacts" : "artifacts"} title="Artefactos del hilo" icon={FileText} count={artifacts.length} summary="Aquí aparecerán los archivos generados." expanded={contextSections.artifacts ?? false} onToggle={() => toggleContextSection("artifacts")}>
+      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <li key={artifact.id} className="assistant-workspace__file-item" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-thread-reference", JSON.stringify({ kind: "artifact", id: artifact.id, filename: artifact.filename })); event.dataTransfer.effectAllowed = "copy"; }}><button type="button" className="assistant-workspace__file-row" aria-label={`Descargar ${artifact.filename}`} title={`Descargar ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => void downloadArtifact(artifact)}><span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(artifact.filename)}`}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="md" /></span><span className="assistant-workspace__file-copy"><strong>{artifact.filename}</strong><small>{fileTypeLabel(artifact.filename, artifact.content_type)} · Generado en este hilo</small></span></button><Menu label={`Acciones de ${artifact.filename}`} trigger="icon" align="end" disabled={busyArtifactId === artifact.id} items={[{ value: "download", label: "Descargar", icon: Download }]} onSelect={() => void downloadArtifact(artifact)} /></li>)}</ul> : <div className="assistant-workspace__context-box">Aquí aparecerán los archivos generados.</div>}
       {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
     </ContextSection>
-    <p className="assistant-workspace__context-note"><Icon icon={Info} size="sm" />Los adjuntos y resultados pertenecen a este hilo.</p>
+    <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} subtitle="Información de solo lectura." expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
+      {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <div className="assistant-workspace__capability-card"><div className="assistant-workspace__capability-row"><Icon icon={Wrench} size="md" /><span className="assistant-workspace__capability-copy"><strong>Herramientas</strong><small>{availableLabel(capabilities.tools?.length ?? 0)}</small></span></div><div className="assistant-workspace__capability-row"><Icon icon={BookOpen} size="md" /><span className="assistant-workspace__capability-copy"><strong>Base de conocimiento</strong><small className={capabilities.kb_available ? "assistant-workspace__capability-state is-available" : "assistant-workspace__capability-state"}>{capabilities.kb_available ? "Disponible" : "No disponible"}</small></span></div></div> : <div className="assistant-workspace__context-box">Sin información disponible.</div>}
+    </ContextSection>
   </div>;
 }
 
-function ContextSection({ id, title, icon, count, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {
+interface ContextProjectOption { slug: string; name: string }
+
+/** The reference's project selector: a disclosure trigger with a searchable
+ *  list, the current choice tinted and checked, and the hint that explains what
+ *  the choice means. A thread locks its project on the first message, so a
+ *  locked thread shows the same trigger as plain information instead of a
+ *  control that would quietly refuse the change. */
+function ContextProjectPicker({ projects, activeSlug, activeName, project, mode = "interactive", locked = false, onExpand, onSelect }: { projects: Project[]; activeSlug?: string; activeName?: string; project?: Project; mode?: "interactive" | "static"; locked?: boolean; onExpand?: () => void; onSelect?: (slug: string) => void }) {
+  const [opened, setOpened] = useState(false);
+  const [query, setQuery] = useState("");
+  const general: ContextProjectOption = { slug: "default", name: "General / Sin proyecto" };
+  const currentSlug = activeSlug ?? "default";
+  const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
+  const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
+    .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
+  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+
+  if (mode === "static") {
+    // The field keeps the chevron, so it must do something: it opens the section
+    // where the searchable list lives.
+    return <div className="assistant-workspace__context-project" data-static="true">
+      <button type="button" className="assistant-workspace__context-project-trigger" aria-expanded={false} aria-label={`Ver proyectos. Actual: ${currentName}`} onClick={() => onExpand?.()}>{trigger}</button>
+      {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+    </div>;
+  }
+
+  if (locked) {
+    return <div className="assistant-workspace__context-project" data-locked="true">
+      <p className="assistant-workspace__context-project-trigger">{trigger}</p>
+      <p className="assistant-workspace__context-project-hint">El proyecto queda fijo desde el primer mensaje.</p>
+    </div>;
+  }
+
+  const choose = (slug: string, element: HTMLElement) => {
+    onSelect?.(slug);
+    (element.closest("[popover]") as (HTMLElement & { hidePopover?: () => void }) | null)?.hidePopover?.();
+  };
+
+  return <div className="assistant-workspace__context-project" onClick={(event) => { if ((event.target as HTMLElement).closest(".popover__trigger")) setOpened(true); }}>
+    <Popover title="Elegir proyecto" triggerLabel={`Cambiar proyecto: ${currentName}`} trigger={trigger} hideTitle>
+      {opened ? <>
+        <SearchInput onSearch={setQuery} delay={0} placeholder="Buscar proyecto…" aria-label="Buscar proyecto" />
+        {options.length
+          ? <ul className="assistant-workspace__context-project-options" aria-label="Proyectos disponibles">{options.map((option) => {
+            const selected = option.slug === currentSlug;
+            return <li key={option.slug}><button type="button" className={`assistant-workspace__context-project-option${selected ? " is-selected" : ""}`} aria-pressed={selected} onClick={(event) => choose(option.slug, event.currentTarget)}><Icon icon={Folder} size="sm" /><span>{option.name}</span>{selected ? <Icon icon={Check} size="sm" /> : null}</button></li>;
+          })}</ul>
+          : <p className="assistant-workspace__context-project-empty" role="status">No encontramos proyectos</p>}
+      </> : null}
+      <p className="assistant-workspace__context-project-hint">El proyecto define el contexto de este hilo.</p>
+    </Popover>
+    {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+  </div>;
+}
+
+function ContextSection({ id, title, icon, count, subtitle, summary, collapsedContent, readOnly = false, expanded = false, onToggle, children }: { id: string; title: string; icon: typeof Folder; count?: number | string; subtitle?: ReactNode; summary?: ReactNode; collapsedContent?: ReactNode; readOnly?: boolean; expanded?: boolean; onToggle: (id: string) => void; children: ReactNode }) {
   const panelId = `assistant-context-${id}`;
+  // The secondary line carries the section's subtitle while it is open and its
+  // one-line summary (or empty copy) while it is closed, so a collapsed section
+  // still says something useful instead of only a count.
+  const secondary = expanded ? subtitle : (collapsedContent ? undefined : summary);
   return <section className="assistant-workspace__context-section">
     <button type="button" className="assistant-workspace__context-row" aria-expanded={expanded} aria-controls={panelId} onClick={() => onToggle(id)}>
-      <Icon icon={icon} size="sm" /><span>{title}</span>{count !== undefined ? <span className="assistant-workspace__context-count">{count}</span> : null}<Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
+      <Icon icon={icon} size="sm" /><span>{title}</span>{count !== undefined ? <span className="assistant-workspace__context-count">{count}</span> : null}{readOnly ? <Icon icon={Lock} size="sm" className="assistant-workspace__context-lock" /> : null}<Icon icon={expanded ? ChevronDown : ChevronRight} size="sm" />
     </button>
+    {!expanded && collapsedContent ? <div className="assistant-workspace__context-collapsed">{collapsedContent}</div> : null}
+    {secondary ? <p className="assistant-workspace__context-secondary">{secondary}</p> : null}
     <div id={panelId} className="assistant-workspace__context-section-content" hidden={!expanded}>{children}</div>
   </section>;
+}
+
+function availableLabel(count: number): string {
+  return `${count} ${count === 1 ? "disponible" : "disponibles"}`;
+}
+
+function fileTypeLabel(filename: string, contentType?: string | null): string {
+  return contentType?.split("/").at(-1)?.toLocaleUpperCase("es-CL")
+    ?? filename.split(".").pop()?.toLocaleUpperCase("es-CL")
+    ?? "Archivo";
 }
 
 function fileTone(filename: string): "pdf" | "sheet" | "document" | "neutral" {

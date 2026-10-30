@@ -123,3 +123,11 @@
   .assistant-chat__composer-bottom-row > .popover { min-width: 0; padding-right: var(--space-2); }
   .assistant-chat__tools-summary { flex: 0 0 auto; margin-left: auto; }
 }
+
+/* References dragged in from the context sidebar: they belong to this thread
+   already, so they read as a removable chip on the message, not as an upload. */
+.assistant-chat__references { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: 0 0 var(--space-2); padding: 0; list-style: none; }
+.assistant-chat__reference { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-pill); background: var(--surface); color: var(--corp-text); font-size: var(--text-sm); }
+.assistant-chat__reference button { display: inline-flex; align-items: center; justify-content: center; width: var(--space-6); height: var(--space-6); padding: 0; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted); cursor: pointer; }
+.assistant-chat__reference button:hover,
+.assistant-chat__reference button:focus-visible { background: var(--brand-bg); }
