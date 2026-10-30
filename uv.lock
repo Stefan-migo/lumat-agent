@@ -1285,7 +1285,7 @@ wheels = [
 
 [[package]]
 name = "lumatagent"
-version = "2026.10.9"
+version = "2026.10.13"
 source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },

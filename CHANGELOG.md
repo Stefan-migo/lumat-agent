@@ -6,6 +6,68 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.13] - 2026-10-29
+
+The assistant can now remember the person it works for, and the owner can see and delete what
+it remembers. One default that reached production wrong is corrected in the same release.
+
+### Added
+
+- **A per-user, cross-project memory axis.** Tukulpan gains a fourth axis: `scope='user'`,
+  `entity_id='user:<owner_id>'`, written and read with `proyecto='default'`. A fact about the
+  person is readable from the default project and from every named project that user owns, and
+  it is filtered by the authenticated user — never by the project's owner, which is a different
+  identity the moment a project has more than one person around it. `memory.read` and
+  `memory.search` union it inside `own` under its own two-row budget, so a person's memory
+  cannot hide the thread or the project axis; `memory.search` keeps ranking by fused score.
+- **An audit screen for that memory.** "Memorias sobre ti" in the assistant workspace lists what
+  the assistant remembers about the owner, with type and date, and deletes a row. The API answers
+  `404` — not `403` — for another user's id, so it never confirms that the record exists.
+- **MEM-14 in the memory spec**, plus the assistant persona and the `memoria-tukulpan` skill now
+  say which fact belongs to the person and which to the project.
+
+### Changed
+
+- **The capture acknowledgement no longer thanks a customer who gave nothing.** The shipped
+  default `Gracias {{nombre}}. ` left production greeting a customer before they had answered
+  anything. Migration 060 rewrites the stored setting only while it still equals that old
+  default, so a text the owner edited in the panel is never overwritten.
+
+### Fixed
+
+- **Four scheduling tests no longer depend on the hour they run.** Their fixtures kept the
+  current hour, so an availability created after 23:00 UTC spilled past midnight and the
+  scheduler legitimately offered the following day, failing an assertion about the requested
+  one. The fixtures now pin a business hour; no assertion was loosened. This is what makes
+  `main` green at night, and it is why this release could be cut at 23:xx UTC at all.
+
+### Migrations
+
+- `059_memory_user_scope.sql` — widens the `memories` visibility/scope coherence constraint to
+  `(visibility = 'global') = (scope IN ('agent','user'))`. The biconditional is preserved, so the
+  incoherent rows it used to reject are still rejected, and the WhatsApp customer axis (which
+  writes `scope='customer'` with `visibility='thread'`) keeps working.
+- `060_capture_ack_plain.sql` — the guarded settings rewrite described above, with its reverse
+  `UPDATE` documented in the file.
+
+### Also in this release (merged while it was being cut)
+
+Three chatbot-realism branches landed between `v2026.10.12` and this tag. Summarized from their
+commit subjects by the release cut; not re-verified one by one here.
+
+- **A returning customer confirms their contact data once** instead of being asked again.
+- **The capture and consent flow answers what the customer actually wrote**: consent answers a real
+  customer sends are accepted, the consent question is skipped when consent was already granted, a
+  reschedule request escapes the capture question, and "manutención" reads as a preventive request
+  while a technical visit does not.
+- **Offers and coverage say only what they can honour**: slot offers read the afternoon window and
+  abbreviated month names, a preference the offer cannot serve is no longer answered with the same
+  list, the out-of-coverage reply drops what it was overstating, and the state only counts visits
+  that have not started.
+- **Answer shape**: a knowledge-base answer that itself asks something no longer carries a second
+  question, a long courtesy closing still closes, and an acknowledgement follows a delivered answer
+  rather than the opening capture turn.
+
 ## [2026.10.12] - 2026-10-29
 
 A release for one operator-visible failure of the panel assistant and the two defect
