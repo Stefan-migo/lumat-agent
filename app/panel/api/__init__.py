@@ -43,6 +43,7 @@ def build_api_router() -> APIRouter:
         projects,
         project_files,
         skills,
+        assistant_memories,
     )
 
     router = APIRouter(prefix="/api")
@@ -67,6 +68,7 @@ def build_api_router() -> APIRouter:
     router.include_router(projects.router)
     router.include_router(project_files.router)
     router.include_router(skills.router)
+    router.include_router(assistant_memories.router)
     return router
 
 
