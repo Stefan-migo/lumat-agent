@@ -211,8 +211,8 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | A3 | S6 | `is_farewell` closes a long courtesy closing | inline | |
 | A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | |
 | A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | |
-| B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | |
-| B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | |
+| B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | 0a7914cd |
+| B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | 0a7914cd |
 | B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | |
 | B4 | S11 | `state.booking` ignores appointments that already started | inline | |
 | B5 | S12 | `reagendar_visita` routes to `manage` | inline | |
@@ -296,3 +296,20 @@ the same JSON, and leaves a panel-edited text alone.
 document + A1 (`f7a6162b`). Slice 2 = A2–A5, slice 3 = B1–B5, slice 4 = C3/C4/C2, slice 5 = C1 once
 L5.1 is decided. Each slice stays reviewable on its own, so the PR can be chained without rewriting
 history. Nothing is pushed: push, PR and merge stay the owner's decision.
+
+**L8** — B1 + B2 done (`0a7914cd`), landed ahead of the A2–A5 commit because `slot_window.py` is
+outside that unit's surfaces. RED observed for all six cases (four afternoon phrasings from
+production #23 turns 304/306/308/310, plus `3 de nov` and the month table); the boundary cases
+`al mediodía` and `si, cualquier dia despues de las 6` stay unparsed, which is the existing rule, not
+an oversight: one names an exact hour, the other would empty a 09:00–18:00 agenda. Verified:
+`pytest tests/unit/test_slot_window.py tests/unit/test_booking.py tests/unit/test_scheduling_unit.py`
+→ 42 passed; `bash scripts/test.sh quick` → exit 0. One test expectation of my own was wrong on the
+first run (year rollover: with today 2026-10-29, `nov` and `dic` resolve inside 2026, not 2027) and
+was corrected against `_next_month_day`, not worked around.
+
+**L9** — B3 design note before coding it: carrying `attempts` across a rebuilt offer is not enough on
+its own. The rebuilt offer has to be compared against what the customer already sees, and when it is
+the same page the node must answer with an existing catalogue text (the loop cannot invent a new
+reply key while `app/services/settings.py` is being edited by another unit, and a new key needs panel
+validation anyway). Preferred: count it as an invalid attempt and let `MAX_INVALID_REPLIES` hand off
+with `handoff_booking_unavailable`; that text already tells the customer a human will coordinate.
