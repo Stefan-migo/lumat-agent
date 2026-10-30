@@ -14,7 +14,7 @@ import logging
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
-from app.models import AssistantAttachment, InternalChatThread, KbVisibility, UserRole
+from app.models import AssistantAttachment, InternalChatThread, KbVisibility, MemoryVisibility, UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
@@ -36,6 +36,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
 })
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
+USER_AXIS_LIMIT = 2
 # Own reads are a compact recall digest, so legacy rows cannot expose unbounded
 # content; 500 characters keeps enough context for the assistant without adding a config knob.
 MEMORY_READ_DIGEST_CONTENT_LIMIT = 500
@@ -189,7 +190,7 @@ class MemoryWriteArgs(BaseModel):
     contenido: str = Field(min_length=1, max_length=2000)
     topic_key: str = Field(min_length=1, max_length=200, pattern=r"^agent:")
     tipo: Literal["decision", "discovery", "pattern", "preference"]
-    visibility: Literal["thread", "global"] = "global"
+    visibility: Literal["thread", "global", "user"] = "global"
     handoff: bool = Field(
         default=False,
         description="True when this memory leaves a continuation point—an open thread of work or the ordering of pending tasks—so later turns prioritize it.",
@@ -457,9 +458,15 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
         agent_rows = memory.list_for_entity(
             session, scope="agent", entity_id=memory.agent_memory_entity(proyecto), proyecto=proyecto, owner_id=memory_owner
         )
+        user_rows = []
+        if type(owner_id) is int and owner_id > 0:
+            user_rows = memory.list_for_entity(
+                session, scope="user", entity_id=memory.user_memory_entity(owner_id), proyecto="default", owner_id=owner_id
+            )
         if parsed.topic:
             thread_rows = [row for row in thread_rows if row.topic_key == parsed.topic]
             agent_rows = [row for row in agent_rows if row.topic_key == parsed.topic]
+            user_rows = [row for row in user_rows if row.topic_key == parsed.topic]
         sort_key = lambda row: (
             bool(getattr(row, "pin", False)),
             bool(getattr(row, "handoff", False)),
@@ -467,10 +474,11 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
         )
         thread_rows.sort(key=sort_key, reverse=True)
         agent_rows.sort(key=sort_key, reverse=True)
-        # Interleave both axes before truncating: a thread holding `limit` rows must not hide the
-        # project axis (R3-own-read-limit).
+        user_rows.sort(key=sort_key, reverse=True)
+        # Each axis has a bounded contribution and is interleaved before truncation, so a busy
+        # thread or personal axis cannot hide project/team memory or vice versa.
         rows = [
-            row for pair in zip_longest(thread_rows, agent_rows) for row in pair if row is not None
+            row for pair in zip_longest(thread_rows, agent_rows, user_rows[:USER_AXIS_LIMIT]) for row in pair if row is not None
         ]
         return [
             {
@@ -503,7 +511,7 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
             raise ToolValidationError("own memory search requires a positive trusted thread id")
         authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
         memory_owner = authorization.owner_id if authorization is not None else None
-        rows = memory.hybrid_search(
+        thread_rows = memory.hybrid_search(
             session,
             parsed.query,
             scope="panel",
@@ -511,7 +519,8 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
             proyecto=proyecto,
             owner_id=memory_owner,
             top_k=parsed.limit,
-        ) + memory.hybrid_search(
+        )
+        agent_rows = memory.hybrid_search(
             session,
             parsed.query,
             scope="agent",
@@ -520,6 +529,16 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
             owner_id=memory_owner,
             top_k=parsed.limit,
         )
+        user_rows = []
+        if type(owner_id) is int and owner_id > 0:
+            user_rows = memory.hybrid_search(
+                session, parsed.query, scope="user", entity_id=memory.user_memory_entity(owner_id),
+                proyecto="default", owner_id=owner_id, top_k=USER_AXIS_LIMIT,
+            )
+        # MEM-3 ranks the qualifiers by fused score; the user axis is bounded by its own
+        # budget instead of being interleaved, so personal memory cannot crowd out the rest
+        # and the ranking the spec requires survives.
+        rows = thread_rows + agent_rows + user_rows[:USER_AXIS_LIMIT]
         rows.sort(key=lambda row: row.get("score", 0), reverse=True)
         return [
             {**row, "contenido": row.get("contenido", "")[:MEMORY_SEARCH_CONTENT_LIMIT]}
@@ -541,11 +560,22 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
 
 def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, proyecto: str = "default", owner_id: int | None = None):
     key = args.topic_key
+    if args.visibility == "user" and (type(owner_id) is not int or owner_id <= 0):
+        raise ToolValidationError("user memory requires a positive authenticated owner")
     try:
-        authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
-        scope, entity_id = memory.visibility_target(
-            args.visibility, thread_id=trusted_thread_id, proyecto=proyecto
-        )
+        if args.visibility == "user":
+            authorization = None
+            proyecto = "default"
+            scope, entity_id = memory.visibility_target(
+                args.visibility, thread_id=trusted_thread_id, proyecto="default", owner_id=owner_id
+            )
+            visibility = MemoryVisibility.GLOBAL
+        else:
+            authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
+            scope, entity_id = memory.visibility_target(
+                args.visibility, thread_id=trusted_thread_id, proyecto=proyecto
+            )
+            visibility = args.visibility
         with session.begin_nested():
             row = memory.upsert(
                 session,
@@ -553,12 +583,13 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, pro
                 entity_id=entity_id,
                 topic_key=key,
                 proyecto=proyecto,
+                owner_id=owner_id if args.visibility == "user" else None,
                 tipo=memory.MemoryType(args.tipo),
                 titulo=args.titulo,
                 contenido=args.contenido,
                 producer=memory.MemoryProducer.AGENT,
                 origin_thread_id=str(trusted_thread_id),
-                visibility=args.visibility,
+                visibility=visibility,
                 handoff=args.handoff,
                 authorization=authorization,
             )

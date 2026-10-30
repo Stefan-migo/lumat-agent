@@ -79,7 +79,7 @@ def _invoke(conv_id, message_id):
 
 def _available_slot(session, technician_id, now):
     starts = now + timedelta(days=2)
-    starts = starts.replace(minute=0, second=0, microsecond=0)
+    starts = starts.replace(hour=9, minute=0, second=0, microsecond=0)
     scheduling.add_availability(
         session, technician_id=technician_id,
         starts_at=starts, ends_at=starts + timedelta(hours=3),
@@ -565,5 +565,60 @@ def test_a_real_complaint_during_an_offer_still_reaches_a_person(mock_openai_cha
     )
 
     assert any("asesor" in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"
+
+
+def _seed_open_offer_on_a_single_day(*, days=5):
+    """A conversation whose offer can only ever be the same three slots."""
+    wanted = _local_today() + timedelta(days=days)
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        _day_block(session, tech_id, wanted)
+        session.commit()
+    return conv_id, wanted
+
+
+def test_asking_again_for_the_same_day_does_not_re_render_the_same_page(mock_openai_chat):
+    """S10: production #23 turn 306 rebuilt the offer and reset its attempt counter,
+    so the customer read the identical three slots for the fourth time in a row.
+
+    "después de las 6" is deliberately unparsed (it would empty a 09:00-18:00
+    agenda), so the day resolves, the page does not change, and the only honest
+    answer is not to print the same list again.
+    """
+    conv_id, wanted = _seed_open_offer_on_a_single_day()
+
+    first = _invoke(conv_id, _add_message(conv_id, "si", "wamid.loop.first"))
+    assert any("1." in reply for reply in first)
+
+    second = _invoke(conv_id, _add_message(
+        conv_id,
+        f"para el {_weekday_name(wanted)} despues de las 6",
+        "wamid.loop.same-page",
+    ))
+
+    assert len(second) == 1
+    assert "1." not in second[0], second[0]
+    with SessionLocal() as session:
+        offer = session.get(Conversation, conv_id).captured_data["_booking_offer"]
+    assert offer["attempts"] == 1
+
+
+def test_a_second_unservable_preference_hands_off_instead_of_looping(mock_openai_chat):
+    """S10: the loop must end in a person, not in a fifth identical list."""
+    conv_id, wanted = _seed_open_offer_on_a_single_day(days=6)
+    unservable = f"para el {_weekday_name(wanted)} despues de las 6"
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.loop2.first"))
+    _invoke(conv_id, _add_message(conv_id, unservable, "wamid.loop2.second"))
+    third = _invoke(conv_id, _add_message(conv_id, unservable, "wamid.loop2.third"))
+
+    assert len(third) == 1
+    assert "asesor" in third[0].lower(), third[0]
     with SessionLocal() as session:
         assert session.get(Conversation, conv_id).state.value == "human"

@@ -932,6 +932,21 @@ describe("AssistantWorkspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download", expect.anything()));
   });
 
+  it("opens the user-memory audit surface from workspace navigation", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input) === "/panel/api/assistant/memories") return new Response(JSON.stringify({ memories: [{ id: 5, titulo: "Prefiere mensajes breves", contenido: "Directo y claro.", tipo: "preference", topic_key: "style", created_at: "2026-10-29T12:00:00Z", updated_at: "2026-10-29T12:00:00Z", review_after: null }] }), { status: 200 });
+      return new Response(JSON.stringify({ projects: [], active_runs: [], threads: [] }), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} role="admin"><p>Thread</p></AssistantWorkspace>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Abrir navegación del asistente" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Memorias sobre ti/ }));
+    const memoriesDialog = await screen.findByRole("dialog", { name: "Memorias sobre ti" });
+    expect(await within(memoriesDialog).findByText("Prefiere mensajes breves")).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/assistant/memories", expect.anything()));
+  });
+
   it("shows the honest empty state when a thread has no artifacts", async () => {
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=8");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

@@ -175,7 +175,10 @@ def test_a_refused_email_is_not_asked_again_on_later_turns(harness):
 def test_ack_uses_configured_text_and_only_non_sensitive_captured_facts(harness, monkeypatch):
     monkeypatch.setattr(capture_node, "get_capture_ack", lambda _session: "Gracias {{nombre}} por el dato de {{equipo}}.")
     result = capture_node.capture(make_state(
-        "quiero una visita", captured={"name": "Ana", "equipment": "calefont", "email": "secret@example.cl", "address": "Privada 1"},
+        "quiero una visita", captured={
+            "name": "Ana", "equipment": "calefont", "email": "secret@example.cl", "address": "Privada 1",
+            "_asked": {"failure": 1},
+        },
     ))
     reply = result["replies"][0]
     assert reply.startswith("Gracias Ana por el dato de calefont.")
@@ -190,6 +193,27 @@ def test_preventive_request_skips_failure_and_marks_it(harness):
     assert "failure" in result["captured"]["_skipped"]
     assert result["captured"]["_pending"] == ["equipment"]
     assert "qué pasa con el equipo" not in result["replies"][0].lower()
+
+
+def test_catalogue_typo_manutencion_is_a_preventive_request(harness):
+    result = capture_node.capture(make_state(
+        "Necesito hacerle manutención a la caldera en casa", captured={},
+    ))
+
+    assert result["captured"].get("failure") is None
+    assert "failure" in result["captured"]["_skipped"]
+    assert result["captured"]["_pending"] == ["equipment"]
+    assert "¿no enciende" not in result["replies"][0].lower()
+
+
+def test_preventive_price_question_and_negated_request_do_not_skip_failure(harness):
+    for text in (
+        "¿cuánto cuesta la revisión anual?",
+        "no quiero mantención",
+    ):
+        result = capture_node.capture(make_state(text, captured={}))
+        assert "failure" not in result["captured"].get("_skipped", [])
+        assert result["captured"].get("_pending") == ["failure"]
 
 
 def test_full_capture_window_preventive_request_skips_pending_failure(harness):
@@ -210,13 +234,45 @@ def test_full_capture_window_preventive_request_skips_pending_failure(harness):
 def test_ack_is_not_repeated_on_consecutive_questions(harness, monkeypatch):
     """S3: an acknowledgement marks a transition, it must not become a tic."""
     monkeypatch.setattr(capture_node, "get_capture_ack", lambda _session: "Gracias {{nombre}}. ")
-    captured = {"failure": "no enciende", "equipment": "calefont", "name": "Ana"}
+    captured = {"failure": "no enciende", "equipment": "calefont", "name": "Ana", "_asked": {"failure": 1}}
 
     first = capture_node.capture(make_state("hola", captured=dict(captured)))
     second = capture_node.capture(make_state("no se", captured=dict(first["captured"])))
 
     assert first["replies"][0].startswith("Gracias Ana.")
     assert not second["replies"][0].startswith("Gracias Ana.")
+
+
+def test_no_acknowledgement_on_the_opening_capture_turn(harness):
+    """S1: nothing has been asked yet, so there is nothing to acknowledge.
+
+    Production turn 285 read "Gracias Stefan. Stefan, cuéntame...": the name was already captured
+    when the first question went out, which is exactly what made the thanks read as a tic.
+    """
+    first = capture_node.capture(make_state(
+        "Necesito hacerle manutención a la caldera en casa", captured={"name": "Stefan"},
+    ))
+
+    reply = first["replies"][0]
+    assert not reply.startswith("Gracias"), reply
+    assert "Stefan" not in reply
+
+
+def test_shipped_acknowledgement_does_not_thank_or_name_the_customer():
+    """S1: thanks for a data point, not for showing up; the name is not repeated."""
+    ack = REPLY_TEXT_DEFAULTS["capture_ack"]
+
+    assert ack.strip() == "Entiendo."
+    assert "{{nombre}}" not in ack
+
+
+def test_acknowledgement_arrives_with_the_first_delivered_answer(harness):
+    """S1: once a field was asked and answered, the transition is acknowledged."""
+    result = capture_node.capture(make_state(
+        "no enciende", captured={"_asked": {"failure": 1}, "failure": "no enciende"},
+    ))
+
+    assert result["replies"][0].startswith("Entiendo."), result["replies"][0]
 
 
 def test_ack_has_a_single_source_and_it_is_the_reply_catalog(monkeypatch):
@@ -235,3 +291,14 @@ def test_ack_has_a_single_source_and_it_is_the_reply_catalog(monkeypatch):
     )
 
     assert settings_module.get_capture_ack(object()) == "Listo {{nombre}}: "
+
+
+def test_a_technical_visit_request_still_asks_about_the_failure(harness):
+    """S4 boundary: \"Visita técnica\" is the generic repair visit, not a preventive
+    service, so it must never skip the one question that describes the fault."""
+    result = capture_node.capture(make_state(
+        "necesito una visita tecnica, mi caldera no enciende", captured={},
+    ))
+
+    assert "failure" not in result["captured"].get("_skipped", [])
+    assert result["captured"].get("_pending") == ["failure"]
