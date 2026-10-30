@@ -588,3 +588,38 @@ non-preventive entry *is* `Visita técnica` — but if the catalogue grows an en
 preventive nor a repair visit (say an installation), this rule would route it to the visit. Follow-up,
 not a defect of this slice: prefer an exact normalized catalogue match before falling back to the
 generic visit.
+
+**L25** — D1 and D2 diagnosed (read-only; the owner authorized production reads for D1 and asked for a
+diagnosis without writes for D2). Both investigations changed shape once the right database was read.
+
+**D2 — appointments never close.** Production holds **10 `booked` appointments whose `starts_at` already
+passed** (oldest 2026-09-25, 34 days) against **one** `cancelled`; there are **zero `completed` and zero
+`no_show` rows**. Nothing in production ever transitions a visit out of `booked`. That is why B4 was
+necessary (`state.booking` ignores visits that already started) and it is also a wider problem: every
+panel KPI or agenda view derived from appointment status is reading a frozen book. Closing it needs a
+decision this slice cannot take — *who* marks a visit completed or no-show — and it writes data, so it
+needs its own unit and explicit authorization.
+
+**D1 — the message-less escalations are harness artifacts, not production.** The handoff pointed at
+production; the evidence does not live there. Production has 309 messages / 197 events / 23
+conversations and **no `classified` or `handoff` events** on 2026-10-28, with id gaps of only 1→3 and
+3→5. The harness has 537 / 339 / 46, and there:
+
+- the three `classified` events with no inbound message nearby (12:04:32, 12:04:42, 14:09:08 on
+  2026-10-28) each sit after an `outbound/processed` message with nothing inbound in the previous 120 s,
+  and the id gaps (506→511, 526→533, 575→587) are the handoff's 527–534 / 576–586 — inserts that
+  consumed a serial id and were rolled back;
+- **there is no `handoff:*` event name.** The vocabulary is `classified` (235), `escalation` (34),
+  `state_change` (32), `kb_retrieved` (25), `unknown_intent` (12), `kb_miss` (1). `handoff:booking_unclear`,
+  `handoff:campo_sin_respuesta` and friends are the **`cause`** column of `escalation` (12, 7 and so on);
+- the **96 `inbound/failed` messages are seed rows, not failures**: all `text`, all **without `wamid`**,
+  with identical microseconds across days (`.839683`) at fixed 01:15/01:17 offsets;
+- the mechanism exists in the repo: `scripts/conv_eval.py` drives `app.chat.graph.run_conversation`
+  against the harness database and offers `reset_business_state()` (`TRUNCATE <business tables> RESTART
+  IDENTITY` on the admin connection). `run_conversation` takes an inbound message that is **already
+  persisted** and only persists replies, and `publish_event` commits on its own — so events can outlive
+  the transcript that produced them.
+
+Verdict: the panel's handoff metric is **not** contaminated, because the panel reads production and
+production has none of these events. The real risk D1 identified is reading harness numbers as if they
+were customer behaviour.

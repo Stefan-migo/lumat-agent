@@ -1,10 +1,9 @@
 # HANDOFF — chatbot-realismo-conversacional
 
-**Estado al cerrar la sesión**: 4 PRs encadenadas abiertas, **las cuatro con CI verde**, actualizadas
-con `main` y con la migración renumerada. Nada mergeado todavía (el merge está autorizado y en curso
-al escribir esto), nada desplegado. Producción sigue en `v2026.10.12` (`24b60d77`), esquema **058**.
-Trabajo en `/home/stefan/repos/lumat-agent-odd-chatbot-realismo-conversacional`, branch punta
-`odd/chatbot-realismo-flujo` (`7e3bf6fa`).
+**Estado al cerrar la sesión**: **todo mergeado**. Las cuatro PRs de la cadena (`#738`, `#740`, `#741`,
+`#743`) y la de las últimas dos unidades (`#750`, C4 + C2). Producción corre `v2026.10.13`, esquema
+**060_capture_ack_plain**: las migraciones `059` y `060` ya se aplicaron. El worktree vigente es
+`/home/stefan/repos/lumat-agent-odd-chatbot-realismo-c4`.
 
 **Regla de entrada**: leer `odd/tasks/chatbot-realismo-conversacional.md` (S1–S14 + Log L1–L19) antes
 de proponer nada. Los specs citan los mensajes reales. No re-abrir lo cerrado; las decisiones ya
@@ -58,8 +57,8 @@ main 2bb8f0fb
 |---|---|---|---|
 | **C4** | S14 | Normalizar `case.service` contra el catálogo **antes** de usarlo como query de retrieval | `respond.py:225 turn_queries()` appendea `service` crudo. #43 (`calefont`) dio `kb_miss`; #44 (`reparación de calefont`) respondió. El matcher de A5 está en `capture.py:396-450` (`_edit_distance_at_most_one`, `_matches_catalogue_phrase`, `_preventive_services`) y hay que extraerlo a un módulo compartido. **Decisión abierta**: `case.service` sin palabra de servicio (`calefont`) → ¿`Visita técnica`, o no steerear el retrieval? Lo primero es coherente con L10 fix 2 (la visita técnica es el default de reparación); lo segundo arriesga repetir el `kb_miss`. |
 | **C2** | S2 | Mover `capture_evidence` al final, después de confirmar la cita | Hoy cuelga del último campo de captura (`capture.py`, `_ask_next`). Decisión abierta L5.3: si el cliente ya mandó una foto antes, ¿se pregunta igual? |
-| **D1** | — | Investigar escalamientos del 2026-10-28 12:04/14:09/16:52 con `conversation_events` pero **sin mensaje** en `messages` (#40, #42) | Si es el runner de `conv_eval` reusando conversaciones, contamina la métrica de handoffs del panel. Huecos en `messages.id` (527–534, 576–586). |
-| **D2** | — | Citas `booked` que nunca se cierran (producción #11 sigue `booked`) | Un sweep de higiene **escribe datos**: unidad propia, con autorización explícita. |
+| **D1** | — | **Diagnosticado (L25).** No es producción: los escalamientos sin mensaje son del **harness** (`classified` tras un `outbound`, con inserts revertidos) y los 96 `inbound/failed` son filas de seed sin `wamid`. | Cerrado: la métrica del panel no está contaminada. El riesgo real es leer números del harness como comportamiento de cliente. |
+| **D2** | — | **Diagnosticado (L25).** Producción: **10 `booked` vencidas** (la más vieja 34 días), **cero `completed` y cero `no_show`**. | Necesita decisión de producto: **quién** marca una visita como hecha. Escribe datos: unidad propia con autorización explícita. |
 | **D3** | — | Anclar los helpers de `test_scheduling.py` y `test_chat_booking.py` a una hora fija del día objetivo | Pre-existente en `main`, no de este feature. Ver L19: falla cuando la suite corre después de ~22:00Z. No tocado acá por estar fuera de las superficies del feature. |
 
 ## 4. Decisiones del owner ya tomadas (no re-preguntar)
@@ -111,6 +110,22 @@ Decisiones todavía abiertas: **L5.3** (evidencia si ya mandó foto) y el mapeo 
 13. **Un `full` interrumpido deja un `seed_dev.py` huérfano** que bloquea la test DB y hace colgar la
     corrida siguiente en `conftest.py:88` (`TRUNCATE`). `ps -eo pid,cmd | grep seed_dev` y matarlo.
 
+14. **`graphify-out/` vive en el worktree, no en el repo.** Al recrear el worktree el gráfico se
+    pierde, y el Graph Check que `AGENTS.md` exige es entonces un bloqueo legítimo para cualquier
+    subagente. Copiarlo desde el worktree principal (`cp -a ../lumat-agent/graphify-out .`) alcanza
+    mientras el commit sea el mismo; reconstruirlo con `graphify .` es el paso de cierre de sesión.
+15. **No existe el evento `handoff:*`.** Ese texto es la columna **`cause`** de un evento `escalation`.
+    Los nombres de evento son `classified`, `escalation`, `state_change`, `kb_retrieved`,
+    `unknown_intent`, `kb_miss`. Buscar `event like 'handoff%'` devuelve vacío y hace creer que nunca
+    hubo escalamientos.
+16. **Filas de seed en `messages`: sin `wamid` y con microsegundos idénticos entre días** (`.839683`, a
+    las 01:15 y 01:17). No son fallas de producción; no las cuentes como mensajes perdidos.
+17. **Preguntá en qué base vive el hallazgo antes de perseguirlo.** D1 se documentó como problema de
+    producción y estaba entero en el harness. Producción: 23 conversaciones / 309 mensajes. Harness:
+    46 / 537.
+18. **Dos suites DB en el mismo worktree se pisan.** Cada worktree deriva una sola test database y las
+    corridas concurrentes chocan en el `TRUNCATE`; van de a una, siempre.
+
 ## 6. Verificación que se usó (repetir tal cual)
 
 ```bash
@@ -127,17 +142,13 @@ CI (`test` + `panel`) verde en las cuatro PRs sobre el árbol combinado.
 ## 7. Primer paso sugerido para el chat nuevo
 
 1. Leer el doc del feature hasta `## Log`.
-2. Confirmar que la cadena está mergeada (`gh pr list --state open`); si no, el orden es
-   738 → 740 → 741 → 743, retargeteando la base a `main` después de cada merge.
-3. Cerrar la decisión de mapeo de **C4** y atacarlo con RED: el mismo texto con `case.service` distinto
-   tiene que dar el mismo retrieval. Extraer primero el matcher de catálogo de `capture.py` a un módulo
-   compartido para que A5 y C4 no dupliquen la tolerancia a typos.
-4. **C2** después, con L5.3 cerrada.
-5. Al desplegar: la migración `060` corre en el arranque de la api; verificar después que
-   `reply.texts.capture_ack` quedó en `Entiendo. ` y que `capture_confirm_contact` aparece con su
-   default. Ojo que **`059_memory_user_scope` se aplica antes** y también está pendiente en producción.
+2. La cadena y #750 están mergeadas; no re-abrir S1–S14 salvo para verificar.
+3. La próxima unidad es **D2**: el sweep de citas vencidas necesita primero una decisión de producto
+   (quién marca `completed` / `no_show`) y después autorización explícita, porque escribe datos.
+4. Si el catálogo de servicios crece con una entrada que no sea preventiva ni visita, revisar
+   `canonical_service` (L24): hoy todo lo no preventivo colapsa a `Visita técnica`.
+5. Follow-ups abiertos: **D3** (tests que dependen de la hora, trampa 12) y evaluar
+   `customers.data_updated_at` para que la vigencia de un año sea exacta (trampa 5).
+6. En el próximo deploy: `059` y `060` **ya están aplicadas** (producción en `060_capture_ack_plain`,
+   verificado en esta sesión); no hace falta volver a mirar `capture_ack`.
 
-14. **`graphify-out/` lives in the worktree, not in the repo.** Al recrear el worktree el gráfico se
-    pierde, y el Graph Check que `AGENTS.md` exige es entonces un bloqueo legítimo para cualquier
-    subagente. Copiarlo desde el worktree principal (`cp -a ../lumat-agent/graphify-out .`) alcanza
-    mientras el commit sea el mismo; reconstruirlo con `graphify .` es el paso de cierre de sesión.
