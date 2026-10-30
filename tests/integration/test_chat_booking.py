@@ -79,7 +79,7 @@ def _invoke(conv_id, message_id):
 
 def _available_slot(session, technician_id, now):
     starts = now + timedelta(days=2)
-    starts = starts.replace(minute=0, second=0, microsecond=0)
+    starts = starts.replace(hour=9, minute=0, second=0, microsecond=0)
     scheduling.add_availability(
         session, technician_id=technician_id,
         starts_at=starts, ends_at=starts + timedelta(hours=3),
