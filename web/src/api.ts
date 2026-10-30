@@ -386,3 +386,6 @@ export async function downloadAssistantConversation(threadId: number): Promise<v
 }
 
 export const threadAttachmentContentUrl = (threadId: number, attachmentId: number): string => `/panel/api/chat/threads/${threadId}/attachments/${attachmentId}/content`;
+/** Same bytes the download endpoint streams; the viewer needs the URL, not a blob. */
+export const assistantArtifactContentUrl = (threadId: number, artifactId: number): string => `/panel/api/chat/threads/${threadId}/artifacts/${artifactId}/download`;
+export const projectFileContentUrl = (slug: string, fileId: number): string => `/panel/api/projects/${encodeURIComponent(slug)}/files/${fileId}/download`;
