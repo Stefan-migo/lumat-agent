@@ -386,3 +386,80 @@ def test_s2_memory_context_marks_stale_snapshots_only(fake_embedder):
     assert "session (stale since " in state.memory_context
     assert "fresh summary (stale since" not in state.memory_context
     assert "customer memo (stale since" not in state.memory_context
+
+
+def _book_appointment(session, *, customer_id: int, conversation_id: int, starts_at: datetime) -> Appointment:
+    technician = User(
+        username=f"tec-{uuid4().hex[:8]}", password_hash="x", role=UserRole.TECNICO,
+    )
+    session.add(technician)
+    session.flush()
+    case = Case(customer_id=customer_id, conversation_id=conversation_id)
+    session.add(case)
+    session.flush()
+    appointment = Appointment(
+        service="Visita técnica",
+        customer_id=customer_id,
+        case_id=case.id,
+        technician_id=technician.id,
+        local_start=starts_at.replace(tzinfo=None),
+        timezone="America/Santiago",
+        starts_at=starts_at,
+        ends_at=starts_at + timedelta(hours=1),
+        duration_minutes=60,
+        status=AppointmentStatus.BOOKED,
+    )
+    session.add(appointment)
+    session.flush()
+    return appointment
+
+
+def test_state_booking_ignores_an_appointment_that_already_started():
+    """S11: production #23 offered "una visita agendada para el 28/10" on 2026-10-29.
+
+    The rebuilt state read the latest BOOKED appointment with no date filter, so a
+    visit from yesterday was injected into the KB prompt and the model offered it.
+    """
+    conv_id = _seed(["hola"])
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        customer = session.scalar(
+            select(Customer).where(Customer.phone_e164 == "+56912345678")
+        )
+        _book_appointment(
+            session, customer_id=customer.id, conversation_id=conv_id,
+            starts_at=now - timedelta(days=1),
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        state = ConversationState.from_db(session, conv_id)
+
+    assert state.booking is None
+
+
+def test_state_booking_still_reads_the_next_appointment():
+    """The filter must not hide the visit the customer does have coming."""
+    conv_id = _seed(["hola"])
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        customer = session.scalar(
+            select(Customer).where(Customer.phone_e164 == "+56912345678")
+        )
+        _book_appointment(
+            session, customer_id=customer.id, conversation_id=conv_id,
+            starts_at=now - timedelta(days=1),
+        )
+        upcoming = _book_appointment(
+            session, customer_id=customer.id, conversation_id=conv_id,
+            starts_at=now + timedelta(days=2),
+        )
+        expected = upcoming.id
+        session.commit()
+
+    with SessionLocal() as session:
+        state = ConversationState.from_db(session, conv_id)
+
+    assert state.booking is not None
+    assert state.booking["status"] == "booked"
+    assert expected is not None

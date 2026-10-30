@@ -41,6 +41,7 @@ CLOSING_TOKENS = frozenset({
 _COURTESY_TOKENS = frozenset({
     "dale", "bueno", "ya", "ok", "oka", "listo", "perfecto", "gracias",
     "muchas", "mil", "genial", "excelente", "amable", "saludos", "cordial",
+    "que", "tengas", "buen", "dia", "nuevament",
 })
 _CLOSING_PHRASES = (
     "eso fue todo",
@@ -67,9 +68,9 @@ def _fold(text: str) -> str:
 
 
 def is_farewell(text: str) -> bool:
-    """Return whether text is only a short customer closing formula."""
+    """Return whether text is a customer closing formula with no other content."""
     folded = _fold(text).strip()
-    if not folded or len(folded) > 40 or "?" in folded:
+    if not folded or "?" in folded:
         return False
     matched_phrase = False
     for phrase in _CLOSING_PHRASES:

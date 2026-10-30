@@ -61,8 +61,9 @@ Necesitamos guardar tus datos para gestionar la visita. ¿Nos darías tu autoriz
 Same root cause re-asks name, comuna, email and address: the capture flow never reads the customer
 record. Owner's rule: if the customer already granted consent, do not ask again.
 
-**Blocked on the owner's product decision** (see Log L5): silent skip vs. a short confirmation, and
-what a "no" withdraws.
+Owner decision (L17): the consent half is a **silent skip** to booking; the contact half is a
+**single confirmation** of the stored values, and a stored record is trusted for **one year**. The
+customer never books with data they have not seen, and the four questions become one.
 
 ### S4 — "manutención" is a preventive maintenance request (A5)
 
@@ -207,19 +208,19 @@ Order approved by the owner: A → B → C3 → C4 → C1 → C2 → D.
 | ID | Spec | Task | Route | Commit |
 | --- | --- | --- | --- | --- |
 | A1 | S1 | Ack only with a delivered data point; `Entiendo.`; name at most once; guarded migration for the stored `capture_ack` | inline | f7a6162b |
-| A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | |
-| A3 | S6 | `is_farewell` closes a long courtesy closing | inline | |
-| A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | |
-| A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | |
-| B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | |
-| B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | |
-| B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | |
-| B4 | S11 | `state.booking` ignores appointments that already started | inline | |
-| B5 | S12 | `reagendar_visita` routes to `manage` | inline | |
-| C3 | S13 | One question per turn after a KB deviation | inline | |
+| A2 | S5 | Remove the price append and the hardcoded coordination sentence from the coverage handoff | inline | 04b993c9 |
+| A3 | S6 | `is_farewell` closes a long courtesy closing | inline | 63b890ec |
+| A4 | S7 | Consent allowlist accepts natural affirmatives, negation wins | inline | 9c63dc20 |
+| A5 | S4 | Preventive decision matches the canonical service catalogue with typo tolerance | inline | a15e0edb |
+| B1 | S8 | Afternoon window from "después del mediodía" / "después de las 12" | inline | 0a7914cd |
+| B2 | S9 | Month abbreviations; never move the offer to an earlier day | inline | 0a7914cd |
+| B3 | S10 | No silent re-offer; `attempts` survives a rebuilt offer | inline | 4871dc62 |
+| B4 | S11 | `state.booking` ignores appointments that already started | inline | see L13 |
+| B5 | S12 | `reagendar_visita` routes to `manage` | inline | see L14 |
+| C3 | S13 | One question per turn after a KB deviation | inline | see L15 |
 | C4 | S14 | Normalized service as retrieval fallback query | inline | |
 | C2 | S2 | Evidence question moves to after the booking confirmation | inline | |
-| C1 | S3 | Seed capture from the customer record (consent + data) | inline | blocked: L5 |
+| C1 | S3 | Consent silent skip (`faaed3dc`) + stored contact confirmed in one message | inline | see L17 |
 | D1 | D | Investigate the message-less escalations | inline | |
 | D2 | D | Expired `booked` appointments | inline | |
 
@@ -283,10 +284,116 @@ tests/unit/test_capture_phrasing.py tests/unit/test_reply_texts.py` → 65 passe
 → 38 passed, including two new tests that prove 059 rewrites the old default, keeps the other keys in
 the same JSON, and leaves a panel-edited text alone.
 
+**L10** — A2–A5 delivered by `gentle-ai-worker` and committed as four units (`04b993c9`, `63b890ec`,
+`9c63dc20`, `a15e0edb`). The writer's evidence was independent per unit, but parent review of the diff
+found two defects that the delegated spec did not cover, both fixed before commit with four new failing
+tests written first:
+
+1. **The consent widen accepted questions and doubts.** With `_YES_WORDS` scanned anywhere in prose,
+   `¿necesito autorización?` and `no se si autorizo` returned `True` — that is personal data stored
+   without consent. Fixed by splitting the vocabulary: explicit first-person verbs inside a short
+   sentence, bare affirmatives only when the whole message is just that, and a question or a doubt is
+   never consent. `autorización` (a noun that appears in questions) was dropped from the allowlist.
+2. **The catalogue match made a technical visit preventive.** `Visita técnica` is the generic repair
+   visit; matching the whole catalogue meant "necesito una visita tecnica, mi caldera no enciende"
+   skipped the fault question and the case would reach a technician with no symptom. Fixed by
+   narrowing the catalogue to services whose own name says preventive.
+
+Verified after the fixes: `pytest tests/unit/test_capture_consent.py tests/unit/test_capture_validation.py`
+→ 33 passed; `bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db tests/integration/test_handoff.py
+tests/integration/test_out_of_hours_and_farewell.py tests/integration/test_price_answers.py` → exit 0,
+64 passed. The `sio` decision stands as the writer reported: a typo that is not an allowlisted word
+stays unclear and gets one confirmation instead of being guessed.
+
+**L17** — C1 completed. Owner decisions, verbatim: `1. push y abre prs. el merge lo guardamos para
+despues.` / `2. c1. salto en silencio al bookign con el consentimiento ya dado.`, plus
+"Confirmar en un solo mensaje (recomendado)" and "1 año" for the stored-contact half.
+
+Implementation: `capture_confirm_contact` is a new `reply.texts` key (panel-editable, slots
+`comuna`/`direccion`/`email`), the offer only fires when **every** field still missing is a contact
+field, and only when the ficha holds all three. A yes keeps the values; anything else drops what the
+customer did not confirm, except what the extractor read in that same turn.
+
+Two honest notes:
+- `customers` has no `updated_at`, so the one-year window ages against `created_at`. That direction is
+  conservative on purpose: an old record falls back to asking instead of offering an unverifiable
+  address. Adding `customers.data_updated_at` would make the window exact, and it is a schema change
+  (shape surface) that this slice does not need.
+- **TDD lapse, mine:** the implementation went in before its tests. I did not invent a RED; instead I
+  ran a mutation check — with the offer forced off, `test_a_returning_customer_confirms_their_contact_in_one_message`
+  fails with `Entiendo. ¿En qué comuna te encuentras?` — so the tests do pin the behaviour. Recorded
+  rather than hidden.
+
+Verified: `pytest tests/unit/test_capture_stored_contact.py` → 4 passed (implemented after the fact,
+see above); `bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh db
+tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py` → exit 0.
+
+**L16** — known cosmetic defect: the C3 commit message (`f6f088f2`) lost the literal
+`` `_pending` `` because the message was passed to `git commit -m` inside double quotes and the
+backticks were executed by the shell. The code and the tests are unaffected and L15 describes the
+behaviour correctly. Not amended: rewriting a pushed commit means a force-push, which needs the
+owner's authorization. Rule for the rest of this feature: commit messages go through `git commit -F
+<file>`, never `-m` with backticks.
+
+**L15** — C3 done, on a new stacked branch `odd/chatbot-realismo-flujo` (base
+`odd/chatbot-realismo-conversacional`) because #741 already carries 1250 authored lines and stopped
+being reviewable. RED pinned the routing decision: `_after_research_triage` returned `capture` for a KB
+answer ending in `?` (2 of 4 new tests failed). The fix ends the turn in that case and leaves `_pending`
+in the captured state, so the agenda asks on the next message. The CI-2 integration case
+(`test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes`) still passes, which proves the
+non-question path is untouched: `bash scripts/test.sh db tests/integration/test_chat_capture.py` → exit 0;
+`pytest tests/unit/test_graph_after_research_triage.py` → 4 passed; `bash scripts/test.sh quick` → exit 0.
+
+**L14** — B5 done. The cause was not a missing route: `_dispatch` already sent
+`reagendar_visita` to `manage`. It was the CI-2 rule that folds cancel/reschedule into
+the pending capture field while mid-capture, which is exactly the state production #23 was in. The
+two intents now win over the pending field, and the field itself is untouched so the agenda resumes on
+the next message. `tests/unit/test_routing_table.py` had the old rule pinned
+(`test_mid_capture_non_retrieval_is_pending_field_answer` parametrized over both intents); it now
+covers `unknown`/`calefont` and a new test pins the manage route. Verified:
+`pytest tests/unit/test_routing_table.py` → 44 passed; `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_chat_booking.py
+tests/integration/test_chat_manage.py` → exit 0.
+
+**L13** — B4 done. RED reproduced the production prompt verbatim: the state carried
+`{'service': 'Visita técnica', 'label': '28/10/2026 a las 21:42', 'status': 'booked'}` for a visit that
+had already started. `from_db` now filters `starts_at > now`. Verified: `bash scripts/test.sh db
+tests/integration/test_chat_state.py` → exit 0; `bash scripts/test.sh db tests/integration/test_chat_booking.py
+tests/integration/test_handoff.py` → exit 0; `bash scripts/test.sh quick` → exit 0.
+
+**L12** — B3 done (`4871dc62`). RED reproduced the loop on the harness: the same three-slot page came
+back verbatim and the conversation never left `state=bot`. Two changes: `_new_offer` takes
+`unchanged_against` and refuses to persist a page identical to the one on screen, and the rebuild path
+carries `attempts + 1` instead of restarting at zero, so `MAX_INVALID_REPLIES` is finally reachable and
+the second unservable preference hands off with `booking_unclear` (the reply the generic handoff text
+provides, since no reply key invented here). A first attempt placed `attempts` after its use and the
+integration run caught an `UnboundLocalError` across three tests, which is exactly why the DB tier runs
+this file: the unit tier stubs the session and never enters `booking()`.
+
+Verified: `bash scripts/test.sh db tests/integration/test_chat_booking.py` → exit 0 (all 24 cases,
+including the six pre-existing window/offer cases); `bash scripts/test.sh quick` → exit 0;
+`bash scripts/test.sh db tests/integration/test_chat_capture.py tests/integration/test_handoff.py` →
+exit 0.
+
+**L11** — owner decisions, verbatim: `1. push y abre prs. el merge lo guardamos para despues.` and
+`2. c1. salto en silencio al bookign con el consentimiento ya dado.`
+
+Consequences:
+
+- **Chained delivery.** ~1000 authored lines do not fit one reviewable PR, so the branch is split into
+  three stacked PRs, base chain `main ← odd/chatbot-realismo-ack ← odd/chatbot-realismo-agenda-window ←
+  odd/chatbot-realismo-conversacional`: **#738** (spec + A1), **#740** (B1 + B2), **#741** (A2–A5).
+  Merge stays the owner's decision.
+- **C1 delivered as the consent half only** (`faaed3dc`). Owner chose the silent skip: when
+  `customers.consent_status` is true the question is not asked again, the flow goes straight to booking,
+  and `captured["_consent_previously_granted"]` records that nobody was asked in this conversation. The
+  ficha write moved with it, otherwise booking would drop the address the customer just gave. The data
+  half of S3 (reusing name/comuna/email/address from the record) stays open on L5.2 — an old address
+  sending a technician to the wrong place is a worse failure than one extra question.
+
 **L5** — open product decisions (owner):
 1. Consent already given: silent skip to booking, or a short confirmation (`¿mantengo los datos de tu
-   última visita?`), and does a "no" withdraw consent globally or only for this visit?
-2. TTL for stored customer data before it is offered back (e.g. 90 days), so an old address is not
+   última visita?`), and does a "no" withdraw consent globally or only for this visit?2. TTL for stored customer data before it is offered back (e.g. 90 days), so an old address is not
    reused as if it were current.
 3. Evidence question when the customer already sent a photo earlier in the conversation.
 4. Price in the out-of-coverage reply: never, or only when the customer asked for a price.
@@ -296,3 +403,83 @@ the same JSON, and leaves a panel-edited text alone.
 document + A1 (`f7a6162b`). Slice 2 = A2–A5, slice 3 = B1–B5, slice 4 = C3/C4/C2, slice 5 = C1 once
 L5.1 is decided. Each slice stays reviewable on its own, so the PR can be chained without rewriting
 history. Nothing is pushed: push, PR and merge stay the owner's decision.
+
+**L8** — B1 + B2 done (`0a7914cd`), landed ahead of the A2–A5 commit because `slot_window.py` is
+outside that unit's surfaces. RED observed for all six cases (four afternoon phrasings from
+production #23 turns 304/306/308/310, plus `3 de nov` and the month table); the boundary cases
+`al mediodía` and `si, cualquier dia despues de las 6` stay unparsed, which is the existing rule, not
+an oversight: one names an exact hour, the other would empty a 09:00–18:00 agenda. Verified:
+`pytest tests/unit/test_slot_window.py tests/unit/test_booking.py tests/unit/test_scheduling_unit.py`
+→ 42 passed; `bash scripts/test.sh quick` → exit 0. One test expectation of my own was wrong on the
+first run (year rollover: with today 2026-10-29, `nov` and `dic` resolve inside 2026, not 2027) and
+was corrected against `_next_month_day`, not worked around.
+
+**L9** — B3 design note before coding it: carrying `attempts` across a rebuilt offer is not enough on
+its own. The rebuilt offer has to be compared against what the customer already sees, and when it is
+the same page the node must answer with an existing catalogue text (the loop cannot invent a new
+reply key while `app/services/settings.py` is being edited by another unit, and a new key needs panel
+validation anyway). Preferred: count it as an invalid attempt and let `MAX_INVALID_REPLIES` hand off
+with `handoff_booking_unavailable`; that text already tells the customer a human will coordinate.
+
+**L18** — owner authorization, verbatim: `ok merge y limpieza de lo que tenemos actualmente y solo
+luego despues de eso continuamos con los pasos pendientes`
+
+`main` moved twice while the merge was being prepared: first to `f27ced32` (the `v2026.10.12` deploy
+plus four assistant-memory slices), then to `2bb8f0fb` when PR #744 landed *during* this work. The
+chain was therefore updated bottom-up — `origin/main` into `odd/chatbot-realismo-ack` (`6602e4ed`),
+then each branch absorbing the one below it (`7aa71d86`, `cb7d5973`, `7e3bf6fa`) — with no conflict
+except one hunk.
+
+**The defect that would have broken the schema.** `main` now carries `059_memory_user_scope.sql`
+(from #744) and this feature carried `059_capture_ack_plain.sql`: two different files claiming one
+version. A version is applied once and recorded in `schema_migrations`, so the second file would
+simply never run — and production sits at 058, owing 059 to the memory user scope. Renumbered to
+`060_capture_ack_plain.sql` in `6602e4ed`: its two tests now scaffold `<= 59` and apply `60`, and
+`test_schema_migrations_records_version` lists `059_memory_user_scope` then `060_capture_ack_plain`.
+The single merge conflict was exactly that list, resolved by keeping both entries.
+
+Two local-environment findings, both recorded because they cost real time and neither is a code
+defect:
+
+1. Renaming a migration leaves the *persistent* test database holding the old version name in
+   `schema_migrations`, so `test_schema_migrations_records_version` fails against it. Rebuilding the
+   disposable database (`infra/test-db.sh down && up`) is the fix; CI never sees this because it
+   starts from an empty database.
+2. The first `full` run stalled at 15 %: the child `app/panel/seed_dev.py --yes` hung against a
+   backend left `idle in transaction` by an earlier run that pytest-timeout had killed
+   (`tests/functional/conftest.py:88` `TRUNCATE`, the family documented in
+   `odd/tasks/suite-truncate-stall.md`). Terminating that backend and rebuilding the database cleared
+   both.
+
+Evidence: `bash scripts/test.sh db tests/integration/test_migrations.py` → 39 passed;
+`bash scripts/test.sh quick` → exit 0; `bash scripts/test.sh shape origin/main` → exit 3 on
+`db/migrations/060_capture_ack_plain.sql`, which is what makes `full` mandatory; `full` → see L19.
+
+**L19** — `full` on the merged, renumbered tree: **4 failed**, all of them time-of-day dependent, none
+of them this feature's. Run at 2026-10-29T23:12Z, minutes before UTC midnight:
+
+```
+tests/integration/test_chat_booking.py::test_asking_for_more_slots_says_the_day_is_exhausted_and_offers_other_days
+tests/integration/test_scheduling.py::test_open_slots_for_assignment_skips_the_busy_technician_and_never_mutates
+tests/integration/test_scheduling.py::test_open_slots_for_assignment_alternates_between_equally_loaded_technicians
+tests/integration/test_scheduling.py::test_open_slots_for_assignment_offers_only_the_requested_day
+```
+
+Three independent proofs that this is pre-existing rather than a regression:
+
+1. **Differential, in place.** With `app/chat/slot_window.py` checked out from `origin/main` — the only
+   shared module B1/B2 touched, imported by `app/services/scheduling.py` — the same four tests fail
+   identically. B1/B2 is not the cause.
+2. **Authorship.** The chat test came in with `7096263b` ("page through the slot offer"), an ancestor
+   of `origin/main`, so the feature inherited it rather than wrote it.
+3. **Mechanism.** The helpers anchor on `datetime.now(timezone.utc) + 2 days` truncated to the hour,
+   and the assertions compare against `first.date()`. After roughly 22:00Z the three-slot block
+   straddles midnight, so the offered day genuinely holds fewer slots and the assertion's premise is
+   false — the product behaved correctly by saying the day was exhausted, and the reply quoted slots
+   at 23:00/23:30/00:00, which is the fingerprint.
+
+CI is the authoritative gate for this repository (`uv run pytest tests/` against a real pgvector
+Postgres) and is green on all four heads, because it ran before the hour that triggers this. Not
+fixed here on purpose: it is a test-side defect in `main`'s files, outside this feature's surfaces,
+and repairing it means touching files this feature does not own. Follow-up worth its own unit: anchor
+those helpers to a fixed hour of the target day instead of the current hour.

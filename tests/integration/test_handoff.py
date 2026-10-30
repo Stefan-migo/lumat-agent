@@ -45,10 +45,8 @@ from app.models import (  # noqa: E402
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.services.settings import (
-    DEFAULT_TARIFA_PRECIOS,
     REPLY_TEXT_DEFAULTS,
     REPLY_TEXTS_KEY,
-    TARIFA_PRECIOS_KEY,
     set_setting,
 )  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -551,22 +549,10 @@ def _coverage_handoff_state(
     )
 
 
-def test_coverage_handoff_names_corrected_equipment_and_quotes_published_maintenance(
+def test_coverage_handoff_is_exactly_the_rendered_coverage_text_without_extras(
     monkeypatch,
 ):
     monkeypatch.setattr("app.chat.nodes.handoff.generate_summary", lambda state, customer: "resumen")
-    with SessionLocal() as session:
-        set_setting(
-            session,
-            TARIFA_PRECIOS_KEY,
-            {
-                **DEFAULT_TARIFA_PRECIOS,
-                "mantencion_caldera": [
-                    {"desde_mes": 1, "hasta_mes": 12, "valor": 123456}
-                ],
-            },
-        )
-        session.commit()
     conv_id = _start_conversation()
     state = _coverage_handoff_state(
         conv_id,
@@ -581,11 +567,12 @@ def test_coverage_handoff_names_corrected_equipment_and_quotes_published_mainten
     result = handoff(state)
 
     reply = result["replies"][0]
-    assert "caldera" in reply.lower()
-    assert "Mantención de caldera" in reply
-    assert "$123.456" in reply
-    assert "asesor" in reply.lower() and "coordinar" in reply.lower()
-    assert "fecha" in reply.lower() and "hora" in reply.lower()
+    assert reply == (
+        "Todavía no tenemos visitas técnicas en Providencia para tu caldera, "
+        "un asesor de Lumat se contactará contigo para ayudarte a la brevedad."
+    )
+    assert "$" not in reply
+    assert "coordinará" not in reply
     assert _conversation_state(conv_id) == "human"
     assert "handoff:cobertura" in [event.cause for event in _events(conv_id)]
 
@@ -601,8 +588,12 @@ def test_coverage_handoff_falls_back_when_equipment_is_missing(monkeypatch):
 
     result = handoff(state)
 
-    assert "tu equipo" in result["replies"][0].lower()
-    assert "$" in result["replies"][0]
+    assert result["replies"][0] == (
+        "Todavía no tenemos visitas técnicas en Providencia para tu equipo, "
+        "un asesor de Lumat se contactará contigo para ayudarte a la brevedad."
+    )
+    assert "$" not in result["replies"][0]
+    assert "coordinará" not in result["replies"][0]
 
 
 @pytest.mark.parametrize("service", ["reparación de caldera", "caldera", None])
@@ -618,9 +609,12 @@ def test_coverage_handoff_does_not_infer_a_tariff_from_equipment(monkeypatch, se
     result = handoff(state)
 
     reply = result["replies"][0]
-    assert "requiere cotización" in reply.lower()
+    assert reply == (
+        "Todavía no tenemos visitas técnicas en Providencia para tu caldera, "
+        "un asesor de Lumat se contactará contigo para ayudarte a la brevedad."
+    )
     assert "$" not in reply
-    assert "asesor" in reply.lower() and "coordinar" in reply.lower()
+    assert "coordinará" not in reply
 
 
 def test_legacy_custom_coverage_text_without_equipment_slot_is_preserved(monkeypatch):
@@ -643,9 +637,9 @@ def test_legacy_custom_coverage_text_without_equipment_slot_is_preserved(monkeyp
 
     result = handoff(state)
 
-    assert result["replies"][0].startswith("Cobertura para Providencia; un asesor coordina.")
+    assert result["replies"] == ["Cobertura para Providencia; un asesor coordina."]
     assert "{{equipo}}" not in result["replies"][0]
-    assert "requiere cotización" in result["replies"][0].lower()
+    assert "$" not in result["replies"][0]
 
 
 def test_configured_handoff_reply_is_used(monkeypatch):

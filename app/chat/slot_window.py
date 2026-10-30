@@ -12,7 +12,10 @@ Rules that matter, and why:
   weekday name produces a ``day``. Anything else leaves it ``None`` so the offer
   stays unrestricted exactly as it is today.
 * **No guessed times.** "después de las 6" is not parsed: mapping it to 18:00
-  would empty the agenda of a business open 09:00-18:00. S2 widens instead.
+  would empty the agenda of a business open 09:00-18:00. S2 widens instead. The
+  line is *does the phrase land on a franja boundary the business already sells*:
+  "después del mediodía" and "después de las 12" start the afternoon, so they are
+  read; "al mediodía" names 12:00 exactly and is not.
 * **"cualquier día" removes the day, never the franja.** "cualquier día en la
   mañana" keeps the morning and drops the day.
 * **"mañana" is ambiguous in Spanish.** After the franja has been consumed
@@ -59,6 +62,23 @@ _MONTHS = {
     "octubre": 10,
     "noviembre": 11,
     "diciembre": 12,
+    # S9 (chatbot-realismo-conversacional): people write "3 de nov". Before these,
+    # the day silently disappeared and the offer started from today, proposing days
+    # EARLIER than the one the customer named (harness #45 turn 604).
+    "ene": 1,
+    "feb": 2,
+    "mar": 3,
+    "abr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "sep": 9,
+    "sept": 9,
+    "set": 9,
+    "oct": 10,
+    "nov": 11,
+    "dic": 12,
 }
 
 # Phrases that say "you pick" without naming a day. They drop the day constraint
@@ -78,7 +98,16 @@ _ANY_DAY = (
 )
 
 _MORNING = re.compile(r"\b(?:a|de|en|por|durante)\s+la\s+manana\b|\bla\s+manana\b|\bmanana\s+(?:temprano|am)\b")
-_AFTERNOON = re.compile(r"\b(?:a|de|en|por|durante)\s+la\s+tarde\b|\bla\s+tarde\b")
+_AFTERNOON = re.compile(
+    r"\b(?:a|de|en|por|durante)\s+la\s+tarde\b"
+    r"|\bla\s+tarde\b"
+    # S8 (chatbot-realismo-conversacional): production #23 asked "después del
+    # mediodía" / "después de las 12" four times and was offered the same three
+    # morning slots every time, because only "la tarde" was read. Both phrasings
+    # start the afternoon the business sells, so they are not a guess.
+    r"|\bdespues\s+del\s+(?:medio\s*dia|mediodia)\b"
+    r"|\bdespues\s+de\s+las\s+12(?:\s+del\s+(?:medio\s*dia|mediodia))?\b"
+)
 _TOMORROW = re.compile(r"\bmanana(?:\s+mismo)?\b")
 
 _DAY_MONTH_YEAR = re.compile(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b")
