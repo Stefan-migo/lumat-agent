@@ -3377,3 +3377,28 @@
   color: var(--corp-fg-muted);
   cursor: pointer;
 }
+
+/* Collapsed-history control: a quiet line above the rows it hides, centered in
+   the message grid. No border and no filled background — the owner rejected the
+   previous full-width bordered bar. */
+.collapsible-messages__toggle {
+  justify-self: center;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  padding: var(--space-1) var(--space-2);
+  color: var(--corp-fg-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.collapsible-messages__toggle:hover {
+  color: var(--corp-text);
+  text-decoration: underline;
+}
+
+.collapsible-messages__toggle:focus-visible {
+  outline: 2px solid var(--primary-700);
+  outline-offset: 2px;
+}
