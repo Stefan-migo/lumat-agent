@@ -81,3 +81,30 @@ def test_delete_user_blocks_on_booked_appointment(monkeypatch, tmp_path):
     with SessionLocal() as session:
         assert session.get(User, tech_id) is not None
     get_settings.cache_clear()
+
+
+def test_delete_user_keeps_blobs_when_the_transaction_rolls_back(monkeypatch, tmp_path):
+    """R3-002: a rollback keeps the user and thread rows, so the files must survive it too."""
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    with SessionLocal() as session:
+        owner = User(username="del-rollback", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id)
+        session.add(thread)
+        session.flush()
+        artifact = assistant_artifacts.store_artifact(session, thread, "r.md", "abc", "assistant")
+        session.commit()
+        owner_id, thread_id, blob_path = owner.id, thread.id, str(artifact.stored_path)
+        assert Path(blob_path).exists()
+
+    with SessionLocal() as session:
+        delete_user(session, session.get(User, owner_id))
+        session.rollback()
+
+    with SessionLocal() as session:
+        assert session.get(User, owner_id) is not None
+        assert session.get(InternalChatThread, thread_id) is not None
+        assert Path(blob_path).exists()
+    get_settings.cache_clear()

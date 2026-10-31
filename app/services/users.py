@@ -13,7 +13,6 @@ app/services/customers.py / audit.py style).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import bcrypt
 from sqlalchemy import delete, func, select, update
@@ -43,6 +42,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.assistant_artifacts import remove_files_after_commit
 
 # AP-1: lock after this many consecutive failures, for this long.
 MAX_FAILED_LOGINS = 5
@@ -155,25 +155,27 @@ def delete_user(session: Session, user: User) -> None:
     ):
         session.execute(update(model).where(column == user.id).values(**{column.key: None}))
 
-    # 2. Remove the user's own rows, blobs first (the thread cascade deletes the rows).
+    # 2. Remove the user's own rows; stage their blobs for removal only after the commit.
     thread_ids = session.scalars(
         select(InternalChatThread.id).where(InternalChatThread.user_id == user.id)
     ).all()
+    blob_paths: list[str] = []
     if thread_ids:
-        for blob in session.scalars(
+        blob_paths += session.scalars(
             select(AssistantArtifact.stored_path).where(AssistantArtifact.thread_id.in_(thread_ids))
-        ).all():
-            Path(blob).unlink(missing_ok=True)
-        for blob in session.scalars(
+        ).all()
+        blob_paths += session.scalars(
             select(AssistantAttachment.stored_path).where(AssistantAttachment.thread_id.in_(thread_ids))
-        ).all():
-            Path(blob).unlink(missing_ok=True)
+        ).all()
 
     session.execute(delete(TechnicianAvailability).where(TechnicianAvailability.technician_id == user.id))
     session.execute(delete(TechnicianWeeklySchedule).where(TechnicianWeeklySchedule.technician_id == user.id))
     session.execute(delete(PanelNotification).where(PanelNotification.user_id == user.id))
     session.execute(delete(PushSubscription).where(PushSubscription.user_id == user.id))
     session.execute(delete(InternalChatThread).where(InternalChatThread.user_id == user.id))
+
+    if blob_paths:
+        remove_files_after_commit(session, blob_paths)
 
     session.delete(user)
 

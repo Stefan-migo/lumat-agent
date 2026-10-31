@@ -385,3 +385,25 @@ def test_delete_artifact_endpoint_is_owner_scoped_and_removes_the_artifact(clien
     assert missing.status_code == 404
     assert missing.json()["detail"] == "artifact not found"
     get_settings.cache_clear()
+
+
+def test_delete_artifact_keeps_blobs_when_the_transaction_rolls_back(monkeypatch, tmp_path):
+    """R3-001: a rollback keeps the rows, so the files must survive it too."""
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    with SessionLocal() as session:
+        owner, thread, first = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-rollback-owner")
+        second, _changed = append_revision(session, thread, first, "second", actor="assistant")
+        session.commit()
+        thread_id, first_id, second_id = thread.id, first.id, second.id
+        blobs = sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir())
+        assert len(blobs) == 2
+
+    with SessionLocal() as session:
+        delete_artifact(session, thread_id, first_id)
+        session.rollback()
+
+    with SessionLocal() as session:
+        assert [item.id for item in list_artifacts(session, thread_id)] == [second_id]
+        assert sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir()) == blobs
+    get_settings.cache_clear()
