@@ -102,7 +102,9 @@ tomarlo aparte.
 - `bash scripts/test.sh quick` por iteración: verde.
 - `bash scripts/test.sh shape origin/main` → **3** (migración, `models.py`, `serializers.py`,
   `registry.yaml`, `personas/assistant.md`): `full` obligatorio.
-- `bash scripts/test.sh full`: ver el registro del cierre.
+- `bash scripts/test.sh full`: **verde** (2026-10-31, `PYTEST_EXIT=0`, progreso al `[100%]`, sin
+  `FAILED`/`ERROR`). Ojo con este repo: corre `-q` sin línea de resumen, y `cmd | tail` devuelve el
+  exit de `tail`, así que la corrida se captura redirigiendo a archivo y leyendo `$?` de pytest.
 - `web/`: `npm ci` → `npm run build` (`tsc -b`) → `npm test`.
 
 ## Log
