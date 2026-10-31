@@ -84,13 +84,26 @@ política de retención con datos reales.
 
 | ID | Specs | Route | Commit |
 |---|---|---|---|
-| T1 | S1, S12, S11 | inline | migración `061_artifact_revisions.sql` |
-| T2 | S1, S2, S7, S8, S9, S11 | inline | servicio `assistant_artifacts`: revisión, vigente, historial |
-| T3 | S6, S7, S8, S9 | inline | herramienta `artifact.update` + allowlists y tests de guardrails |
-| T4 | S2, S3, S10 | inline | API: `?version=` en download, leyenda vigente y serializer |
-| T5 | S4, S5, S10 | inline | frontend: badge `vN`, historial colapsado, visor por revisión |
-| T6 | S13 | inline | consulta de retención documentada en la guía de operación |
-| T7 | todas | inline | verificación de cierre: `shape` + `full`, frontend `build` + `test`, RDD |
+| T1 | S1, S12, S11 | inline | `e672fd6f` — migración 061 + tests de migración |
+| T2 | S1, S2, S7, S8, S9, S11 | inline | `e18a6c87` — servicio `assistant_artifacts` |
+| T3 | S6, S7, S8, S9 | inline | `194ecade` — `artifact.update` + superficies declaradas |
+| T4 | S2, S3, S10 | inline | `155a91d4` — API: `?version=` y serializer |
+| T5 | S4, S5, S10 | inline | `20bb0b13` — frontend: badge `vN`, historial, referencias |
+| T6 | S13 | inline | `e672fd6f` — consulta de costo en `docs/ops.md` §2.9.1 |
+| T7 | todas | inline | verificación de cierre (abajo) |
+
+Cortes de entrega, por unidad revisable: `32335328` (doc) → `e672fd6f` (esquema) →
+`e18a6c87` (servicio) → `194ecade` (herramienta) → `155a91d4` (API) → `20bb0b13` (panel). El corte
+del esquema va solo porque su `Risk` nombra alto riesgo (item 1), para que la revisión nativa pueda
+tomarlo aparte.
+
+### Verificación de cierre (T7)
+
+- `bash scripts/test.sh quick` por iteración: verde.
+- `bash scripts/test.sh shape origin/main` → **3** (migración, `models.py`, `serializers.py`,
+  `registry.yaml`, `personas/assistant.md`): `full` obligatorio.
+- `bash scripts/test.sh full`: ver el registro del cierre.
+- `web/`: `npm ci` → `npm run build` (`tsc -b`) → `npm test`.
 
 ## Log
 
