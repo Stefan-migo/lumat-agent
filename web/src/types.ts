@@ -214,7 +214,9 @@ export interface InternalChatThreadsResponse { threads: InternalChatThreadSummar
 export interface ActiveRun { thread_id: number; title: string | null; proyecto: string; agent: string; stage: string; run_id: string; updated_at: string | null; }
 export interface ActiveRunsResponse { active_runs: ActiveRun[]; }
 export interface AssistantAttachment { id: number; thread_id: number; filename: string; kind: string; content_type: string; size: number; created_at?: string | null; }
-export interface AssistantArtifact { id: number; thread_id: number; filename: string; content_type: string; size: number; created_at?: string | null; }
+/** One revision of an artifact; `id` is that revision's artifact id. */
+export interface AssistantArtifactVersion { version: number; id: number; size: number; created_at?: string | null; }
+export interface AssistantArtifact { id: number; thread_id: number; filename: string; content_type: string; size: number; created_at?: string | null; root_id: number; version: number; versions: AssistantArtifactVersion[]; }
 export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
 export interface AssistantCapabilities { tools: AssistantCapabilityTool[]; personas: string[]; prompts: string[]; kb_available: boolean; memory_available: boolean; }
 

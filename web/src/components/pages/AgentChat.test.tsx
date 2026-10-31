@@ -2044,6 +2044,42 @@ describe("AgentChat", () => {
     expect(screen.getAllByRole("button", { name: /Descargar/ })).toHaveLength(1);
   });
 
+  it("resolves a reference written before an edit to the artifact's current version", async () => {
+    // S4: the message kept the path of revision 1, but the chip and the download follow the current one.
+    const oldPath = "/panel/api/chat/threads/4/artifacts/5/download";
+    const currentPath = "/panel/api/chat/threads/4/artifacts/12/download";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/tool-policy")) return jsonResponse(policy());
+      if (String(input) === currentPath) return new Response(new Blob(["v2"]));
+      return jsonResponse({
+        thread: makeThread(),
+        artifacts: [{
+          id: 12, thread_id: 4, filename: "reporte.csv", content_type: "text/csv", size: 2, created_at: null,
+          root_id: 5, version: 2,
+          versions: [
+            { version: 1, id: 5, size: 2, created_at: null },
+            { version: 2, id: 12, size: 2, created_at: null },
+          ],
+        }],
+        messages: [{ id: 1, author: "agent", content: `Descarga \`${oldPath}\``, status: "processed" }],
+      });
+    });
+    const TestURL = class extends globalThis.URL {};
+    Object.assign(TestURL, {
+      createObjectURL: vi.fn().mockReturnValue("blob:artifact"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.stubGlobal("URL", TestURL);
+
+    render(<AgentChat threadId={4} />);
+    const message = await screen.findByRole("article", { name: "Mensaje de agente" });
+    expect(within(message).queryByText(oldPath)).not.toBeInTheDocument();
+    expect(within(message).getByText("reporte.csv")).toBeInTheDocument();
+    fireEvent.click(within(message).getByRole("button", { name: "Descargar reporte.csv" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(currentPath, { credentials: "include" }));
+    expect(fetchMock).not.toHaveBeenCalledWith(oldPath, { credentials: "include" });
+  });
+
   it("renders agent replies as markdown and leaves the operator text literal", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
       thread: makeThread(),

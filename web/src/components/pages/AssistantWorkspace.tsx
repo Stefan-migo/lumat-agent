@@ -699,6 +699,31 @@ function activityTime(thread: InternalChatThreadSummary): number {
   return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
+/** One artifact in the thread: the current version inline, the older versions behind a
+ * collapsed history (S5). Opening a revision only reads it; it never changes what the thread shows. */
+function ArtifactRows({ artifact, busy, onOpenFile, downloadArtifact }: { artifact: AssistantArtifact; busy: boolean; onOpenFile?: (source: ViewerSource) => void; downloadArtifact: (artifact: AssistantArtifact) => Promise<void> }) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const revisions = [...artifact.versions].sort((left, right) => right.version - left.version);
+  const openCurrent = () => onOpenFile?.({ url: assistantArtifactContentUrl(artifact.thread_id, artifact.id), filename: artifact.filename, contentType: artifact.content_type });
+  const openRevision = (version: number, id: number) => onOpenFile?.({
+    url: assistantArtifactContentUrl(artifact.thread_id, id, version === artifact.version ? undefined : version),
+    filename: artifact.filename,
+    contentType: artifact.content_type,
+  });
+  return <>
+    <li className="assistant-workspace__file-item" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-thread-reference", JSON.stringify({ kind: "artifact", id: artifact.id, filename: artifact.filename })); event.dataTransfer.effectAllowed = "copy"; }}>
+      <button type="button" className="assistant-workspace__file-row" aria-label={`Abrir ${artifact.filename}`} title={`Abrir ${artifact.filename}`} disabled={busy} onClick={openCurrent}>
+        <span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(artifact.filename)}`}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="md" /></span>
+        <span className="assistant-workspace__file-copy"><strong>{artifact.filename}</strong><small>{fileTypeLabel(artifact.filename, artifact.content_type)} · Generado en este hilo</small></span>
+        {artifact.version > 1 ? <Badge tone="neutral" className="assistant-workspace__artifact-version">{`v${artifact.version}`}</Badge> : null}
+      </button>
+      {revisions.length > 1 ? <button type="button" className="assistant-workspace__artifact-history-toggle" aria-label={`Historial de ${artifact.filename}`} aria-expanded={historyOpen} title={`Historial de ${artifact.filename}`} onClick={() => setHistoryOpen((open) => !open)}><Icon icon={History} size="sm" /></button> : null}
+      <Menu label={`Acciones de ${artifact.filename}`} trigger="icon" align="end" disabled={busy} items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }]} onSelect={(value) => { if (value === "download") void downloadArtifact(artifact); else openCurrent(); }} />
+    </li>
+    {historyOpen && revisions.length > 1 ? <li className="assistant-workspace__artifact-history"><ul aria-label={`Versiones de ${artifact.filename}`}>{revisions.map((revision) => <li key={revision.id}><button type="button" className="assistant-workspace__artifact-history-row" aria-label={`Abrir versión ${revision.version} de ${artifact.filename}`} onClick={() => openRevision(revision.version, revision.id)}><span>{`v${revision.version}`}</span><span>{revision.version === artifact.version ? "Versión vigente" : fileBytesLabel(revision.size)}</span></button></li>)}</ul></li> : null}
+  </>;
+}
+
 function ThreadContextSections({ activeProject, projects = [], activeProjectSlug, projectLocked = false, onSelectProject, resourcesSummary, onResourcesSummary, onOpenFile, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; projects?: Project[]; activeProjectSlug?: string; projectLocked?: boolean; onSelectProject?: (slug: string) => void; resourcesSummary?: string; onResourcesSummary?: (summary: string) => void; onOpenFile?: (source: ViewerSource) => void; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
   const threadNote = "Los adjuntos y resultados pertenecen a este hilo.";
   return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
@@ -710,7 +735,7 @@ function ThreadContextSections({ activeProject, projects = [], activeProjectSlug
       {attachments.length ? <ul className="assistant-workspace__file-list">{attachments.map((attachment) => <li key={attachment.id} className="assistant-workspace__file-item" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-thread-reference", JSON.stringify({ kind: "attachment", id: attachment.id, filename: attachment.filename })); event.dataTransfer.effectAllowed = "copy"; }}><button type="button" className="assistant-workspace__file-row" aria-label={`Abrir ${attachment.filename}`} title={`Abrir ${attachment.filename}`} onClick={() => onOpenFile?.({ url: threadAttachmentContentUrl(attachment.thread_id, attachment.id), filename: attachment.filename, contentType: attachment.content_type })}><span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(attachment.filename)}`}><Icon icon={assistantFileIcon(attachment.filename, attachment.content_type)} size="md" /></span><span className="assistant-workspace__file-copy"><strong>{attachment.filename}</strong><small>{fileTypeLabel(attachment.filename, attachment.content_type)} · Adjunto a este hilo</small></span></button><Menu label={`Acciones de ${attachment.filename}`} trigger="icon" align="end" items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }]} onSelect={(value) => { const url = threadAttachmentContentUrl(attachment.thread_id, attachment.id); if (value === "download") downloadUrl(url, attachment.filename); else onOpenFile?.({ url, filename: attachment.filename, contentType: attachment.content_type }); }} /></li>)}</ul> : <div className="assistant-workspace__context-box assistant-workspace__context-box--empty"><Icon icon={Paperclip} size="sm" />Aún no hay archivos adjuntos.</div>}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-artifacts" : "artifacts"} title="Artefactos del hilo" icon={FileText} count={artifacts.length} summary="Aquí aparecerán los archivos generados." expanded={contextSections.artifacts ?? false} onToggle={() => toggleContextSection("artifacts")}>
-      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <li key={artifact.id} className="assistant-workspace__file-item" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-thread-reference", JSON.stringify({ kind: "artifact", id: artifact.id, filename: artifact.filename })); event.dataTransfer.effectAllowed = "copy"; }}><button type="button" className="assistant-workspace__file-row" aria-label={`Abrir ${artifact.filename}`} title={`Abrir ${artifact.filename}`} disabled={busyArtifactId === artifact.id} onClick={() => onOpenFile?.({ url: assistantArtifactContentUrl(artifact.thread_id, artifact.id), filename: artifact.filename, contentType: artifact.content_type })}><span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(artifact.filename)}`}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="md" /></span><span className="assistant-workspace__file-copy"><strong>{artifact.filename}</strong><small>{fileTypeLabel(artifact.filename, artifact.content_type)} · Generado en este hilo</small></span></button><Menu label={`Acciones de ${artifact.filename}`} trigger="icon" align="end" disabled={busyArtifactId === artifact.id} items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }]} onSelect={(value) => { if (value === "download") void downloadArtifact(artifact); else onOpenFile?.({ url: assistantArtifactContentUrl(artifact.thread_id, artifact.id), filename: artifact.filename, contentType: artifact.content_type }); }} /></li>)}</ul> : <div className="assistant-workspace__context-box">Aquí aparecerán los archivos generados.</div>}
+      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <ArtifactRows key={artifact.id} artifact={artifact} busy={busyArtifactId === artifact.id} onOpenFile={onOpenFile} downloadArtifact={downloadArtifact} />)}</ul> : <div className="assistant-workspace__context-box">Aquí aparecerán los archivos generados.</div>}
       {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} subtitle="Información de solo lectura." expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
@@ -798,6 +823,13 @@ function fileTypeLabel(filename: string, contentType?: string | null): string {
   return contentType?.split("/").at(-1)?.toLocaleUpperCase("es-CL")
     ?? filename.split(".").pop()?.toLocaleUpperCase("es-CL")
     ?? "Archivo";
+}
+
+/** A revision's weight, so the history says something about each version. */
+function fileBytesLabel(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function downloadUrl(url: string, filename: string): void {
