@@ -978,10 +978,17 @@ class AssistantAttachment(Base):
 
 class AssistantArtifact(Base):
     __tablename__ = "assistant_artifacts"
-    __table_args__ = (Index("idx_assistant_artifacts_thread", "thread_id"),)
+    __table_args__ = (
+        Index("idx_assistant_artifacts_thread", "thread_id"),
+        Index("uq_assistant_artifacts_root_version", "root_id", "version", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     thread_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("internal_chat_threads.id", ondelete="CASCADE"), nullable=False)
+    # 061: append-only revision chain. The row where root_id == id is version 1 of the artifact;
+    # every edit inserts a sibling row with the next version instead of overwriting a blob.
+    root_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
