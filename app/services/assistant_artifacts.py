@@ -13,6 +13,35 @@ from uuid import uuid4
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.orm import Session
 
+_PENDING_FILES = "_pending_file_cleanup"
+_FILES_HOOKED = "_file_cleanup_hooked"
+
+
+def remove_files_after_commit(session: Session, paths: list[str]) -> None:
+    """Unlink `paths` only after the current transaction commits successfully.
+
+    Deleting a row and its file are two stores and cannot be atomic. The safe order is rows first,
+    commit, then files: a failed commit or an explicit rollback leaves the rows, so the files must
+    survive it too. `after_commit` fires only on a successful commit, and `after_rollback` discards
+    the staged paths so a later commit of the same session never removes them.
+    """
+    from sqlalchemy import event
+
+    session.info.setdefault(_PENDING_FILES, []).extend(paths)
+    if session.info.get(_FILES_HOOKED):
+        return
+    session.info[_FILES_HOOKED] = True
+
+    def _after_commit(_session: Session) -> None:
+        for path in _session.info.pop(_PENDING_FILES, []):
+            Path(path).unlink(missing_ok=True)
+
+    def _after_rollback(_session: Session) -> None:
+        _session.info.pop(_PENDING_FILES, None)
+
+    event.listen(session, "after_commit", _after_commit)
+    event.listen(session, "after_rollback", _after_rollback)
+
 from app.config import get_settings
 from app.models import AssistantArtifact, InternalChatThread
 from app.services.audit import record_audit
@@ -197,3 +226,32 @@ def get_revision(session: Session, thread_id: int, artifact_id: int, version: in
             AssistantArtifact.version == version,
         )
     )
+
+
+def delete_artifact(session: Session, thread_id: int, artifact_id: int) -> dict | None:
+    """Hard-delete every version of one artifact (rows and blobs). Returns a summary or None.
+
+    Deleting resolves the artifact by its `root_id`, so any revision id names the whole chain; the
+    blobs are removed first, then the rows, so a failed file removal never strands a row and a failed
+    row flush never strands a blob.
+    """
+    row = get_artifact(session, thread_id, artifact_id)
+    if row is None:
+        return None
+    versions = session.scalars(
+        select(AssistantArtifact).where(
+            AssistantArtifact.thread_id == thread_id,
+            AssistantArtifact.root_id == row.root_id,
+        )
+    ).all()
+    blob_paths = [version.stored_path for version in versions]
+    for version in versions:
+        session.delete(version)
+    session.flush()
+    # R3-001: remove the files only after the commit, so a failed commit or rollback keeps them.
+    remove_files_after_commit(session, blob_paths)
+    record_audit(session, actor="assistant", action="assistant_artifact.deleted", entity="assistant_artifact",
+                 entity_id=str(row.id), after={"thread_id": thread_id, "filename": row.filename,
+                                              "root_id": row.root_id, "versions_deleted": len(versions)})
+    return {"artifact_id": artifact_id, "root_id": row.root_id, "filename": row.filename,
+            "versions_deleted": len(versions), "deleted": True}

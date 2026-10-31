@@ -36,7 +36,9 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
 })
 # `artifact.update` joins `artifact.save`: it can only rewrite an artifact the assistant itself
 # produced in the thread it already owns, so it needs no approval of its own.
-AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update"})
+AUTONOMOUS_WRITE_ALLOWLIST = frozenset({
+    "memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete",
+})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 USER_AXIS_LIMIT = 2
 # Own reads are a compact recall digest, so legacy rows cannot expose unbounded
@@ -311,6 +313,11 @@ class ArtifactUpdateArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     artifact_id: int = Field(gt=0)
     content: str = Field(min_length=1, max_length=assistant_artifacts.MAX_ARTIFACT_CONTENT_CHARS)
+
+
+class ArtifactDeleteArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    artifact_id: int = Field(gt=0)
 
 
 def _plain(value: Any) -> Any:
@@ -836,6 +843,17 @@ def _update_artifact(session, args: ArtifactUpdateArgs, *, owner_id: int | None 
     }
 
 
+def _delete_artifact(session, args: ArtifactDeleteArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
+    """Hard-delete one artifact and all of its versions in the assistant's own thread."""
+    thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
+    if thread is None:
+        raise ToolValidationError("no accessible chat thread for artifacts")
+    summary = assistant_artifacts.delete_artifact(session, thread.id, args.artifact_id)
+    if summary is None:
+        raise ToolValidationError("artifact not found")
+    return summary
+
+
 def _assistant_capabilities(
     _session,
     _args: CapabilitiesArgs,
@@ -925,6 +943,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "view_image": ToolDefinition("view_image", ViewImageArgs, True, _view_image, "View an image on demand: a project file or a thread attachment, returned to the model as a vision part.", tier="default"),
     "artifact.save": ToolDefinition("artifact.save", ArtifactSaveArgs, False, _save_artifact, "Save a downloadable file artifact for the current conversation.", tier="default"),
     "artifact.update": ToolDefinition("artifact.update", ArtifactUpdateArgs, False, _update_artifact, "Rewrite an artifact you already saved in this conversation, as a new version. The previous version is kept. Pass the artifact_id returned by artifact.save or artifact.update; use artifact.save when you mean to create a different file.", tier="default"),
+    "artifact.delete": ToolDefinition("artifact.delete", ArtifactDeleteArgs, False, _delete_artifact, "Delete an artifact you saved in this conversation, with every version it has. Pass the artifact_id returned by artifact.save or artifact.update.", tier="default"),
     "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),
     "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval.", tier="opt_in"),
     "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval.", tier="opt_in"),
@@ -947,6 +966,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "view_image": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "artifact.save": frozenset(UserRole),
     "artifact.update": frozenset(UserRole),
+    "artifact.delete": frozenset(UserRole),
     "memory.read": frozenset(UserRole),
     "memory.search": frozenset(UserRole),
     "memory.write": frozenset(UserRole),
@@ -1025,7 +1045,7 @@ def execute_tool(
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "view_image", "artifact.save", "artifact.update", "skill.propose"} or (
+    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "view_image", "artifact.save", "artifact.update", "artifact.delete", "skill.propose"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
@@ -1077,7 +1097,7 @@ def execute_tool(
     if not definition.read_only and not autonomous_write and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
-        if name in {"artifact.save", "artifact.update"}:
+        if name in {"artifact.save", "artifact.update", "artifact.delete"}:
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id))
         elif name == "view_image":
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id, proyecto=proyecto, project_id=project_id))

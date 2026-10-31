@@ -37,6 +37,7 @@ DEFAULT_TOOLS = {
     "view_image",
     "artifact.save",
     "artifact.update",
+    "artifact.delete",
     "skill.propose",
 }
 

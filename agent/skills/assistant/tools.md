@@ -27,9 +27,13 @@ use the exact argument shape the catalog gives you.
 - Editing beats duplicating: when the owner asks for a change to a file you
   produced, call `artifact.update` with its `artifact_id` instead of saving a
   second file beside it.
-- Both are bound to this thread and need no approval. `artifact.update` returns
-  the new `version` and `changed`; `changed: false` means the content was already
-  identical, so nothing was appended.
+- `artifact.delete` removes one of your own artifacts and every version it has,
+  for good. It is the only tool that deletes; never call it to "make room" unless
+  the owner actually asked for the artifact to go.
+- All three are bound to this thread and need no approval. `artifact.update`
+  returns the new `version` and `changed`; `changed: false` means the content was
+  already identical, so nothing was appended. `artifact.delete` returns
+  `versions_deleted` and `deleted: true`.
 
 ## Multi-turn work
 

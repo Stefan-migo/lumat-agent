@@ -452,8 +452,48 @@ describe("AssistantWorkspace", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
     render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
 
-    expect(await screen.findByText("El proyecto queda fijo desde el primer mensaje.")).toBeInTheDocument();
+    expect(await screen.findByText("General / Sin proyecto")).toBeInTheDocument();
+    expect(screen.queryByText("El proyecto queda fijo desde el primer mensaje.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Cambiar proyecto:/ })).not.toBeInTheDocument();
+  });
+
+  it("collapses the project menu to just the name, without dropdown chevron, badge or description", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input) === "/panel/api/projects") return new Response(JSON.stringify({
+        projects: [{ id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo de terreno", status: "active", created_at: null, updated_at: null }],
+      }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="ops" onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
+
+    await screen.findAllByText("Operaciones");
+    fireEvent.click(screen.getByRole("button", { name: "Proyecto" }));
+
+    const trigger = screen.getByRole("button", { name: /Ver proyectos\. Actual: Operaciones/ });
+    // S1: name only — the dropdown chevron is gone, and so are the badge and description.
+    expect(trigger.querySelector("svg.lucide-chevron-down")).toBeNull();
+    expect(within(trigger).queryByText("Activo")).not.toBeInTheDocument();
+    expect(within(trigger).queryByText("Trabajo de terreno")).not.toBeInTheDocument();
+    expect(screen.queryByText("Trabajo de terreno")).not.toBeVisible();
+  });
+
+  it("shows the description and a small badge, not the fixed legend, once the thread is started", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input) === "/panel/api/projects") return new Response(JSON.stringify({
+        projects: [{ id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo de terreno", status: "active", created_at: null, updated_at: null }],
+      }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted activeProjectSlug="ops" onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
+
+    // S2: the description is here and the "fixed" legend is gone.
+    expect(await screen.findByText("Trabajo de terreno")).toBeInTheDocument();
+    expect(screen.queryByText("El proyecto queda fijo desde el primer mensaje.")).not.toBeInTheDocument();
+    expect(screen.getByText("Activo")).toHaveClass("badge--sm");
   });
 
   it("changes the active thread project from the lean mobile picker", async () => {
@@ -1108,6 +1148,41 @@ describe("AssistantWorkspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download", expect.anything()));
     await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de reporte.csv" }));
     await userEvent.setup().click(screen.getByRole("menuitem", { name: "Descargar" }));
+  });
+
+  it("deletes an artifact after confirmation and removes it from the list", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
+    let deleted = false;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.endsWith("/threads/7")) return new Response(JSON.stringify({
+        thread: { id: 7, proyecto: "operaciones", status: "open" },
+        messages: [],
+        artifacts: [{ id: 5, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 1200, created_at: null, root_id: 5, version: 1, versions: [{ version: 1, id: 5, size: 1200, created_at: null }] }],
+      }), { status: 200 });
+      if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
+      if (url.endsWith("/artifacts/5") && init?.method === "DELETE") { deleted = true; return new Response(JSON.stringify({ artifact_id: 5, root_id: 5, filename: "reporte.csv", versions_deleted: 1, deleted: true }), { status: 200 }); }
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("reporte.csv")).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de reporte.csv" }));
+    await userEvent.setup().click(screen.getByRole("menuitem", { name: "Eliminar" }));
+    const dialog = screen.getByRole("dialog", { name: "Eliminar artefacto" });
+    expect(dialog).toHaveTextContent("reporte.csv");
+    await userEvent.setup().click(within(dialog).getByRole("button", { name: "Eliminar artefacto" }));
+
+    await waitFor(() => expect(deleted).toBe(true));
+    await waitFor(() => expect(screen.queryByText("reporte.csv")).not.toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5", expect.objectContaining({ method: "DELETE" }));
   });
 
   it("opens the user-memory audit surface from workspace navigation", async () => {

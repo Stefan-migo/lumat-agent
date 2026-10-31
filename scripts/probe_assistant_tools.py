@@ -58,6 +58,7 @@ ARGUMENT_FIXTURES: dict[str, dict[str, Any]] = {
     "view_image": {"source": "project", "id": 1},
     "artifact.save": {"filename": "probe.txt", "content": "probe"},
     "artifact.update": {"artifact_id": 1, "content": "probe v2"},
+    "artifact.delete": {"artifact_id": 1},
     "project.create": {"slug": "probe", "name": "Probe", "purpose": "Probe"},
     "project.rename": {"project": "probe", "name": "Probe"},
     "project.archive": {"project": "probe"},

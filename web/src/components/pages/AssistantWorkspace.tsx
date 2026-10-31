@@ -59,7 +59,7 @@ function useDesktopWorkspace() {
   return desktop;
 }
 
-export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, userId, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, threadStarted = false, onChangeProject, onSelectProject }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; userId?: number; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; threadStarted?: boolean; onChangeProject?: () => void; onSelectProject?: (slug: string) => void }) {
+export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultThread, role, userId, loadThreadTabs = true, attachments = [], artifacts = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, activeProjectSlug, threadStarted = false, onChangeProject, onSelectProject, onDeleteArtifact }: { children: ReactNode; onCreateThread: () => void; onCreateDefaultThread?: () => void; role?: Role; userId?: number; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; artifacts?: AssistantArtifact[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; activeProjectSlug?: string; threadStarted?: boolean; onChangeProject?: () => void; onSelectProject?: (slug: string) => void; onDeleteArtifact?: (artifact: AssistantArtifact) => Promise<void> }) {
   const desktopWorkspace = useDesktopWorkspace();
   const [projectsVisible, setProjectsVisible] = useState(desktopWorkspace);
   const [contextVisible, setContextVisible] = useState(desktopWorkspace);
@@ -145,6 +145,21 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       await downloadAssistantArtifact(artifact.thread_id, artifact.id, artifact.filename);
     } catch (reason: unknown) {
       setArtifactError(reason instanceof ApiError ? reason.detail : "No pudimos descargar el artefacto.");
+    } finally {
+      setBusyArtifactId(null);
+    }
+  };
+
+  const [pendingArtifactDelete, setPendingArtifactDelete] = useState<AssistantArtifact | null>(null);
+  const confirmDeleteArtifact = async () => {
+    if (!pendingArtifactDelete) return;
+    setBusyArtifactId(pendingArtifactDelete.id);
+    setArtifactError(null);
+    try {
+      await onDeleteArtifact?.(pendingArtifactDelete);
+      setPendingArtifactDelete(null);
+    } catch (reason: unknown) {
+      setArtifactError(reason instanceof ApiError ? reason.detail : "No pudimos eliminar el artefacto.");
     } finally {
       setBusyArtifactId(null);
     }
@@ -391,7 +406,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <span>{activeProject?.name ?? (activeProjectSlug === "default" ? "General" : activeProjectSlug ?? "Sin proyecto")}</span>
             <Button variant="tertiary" disabled={projectLocked} onClick={() => { setThreadDetailOpen(false); onChangeProject?.(); }}>Cambiar</Button>
           </div>
-          <ThreadContextSections activeProject={activeProject} onOpenFile={setViewerFile} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} mobile />
+          <ThreadContextSections activeProject={activeProject} onOpenFile={setViewerFile} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} onRequestDeleteArtifact={setPendingArtifactDelete} mobile />
         </div> : null}
       </Dialog>
       <Dialog open={navigationOpen} onClose={() => setNavigationOpen(false)} title="Navegación" variant="sheet">
@@ -629,6 +644,12 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
             <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
           </div>
         </Dialog>
+        <Dialog open={pendingArtifactDelete !== null} onClose={() => setPendingArtifactDelete(null)} title="Eliminar artefacto">
+          <div className="assistant-workspace__thread-dialog">
+            <p>¿Eliminar “{pendingArtifactDelete?.filename}”? Se borrarán todas sus versiones. Esta acción no se puede deshacer.</p>
+            <Button variant="danger" onClick={() => void confirmDeleteArtifact()}>Eliminar artefacto</Button>
+          </div>
+        </Dialog>
         {activeContextSlug ? <ProjectsPage projectSlug={activeContextSlug} role={role} onOpenChat={() => closeTab({ kind: "context", projectSlug: activeContextSlug })} onOpenThread={(threadId, slug) => navigateToThread(threadId, slug)} onOpenHistory={navigateToHistory} embedded /> : activeHistorySlug ? <ProjectHistory projectSlug={activeHistorySlug} projectName={projects.find((item) => item.slug === activeHistorySlug)?.name ?? activeHistorySlug} history={projectThreads[activeHistorySlug]} search={historySearch[activeHistorySlug] || ""} onSearch={(value) => setHistorySearch((current) => ({ ...current, [activeHistorySlug]: value }))} onOpen={(thread) => navigateToThread(thread.id, activeHistorySlug)} onThreadAction={(thread, action) => { setThreadActionError(null); if (action === "rename") { setRenameTarget({ id: thread.id, title: thread.title }); setRenameTitle(thread.title ?? ""); } else setDeleteTarget({ id: thread.id, title: thread.title }); }} onRetry={() => void loadProjectThreads(activeHistorySlug, 50)} /> : children}
       </section>
 
@@ -647,7 +668,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
           ariaLabel="Panel del hilo"
           tabs={[{ id: "context", label: "Contexto" }]}
         >
-          {() => <ThreadContextSections activeProject={activeProject} projects={projects} activeProjectSlug={activeProjectSlug} projectLocked={threadStarted} onSelectProject={onSelectProject} resourcesSummary={resourcesSummary} onResourcesSummary={setResourcesSummary} onOpenFile={setViewerFile} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} />}
+          {() => <ThreadContextSections activeProject={activeProject} projects={projects} activeProjectSlug={activeProjectSlug} projectLocked={threadStarted} onSelectProject={onSelectProject} resourcesSummary={resourcesSummary} onResourcesSummary={setResourcesSummary} onOpenFile={setViewerFile} threadId={activeThreadId} capabilities={effectiveCapabilities} capabilitiesLoading={effectiveCapabilitiesLoading} capabilitiesError={effectiveCapabilitiesError} attachments={attachments} artifacts={artifacts} contextSections={contextSections} toggleContextSection={toggleContextSection} busyArtifactId={busyArtifactId} artifactError={artifactError} downloadArtifact={downloadArtifact} onRequestDeleteArtifact={setPendingArtifactDelete} />}
         </Tabs>
         </> : null}
       </aside>
@@ -701,7 +722,7 @@ function activityTime(thread: InternalChatThreadSummary): number {
 
 /** One artifact in the thread: the current version inline, the older versions behind a
  * collapsed history (S5). Opening a revision only reads it; it never changes what the thread shows. */
-function ArtifactRows({ artifact, busy, onOpenFile, downloadArtifact }: { artifact: AssistantArtifact; busy: boolean; onOpenFile?: (source: ViewerSource) => void; downloadArtifact: (artifact: AssistantArtifact) => Promise<void> }) {
+function ArtifactRows({ artifact, busy, onOpenFile, downloadArtifact, onRequestDelete }: { artifact: AssistantArtifact; busy: boolean; onOpenFile?: (source: ViewerSource) => void; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; onRequestDelete?: (artifact: AssistantArtifact) => void }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const currentVersion = artifact.version ?? 1;
   // A payload from before migration 061 has no chain; it is a single revision, never a crash.
@@ -722,13 +743,13 @@ function ArtifactRows({ artifact, busy, onOpenFile, downloadArtifact }: { artifa
         {currentVersion > 1 ? <Badge tone="neutral" className="assistant-workspace__artifact-version">{`v${currentVersion}`}</Badge> : null}
       </button>
       {revisions.length > 1 ? <button type="button" className="assistant-workspace__artifact-history-toggle" aria-label={`Historial de ${artifact.filename}`} aria-expanded={historyOpen} title={`Historial de ${artifact.filename}`} onClick={() => setHistoryOpen((open) => !open)}><Icon icon={History} size="sm" /></button> : null}
-      <Menu label={`Acciones de ${artifact.filename}`} trigger="icon" align="end" disabled={busy} items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }]} onSelect={(value) => { if (value === "download") void downloadArtifact(artifact); else openCurrent(); }} />
+      <Menu label={`Acciones de ${artifact.filename}`} trigger="icon" align="end" disabled={busy} items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }, { value: "delete", label: "Eliminar", icon: Trash2, tone: "danger" }]} onSelect={(value) => { if (value === "download") void downloadArtifact(artifact); else if (value === "delete") onRequestDelete?.(artifact); else openCurrent(); }} />
     </li>
     {historyOpen && revisions.length > 1 ? <li className="assistant-workspace__artifact-history"><ul aria-label={`Versiones de ${artifact.filename}`}>{revisions.map((revision) => <li key={revision.id}><button type="button" className="assistant-workspace__artifact-history-row" aria-label={`Abrir versión ${revision.version} de ${artifact.filename}`} onClick={() => openRevision(revision.version, revision.id)}><span>{`v${revision.version}`}</span><span>{revision.version === currentVersion ? "Versión vigente" : fileBytesLabel(revision.size)}</span></button></li>)}</ul></li> : null}
   </>;
 }
 
-function ThreadContextSections({ activeProject, projects = [], activeProjectSlug, projectLocked = false, onSelectProject, resourcesSummary, onResourcesSummary, onOpenFile, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, mobile = false }: { activeProject?: Project; projects?: Project[]; activeProjectSlug?: string; projectLocked?: boolean; onSelectProject?: (slug: string) => void; resourcesSummary?: string; onResourcesSummary?: (summary: string) => void; onOpenFile?: (source: ViewerSource) => void; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; mobile?: boolean }) {
+function ThreadContextSections({ activeProject, projects = [], activeProjectSlug, projectLocked = false, onSelectProject, resourcesSummary, onResourcesSummary, onOpenFile, threadId, capabilities, capabilitiesLoading, capabilitiesError, attachments, artifacts, contextSections, toggleContextSection, busyArtifactId, artifactError, downloadArtifact, onRequestDeleteArtifact, mobile = false }: { activeProject?: Project; projects?: Project[]; activeProjectSlug?: string; projectLocked?: boolean; onSelectProject?: (slug: string) => void; resourcesSummary?: string; onResourcesSummary?: (summary: string) => void; onOpenFile?: (source: ViewerSource) => void; threadId?: number; capabilities?: AssistantCapabilities | null; capabilitiesLoading: boolean; capabilitiesError: boolean; attachments: AssistantAttachment[]; artifacts: AssistantArtifact[]; contextSections: Record<string, boolean>; toggleContextSection: (id: string) => void; busyArtifactId: number | null; artifactError: string | null; downloadArtifact: (artifact: AssistantArtifact) => Promise<void>; onRequestDeleteArtifact?: (artifact: AssistantArtifact) => void; mobile?: boolean }) {
   const threadNote = "Los adjuntos y resultados pertenecen a este hilo.";
   return <div className={mobile ? "assistant-workspace__thread-detail-sections" : "assistant-workspace__context-content"}>
     <ContextSection id={mobile ? "mobile-project" : "project"} title={mobile ? "Contexto del proyecto" : "Proyecto"} icon={Folder} summary={activeProject ? activeProject.name : "General / Sin proyecto"} collapsedContent={mobile ? undefined : <ContextProjectPicker mode="static" projects={projects} activeSlug={activeProjectSlug} activeName={activeProject?.name} project={activeProject} onExpand={() => toggleContextSection("project")} />} expanded={contextSections.project ?? true} onToggle={() => toggleContextSection("project")}>
@@ -739,7 +760,7 @@ function ThreadContextSections({ activeProject, projects = [], activeProjectSlug
       {attachments.length ? <ul className="assistant-workspace__file-list">{attachments.map((attachment) => <li key={attachment.id} className="assistant-workspace__file-item" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-lumat-thread-reference", JSON.stringify({ kind: "attachment", id: attachment.id, filename: attachment.filename })); event.dataTransfer.effectAllowed = "copy"; }}><button type="button" className="assistant-workspace__file-row" aria-label={`Abrir ${attachment.filename}`} title={`Abrir ${attachment.filename}`} onClick={() => onOpenFile?.({ url: threadAttachmentContentUrl(attachment.thread_id, attachment.id), filename: attachment.filename, contentType: attachment.content_type })}><span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(attachment.filename)}`}><Icon icon={assistantFileIcon(attachment.filename, attachment.content_type)} size="md" /></span><span className="assistant-workspace__file-copy"><strong>{attachment.filename}</strong><small>{fileTypeLabel(attachment.filename, attachment.content_type)} · Adjunto a este hilo</small></span></button><Menu label={`Acciones de ${attachment.filename}`} trigger="icon" align="end" items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }]} onSelect={(value) => { const url = threadAttachmentContentUrl(attachment.thread_id, attachment.id); if (value === "download") downloadUrl(url, attachment.filename); else onOpenFile?.({ url, filename: attachment.filename, contentType: attachment.content_type }); }} /></li>)}</ul> : <div className="assistant-workspace__context-box assistant-workspace__context-box--empty"><Icon icon={Paperclip} size="sm" />Aún no hay archivos adjuntos.</div>}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-artifacts" : "artifacts"} title="Artefactos del hilo" icon={FileText} count={artifacts.length} summary="Aquí aparecerán los archivos generados." expanded={contextSections.artifacts ?? false} onToggle={() => toggleContextSection("artifacts")}>
-      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <ArtifactRows key={artifact.id} artifact={artifact} busy={busyArtifactId === artifact.id} onOpenFile={onOpenFile} downloadArtifact={downloadArtifact} />)}</ul> : <div className="assistant-workspace__context-box">Aquí aparecerán los archivos generados.</div>}
+      {artifacts.length ? <ul className="assistant-workspace__file-list">{artifacts.map((artifact) => <ArtifactRows key={artifact.id} artifact={artifact} busy={busyArtifactId === artifact.id} onOpenFile={onOpenFile} downloadArtifact={downloadArtifact} onRequestDelete={onRequestDeleteArtifact} />)}</ul> : <div className="assistant-workspace__context-box">Aquí aparecerán los archivos generados.</div>}
       {artifactError ? <StateMessage tone="danger" role="alert" title={artifactError} /> : null}
     </ContextSection>
     <ContextSection id={mobile ? "mobile-capabilities" : "capabilities"} title="Capacidades del asistente" icon={BrainCircuit} count={capabilities ? undefined : "Sin datos"} subtitle="Información de solo lectura." expanded={contextSections.capabilities ?? false} onToggle={() => toggleContextSection("capabilities")}>
@@ -763,21 +784,23 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, mode 
   const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
   const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
     .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
-  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={ChevronDown} size="sm" /></>;
+  const projectMeta = project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)} className="badge--sm">{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null;
 
   if (mode === "static") {
-    // The field keeps the chevron, so it must do something: it opens the section
-    // where the searchable list lives.
+    // Closed: just the name. The dropdown chevron is gone (this opens the section, not a menu),
+    // and the badge/description live only in the open state.
     return <div className="assistant-workspace__context-project" data-static="true">
-      <button type="button" className="assistant-workspace__context-project-trigger" aria-expanded={false} aria-label={`Ver proyectos. Actual: ${currentName}`} onClick={() => onExpand?.()}>{trigger}</button>
-      {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+      <button type="button" className="assistant-workspace__context-project-trigger" aria-expanded={false} aria-label={`Ver proyectos. Actual: ${currentName}`} onClick={() => onExpand?.()}><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span></button>
     </div>;
   }
 
   if (locked) {
+    // Open and fixed: the lock icon is the "fixed" signal; the description and a small badge
+    // replace the explanatory legend.
     return <div className="assistant-workspace__context-project" data-locked="true">
-      <p className="assistant-workspace__context-project-trigger">{trigger}</p>
-      <p className="assistant-workspace__context-project-hint">El proyecto queda fijo desde el primer mensaje.</p>
+      <p className="assistant-workspace__context-project-trigger"><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={Lock} size="sm" /></p>
+      {projectMeta}
     </div>;
   }
 
@@ -799,7 +822,7 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, mode 
       </> : null}
       <p className="assistant-workspace__context-project-hint">El proyecto define el contexto de este hilo.</p>
     </Popover>
-    {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+    {projectMeta}
   </div>;
 }
 
