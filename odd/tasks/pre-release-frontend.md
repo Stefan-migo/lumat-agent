@@ -193,3 +193,33 @@ Nota de disciplina: los tres tests nuevos de esta capa (control sobre el scrolle
 abrible/cerrable, separador de día) se escribieron **después** de la implementación, no en RED
 primero; los 4 tests existentes que rompió el cambio de formato se migraron a la conducta nueva.
 
+**L12 — segunda vuelta sobre la maqueta, con el render real a la vista (2026-10-31).**
+El owner mandó dos capturas del resultado y cuatro correcciones sobre el render, no sobre la
+descripción:
+1. **El alto no se usaba.** `.conversation-workspace` tenía `height: clamp(480px, 100dvh - 15rem,
+   736px)`, un número fijo que dejaba una franja muerta abajo. Ahora la cadena
+   `.conversation-thread-page` → `.page-frame__content` → `.conversation-workspace` es flex con
+   `min-height: 0` y la tarjeta toma la altura que realmente queda.
+2. **El espacio libre se lo llevaba el composer, no el hilo.** Defecto de mi propio slice 3: al
+   eliminar la banda "Historial de mensajes", `.ai-agent-grammar__main` quedó con
+   `grid-template-rows: auto minmax(0,1fr) auto` para dos hijos, así que la fila elástica era la
+   segunda — el composer. Corregido a `minmax(0,1fr) auto` en esta página.
+3. **Burbujas centradas.** La gramática compartida centra una columna de 52 rem
+   (`.ai-agent-grammar__thread-area`); acá se anula el `max-width` y las burbujas van a las orillas
+   de la tarjeta, que es como se lee un hilo de WhatsApp.
+4. **Aviso de 24 h invasivo.** Era un bloque ámbar con título y subtítulo, repetido en las dos
+   ramas del composer. Ahora es una línea fina (`conversation-thread__window-note`) con
+   `aria-label` propio para no perder el nombre accesible. Se eliminó además el
+   "Conversación cerrada" que se imprimía al pie: decía "cerrada" cuando en realidad era la ventana
+   de 24 h, y ya lo dice el aviso.
+El toggle de detalles salió del círculo flotante sobre el hilo (se veía fuera de lugar en la
+captura) y pasó a ser un botón del header con `aria-pressed`.
+
+**Respuesta a la consulta de GIF/stickers** (verificado en el código, no supuesto): el backend ya
+modela `MessageType.STICKER` y `app/webhook/ingest.py:117` lo ingiere, y `image/gif` está en los
+sufijos y en los tipos servidos inline. Un **GIF** que llegue como `image` se ve animado hoy mismo
+con el `<img>` existente; si WhatsApp lo entrega como video MP4 —el caso típico— se ve como video
+con controles, no en loop. Un **sticker** llega y se guarda, pero el panel no tiene rama de render:
+cae al `default` de `MessageBubble` y aparece como link de descarga. Falta una rama `sticker` con
+`<img>` (webp). Enviar stickers no es posible: la Cloud API sólo acepta stickers de un pack propio.
+

@@ -17,11 +17,27 @@
 .conversation-thread__id { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .conversation-thread__header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); margin-left: auto; }
 
+/* The conversation owns the whole content area. The shell gives the content cell a minmax(0, 1fr)
+   row of a 100dvh grid, so once these three rules are in play the workspace takes the height that
+   is actually left instead of a fixed clamp that left dead space under the card. */
+.conversation-thread-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.conversation-thread-page .page-frame__content { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.conversation-thread-page .conversation-workspace { flex: 1 1 auto; height: auto; min-height: 0; }
+/* Bubbles hug the card edges. The shared grammar centres a 52rem column for the assistant chat; a
+   WhatsApp thread reads edge to edge, so the column is dropped here only. */
+.conversation-thread-page .ai-agent-grammar__thread-area { max-width: none; margin: 0; }
+
+/* The thread takes the free row and the composer keeps its own. The shared grammar declares three
+   rows (header, thread, composer); this page no longer renders an inner header, so without this the
+   spare height went to the composer instead of the conversation. */
+.conversation-thread-page .ai-agent-grammar__main { grid-template-rows: minmax(0, 1fr) auto; }
+/* The 24-hour window is one quiet line, not a block that competes with the conversation. */
+.conversation-thread__window-note { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-4); border-top: 1px solid var(--warning-border); color: var(--warning); font-size: var(--text-sm); }
+.conversation-thread__window-note > svg { flex: 0 0 auto; }
+
 /* The client details float over the thread instead of taking a column from it, which is what gives
    the conversation its width back. The workspace becomes the positioning context. */
 .conversation-thread-page .conversation-workspace { position: relative; grid-template-columns: minmax(0, 1fr); }
-.conversation-thread__detail-toggle { position: absolute; top: var(--space-3); right: var(--space-3); z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: calc(var(--space-8) + var(--space-2)); height: calc(var(--space-8) + var(--space-2)); border: 1px solid var(--corp-border); border-radius: 50%; background: var(--surface); color: var(--corp-fg-muted); cursor: pointer; }
-.conversation-thread__detail-toggle:hover { color: var(--corp-fg); border-color: var(--corp-border-strong, var(--corp-border)); }
 .conversation-thread__detail { position: absolute; top: var(--space-3); right: var(--space-3); bottom: var(--space-3); z-index: 3; width: min(384px, calc(100% - var(--space-6))); overflow-y: auto; border: 1px solid var(--corp-border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--elevation-overlay); }
 .conversation-thread__detail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
 .conversation-thread__detail-head h2 { margin: 0; font-size: var(--text-md); }
@@ -105,7 +121,7 @@
   .ai-agent-grammar__bubble-stack { max-width: 90%; }
   /* The chat is the primary surface: below this width the details live in the "Información del
      chat" sheet, opened from the conversation menu, instead of floating over the thread. */
-  .conversation-thread__detail, .conversation-thread__detail-toggle { display: none; }
+  .conversation-thread__detail { display: none; }
   .conversation-thread__actions-desktop { display: none; }
   .conversation-thread__actions-mobile { display: flex; }
 }

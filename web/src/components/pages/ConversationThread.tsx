@@ -260,6 +260,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
         <span role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></span>
         <div className="conversation-thread__header-actions">
           {interactive ? <><span className="conversation-thread__actions-desktop">{desktopActions}</span><span className="conversation-thread__actions-mobile">{mobileActions}</span></> : null}
+          <Button variant="secondary" aria-label="Detalles del cliente" aria-pressed={detailOpen} onClick={() => setDetailOpen((open) => !open)}><Icon icon={Info} size="sm" /></Button>
           <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Cliente</Button>
         </div>
       </header> : null}
@@ -286,7 +287,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
          {interactive ? <div className="ai-agent-grammar__composer-zone">
            {messages.filter((m) => m.delivery_status === "failed").map((m) => <Button key={m.id} variant="secondary" disabled={busy} onClick={() => void mutate(() => retryMessage(m.conversation_id, m.id))}>Reintentar entrega #{m.id}</Button>)}
            {conversation?.state === "human" ? <form className={`ai-agent-grammar__composer${windowOpen ? "" : " ai-agent-grammar__composer--locked"}`} aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}>
-             {!windowOpen ? <div className="ai-agent-grammar__window-warning" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /><div><strong>Fuera de la ventana de 24 horas</strong><span>El envío de mensajes no está disponible.</span></div></div> : null}
+             {!windowOpen ? <p className="conversation-thread__window-note" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /> Fuera de la ventana de 24 horas · el envío no está disponible.</p> : null}
              <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field">{!windowOpen ? <Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /> : null}<Textarea label="Respuesta" rows={windowOpen ? undefined : 1} placeholder={windowOpen ? undefined : "Respuesta no disponible"} value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /></div><Button type="submit" aria-label="Enviar respuesta" disabled={!windowOpen || busy || !text.trim()}><SendHorizonal aria-hidden="true" /></Button></div>
              <div className="conversation-thread__media-tools">
                <input ref={inputRef} className="conversation-thread__file-input" type="file" aria-label="Adjuntar archivo" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" disabled={!windowOpen || busy} onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setCaption(""); event.currentTarget.value = ""; }} />
@@ -295,16 +296,14 @@ export function ConversationThread({ conversationId, data: controlledData, state
                {!supportedRecordingMime ? <span className="conversation-thread__recording-help">La grabación de audio no está disponible en este navegador.</span> : null}
              </div>
              {selectedFile ? <div className="conversation-thread__selected-file"><span>{selectedFile.name} · {(selectedFile.size / 1024).toFixed(1)} KB</span><Textarea label="Texto del archivo (opcional)" rows={2} value={caption} disabled={busy} onChange={(event) => setCaption(event.target.value)} /><Button disabled={!windowOpen || busy} onClick={() => sendSelectedFile(selectedFile, caption)}>Enviar archivo</Button></div> : null}
-             {!windowOpen ? <p className="ai-agent-grammar__closed-note">Conversación cerrada</p> : null}
-           </form> : <div className="ai-agent-grammar__composer ai-agent-grammar__composer--locked">
-             <div className="ai-agent-grammar__window-warning" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /><div><strong>Fuera de la ventana de 24 horas</strong><span>El envío de mensajes no está disponible.</span></div></div>
+                        </form> : <div className="ai-agent-grammar__composer ai-agent-grammar__composer--locked">
+             <p className="conversation-thread__window-note" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /> Fuera de la ventana de 24 horas · el envío no está disponible.</p>
              <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field"><Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /><Textarea label="Respuesta" rows={1} placeholder="Respuesta no disponible" value="" disabled onChange={() => {}} /></div><Button aria-label="Enviar respuesta" disabled><SendHorizonal aria-hidden="true" /></Button></div>
              <p className="ai-agent-grammar__closed-note">{conversation?.state === "closed" ? "Conversación cerrada" : "Toma la conversación para responder."}</p>
            </div>}
            {mutationError && <p role="alert">La entrega falló: {mutationError}</p>}
          </div> : null}
            </main>{conversation ? <>
-             <button type="button" className="conversation-thread__detail-toggle" aria-label="Detalles del cliente" aria-expanded={detailOpen} onClick={() => setDetailOpen((open) => !open)}><Icon icon={Info} size="sm" /></button>
              {detailOpen ? <div className="conversation-thread__detail" role="dialog" aria-label="Detalles del cliente">
                <div className="conversation-thread__detail-head"><h2>Detalles del cliente</h2><Button variant="tertiary" aria-label="Cerrar detalles del cliente" onClick={() => setDetailOpen(false)}><X aria-hidden="true" /></Button></div>
                <ConversationContext conversation={conversation} />
