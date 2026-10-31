@@ -93,3 +93,22 @@ other records; deactivate instead". `appointments.technician_id` y `project_file
 NULL`. Los hilos del asistente y sus hijos (`internal_chat_messages`, `assistant_attachments`,
 `assistant_artifacts`) tienen `ondelete="CASCADE"` en `thread_id`. No hay endpoint ni tool de borrado
 de artefactos (sólo download). `AUTONOMOUS_WRITE_ALLOWLIST` ya incluye `artifact.save`/`artifact.update`.
+
+**L4 — review nativo (RDD, `review-7595a825ca677c64`, tier high, 4 lentes + refuter) encontró dos
+hallazgos CRITICAL reales y la corrección quedó commiteada, pero la validación dirigida no se puede
+cerrar por el facade.**
+
+Hallazgos **R3-001** (borrado de artefacto) y **R3-002** (borrado de usuario), ambos determinísticos
+e introducidos: los dos caminos de borrado deslinkeaban los blobs **antes** de que la transacción
+committeara, así que un commit fallido o un rollback dejaba las filas vivas pero los archivos
+destruidos. Corregido en `c3970ea6`: el borrado de archivos ahora cuelga del evento `after_commit` de
+SQLAlchemy y se descarta en `after_rollback` (`remove_files_after_commit`, inlined en
+`app/services/assistant_artifacts.py`). Dos tests de rollback nuevos lo pinchan (verificados RED→GREEN).
+
+El plan de corrección fue **aceptado** (`correction_lines: 101`, dentro del presupuesto de 200) tras
+corregir el `schema` del binding a `gentle-ai.review-correction-plan/v1`. La etapa siguiente — el
+validador dirigido (`provider_targeted_validator`, `review.capture-validation`) — rechaza el binding
+exacto emitido por STATUS con `capture-binding-rejected / "collectBinding is missing or stale for
+current STATUS"` (objeto y string, con y sin re-STATUS). Es el mismo defecto del facade visto en la
+feature anterior; la autoridad queda en `correction_required`.
+
