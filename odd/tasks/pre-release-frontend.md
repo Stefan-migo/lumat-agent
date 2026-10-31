@@ -59,9 +59,9 @@ por slice sin reescribir el trabajo.
 | ID | Specs | Route | Commit | Estado |
 |----|-------|-------|--------|--------|
 | T1 | S1, S2 | inline | `3b83f31e` (api) + `3b58ef72` | hecho |
-| T2 | S3, S4 | inline + worker | `3a11def4` (Configuración), `edb3501b` (Agenda), worker en curso | en curso |
+| T2 | S3, S4 | inline + worker | `3a11def4`, `edb3501b`, `5e535ccb`, `b12c2307`, `14f1feaf`, `4fe96b32`, `43d8c6b3` | hecho |
 | T3 | S5 | worker (tras la captura) | — | bloqueada por L2 |
-| T4 | S1–S6 | inline | — | pendiente |
+| T4 | S1–S6 | inline | ver L9 | gate verde; PR pendiente de decisión del owner |
 
 ## Log
 
@@ -113,3 +113,46 @@ del baseline por rojo propio; `ClientesList` pasó sola al reintentar. También 
 `ProjectResourcesPanel.test.tsx` no existe en el repo (error de mi brief). Conclusión operativa: en
 esta máquina hay que medir el baseline antes de delegar y nunca creer un rojo de frontend sin mirar
 `uptime`. Configuración se hizo inline y quedó verde (102 tests en los tres archivos de Settings).
+
+**L6 — barrido del resto del panel (2026-10-31).**
+El worker convirtió 11 páginas (22 archivos, +172/−140): `AppointmentDetail`, `ClientFicha`,
+`ClientesList`, `KbList`, `KbDocumentDetail`, `AutomationRecipesPage`, `ProjectSkills`,
+`ProjectsPage`, `SelfProfile`, `UserFicha`, `UserManagement`. `ProjectAgents` no tenía feedback de
+acción que convertir y así se reportó, sin inventar un cambio.
+Quedaron fuera del barrido, a propósito y con razón: `ConversationThread` (lo toca S5),
+`AgentChat`/`AssistantWorkspace` (su feedback es estado de stream y micro-feedback pegado al
+control — "Subiendo archivo…", "Copiado", "Cancelado" —, no resultado de acción), y los errores
+dentro de `Dialog`, que S4 mantiene inline.
+
+**L7 — el rojo de ProjectsPage era un defecto del test, no del producto (2026-10-31).**
+El único fallo del barrido fue `saves project instructions through the config endpoint`: la
+toast de éxito no aparecía porque el mensaje real era el de error ("No pudimos guardar las
+instrucciones."). Causa: el test mockeaba `fetch` por **secuencia** (`mockResolvedValueOnce`), y
+`ProjectResources` también fetchea al montar, así que el PATCH recibía la respuesta de otro
+request. El test viejo no lo detectaba porque su única aserción de resultado era el valor del
+textarea, que sale del estado local y no de la respuesta: **el guardado llevaba fallando en ese
+test sin que nadie lo viera**. Se corrigió mockeando por URL y método. Regla que deja: una
+aserción de resultado tiene que mirar lo que produjo la llamada, no el estado que el usuario ya
+tecleó.
+
+**L8 — el gate mintió dos veces por un huérfano, no por código (2026-10-31).**
+Dos corridas de `scripts/test.sh full` salieron con exit 1 y **cero** `FAILED`/`ERROR`. No era un
+test flojo: `pytest-timeout` (120 s, `timeout_method = "thread"`) mata el proceso de pytest pero
+**no** los subprocesos que el test lanzó. `tests/functional/test_seed_dev.py:42` corre
+`seed_dev.py` con `subprocess.run`; cuando ese test expiró, el hijo sobrevivió `idle in
+transaction` y bloqueó todos los `TRUNCATE` de `tests/functional/conftest.py:88`. La segunda
+corrida moría en el primer test de base, no en el del seed.
+Confirmado en `pg_stat_activity` (dos `TRUNCATE` en `active/Lock` y el culpable `idle in
+transaction`), limpiado con `kill -9` del huérfano y `pg_terminate_backend`, y re-corrido sobre
+base limpia: **exit 0, 0 fallos, 0 timeouts**. Corolario que queda: en este repo un `full` rojo
+sin ningún `FAILED` es el harness bloqueado; re-correr sobre la base sucia repite el timeout.
+
+**L9 — gate de cierre (2026-10-31).**
+- Backend `full` sobre base limpia: `BACKEND_EXIT=0`, 0 `FAILED`, 0 `ERROR`, 0 timeouts.
+- Frontend `npm test` sobre el árbol final: verde, 119 archivos / 1386 tests.
+- `npm run build` (`tsc -b` + vite): verde.
+- Slice 1: 3 tests nuevos de formato de audio + 18 tests de media existentes en verde.
+
+**L10 — pendiente del owner (2026-10-31).**
+T3 no arranca sin la captura o maqueta de la ventana de conversación (L2.2). El push de la rama y
+la apertura del PR quedan como decisión del owner, como manda la política del repo.
