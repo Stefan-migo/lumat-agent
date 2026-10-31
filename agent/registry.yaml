@@ -100,6 +100,7 @@ assistant:
     - view_image
     - skill.propose
     - artifact.save
+    - artifact.update
     - project.create
     - project.rename
     - project.archive
@@ -134,6 +135,7 @@ role_agents:
       - memory.update
       - memory.delete
       - artifact.save
+      - artifact.update
       - web.search
       - web.fetch
       - project.list
