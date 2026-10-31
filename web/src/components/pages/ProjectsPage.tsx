@@ -4,6 +4,7 @@ import { ApiError, createProject, getProject, listProjects, updateProjectConfig 
 import type { Project, ProjectCandidate, ProjectDetailResponse, ProjectsResponse, Role } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
+import { useToast } from "../primitives/Toast";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
@@ -21,13 +22,12 @@ import { ProjectThreads } from "./ProjectThreads";
 import "./ProjectsPage.css";
 
 export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, onOpenThread, onOpenHistory, data, state, role, embedded = false }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; onOpenThread?: (threadId: number, slug: string) => void; onOpenHistory?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; role?: Role; embedded?: boolean }) {
+  const toast = useToast();
   const [form, setForm] = useState({ slug: "", name: "", purpose: "" });
   const [createdProjects, setCreatedProjects] = useState<ProjectsResponse | null>(null);
-  const [creationError, setCreationError] = useState<{ detail: string; candidates: ProjectCandidate[] } | null>(null);
   const [creating, setCreating] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [savingInstructions, setSavingInstructions] = useState(false);
-  const [instructionsError, setInstructionsError] = useState<string | null>(null);
   const load = useCallback(() => listProjects(), []);
   const fetched = useAsyncData(load, data === undefined);
   const detailLoad = useCallback(() => getProject(projectSlug!), [projectSlug]);
@@ -38,11 +38,11 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, onOpenThr
   }, [body?.project.slug, body?.project.config?.instructions]);
   const saveInstructions = async () => {
     setSavingInstructions(true);
-    setInstructionsError(null);
     try {
       await updateProjectConfig(projectSlug!, { instructions });
+      toast.show("Instrucciones guardadas.");
     } catch (reason: unknown) {
-      setInstructionsError(reason instanceof ApiError ? reason.detail : "No pudimos guardar las instrucciones.");
+      toast.show(reason instanceof ApiError ? reason.detail : "No pudimos guardar las instrucciones.", "danger");
     } finally {
       setSavingInstructions(false);
     }
@@ -60,7 +60,6 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, onOpenThr
             <Textarea label="Propósito" value={body.project.purpose} disabled onChange={() => undefined} />
             <Textarea label="Instrucciones del proyecto" placeholder="Describe cómo debe trabajar el asistente en este proyecto…" value={instructions} onChange={(event) => setInstructions(event.target.value)} />
             <p className="projects-page__hint">Estas instrucciones forman parte del contexto del proyecto.</p>
-            {instructionsError ? <p role="alert">No se guardaron los cambios: {instructionsError}</p> : null}
           </Card>
           <ProjectResources projectSlug={body.project.slug} projectId={body.project.id} projectName={body.project.name} role={role} />
         </div>;
@@ -72,7 +71,6 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, onOpenThr
   const create = async (event: FormEvent) => {
     event.preventDefault();
     setCreating(true);
-    setCreationError(null);
     try {
       let created: Project;
       try {
@@ -82,10 +80,12 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, onOpenThr
         const candidates = reason instanceof ApiError && Array.isArray(reason.structuredDetail?.candidates)
           ? reason.structuredDetail.candidates as ProjectCandidate[]
           : [];
-        setCreationError({ detail, candidates });
+        const candidateDetails = candidates.map((candidate) => `${candidate.name} (${candidate.slug}) · ${candidate.similarity}`).join("; ");
+        toast.show(candidateDetails ? `${detail}: ${candidateDetails}` : detail, "danger");
         return;
       }
       setForm({ slug: "", name: "", purpose: "" });
+      toast.show("Proyecto creado.");
       try {
         setCreatedProjects(await listProjects());
       } catch {
@@ -105,7 +105,6 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, onOpenThr
         <Input label="Nombre" maxLength={200} required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         <Textarea label="Propósito" maxLength={500} required value={form.purpose} onChange={(event) => setForm({ ...form, purpose: event.target.value })} />
         <Button type="submit" disabled={creating}>{creating ? "Creando…" : "Crear proyecto"}</Button>
-        {creationError ? <section role="alert"><p>{creationError.detail}</p>{creationError.candidates.map((candidate) => <p key={candidate.slug}>{candidate.name} ({candidate.slug}) · {candidate.similarity}</p>)}</section> : null}
       </form>
     </Card>
     {!visibleProjects || visibleProjects.projects.length === 0 ? <EmptyState title="No hay proyectos" description="No hay espacios de proyecto registrados para mostrar." /> : <DataTable rows={visibleProjects.projects} rowKey={(project) => project.slug} columns={[{ key: "name", header: "Proyecto", render: (project) => <Button variant="tertiary" onClick={() => onOpenProject?.(project.slug)}>{project.name}</Button> }, { key: "purpose", header: "Propósito", render: (project) => project.purpose }, { key: "status", header: "Estado", render: (project) => <Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge> }]} />}

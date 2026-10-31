@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ProjectSkills } from "./ProjectSkills";
+import { ToastProvider } from "../primitives/Toast";
 
 const response = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
@@ -35,7 +36,7 @@ describe("ProjectSkills", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(response({ skills: [] }))
       .mockResolvedValueOnce(response({ project: {} }));
-    render(<ProjectSkills projectSlug="ops" skills={[]} />);
+    render(<ToastProvider><ProjectSkills projectSlug="ops" skills={[]} /></ToastProvider>);
     expect(await screen.findByText("Aún no hay habilidades en este proyecto")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Agregar habilidad" }));
@@ -46,6 +47,7 @@ describe("ProjectSkills", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar habilidad" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ skills: [{ name: "resumen-operativo", description: "Resume", body: "Body" }] }) })));
+    expect(await screen.findByText("Habilidad agregada.", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("expands a global skill into its read-only content", async () => {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectsPage } from "./ProjectsPage";
+import { ToastProvider } from "../primitives/Toast";
 import { parsePanelPath, pathForView } from "../domain/panelRoutes";
 
 describe("projects panel", () => {
@@ -31,9 +32,10 @@ describe("projects panel", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 2, slug: "ops", name: "Operations", purpose: "Run operations", status: "active" } }), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ projects: [{ id: 2, slug: "ops", name: "Operations", purpose: "Run operations", status: "active" }] }), { status: 200 }));
-    render(<ProjectsPage />);
+    render(<ToastProvider><ProjectsPage /></ToastProvider>);
     await fillProjectForm();
     expect(await screen.findByRole("button", { name: "Operations" })).toBeInTheDocument();
+    expect(await screen.findByText("Proyecto creado.", { selector: ".toast__message" })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/panel/api/projects", expect.objectContaining({ method: "POST", body: JSON.stringify({ slug: "ops", name: "Operations", purpose: "Run operations" }) }));
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -52,19 +54,20 @@ describe("projects panel", () => {
 
   it("shows duplicate slug conflicts", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Slug already exists" }), { status: 409 }));
-    render(<ProjectsPage />);
+    render(<ToastProvider><ProjectsPage /></ToastProvider>);
     await fillProjectForm();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Slug already exists");
+    expect(await screen.findByText("Slug already exists", { selector: ".toast__message" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows candidates for ambiguous project purposes", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Purpose is ambiguous", candidates: [{ slug: "ops", name: "Operations", similarity: 0.82 }] }), { status: 409 }));
-    render(<ProjectsPage />);
+    render(<ToastProvider><ProjectsPage /></ToastProvider>);
     await fillProjectForm();
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Purpose is ambiguous");
-    expect(alert).toHaveTextContent("Operations (ops)");
-    expect(alert).toHaveTextContent("0.82");
+    const toast = await screen.findByText(/Purpose is ambiguous/, { selector: ".toast__message" });
+    expect(toast).toHaveTextContent("Operations (ops)");
+    expect(toast).toHaveTextContent("0.82");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("renders the project status and back control in the detail header", async () => {
@@ -105,18 +108,26 @@ describe("projects panel", () => {
   });
 
   it("saves project instructions through the config endpoint", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Existing instructions", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Answer in Spanish.", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }))
-      .mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
-    render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
+    const project = (instructions: string) => ({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions, tool_policy: { opt_in_enabled: [] }, skills: [] } } });
+    // Keyed by URL, not by call order: ProjectResources also fetches on mount, so a sequence of
+    // mockResolvedValueOnce handed the PATCH someone else's response and the save silently failed
+    // while the old assertion (local textarea state) still passed.
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects/ops/config" && init?.method === "PATCH") return new Response(JSON.stringify(project("Answer in Spanish.")), { status: 200 });
+      if (url === "/panel/api/projects/ops") return new Response(JSON.stringify(project("Existing instructions")), { status: 200 });
+      return new Response(JSON.stringify({ files: [] }), { status: 200 });
+    });
+    render(<ToastProvider><ProjectsPage projectSlug="ops" data={{ projects: [] }} /></ToastProvider>);
 
     const textarea = await screen.findByLabelText("Instrucciones del proyecto");
     expect(textarea).toHaveValue("Existing instructions");
     fireEvent.change(textarea, { target: { value: "Answer in Spanish." } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) })));
     expect(await screen.findByLabelText("Instrucciones del proyecto")).toHaveValue("Answer in Spanish.");
+    expect(await screen.findByText("Instrucciones guardadas.", { selector: ".toast__message" })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
   });
 
