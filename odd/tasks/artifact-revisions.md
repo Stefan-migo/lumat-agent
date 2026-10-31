@@ -165,3 +165,25 @@ obligatorio en TypeScript no protege el runtime de un JSON viejo. Después del a
    Tests nuevos/actualizados: `test_a_repeated_identical_tool_call_is_quoted_once_in_the_responder_evidence`
    (dedupe), y los dos unitarios de `_TOOL_EVIDENCE_LIMIT` ahora miden el bloque contra la constante en
    lugar de un literal o de la cola del prompt.
+
+**L8 — review nativo (RDD, `review-0bc06157a229cb9a`, tier high, 4 lentes) encontró un defecto real
+del candidato y la corrección quedó aplicada, pero el flujo no se puede cerrar por el facade.**
+
+Hallazgo **R3-001** (lente reliability, CRITICAL, `causal_disposition: introduced`): `store_artifact`
+escribía el blob **antes** de reservar la identidad e insertar la fila, así que un fallo en el
+`nextval` o en el insert dejaba un archivo huérfano en disco sin fila. Corregido en `ec1f4874`: la fila
+entra primero, los bytes después, y una escritura fallida borra su archivo parcial
+(`_write_blob`). Dos tests nuevos lo prueban y **verifiqué el RED**: con el orden anterior los dos
+fallan; con el fix, verdes. Diff de la corrección: 72 líneas de diff (13+/6- servicio, 53+ tests),
+dentro del presupuesto de 200.
+
+**Bloqueo**: el provider pasó la autoridad a `correction_required` y emitió el slot
+`review.capture-correction-plan` (request hash `sha256:64f7c045…`). `gentle_review_capture` rechaza ese
+binding exacto con `capture-binding-rejected / "collectBinding is missing or stale for current
+STATUS"` en cinco formas: objeto tal cual lo emite STATUS, string serializado, con el árbol limpio
+(`git stash`), con el árbol sucio, y tras un STATUS fresco inmediato. No se manipuló ni se reconstruyó
+ningún binding. La autoridad queda en `correction_required`; el trabajo está commiteado y verificado,
+pero el review no se puede cerrar por esta vía. Decisión del owner: reintentar el review más tarde,
+entregar por política ordinaria del repo dejando el review registrado como bloqueado en corrección, o
+reportar el defecto del facade.
+
