@@ -42,9 +42,13 @@ bottón deshabilitado) tampoco es un toast: es el estado del control, no el resu
 La ventana de conversación con el cliente debe dar más ancho y foco al hilo; el control para cargar
 la conversación completa (`CollapsibleMessages`, "N mensajes anteriores · Ver todos") debe quedar
 fijo arriba, fuera del área con scroll, porque hoy arranca pegado al último mensaje y queda fuera de
-la vista. El formato de burbujas debe ser el mismo que usan los chats del asistente Lumat
-(`ai-agent-grammar__*` en `AgentChat.tsx`: avatar en ambos lados, `bubble-stack`, `message-meta`).
-Referencia visual: captura o maqueta del owner (pendiente, ver L2).
+la vista. El formato de burbujas debe ser el mismo que usan los chats del asistente Lumat: la gramática
+`ai-agent-grammar__*` (`bubble-row`, `bubble-stack`, `bubble`, `message-meta`) de `AgentChat.tsx`.
+La maqueta del owner (L11) precisa ese formato y **descarta** el avatar por mensaje de las dos
+puntas: el hablante va como texto sólo arriba de las burbujas salientes, la hora pasa adentro de la
+burbuja con un tilde de entregado, y cada día arranca con un separador centrado.
+El panel de cliente deja de ser una columna: flota sobre el hilo (overlay) y se abre y cierra desde
+un botón, que es lo que devuelve el ancho a la conversación.
 
 **S6 — Entrega.**
 Un worktree (`odd/pre-release-frontend`), un PR contra `main`, tres slices como commits-unidad con
@@ -60,7 +64,7 @@ por slice sin reescribir el trabajo.
 |----|-------|-------|--------|--------|
 | T1 | S1, S2 | inline | `3b83f31e` (api) + `3b58ef72` | hecho |
 | T2 | S3, S4 | inline + worker | `3a11def4`, `edb3501b`, `5e535ccb`, `b12c2307`, `14f1feaf`, `4fe96b32`, `43d8c6b3` | hecho |
-| T3 | S5 | worker (tras la captura) | — | bloqueada por L2 |
+| T3 | S5 | inline | ver L11 | hecho (ver delta en L11) |
 | T4 | S1–S6 | inline | ver L9 | gate verde; PR pendiente de decisión del owner |
 
 ## Log
@@ -156,3 +160,36 @@ sin ningún `FAILED` es el harness bloqueado; re-correr sobre la base sucia repi
 **L10 — pendiente del owner (2026-10-31).**
 T3 no arranca sin la captura o maqueta de la ventana de conversación (L2.2). El push de la rama y
 la apertura del PR quedan como decisión del owner, como manda la política del repo.
+
+**L11 — maqueta recibida y rediseño aplicado (2026-10-31).**
+El owner entregó `LUMAT WhatsApp support chat with details.png`. Implementado en
+`ConversationThread.tsx` + `ConversationThread.css`:
+- **Header compacto**: una sola banda con volver, avatar, nombre, teléfono con punto verde, `#id`,
+  pill de estado y acciones a la derecha, más un botón "Cliente". Desaparecieron la fila de
+  identidad con "Iniciada el …", la fila de acciones y la banda "Historial de mensajes" con su
+  frescura: las tres comían alto útil.
+- **Panel de cliente como overlay**: `.conversation-workspace` pasa a una columna y los detalles
+  flotan sobre el hilo con `--elevation-overlay`, abiertos por defecto y cerrados desde el botón.
+  Bajo el breakpoint móvil el overlay y su botón se ocultan y sigue valiendo el sheet
+  "Información del chat" del menú.
+- **"Ver todos" arriba y fuera del scroller**: `CollapsibleMessages` envuelve ahora al área con
+  scroll en lugar de vivir adentro. Antes el hilo abría en el último mensaje y el control quedaba
+  fuera de la vista justo cuando hace falta.
+- **Formato de burbujas**: sin avatares por mensaje, hablante sólo en las salientes, hora adentro
+  de la burbuja, tilde de entregado en las salientes enviadas, y separador de día centrado al
+  cambiar de fecha (`role="separator"`).
+Se eliminaron `formatRecency` y `formatInitiatedDate` al quedar sin uso.
+
+**Delta deliberado contra la maqueta** (para que el owner decida, no para que lo descubra después):
+- El **composer** sigue como estaba (Adjuntar / Grabar audio en su fila propia). La maqueta lo
+  muestra como una sola fila de íconos con emoji; el emoji no existe en ningún lado del panel y
+  crearlo es una feature nueva, no un rediseño. Queda para después.
+- La **lupa** del header y el **chevron flotante de scroll** de la maqueta no se implementaron: la
+  búsqueda dentro del hilo no existe como función y el chevron duplica "Ver todos" en el caso corto.
+- La maqueta muestra un **rail de tres íconos** (persona, portapapeles, info); sólo hay datos para
+  el primero, así que el panel se abre desde un único botón en vez de inventar dos secciones vacías.
+
+Nota de disciplina: los tres tests nuevos de esta capa (control sobre el scroller, overlay
+abrible/cerrable, separador de día) se escribieron **después** de la implementación, no en RED
+primero; los 4 tests existentes que rompió el cambio de formato se migraron a la conducta nueva.
+

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, CircleCheck, Clock, Copy, Info, Lock, Paperclip, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff, Mic, Square } from "lucide-react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Bot, CheckCheck, CircleCheck, Clock, Copy, Info, Lock, Paperclip, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff, Mic, Square, X } from "lucide-react";
 import { ApiError, acknowledgeCase, changeConversationState, getConversation, listActiveConversations, listConversations, retryMessage, sendMedia, sendMessage } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { ConversationThread as ThreadData, Message } from "../../types";
@@ -52,9 +52,10 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
     }
   })() : <p className="conversation-thread__media-unavailable" role="status">Este archivo no está disponible.</p>;
   return <div className={`ai-agent-grammar__bubble-row${outbound ? " ai-agent-grammar__bubble-row--outbound" : ""}`} data-bubble aria-label={`Mensaje ${outbound ? "saliente" : "entrante"} de ${author}`}>
-    {!outbound ? <Avatar name={author} className="conversation-thread__bubble-avatar" /> : null}
     <div className="ai-agent-grammar__bubble-stack">
-      <span className="ai-agent-grammar__message-meta">{author}</span>
+      {/* One author label, above the outgoing bubble only: the mockup drops the per-message avatars
+          that used to sit on both sides and keeps the speaker as text. */}
+      {outbound ? <span className="ai-agent-grammar__message-meta">{author}</span> : null}
       <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
         {isText ? <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span> : <>
           {message.text ? <span>{message.text}</span> : null}
@@ -62,10 +63,12 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
           {hasMedia && message.caption ? <p className="conversation-thread__media-caption">{message.caption}</p> : null}
         </>}
         {message.delivery_status === "failed" ? <span className="ai-agent-grammar__message-error" role="alert">Entrega fallida{message.delivery_error ? `: ${message.delivery_error}` : ""}</span> : null}
+        <span className="conversation-thread__bubble-meta">
+          <span>{message.created_at?.slice(11, 16) ?? "—"}</span>
+          {outbound && message.delivery_status === "sent" ? <span className="conversation-thread__bubble-check" role="img" aria-label="Entregado"><Icon icon={CheckCheck} size="sm" /></span> : null}
+        </span>
       </div>
-      <span className="ai-agent-grammar__message-time">{message.created_at?.slice(11, 16) ?? "—"}</span>
     </div>
-    {outbound ? <Avatar name={author} className="conversation-thread__bubble-avatar" /> : null}
   </div>;
 }
 
@@ -89,9 +92,9 @@ function activityText(activity: { event: string; cause?: string | null }) {
   if (activity.event === "kb_retrieved" && cause.startsWith("chunks:")) return `${base} (${cause.slice(7)} resultados)`;
   return base;
 }
-const formatRecency = (value: string | null) => value ? new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
-const formatInitiatedDate = (value: string | null | undefined) => value ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)).replace(".", "") : "—";
 const MESSAGE_PREVIEW = 10;
+/** Day separator label, e.g. "9 de octubre de 2026", the shape the mockup uses above each day. */
+const formatDay = (isoDay: string) => new Intl.DateTimeFormat("es-CL", { dateStyle: "long" }).format(new Date(`${isoDay}T12:00:00`));
 // Case priority arrives as either the API's English enum or the domain's Spanish value.
 const PRIORITY_LABELS: Record<string, string> = { high: "Prioridad alta", alta: "Prioridad alta", medium: "Prioridad normal", media: "Prioridad normal", normal: "Prioridad normal", low: "Prioridad baja", baja: "Prioridad baja" };
 const priorityLabel = (value: string) => PRIORITY_LABELS[value] ?? `Prioridad ${value}`;
@@ -242,30 +245,44 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const loadError = fetched.error;
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
+  const phone = conversation?.customer?.phone_e164 ?? conversation?.wa_phone ?? null;
+  // Open by default: the mockup shows the client details beside the thread, and they are what the
+  // operator reads while replying. Narrow screens hide it (ConversationThread.css) and use the
+  // "Información del chat" sheet from the conversation menu instead.
+  const [detailOpen, setDetailOpen] = useState(true);
   return <PageFrame className="conversations-page conversation-thread-page" title="" state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : state === "stale" ? <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="Mostramos la información disponible." /> : null}>
-      {conversation ? <header className="conversation-thread__identity">
-        <div className="conversation-thread__identity-person">
-          <Avatar className="conversation-thread__hero-avatar" name={displayName ?? "Conversación"} />
-          <div>
-            <div className="conversation-thread__identity-title"><h1>{displayName}</h1><div role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></div></div>
-            <p>Conversación #{conversation.id} · Iniciada el {formatInitiatedDate(conversation.created_at)}</p>
-          </div>
+      {conversation ? <header className="conversation-thread__header">
+        {onBack ? <Button variant="tertiary" className="conversation-thread__back" aria-label="Volver a conversaciones" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button> : null}
+        <Avatar className="conversation-thread__hero-avatar" name={displayName ?? "Conversación"} />
+        <h1>{displayName}</h1>
+        {phone ? <span className="conversation-thread__phone"><span className="conversation-thread__online" aria-hidden="true" />{phone}</span> : null}
+        <span className="conversation-thread__id">· #{conversation.id}</span>
+        <span role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></span>
+        <div className="conversation-thread__header-actions">
+          {interactive ? <><span className="conversation-thread__actions-desktop">{desktopActions}</span><span className="conversation-thread__actions-mobile">{mobileActions}</span></> : null}
+          <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Cliente</Button>
         </div>
       </header> : null}
-      {interactive ? <div className="conversation-thread__actions-row">
-        {onBack ? <Button variant="secondary" onClick={onBack}>Volver a conversaciones</Button> : null}
-        {conversation ? <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Ver ficha del cliente</Button> : null}
-      </div> : null}
         {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>El histórico guardado sigue disponible.</span></p> : null}
        {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="conversation-workspace">
          <main className="ai-agent-grammar__main" aria-label="Conversación">
-          {conversation ? <header className="ai-agent-grammar__header"><div className="ai-agent-grammar__header-copy"><h2>Historial de mensajes</h2><span className="ai-agent-grammar__freshness">Actualizada el {formatRecency(conversation.last_message_at)}</span></div><div className="conversation-thread__actions-desktop">{interactive ? desktopActions : null}</div><div className="conversation-thread__actions-mobile">{interactive ? mobileActions : null}</div>{!interactive ? <span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span> : null}</header> : null}
+         <div className="conversation-thread__thread">
+           <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}>
          <section className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
-           <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}><div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={(id) => conversation?.customer?.name ?? customerName?.(id) ?? `Cliente #${id}`} />)}</div></CollapsibleMessages>
+           <div className="ai-agent-grammar__bubbles">{messages.map((message, index) => {
+             const day = message.created_at?.slice(0, 10) ?? null;
+             const previousDay = index > 0 ? messages[index - 1]?.created_at?.slice(0, 10) ?? null : null;
+             return <Fragment key={message.id}>
+               {day && day !== previousDay ? <div className="conversation-thread__day" role="separator">{formatDay(day)}</div> : null}
+               <MessageBubble message={message} customerId={conversation?.customer_id ?? 0} customerName={(id) => conversation?.customer?.name ?? customerName?.(id) ?? `Cliente #${id}`} />
+             </Fragment>;
+           })}</div>
           {liveActivity.length > 0 ? <div className="ai-agent-grammar__activity-list" aria-label="Actividad persistida">{liveActivity.map((activity, index) => <div className="ai-agent-grammar__activity" role="status" key={`${activity.event}-${index}`}><span aria-hidden="true">✦</span><span className="ai-agent-grammar__activity-chip">{activityText(activity)}</span></div>)}</div> : null}
          {!interactive ? <NoReplyNote /> : null}
          {conversation?.state === "human" ? <div className="ai-agent-grammar__handoff" aria-label="Traspaso a atención humana">La conversación está en atención humana.</div> : null}
          </section>
+           </CollapsibleMessages>
+         </div>
          {interactive ? <div className="ai-agent-grammar__composer-zone">
            {messages.filter((m) => m.delivery_status === "failed").map((m) => <Button key={m.id} variant="secondary" disabled={busy} onClick={() => void mutate(() => retryMessage(m.conversation_id, m.id))}>Reintentar entrega #{m.id}</Button>)}
            {conversation?.state === "human" ? <form className={`ai-agent-grammar__composer${windowOpen ? "" : " ai-agent-grammar__composer--locked"}`} aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}>
@@ -286,7 +303,13 @@ export function ConversationThread({ conversationId, data: controlledData, state
            </div>}
            {mutationError && <p role="alert">La entrega falló: {mutationError}</p>}
          </div> : null}
-           </main>{conversation ? <ConversationContext conversation={conversation} /> : null}</div>}
+           </main>{conversation ? <>
+             <button type="button" className="conversation-thread__detail-toggle" aria-label="Detalles del cliente" aria-expanded={detailOpen} onClick={() => setDetailOpen((open) => !open)}><Icon icon={Info} size="sm" /></button>
+             {detailOpen ? <div className="conversation-thread__detail" role="dialog" aria-label="Detalles del cliente">
+               <div className="conversation-thread__detail-head"><h2>Detalles del cliente</h2><Button variant="tertiary" aria-label="Cerrar detalles del cliente" onClick={() => setDetailOpen(false)}><X aria-hidden="true" /></Button></div>
+               <ConversationContext conversation={conversation} />
+             </div> : null}
+           </> : null}</div>}
       {interactive && conversation && infoOpen ? <Dialog open onClose={() => setInfoOpen(false)} title="Información del chat" variant="sheet"><ConversationContext conversation={conversation} /></Dialog> : null}
     </PageFrame>;
 }

@@ -157,7 +157,8 @@ describe('conversation message media', () => {
     const bubble = screen.getByText('Hola').closest('.ai-agent-grammar__bubble');
     expect(bubble).toHaveTextContent('Hola');
     expect(bubble?.querySelector('img, video, audio, a')).toBeNull();
-    expect(bubble?.textContent).toBe('Hola');
+    // The timestamp lives inside the bubble now (mockup 2026-10-31), so the text is no longer alone.
+    expect(bubble?.textContent).toBe('Hola09:00');
   });
 });
 
@@ -173,10 +174,13 @@ it('presents directional bubbles with identity and owner status', () => {
   expect(inbound).toHaveClass('ai-agent-grammar__bubble-row');
   expect(outbound).toHaveClass('ai-agent-grammar__bubble-row--outbound');
   expect(inbound.querySelector('.ai-agent-grammar__bubble')).toBeTruthy();
-  expect(inbound.querySelector('.ai-agent-grammar__message-meta')).toHaveTextContent('María González');
-  expect(inbound.querySelector('.ai-agent-grammar__message-time')).toHaveTextContent('09:00');
-  expect(within(inbound).getByText('María González')).toBeInTheDocument();
-  expect(screen.getByText('Lumat')).toBeInTheDocument();
+  // Only the outgoing bubble carries an author label and no longer an avatar; the incoming side is
+  // the customer, so it reads without a speaker line.
+  expect(inbound.querySelector('.ai-agent-grammar__message-meta')).toBeNull();
+  expect(inbound.querySelector('.conversation-thread__bubble-meta')).toHaveTextContent('09:00');
+  expect(inbound.querySelector('img, .conversation-thread__bubble-avatar')).toBeNull();
+  expect(outbound.querySelector('.ai-agent-grammar__message-meta')).toHaveTextContent('Lumat');
+  expect(within(outbound).getByLabelText('Entregado')).toBeInTheDocument();
 });
 
 it('shows truthful handoff and closed-window reply reason', () => {
@@ -205,7 +209,9 @@ it('keeps conversation actions in the thread header and context actions-free', a
     acknowledged_at: null,
   }, messages: thread.messages }} state="ready" interactive />);
 
-  const header = document.querySelector('.ai-agent-grammar__header');
+  // The header band is the compact one from the 2026-10-31 mockup; the old two-row identity +
+  // actions block and the "Historial de mensajes" band are gone.
+  const header = document.querySelector('.conversation-thread__header');
   expect(header).not.toBeNull();
   expect(header).toContainElement(screen.getByRole('button', { name: 'Tomar conversación' }));
   expect(header).toContainElement(screen.getByRole('button', { name: 'Acciones de la conversación' }));
@@ -344,5 +350,47 @@ describe('migrated InboxThread scenarios', () => {
     expect(screen.getByRole('status', { name: 'Cerrada' })).toBeInTheDocument();
     rerender(<ConversationThread data={{ conversation: conversations[2], messages, messages_total: messages.length }} state="stale" interactive />);
     expect(screen.getAllByRole('status').some((status) => /desactualizados/i.test(status.textContent ?? ''))).toBe(true);
+  });
+});
+
+// The 2026-10-31 mockup moved three things that were invisible to the operator before: the
+// full-thread control out of the scroller, the client details over the thread instead of beside it,
+// and a day separator above each day's messages.
+describe('conversation mockup layout', () => {
+  it('keeps the full-thread control above the scroller', () => {
+    const messages = Array.from({ length: 14 }, (_, index) => ({ ...thread.messages[0], id: index + 1, text: `Mensaje ${index + 1}` }));
+    render(<ConversationThread data={{ ...thread, messages, messages_total: messages.length }} state="ready" />);
+    const toggle = screen.getByRole('button', { name: /ver todos/i });
+    const scroller = document.querySelector('.ai-agent-grammar__thread-area');
+    expect(scroller).not.toBeNull();
+    expect(scroller).not.toContainElement(toggle);
+  });
+
+  it('opens and closes the client details without giving up thread width', async () => {
+    const user = userEvent.setup();
+    render(<ConversationThread data={{ ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+56941234567' } } }} state="ready" />);
+    expect(screen.getByRole('dialog', { name: 'Detalles del cliente' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cerrar detalles del cliente' }));
+    expect(screen.queryByRole('dialog', { name: 'Detalles del cliente' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
+    expect(screen.getByRole('dialog', { name: 'Detalles del cliente' })).toBeInTheDocument();
+  });
+
+  it('separates messages by day and prints the speaker only for outgoing ones', () => {
+    const messages = [
+      { ...thread.messages[0], id: 1, created_at: '2026-10-09T19:02:00Z' },
+      { ...thread.messages[0], id: 2, created_at: '2026-10-09T19:05:00Z' },
+      { ...thread.messages[0], id: 3, created_at: '2026-10-10T09:00:00Z', direction: 'outbound' as const, delivery_status: 'sent' as const },
+    ];
+    render(<ConversationThread data={{ ...thread, messages, messages_total: messages.length }} state="ready" customerName={() => 'María González'} />);
+    const separators = screen.getAllByRole('separator');
+    expect(separators).toHaveLength(2);
+    expect(separators[0]).toHaveTextContent('9 de octubre de 2026');
+    expect(separators[1]).toHaveTextContent('10 de octubre de 2026');
+    // The customer's name belongs to the header, not to every incoming bubble: only the outgoing
+    // side prints a speaker line.
+    const speakers = document.querySelectorAll('.ai-agent-grammar__message-meta');
+    expect(speakers).toHaveLength(1);
+    expect(speakers[0]).toHaveTextContent('Lumat');
   });
 });

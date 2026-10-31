@@ -21,7 +21,10 @@ describe("ConversationThread", () => {
     expect(screen.queryAllByRole("table")).toHaveLength(0);
     expect(screen.getAllByText(/Marcela Fuentes|Lumat/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
+    // The read-only thread keeps navigation chrome (client file, client details) but offers no reply
+    // control at all, which is the rule this assertion protects.
+    expect(screen.queryByRole("button", { name: /responder|enviar|adjuntar|grabar/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tomar conversación" })).toBeNull();
   });
 
   it("renders the empty thread state", () => {
