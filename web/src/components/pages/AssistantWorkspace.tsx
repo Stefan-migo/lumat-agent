@@ -763,21 +763,23 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, mode 
   const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
   const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
     .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
-  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={locked ? Lock : ChevronDown} size="sm" /></>;
+  const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={ChevronDown} size="sm" /></>;
+  const projectMeta = project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)} className="badge--sm">{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null;
 
   if (mode === "static") {
-    // The field keeps the chevron, so it must do something: it opens the section
-    // where the searchable list lives.
+    // Closed: just the name. The dropdown chevron is gone (this opens the section, not a menu),
+    // and the badge/description live only in the open state.
     return <div className="assistant-workspace__context-project" data-static="true">
-      <button type="button" className="assistant-workspace__context-project-trigger" aria-expanded={false} aria-label={`Ver proyectos. Actual: ${currentName}`} onClick={() => onExpand?.()}>{trigger}</button>
-      {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+      <button type="button" className="assistant-workspace__context-project-trigger" aria-expanded={false} aria-label={`Ver proyectos. Actual: ${currentName}`} onClick={() => onExpand?.()}><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span></button>
     </div>;
   }
 
   if (locked) {
+    // Open and fixed: the lock icon is the "fixed" signal; the description and a small badge
+    // replace the explanatory legend.
     return <div className="assistant-workspace__context-project" data-locked="true">
-      <p className="assistant-workspace__context-project-trigger">{trigger}</p>
-      <p className="assistant-workspace__context-project-hint">El proyecto queda fijo desde el primer mensaje.</p>
+      <p className="assistant-workspace__context-project-trigger"><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={Lock} size="sm" /></p>
+      {projectMeta}
     </div>;
   }
 
@@ -799,7 +801,7 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, mode 
       </> : null}
       <p className="assistant-workspace__context-project-hint">El proyecto define el contexto de este hilo.</p>
     </Popover>
-    {project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null}
+    {projectMeta}
   </div>;
 }
 

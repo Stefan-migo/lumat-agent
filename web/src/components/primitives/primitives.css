@@ -373,6 +373,7 @@
   color: var(--text-muted);
   background: var(--surface-subtle);
 }
+.badge--sm { padding: 0 var(--space-1); font-size: var(--text-xs); }
 .badge--success {
   color: var(--success);
   background: var(--success-bg);

@@ -452,8 +452,48 @@ describe("AssistantWorkspace", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ projects: [] }), { status: 200 }));
     render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
 
-    expect(await screen.findByText("El proyecto queda fijo desde el primer mensaje.")).toBeInTheDocument();
+    expect(await screen.findByText("General / Sin proyecto")).toBeInTheDocument();
+    expect(screen.queryByText("El proyecto queda fijo desde el primer mensaje.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Cambiar proyecto:/ })).not.toBeInTheDocument();
+  });
+
+  it("collapses the project menu to just the name, without dropdown chevron, badge or description", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input) === "/panel/api/projects") return new Response(JSON.stringify({
+        projects: [{ id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo de terreno", status: "active", created_at: null, updated_at: null }],
+      }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} activeProjectSlug="ops" onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
+
+    await screen.findAllByText("Operaciones");
+    fireEvent.click(screen.getByRole("button", { name: "Proyecto" }));
+
+    const trigger = screen.getByRole("button", { name: /Ver proyectos\. Actual: Operaciones/ });
+    // S1: name only — the dropdown chevron is gone, and so are the badge and description.
+    expect(trigger.querySelector("svg.lucide-chevron-down")).toBeNull();
+    expect(within(trigger).queryByText("Activo")).not.toBeInTheDocument();
+    expect(within(trigger).queryByText("Trabajo de terreno")).not.toBeInTheDocument();
+    expect(screen.queryByText("Trabajo de terreno")).not.toBeVisible();
+  });
+
+  it("shows the description and a small badge, not the fixed legend, once the thread is started", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input) === "/panel/api/projects") return new Response(JSON.stringify({
+        projects: [{ id: 5, slug: "ops", name: "Operaciones", purpose: "Trabajo de terreno", status: "active", created_at: null, updated_at: null }],
+      }), { status: 200 });
+      return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} threadStarted activeProjectSlug="ops" onSelectProject={vi.fn()}><p>Thread</p></AssistantWorkspace>);
+
+    // S2: the description is here and the "fixed" legend is gone.
+    expect(await screen.findByText("Trabajo de terreno")).toBeInTheDocument();
+    expect(screen.queryByText("El proyecto queda fijo desde el primer mensaje.")).not.toBeInTheDocument();
+    expect(screen.getByText("Activo")).toHaveClass("badge--sm");
   });
 
   it("changes the active thread project from the lean mobile picker", async () => {
