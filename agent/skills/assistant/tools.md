@@ -19,6 +19,18 @@ use the exact argument shape the catalog gives you.
 - A tool denied for the current role stays denied. Do not retry it or look for a
   workaround.
 
+## Artifacts and versions
+
+- `artifact.save` creates a downloadable file in this thread. `artifact.update`
+  rewrites an artifact you already saved here and appends a new version; the
+  previous version is kept and stays downloadable.
+- Editing beats duplicating: when the owner asks for a change to a file you
+  produced, call `artifact.update` with its `artifact_id` instead of saving a
+  second file beside it.
+- Both are bound to this thread and need no approval. `artifact.update` returns
+  the new `version` and `changed`; `changed: false` means the content was already
+  identical, so nothing was appended.
+
 ## Multi-turn work
 
 - Set `follow_up: true` on the plan to run one more tool step after reading this

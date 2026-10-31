@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
-from app.models import AssistantArtifact, AssistantAttachment, InternalChatMessage, InternalChatThread, ProjectFile, User
+from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, ProjectFile, User
 from app.config import get_settings
 from app.agent_registry import get_registry, select_assistant
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
@@ -347,8 +347,9 @@ def read_thread(thread_id: int, session: Session = Depends(get_db), current: Use
     resume_thread(session, thread, current)
     messages = get_thread(session, thread_id, current.id)[1]
     attachments = session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.deleted_at.is_(None)).order_by(AssistantAttachment.id)).all()
-    artifacts = session.scalars(select(AssistantArtifact).where(AssistantArtifact.thread_id == thread_id).order_by(AssistantArtifact.id)).all()
-    return {"thread": thread_dict(thread), "messages": [message_dict(row) for row in messages], "attachments": [to_assistant_attachment_dict(row) for row in attachments], "artifacts": [to_assistant_artifact_dict(row) for row in artifacts]}
+    chains = assistant_artifacts.revision_chain(session, thread_id)
+    artifacts = [chain[-1] for _, chain in sorted(chains.items())]
+    return {"thread": thread_dict(thread), "messages": [message_dict(row) for row in messages], "attachments": [to_assistant_attachment_dict(row) for row in attachments], "artifacts": [to_assistant_artifact_dict(row, chains[row.root_id]) for row in artifacts]}
 
 
 @router.post("/chat/threads/{thread_id}/stop")
@@ -413,13 +414,24 @@ def stop_thread_run(
 
 
 @router.get("/chat/threads/{thread_id}/artifacts/{artifact_id}/download")
-def download_artifact(thread_id: int, artifact_id: int, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> FileResponse:
+def download_artifact(thread_id: int, artifact_id: int, version: int | None = None, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> FileResponse:
+    """Serve the current revision of an artifact, or the exact one `?version=` names (S3).
+
+    A path written into an older message keeps the id it had, so `id` identifies the artifact and the
+    current version is what that path serves; asking for a named revision is explicit.
+    """
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
     row = assistant_artifacts.get_artifact(session, thread_id, artifact_id)
     if row is None:
         raise HTTPException(status_code=404, detail="artifact not found")
+    if version is None:
+        row = assistant_artifacts.latest_for_root(session, thread_id, row.root_id) or row
+    else:
+        row = assistant_artifacts.get_revision(session, thread_id, artifact_id, version)
+        if row is None:
+            raise HTTPException(status_code=404, detail="artifact version not found")
     return FileResponse(row.stored_path, filename=row.filename, media_type=row.content_type)
 
 

@@ -1203,6 +1203,33 @@ def test_a_chained_read_only_turn_persists_the_tool_step_cap(client, monkeypatch
     assert state["cap_reached"] is True
 
 
+def test_a_repeated_identical_tool_call_is_quoted_once_in_the_responder_evidence(client, monkeypatch):
+    """The evidence budget belongs to the responder: the same payload twice spends it for nothing.
+
+    The duplicate is still named in the inventory, so the turn loses no provenance; only the
+    redundant payload stops being quoted.
+    """
+    dashboard = json.dumps({
+        "kind": "tool", "tool": "dashboard.summary", "arguments": {"window_days": 7},
+        "summary": "read dashboard", "requires_approval": False, "follow_up": True,
+    })
+    plans = [
+        dashboard,
+        dashboard,
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "summary": "find customer", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({"kind": "respond", "arguments": {}, "summary": "done", "requires_approval": False}),
+    ]
+    _settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "repeated-evidence", plans)
+
+    responder_prompt = "\n".join(message["content"] for message in stream_calls[-1]["messages"])
+    assert responder_prompt.count("window_start") == 1
+    assert responder_prompt.count("tool=dashboard.summary status=completed arguments=") == 1
+    assert '"customers.search"' in responder_prompt or '"contacts"' in responder_prompt
+
+
 def test_a_capped_read_only_turn_responder_receives_combined_tool_evidence(client, monkeypatch):
     plans = [
         json.dumps({

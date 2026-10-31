@@ -37,7 +37,10 @@ from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, veri
 
 logger = logging.getLogger(__name__)
 
-_TOOL_EVIDENCE_LIMIT = 4_000
+# Bounds the responder's tool evidence by characters. Measured: a four-step read-only turn with a
+# 34-tool catalog quotes ~3,980 characters once redundant payloads are deduplicated, so the cap
+# leaves room for every executed step instead of evicting the oldest one when the catalog grows.
+_TOOL_EVIDENCE_LIMIT = 4_500
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 MAX_ASSISTANT_TOOL_STEPS = 6
@@ -675,7 +678,7 @@ def _render_tool_evidence(state: AssistantState) -> str:
     results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
     if not results:
         return ""
-    rendered_results = []
+    rendered_results: list[tuple[str, str]] = []
     for result in results:
         if not isinstance(result, dict):
             continue
@@ -702,7 +705,10 @@ def _render_tool_evidence(state: AssistantState) -> str:
                     rendered += "\n" + page_cue
                 except (AttributeError, TypeError, ValueError):
                     pass
-        rendered_results.append(rendered)
+        # An identical tool + arguments + payload is the same information however many times the
+        # model asked for it; quoting it twice only spends the responder's evidence budget.
+        signature = f"{tool}\u0000{arguments}\u0000{json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)}"
+        rendered_results.append((rendered, signature))
     if not rendered_results:
         return ""
 
@@ -714,7 +720,11 @@ def _render_tool_evidence(state: AssistantState) -> str:
         inventory = f"Execution chain stopped ({stall}); tools already run: {ran}.\n"
     newest_first = list(reversed(rendered_results))
     kept: list[str] = []
-    for item in newest_first:
+    quoted: set[str] = set()
+    for item, signature in newest_first:
+        if signature in quoted:
+            # Counted by the omission marker below, and still named in the inventory.
+            continue
         candidate = "\n".join(reversed([*kept, item]))
         omitted = len(rendered_results) - len(kept) - 1
         marker = _omission_marker(omitted) if omitted else ""
@@ -726,10 +736,12 @@ def _render_tool_evidence(state: AssistantState) -> str:
             ) + "\n"
         if len(inventory) + len(inventory_lines) + len(marker) + len(candidate) <= _TOOL_EVIDENCE_LIMIT:
             kept.append(item)
+            quoted.add(signature)
         elif not kept:
             # Preserve the newest result's provenance and as much payload as the bound permits.
             reserve = len(inventory) + len(inventory_lines) + len(marker) + 2
             kept.append(item[:max(0, _TOOL_EVIDENCE_LIMIT - reserve)] + "…")
+            quoted.add(signature)
             break
         else:
             break

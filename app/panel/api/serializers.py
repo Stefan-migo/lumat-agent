@@ -555,9 +555,14 @@ def to_assistant_attachment_dict(attachment: AssistantAttachment) -> dict:
             "created_at": _iso(attachment.created_at)}
 
 
-def to_assistant_artifact_dict(artifact) -> dict:
+def to_assistant_artifact_dict(artifact, revisions=None) -> dict:
+    """One artifact: the current version plus the revision chain it belongs to (061)."""
+    versions = revisions if revisions is not None else [artifact]
     return {"id": artifact.id, "thread_id": artifact.thread_id, "filename": artifact.filename,
             "content_type": artifact.content_type, "size": artifact.size,
+            "root_id": artifact.root_id, "version": artifact.version,
+            "versions": [{"version": row.version, "id": row.id, "size": row.size,
+                          "created_at": _iso(row.created_at)} for row in versions],
             "created_at": _iso(artifact.created_at)}
 
 

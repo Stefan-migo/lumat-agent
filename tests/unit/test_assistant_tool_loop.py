@@ -326,22 +326,23 @@ def test_replan_marker_never_cuts_the_newest_result(monkeypatch):
     # The middle result fills the budget almost exactly and the oldest is dropped, so the
     # omission marker gets prepended. Budgeting it outside the limit made the final cut
     # remove the newest result instead of older evidence.
-    plan_llm(
-        {
-            "content": "Find Ana",
-            "context": {"items": [], "meta": {}},
-            "tool_results": [
-                {"result": [{"evidence": "kb.retrieve", "pad": "o" * 10_000}]},
-                {"result": [{"evidence": "customers.search", "pad": "m" * 3_870}]},
-                {"result": [{"evidence": "memory.search", "tail": marker}]},
-            ],
-        }
-    )
+    state = {
+        "content": "Find Ana",
+        "context": {"items": [], "meta": {}},
+        "tool_results": [
+            {"result": [{"evidence": "kb.retrieve", "pad": "o" * 10_000}]},
+            {"result": [{"evidence": "customers.search", "pad": "m" * 3_870}]},
+            {"result": [{"evidence": "memory.search", "tail": marker}]},
+        ],
+    }
+    plan_llm(state)
 
     evidence = calls[-1]["messages"][-1]["content"].split("Prior tool evidence:\n", 1)[1]
     assert marker in evidence
     assert "earlier tool result(s) omitted" in evidence
-    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
+    # The bound applies to the evidence block itself, not to the prompt text that follows it, so it
+    # is measured on the block instead of on the split tail.
+    assert len(_render_tool_evidence(state)) <= _TOOL_EVIDENCE_LIMIT
 
 
 def test_cap_refuses_the_step_after_the_budget(monkeypatch):
@@ -1100,7 +1101,7 @@ def test_tool_evidence_is_bounded_and_prompt_statement_is_truthful(monkeypatch):
     prompt = calls[0]["messages"][-1]["content"]
     evidence = prompt.split("<tool_evidence>", 1)[1].split("</tool_evidence>", 1)[0]
     assert evidence
-    assert len(evidence) <= 4_000
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
     assert "Ana" in evidence
     assert "Tool customers.search completed." not in prompt
     assert "already run" in prompt

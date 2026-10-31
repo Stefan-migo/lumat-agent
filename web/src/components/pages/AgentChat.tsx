@@ -112,7 +112,14 @@ function displayArgumentValue(value: unknown) {
 }
 
 function resolveArtifactReferences(content: string, artifacts: AssistantArtifact[]) {
-  const byId = new Map(artifacts.map((artifact) => [String(artifact.id), artifact]));
+  // A message written before an edit carries the path of the revision that existed then, so every
+  // revision id resolves to the artifact it belongs to — and the chip shows the current version (S4).
+  const byId = new Map<string, AssistantArtifact>();
+  for (const artifact of artifacts) {
+    byId.set(String(artifact.id), artifact);
+    for (const revision of artifact.versions ?? []) byId.set(String(revision.id), artifact);
+    if (!artifact.versions?.length) byId.set(String(artifact.id), artifact);
+  }
   const referenced = new Map<number, AssistantArtifact>();
   const renderedContent = content.replace(
     /`?(\/panel\/api\/chat\/threads\/\d+\/artifacts\/(\d+)\/download)`?/g,

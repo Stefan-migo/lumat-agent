@@ -812,6 +812,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("058_message_media",),
         ("059_memory_user_scope",),
         ("060_capture_ack_plain",),
+        ("061_artifact_revisions",),
     ]
 
 
@@ -853,6 +854,68 @@ def test_migration_060_leaves_a_hand_edited_acknowledgement_alone(tmp_path):
 
         texts = conn.execute("SELECT value FROM settings WHERE key='reply.texts'").fetchone()[0]
         assert texts["capture_ack"] == "Listo {{nombre}}: "
+
+
+def _seed_artifact_before_061(conn) -> int:
+    """A stored artifact as it exists on the schema before 061."""
+    owner = conn.execute(
+        "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+        (f"artifact-root-{uuid4().hex}",),
+    ).fetchone()[0]
+    thread = conn.execute(
+        "INSERT INTO internal_chat_threads (user_id) VALUES (%s) RETURNING id", (owner,)
+    ).fetchone()[0]
+    return conn.execute(
+        "INSERT INTO assistant_artifacts "
+        "(thread_id, filename, content_type, size, sha256, stored_path) "
+        "VALUES (%s, 'informe.md', 'text/markdown', 3, 'abc', '/tmp/informe.md') RETURNING id",
+        (thread,),
+    ).fetchone()[0]
+
+
+def test_migration_061_backfills_every_stored_artifact_as_its_own_root(tmp_path):
+    """061 makes the revision chain explicit and loses no stored artifact."""
+    with _scratch_migration_db(tmp_path, 60, 61) as (conn, apply_061, _):
+        artifact_id = _seed_artifact_before_061(conn)
+
+        result = apply_061()
+        assert result.returncode == 0, f"061 failed:\n{result.stdout}\n{result.stderr}"
+
+        row = conn.execute(
+            "SELECT root_id, version FROM assistant_artifacts WHERE id = %s", (artifact_id,)
+        ).fetchone()
+        assert row == (artifact_id, 1)
+        columns = conn.execute(
+            "SELECT column_name, is_nullable, column_default FROM information_schema.columns "
+            "WHERE table_name = 'assistant_artifacts' AND column_name IN ('root_id', 'version') "
+            "ORDER BY column_name"
+        ).fetchall()
+        assert columns == [("root_id", "NO", None), ("version", "NO", "1")]
+
+
+def test_migration_061_refuses_two_rows_claiming_the_same_revision(tmp_path):
+    """The root/version pair is the revision identity; a duplicate never lands."""
+    with _scratch_migration_db(tmp_path, 60, 61) as (conn, apply_061, _):
+        artifact_id = _seed_artifact_before_061(conn)
+        result = apply_061()
+        assert result.returncode == 0, f"061 failed:\n{result.stdout}\n{result.stderr}"
+
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(
+                "INSERT INTO assistant_artifacts "
+                "(thread_id, filename, content_type, size, sha256, stored_path, root_id, version) "
+                "SELECT thread_id, filename, content_type, size, sha256, stored_path, root_id, 1 "
+                "FROM assistant_artifacts WHERE id = %s",
+                (artifact_id,),
+            )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(
+                "INSERT INTO assistant_artifacts "
+                "(thread_id, filename, content_type, size, sha256, stored_path, root_id, version) "
+                "SELECT thread_id, filename, content_type, size, sha256, stored_path, root_id, 0 "
+                "FROM assistant_artifacts WHERE id = %s",
+                (artifact_id,),
+            )
 
 
 def test_memory_dedup_index_includes_owner_and_allows_cross_owner_duplicates(migrated_db, admin_conn):

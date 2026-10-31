@@ -138,7 +138,7 @@ describe("AssistantWorkspace", () => {
       onCreateThread={vi.fn()}
       capabilities={{ tools: [tool, { ...tool, name: "web.search" }, { ...tool, name: "web.fetch" }], personas: [], prompts: [], kb_available: true, memory_available: false }}
       attachments={[{ id: 3, thread_id: 7, filename: "captura.png", kind: "upload", content_type: "image/png", size: 10 }]}
-      artifacts={[{ id: 4, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 10 }]}
+      artifacts={[{ id: 4, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 10, root_id: 4, version: 1, versions: [{ version: 1, id: 4, size: 10 }] }]}
     ><p>Thread</p></AssistantWorkspace>);
 
     fireEvent.click(screen.getByRole("button", { name: /Archivos del hilo/ }));
@@ -1081,7 +1081,7 @@ describe("AssistantWorkspace", () => {
       if (url.endsWith("/threads/7")) return new Response(JSON.stringify({
         thread: { id: 7, proyecto: "operaciones", status: "open" },
         messages: [],
-        artifacts: [{ id: 5, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 1200, created_at: null }],
+        artifacts: [{ id: 5, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 1200, created_at: null, root_id: 5, version: 1, versions: [{ version: 1, id: 5, size: 1200, created_at: null }] }],
       }), { status: 200 });
       if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
       if (url.endsWith("/artifacts/5/download")) return new Response(new Blob(["data"], { type: "text/csv" }), { status: 200 });
@@ -1141,5 +1141,88 @@ describe("AssistantWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
     expect(await screen.findByText("Aquí aparecerán los archivos generados.")).toBeInTheDocument();
+  });
+
+  it("shows the current artifact version with a badge and a collapsed history that opens an older revision", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=7");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.endsWith("/threads/7")) return new Response(JSON.stringify({
+        thread: { id: 7, proyecto: "operaciones", status: "open" },
+        messages: [],
+        artifacts: [{
+          id: 12, thread_id: 7, filename: "reporte.csv", content_type: "text/csv", size: 20, created_at: null,
+          root_id: 5, version: 2,
+          versions: [
+            { version: 1, id: 5, size: 10, created_at: null },
+            { version: 2, id: 12, size: 20, created_at: null },
+          ],
+        }],
+      }), { status: 200 });
+      if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
+      return new Response(new Blob(["data"], { type: "text/csv" }), { status: 200 });
+    });
+    vi.stubGlobal("URL", Object.assign(class extends URL {}, {
+      createObjectURL: vi.fn(() => "blob:test-artifact"),
+      revokeObjectURL: vi.fn(),
+    }));
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("reporte.csv")).toBeInTheDocument();
+    const row = screen.getByRole("button", { name: "Abrir reporte.csv" });
+    // S5: the current version is named, and the history starts collapsed.
+    expect(within(row).getByText("v2")).toBeInTheDocument();
+    const history = screen.getByRole("button", { name: "Historial de reporte.csv" });
+    expect(history).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Abrir versión 1 de reporte.csv" })).toBeNull();
+
+    fireEvent.click(history);
+    expect(history).toHaveAttribute("aria-expanded", "true");
+    // Newest first, current version flagged, and the older revision is reachable.
+    const revisions = await screen.findAllByRole("button", { name: /Abrir versión \d de reporte\.csv/ });
+    expect(revisions.map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Abrir versión 2 de reporte.csv",
+      "Abrir versión 1 de reporte.csv",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir versión 1 de reporte.csv" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7/artifacts/5/download?version=1", expect.anything()));
+    // Opening an old revision never rewrites which version the thread shows.
+    expect(screen.getByRole("button", { name: "Abrir reporte.csv" })).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: "Abrir reporte.csv" })).getByText("v2")).toBeInTheDocument();
+  });
+
+  it("hides the version badge and the history for an artifact with a single revision", async () => {
+    window.history.replaceState({}, "", "/panel/app/chat?proyecto=operaciones&thread_id=9");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+      if (url.includes("/panel/api/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      if (url.endsWith("/threads/9")) return new Response(JSON.stringify({
+        thread: { id: 9, proyecto: "operaciones", status: "open" },
+        messages: [],
+        artifacts: [{
+          id: 3, thread_id: 9, filename: "nota.md", content_type: "text/markdown", size: 4, created_at: null,
+          root_id: 3, version: 1,
+          versions: [{ version: 1, id: 3, size: 4, created_at: null }],
+        }],
+      }), { status: 200 });
+      if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /Artefactos del hilo/ }));
+    expect(await screen.findByText("nota.md")).toBeInTheDocument();
+    expect(screen.queryByText(/^v\d+$/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Historial de nota.md" })).toBeNull();
   });
 });

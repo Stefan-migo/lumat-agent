@@ -159,7 +159,7 @@ def test_s2_other_plan_token_is_refused(migrated_db, monkeypatch):
 
 def test_s3_class_b_set_is_exactly_agreed_and_chains_without_approval(migrated_db, monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({
-        "memory.write", "memory.update", "memory.delete", "artifact.save",
+        "memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update",
     })
     from app.chat.assistant.graph import run_assistant
 
