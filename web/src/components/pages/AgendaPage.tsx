@@ -25,6 +25,7 @@ import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalenda
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 import { QUICK_ACTION_LABELS, fieldStateAge } from "../shared/visitState";
 import { pathForRoute } from "../domain/panelRoutes";
+import { useToast } from "../primitives/Toast";
 
 export type AgendaPageState = AsyncDataState | "stale";
 
@@ -73,7 +74,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [cancelFeedback, setCancelFeedback] = useState<ActionFeedback | null>(null);
   const [closeFeedback, setCloseFeedback] = useState<ActionFeedback | null>(null);
-  const [syncFeedback, setSyncFeedback] = useState<ActionFeedback | null>(null);
+  const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createFeedback, setCreateFeedback] = useState<{ tone: "danger" | "success"; title: string; detail?: string } | null>(null);
@@ -129,7 +130,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       setCancelTarget(null);
       setReason("");
       await refreshAgenda();
-      setCancelFeedback({ id: appointmentId, tone: "success", title: "Visita cancelada" });
+      toast.show("Visita cancelada");
     } catch (error) {
       setCancelFeedback({ id: appointmentId, tone: "danger", title: "No se pudo cancelar la visita", detail: error instanceof Error ? error.message : undefined });
     } finally {
@@ -145,7 +146,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       await closeAppointment(appointmentId, outcome);
       setCloseTarget(null);
       await refreshAgenda();
-      setCloseFeedback({ id: appointmentId, tone: "success", title: outcome === "completed" ? "Visita completada" : "Visita marcada como no asistida" });
+      toast.show(outcome === "completed" ? "Visita completada" : "Visita marcada como no asistida");
     } catch (error) {
       setCloseFeedback({ id: appointmentId, tone: "danger", title: "No se pudo registrar el resultado", detail: error instanceof Error ? error.message : "Intenta nuevamente." });
     } finally {
@@ -164,7 +165,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       await rescheduleAppointment(rescheduleTarget.id, { ...composeAgendaTime(rescheduleForm.local_date, rescheduleForm.local_time, rescheduleTarget.timezone), duration_minutes: Number(rescheduleForm.duration_minutes), technician_id: Number(rescheduleForm.technician_id) });
       setRescheduleTarget(null);
       await refreshAgenda();
-      setRescheduleFeedback({ tone: "success", title: "Visita reprogramada" });
+      toast.show("Visita reprogramada");
     } catch (error) {
       setRescheduleFeedback({ tone: "danger", title: "No se pudo reprogramar la visita", detail: error instanceof Error ? error.message : "Intenta nuevamente." });
     } finally {
@@ -174,12 +175,12 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const retrySync = async (id: number) => {
     if (mutatingId !== null) return;
     setMutatingId(id);
-    setSyncFeedback(null);
     try {
       await retryCalendarSync(id);
       await refreshAgenda();
+      toast.show("Calendario sincronizado");
     } catch (error) {
-      setSyncFeedback({ id, tone: "danger", title: "No se pudo sincronizar el calendario", detail: error instanceof Error ? error.message : undefined });
+      toast.show(error instanceof Error && error.message ? `No se pudo sincronizar el calendario: ${error.message}` : "No se pudo sincronizar el calendario", "danger");
     } finally {
       setMutatingId(null);
     }
@@ -214,7 +215,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       await createAppointment({ ...localTime, service: createForm.service.trim(), customer_id: customerId, case_id: caseId, technician_id: technicianId, duration_minutes: Number(createForm.duration_minutes) });
       setCreateOpen(false);
       await refreshAgenda();
-      setCreateFeedback({ tone: "success", title: "Visita creada" });
+      setCreateFeedback(null);
+      toast.show("Visita creada");
     } catch (error) {
       if (error instanceof AgendaTimeError) {
         const title = error.code === "nonexistent_local_time"
@@ -283,8 +285,6 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
         </div>
          <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div><div><dt>Dirección</dt><dd>{row.customer_address ? <a className="address-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([row.customer_address, row.customer_comuna].filter(Boolean).join(", "))}`}><Icon icon={ExternalLink} size="sm" />{[row.customer_address, row.customer_comuna].filter(Boolean).join(", ")}</a> : "—"}</dd></div></dl>
         <div className="agenda-page__sync"><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div>
-        {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
-        {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
       </Card>)}</div>
     </section>
   ) : null;
@@ -310,9 +310,6 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
   const headerCount = data ? <Badge tone="success">{appointments.length} {appointments.length === 1 ? "visita" : "visitas"}</Badge> : null;
   return <PageFrame title="Agenda" titleAdornment={headerCount} meta={data ? undefined : "Visitas de la agenda"} subtitle="Organiza las visitas y consulta la disponibilidad." actions={<Button onClick={() => void openCreate()}><Plus />Nueva visita</Button>} state={stateMessage(state, retry)}>
-    {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
-    {closeFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={closeFeedback.title} /> : null}
-    {rescheduleFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={rescheduleFeedback.title} /> : null}
     <OverdueVisitsPanel appointments={overdueRows ?? []} onCloseAppointment={closeOverdue} onBulkClose={bulkCloseOverdue} />
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
