@@ -223,3 +223,11 @@ con controles, no en loop. Un **sticker** llega y se guarda, pero el panel no ti
 cae al `default` de `MessageBubble` y aparece como link de descarga. Falta una rama `sticker` con
 `<img>` (webp). Enviar stickers no es posible: la Cloud API sólo acepta stickers de un pack propio.
 
+**L13 — el panel de cliente arranca colapsado (2026-10-31).**
+Pedido del owner tras ver el render: "la información del cliente debe estar colapsada cuando se
+abre una conversación". `detailOpen` pasa a `false` y un `useEffect` sobre `conversationId` lo vuelve
+a colapsar al cambiar de conversación, para que no herede el panel abierto del cliente anterior.
+Los cinco tests que asumían un inspector siempre visible (cuatro en `ConversationThread.test.tsx`,
+uno en el story test) se migraron a: el panel **no** está al abrir, se abre con el botón y se
+cierra con su cabecera.
+

@@ -215,6 +215,9 @@ it('keeps conversation actions in the thread header and context actions-free', a
   expect(header).not.toBeNull();
   expect(header).toContainElement(screen.getByRole('button', { name: 'Tomar conversación' }));
   expect(header).toContainElement(screen.getByRole('button', { name: 'Acciones de la conversación' }));
+  // The details are collapsed until the operator asks for them.
+  expect(screen.queryByRole('complementary', { name: /inspector de conversación/i })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
   expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Acciones' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Acciones de la conversación' }));
@@ -241,7 +244,8 @@ it('offers emergency acknowledgement from the mobile action menu', async () => {
   expect(await screen.findByRole('menuitem', { name: 'Reconocer emergencia' })).toBeInTheDocument();
 });
 
-it('gives every inspector details element its own summary', () => {
+it('gives every inspector details element its own summary', async () => {
+  const user = userEvent.setup();
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
     customer: { id: 4, name: 'María González', phone_e164: '+5694' },
@@ -249,6 +253,7 @@ it('gives every inspector details element its own summary', () => {
     captured_data: { source: 'web' },
   } }} state="ready" />);
 
+  await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
   const inspector = screen.getByRole('complementary', { name: /inspector de conversación/i });
   for (const details of inspector.querySelectorAll('details')) {
     expect(details.querySelector(':scope > summary')).not.toBeNull();
@@ -291,7 +296,8 @@ describe('conversation inspector layout CSS contract', () => {
   });
 });
 
-  it('renders the conversation inspector beside the thread', () => {
+  it('renders the conversation inspector beside the thread', async () => {
+  const user = userEvent.setup();
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
     customer: { id: 4, name: 'María González', phone_e164: '+5694' },
@@ -304,6 +310,7 @@ describe('conversation inspector layout CSS contract', () => {
     captured_data: { preferred_language: 'es', nested: { source: 'web' }, attempts: 2 },
   }}} state="ready" />);
 
+  await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
     expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Caso vinculado' })).toBeInTheDocument();
   expect(within(screen.getByRole('complementary', { name: /inspector de conversación/i })).getByText('María González')).toBeInTheDocument();
@@ -314,22 +321,26 @@ describe('conversation inspector layout CSS contract', () => {
   expect(screen.getByText('2')).toBeInTheDocument();
 });
 
-it('renders the inspector case summary as markdown', () => {
+it('renders the inspector case summary as markdown', async () => {
+  const user = userEvent.setup();
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
     case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: true, summary: '**Needs** help', acknowledged_at: null, closed_at: null },
     case_id: 22,
   } }} state="ready" />);
+  await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
   const inspector = screen.getByRole('complementary', { name: /inspector de conversación/i });
   expect(within(inspector).getByText('Needs')).toBeInTheDocument();
   expect(within(inspector).getByText('Needs').tagName).toBe('STRONG');
   expect(inspector.textContent).not.toContain('**');
 });
 
-it('keeps the thread usable without optional case or captured data', () => {
+it('keeps the thread usable without optional case or captured data', async () => {
+  const user = userEvent.setup();
   render(<ConversationThread data={{ ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+5694' }, case: null, case_id: null, captured_data: null } }} state="ready" />);
 
   expect(screen.getByText('Hola')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
     expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Caso vinculado' })).not.toBeInTheDocument();
   expect(screen.queryByText('Datos capturados')).not.toBeInTheDocument();
@@ -366,14 +377,21 @@ describe('conversation mockup layout', () => {
     expect(scroller).not.toContainElement(toggle);
   });
 
-  it('opens and closes the client details without giving up thread width', async () => {
+  it('keeps the client details collapsed when a conversation opens', async () => {
     const user = userEvent.setup();
-    render(<ConversationThread data={{ ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+56941234567' } } }} state="ready" />);
+    const data = { ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+56941234567' } } };
+    const { rerender } = render(<ConversationThread conversationId={9} data={data} state="ready" />);
+    // The thread is what the operator came for: the details are one click away, never in the way.
+    expect(screen.queryByRole('dialog', { name: 'Detalles del cliente' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
     expect(screen.getByRole('dialog', { name: 'Detalles del cliente' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cerrar detalles del cliente' }));
     expect(screen.queryByRole('dialog', { name: 'Detalles del cliente' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Detalles del cliente' }));
     expect(screen.getByRole('dialog', { name: 'Detalles del cliente' })).toBeInTheDocument();
+    // Another conversation starts collapsed again, not carrying the previous customer's panel.
+    rerender(<ConversationThread conversationId={10} data={data} state="ready" />);
+    expect(screen.queryByRole('dialog', { name: 'Detalles del cliente' })).not.toBeInTheDocument();
   });
 
   it('separates messages by day and prints the speaker only for outgoing ones', () => {

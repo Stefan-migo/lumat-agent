@@ -56,8 +56,12 @@ describe("ConversationThread", () => {
     expect(screen.getByRole("button", { name: "2 mensajes anteriores · Ver todos" })).toBeInTheDocument();
   });
 
-  it("renders the interactive story inspector content", () => {
+  it("renders the interactive story inspector content", async () => {
+    const user = userEvent.setup();
     render(<InteractiveConversationThreadView />);
+    // Collapsed by default: the panel is one click away.
+    expect(screen.queryByRole("heading", { name: "Cliente" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Detalles del cliente" }));
     expect(screen.getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Caso vinculado" })).toBeInTheDocument();
     expect(screen.getByText("Datos capturados")).toBeInTheDocument();

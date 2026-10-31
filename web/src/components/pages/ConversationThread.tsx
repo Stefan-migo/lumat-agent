@@ -246,10 +246,13 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
   const phone = conversation?.customer?.phone_e164 ?? conversation?.wa_phone ?? null;
-  // Open by default: the mockup shows the client details beside the thread, and they are what the
-  // operator reads while replying. Narrow screens hide it (ConversationThread.css) and use the
-  // "Información del chat" sheet from the conversation menu instead.
-  const [detailOpen, setDetailOpen] = useState(true);
+  // Collapsed when a conversation opens: the thread is what the operator came for, and the details
+  // are one click away. Narrow screens hide the overlay entirely (ConversationThread.css) and use
+  // the "Información del chat" sheet from the conversation menu instead.
+  const [detailOpen, setDetailOpen] = useState(false);
+  // Opening another conversation is a fresh start: the details collapse again instead of staying
+  // open from the previous customer.
+  useEffect(() => { setDetailOpen(false); }, [conversationId]);
   return <PageFrame className="conversations-page conversation-thread-page" title="" state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : state === "stale" ? <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="Mostramos la información disponible." /> : null}>
       {conversation ? <header className="conversation-thread__header">
         {onBack ? <Button variant="tertiary" className="conversation-thread__back" aria-label="Volver a conversaciones" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button> : null}
