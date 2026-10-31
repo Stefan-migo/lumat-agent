@@ -5,6 +5,7 @@ import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
 import { roleLabels } from "../../roleLabels";
 import { Button } from "../primitives/Button";
+import { useToast } from "../primitives/Toast";
 import { Pagination } from "../primitives/Pagination";
 import { Input } from "../primitives/Input";
 import { DataTable, type Column } from "../shared/DataTable";
@@ -32,6 +33,7 @@ function errorMessage(error: unknown, fallback: string) {
 export interface UserManagementProps { currentUser: User; onOpenUser?: (id: number) => void; }
 
 export function UserManagement({ currentUser, onOpenUser }: UserManagementProps) {
+  const toast = useToast();
   const [refreshKey, setRefreshKey] = useState(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -63,7 +65,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
     try {
       await createUser({ username: username.trim(), password, role });
       setUsername(""); setPassword(""); setConfirmPassword("");
-      setMutationState({ tone: "success", title: "Usuario creado" });
+      toast.show("Usuario creado.");
       setRefreshKey((value) => value + 1);
       setCreateOpen(false);
     } catch (error) {
@@ -73,9 +75,12 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   };
 
   const toggle = async (user: AdminUser) => {
-    setBusyId(user.id); setMutationState({ tone: "info", title: "Actualizando estado" });
-    try { await toggleUserActive(user.id); setMutationState({ tone: "success", title: "Estado actualizado" }); setRefreshKey((value) => value + 1); }
-    catch (error) { setMutationState({ tone: "danger", title: errorMessage(error, "No pudimos actualizar el estado") }); }
+    setBusyId(user.id);
+    try {
+      await toggleUserActive(user.id);
+      toast.show("Estado actualizado.");
+      setRefreshKey((value) => value + 1);
+    } catch (error) { toast.show(errorMessage(error, "No pudimos actualizar el estado"), "danger"); }
     finally { setBusyId(null); }
   };
 
@@ -86,7 +91,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
     try {
       await deleteUser(deleteTarget.id);
       setDeleteTarget(null);
-      setMutationState({ tone: "success", title: "Usuario eliminado" });
+      toast.show("Usuario eliminado.");
       setRefreshKey((value) => value + 1);
     } catch (error) {
       setDeleteError(errorMessage(error, "No pudimos eliminar el usuario"));
@@ -103,7 +108,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   const state = data.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando usuarios" />
     : data.state === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />
     : data.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los usuarios" detail="Intenta nuevamente en unos minutos." />
-    : mutationState && !createOpen ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null;
+    : null;
   const users = data.data?.users ?? [];
   const roleUsers = useMemo(() => users.filter((user) => roleFilter === "all" || user.role === roleFilter), [users, roleFilter]);
   const matchingUsers = useMemo(() => {
