@@ -53,11 +53,18 @@ y reversible; ninguna fila se borra en la migración.
 
 | ID | Specs | Route | Commit |
 |---|---|---|---|
-| T1 | S1, S2 | inline | pulido del menú de proyecto + tests de frontend |
-| T2 | S3, S4 | inline | `artifact.delete`: servicio + endpoint + tool + superficies declaradas + tests |
-| T3 | S3 | inline | botón "Eliminar" en el panel con confirmación + tests |
-| T4 | S5, S6 | inline | migración 062 + servicio `delete_user` + endpoint + tests |
-| T5 | todas | inline | verificación de cierre: `shape` + `full`, frontend `build` + `test`, RDD |
+| T1 | S1, S2 | inline | `c0e76132` — pulido del menú de proyecto + tests |
+| T2 | S3, S4 | inline | `d2df4e2d` — `artifact.delete`: servicio + endpoint + tool + superficies |
+| T3 | S3 | inline | `fad64601` — botón "Eliminar" con confirmación + tests |
+| T4 | S5, S6 | inline | `8c3eb803` — migración 062 + `delete_user` + endpoint + tests |
+| T5 | todas | inline | verificación de cierre (abajo) |
+
+### Verificación de cierre (T5)
+
+- `bash scripts/test.sh quick` por iteración: verde.
+- `bash scripts/test.sh shape origin/main` → **3** (migración, `agent/registry.yaml`, `agent/personas/assistant.md`): `full` obligatorio.
+- `web/`: `npm ci` → `npm run build` (tsc −b) verde → `npm test` **119 archivos / 1384 tests** verde.
+- `bash scripts/test.sh full`: ver el registro del cierre.
 
 ## Log
 
