@@ -17,7 +17,7 @@ ROLE_TOOL_EXPECTATIONS = {
         "memory.update", "memory.delete", "project.list", "project.find",
         "project.create", "project.rename", "project.archive", "project.merge",
         "web.search", "web.fetch", "appointments.upcoming",
-        "artifact.save", "artifact.update", "kb.retrieve",
+        "artifact.save", "artifact.update", "artifact.delete", "kb.retrieve",
     },
 }
 

@@ -197,3 +197,31 @@ def get_revision(session: Session, thread_id: int, artifact_id: int, version: in
             AssistantArtifact.version == version,
         )
     )
+
+
+def delete_artifact(session: Session, thread_id: int, artifact_id: int) -> dict | None:
+    """Hard-delete every version of one artifact (rows and blobs). Returns a summary or None.
+
+    Deleting resolves the artifact by its `root_id`, so any revision id names the whole chain; the
+    blobs are removed first, then the rows, so a failed file removal never strands a row and a failed
+    row flush never strands a blob.
+    """
+    row = get_artifact(session, thread_id, artifact_id)
+    if row is None:
+        return None
+    versions = session.scalars(
+        select(AssistantArtifact).where(
+            AssistantArtifact.thread_id == thread_id,
+            AssistantArtifact.root_id == row.root_id,
+        )
+    ).all()
+    for version in versions:
+        Path(version.stored_path).unlink(missing_ok=True)
+    for version in versions:
+        session.delete(version)
+    session.flush()
+    record_audit(session, actor="assistant", action="assistant_artifact.deleted", entity="assistant_artifact",
+                 entity_id=str(row.id), after={"thread_id": thread_id, "filename": row.filename,
+                                              "root_id": row.root_id, "versions_deleted": len(versions)})
+    return {"artifact_id": artifact_id, "root_id": row.root_id, "filename": row.filename,
+            "versions_deleted": len(versions), "deleted": True}

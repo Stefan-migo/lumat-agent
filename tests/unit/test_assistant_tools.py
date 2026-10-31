@@ -274,6 +274,34 @@ def test_artifact_update_returns_the_new_version_and_only_download_metadata(monk
     assert "sha256" not in serialized
 
 
+def test_artifact_delete_is_typed_and_thread_scoped(monkeypatch):
+    """S4: deleting is a separate tool, confined to the assistant's artifacts in its own thread."""
+    schemas = tool_schemas()
+    assert "artifact.delete" in schemas
+    assert get_tool("artifact.delete").read_only is False
+    assert schemas["artifact.delete"]["required"] == ["artifact_id"]
+
+    for payload in ({"artifact_id": 0}, {"artifact_id": 4, "extra": True}):
+        with pytest.raises(ToolValidationError):
+            execute_tool(SimpleNamespace(), "artifact.delete", payload, owner_id=1, trusted_thread_id=5, role="admin")
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.owned_thread", lambda *_args: None)
+    with pytest.raises(ToolValidationError, match="no accessible chat thread for artifacts"):
+        execute_tool(SimpleNamespace(), "artifact.delete", {"artifact_id": 4}, owner_id=1, trusted_thread_id=5, role="admin")
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.owned_thread", lambda *_args: SimpleNamespace(id=5))
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.assistant_artifacts.delete_artifact",
+        lambda *_args, **_kwargs: {"artifact_id": 4, "root_id": 4, "filename": "r.md", "versions_deleted": 2, "deleted": True},
+    )
+    result = execute_tool(SimpleNamespace(), "artifact.delete", {"artifact_id": 4}, owner_id=1, trusted_thread_id=5, role="admin")
+    assert result["result"] == {"artifact_id": 4, "root_id": 4, "filename": "r.md", "versions_deleted": 2, "deleted": True}
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.delete_artifact", lambda *_args, **_kwargs: None)
+    with pytest.raises(ToolValidationError, match="artifact not found"):
+        execute_tool(SimpleNamespace(), "artifact.delete", {"artifact_id": 4}, owner_id=1, trusted_thread_id=5, role="admin")
+
+
 def test_artifact_update_reports_an_unchanged_edit(monkeypatch):
     """S7: pushing the same bytes back is reported, not silently duplicated."""
     monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.owned_thread", lambda *_args: SimpleNamespace(id=5))
@@ -1316,7 +1344,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
 
 def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset(
-        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update"}
+        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete"}
     )
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
@@ -1417,7 +1445,7 @@ def test_memory_correction_rejects_rows_outside_agent_ownership(row_kwargs):
 
 def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset(
-        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update"}
+        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete"}
     )
     row = SimpleNamespace(id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
 

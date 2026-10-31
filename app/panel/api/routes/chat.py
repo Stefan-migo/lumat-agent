@@ -435,6 +435,19 @@ def download_artifact(thread_id: int, artifact_id: int, version: int | None = No
     return FileResponse(row.stored_path, filename=row.filename, media_type=row.content_type)
 
 
+@router.delete("/chat/threads/{thread_id}/artifacts/{artifact_id}")
+def delete_artifact_route(thread_id: int, artifact_id: int, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
+    """Hard-delete an artifact and all of its revisions, for its owner only."""
+    result = get_thread(session, thread_id, current.id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    summary = assistant_artifacts.delete_artifact(session, thread_id, artifact_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="artifact not found")
+    session.commit()
+    return summary
+
+
 @router.get("/assistant/capabilities")
 def assistant_capabilities(current: User = Depends(require_agent_surface_json)) -> dict:
     """Return the validated assistant configuration without mutation controls."""

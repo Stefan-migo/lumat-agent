@@ -10,6 +10,7 @@ from app.db import SessionLocal
 from app.models import AssistantArtifact, AuditLog, InternalChatThread, User
 from app.services.assistant_artifacts import (
     append_revision,
+    delete_artifact,
     get_artifact,
     get_current,
     get_revision,
@@ -317,4 +318,70 @@ def test_a_failed_identity_leaves_no_blob_on_disk(monkeypatch, tmp_path):
         session.rollback()
 
     assert sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir()) == files_before
+    get_settings.cache_clear()
+
+
+def test_delete_artifact_removes_every_version_and_its_blobs(monkeypatch, tmp_path):
+    """S3/S4: deleting an artifact removes all of its revisions, rows and blobs alike."""
+    with SessionLocal() as session:
+        owner, thread, first = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-delete-owner")
+        second, _changed = append_revision(session, thread, first, "second", actor="assistant")
+        session.flush()
+        root_id = first.root_id
+        blobs = sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread.id)).iterdir())
+        assert len(blobs) == 2
+
+        summary = delete_artifact(session, thread.id, first.id)
+        session.commit()
+
+        assert summary == {
+            "artifact_id": first.id,
+            "root_id": root_id,
+            "filename": "report.md",
+            "versions_deleted": 2,
+            "deleted": True,
+        }
+        assert list_artifacts(session, thread.id) == []
+        assert revision_chain(session, thread.id) == {}
+        assert [p.name for p in (tmp_path / "assistant_artifacts" / str(thread.id)).iterdir()] == []
+        assert get_artifact(session, thread.id, second.id) is None
+
+        audit = session.execute(
+            select(AuditLog).where(AuditLog.action == "assistant_artifact.deleted")
+        ).scalar_one()
+        assert audit.entity_id == str(first.id)
+        assert audit.after["root_id"] == root_id
+        assert audit.after["versions_deleted"] == 2
+    get_settings.cache_clear()
+
+
+def test_delete_artifact_endpoint_is_owner_scoped_and_removes_the_artifact(client, monkeypatch, tmp_path):
+    """S3: the panel can hard-delete an artifact, and the download then 404s."""
+    monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    username = "artifact-delete-api"
+    with SessionLocal() as session:
+        session.add(User(username=username, password_hash=hash_password("pass"), role="admin"))
+        session.commit()
+
+    assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        first = store_artifact(session, thread, "report.md", "one", username)
+        second, _changed = append_revision(session, thread, first, "two", actor="assistant")
+        session.commit()
+        first_id = first.id
+
+    deleted = client.delete(f"/panel/api/chat/threads/{thread_id}/artifacts/{first_id}")
+    assert deleted.status_code == 200
+    assert deleted.json()["versions_deleted"] == 2
+    assert deleted.json()["deleted"] is True
+    assert client.get(f"/panel/api/chat/threads/{thread_id}/artifacts/{first_id}/download").status_code == 404
+    assert client.get(f"/panel/api/chat/threads/{thread_id}").json()["artifacts"] == []
+
+    # A foreign artifact id is not found.
+    missing = client.delete(f"/panel/api/chat/threads/{thread_id}/artifacts/999999")
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "artifact not found"
     get_settings.cache_clear()
