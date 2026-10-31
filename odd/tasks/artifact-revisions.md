@@ -136,3 +136,28 @@ aparte y `artifact.save` sigue creando siempre (mismo nombre = artefacto distint
 endpoint de download existente en lugar de un endpoint nuevo, para no romper ninguna URL ya emitida;
 reenviar contenido idéntico no crea revisión (S7); el append se serializa con `SELECT ... FOR UPDATE`
 sobre la raíz más el índice único (S11).
+
+**L6 — defecto encontrado por el suite completo de frontend y corregido (`0d263a50`):** la fila de
+artefacto hacía `[...artifact.versions]` y un payload sin `versions` —el que entrega el panel antes de
+que corra la migración, y el de los fixtures existentes— tiraba `TypeError: artifact.versions is not
+iterable` y tumbaba el árbol de React. El fallback deriva una revisión única de la fila: un contrato
+obligatorio en TypeScript no protege el runtime de un JSON viejo. Después del arreglo, `web/`:
+`npm run build` (tsc -b) verde y `npm test` **119 archivos / 1381 tests** verdes.
+
+**L7 — `full` de backend (2026-10-31): 2 rojos, uno corregido y uno que necesita decisión.**
+
+1. *Corregido*: `tests/integration/test_assistant_write_chain_timeline_verifier_probes.py::test_s3_class_b_set_is_exactly_agreed_and_chains_without_approval`
+   afirma por igualdad el conjunto autónomo de escritura; `artifact.update` entra en ese conjunto
+   (S6), así que la lista esperada se actualiza con él. Verde.
+2. *Necesita decisión*: `tests/integration/test_assistant_chat.py::test_a_capped_read_only_turn_responder_receives_combined_tool_evidence`
+   falla, y **no** por el contenido de este cambio. `_TOOL_EVIDENCE_LIMIT = 4_000`
+   (`app/chat/assistant/nodes.py:40`) acota la evidencia del responder por caracteres, y el payload de
+   `assistant.capabilities` **cita el catálogo entero**: medido con la misma prueba en `main` y en la
+   rama, el turno de 4 pasos conserva 3 payloads con 33 herramientas (`[1 earlier tool result(s)
+   omitted]`) y sólo 2 con 34 (`[2 earlier tool result(s) omitted]`). El catálogo creció porque la
+   herramienta nueva tiene que declararse, así que **cualquier** herramienta nueva come el presupuesto
+   de un turno largo. La prueba no es frágil por el temario: es el presupuesto el que está calibrado
+   contra el tamaño actual del catálogo. Se midió también que acortar la descripción de la herramienta
+   no alcanza para recuperarlo. Las salidas posibles (subir el tope, deduplicar resultados idénticos
+   del mismo turno, o aceptar la omisión y ajustar la aserción) cambian el comportamiento del
+   asistente fuera del alcance de esta feature, así que quedan para el owner.
