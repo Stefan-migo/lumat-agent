@@ -319,6 +319,7 @@ def test_delete_user_guards_references_and_audits(client, make_user, monkeypatch
     monkeypatch.setattr(user_service, "active_admin_count", lambda _session: 1)
     assert client.delete(f"/panel/api/users/{last_admin_id}").status_code == 409
     monkeypatch.undo()
+    # A referenced user is dereferenced, not blocked: the project survives, its owner goes null.
     with SessionLocal() as session:
         another_admin = User(username="second-admin", password_hash="unused", role="admin", active=True)
         target = User(username="referenced-user", password_hash="unused", role="operador", active=True)
@@ -328,12 +329,11 @@ def test_delete_user_guards_references_and_audits(client, make_user, monkeypatch
         session.commit()
         another_admin_id, target_id = another_admin.id, target.id
 
-    assert client.delete(f"/panel/api/users/{target_id}").status_code == 409
+    assert client.delete(f"/panel/api/users/{target_id}").status_code == 200
     with SessionLocal() as session:
-        target = session.get(User, target_id)
-        target.active = False
-        session.commit()
-    assert client.delete(f"/panel/api/users/{target_id}").status_code == 409
+        assert session.get(User, target_id) is None
+        project = session.scalar(select(Project).where(Project.slug == "referenced-user-project"))
+        assert project.owner_id is None
 
     assert client.delete(f"/panel/api/users/{another_admin_id}").status_code == 200
     with SessionLocal() as session:

@@ -813,6 +813,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("059_memory_user_scope",),
         ("060_capture_ack_plain",),
         ("061_artifact_revisions",),
+        ("062_user_nullable_refs",),
     ]
 
 
@@ -916,6 +917,24 @@ def test_migration_061_refuses_two_rows_claiming_the_same_revision(tmp_path):
                 "FROM assistant_artifacts WHERE id = %s",
                 (artifact_id,),
             )
+
+
+def test_migration_062_makes_appointment_technician_and_project_file_owner_nullable(tmp_path):
+    """062 lets a deleted user's attribution be nulled instead of blocking or deleting the record."""
+    with _scratch_migration_db(tmp_path, 61, 62) as (conn, apply_062, _):
+        result = apply_062()
+        assert result.returncode == 0, f"062 failed:\n{result.stdout}\n{result.stderr}"
+
+        columns = conn.execute(
+            "SELECT table_name, column_name, is_nullable FROM information_schema.columns "
+            "WHERE (table_name = 'appointments' AND column_name = 'technician_id') "
+            "   OR (table_name = 'project_files' AND column_name = 'owner_id') "
+            "ORDER BY table_name"
+        ).fetchall()
+        assert columns == [
+            ("appointments", "technician_id", "YES"),
+            ("project_files", "owner_id", "YES"),
+        ]
 
 
 def test_memory_dedup_index_includes_owner_and_allows_cross_owner_duplicates(migrated_db, admin_conn):

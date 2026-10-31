@@ -261,9 +261,12 @@ def delete_user_route(
         entity_id=str(user.id),
         before=before,
     )
-    users.delete_user(session, user)
     try:
+        users.delete_user(session, user)
         session.commit()
+    except users.UserDeleteBlocked as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except IntegrityError as exc:
         session.rollback()
         raise HTTPException(

@@ -13,13 +13,36 @@ app/services/customers.py / audit.py style).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import bcrypt
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import User, UserRole
+from app.models import (
+    Appointment,
+    AppointmentStatus,
+    AssistantArtifact,
+    AssistantAttachment,
+    Case,
+    Conversation,
+    InternalChatThread,
+    Memory,
+    Message,
+    NotificationOperation,
+    PanelNotification,
+    PanelSecret,
+    Project,
+    ProjectAlias,
+    ProjectFile,
+    PushSubscription,
+    Settings,
+    TechnicianAvailability,
+    TechnicianWeeklySchedule,
+    User,
+    UserRole,
+)
 
 # AP-1: lock after this many consecutive failures, for this long.
 MAX_FAILED_LOGINS = 5
@@ -94,8 +117,64 @@ def active_admin_count(session: Session) -> int:
     ) or 0
 
 
+class UserDeleteBlocked(Exception):
+    """A user cannot be hard-deleted until the named obstacle is resolved."""
+
+
 def delete_user(session: Session, user: User) -> None:
-    """Mark a user for deletion; the caller commits the transaction."""
+    """Hard-delete a user: dereference what survives, remove what is theirs.
+
+    A user with `booked` appointments blocks the delete (those business records need a technician,
+    so reassign them first). Otherwise every nullable "who did it" reference is nulled so the record
+    survives without the author, the user's own rows are deleted, and the user row goes last. The
+    assistant threads cascade to their messages/attachments/artifacts; the blobs those rows point to
+    are removed first so the cascade never strands a file.
+    """
+    booked = session.scalar(
+        select(func.count()).select_from(Appointment).where(
+            Appointment.technician_id == user.id,
+            Appointment.status == AppointmentStatus.BOOKED,
+        )
+    ) or 0
+    if booked:
+        raise UserDeleteBlocked("reassign the user's appointments before deleting")
+
+    # 1. Dereference the nullable attribution columns; the records survive.
+    for model, column in (
+        (Project, Project.owner_id),
+        (ProjectAlias, ProjectAlias.owner_id),
+        (Conversation, Conversation.responsible_id),
+        (Message, Message.author_id),
+        (Case, Case.responsible_id),
+        (Memory, Memory.owner_id),
+        (Settings, Settings.updated_by),
+        (PanelSecret, PanelSecret.updated_by),
+        (NotificationOperation, NotificationOperation.user_id),
+        (Appointment, Appointment.technician_id),
+        (ProjectFile, ProjectFile.owner_id),
+    ):
+        session.execute(update(model).where(column == user.id).values(**{column.key: None}))
+
+    # 2. Remove the user's own rows, blobs first (the thread cascade deletes the rows).
+    thread_ids = session.scalars(
+        select(InternalChatThread.id).where(InternalChatThread.user_id == user.id)
+    ).all()
+    if thread_ids:
+        for blob in session.scalars(
+            select(AssistantArtifact.stored_path).where(AssistantArtifact.thread_id.in_(thread_ids))
+        ).all():
+            Path(blob).unlink(missing_ok=True)
+        for blob in session.scalars(
+            select(AssistantAttachment.stored_path).where(AssistantAttachment.thread_id.in_(thread_ids))
+        ).all():
+            Path(blob).unlink(missing_ok=True)
+
+    session.execute(delete(TechnicianAvailability).where(TechnicianAvailability.technician_id == user.id))
+    session.execute(delete(TechnicianWeeklySchedule).where(TechnicianWeeklySchedule.technician_id == user.id))
+    session.execute(delete(PanelNotification).where(PanelNotification.user_id == user.id))
+    session.execute(delete(PushSubscription).where(PushSubscription.user_id == user.id))
+    session.execute(delete(InternalChatThread).where(InternalChatThread.user_id == user.id))
+
     session.delete(user)
 
 
