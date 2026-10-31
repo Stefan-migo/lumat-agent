@@ -6,6 +6,11 @@ import { Settings } from "../../components/pages/Settings";
 import { SettingsView } from "./Settings.stories";
 import * as settingsStories from "./Settings.stories";
 import type { AssistantCapabilities } from "../../types";
+import { ToastProvider } from "../../components/primitives/Toast";
+import type { ReactElement } from "react";
+
+/** Every save reports its outcome as a toast, so these renders need the provider. */
+const renderSettings = (ui: ReactElement) => render(<ToastProvider>{ui}</ToastProvider>);
 
 const capabilities: AssistantCapabilities = {
   tools: [
@@ -37,12 +42,12 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the Spanish page title 'Configuración'", () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     expect(screen.getByRole("heading", { name: "Configuración" })).toBeInTheDocument();
   });
 
   it("renders groups by business consequence with approved Spanish card titles", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detección de emergencias" })).toBeInTheDocument();
     await selectSection("Mensajes");
@@ -55,7 +60,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("explains the agent-scope effect in plain Spanish before the input", () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
     // The explanation precedes the textarea and is readable, not raw English.
     expect(card.querySelector(".card__description")).toHaveTextContent(/el agente responde de forma automática/i);
@@ -63,7 +68,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("separates and explains the advanced category=mode syntax, keeping the editable lines", () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Alcance del agente" }).closest(".card") as HTMLElement;
     const advanced = within(card).getByText(/sintaxis avanzada/i);
     expect(advanced).toBeInTheDocument();
@@ -79,14 +84,14 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("shows validation for invalid category=mode lines before saving (DS-UI-STATES)", () => {
-    render(<SettingsView state="validation" />);
+    renderSettings(<SettingsView state="validation" />);
     const alert = screen.getByRole("alert");
     expect(within(alert).getByText(/sintaxis no válida/i)).toBeInTheDocument();
     expect(within(alert).getByText(/cada línea debe tener categoría=mode/i)).toBeInTheDocument();
   });
 
   it("renders one save action per independently persisted group", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Mensajes");
     const toneCard = screen.getByRole("heading", { name: "Tono del asistente" }).closest(".card") as HTMLElement;
     expect(within(toneCard).queryByRole("button", { name: "Guardar tono" })).not.toBeInTheDocument();
@@ -107,7 +112,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the emergency keywords as chips with the plain-Spanish effect", () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Detección de emergencias" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/próximo mensaje entrante/i)).toBeInTheDocument();
     const chips = within(card).getByRole("list", { name: "Palabras y frases de activación" });
@@ -118,7 +123,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the tone selector with the current tone value and plain-Spanish effect", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Mensajes");
     const card = screen.getByRole("heading", { name: "Tono del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText("Define el estilo de las respuestas generadas. Los mensajes fijos se envían tal como los escribes.")).toBeInTheDocument();
@@ -126,7 +131,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the editable standard messages with their configured text", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Mensajes");
     const card = screen.getByRole("heading", { name: "Mensajes del asistente" }).closest(".card") as HTMLElement;
     expect(within(card).getByText("Menú de categorías automático")).toBeInTheDocument();
@@ -151,7 +156,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the configured timezone and weekly table without an always-open new editor", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
     expect(within(card.querySelector(".card__header")!).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
@@ -163,7 +168,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("keeps the occupied-day rule in the schedule editor", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
     fireEvent.click(within(card).getByRole("button", { name: "Agregar horario" }));
@@ -173,7 +178,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the paired USD spend-limit inputs", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Límites de gasto" }).closest(".card") as HTMLElement;
     const conv = within(card).getByLabelText(/límite por conversación/i) as HTMLInputElement;
@@ -184,7 +189,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders the Meta pricing input and effective-date chip", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Precio Meta" }).closest(".card") as HTMLElement;
     expect(within(card).getByText("Vigente desde el 1 oct 2026")).toBeInTheDocument();
@@ -194,7 +199,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders current spend as a three-metric row with its date and conversation context", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Costos");
     const card = screen.getByRole("heading", { name: "Gasto actual" }).closest(".card") as HTMLElement;
     const snap = settings.snapshot;
@@ -211,7 +216,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("explains the 80% and 100% threshold actions", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Costos");
     expect(screen.getByRole("heading", { name: "Qué ocurre al alcanzar los límites" })).toBeInTheDocument();
     expect(screen.getByText(/Respuestas más conservadoras/)).toBeInTheDocument();
@@ -219,31 +224,31 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
   });
 
   it("renders saving state (DS-UI-STATES)", () => {
-    render(<SettingsView state="saving" />);
+    renderSettings(<SettingsView state="saving" />);
     const banner = screen.getByRole("status");
     expect(within(banner).getByText("Guardando cambios")).toBeInTheDocument();
   });
 
   it("renders saved state (DS-UI-STATES)", () => {
-    render(<SettingsView state="saved" />);
+    renderSettings(<SettingsView state="saved" />);
     const banner = screen.getByRole("status");
     expect(within(banner).getByText("Configuración guardada")).toBeInTheDocument();
   });
 
   it("renders server-error state (DS-UI-STATES)", () => {
-    render(<SettingsView state="server-error" />);
+    renderSettings(<SettingsView state="server-error" />);
     const banner = screen.getByRole("alert");
     expect(within(banner).getByText("No pudimos guardar los cambios")).toBeInTheDocument();
   });
 
   it("renders stale-state note above the data (DS-UI-STATES)", () => {
-    render(<SettingsView state="stale" />);
+    renderSettings(<SettingsView state="stale" />);
     const banner = screen.getByRole("status");
     expect(within(banner).getByText(/datos posiblemente desactualizados/i)).toBeInTheDocument();
   });
 
   it("points the schedule section at the single push settings page", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones del navegador" }).closest(".card") as HTMLElement;
     expect(push).toBeInTheDocument();
@@ -258,7 +263,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
 
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Capacidades");
 
     const card = await screen.findByRole("heading", { name: "Herramientas del asistente" });
@@ -291,7 +296,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
 
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Capacidades");
 
     expect(await screen.findByText("Cargando capacidades del asistente")).toBeInTheDocument();
@@ -306,7 +311,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
 
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Capacidades");
 
     expect(await screen.findByText("No pudimos cargar las capacidades del asistente")).toBeInTheDocument();
@@ -316,7 +321,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
 
   it("keeps the push entry point when this browser cannot subscribe", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ public_key: null }), { status: 200 }));
-    render(<Settings data={settings} state="ready" />);
+    renderSettings(<Settings data={settings} state="ready" />);
     await selectSection("Horarios y avisos");
     const push = screen.getByRole("heading", { name: "Notificaciones del navegador" }).closest(".card") as HTMLElement;
     // The unsupported-browser explanation belongs to the page now; the section must still lead there.
@@ -334,7 +339,7 @@ describe("Settings API page", () => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
 
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Mensajes");
     const tone = await screen.findByRole("button", { name: "Tono" });
     await waitFor(() => expect(tone).toHaveTextContent("Cercano"));
@@ -356,7 +361,7 @@ describe("Settings API page", () => {
       if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Mensajes");
     const templates = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
     const greetingTab = within(templates).getByRole("tab", { name: /^Saludo cuando falta el nombre/ });
@@ -386,7 +391,7 @@ describe("Settings API page", () => {
       if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Horarios y avisos");
     const timezone = await screen.findByLabelText("Zona horaria");
     const card = timezone.closest(".card") as HTMLElement;
@@ -404,7 +409,7 @@ describe("Settings API page", () => {
       if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
       return new Response(JSON.stringify({ detail: "weekday repeated across entries" }), { status: 400 });
     });
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Horarios y avisos");
     fireEvent.change(await screen.findByLabelText("Zona horaria"), { target: { value: "America/New_York" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -420,7 +425,7 @@ describe("Settings API page", () => {
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
 
-    render(<Settings />);
+    renderSettings(<Settings />);
     await selectSection("Costos");
     const dailyLimit = await screen.findByLabelText("Límite diario");
     await waitFor(() => expect(dailyLimit).toHaveValue(5));
@@ -435,7 +440,7 @@ describe("Settings API page", () => {
   });
 
   it("renders the cost metrics, effective date, and threshold actions", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Costos");
 
     expect(await screen.findByText("Gasto diario")).toBeInTheDocument();
@@ -449,7 +454,7 @@ describe("Settings API page", () => {
   });
 
   it("edits and saves the tariff with the agreed services", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Tarifas");
     const card = screen.getByRole("heading", { name: "Tarifario" }).closest(".card") as HTMLElement;
     expect(within(card).getByLabelText(/Visita técnica/)).toHaveValue(30000);
@@ -469,7 +474,7 @@ describe("Settings API page", () => {
   });
 
   it("edits and saves the coverage communes", async () => {
-    render(<SettingsView />);
+    renderSettings(<SettingsView />);
     await selectSection("Cobertura");
     const card = screen.getByRole("heading", { name: "Cobertura" }).closest(".card") as HTMLElement;
     const field = within(card).getByLabelText("Comunas con cobertura");
@@ -493,7 +498,7 @@ describe("Settings API page", () => {
       new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }),
     );
 
-    render(<Settings />);
+    renderSettings(<Settings />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
     expect(screen.queryByText("No pudimos cargar la configuración")).toBeNull();
