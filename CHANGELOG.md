@@ -6,6 +6,55 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.10.14] - 2026-10-31
+
+El panel del asistente y la ventana de conversación quedan usables de punta a punta: se ve el
+historial completo, se abren los archivos del sidebar, se versionan y se borran artefactos, se
+borran usuarios de verdad y se puede enviar un audio. Dos migraciones aditivas acompañan el
+release: el versionado de artefactos (061) y el borrado real de usuarios (062).
+
+### Added
+
+- **Versionado append-only de artefactos** (`061_artifact_revisions.sql`). Editar un artefacto ya
+  no crea un archivo suelto al lado: es una fila nueva con el mismo `root_id` y la versión
+  siguiente, y la anterior nunca se actualiza ni se borra, así que su blob y su sha256 siguen
+  verificables. Un índice único impide que dos ediciones concurrentes produzcan dos filas con la
+  misma versión. El panel muestra el badge `vN` y un historial colapsado, y el download acepta
+  `?version=`.
+- **Borrado real de usuarios** (`062_user_nullable_refs.sql`). `appointments.technician_id` y
+  `project_files.owner_id` pasan a nullable para que un usuario se pueda borrar sin perder el
+  turno ni el archivo: se desvincula la atribución y se borra lo personal. Un turno `booked` sigue
+  bloqueando con `409` y pide reasignar antes.
+- **Envío de audio desde la ventana de conversación.** Chromium graba `audio/webm;codecs=opus` y
+  Meta acepta sólo aac, amr, mpeg, mp4 y ogg con Opus. El api normaliza con un remux
+  (`ffmpeg -c:a copy`): el audio no se re-encodea y lo que Meta ya acepta se sube intacto.
+- **Visor de archivos dentro del panel** y **sidebar de contexto del asistente** con árbol de
+  recursos, upload, drag entre carpetas y chips de referencia al composer.
+- **Visitas vencidas**: la agenda lista las visitas que siguen abiertas y se pueden cerrar en una
+  sola acción.
+
+### Changed
+
+- **El panel del asistente se reconstruyó** sobre la referencia del owner.
+- **La ventana de conversación le da el protagonismo al hilo**: un header de una banda, el panel de
+  cliente flotando sobre la conversación y colapsado al abrir, toda la altura disponible para el
+  hilo, el control de "ver todos" arriba y fuera del scroller, y burbujas a las orillas con
+  separador de día y hora adentro.
+- **Todo feedback de acción del panel es el toast de la esquina inferior derecha.** Configuración
+  tenía cuatro mecanismos distintos y ninguno era el toast. Quedan inline los estados de página
+  (carga, permiso, stale), la validación de campo, el error dentro del `Dialog` que originó la
+  acción y el micro-feedback pegado a un control.
+- **La ventana de 24 horas** pasó de bloque ámbar a una línea fina: informa sin competir con la
+  conversación.
+
+### Fixed
+
+- **El fallback de retrieval del asistente** se normaliza y la pregunta de evidencia se mueve
+  (S14, S2).
+- **Los blobs de un artefacto borrado se eliminan después del commit**, no antes: si el commit
+  fallaba quedaban filas vivas apuntando a archivos ya destruidos.
+- **Los anclajes de reloj de los tests de slots** dejan de depender del momento de la corrida.
+
 ## [2026.10.13] - 2026-10-29
 
 The assistant can now remember the person it works for, and the owner can see and delete what
