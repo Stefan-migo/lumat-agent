@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
+import { ToastProvider } from '../primitives/Toast';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { closeAppointment, closeTechnicianAppointment, fetchTechnicians, fetchUsers, getAppointment, getTechnicianAppointment, rescheduleAppointment, sendTechnicianQuickAction } from '../../api';
 import { readFileSync } from 'node:fs';
@@ -45,7 +46,7 @@ describe('AppointmentDetail', () => {
   it('offers confirmed outcomes for booked appointments and reports success', async () => {
     const user = userEvent.setup();
     vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: {} });
-    render(<AppointmentDetail data={detail} />);
+    render(<ToastProvider><AppointmentDetail data={detail} /></ToastProvider>);
     await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
     const dialog = screen.getByRole('dialog', { name: 'Cerrar visita' });
     expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
@@ -58,6 +59,8 @@ describe('AppointmentDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(7, 'completed'));
     expect(await screen.findByRole('status')).toHaveTextContent('Visita completada');
+    expect(document.querySelector('.toast-region')).toHaveTextContent('Visita completada');
+    expect(screen.queryByText('Visita completada', { selector: '.state-message__title' })).not.toBeInTheDocument();
   });
 
   it('supports no-show and surfaces failure; terminal visits have no outcome action', async () => {
@@ -376,11 +379,12 @@ describe('AppointmentDetail (technician)', () => {
     vi.mocked(getTechnicianAppointment).mockResolvedValue(technicianDetail);
     vi.mocked(sendTechnicianQuickAction).mockResolvedValue({ ok: true, technician_state: 'en_route', resend_available_at: '2026-09-26T13:00:00.000Z' });
 
-    render(<AppointmentDetail appointmentId={7} role="tecnico" now={FIELD_NOW} />);
+    render(<ToastProvider><AppointmentDetail appointmentId={7} role="tecnico" now={FIELD_NOW} /></ToastProvider>);
     await user.click(await screen.findByRole('button', { name: 'Voy en camino' }));
 
     await waitFor(() => expect(sendTechnicianQuickAction).toHaveBeenCalledWith(7, 'en_route'));
     expect(await screen.findByRole('status')).toHaveTextContent('Avisamos que vas en camino');
+    expect(document.querySelector('.toast-region')).toHaveTextContent('Avisamos que vas en camino');
   });
 
   it('keeps the operator affordances for an operator role and no field actions', () => {

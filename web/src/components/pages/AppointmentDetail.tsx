@@ -14,6 +14,7 @@ import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from '../
 import { ConversationSummary } from '../shared/ConversationSummary';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
+import { useToast } from '../primitives/Toast';
 import { QUICK_ACTION_LABELS, fieldStateAge } from '../shared/visitState';
 import { composeAgendaTime } from '../shared/agendaTime';
 import { pathForRoute } from '../domain/panelRoutes';
@@ -147,6 +148,7 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
   const [rescheduleForm, setRescheduleForm] = useState<AppointmentRescheduleForm>({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
   const [mutating, setMutating] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
+  const toast = useToast();
   const fetchDetail = useCallback(() => {
     if (appointmentId === undefined) throw new Error('appointment id is required');
     return technician ? getTechnicianAppointment(appointmentId) : getAppointment(appointmentId);
@@ -182,7 +184,7 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
         ? closeTechnicianAppointment(detail.appointment.id, outcome)
         : closeAppointment(detail.appointment.id, outcome));
       setCloseOpen(false);
-      setFeedback({ tone: 'success', title: outcome === 'completed' ? 'Visita completada' : 'Visita marcada como no asistida' });
+      toast.show(outcome === 'completed' ? 'Visita completada' : 'Visita marcada como no asistida');
       await retry();
     } catch (error) {
       setFeedback({ tone: 'danger', title: 'No se pudo registrar el resultado', detail: error instanceof Error ? error.message : 'Intenta nuevamente.' });
@@ -193,13 +195,12 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
   const sendQuickAction = async (action: TechnicianVisitState) => {
     if (!detail || mutating) return;
     setMutating(true);
-    setFeedback(null);
     try {
       await sendTechnicianQuickAction(detail.appointment.id, action);
-      setFeedback({ tone: 'success', title: action === 'en_route' ? 'Avisamos que vas en camino' : 'Avisamos que llegaste' });
+      toast.show(action === 'en_route' ? 'Avisamos que vas en camino' : 'Avisamos que llegaste');
       await retry();
     } catch (error) {
-      setFeedback({ tone: 'danger', title: quickActionErrorTitle(error) });
+      toast.show(quickActionErrorTitle(error), 'danger');
     } finally {
       setMutating(false);
     }
@@ -215,7 +216,7 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
     try {
       await rescheduleAppointment(detail.appointment.id, { ...composeAgendaTime(rescheduleForm.local_date, rescheduleForm.local_time, detail.appointment.timezone), duration_minutes: Number(rescheduleForm.duration_minutes), technician_id: Number(rescheduleForm.technician_id) });
       setRescheduleOpen(false);
-      setFeedback({ tone: 'success', title: 'Visita reprogramada' });
+      toast.show('Visita reprogramada');
       await retry();
     } catch (error) {
       setFeedback({ tone: 'danger', title: 'No se pudo reprogramar la visita', detail: error instanceof Error ? error.message : 'Intenta nuevamente.' });
@@ -248,7 +249,6 @@ export function AppointmentDetail({ appointmentId, role, data: controlledData, s
           <Button variant="primary" aria-label="Cerrar visita" title="Cerrar visita" onClick={() => { setFeedback(null); setCloseOpen(true); }}><Icon icon={Check} /><span>Cerrar visita</span></Button>
         </> : null}
       </>} state={stateMessage(state)}>
-    {feedback?.tone === 'success' ? <StateMessage tone="success" role="status" title={feedback.title} /> : null}
     <div className="detail-region">
       <section className="detail-region__rail" aria-label="Información de la visita">
         <Card title="Programación" icon={CalendarDays} className="appointment-detail__schedule">
