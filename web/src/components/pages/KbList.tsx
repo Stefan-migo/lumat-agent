@@ -16,6 +16,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Dialog } from "../primitives/Dialog";
+import { useToast } from "../primitives/Toast";
 
 export interface KbListProps { data?: DocsResponse | null; onRetry?: () => void; onOpenDocument?: (id: number) => void; fetchDocuments?: () => Promise<DocsResponse>; }
 
@@ -110,7 +111,7 @@ function SearchPanel() {
 function UploadFields({ title, setTitle, file, setFile, visibility, setVisibility, busy, feedback, submitUpload, retryUpload }: {
   title: string; setTitle: (value: string) => void; file: File | null; setFile: (file: File | null) => void;
   visibility: KbVisibility; setVisibility: (value: KbVisibility) => void; busy: boolean;
-  feedback: { tone: "success" | "danger"; title: string; retry?: boolean } | null;
+  feedback: { retry?: boolean } | null;
   submitUpload: () => void; retryUpload: () => void;
 }) {
   const inputRef = useRef<HTMLDivElement>(null);
@@ -119,7 +120,6 @@ function UploadFields({ title, setTitle, file, setFile, visibility, setVisibilit
   const acceptFile = (selected?: File) => { if (selected) setFile(selected); };
   return <div className="kb-upload-form">
     {busy ? <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido." /> : null}
-    {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} /> : null}
     <Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy} />
     <div className="kb-upload__picker">
       <div className={`kb-upload__dropzone${dragging ? " kb-upload__dropzone--active" : ""}`} role="button" tabIndex={busy ? -1 : 0} aria-label="Arrastra un archivo aquí o selecciónalo desde tu equipo" onClick={chooseFile} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseFile(); } }} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); acceptFile(event.dataTransfer.files[0]); }}>
@@ -137,11 +137,12 @@ function UploadFields({ title, setTitle, file, setFile, visibility, setVisibilit
 }
 
 export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDocuments }: KbListProps = {}) {
+  const toast = useToast();
   const fetchDocs = useCallback(() => (fetchDocuments ?? refreshKbDocuments)(), [fetchDocuments]);
   const fetched = useAsyncData(fetchDocs, controlledData === undefined);
   const [refreshed, setRefreshed] = useState<DocsResponse | null>(null);
   const [busy, setBusy] = useState<"upload" | null>(null);
-  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string; retry?: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<{ retry?: boolean } | null>(null);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [visibility, setVisibility] = useState<KbVisibility>("internal");
@@ -160,8 +161,12 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
   const refresh = async () => setRefreshed(await refreshKbDocuments());
   const mutate = async (commit: () => Promise<unknown>) => {
     setBusy("upload"); setFeedback(null);
-    try { await commit(); await refresh(); setFeedback({ tone: "success", title: "Documento agregado" }); }
-     catch (error) { setFeedback({ tone: "danger", retry: true, title: error instanceof ApiError && error.status === 403 ? "No tienes permiso para modificar la base de conocimientos." : "No pudimos procesar el documento" }); }
+    try { await commit(); await refresh(); setFeedback(null); toast.show("Documento agregado"); }
+     catch (error) {
+       const message = error instanceof ApiError && error.status === 403 ? "No tienes permiso para modificar la base de conocimientos." : "No pudimos procesar el documento";
+       setFeedback({ retry: true });
+       toast.show(message, "danger");
+     }
     finally { setBusy(null); }
   };
   const retry = onRetry ?? fetched.retry;
@@ -171,11 +176,11 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
     const dot = file.name.lastIndexOf(".");
     const extension = dot > 0 ? file.name.slice(dot).toLowerCase() : "";
     if (!ACCEPTED_EXTENSIONS.includes(extension)) {
-      setFeedback({ tone: "danger", title: "Formato no compatible. Usa PDF, Markdown, TXT o CSV." });
+      toast.show("Formato no compatible. Usa PDF, Markdown, TXT o CSV.", "danger");
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      setFeedback({ tone: "danger", title: "El archivo supera el tamaño máximo de 5 MB." });
+      toast.show("El archivo supera el tamaño máximo de 5 MB.", "danger");
       return;
     }
     const draft = { title, file, visibility };

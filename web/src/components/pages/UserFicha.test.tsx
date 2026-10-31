@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, getAdminUser, resetUserPassword, toggleUserActive, unlockUser, updateAdminUser } from "../../api";
 import { UserFicha } from "./UserFicha";
+import { ToastProvider } from "../primitives/Toast";
 
 vi.mock("../../api", async (importActual) => ({
   ...(await importActual<typeof import("../../api")>()),
@@ -62,13 +63,13 @@ describe("UserFicha", () => {
   it("explains duplicate email conflicts", async () => {
     vi.mocked(updateAdminUser).mockRejectedValue(new ApiError(409, "Email already exists"));
     const user = userEvent.setup();
-    render(<UserFicha userId={8} />);
+    render(<ToastProvider><UserFicha userId={8} /></ToastProvider>);
     await screen.findByLabelText("Correo electrónico");
     await waitFor(() => expect(screen.getByLabelText("Correo electrónico")).toHaveValue("carlos@example.cl"));
     await user.clear(screen.getByLabelText("Correo electrónico"));
     await user.type(screen.getByLabelText("Correo electrónico"), "other@example.cl");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/correo.*registrado|correo.*otro usuario/i);
+    expect(await screen.findByText(/correo.*registrado|correo.*otro usuario/i, { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("unlocks and updates lockout state", async () => {
@@ -83,11 +84,11 @@ describe("UserFicha", () => {
 
   it("toggles the real account state and shows feedback", async () => {
     const user = userEvent.setup();
-    render(<UserFicha userId={8} />);
+    render(<ToastProvider><UserFicha userId={8} /></ToastProvider>);
     await user.click(await screen.findByRole("button", { name: "Desactivar cuenta" }));
     expect(toggleUserActive).toHaveBeenCalledWith(8);
     expect(await screen.findByText("Inactiva")).toBeInTheDocument();
-    expect(await screen.findByRole("status")).toHaveTextContent("La cuenta está desactivada");
+    expect(await screen.findByText("La cuenta está desactivada.", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("opens the shared password reset flow for the current account", async () => {

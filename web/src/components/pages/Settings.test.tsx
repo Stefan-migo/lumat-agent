@@ -4,6 +4,11 @@ import userEvent from "@testing-library/user-event";
 import type { Settings as SettingsData } from "../../types";
 import { Settings } from "./Settings";
 import { WEEKDAY_NAMES } from "../shared/agendaTime";
+import { ToastProvider } from "../primitives/Toast";
+import type { ReactElement } from "react";
+
+/** Every save reports its outcome as a toast, so these renders need the provider. */
+const renderSettings = (ui: ReactElement) => render(<ToastProvider>{ui}</ToastProvider>);
 
 const replyTextValues = {
   handoff_cobertura: "Sin cobertura en {{comuna}}.",
@@ -87,7 +92,7 @@ describe("Settings", () => {
   it("operation uses the shared save bar for hours and durations with an explicit empty state", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     const durations = screen.getByRole("heading", { name: "Duraciones por servicio" }).closest(".card") as HTMLElement;
     expect(within(durations).getByText("Aún no hay duraciones configuradas")).toBeInTheDocument();
@@ -114,7 +119,7 @@ describe("Settings", () => {
   it("operation adapts coverage help and keeps empty rejection and exact normalized payload", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Cobertura");
     expect(screen.getByRole("button", { name: "Ayuda sobre cobertura" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Guardar cobertura" })).not.toBeInTheDocument();
@@ -136,7 +141,7 @@ describe("Settings", () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
     const data = settings();
-    render(<Settings data={data} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={data} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Tarifas");
     expect(screen.getByRole("button", { name: "Ayuda sobre tarifas" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Guardar tarifas" })).not.toBeInTheDocument();
@@ -155,7 +160,7 @@ describe("Settings", () => {
   it("operation keeps unsaved coverage and tariff drafts isolated and discards only the active section", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Cobertura");
     fireEvent.change(screen.getByLabelText("Comunas con cobertura"), { target: { value: "Ñuñoa" } });
     await selectSection(user, "Tarifas");
@@ -169,7 +174,7 @@ describe("Settings", () => {
   });
   it("uses contextual decorative icons for all five derivation cases", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
     for (const [label, icon] of [
@@ -188,7 +193,7 @@ describe("Settings", () => {
 
   it("shows a contextual icon on each option inside all four reply accordions", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
     const groups = [
@@ -221,7 +226,7 @@ describe("Settings", () => {
 
   it("groups specific derivation cases in a collapsible list separate from generic handoff", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
     const cases = within(nav).getByRole("button", { name: /Casos de derivación/ });
@@ -244,7 +249,7 @@ describe("Settings", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("renders every section and selects Agente by default", () => {
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(screen.getAllByRole("tablist").map((tablist) => within(tablist).getAllByRole("tab").map((tab) => tab.textContent))).toEqual([
       ["Chatbot", "Operación", "Integraciones", "Costos"],
       ["Agente", "Persona", "Conducta", "Mensajes"],
@@ -256,7 +261,7 @@ describe("Settings", () => {
 
   it("renders only the active group's members", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     const members = () => within(screen.getByRole("tablist", { name: "Secciones de configuración" })).getAllByRole("tab").map((tab) => tab.textContent);
     expect(members()).toEqual(["Agente", "Persona", "Conducta", "Mensajes"]);
     await user.click(screen.getByRole("tab", { name: "Operación" }));
@@ -270,7 +275,7 @@ describe("Settings", () => {
   it("saves a DeepSeek key and reports a valid key without balance", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, validation: "no_balance", model_api_key: { configured: true, source: "panel", masked: "…1234" } }), { status: 200 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "API key de modelos");
     expect(screen.getByText("No configurada")).toBeInTheDocument();
     const keyInput = screen.getByLabelText("API key de DeepSeek");
@@ -286,7 +291,7 @@ describe("Settings", () => {
   it("reports a successfully validated key", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, validation: "valid", model_api_key: { configured: true, source: "panel", masked: "…1234" } }), { status: 200 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "API key de modelos");
     await user.type(screen.getByLabelText("API key de DeepSeek"), "sk-test-key");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
@@ -298,7 +303,7 @@ describe("Settings", () => {
     const fetch = vi.spyOn(globalThis, "fetch");
     fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "invalid api key" }), { status: 400 }));
     fetch.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "could not validate the api key" }), { status: 502 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "API key de modelos");
     await user.type(screen.getByLabelText("API key de DeepSeek"), "sk-test-key");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
@@ -310,7 +315,7 @@ describe("Settings", () => {
   it("deletes a panel-managed key and refreshes its displayed status", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, model_api_key: { configured: false, source: "none", masked: "" } }), { status: 200 }));
-    render(<Settings data={settings({ model_api_key: { configured: true, source: "panel", masked: "…1234" } })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ model_api_key: { configured: true, source: "panel", masked: "…1234" } })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "API key de modelos");
     expect(screen.getByText("Configurada desde el panel")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Borrar" }));
@@ -320,7 +325,7 @@ describe("Settings", () => {
 
   it("renders Agente contextual help in popovers and keeps the advanced rule editor", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(screen.getByRole("heading", { name: "Alcance del agente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detección de emergencias" })).toBeInTheDocument();
     expect(screen.getByText("Avanzado")).toBeInTheDocument();
@@ -342,7 +347,7 @@ describe("Settings", () => {
 
   it("shows Historial only for Agente and Persona", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(screen.getByRole("button", { name: "Historial" })).toBeInTheDocument();
     await selectSection(user, "Mensajes");
     expect(screen.queryByRole("button", { name: "Historial" })).not.toBeInTheDocument();
@@ -353,7 +358,7 @@ describe("Settings", () => {
   it("tracks dirty state, discards without a request, and disables save when clean", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     const save = screen.getByRole("button", { name: "Guardar cambios" });
     expect(screen.getByText("Sin cambios pendientes")).toBeInTheDocument();
     expect(save).toBeDisabled();
@@ -369,7 +374,7 @@ describe("Settings", () => {
   it("adds and removes emergency keyword chips and persists them through the sticky save bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     const input = screen.getByLabelText("Escribe una frase y presiona Enter");
     await user.type(input, " humo{enter}");
     expect(screen.getByRole("button", { name: "Quitar palabra clave humo" })).toBeInTheDocument();
@@ -385,7 +390,7 @@ describe("Settings", () => {
 
   it("switches sections from the accessible mobile menus", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mensajes del asistente" })).toBeInTheDocument());
     const groupMenu = screen.getByRole("button", { name: "Grupo de configuración" });
@@ -398,7 +403,7 @@ describe("Settings", () => {
 
   it("cannot save a spend limit of zero (S19: 0 would disable the cost gate)", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Costos");
     const conversationLimit = screen.getByLabelText("Límite por conversación");
     const saveLimits = screen.getByRole("button", { name: "Guardar límites" });
@@ -418,7 +423,7 @@ describe("Settings", () => {
       tones: ["directo", "formal", "cercano"],
       tarifa_labels: { visita_tecnica: "Servicio A", mantencion_calefont: "Servicio B", mantencion_caldera: "Servicio C", lavado_red: "Servicio D" },
     } });
-    render(<Settings data={payload} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={payload} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Tono" }));
     expect(within(screen.getByRole("menu")).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Directo", "Formal", "Cercano"]);
@@ -432,7 +437,7 @@ describe("Settings", () => {
     WEEKDAY_NAMES[0] = "Lunes compartido";
     try {
       const user = userEvent.setup();
-      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Horarios y avisos");
       expect(screen.getByText("Lunes compartido")).toBeInTheDocument();
     } finally {
@@ -443,7 +448,7 @@ describe("Settings", () => {
   it("renders the tone selector in the row header and saves only through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     const tone = screen.getByRole("button", { name: "Tono" });
     expect(tone.closest(".card__header")).toContainElement(tone);
@@ -457,14 +462,14 @@ describe("Settings", () => {
 
   it("disables sticky saving when no tone is configured", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings({ tone: "" })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ tone: "" })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
   });
 
   it("switches the message template editor and previews its edited text", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
 
     const greetingPanel = screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-greeting"));
@@ -482,7 +487,7 @@ describe("Settings", () => {
 
   it("labels each greeting according to whether the name is available", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByRole("tab", { name: /^Saludo cuando falta el nombre/ })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^Saludo con nombre/ })).toBeInTheDocument();
@@ -493,7 +498,7 @@ describe("Settings", () => {
   it("edits the short greeting and saves all ten messages", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("tab", { name: /^Saludo corto cuando falta el nombre/ }));
 
@@ -513,7 +518,7 @@ describe("Settings", () => {
 
   it("switches the selected template from the mobile selector", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     const selector = screen.getByRole("button", { name: "Plantilla" });
     expect(selector).toHaveTextContent("Saludo cuando falta el nombre");
@@ -527,7 +532,7 @@ describe("Settings", () => {
 
   it("shows the 11 fixed messages, filters them, and previews inside the selected editor", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByText("11 mensajes")).toBeInTheDocument();
     expect(screen.getAllByText("Mensaje fijo")).toHaveLength(1);
@@ -554,7 +559,7 @@ describe("Settings", () => {
 
   it("shows the exact empty state and informational band for preset answers", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings({ templates: [] })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ templates: [] })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByText("Aún no hay respuestas prediseñadas")).toBeInTheDocument();
     expect(screen.getByText("Crea una plantilla para una consulta frecuente.")).toBeInTheDocument();
@@ -565,7 +570,7 @@ describe("Settings", () => {
   it("saves tone, messages and preset answers through the sticky bar with unchanged payloads", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     const tone = screen.getByRole("button", { name: "Tono" });
     await user.click(tone);
@@ -584,7 +589,7 @@ describe("Settings", () => {
 
   it("renders the preset answers card and explains how it differs from fixed messages", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByRole("heading", { name: "Respuestas prediseñadas" })).toBeInTheDocument();
     expect(screen.getByText("Plantillas que el bot puede elegir según la consulta y los datos disponibles.")).toBeInTheDocument();
@@ -593,7 +598,7 @@ describe("Settings", () => {
 
   it("generates a readable template id, can regenerate it, and unlocks explicit manual editing", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     const id = screen.getByLabelText("ID de respuesta 1");
@@ -615,7 +620,7 @@ describe("Settings", () => {
 
   it("shows template slots, sample-data preview, and the permanent missing-data warning", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings({ templates: [{ id: "garantia", text: "Hola {{nombre}}, cobertura en {{comuna}}." }] })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ templates: [{ id: "garantia", text: "Hola {{nombre}}, cobertura en {{comuna}}." }] })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     expect(screen.getByText(/Datos disponibles:/).parentElement).toHaveTextContent("Datos disponibles: {{nombre}}, {{comuna}}");
     expect(screen.getByRole("heading", { name: "Vista previa de la respuesta 1" })).toBeInTheDocument();
@@ -626,7 +631,7 @@ describe("Settings", () => {
   it("adds a preset answer row and saves its templates", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     await user.type(screen.getByLabelText("Texto de respuesta 1"), "Hola, cliente");
@@ -640,7 +645,7 @@ describe("Settings", () => {
 
   it("removes a preset answer row", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     expect(screen.getByLabelText("ID de respuesta 1")).toBeInTheDocument();
@@ -650,7 +655,7 @@ describe("Settings", () => {
 
   it("disables saving preset answers while a row is blank", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
     await user.click(screen.getByRole("button", { name: "Agregar respuesta" }));
     expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
@@ -659,17 +664,17 @@ describe("Settings", () => {
   });
 
   it("keeps an edited draft when refreshed persisted data changes", () => {
-    const { rerender } = render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    const { rerender } = renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     fireEvent.change(screen.getByLabelText("Escribe una frase y presiona Enter"), { target: { value: "incendio" } });
     fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
-    rerender(<Settings data={settings({ keywords: ["gas", "humo"] })} state="ready" capabilities={capabilities} />);
+    rerender(<ToastProvider><Settings data={settings({ keywords: ["gas", "humo"] })} state="ready" capabilities={capabilities} /></ToastProvider>);
     expect(screen.getByRole("button", { name: "Quitar palabra clave incendio" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Quitar palabra clave humo" })).not.toBeInTheDocument();
   });
 
   it("disables invalid save controls and disables a valid save while pending", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings({ hours: { timezone: "America/Santiago", schedule: [] } })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ hours: { timezone: "America/Santiago", schedule: [] } })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Horarios de atención" })).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Guardar horarios" })).not.toBeInTheDocument();
@@ -689,7 +694,7 @@ describe("Settings", () => {
 
   it("groups, searches, and filters capability tools by ordered category", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={{
+    renderSettings(<Settings data={settings()} state="ready" capabilities={{
       tools: [
         { name: "kb.retrieve", description: "Busca documentos", read_only: true, write: false },
         { name: "kb.index", description: "Indexa documentos", read_only: false, write: true },
@@ -720,7 +725,7 @@ describe("Settings", () => {
   it("renders the persona draft as Markdown and switches to its editor", async () => {
     const user = userEvent.setup();
     const markdown = "# Identidad\n\nEres Max.\n\n- Responde con claridad";
-    render(<Settings data={settings({ persona: { orchestrator: markdown, orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ persona: { orchestrator: markdown, orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Persona");
 
     expect(screen.getByRole("heading", { name: "Identidad" })).toBeInTheDocument();
@@ -733,7 +738,7 @@ describe("Settings", () => {
 
   it("keeps persona mode and expand controls together below the card heading", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Persona");
     const toolbar = screen.getByRole("toolbar", { name: "Herramientas de persona" });
     expect(within(toolbar).getByRole("button", { name: "Vista previa" })).toHaveAttribute("aria-pressed", "true");
@@ -744,7 +749,7 @@ describe("Settings", () => {
 
   it("opens the persona Markdown in an enlarged dialog", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings({ persona: { orchestrator: "# Identidad\n\nEres Max.", orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings({ persona: { orchestrator: "# Identidad\n\nEres Max.", orchestrator_brief: "Sé breve.", customized: false } })} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Persona");
     await user.click(screen.getByRole("button", { name: "Ampliar" }));
 
@@ -757,7 +762,7 @@ describe("Settings", () => {
   it("saves the edited persona and its brief through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Persona");
     await user.click(screen.getByRole("button", { name: "Editar Markdown" }));
 
@@ -776,7 +781,7 @@ describe("Settings", () => {
   it("saves the emergency protocol with one item per line", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
 
     fireEvent.change(screen.getByLabelText("Instrucciones de seguridad"), { target: { value: "Corta el gas.\nVentila el lugar." } });
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -792,7 +797,7 @@ describe("Settings", () => {
   });
   it("renders ordered capture fields and their inline questions in the Datos y preguntas table", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     const card = screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card") as HTMLElement;
@@ -814,7 +819,7 @@ describe("Settings", () => {
   it("reorders the table and saves the conduct order through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     await user.click(screen.getByRole("button", { name: "Bajar Problema" }));
@@ -830,7 +835,7 @@ describe("Settings", () => {
   it("saves inline capture-question edits through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     const comuna = screen.getByLabelText("Comuna");
@@ -846,7 +851,7 @@ describe("Settings", () => {
   it("changes Preguntas por mensaje with the bounded stepper and saves conduct", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     expect(screen.getByText("Los textos se envían tal como están escritos.")).toBeInTheDocument();
@@ -863,7 +868,7 @@ describe("Settings", () => {
   it("lets the owner choose how the capture questions are written", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     const trigger = () => screen.getByRole("button", { name: "Redacción de las preguntas" });
@@ -880,7 +885,7 @@ describe("Settings", () => {
 
   it("removes a capture field from the table through its kebab menu without removing the last field", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     await user.click(screen.getByRole("button", { name: "Acciones de Problema" }));
@@ -897,7 +902,7 @@ describe("Settings", () => {
   it("keeps capture-question validation and both capture-order rules in the card", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
 
     const card = screen.getByRole("heading", { name: "Datos y preguntas" }).closest(".card") as HTMLElement;
@@ -912,7 +917,7 @@ describe("Settings", () => {
   it("selects a grouped reply and saves its edit through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
     await user.click(screen.getByRole("button", { name: "Oferta de horarios" }));
@@ -932,7 +937,7 @@ describe("Settings", () => {
   it("makes Conducta the single editable owner of all 25 reply texts", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     const situationList = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
 
@@ -972,7 +977,7 @@ describe("Settings", () => {
   it("blocks the sticky save if any of the 25 reply texts is blank", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     const save = screen.getByRole("button", { name: "Guardar cambios" });
 
@@ -987,7 +992,7 @@ describe("Settings", () => {
 
   it("does not render flow reply-text editing in Mensajes, while retaining its three other cards", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
 
     expect(screen.queryByRole("heading", { name: "Respuestas del flujo" })).not.toBeInTheDocument();
@@ -999,7 +1004,7 @@ describe("Settings", () => {
   it("keeps the exhausted-day notice editable and saves it through the sticky bar", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
     await user.click(screen.getByRole("button", { name: /Agendar/ }));
     await user.click(screen.getByRole("button", { name: "Sin más horarios para ese día" }));
@@ -1017,7 +1022,7 @@ describe("Settings", () => {
   describe("derivaciones (S6.5–S6.6)", () => {
     it("shows the five specific cases first and their existing team rule only when offered", async () => {
       const user = userEvent.setup();
-      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
 
       expect(screen.getByRole("heading", { name: "Derivaciones y respuestas" })).toBeInTheDocument();
@@ -1031,7 +1036,7 @@ describe("Settings", () => {
 
     it("search narrows the situation list", async () => {
       const user = userEvent.setup();
-      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
       fireEvent.change(screen.getByLabelText("Buscar situación"), { target: { value: "horarios" } });
       await waitFor(() => {
@@ -1042,7 +1047,7 @@ describe("Settings", () => {
 
     it("updates the available derivation rule and marks conduct dirty", async () => {
       const user = userEvent.setup();
-      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
       await user.click(screen.getByLabelText("Derivar al equipo"));
       expect(screen.getByLabelText("Derivar al equipo")).not.toBeChecked();
@@ -1052,7 +1057,7 @@ describe("Settings", () => {
 
     it("appends an available slot and previews its sample value", async () => {
       const user = userEvent.setup();
-      render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+      renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
       expect(screen.getByText("Sin cobertura en Las Condes.")).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Insertar dato {{comuna}}" }));
@@ -1063,7 +1068,7 @@ describe("Settings", () => {
 
   it("links to the standalone push settings page instead of mounting push controls here", async () => {
     const user = userEvent.setup();
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
 
     expect(screen.getByRole("link", { name: /configurar notificaciones/i })).toHaveAttribute("href", "/panel/app/push");
@@ -1074,7 +1079,7 @@ describe("Settings", () => {
     const previousUrl = window.location.href;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
     window.history.replaceState({}, "", "/panel/app/settings#schedule");
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(within(screen.getByRole("tablist", { name: "Super-secciones de configuración" })).getByRole("tab", { name: "Operación" })).toHaveAttribute("aria-selected", "true");
     expect(within(screen.getByRole("tablist", { name: "Secciones de configuración" })).getByRole("tab", { name: "Horarios y avisos" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText("No hay técnicos disponibles.")).toBeInTheDocument();
@@ -1084,7 +1089,7 @@ describe("Settings", () => {
   it("saves the minimum booking lead time in hours using the panel contract", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     const leadHours = screen.getByLabelText("Anticipación mínima");
     expect(leadHours).toHaveValue(2);
@@ -1104,7 +1109,7 @@ describe("Settings", () => {
       if (url.endsWith("/panel/api/technicians/30/schedule")) return new Response(JSON.stringify({ technician_id: 30, schedule: [{ weekday: 1, opens_at: "09:00:00", closes_at: "18:00:00" }] }), { status: 200 });
       return new Response("{}", { status: 200 });
     });
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     expect(await screen.findByRole("heading", { name: "Luis Pérez" })).toBeInTheDocument();
     expect(await screen.findByLabelText("Días y horarios de atención")).toBeInTheDocument();
@@ -1116,7 +1121,7 @@ describe("Settings", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ technicians: [] }), { status: 200 }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar los técnicos");
     await user.click(screen.getByRole("button", { name: "Reintentar" }));
@@ -1127,7 +1132,7 @@ describe("Settings", () => {
   it("adds a service duration and saves the map", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
-    render(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Horarios y avisos");
 
     await user.click(screen.getByRole("button", { name: "Agregar servicio" }));

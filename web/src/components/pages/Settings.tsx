@@ -23,6 +23,7 @@ import { SettingsTechnicians } from "./SettingsTechnicians";
 import { PageFrame } from "../shared/PageFrame";
 import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
+import { useToast } from "../primitives/Toast";
 import { SettingsVersionHistory } from "../domain/SettingsVersionHistory";
 import "./Settings.css";
 
@@ -480,18 +481,16 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [personaDialogOpen, setPersonaDialogOpen] = useState(false);
   const [pending, setPending] = useState<Partial<Record<DraftKey, boolean>>>({});
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
+  const toast = useToast();
   const [personaVersion, setPersonaVersion] = useState(0);
   const [emergencyVersion, setEmergencyVersion] = useState(0);
-  const [saveErrorDetail, setSaveErrorDetail] = useState<string | null>(null);
   const [modelApiKeyStatus, setModelApiKeyStatus] = useState<ModelApiKeyStatus | undefined>(data?.model_api_key);
   const [modelApiKey, setModelApiKey] = useState("");
   const [modelApiKeyBusy, setModelApiKeyBusy] = useState(false);
-  const [modelApiKeyFeedback, setModelApiKeyFeedback] = useState("");
   const [emailDraft, setEmailDraft] = useState<Omit<SmtpEmailSettings, "password">>({ host: "", port: 25, from_address: "", user: "", tls: "none" });
   const [emailPasswordStatus, setEmailPasswordStatus] = useState<SmtpEmailSettings["password"] | undefined>(data?.email?.password);
   const [emailPassword, setEmailPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
-  const [emailFeedback, setEmailFeedback] = useState("");
   const [manualTemplateIds, setManualTemplateIds] = useState<number[]>([]);
   const [technicians, setTechnicians] = useState<UserRef[]>([]);
   const [techniciansState, setTechniciansState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -515,25 +514,25 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   }, [data?.email]);
 
   const saveModelKey = async () => {
-    setModelApiKeyBusy(true); setModelApiKeyFeedback("");
+    setModelApiKeyBusy(true);
     try {
       const result = await saveModelApiKey(modelApiKey);
       setModelApiKeyStatus(result.model_api_key);
       setModelApiKey("");
-      setModelApiKeyFeedback(result.validation === "valid" ? "Clave validada." : "Clave válida, pero la cuenta no tiene saldo.");
+      toast.show(result.validation === "valid" ? "Clave validada." : "Clave válida, pero la cuenta no tiene saldo.");
     } catch (error) {
-      setModelApiKeyFeedback(error instanceof ApiError && error.status === 400 ? "Clave inválida." : error instanceof ApiError && error.status === 502 ? "No se pudo validar la clave." : "No se pudo guardar la clave.");
+      toast.show(error instanceof ApiError && error.status === 400 ? "Clave inválida." : error instanceof ApiError && error.status === 502 ? "No se pudo validar la clave." : "No se pudo guardar la clave.", "danger");
     } finally { setModelApiKeyBusy(false); }
   };
 
   const deleteModelKey = async () => {
-    setModelApiKeyBusy(true); setModelApiKeyFeedback("");
+    setModelApiKeyBusy(true);
     try {
       const result = await deleteModelApiKey();
       setModelApiKeyStatus(result.model_api_key);
-      setModelApiKeyFeedback("Clave eliminada del panel.");
+      toast.show("Clave eliminada del panel.");
     } catch (error) {
-      setModelApiKeyFeedback(error instanceof Error ? error.message : "No se pudo borrar la clave.");
+      toast.show(error instanceof Error ? error.message : "No se pudo borrar la clave.", "danger");
     } finally { setModelApiKeyBusy(false); }
   };
 
@@ -545,36 +544,36 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const emailValid = emailDraft.host.trim() !== "" && emailDraft.from_address.trim() !== "" && Number.isInteger(port) && port >= 1 && port <= 65535;
 
   const saveEmail = async () => {
-    setEmailBusy(true); setEmailFeedback("");
+    setEmailBusy(true);
     try {
       const result = await saveEmailSettings({ ...emailDraft, host: emailDraft.host.trim(), from_address: emailDraft.from_address.trim(), user: emailDraft.user.trim() });
       setEmailPasswordStatus(result.email.password);
-      setEmailFeedback("Configuración de correo guardada.");
+      toast.show("Configuración de correo guardada.");
     } catch {
-      setEmailFeedback("No se pudo guardar la configuración.");
+      toast.show("No se pudo guardar la configuración.", "danger");
     } finally { setEmailBusy(false); }
   };
 
   const saveSmtpPasswordHandler = async () => {
-    setEmailBusy(true); setEmailFeedback("");
+    setEmailBusy(true);
     try {
       const result = await saveSmtpPassword(emailPassword);
       setEmailPasswordStatus(result.email.password);
       setEmailPassword("");
-      setEmailFeedback("Contraseña guardada.");
+      toast.show("Contraseña guardada.");
     } catch {
-      setEmailFeedback("No se pudo guardar la contraseña.");
+      toast.show("No se pudo guardar la contraseña.", "danger");
     } finally { setEmailBusy(false); }
   };
 
   const deleteSmtpPasswordHandler = async () => {
-    setEmailBusy(true); setEmailFeedback("");
+    setEmailBusy(true);
     try {
       const result = await deleteSmtpPassword();
       setEmailPasswordStatus(result.email.password);
-      setEmailFeedback("Contraseña eliminada del panel.");
+      toast.show("Contraseña eliminada del panel.");
     } catch {
-      setEmailFeedback("No se pudo borrar la contraseña.");
+      toast.show("No se pudo borrar la contraseña.", "danger");
     } finally { setEmailBusy(false); }
   };
 
@@ -595,7 +594,6 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const update = <K extends DraftKey>(key: K, value: Drafts[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const save = async (key: DraftKey, path: string, body: unknown, savedValue: Drafts[DraftKey]) => {
     setPending((current) => ({ ...current, [key]: true }));
-    setSaveState("saving"); setSaveErrorDetail(null);
     try {
       await postJson(path, body);
       baseline.current = { ...baseline.current, [key]: savedValue };
@@ -604,9 +602,9 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
         const next = sameValue(current[key], savedValue) ? { ...current, [key]: savedValue } : current;
         return key === "conversationLimit" && sameValue(current.dailyLimit, draft.dailyLimit) ? { ...next, dailyLimit: draft.dailyLimit } : next;
       });
-      setSaveState("saved");
+      toast.show("Configuración guardada. Los cambios quedaron aplicados.");
     } catch (error) {
-      setSaveErrorDetail(error instanceof Error ? error.message : null); setSaveState("server-error");
+      toast.show(error instanceof ApiError ? error.detail : "No pudimos guardar los cambios. Reintenta en unos minutos.", "danger");
     } finally { setPending((current) => ({ ...current, [key]: false })); }
   };
   const saveScope = async () => {
@@ -748,7 +746,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const selectedDerivationRule = selectedCase?.key.replace(/^handoff_/, "");
   const selectedDerivationAvailable = Boolean(selectedDerivationRule && data?.conduct?.options?.derivaciones.includes(selectedDerivationRule));
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
-  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className={activeGroup === "operation" ? "settings-page settings-page--operation" : "settings-page"} actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state, saveErrorDetail)}>
+  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" className={activeGroup === "operation" ? "settings-page settings-page--operation" : "settings-page"} actions={activeSection === "agent" ? <SettingsVersionHistory scope="emergency" triggerLabel="Historial" refreshToken={emergencyVersion} onRestored={retry} /> : activeSection === "persona" ? <SettingsVersionHistory scope="persona" triggerLabel="Historial" refreshToken={personaVersion} onRestored={retry} /> : undefined} state={stateMessage(state)}>
     <div className="settings-tabs">
       <div className="settings-tabs__select">
         <Menu label={GROUPS.find(({ id }) => id === activeGroup)?.label ?? "Chatbot"} ariaLabel="Grupo de configuración" showChevron items={GROUPS.map(({ id, label }) => ({ value: id, label }))} onSelect={selectGroup} />
@@ -1034,7 +1032,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               <Button disabled={modelApiKeyBusy || !modelApiKey.trim()} onClick={() => void saveModelKey()}>Guardar</Button>
               <Button variant="danger" disabled={modelApiKeyBusy || modelApiKeyStatus?.source !== "panel"} onClick={() => void deleteModelKey()}>Borrar</Button>
             </div>
-            {modelApiKeyFeedback ? <p className="settings-model-key__feedback" role="status">{modelApiKeyFeedback}</p> : null}
+
           </div>
         </Card> : null}
         {active === "email" ? <Card title="Correo" description="Configura el servidor SMTP que usa el sistema para enviar correos.">
@@ -1054,7 +1052,6 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
               <Button disabled={emailBusy || emailPassword === ""} onClick={() => void saveSmtpPasswordHandler()}>Guardar contraseña</Button>
               <Button variant="danger" disabled={emailBusy || !emailPasswordStatus?.configured} onClick={() => void deleteSmtpPasswordHandler()}>Borrar contraseña</Button>
             </div>
-            {emailFeedback ? <p className="settings-email__feedback" role="status">{emailFeedback}</p> : null}
           </div>
         </Card> : null}
       </div>}

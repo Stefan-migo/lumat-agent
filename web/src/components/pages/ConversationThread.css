@@ -1,17 +1,50 @@
+/* Message format from the 2026-10-31 mockup: a centred day separator, and the timestamp inside the
+   bubble instead of under it, so a bubble reads as one block. */
+.conversation-thread__day { justify-self: center; margin: var(--space-3) auto; padding: var(--space-1) var(--space-3); border-radius: var(--radius-full, 999px); background: var(--surface-subtle); color: var(--corp-fg-muted); font-size: var(--text-xs); text-align: center; }
+.conversation-thread__bubble-meta { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-1); margin-top: var(--space-1); font-size: var(--text-xs); opacity: 0.75; }
+
 /* The thread owns its own identity header, so the PageFrame title block (an empty h1) is dead space. */
 .conversation-thread-page > .page-frame__titlebar { display: none; }
 
-/* Page identity header: avatar + name + state badge + initiated line. */
-.conversation-thread__identity { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
-.conversation-thread__identity-person { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+/* Page identity header: one compact band (avatar + name + phone + state + actions) so the thread
+   keeps the vertical space and the width. Design reference: the 2026-10-31 conversation mockup. */
+.conversation-thread__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.conversation-thread__header h1 { margin: 0; font-size: var(--text-xl); }
+.conversation-thread__back { flex: 0 0 auto; }
 .conversation-thread__hero-avatar { flex: 0 0 auto; width: calc(var(--space-8) * 1.5); height: calc(var(--space-8) * 1.5); font-size: var(--text-lg); }
-.conversation-thread__identity-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.conversation-thread__identity-title h1 { margin: 0; font-size: var(--text-xl); }
-.conversation-thread__identity-person p { margin: var(--space-1) 0 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.conversation-thread__phone { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.conversation-thread__online { width: var(--space-2); height: var(--space-2); border-radius: 50%; background: var(--success); }
+.conversation-thread__id { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.conversation-thread__header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); margin-left: auto; }
 
-/* Action row: "Volver a conversaciones" and "Ver ficha del cliente" share one line and one height. */
-.conversation-thread__actions-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
-.conversation-thread__actions-row .btn { min-height: var(--space-8); }
+/* The conversation owns the whole content area. The shell gives the content cell a minmax(0, 1fr)
+   row of a 100dvh grid, so once these three rules are in play the workspace takes the height that
+   is actually left instead of a fixed clamp that left dead space under the card. */
+.conversation-thread-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.conversation-thread-page .page-frame__content { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.conversation-thread-page .conversation-workspace { flex: 1 1 auto; height: auto; min-height: 0; }
+/* Bubbles hug the card edges. The shared grammar centres a 52rem column for the assistant chat; a
+   WhatsApp thread reads edge to edge, so the column is dropped here only. */
+.conversation-thread-page .ai-agent-grammar__thread-area { max-width: none; margin: 0; }
+
+/* The thread takes the free row and the composer keeps its own. The shared grammar declares three
+   rows (header, thread, composer); this page no longer renders an inner header, so without this the
+   spare height went to the composer instead of the conversation. */
+.conversation-thread-page .ai-agent-grammar__main { grid-template-rows: minmax(0, 1fr) auto; }
+/* The 24-hour window is one quiet line, not a block that competes with the conversation. */
+.conversation-thread__window-note { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-4); border-top: 1px solid var(--warning-border); color: var(--warning); font-size: var(--text-sm); }
+.conversation-thread__window-note > svg { flex: 0 0 auto; }
+
+/* The client details float over the thread instead of taking a column from it, which is what gives
+   the conversation its width back. The workspace becomes the positioning context. */
+.conversation-thread-page .conversation-workspace { position: relative; grid-template-columns: minmax(0, 1fr); }
+.conversation-thread__detail { position: absolute; top: var(--space-3); right: var(--space-3); bottom: var(--space-3); z-index: 3; width: min(384px, calc(100% - var(--space-6))); overflow-y: auto; border: 1px solid var(--corp-border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--elevation-overlay); }
+.conversation-thread__detail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.conversation-thread__detail-head h2 { margin: 0; font-size: var(--text-md); }
+
+/* "Ver todos" sits above the scroller, never inside it: the thread opens at the last message, so a
+   control inside the scroll area is off-screen exactly when the operator needs it. */
+.conversation-thread__thread { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
 
 /* Separator around the human-attention notice. */
 .ai-agent-grammar__handoff { margin: var(--space-4) 0; padding: var(--space-2) 0; border-top: 2px solid var(--warning-border); border-bottom: 2px solid var(--warning-border); text-align: center; color: var(--warning); font-size: var(--text-sm); }
@@ -85,11 +118,10 @@
 
 @media (max-width: 39.99rem) {
   .conversation-thread__identity { flex-direction: column; align-items: stretch; gap: var(--space-3); }
-  .conversation-thread__actions-row { flex-direction: row-reverse; align-items: stretch; }
-  .conversation-thread__actions-row .btn { flex: 1 1 0; min-width: 0; white-space: normal; }
   .ai-agent-grammar__bubble-stack { max-width: 90%; }
-  /* The chat is the primary surface: the inline inspector moves into the "Información del chat" sheet. */
-  .conversation-workspace .ai-agent-grammar__inspector { display: none; }
+  /* The chat is the primary surface: below this width the details live in the "Información del
+     chat" sheet, opened from the conversation menu, instead of floating over the thread. */
+  .conversation-thread__detail { display: none; }
   .conversation-thread__actions-desktop { display: none; }
   .conversation-thread__actions-mobile { display: flex; }
 }

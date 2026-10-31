@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, createUser, deleteUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
 import { UserManagement } from "./UserManagement";
+import { ToastProvider } from "../primitives/Toast";
 
 vi.mock("../../api", async (importActual) => ({
   ...(await importActual<typeof import("../../api")>()),
@@ -114,7 +115,7 @@ describe("UserManagement", () => {
   it("creates a user and refreshes the safe list", async () => {
     const user = userEvent.setup();
     vi.mocked(fetchUsers).mockResolvedValueOnce({ users }).mockResolvedValueOnce({ users: [...users, { id: 4, username: "new", role: "operador", active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 }] });
-    render(<UserManagement currentUser={admin} />);
+    render(<ToastProvider><UserManagement currentUser={admin} /></ToastProvider>);
     await screen.findByRole("table");
     await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     expect(screen.getByText("Datos de acceso")).toBeInTheDocument();
@@ -125,7 +126,7 @@ describe("UserManagement", () => {
     await user.type(screen.getByLabelText("Confirmar contraseña"), "long enough");
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
     await waitFor(() => expect(createUser).toHaveBeenCalledWith({ username: "new", password: "long enough", role: "operador" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Usuario creado");
+    expect(await screen.findByText("Usuario creado.", { selector: ".toast__message" })).toBeInTheDocument();
     expect(await screen.findAllByText("new")).not.toHaveLength(0);
   });
 
@@ -147,7 +148,7 @@ describe("UserManagement", () => {
 
   it("disables self-protection controls and manages another user", async () => {
     const user = userEvent.setup();
-    render(<UserManagement currentUser={admin} />);
+    render(<ToastProvider><UserManagement currentUser={admin} /></ToastProvider>);
     await screen.findByRole("table");
     const ownRow = screen.getByRole("row", { name: /ana.*Administrador/i });
     expect(within(ownRow).queryByRole("button", { name: /acciones para/i })).not.toBeInTheDocument();
@@ -157,7 +158,7 @@ describe("UserManagement", () => {
     await user.click(within(otherRow).getByRole("button", { name: /acciones para op/i }));
     await user.click(await screen.findByRole("menuitem", { name: "Activar usuario" }));
     expect(toggleUserActive).toHaveBeenCalledWith(2);
-    expect(await screen.findAllByText("Estado actualizado")).not.toHaveLength(0);
+    expect(await screen.findByText("Estado actualizado.", { selector: ".toast__message" })).toBeInTheDocument();
     await user.click(within(otherRow).getByRole("button", { name: /acciones para op/i }));
     await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
     expect(await screen.findByRole("dialog", { name: "Restablecer contraseña" })).toBeInTheDocument();

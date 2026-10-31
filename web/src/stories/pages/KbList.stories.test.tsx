@@ -6,6 +6,11 @@ import userEvent from "@testing-library/user-event";
 import { docs } from "./_shared/mockData/kb";
 import { kbStatusLabel } from "./_shared/toneMaps";
 import { KbList } from "../../components/pages/KbList";
+import { ToastProvider } from "../../components/primitives/Toast";
+import type { ReactElement } from "react";
+
+/** Upload results are toasts, so these renders need the provider. */
+const renderKb = (ui: ReactElement) => render(<ToastProvider>{ui}</ToastProvider>);
 import { KbListView, KbListEmpty } from "./KbList.stories";
 
 const sourceRoot = resolve(process.cwd(), "src");
@@ -100,7 +105,7 @@ describe("KbList page", () => {
   it("links each document title to its detail without inline operation controls", async () => {
     const onOpenDocument = vi.fn();
     const user = userEvent.setup();
-    render(<KbList data={{ docs }} onOpenDocument={onOpenDocument} />);
+    renderKb(<KbList data={{ docs }} onOpenDocument={onOpenDocument} />);
     const row = within(screen.getByRole("table")).getByRole("link", { name: new RegExp(docs[0].title) }).closest("tr") as HTMLElement;
     const link = within(row).getByRole("link", { name: new RegExp(docs[0].title) });
     expect(link).toHaveClass("kb-list__identity");
@@ -111,7 +116,7 @@ describe("KbList page", () => {
   });
 
   it("declares who reads a customer document on every remaining audience surface", () => {
-    render(<KbList data={{ docs }} />);
+    renderKb(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     expect(within(addRegion).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
     expect(within(addRegion).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
@@ -129,7 +134,7 @@ describe("KbList page", () => {
   });
 
   it("renders the page loading banner from its own data source", async () => {
-    render(<KbList fetchDocuments={() => new Promise(() => undefined)} />);
+    renderKb(<KbList fetchDocuments={() => new Promise(() => undefined)} />);
     expect(await screen.findByRole("status")).toHaveTextContent("Cargando base de conocimientos");
     expect(screen.getByText("Documentos de la base de conocimientos")).toBeInTheDocument();
   });
@@ -155,7 +160,7 @@ describe("KbList search panel", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ results: [] }), { status: 200 }));
-    render(<KbList />);
+    renderKb(<KbList />);
     const searchCard = await openSearch();
     await user.type(within(searchCard).getByLabelText("Consulta"), "portabilidad numerica");
     await user.clear(within(searchCard).getByLabelText("Máximo de resultados"));
@@ -179,7 +184,7 @@ describe("KbList search panel", () => {
     const runSearch = async (response: Response, assertion: (searchCard: HTMLElement) => Promise<void>) => {
       fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
       fetchMock.mockResolvedValueOnce(response);
-      const view = render(<KbList />);
+      const view = renderKb(<KbList />);
       const searchCard = await openSearch();
       await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
       await assertion(searchCard);
@@ -209,7 +214,7 @@ describe("KbList search panel", () => {
     let resolveSearch!: (response: Response) => void;
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
     fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveSearch = resolve; }));
-    const loadingView = render(<KbList />);
+    const loadingView = renderKb(<KbList />);
     const loadingCard = await openSearch();
     await user.click(within(loadingCard).getByRole("button", { name: "Buscar" }));
     expect(await within(loadingCard).findByRole("status")).toHaveTextContent("Buscando en la base de conocimientos");
@@ -219,7 +224,7 @@ describe("KbList search panel", () => {
   });
 
   it("shows the initial retrieval empty state and hides advanced values until disclosed", async () => {
-    render(<KbList data={{ docs }} />);
+    renderKb(<KbList data={{ docs }} />);
     const card = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
     expect(within(card).getByText("Los resultados aparecerán aquí después de buscar.")).toBeInTheDocument();
     expect(within(card).getByText("Opciones avanzadas").closest("details")).not.toHaveAttribute("open");
@@ -230,13 +235,13 @@ describe("KbList search panel", () => {
 
 describe("KbList mobile upload story", () => {
   it("opens the add-document dialog from the full-width entry action", async () => {
-    render(<KbList data={{ docs }} />);
+    renderKb(<KbList data={{ docs }} />);
     await userEvent.setup().click(screen.getByRole("button", { name: "Agregar documento" }));
     expect(screen.getByRole("dialog", { name: "Agregar documento" })).toBeInTheDocument();
   });
 
   it("accepts a dropped file through the accessible dropzone", async () => {
-    render(<KbList data={{ docs }} />);
+    renderKb(<KbList data={{ docs }} />);
     const card = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
     const zone = within(card).getByText("Arrastra un archivo aquí o selecciónalo desde tu equipo").closest("[role='button']") as HTMLElement;
     const file = new File(["content"], "guide.md", { type: "text/markdown" });
@@ -249,7 +254,7 @@ describe("KbList mobile upload story", () => {
 describe("KbList API page", () => {
   it("renders the admin document list from GET /panel/api/kb", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ docs }), { status: 200 }));
-    render(<KbList />);
+    renderKb(<KbList />);
     const table = await screen.findByRole("table");
     expect(within(table).getByRole("link", { name: new RegExp(docs[0].title) })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb", expect.objectContaining({ credentials: "include" }));
@@ -258,7 +263,7 @@ describe("KbList API page", () => {
 
   it("renders permission denied when an operador receives 403", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "Admin role required" }), { status: 403 }));
-    render(<KbList />);
+    renderKb(<KbList />);
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
     fetchMock.mockRestore();
   });
@@ -269,7 +274,7 @@ describe("KbList API page", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
-    render(<KbList />);
+    renderKb(<KbList />);
     await screen.findByRole("table");
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     expect(within(addRegion).getByLabelText("Audiencia")).toHaveValue("internal");
@@ -285,7 +290,7 @@ describe("KbList API page", () => {
     expect((request.body as FormData).get("visibility")).toBe("customer");
     expect((request.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(await within(addRegion).findByRole("status")).toHaveTextContent("Documento agregado");
+    expect(await screen.findByText("Documento agregado", { selector: ".toast__message" })).toBeInTheDocument();
     fetchMock.mockRestore();
   });
 
@@ -297,7 +302,7 @@ describe("KbList API page", () => {
 
   it("shows the supported formats and size limit before upload", async () => {
     const user = userEvent.setup();
-    render(<KbList data={{ docs }} />);
+    renderKb(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     const fileInput = within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)");
     expect(fileInput).toHaveAttribute("accept", ".pdf,.md,.txt,.csv");
@@ -305,7 +310,7 @@ describe("KbList API page", () => {
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
     fireEvent.change(fileInput, { target: { files: [new File(["content"], "guide.exe", { type: "application/octet-stream" })] } });
     await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
-    expect(await within(addRegion).findByRole("alert")).toHaveTextContent("Formato no compatible");
+    expect(await screen.findByText(/Formato no compatible/, { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("keeps processing feedback at the upload locus and offers upload retry after failure", async () => {
@@ -313,12 +318,12 @@ describe("KbList API page", () => {
     let resolveUpload!: (response: Response) => void;
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockRejectedValueOnce(new Response(JSON.stringify({ detail: "upload failed" }), { status: 500 }));
-    render(<KbList data={{ docs }} />);
+    renderKb(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
     await user.upload(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)"), new File(["content"], "guide.md", { type: "text/markdown" }));
     await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
-    expect(await within(addRegion).findByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
+    expect(await screen.findByText("No pudimos procesar el documento", { selector: ".toast__message" })).toBeInTheDocument();
     expect(within(addRegion).getByRole("button", { name: "Reintentar carga" })).toBeInTheDocument();
 
     fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));

@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError, fetchClients, createCustomer, getClientFicha, archiveCustomer, unarchiveCustomer, changeClientState } from "../../api";
 import { ClientesList } from "./ClientesList";
+import { ToastProvider } from "../primitives/Toast";
 import type { Customer } from "../../types";
 
 vi.mock("../../api", async () => {
@@ -358,10 +359,10 @@ describe("ClientesList", () => {
   it("surfaces a failed restore to the operator instead of failing silently", async () => {
     const user = userEvent.setup();
     vi.mocked(unarchiveCustomer).mockRejectedValue(new Error("offline"));
-    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+    render(<ToastProvider><ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" /></ToastProvider>);
     const row = desktopRow(document.body, "Marcela Fuentes");
     await user.click((await openRowActions(user, row, "Marcela Fuentes")).getByRole("menuitem", { name: "Restaurar" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos restaurar");
+    expect(await screen.findByText("No pudimos restaurar el cliente. Inténtalo nuevamente.", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("shows positive available and warning archived badges", () => {
@@ -496,7 +497,7 @@ describe("ClientesList", () => {
     const active = customers.slice(0, 2);
     vi.mocked(fetchClients).mockResolvedValue({ clients: active });
     vi.mocked(archiveCustomer).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ customer: active[1] });
-    render(<ClientesList />);
+    render(<ToastProvider><ClientesList /></ToastProvider>);
     const table = await screen.findByRole("table");
     const failedRow = desktopRow(table, "Marcela Fuentes");
     await user.click(within(failedRow).getByRole("checkbox"));
@@ -505,7 +506,7 @@ describe("ClientesList", () => {
     await user.click(screen.getByRole("button", { name: "Archivar seleccionados" }));
     await user.click(within(screen.getByRole("dialog", { name: "Archivar 2 clientes" })).getByRole("button", { name: "Archivar 2 clientes" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Se archivaron 1 de 2 clientes. Fallaron 1.");
+    expect(await screen.findByText("Se archivaron 1 de 2 clientes. Fallaron 1.", { selector: ".toast__message" })).toBeInTheDocument();
     await waitFor(() => expect(fetchClients).toHaveBeenCalledTimes(2));
     expect(screen.getByText("1 seleccionados")).toBeInTheDocument();
     expect(within(desktopRow(document.body, "Marcela Fuentes")).getByRole("checkbox")).toBeChecked();

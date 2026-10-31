@@ -73,6 +73,26 @@ describe('conversation media composer', () => {
     await waitFor(() => expect(sendMedia).toHaveBeenCalledWith(9, expect.objectContaining({ file: expect.objectContaining({ type: 'audio/mp4' }) })));
   });
 
+  it('records in webm when the browser only offers what Chromium supports', async () => {
+    recorderMimeSupport = ['audio/webm;codecs=opus'];
+    recorderInstances = [];
+    Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: FakeRecorder });
+    const stream = { getTracks: () => { const track = { stop: vi.fn() }; tracks.push(track); return [track]; } };
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn().mockResolvedValue(stream) } });
+    vi.mocked(sendMedia).mockResolvedValue(result);
+    render(<ConversationThread conversationId={9} data={thread} state="ready" interactive />);
+    const record = screen.getByRole('button', { name: 'Grabar audio' });
+    expect(record).toBeEnabled();
+    await userEvent.setup().click(record);
+    await waitFor(() => expect(recorderInstances).toHaveLength(1));
+    expect(recorderInstances[0].mimeType).toBe('audio/webm;codecs=opus');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Detener y enviar audio' }));
+    await waitFor(() => expect(sendMedia).toHaveBeenCalledWith(9, expect.objectContaining({ file: expect.objectContaining({ type: 'audio/webm;codecs=opus' }) })));
+    const sent = vi.mocked(sendMedia).mock.calls[0][1].file;
+    expect(sent.name).toMatch(/\.webm$/);
+    expect(screen.queryByText(/grabación de audio no está disponible/i)).not.toBeInTheDocument();
+  });
+
   it('cancels recording, releases microphone tracks, and sends nothing', async () => {
     recorderMimeSupport = ['audio/ogg;codecs=opus'];
     Object.defineProperty(globalThis, 'MediaRecorder', { configurable: true, value: FakeRecorder });

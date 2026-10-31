@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { Doc } from "../../types";
 import { KbList } from "./KbList";
+import { ToastProvider } from "../primitives/Toast";
 
 const docs: Doc[] = [
   { id: 1, project_id: null, title: "Manual de atención", format: "pdf", version: 3, active_version: 2, active: true, visibility: "customer", provider: null, model: null, cost_meta: 0.0012, created_at: "2026-07-10T14:02:00-04:00" },
@@ -84,6 +85,14 @@ describe("KbList retrieval and upload cards", () => {
     expect(within(card).getByText("Arrastra un archivo aquí o selecciónalo desde tu equipo")).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Seleccionar archivo" })).toBeInTheDocument();
     expect(within(card).getByLabelText("Archivo (PDF / MD / TXT / CSV)")).toHaveAttribute("type", "file");
+  });
+
+  it("reports unsupported upload formats through the toast", async () => {
+    render(<ToastProvider><KbList data={{ docs }} /></ToastProvider>);
+    const file = new File(["invalid"], "manual.exe", { type: "application/octet-stream" });
+    fireEvent.change(screen.getByLabelText("Archivo (PDF / MD / TXT / CSV)"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /^Agregar$/ }));
+    expect(await screen.findByText("Formato no compatible. Usa PDF, Markdown, TXT o CSV.", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("opens the upload form in a mobile entry dialog while retaining it in the desktop card", () => {

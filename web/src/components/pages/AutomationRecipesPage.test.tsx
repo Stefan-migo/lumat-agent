@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ApiError } from '../../api';
 import { AutomationRecipesPage } from './AutomationRecipesPage';
+import { ToastProvider } from '../primitives/Toast';
 
 const recipes = [
   { recipe_id: 'appointment_confirmation', name: 'Confirmación de reserva', description: 'Envía un mensaje automático al confirmar una reserva.', category: 'reservas', trigger_kind: 'event', event_type: 'appointment.booked', channel_allowed: ['whatsapp'], recipient_target: 'customer', content: 'Tu visita quedó registrada.', cooldown_seconds: 0, parameters: [{ key: 'channel', label: 'Canal', type: 'channel', required: true, default: 'whatsapp' }] },
@@ -9,7 +10,7 @@ const recipes = [
 ];
 const installation = { id: 8, recipe_id: recipes[0].recipe_id, parameters: { channel: 'whatsapp' }, enabled: false, created_by: 'ana', created_at: null, updated_at: null };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-const page = (loadInstallations = async () => ({ installations: [] as typeof installation[] })) => render(<AutomationRecipesPage loadRecipes={async () => ({ recipes })} loadInstallations={loadInstallations} />);
+const page = (loadInstallations = async () => ({ installations: [] as typeof installation[] })) => render(<ToastProvider><AutomationRecipesPage loadRecipes={async () => ({ recipes })} loadInstallations={loadInstallations} /></ToastProvider>);
 
 describe('AutomationRecipesPage', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -39,6 +40,7 @@ describe('AutomationRecipesPage', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations', expect.objectContaining({ method: 'POST', body: JSON.stringify({ recipe_id: recipes[0].recipe_id, parameters: { channel: 'whatsapp' } }) })));
+    expect(await screen.findByText('Automatización configurada.', { selector: '.toast__message' })).toBeInTheDocument();
   });
 
   it('surfaces a failed configuration inside the open dialog', async () => {
@@ -72,6 +74,7 @@ describe('AutomationRecipesPage', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations/8', expect.objectContaining({ method: 'PATCH' })));
     fireEvent.click(await screen.findByRole('button', { name: 'Activar' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations/8/enable', expect.objectContaining({ method: 'POST' })));
+    expect(await screen.findByText('Automatización activada.', { selector: '.toast__message' })).toBeInTheDocument();
   });
 
   it('shows loading, denied, retryable error, and honest empty installed states', async () => {
@@ -103,7 +106,7 @@ describe('AutomationRecipesPage', () => {
       if (init?.method === 'DELETE') { deleted = true; calls.push(`${path}:${init.method}`); return json({ ok: true }); }
       return json({ installations: deleted ? [] : [installation] });
     });
-    render(<AutomationRecipesPage loadRecipes={async () => ({ recipes })} loadInstallations={async () => ({ installations: deleted ? [] : [installation] })} />);
+    render(<ToastProvider><AutomationRecipesPage loadRecipes={async () => ({ recipes })} loadInstallations={async () => ({ installations: deleted ? [] : [installation] })} /></ToastProvider>);
     fireEvent.click(screen.getByRole('button', { name: /Ver instaladas/ }));
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Instaladas (1)' })).toHaveAttribute('aria-selected', 'true'));
     fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
@@ -111,6 +114,7 @@ describe('AutomationRecipesPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Quitar' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/automation-installations/8', expect.objectContaining({ method: 'DELETE' })));
     expect(calls).toEqual(['/panel/api/automation-installations/8:DELETE']);
+    expect(await screen.findByText('Automatización quitada.', { selector: '.toast__message' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Aún no hay automatizaciones instaladas')).toBeInTheDocument());
   });
 

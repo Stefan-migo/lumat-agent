@@ -21,7 +21,10 @@ describe("ConversationThread", () => {
     expect(screen.queryAllByRole("table")).toHaveLength(0);
     expect(screen.getAllByText(/Marcela Fuentes|Lumat/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
+    // The read-only thread keeps navigation chrome (client file, client details) but offers no reply
+    // control at all, which is the rule this assertion protects.
+    expect(screen.queryByRole("button", { name: /responder|enviar|adjuntar|grabar/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tomar conversación" })).toBeNull();
   });
 
   it("renders the empty thread state", () => {
@@ -53,8 +56,12 @@ describe("ConversationThread", () => {
     expect(screen.getByRole("button", { name: "2 mensajes anteriores · Ver todos" })).toBeInTheDocument();
   });
 
-  it("renders the interactive story inspector content", () => {
+  it("renders the interactive story inspector content", async () => {
+    const user = userEvent.setup();
     render(<InteractiveConversationThreadView />);
+    // Collapsed by default: the panel is one click away.
+    expect(screen.queryByRole("heading", { name: "Cliente" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Detalles del cliente" }));
     expect(screen.getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Caso vinculado" })).toBeInTheDocument();
     expect(screen.getByText("Datos capturados")).toBeInTheDocument();

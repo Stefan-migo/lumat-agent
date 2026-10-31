@@ -7,6 +7,7 @@ import { roleLabels } from "../../roleLabels";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
+import { useToast } from "../primitives/Toast";
 import { Card } from "../primitives/Card";
 import { Icon } from "../primitives/Icon";
 import { Input } from "../primitives/Input";
@@ -20,6 +21,7 @@ type FormFields = Record<(typeof fields)[number], string>;
 const emptyForm: FormFields = { name: "", phone: "", email: "", position: "" };
 
 export function UserFicha({ userId }: { userId: number }) {
+  const toast = useToast();
   const loadUser = useCallback(() => getAdminUser(userId), [userId]);
   const [refreshKey, setRefreshKey] = useState(0);
   const data = useAsyncData(loadUser, true, refreshKey);
@@ -27,8 +29,6 @@ export function UserFicha({ userId }: { userId: number }) {
   const [form, setForm] = useState<FormFields>(emptyForm);
   const [busy, setBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
-  const [accountFeedback, setAccountFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
   const account = accountOverride ?? data.data?.user ?? null;
   useEffect(() => {
     if (account) setForm(Object.fromEntries(fields.map((field) => [field, account[field] ?? ""])) as FormFields);
@@ -36,36 +36,36 @@ export function UserFicha({ userId }: { userId: number }) {
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!account || busy) return;
-    setBusy(true); setFeedback(null);
+    setBusy(true);
     const body = Object.fromEntries(fields.map((field) => [field, form[field].trim() || null])) as AdminUserProfileUpdate;
     try {
       const result = await updateAdminUser(userId, body);
       setAccountOverride(result.user);
-      setFeedback({ tone: "success", title: "Perfil actualizado" });
+      toast.show("Perfil actualizado.");
     } catch (error) {
       const title = error instanceof ApiError && error.status === 409
         ? "Este correo ya está registrado en otro usuario"
         : error instanceof ApiError ? error.detail : "No pudimos guardar los cambios";
-      setFeedback({ tone: "danger", title });
+      toast.show(title, "danger");
     } finally { setBusy(false); }
   };
   const unlock = async () => {
-    setBusy(true); setAccountFeedback(null);
+    setBusy(true);
     try {
       const result = await unlockUser(userId);
       setAccountOverride(result.user);
-      setAccountFeedback({ tone: "success", title: "La cuenta está desbloqueada" });
-    } catch (error) { setAccountFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos desbloquear la cuenta" }); }
+      toast.show("La cuenta está desbloqueada.");
+    } catch (error) { toast.show(error instanceof ApiError ? error.detail : "No pudimos desbloquear la cuenta", "danger"); }
     finally { setBusy(false); }
   };
   const toggleActive = async () => {
     if (!account || busy) return;
-    setBusy(true); setAccountFeedback(null);
+    setBusy(true);
     try {
       const result = await toggleUserActive(userId);
       setAccountOverride(result.user);
-      setAccountFeedback({ tone: "success", title: result.user.active ? "La cuenta está activa" : "La cuenta está desactivada" });
-    } catch (error) { setAccountFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos actualizar el estado de la cuenta" }); }
+      toast.show(result.user.active ? "La cuenta está activa." : "La cuenta está desactivada.");
+    } catch (error) { toast.show(error instanceof ApiError ? error.detail : "No pudimos actualizar el estado de la cuenta", "danger"); }
     finally { setBusy(false); }
   };
   if (!account) return <PageFrame title="Detalle del usuario" meta="Consulta y actualiza los datos de esta cuenta." state={<StateMessage tone="danger" role="alert" title={data.state === "denied" ? "No tienes permiso para ver esta ficha" : data.state === "error" ? "No pudimos cargar la ficha" : "Cargando ficha"} />}>{null}</PageFrame>;
@@ -90,9 +90,8 @@ export function UserFicha({ userId }: { userId: number }) {
               <Input label="Correo electrónico" icon={Mail} placeholder="correo@ejemplo.com" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
               <Input label="Cargo" icon={BriefcaseBusiness} placeholder="Ej. Coordinador de operaciones" value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })} />
             </div>
-            {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} /> : null}
             <footer className="user-ficha__footer">
-              <Button variant="secondary" disabled={busy} onClick={() => { setForm(Object.fromEntries(fields.map((field) => [field, account[field] ?? ""])) as FormFields); setFeedback(null); }}>Descartar cambios</Button>
+              <Button variant="secondary" disabled={busy} onClick={() => { setForm(Object.fromEntries(fields.map((field) => [field, account[field] ?? ""])) as FormFields); }}>Descartar cambios</Button>
               <Button type="submit" disabled={busy}><Icon icon={Save} />{busy ? "Guardando…" : "Guardar cambios"}</Button>
             </footer>
           </form>
@@ -115,7 +114,6 @@ export function UserFicha({ userId }: { userId: number }) {
             <Button variant="secondary" disabled={busy} onClick={() => setResetOpen(true)}><Icon icon={KeyRound} />Restablecer contraseña</Button>
             <Button variant={account.active ? "danger" : "secondary"} disabled={busy} onClick={() => void toggleActive()}><Icon icon={UserRoundMinus} />{account.active ? "Desactivar cuenta" : "Activar cuenta"}</Button>
           </div>
-          {accountFeedback ? <StateMessage tone={accountFeedback.tone} role={accountFeedback.tone === "danger" ? "alert" : "status"} title={accountFeedback.title} /> : null}
         </Card>
       </div>
     </div>

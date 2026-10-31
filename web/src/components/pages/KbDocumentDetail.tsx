@@ -11,6 +11,7 @@ import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { Icon } from "../primitives/Icon";
 import { Tabs } from "../primitives/Tabs";
+import { useToast } from "../primitives/Toast";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { Markdown } from "../shared/Markdown";
@@ -32,8 +33,6 @@ function stateMessage(state: AsyncDataState) {
 
 type Mutation = "edit" | "disable" | "enable" | "restore" | "visibility" | "delete";
 type Confirmation = { kind: "disable" | "delete"; doc: KbDocument } | { kind: "restore"; doc: KbDocument; version: number };
-type Feedback = { tone: "success" | "danger"; title: string };
-
 function docStatus(doc: KbDocument): "activo" | "deshabilitado" {
   return doc.active ? "activo" : "deshabilitado";
 }
@@ -56,6 +55,7 @@ function safeMutationError(error: unknown) {
 }
 
 export function KbDocumentDetail({ documentId, data: controlledData, state: controlledState, onRetry }: KbDocumentDetailProps) {
+  const toast = useToast();
   const fetchDocument = useCallback(() => {
     if (documentId === undefined) throw new Error("document id is required");
     return getKbDocument(documentId);
@@ -66,7 +66,6 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
   const retry = onRetry ?? fetched.retry;
   const [refreshed, setRefreshed] = useState<KbDocument | null>(null);
   const [busy, setBusy] = useState<Mutation | null>(null);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
@@ -99,13 +98,12 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
   const mutate = async (action: Mutation, commit: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(action);
-    setFeedback(null);
     try {
       await commit();
       await refresh();
-      setFeedback({ tone: "success", title: "Cambios guardados" });
+      toast.show("Cambios guardados");
     } catch (error) {
-      setFeedback({ tone: "danger", title: safeMutationError(error) });
+      toast.show(safeMutationError(error), "danger");
     } finally {
       setBusy(null);
     }
@@ -113,12 +111,11 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
   const removeDocument = async (target: KbDocument) => {
     if (busy) return;
     setBusy("delete");
-    setFeedback(null);
     try {
       await deleteKbDocument(target.id);
       window.history.back();
     } catch (error) {
-      setFeedback({ tone: "danger", title: safeMutationError(error) });
+      toast.show(safeMutationError(error), "danger");
       setBusy(null);
     }
   };
@@ -149,7 +146,6 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
 
   return <PageFrame title={current.title} titleAdornment={<>{fileAdornment}<Badge tone={kbStatusTone(docStatus(current))}>{kbStatusLabel(docStatus(current))}</Badge></>} meta={`#${current.id} · ${current.format.toUpperCase()} · Creado el ${current.created_at ? DATE_FORMAT.format(new Date(current.created_at)) : "—"}`} actions={<><Button onClick={editContent}>Editar contenido</Button><Button variant="danger" disabled={busy !== null} onClick={() => setConfirmation({ kind: "delete", doc: current })}><Icon icon={Trash2} />Eliminar</Button></>} state={stateMessage(state)}>
     <div className="detail-region__main">
-      {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
       <Tabs tabs={DETAIL_TABS} activeTab={activeTab} ariaLabel="Secciones del documento" onTabChange={(tab) => { setActiveTab(tab); if (tab === "content" && contentState === "idle") void loadContent(); }}>
         {(tab) => tab === "summary" ? <div className="kb-document__layout" role="region" aria-label="Resumen del documento">
           <section className="kb-document__column" aria-label="Información y detalles técnicos">

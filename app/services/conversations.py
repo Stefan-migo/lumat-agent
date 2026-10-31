@@ -15,6 +15,7 @@ from app.chat.state import set_conversation_state
 from app.config import get_settings
 from app.models import AuditLog, Conversation, ConversationEvent, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
+from app.services.audio_format import AUDIO_SUFFIXES, normalize_audio
 from app.services.send import deliver_message
 from app.webhook.ingest import _safe_filename
 
@@ -251,7 +252,13 @@ MEDIA_SIZE_LIMITS = {"image": 5 * 1024 * 1024, "video": 16 * 1024 * 1024, "audio
 
 
 def send_operator_media(session: Session, conversation_id: int, *, path: Path, content_type: str, filename: str, caption: str | None, actor: User, request_id: str) -> Message:
-    """Persist and synchronously deliver one operator-uploaded media message."""
+    """Persist and synchronously deliver one operator-uploaded media message.
+
+    Audio is normalized to a container Meta accepts *before* anything is stored or compared:
+    normalizing afterwards would make a retry of the same recording look like a different message
+    (the stored row says `audio/ogg`, the retry still says `audio/webm`) and the operator would get
+    a 409 for a request that is genuinely the same one.
+    """
     path = Path(path)
     kind = content_type.split("/", 1)[0].lower()
     msg_type = {"image": MessageType.IMAGE, "video": MessageType.VIDEO, "audio": MessageType.AUDIO}.get(kind, MessageType.DOCUMENT)
@@ -260,6 +267,26 @@ def send_operator_media(session: Session, conversation_id: int, *, path: Path, c
     if size_bytes > limit:
         raise ValueError(f"{msg_type.value} file exceeds the {limit // (1024 * 1024)} MB limit")
 
+    options = {"conversation_id": conversation_id, "caption": caption, "actor": actor, "request_id": request_id, "msg_type": msg_type}
+    if msg_type != MessageType.AUDIO:
+        return _persist_operator_media(session, path=path, content_type=content_type, filename=filename, size_bytes=size_bytes, **options)
+
+    original = path
+    try:
+        path, content_type = normalize_audio(original, content_type)
+        filename = f"{Path(filename).stem}{AUDIO_SUFFIXES[content_type]}"
+        size_bytes = path.stat().st_size
+        return _persist_operator_media(session, path=path, content_type=content_type, filename=filename, size_bytes=size_bytes, **options)
+    finally:
+        if path != original:
+            Path(path).unlink(missing_ok=True)
+
+
+def _persist_operator_media(
+    session: Session, *, conversation_id: int, path: Path, content_type: str, filename: str,
+    caption: str | None, actor: User, request_id: str, msg_type: MessageType, size_bytes: int,
+) -> Message:
+    """Validate, store and deliver one media message whose file Meta can already accept."""
     conversation = session.scalar(select(Conversation).where(Conversation.id == conversation_id).with_for_update())
     if conversation is None:
         raise HTTPException(status_code=404, detail="conversation not found")

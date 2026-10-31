@@ -5,6 +5,7 @@ import type { GlobalSkill, ProjectSkill, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
+import { useToast } from "../primitives/Toast";
 import { Card } from "../primitives/Card";
 import { Dialog } from "../primitives/Dialog";
 import { Icon } from "../primitives/Icon";
@@ -29,6 +30,7 @@ function SkillContent({ body }: { body: string | null }) {
 }
 
 export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; role?: Role; skills: ProjectSkill[] }) {
+  const toast = useToast();
   const load = useCallback(() => listGlobalSkills(), []);
   const catalog = useAsyncData(load, true);
   const [filter, setFilter] = useState("");
@@ -41,13 +43,14 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
   const [open, setOpen] = useState<Set<string>>(new Set());
   const query = filter.trim().toLocaleLowerCase("es-CL");
   const matches = (name: string, description: string) => !query || `${name} ${description}`.toLocaleLowerCase("es-CL").includes(query);
-  const persist = async (next: ProjectSkill[]) => {
+  const persist = async (next: ProjectSkill[], successMessage: string) => {
     setSaving(true);
     setError(null);
     try {
       await updateProjectConfig(projectSlug, { skills: next });
       setItems(next);
       closeDialog();
+      toast.show(successMessage);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.detail : "No pudimos guardar las habilidades del proyecto.");
     } finally {
@@ -66,7 +69,7 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
   const save = () => {
     if (!draft.name.trim()) return;
     const next = editing === null ? [...items, draft] : items.map((item) => item.name === editing ? draft : item);
-    void persist(next);
+    void persist(next, editing === null ? "Habilidad agregada." : "Habilidad actualizada.");
   };
   const globalSkills = catalog.data?.skills ?? [];
   const visibleGlobal = globalSkills.filter((skill) => matches(skill.name, skill.description));
@@ -112,7 +115,7 @@ export function ProjectSkills({ projectSlug, skills }: { projectSlug: string; ro
             { value: "edit", label: "Editar", icon: Pencil },
             { value: "delete", label: "Eliminar", icon: Trash2, tone: "danger" },
           ]}
-          onSelect={(value) => (value === "edit" ? startEdit(item) : void persist(items.filter((entry) => entry.name !== item.name)))}
+          onSelect={(value) => (value === "edit" ? startEdit(item) : void persist(items.filter((entry) => entry.name !== item.name), "Habilidad eliminada."))}
         />
       </div>
       {isOpen ? <SkillContent body={item.body} /> : null}

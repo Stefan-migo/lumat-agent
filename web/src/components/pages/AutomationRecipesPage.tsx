@@ -6,6 +6,7 @@ import { useAsyncData } from '../../hooks/useAsyncData';
 import type { AutomationInstallation, AutomationRecipe, AutomationInstallationsResponse, AutomationRecipesResponse } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
+import { useToast } from '../primitives/Toast';
 import { Dialog } from '../primitives/Dialog';
 import { Icon } from '../primitives/Icon';
 import { Input } from '../primitives/Input';
@@ -66,6 +67,7 @@ function parameterSummary(parameters: Record<string, unknown>, recipe?: Automati
 }
 
 export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomationRecipes, loadInstallations: fetchInstallations = listAutomationInstallations }: AutomationRecipesPageProps) {
+  const toast = useToast();
   const [refresh, setRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState('catalog');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -88,9 +90,9 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
     return (selectedCategory === 'all' || recipe.category === selectedCategory)
       && (!query || `${recipe.name} ${recipe.description} ${recipe.category}`.toLocaleLowerCase().includes(query));
   });
-  const run = async (key: string | number, action: () => Promise<unknown>) => {
+  const run = async (key: string | number, action: () => Promise<unknown>, successMessage: string) => {
     setPending(key); setActionError('');
-    try { await action(); setSelected(null); setRefresh((value) => value + 1); }
+    try { await action(); setSelected(null); setRefresh((value) => value + 1); toast.show(successMessage); }
     catch (error) { setActionError(error instanceof ApiError ? error.detail : 'No pudimos guardar los cambios.'); }
     finally { setPending(null); }
   };
@@ -109,12 +111,12 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
     const { recipe, installation } = selected;
     void run(installation?.id ?? recipe.recipe_id, () => installation
       ? updateAutomationInstallation(installation.id, parameters)
-      : createAutomationInstallation(recipe.recipe_id, parameters));
+      : createAutomationInstallation(recipe.recipe_id, parameters), installation ? 'Automatización actualizada.' : 'Automatización configurada.');
   };
   const recipeName = (installation: AutomationInstallation) => recipeList.find((recipe) => recipe.recipe_id === installation.recipe_id)?.name ?? installation.recipe_id;
   const removeInstallation = async (installation: AutomationInstallation) => {
     setPending(installation.id); setActionError('');
-    try { await deleteAutomationInstallation(installation.id); setConfirmRemove(null); setRefresh((value) => value + 1); }
+    try { await deleteAutomationInstallation(installation.id); setConfirmRemove(null); setRefresh((value) => value + 1); toast.show('Automatización quitada.'); }
     catch (error) { setActionError(error instanceof ApiError ? error.detail : 'No pudimos quitar la automatización.'); }
     finally { setPending(null); }
   };
@@ -175,7 +177,7 @@ export function AutomationRecipesPage({ loadRecipes: fetchRecipes = listAutomati
             return <article className="automation-recipes__row automation-recipes__installed-row" key={installation.id}>
               <div className="automation-recipes__recipe-copy"><h3>{recipe?.name ?? installation.recipe_id}</h3><p>{parameterSummary(installation.parameters, recipe) || 'Sin parámetros configurados'}</p></div>
               <Badge tone={installation.enabled ? 'success' : 'neutral'}>{installation.enabled ? 'Activa' : 'Inactiva'}</Badge>
-              <Button variant="secondary" disabled={pending !== null} onClick={() => void run(installation.id, () => installation.enabled ? disableAutomationInstallation(installation.id) : enableAutomationInstallation(installation.id))}>{pending === installation.id ? 'Guardando…' : installation.enabled ? 'Desactivar' : 'Activar'}</Button>
+              <Button variant="secondary" disabled={pending !== null} onClick={() => void run(installation.id, () => installation.enabled ? disableAutomationInstallation(installation.id) : enableAutomationInstallation(installation.id), installation.enabled ? 'Automatización desactivada.' : 'Automatización activada.')}>{pending === installation.id ? 'Guardando…' : installation.enabled ? 'Desactivar' : 'Activar'}</Button>
               {recipe ? <Button variant="secondary" disabled={pending !== null} onClick={() => openConfiguration(recipe, installation)}>Editar</Button> : null}
               <Button variant="secondary" disabled={pending !== null} onClick={() => { setActionError(''); setConfirmRemove(installation); }}>Quitar</Button>
             </article>;

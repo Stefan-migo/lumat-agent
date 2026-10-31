@@ -45,6 +45,10 @@ jobs:
         with:
           python-version: "3.14"
       - run: uv sync --frozen
+      # app/services/audio_format.py shells out to ffmpeg to remux a Chromium recording into the
+      # ogg/opus container Meta requires, and the production image installs it for the same reason.
+      # Stated here instead of relying on the runner image carrying it.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv run pytest tests/
 
   # The panel gate. `uv run pytest` only covers the Python side, so a TypeScript

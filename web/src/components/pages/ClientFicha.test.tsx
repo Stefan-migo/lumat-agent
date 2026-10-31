@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { ApiError, apiFetch, addClientNote, archiveCase, cancelAppointment, changeClientState, closeAppointment, deleteClientNote, postJson, resolveMemoryRelation, unarchiveCase, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, getConversation, previewClientMerge, mergeClient } from "../../api";
 import { ClientFicha } from "./ClientFicha";
+import { ToastProvider } from "../primitives/Toast";
 import type { ClientFichaResponse, ConversationThread, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
@@ -406,7 +407,7 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "pendiente" });
     vi.mocked(addClientNote).mockResolvedValue({ ok: true, note: ficha.notes[0] });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
-    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    render(<ToastProvider><ClientFicha customerId={7} data={ficha} memories={memories} /></ToastProvider>);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
     await user.click(screen.getByRole("radio", { name: "Pendiente" }));
@@ -420,7 +421,7 @@ describe("ClientFicha page grammar", () => {
     expect(addClientNote).toHaveBeenCalledWith(7, "Llamar mañana");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
-    expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
+    expect(await screen.findByText("Nota agregada", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("edits a customer note and refreshes the ficha", async () => {
@@ -572,7 +573,7 @@ describe("ClientFicha customer controls", () => {
     const user = userEvent.setup();
     vi.mocked(updateCustomerProfile).mockResolvedValue({ customer: ficha.customer });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
-    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    render(<ToastProvider><ClientFicha customerId={7} data={ficha} memories={memories} /></ToastProvider>);
 
     await clickCustomerMenuItem(user, "Editar");
     const dialog = screen.getByRole("dialog");
@@ -582,7 +583,7 @@ describe("ClientFicha customer controls", () => {
     await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
 
     expect(updateCustomerProfile).toHaveBeenCalledWith(7, { name: "Marcela Rojas" });
-    expect(await screen.findByRole("heading", { name: "Identidad guardada" })).toBeInTheDocument();
+    expect(await screen.findByText("Identidad guardada", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("shows a local message rather than silently dropping a blank changed field", async () => {
@@ -618,7 +619,7 @@ describe("ClientFicha customer controls", () => {
     const futureAppointment = { id: 44, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: futureStart, timezone: "UTC", starts_at: futureStart, ends_at: futureStart, duration_minutes: 60, status: "booked" };
     vi.mocked(archiveCustomer).mockResolvedValue({ customer: ficha.customer });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
-    render(<ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [futureAppointment] } }} memories={memories} />);
+    render(<ToastProvider><ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [futureAppointment] } }} memories={memories} /></ToastProvider>);
     await clickCustomerMenuItem(user, "Archivar");
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("caso abierto")).toBeInTheDocument();
@@ -628,7 +629,7 @@ describe("ClientFicha customer controls", () => {
     expect(within(dialog).getByRole("button", { name: "Archivar cliente" })).toHaveClass("btn--danger");
     await user.click(within(dialog).getByRole("button", { name: "Archivar cliente" }));
     expect(archiveCustomer).toHaveBeenCalledWith(7);
-    expect(await screen.findByRole("heading", { name: "Cliente archivado" })).toBeInTheDocument();
+    expect(await screen.findByText("Cliente archivado", { selector: ".toast__message" })).toBeInTheDocument();
   });
 
   it("shows an archive failure once, with a readable label", async () => {
@@ -644,11 +645,11 @@ describe("ClientFicha customer controls", () => {
   it("shows archived state and offers restore with visible failure feedback", async () => {
     const user = userEvent.setup();
     vi.mocked(unarchiveCustomer).mockRejectedValue(new ApiError(500, "private"));
-    render(<ClientFicha customerId={7} data={{ ...ficha, customer: { ...ficha.customer, archived_at: "2026-09-01T00:00:00Z" } }} memories={memories} />);
+    render(<ToastProvider><ClientFicha customerId={7} data={{ ...ficha, customer: { ...ficha.customer, archived_at: "2026-09-01T00:00:00Z" } }} memories={memories} /></ToastProvider>);
     expect(screen.getByText("Cliente archivado")).toBeInTheDocument();
     await clickCustomerMenuItem(user, "Restaurar");
     expect(unarchiveCustomer).toHaveBeenCalledWith(7);
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar el archivo" })).toBeInTheDocument();
+    expect(await screen.findByText("No pudimos guardar el archivo", { selector: ".toast__message" })).toBeInTheDocument();
   });
 });
 
@@ -790,15 +791,14 @@ describe("ClientFicha slice 2 — product register", () => {
     const user = userEvent.setup();
     vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "pendiente" });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
-    const { container } = render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    const { container } = render(<ToastProvider><ClientFicha customerId={7} data={ficha} memories={memories} /></ToastProvider>);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
     await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
 
     expect(container.querySelector(".client-ficha__state-control")).toBeNull();
-    expect(await screen.findAllByText("Estado guardado")).not.toHaveLength(0);
-    // The page banner must not carry action feedback.
+    expect(await screen.findByText("Estado guardado", { selector: ".toast__message" })).toBeInTheDocument();
     expect(container.querySelector(".page-frame__banner")?.textContent ?? "").not.toContain("Estado guardado");
   });
 
