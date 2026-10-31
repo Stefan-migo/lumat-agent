@@ -11,6 +11,7 @@ import {
   approveChatPlan,
   createChatThread,
   deleteThreadAttachment,
+  deleteAssistantArtifact,
   downloadAssistantArtifact,
   getChatThread,
   getThreadToolPolicy,
@@ -766,6 +767,12 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
     }
   };
 
+  const deleteArtifact = async (artifact: AssistantArtifact) => {
+    if (!thread) return;
+    await deleteAssistantArtifact(thread.id, artifact.id);
+    setArtifacts((current) => current.filter((item) => item.root_id !== artifact.root_id));
+  };
+
   const copyMessage = (message: InternalChatMessage) => {
     void navigator.clipboard?.writeText(message.content);
     setCopiedId(message.id);
@@ -910,6 +917,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
       onSelectProject={(slug) => void (thread ? changeProject(slug) : createProjectChat(slug))}
       attachments={attachments}
       artifacts={artifacts}
+      onDeleteArtifact={(artifact) => deleteArtifact(artifact)}
     >
     <PageFrame
       title="Asistente Lumat"

@@ -378,6 +378,8 @@ export async function downloadProjectFile(slug: string, fileId: number, filename
 export async function downloadAssistantArtifact(threadId: number, artifactId: number, filename: string): Promise<void> {
   triggerDownload(await apiFetchBlob(`/panel/api/chat/threads/${threadId}/artifacts/${artifactId}/download`), filename);
 }
+export const deleteAssistantArtifact = (threadId: number, artifactId: number): Promise<void> =>
+  apiFetch<void>(`/panel/api/chat/threads/${threadId}/artifacts/${artifactId}`, { method: 'DELETE' });
 export async function downloadAssistantConversation(threadId: number): Promise<void> {
   const res = await apiFetchBlobResponse(`/panel/api/chat/threads/${threadId}/export`);
   const disposition = res.headers.get('Content-Disposition');
