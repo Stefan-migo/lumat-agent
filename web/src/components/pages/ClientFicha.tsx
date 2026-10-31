@@ -17,6 +17,7 @@ import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { Tabs } from "../primitives/Tabs";
 import { Pagination } from "../primitives/Pagination";
+import { useToast } from "../primitives/Toast";
 import "./ClientFichaDialogs.css";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -121,6 +122,7 @@ const priorityLabel = (priority: string | null) => priority ? priority.charAt(0)
 
 export function ClientFicha({ customerId, initialTab, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState(initialTab ?? "summary");
+  const toast = useToast();
   const [archivedCasePage, setArchivedCasePage] = useState(1);
   const [showArchivedCases, setShowArchivedCases] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -327,7 +329,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       else await createClientEquipment(customerId, body);
       setEquipmentRefresh((value) => value + 1);
       setEquipmentOpen(false);
-      setEquipmentFeedback({ tone: "success", title: editingEquipment ? "Equipo actualizado" : "Equipo agregado" });
+      toast.show(editingEquipment ? "Equipo actualizado" : "Equipo agregado");
     } catch (error) { setEquipmentFeedback({ tone: "danger", ...safeError(error, "equipo") }); }
     finally { setEquipmentMutation(false); }
   };
@@ -377,7 +379,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
   const saveState = async () => {
     if (customerId === undefined || !selectedState || selectedState === customer.state || mutation) return;
     setMutation("state"); setStateFeedback(null);
-    try { await changeClientState(customerId, selectedState); await refresh(); setStateDialogOpen(false); setStateFeedback({ tone: "success", title: "Estado guardado" }); }
+    try { await changeClientState(customerId, selectedState); await refresh(); setStateDialogOpen(false); toast.show("Estado guardado"); }
     catch (error) { setStateFeedback({ tone: "danger", ...safeError(error, "estado") }); }
     finally { setMutation(null); }
   };
@@ -387,7 +389,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       return;
     }
     setMutation("note"); setNoteFeedback(null);
-    try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setNoteFeedback({ tone: "success", title: "Nota agregada" }); }
+    try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); toast.show("Nota agregada"); }
     catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
   };
@@ -396,14 +398,14 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
     if (customerId === undefined || !editingNote || mutation) return;
     if (!editingNote.note.trim()) { setNoteFeedback({ tone: "danger", title: "La nota no puede estar vacía" }); return; }
     setMutation("note"); setNoteFeedback(null);
-    try { await updateClientNote(customerId, editingNote.id, editingNote.note.trim()); await refresh(); setEditingNote(null); setNoteFeedback({ tone: "success", title: "Nota actualizada" }); }
+    try { await updateClientNote(customerId, editingNote.id, editingNote.note.trim()); await refresh(); setEditingNote(null); toast.show("Nota actualizada"); }
     catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
   };
   const confirmDeleteNote = async () => {
     if (customerId === undefined || deletingNote === null || mutation) return;
     setMutation("note"); setNoteFeedback(null);
-    try { await deleteClientNote(customerId, deletingNote); await refresh(); setDeletingNote(null); setNoteFeedback({ tone: "success", title: "Nota eliminada" }); }
+    try { await deleteClientNote(customerId, deletingNote); await refresh(); setDeletingNote(null); toast.show("Nota eliminada"); }
     catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
   };
@@ -429,7 +431,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       await updateCustomerProfile(customerId, body);
       await refresh();
       setProfileOpen(false);
-      setProfileFeedback({ tone: "success", title: "Identidad guardada" });
+      toast.show("Identidad guardada");
     } catch (error) { setProfileFeedback({ tone: "danger", ...safeError(error, "identidad") }); }
     finally { setCustomerMutation(null); }
   };
@@ -441,7 +443,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       await updateCustomerConsent(customerId, selectedConsent);
       await refresh();
       setConsentDialogOpen(false);
-      setConsentFeedback({ tone: "success", title: "Consentimiento actualizado" });
+      toast.show("Consentimiento actualizado");
     } catch (error) { setConsentFeedback({ tone: "danger", ...safeError(error, "consentimiento") }); }
     finally { setCustomerMutation(null); }
   };
@@ -454,8 +456,12 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       else await archiveCustomer(customerId);
       await refresh();
       setArchiveOpen(false);
-      setArchiveFeedback({ tone: "success", title: customer.archived_at ? "Cliente restaurado" : "Cliente archivado" });
-    } catch (error) { setArchiveFeedback({ tone: "danger", ...safeError(error, "archivo") }); }
+      toast.show(customer.archived_at ? "Cliente restaurado" : "Cliente archivado");
+    } catch (error) {
+      const feedback = { tone: "danger" as const, ...safeError(error, "archivo") };
+      if (archiveOpen) setArchiveFeedback(feedback);
+      else toast.show(feedback.title, "danger");
+    }
     finally { setCustomerMutation(null); }
   };
   const resolveRelation = async (relationId: number, relation: MemoryRelationKind) => {
@@ -484,7 +490,7 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
       else await archiveCase(row.id);
       await refresh();
     } catch (error) {
-      setCaseFeedback({ tone: "danger", title: error instanceof ApiError && error.status === 409 ? "Solo se pueden archivar casos cerrados" : "No se pudo actualizar el archivo del caso" });
+      toast.show(error instanceof ApiError && error.status === 409 ? "Solo se pueden archivar casos cerrados" : "No se pudo actualizar el archivo del caso", "danger");
     }
   };
   const archivedCaseColumns: Column<FichaCase>[] = [
@@ -543,12 +549,6 @@ export function ClientFicha({ customerId, initialTab, data: controlledData, memo
         <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
         <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
       </dl>
-      <div className="client-ficha__local-feedback">
-        <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
-        <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
-        {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
-        {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
-      </div>
     </Card>
   );
   const customerDialogs = <>

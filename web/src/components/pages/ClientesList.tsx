@@ -18,6 +18,7 @@ import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
 import { Tabs } from "../primitives/Tabs";
+import { useToast } from "../primitives/Toast";
 import "./ClientesList.css";
 import { ChangeCustomerStateDialog } from "../shared/ChangeCustomerStateDialog";
 
@@ -84,6 +85,7 @@ function stateMessage(state: ClientesListState, retry: () => void) {
 }
 
 export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient, query: controlledQuery }: ClientesListProps) {
+  const toast = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const query = controlledQuery ?? searchTerm;
   // The query drives the fetch through the hook's own refresh key, so an emptied search
@@ -195,7 +197,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       await unarchiveCustomer(customer.id);
       refresh();
     } catch {
-      setDialogError("No pudimos restaurar el cliente. Inténtalo nuevamente.");
+      toast.show("No pudimos restaurar el cliente. Inténtalo nuevamente.", "danger");
     }
   };
   const openState = (customer: Customer) => {
@@ -231,7 +233,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     refresh();
     if (failedIds.length) {
       const verb = bulkAction.action === "archive" ? "archivaron" : "restauraron";
-      setDialogError(`Se ${verb} ${succeeded} de ${bulkAction.ids.length} clientes. Fallaron ${failedIds.length}.`);
+      toast.show(`Se ${verb} ${succeeded} de ${bulkAction.ids.length} clientes. Fallaron ${failedIds.length}.`, "danger");
     }
     setBusy(false);
   };
@@ -253,7 +255,6 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
           <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
           <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
         </div>
-        {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
               <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <div className="clientes-list__selection-actions"><span>{selected.size} seleccionados</span>{selectedActive.length ? <Button variant="danger" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "archive", ids: selectedActive.map((row) => row.id) }); }}><Archive />Archivar seleccionados</Button> : null}{selectedArchived.length ? <Button variant="secondary" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "restore", ids: selectedArchived.map((row) => row.id) }); }}><ArchiveRestore />Restaurar seleccionados</Button> : null}</div> : null}</div>
