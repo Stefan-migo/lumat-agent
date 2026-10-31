@@ -179,9 +179,14 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const windowOpen = conversation?.reply_window_open === true;
   const releaseStream = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; };
   useEffect(() => () => { cancelRecordingRef.current = true; recorderRef.current?.stop(); releaseStream(); }, []);
+  // Formats Meta accepts come first so a browser that can produce one is left untouched by the
+  // server. Chromium only offers webm, which Meta rejects: the api remuxes it to ogg/opus before
+  // uploading, so the recording works everywhere instead of being disabled outside Firefox/Safari.
   const supportedRecordingMime = typeof MediaRecorder !== "undefined"
-    ? ["audio/ogg;codecs=opus", "audio/mp4", "audio/aac"].find((mime) => MediaRecorder.isTypeSupported(mime)) ?? null
+    ? ["audio/ogg;codecs=opus", "audio/mp4", "audio/aac", "audio/webm;codecs=opus", "audio/webm"].find((mime) => MediaRecorder.isTypeSupported(mime)) ?? null
     : null;
+  const recordingExtension = (mime: string) => ["audio/ogg", "audio/mp4", "audio/webm", "audio/aac"]
+    .find((container) => mime.startsWith(container))?.split("/")[1] ?? "ogg";
   const mutate = async (action: () => Promise<unknown>) => { setBusy(true); setMutationError(null); try { await action(); setText(""); onMutate?.(); refresh(); } catch (error) { setMutationError(error instanceof ApiError ? `${error.status}: ${error.detail}` : error && typeof error === "object" && "detail" in error ? String(error.detail) : "No se pudo completar la acción"); } finally { setBusy(false); } };
   const sendSelectedFile = (file: File, fileCaption = "") => {
     if (!conversationId || busy) return;
@@ -203,7 +208,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
         setRecording(false);
         if (!cancelRecordingRef.current && chunksRef.current.length && conversationId) {
           const blob = new Blob(chunksRef.current, { type: supportedRecordingMime });
-          const extension = supportedRecordingMime.startsWith("audio/ogg") ? "ogg" : supportedRecordingMime === "audio/mp4" ? "mp4" : "aac";
+          const extension = recordingExtension(supportedRecordingMime);
           sendSelectedFile(new File([blob], `audio-${Date.now()}.${extension}`, { type: supportedRecordingMime }));
         }
       };
