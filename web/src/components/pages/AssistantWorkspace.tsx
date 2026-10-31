@@ -703,10 +703,14 @@ function activityTime(thread: InternalChatThreadSummary): number {
  * collapsed history (S5). Opening a revision only reads it; it never changes what the thread shows. */
 function ArtifactRows({ artifact, busy, onOpenFile, downloadArtifact }: { artifact: AssistantArtifact; busy: boolean; onOpenFile?: (source: ViewerSource) => void; downloadArtifact: (artifact: AssistantArtifact) => Promise<void> }) {
   const [historyOpen, setHistoryOpen] = useState(false);
-  const revisions = [...artifact.versions].sort((left, right) => right.version - left.version);
+  const currentVersion = artifact.version ?? 1;
+  // A payload from before migration 061 has no chain; it is a single revision, never a crash.
+  const revisions = (artifact.versions ?? [{ version: currentVersion, id: artifact.id, size: artifact.size, created_at: artifact.created_at }])
+    .slice()
+    .sort((left, right) => right.version - left.version);
   const openCurrent = () => onOpenFile?.({ url: assistantArtifactContentUrl(artifact.thread_id, artifact.id), filename: artifact.filename, contentType: artifact.content_type });
   const openRevision = (version: number, id: number) => onOpenFile?.({
-    url: assistantArtifactContentUrl(artifact.thread_id, id, version === artifact.version ? undefined : version),
+    url: assistantArtifactContentUrl(artifact.thread_id, id, version === currentVersion ? undefined : version),
     filename: artifact.filename,
     contentType: artifact.content_type,
   });
@@ -715,12 +719,12 @@ function ArtifactRows({ artifact, busy, onOpenFile, downloadArtifact }: { artifa
       <button type="button" className="assistant-workspace__file-row" aria-label={`Abrir ${artifact.filename}`} title={`Abrir ${artifact.filename}`} disabled={busy} onClick={openCurrent}>
         <span className={`assistant-workspace__file-tile assistant-workspace__file-tile--${fileTone(artifact.filename)}`}><Icon icon={assistantFileIcon(artifact.filename, artifact.content_type)} size="md" /></span>
         <span className="assistant-workspace__file-copy"><strong>{artifact.filename}</strong><small>{fileTypeLabel(artifact.filename, artifact.content_type)} · Generado en este hilo</small></span>
-        {artifact.version > 1 ? <Badge tone="neutral" className="assistant-workspace__artifact-version">{`v${artifact.version}`}</Badge> : null}
+        {currentVersion > 1 ? <Badge tone="neutral" className="assistant-workspace__artifact-version">{`v${currentVersion}`}</Badge> : null}
       </button>
       {revisions.length > 1 ? <button type="button" className="assistant-workspace__artifact-history-toggle" aria-label={`Historial de ${artifact.filename}`} aria-expanded={historyOpen} title={`Historial de ${artifact.filename}`} onClick={() => setHistoryOpen((open) => !open)}><Icon icon={History} size="sm" /></button> : null}
       <Menu label={`Acciones de ${artifact.filename}`} trigger="icon" align="end" disabled={busy} items={[{ value: "open", label: "Abrir", icon: ExternalLink }, { value: "download", label: "Descargar", icon: Download }]} onSelect={(value) => { if (value === "download") void downloadArtifact(artifact); else openCurrent(); }} />
     </li>
-    {historyOpen && revisions.length > 1 ? <li className="assistant-workspace__artifact-history"><ul aria-label={`Versiones de ${artifact.filename}`}>{revisions.map((revision) => <li key={revision.id}><button type="button" className="assistant-workspace__artifact-history-row" aria-label={`Abrir versión ${revision.version} de ${artifact.filename}`} onClick={() => openRevision(revision.version, revision.id)}><span>{`v${revision.version}`}</span><span>{revision.version === artifact.version ? "Versión vigente" : fileBytesLabel(revision.size)}</span></button></li>)}</ul></li> : null}
+    {historyOpen && revisions.length > 1 ? <li className="assistant-workspace__artifact-history"><ul aria-label={`Versiones de ${artifact.filename}`}>{revisions.map((revision) => <li key={revision.id}><button type="button" className="assistant-workspace__artifact-history-row" aria-label={`Abrir versión ${revision.version} de ${artifact.filename}`} onClick={() => openRevision(revision.version, revision.id)}><span>{`v${revision.version}`}</span><span>{revision.version === currentVersion ? "Versión vigente" : fileBytesLabel(revision.size)}</span></button></li>)}</ul></li> : null}
   </>;
 }
 

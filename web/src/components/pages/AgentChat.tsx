@@ -118,6 +118,7 @@ function resolveArtifactReferences(content: string, artifacts: AssistantArtifact
   for (const artifact of artifacts) {
     byId.set(String(artifact.id), artifact);
     for (const revision of artifact.versions ?? []) byId.set(String(revision.id), artifact);
+    if (!artifact.versions?.length) byId.set(String(artifact.id), artifact);
   }
   const referenced = new Map<number, AssistantArtifact>();
   const renderedContent = content.replace(
