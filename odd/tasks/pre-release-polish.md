@@ -64,7 +64,8 @@ y reversible; ninguna fila se borra en la migración.
 - `bash scripts/test.sh quick` por iteración: verde.
 - `bash scripts/test.sh shape origin/main` → **3** (migración, `agent/registry.yaml`, `agent/personas/assistant.md`): `full` obligatorio.
 - `web/`: `npm ci` → `npm run build` (tsc −b) verde → `npm test` **119 archivos / 1384 tests** verde.
-- `bash scripts/test.sh full`: ver el registro del cierre.
+- `bash scripts/test.sh full`: **verde** (2026-10-31, `PYTEST_EXIT=0`, `[100%]`, sin `FAILED`/`ERROR`).
+  Como en la feature anterior, el repo corre `-q` sin línea de resumen: la señal válida es el código de salida.
 
 ## Log
 
