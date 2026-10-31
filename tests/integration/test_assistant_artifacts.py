@@ -1,5 +1,6 @@
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -264,4 +265,56 @@ def test_download_serves_the_current_version_and_any_named_one(client, monkeypat
     assert "stored_path" not in artifacts[0]
     assert "sha256" not in artifacts[0]
     assert client.get(f"/panel/api/chat/threads/{thread_id}").json()["artifacts"][0]["versions"][0]["size"] == len(b"version one")
+    get_settings.cache_clear()
+
+
+def test_a_failed_insert_leaves_no_artifact_row_and_no_orphan_blob(monkeypatch, tmp_path):
+    """R3-001: an insert that fails must not leave a blob on disk with no row behind it."""
+    with SessionLocal() as session:
+        owner, thread, first = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-orphan-owner")
+        session.commit()
+        thread_id = thread.id
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+
+        def failing_flush(*_args, **_kwargs):
+            raise RuntimeError("insert failed")
+
+        monkeypatch.setattr(session, "flush", failing_flush)
+        with pytest.raises(RuntimeError):
+            store_artifact(session, thread, "informe.md", "second file", "assistant")
+        session.rollback()
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(AssistantArtifact).where(AssistantArtifact.thread_id == thread_id)
+        ).scalars().all()
+        assert len(rows) == 1
+        assert sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir()) == [
+            Path(first.stored_path).name
+        ]
+    get_settings.cache_clear()
+
+
+def test_a_failed_identity_leaves_no_blob_on_disk(monkeypatch, tmp_path):
+    """R3-001: a failure before the row exists never touches the media directory."""
+    with SessionLocal() as session:
+        owner, thread, _first = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-identity-owner")
+        session.commit()
+        thread_id = thread.id
+        files_before = sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir())
+
+        def failing_nextval(*_args, **_kwargs):
+            raise RuntimeError("sequence unavailable")
+
+        monkeypatch.setattr(
+            "app.services.assistant_artifacts.text", lambda *_args, **_kwargs: SimpleNamespace()
+        )
+        monkeypatch.setattr(session, "execute", failing_nextval)
+        with pytest.raises(RuntimeError):
+            store_artifact(session, thread, "informe.md", "never lands", "assistant")
+        session.rollback()
+
+    assert sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir()) == files_before
     get_settings.cache_clear()
