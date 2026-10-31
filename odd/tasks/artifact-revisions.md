@@ -149,15 +149,17 @@ obligatorio en TypeScript no protege el runtime de un JSON viejo. Después del a
 1. *Corregido*: `tests/integration/test_assistant_write_chain_timeline_verifier_probes.py::test_s3_class_b_set_is_exactly_agreed_and_chains_without_approval`
    afirma por igualdad el conjunto autónomo de escritura; `artifact.update` entra en ese conjunto
    (S6), así que la lista esperada se actualiza con él. Verde.
-2. *Necesita decisión*: `tests/integration/test_assistant_chat.py::test_a_capped_read_only_turn_responder_receives_combined_tool_evidence`
-   falla, y **no** por el contenido de este cambio. `_TOOL_EVIDENCE_LIMIT = 4_000`
-   (`app/chat/assistant/nodes.py:40`) acota la evidencia del responder por caracteres, y el payload de
-   `assistant.capabilities` **cita el catálogo entero**: medido con la misma prueba en `main` y en la
-   rama, el turno de 4 pasos conserva 3 payloads con 33 herramientas (`[1 earlier tool result(s)
-   omitted]`) y sólo 2 con 34 (`[2 earlier tool result(s) omitted]`). El catálogo creció porque la
-   herramienta nueva tiene que declararse, así que **cualquier** herramienta nueva come el presupuesto
-   de un turno largo. La prueba no es frágil por el temario: es el presupuesto el que está calibrado
-   contra el tamaño actual del catálogo. Se midió también que acortar la descripción de la herramienta
-   no alcanza para recuperarlo. Las salidas posibles (subir el tope, deduplicar resultados idénticos
-   del mismo turno, o aceptar la omisión y ajustar la aserción) cambian el comportamiento del
-   asistente fuera del alcance de esta feature, así que quedan para el owner.
+2. *Decidido por el owner y corregido*: `tests/integration/test_assistant_chat.py::test_a_capped_read_only_turn_responder_receives_combined_tool_evidence`
+   fallaba porque `_TOOL_EVIDENCE_LIMIT` (`app/chat/assistant/nodes.py:40`) acota la evidencia del
+   responder por caracteres y el payload de `assistant.capabilities` **cita el catálogo entero**.
+   Medido con la misma prueba en `main` y en la rama: el turno de 4 pasos conservaba 3 payloads con 33
+   herramientas (`[1 earlier tool result(s) omitted]`) y sólo 2 con 34. El owner eligió **deduplicar
+   resultados idénticos del mismo turno**, así que `_render_tool_evidence` ya no cita dos veces el mismo
+   payload (misma herramienta + mismos argumentos + mismo resultado), y cada ejecución sigue nombrada
+   en el inventario. Medición posterior: la evidencia quedó en **3.980 caracteres** con el catálogo de
+   34 herramientas, y el payload de `dashboard.summary` todavía no entraba, así que el tope subió a
+   **4.500** — el mínimo que deja entrar los tres payloads del turno. `main` va a 4.000 y este cambio
+   agrega como máximo 500 caracteres de evidencia por turno (≈125 tokens).
+   Tests nuevos/actualizados: `test_a_repeated_identical_tool_call_is_quoted_once_in_the_responder_evidence`
+   (dedupe), y los dos unitarios de `_TOOL_EVIDENCE_LIMIT` ahora miden el bloque contra la constante en
+   lugar de un literal o de la cola del prompt.
