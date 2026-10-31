@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { AppShell } from "../domain/AppShell";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
 import { KbDocumentDetail } from "./KbDocumentDetail";
+import { ToastProvider } from "../primitives/Toast";
 import type { KbDocument, User } from "../../types";
 
 const admin: User = { username: "ana", role: "admin" };
@@ -160,13 +161,14 @@ describe("KB document detail route", () => {
       }
       return new Response(JSON.stringify({ ...document, active: true }), { status: 200 });
     });
-    render(<KbDocumentDetail data={{ ...document, active: false }} state="ready" />);
+    render(<ToastProvider><KbDocumentDetail data={{ ...document, active: false }} state="ready" /></ToastProvider>);
 
     expect(screen.getByText("El documento está deshabilitado.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Habilitar" }));
 
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith(`/kb/${document.id}/enable`) && init?.method === "POST")).toBe(true);
     expect(await screen.findByText("El documento está habilitado.")).toBeInTheDocument();
+    expect(await screen.findByText("Cambios guardados", { selector: ".toast__message" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Deshabilitar" })).toBeInTheDocument();
     fetchMock.mockRestore();
   });
@@ -257,13 +259,13 @@ describe("KB document detail route", () => {
       if (init?.method === "POST") return new Response(JSON.stringify({ detail: "database secret" }), { status });
       return new Response(JSON.stringify({ ...document, content: "Contenido existente" }), { status: 200 });
     });
-    render(<KbDocumentDetail data={document} state="ready" />);
+    render(<ToastProvider><KbDocumentDetail data={document} state="ready" /></ToastProvider>);
     await user.click(screen.getByText("Editar contenido"));
     await screen.findByDisplayValue("Contenido existente");
     await user.click(screen.getByRole("button", { name: /guardar/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Revisa los campos e inténtalo nuevamente.");
-    expect(screen.getByRole("alert")).not.toHaveTextContent("database secret");
+    expect(await screen.findByText("Revisa los campos e inténtalo nuevamente.", { selector: ".toast__message" })).toBeInTheDocument();
+    expect(screen.queryByText("database secret")).not.toBeInTheDocument();
     fetchMock.mockRestore();
   });
 
@@ -271,13 +273,13 @@ describe("KB document detail route", () => {
     const user = userEvent.setup();
     let resolve!: (response: Response) => void;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise((next) => { resolve = next; }));
-    render(<KbDocumentDetail data={document} state="ready" />);
+    render(<ToastProvider><KbDocumentDetail data={document} state="ready" /></ToastProvider>);
     await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
     expect(screen.getByRole("button", { name: "Deshabilitar" })).toBeDisabled();
     resolve(new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para modificar la base de conocimientos");
-    expect(screen.getByRole("alert")).not.toHaveTextContent("admin role required");
+    expect(await screen.findByText("No tienes permiso para modificar la base de conocimientos.", { selector: ".toast__message" })).toBeInTheDocument();
+    expect(screen.queryByText("admin role required")).not.toBeInTheDocument();
     fetchMock.mockRestore();
   });
 });
