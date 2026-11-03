@@ -11,6 +11,7 @@ from app.chat.state import ConversationState
 from app.db import SessionLocal
 from app.models import DocumentFormat, KbVisibility
 from app.services import kb as kb_service
+from app.services.settings import TARIFA_PRECIOS_KEY, set_setting
 
 
 def _state(text: str, *, intent: str = "valores") -> ConversationState:
@@ -24,7 +25,26 @@ def _state(text: str, *, intent: str = "valores") -> ConversationState:
     )
 
 
+_CALENDAR_FREE_TARIFF = {
+    # A whole-year range per service on purpose: the assertion below names a
+    # figure, so the tariff it comes from must not depend on the month the suite
+    # runs in. `tarifa.precios` must cover exactly the known services and every
+    # service's ranges must partition months 1-12, so a partial dict would be
+    # rejected and the reader would fall back to the seasonal default (measured
+    # 2026-11-03: a partial tariff silently answered $40.000). The seasonal
+    # default itself is pinned by tests/unit/test_tarifa_vigente.py.
+    "visita_tecnica": [{"desde_mes": 1, "hasta_mes": 12, "valor": 30000}],
+    "mantencion_calefont": [{"desde_mes": 1, "hasta_mes": 12, "valor": 50000}],
+    "mantencion_caldera": [{"desde_mes": 1, "hasta_mes": 12, "valor": 80000}],
+    "lavado_red": [{"desde_mes": 1, "hasta_mes": 12, "valor": 140000}],
+}
+
+
 def test_a_published_price_is_answered_instead_of_the_miss_offer():
+    with SessionLocal() as session:
+        set_setting(session, TARIFA_PRECIOS_KEY, _CALENDAR_FREE_TARIFF)
+        session.commit()
+
     result = respond(_state("cuanto sale la mantencion de calefont?"))
 
     reply = result["replies"][0]

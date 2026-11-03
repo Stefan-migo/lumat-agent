@@ -54,11 +54,21 @@ def test_an_unrecognised_service_names_nothing(question):
 
 
 def test_the_reply_uses_the_price_in_force_and_the_published_label(monkeypatch):
+    """The label and the formatting, with a price that is in force in any month.
+
+    A tariff with a single range covering the whole year keeps this test about
+    the reply text. It used to read `DEFAULT_TARIFA_PRECIOS` while asserting the
+    March-October figure, so it failed for every run from November to February
+    (measured 2026-11-03). The month selection of the seasonal default is pinned
+    by `tests/unit/test_tarifa_vigente.py`, which names the month in every case.
+    """
     monkeypatch.setattr(
         respond, "get_hours_timezone", lambda _session: "America/Santiago"
     )
     monkeypatch.setattr(
-        respond, "get_tarifa_precios", lambda _session: DEFAULT_TARIFA_PRECIOS
+        respond,
+        "get_tarifa_precios",
+        lambda _session: {"mantencion_calefont": [{"desde_mes": 1, "hasta_mes": 12, "valor": 50000}]},
     )
 
     reply = respond.tariff_price_reply(
