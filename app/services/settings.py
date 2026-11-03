@@ -586,11 +586,46 @@ def get_booking_lead_minutes(session: Session) -> int:
     return value
 
 
+# S15: how close a spelling must be to count as the same place. Below this
+# length a single edit is most of the name ("Colina" vs "Coli"), so short names
+# keep the exact-match rule and never accept a typo.
+_MIN_TYPO_LENGTH = 5
+
+
 def normalize_comuna(value: str) -> str:
-    """Fold a commune name for matching: case, accents and inner spacing."""
+    """Fold a commune name for matching: case, accents, punctuation and spacing.
+
+    Punctuation is dropped rather than kept. A customer writing "estoy en
+    Huechuraba." used to normalize to "huechuraba." and fall out of coverage,
+    which derived a covered lead to a human with a message telling the customer
+    we do not serve there — a false statement about the business, produced by a
+    period.
+    """
     decomposed = unicodedata.normalize("NFKD", value.casefold())
     without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
-    return " ".join(without_accents.split())
+    without_punctuation = "".join(
+        char if char.isalnum() else " " for char in without_accents
+    )
+    return " ".join(without_punctuation.split())
+
+
+def _within_one_edit(left: str, right: str) -> bool:
+    """True when two normalized names differ by at most one edit.
+
+    A bounded Levenshtein (insertion, deletion or substitution). It early-exits
+    on length and walks once, so it never allocates a distance matrix.
+    """
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(1 for a, b in zip(left, right) if a != b) == 1
+    shorter, longer = (left, right) if len(left) < len(right) else (right, left)
+    index = 0
+    while index < len(shorter) and shorter[index] == longer[index]:
+        index += 1
+    return shorter[index:] == longer[index + 1:]
 
 
 def validate_coverage_communes(value: Any) -> list[str]:
@@ -619,13 +654,34 @@ def get_coverage_communes(session: Session) -> list[str]:
 
 
 def comuna_cubierta(communes: list[str], nombre: str | None) -> bool:
-    """True when ``nombre`` matches a covered commune under normalization."""
+    """True when ``nombre`` names a covered commune.
+
+    The comparison folds case, accents, punctuation and spacing, and tolerates a
+    single typo when exactly one covered commune is that close — customers type
+    "Huchuraba" and "Penalolen", and an exact-match gate derived those leads to
+    a human while claiming we do not serve there.
+
+    Two covered communes at the same distance are ambiguous: that returns False
+    so the turn takes the coverage derivation instead of guessing a name. Never
+    resolve ambiguity towards coverage — a wrong "yes" promises a visit the
+    owner does not offer.
+    """
     if not isinstance(nombre, str):
         return False
     normalized = normalize_comuna(nombre)
     if not normalized:
         return False
-    return any(normalize_comuna(item) == normalized for item in communes)
+    candidates = [normalize_comuna(item) for item in communes]
+    if normalized in candidates:
+        return True
+    if len(normalized) < _MIN_TYPO_LENGTH:
+        return False
+    near = [
+        candidate
+        for candidate in candidates
+        if len(candidate) >= _MIN_TYPO_LENGTH and _within_one_edit(normalized, candidate)
+    ]
+    return len(near) == 1
 
 
 def get_tarifa_precios(session: Session) -> dict[str, list[dict[str, int]]]:
