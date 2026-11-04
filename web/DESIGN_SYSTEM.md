@@ -364,7 +364,7 @@ Breakpoints respond to content, not device names. Never hide emergency, handoff,
 
 ## Page architecture
 
-`Asistente Lumat`, `Agenda`, `Automatizaciones`, and `Usuarios` do not yet have page-architecture sections here; their absence is not permission to improvise.
+`Asistente Lumat`, `Automatizaciones`, and `Usuarios` do not yet have page-architecture sections here; their absence is not permission to improvise.
 
 ### Page header
 
@@ -411,6 +411,33 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 - Cancellation confirmation states that the visit will be marked as cancelled and that this panel does not offer rebooking; it does not claim a domain-level guarantee.
 - Provide explicit loading, permission, empty, stale, and error states. Action failures stay beside the action that caused them. An empty period is an explicit empty state, not a bare grid.
 - The Agenda product change owns the available actions and surface composition; this system supplies the shared visual and accessibility grammar.
+
+#### Agenda · visitas vencidas
+
+The overdue band is how the agenda recovers visits whose scheduled start passed with no recorded
+outcome. It is work waiting for a decision, not a period, so it never becomes another calendar state.
+
+- The band renders **above** the calendar and the register, as a section with its own `h2` and a count
+  badge. It is not a tab, not a filter, and not a second register.
+- Nothing overdue means the band is absent. A recovery surface shows no empty card; the register's own
+  empty state already covers "no visits".
+- Row anatomy: a selection checkbox, the customer, the service, the scheduled date and time (the real
+  date, never "hace N días"), and one primary row action that names the customer it closes. The row
+  action opens the shared closure dialog; a visit is never closed by a bare click.
+- Selection reveals exactly one bulk action, and its label carries the count. The confirmation lists the
+  affected customers before submitting, and the panel keeps each submitted row's result in place: a
+  recorded closure is a `status`, a failure is an `alert` with the server detail beside the row that
+  caused it.
+- Closure records an outcome (`Completada` / `No completada`). The confirmation names the outcome it
+  will record and never claims the closure can be undone from the agenda.
+- The band carries a warning-toned leading indication together with text; never colour alone. Rows use
+  the semantic surfaces (`--surface`, `--border`, `--fg-muted`) and no raw hex.
+- At narrow widths a row stacks — customer and service first, date second, actions full width — with
+  touch targets of at least 44px.
+
+A section that presents a list of entities follows the grammar of the page it sits in
+(`Card`/`DataTable`/row-cards plus its own BEM block). Bare `<ul>`/`<li>` markup with no classes is an
+unfinished surface, not a minimal one.
 
 ### Conversaciones and human inbox
 

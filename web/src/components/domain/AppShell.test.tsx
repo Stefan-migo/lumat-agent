@@ -244,7 +244,11 @@ describe('AppShell (T6.4)', () => {
 
   it('keeps the push deep link landing on the single standalone push settings page', async () => {
     window.history.replaceState({}, '', '/panel/app/push');
+    // All three capabilities a browser needs before a subscription can exist:
+    // the activation button only renders when push could actually be enabled.
     vi.stubGlobal('PushManager', vi.fn());
+    vi.stubGlobal('Notification', { requestPermission: vi.fn() });
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { ready: Promise.resolve({ pushManager: { subscribe: vi.fn() } }) } });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
 
     render(<AppShell user={operador} />);

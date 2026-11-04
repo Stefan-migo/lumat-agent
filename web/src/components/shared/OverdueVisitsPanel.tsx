@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Check, UserRoundX } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, UserRoundX } from "lucide-react";
 import { Button } from "../primitives/Button";
 import { Dialog } from "../primitives/Dialog";
 import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "./AppointmentClosureDialog";
@@ -83,18 +83,28 @@ export function OverdueVisitsPanel({ appointments, onCloseAppointment, onBulkClo
   };
 
   return (
-    <section aria-labelledby="overdue-visits-heading" aria-label="Visitas vencidas">
-      <h2 id="overdue-visits-heading">Visitas vencidas</h2>
+    <section className="overdue-visits" aria-labelledby="overdue-visits-heading" aria-label="Visitas vencidas">
+      <header className="overdue-visits__header">
+        <div className="overdue-visits__heading">
+          <h2 id="overdue-visits-heading">Visitas vencidas</h2>
+          <span className="overdue-visits__count" aria-label={`${appointments.length} visitas vencidas`}>{appointments.length}</span>
+        </div>
+        <p className="overdue-visits__warning"><AlertTriangle aria-hidden="true" />Requieren seguimiento</p>
+      </header>
       {selectedIds.length > 0 ? (
-        <Button onClick={() => { setBulkOutcome(null); setBulkError(null); setBulkOpen(true); }}>Cerrar visitas seleccionadas</Button>
+        <div className="overdue-visits__bulk-action">
+          <Button onClick={() => { setBulkOutcome(null); setBulkError(null); setBulkOpen(true); }}>
+            Cerrar {selectedIds.length} {selectedIds.length === 1 ? "visita" : "visitas"} seleccionadas
+          </Button>
+        </div>
       ) : null}
-      <ul>
+      <ul className="overdue-visits__list">
         {appointments.map((appointment) => {
           const name = customerName(appointment);
           const dateLabel = `${agendaPeriodLabel(appointment.local_start.slice(0, 10), appointment.timezone)} · ${formatAgendaSlot(appointment.starts_at, appointment.timezone)}`;
           return (
-            <li key={appointment.id}>
-              <label>
+            <li className="overdue-visits__row" key={appointment.id}>
+              <label className="overdue-visits__customer">
                 <input
                   type="checkbox"
                   aria-label={`Seleccionar visita de ${name}`}
@@ -104,19 +114,21 @@ export function OverdueVisitsPanel({ appointments, onCloseAppointment, onBulkClo
                 />
                 <span>{name}</span>
               </label>
-              <span>{appointment.service}</span>
-              <time dateTime={appointment.local_start}>{dateLabel}</time>
-              <Button variant="secondary" onClick={() => { setCloseTarget(appointment); setSingleOutcome("completed"); setSingleError(null); }}>
-                Cerrar visita de {name}
-              </Button>
+              <span className="overdue-visits__service">{appointment.service}</span>
+              <time className="overdue-visits__date" dateTime={appointment.local_start}>{dateLabel}</time>
+              <div className="overdue-visits__row-action">
+                <Button variant="secondary" onClick={() => { setCloseTarget(appointment); setSingleOutcome("completed"); setSingleError(null); }}>
+                  Cerrar visita de {name}
+                </Button>
+              </div>
             </li>
           );
         })}
       </ul>
       {displayedResults.length > 0 ? (
-        <ul aria-label="Resultados del cierre">
+        <ul className="overdue-visits__results" aria-label="Resultados del cierre">
           {displayedResults.map((result) => (
-            <li key={result.id} role={result.ok ? "status" : "alert"}>
+            <li className={`overdue-visits__result${result.ok ? " overdue-visits__result--success" : " overdue-visits__result--error"}`} key={result.id} role={result.ok ? "status" : "alert"}>
               <span>{result.customerName}</span>
               <span>{result.ok ? "Cierre registrado" : result.error}</span>
             </li>
@@ -143,7 +155,7 @@ export function OverdueVisitsPanel({ appointments, onCloseAppointment, onBulkClo
         title={`Cerrar ${selectedAppointments.length} ${selectedAppointments.length === 1 ? "visita" : "visitas"}`}
         icon={CalendarDays}
       >
-        <ul>
+        <ul className="overdue-visits__customer-list">
           {selectedCustomers.map((name, index) => <li key={`${selectedAppointments[index]?.id ?? index}-${name}`}>{name}</li>)}
         </ul>
         <fieldset className="appointment-detail__outcomes" disabled={bulkBusy}>

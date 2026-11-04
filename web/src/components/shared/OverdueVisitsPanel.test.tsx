@@ -40,6 +40,12 @@ describe('OverdueVisitsPanel', () => {
     const onCloseAppointment = vi.fn();
     renderPanel([visit(1, 'Camila Soto'), visit(2, 'Diego Rojas')], onCloseAppointment);
 
+    const section = screen.getByRole('region', { name: 'Visitas vencidas' });
+    expect(section).toHaveClass('overdue-visits');
+    expect(within(section).getByRole('heading', { name: 'Visitas vencidas' })).toBeInTheDocument();
+    expect(within(section).getByText('2')).toHaveClass('overdue-visits__count');
+    expect(within(section).getByText('Requieren seguimiento')).toHaveClass('overdue-visits__warning');
+    expect(section.querySelector('.overdue-visits__row')).toBeInTheDocument();
     expect(screen.getByText('Camila Soto')).toBeInTheDocument();
     expect(screen.getByText('Servicio 1')).toBeInTheDocument();
     expect(screen.getByText('Diego Rojas')).toBeInTheDocument();
@@ -61,7 +67,7 @@ describe('OverdueVisitsPanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Camila Soto' }));
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Diego Rojas' }));
-    await user.click(screen.getByRole('button', { name: 'Cerrar visitas seleccionadas' }));
+    await user.click(screen.getByRole('button', { name: /cerrar\s+\d+\s+visitas?\s+seleccionadas/i }));
 
     const dialog = screen.getByRole('dialog', { name: 'Cerrar 2 visitas' });
     expect(dialog).toHaveTextContent('Camila Soto');
@@ -88,7 +94,7 @@ describe('OverdueVisitsPanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Camila Soto' }));
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Diego Rojas' }));
-    await user.click(screen.getByRole('button', { name: 'Cerrar visitas seleccionadas' }));
+    await user.click(screen.getByRole('button', { name: /cerrar\s+\d+\s+visitas?\s+seleccionadas/i }));
     const dialog = screen.getByRole('dialog', { name: 'Cerrar 2 visitas' });
     await user.click(within(dialog).getByRole('radio', { name: /Completada/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Confirmar cierre' }));
@@ -125,7 +131,7 @@ describe('OverdueVisitsPanel', () => {
 
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Camila Soto' }));
     await user.click(screen.getByRole('checkbox', { name: 'Seleccionar visita de Diego Rojas' }));
-    await user.click(screen.getByRole('button', { name: 'Cerrar visitas seleccionadas' }));
+    await user.click(screen.getByRole('button', { name: /cerrar\s+\d+\s+visitas?\s+seleccionadas/i }));
     expect(screen.getByRole('dialog', { name: 'Cerrar 2 visitas' })).toHaveTextContent('Diego Rojas');
 
     // The agenda refetches while the dialog is open and Diego's visit is gone: the

@@ -1,6 +1,6 @@
 import pytest
 
-from app.chat.nodes.closure_gate import CLOSING_TOKENS, is_farewell
+from app.chat.nodes.closure_gate import CLOSING_TOKENS, _is_refusal, is_farewell
 
 
 @pytest.mark.parametrize(
@@ -123,6 +123,32 @@ def test_a_closing_phrase_surrounded_by_courtesy_still_closes(phrase):
 def test_courtesy_alone_or_around_content_does_not_close(phrase):
     """The courtesy allowance only applies when a closing phrase matched."""
     assert not is_farewell(phrase)
+
+
+def test_temporal_qualifier_after_closing_phrase_is_allowed():
+    assert is_farewell("No, eso sería todo por ahora")
+    assert not is_farewell("eso era todo lo que necesitaba saber del precio")
+    assert not is_farewell("gracias")
+
+
+@pytest.mark.parametrize("phrase", ["No", "no gracias", "No, gracias!", "Noooooooooo", "nop"])
+def test_a_bare_refusal_counts_towards_closing(phrase):
+    assert _is_refusal(phrase)
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "No tengo agua caliente",
+        "No me llega el agua",
+        "Nada, el calefont era viejo",
+        "Si, perfecto",
+        "",
+    ],
+)
+def test_a_refusal_with_content_is_not_a_bare_refusal(phrase):
+    """Only a refusal with nothing left to answer counts towards the pair."""
+    assert not _is_refusal(phrase)
 
 
 @pytest.mark.parametrize(

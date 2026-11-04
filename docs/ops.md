@@ -530,6 +530,76 @@ nothing). The runner requires the deployed image to carry both
 in `v2026.10.2`, so on `v2026.10.1` and earlier this cron is a no-op for the
 time/calendar recipes.
 
+### 2.8.3 Panel web push (VAPID)
+
+Web push is optional and never replaces the email/WhatsApp fallback, but when the
+operator turns it on from the panel it has to work. Production ran from
+`v2026.10.2` (the release that added panel push) until `2026-11-04` with **zero
+VAPID keys**: `/opt/lumat/infra/.env` had none, `push_subscriptions` held 0 rows,
+and `GET /panel/api/push/config` answered `{"public_key": null}`. The panel read
+that as "this browser does not support push", so an operator on current Chrome
+was told the browser was the problem. It never was.
+
+Three values live in `infra/.env` (server only, never in the repo, §1.2):
+
+| Key | Value |
+|---|---|
+| `VAPID_PUBLIC_KEY` | base64url of the uncompressed EC point (87 chars, starts with `B`) — this is what the browser gets as `applicationServerKey` |
+| `VAPID_PRIVATE_KEY` | base64url of the **PKCS8 DER**, one single line (184 chars, no PEM header) |
+| `VAPID_SUBJECT` | a `mailto:` contact the push service can reach, e.g. `mailto:contacto@lumat.cl` |
+
+Generate them inside the running container, so the key pair never touches a
+laptop, and print only the public half:
+
+```bash
+docker exec lumat-api-1 python - <<'PY'
+import base64
+from cryptography.hazmat.primitives import serialization
+from py_vapid import Vapid01
+v = Vapid01(); v.generate_keys()
+der = v.private_key.private_bytes(
+    encoding=serialization.Encoding.DER,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+)
+pub = v.public_key.public_bytes(
+    encoding=serialization.Encoding.X962,
+    format=serialization.PublicFormat.UncompressedPoint,
+)
+print("VAPID_PRIVATE_KEY=" + base64.urlsafe_b64encode(der).decode().rstrip("="))
+print("VAPID_PUBLIC_KEY=" + base64.urlsafe_b64encode(pub).decode().rstrip("="))
+PY
+```
+
+The private key must be **written into `infra/.env` without passing through this
+command's stdout** (redirect it straight into the file, or paste it in a shell
+that does not echo), and `infra/.env` keeps mode `600`.
+
+The api service declares its environment explicitly in `infra/docker-compose.yml`,
+so the three keys are forwarded there by name. Adding them only to `.env` is not
+enough — that is the second half of this incident. After editing, recreate **only**
+api and verify:
+
+```bash
+cd /opt/lumat && GIT_SHA=$(git rev-parse HEAD) docker compose --project-name lumat \
+  -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d api
+docker exec lumat-api-1 sh -lc 'printenv | cut -d= -f1 | grep VAPID'   # three names, no values
+cd /opt/lumat && GIT_SHA=$(git rev-parse HEAD) docker compose --project-name lumat \
+  -f infra/docker-compose.yml -f infra/docker-compose.prod.yml exec -T api \
+  python -c "from app.config import get_settings as g; print(bool(g().vapid_public_key), bool(g().vapid_private_key))"
+```
+
+Expected: `True True`. Then the operator opens the panel, presses **Activar
+notificaciones**, accepts the browser prompt, and `push_subscriptions` gains one
+row per device. A row appearing is the end-to-end proof; the panel saying "Push
+activado" without a row means the save route failed, not the browser.
+
+Rotating the keys invalidates every existing subscription: the browsers keep a
+subscription bound to the old `applicationServerKey`, and `push_subscriptions`
+keeps rows that can no longer receive anything. Delete those rows (or ask each
+operator to reactivate) as part of a rotation; do not leave them to be counted as
+deliveries.
+
 ### 2.9 Release record
 
 One row per deploy; it is the evidence that the tagged release is in production.
