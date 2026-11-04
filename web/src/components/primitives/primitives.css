@@ -3188,6 +3188,48 @@
   .dashboard__card, .dashboard__row, .dashboard__card__hint svg { transition:none; }
 }
 
+/* Agenda page: overdue-visit recovery band. */
+.overdue-visits {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-lg);
+  background: var(--brand-bg-elevated);
+  color: var(--corp-text);
+}
+.overdue-visits__header { display: grid; gap: var(--space-3); }
+.overdue-visits__heading { display: flex; align-items: center; gap: var(--space-3); }
+.overdue-visits__heading h2 { margin: 0; font-size: var(--text-lg); font-weight: var(--weight-semibold); }
+.overdue-visits__count { display: inline-flex; min-width: var(--space-6); min-height: var(--space-6); align-items: center; justify-content: center; padding-inline: var(--space-2); border-radius: var(--radius-pill); background: var(--surface); color: var(--corp-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+.overdue-visits__warning { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--warning-border); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.overdue-visits__warning svg { width: var(--space-5); height: var(--space-5); flex: 0 0 auto; }
+.overdue-visits__bulk-action { display: flex; justify-content: flex-start; }
+.overdue-visits__bulk-action .btn { min-height: calc(var(--space-8) + var(--space-3)); }
+.overdue-visits__list,
+.overdue-visits__results { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.overdue-visits__customer-list { display: grid; gap: var(--space-1); padding-left: var(--space-5); color: var(--corp-text); }
+.overdue-visits__row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-md); background: var(--surface); }
+.overdue-visits__customer { display: flex; align-items: center; gap: var(--space-2); min-width: 0; min-height: calc(var(--space-8) + var(--space-3)); color: var(--corp-text); font-weight: var(--weight-semibold); overflow-wrap: anywhere; cursor: pointer; }
+.overdue-visits__customer input { width: var(--space-4); height: var(--space-4); flex: 0 0 auto; }
+.overdue-visits__service { min-width: 0; color: var(--corp-fg-muted); overflow-wrap: anywhere; }
+.overdue-visits__date { color: var(--corp-text); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.overdue-visits__row-action .btn { min-height: calc(var(--space-8) + var(--space-3)); }
+.overdue-visits__result { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); padding: var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); overflow-wrap: anywhere; }
+.overdue-visits__result--success { border-color: var(--success-border); background: var(--success-bg); }
+.overdue-visits__result--error { border-color: var(--danger-border); background: var(--danger-bg); }
+@media (max-width: 40rem) {
+  .overdue-visits { padding: var(--space-3); }
+  .overdue-visits__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
+  .overdue-visits__customer { grid-column: 1; }
+  .overdue-visits__service { grid-column: 2; }
+  .overdue-visits__date { grid-column: 1 / -1; }
+  .overdue-visits__row-action { grid-column: 1 / -1; }
+  .overdue-visits__row-action .btn { width: 100%; min-height: calc(var(--space-8) + var(--space-3)); }
+  .overdue-visits__result { align-items: flex-start; flex-direction: column; }
+}
+
 /* Agenda page: responsive day-detail card register. */
 .agenda-page__section {
   display: grid;

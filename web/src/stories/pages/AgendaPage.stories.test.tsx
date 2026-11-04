@@ -180,11 +180,10 @@ describe("AgendaPage Storybook state matrix", () => {
 
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
-    // Agenda actions remain independently available beside optional schedule editing.
+    // Agenda actions remain independently available; schedules are configured elsewhere.
     expect(screen.getByRole("button", { name: "Nueva visita" })).toBeInTheDocument();
-    // S5: the schedule editor lives in Settings now; Agenda only links to it.
     expect(screen.queryByRole("tab", { name: "Técnicos" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Configurar horarios de técnicos" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Configurar horarios de técnicos" })).not.toBeInTheDocument();
   });
 
 });

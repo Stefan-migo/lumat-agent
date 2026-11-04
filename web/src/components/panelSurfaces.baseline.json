@@ -44,18 +44,6 @@
     {
       "entry": "pages/Settings.tsx: <ul>",
       "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
-    },
-    {
-      "entry": "shared/OverdueVisitsPanel.tsx: <ul>",
-      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
-    },
-    {
-      "entry": "shared/OverdueVisitsPanel.tsx: <ul aria-label=\"Resultados del cierre\">",
-      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
-    },
-    {
-      "entry": "shared/OverdueVisitsPanel.tsx: <ul>",
-      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
     }
   ]
 }

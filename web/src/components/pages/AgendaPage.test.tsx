@@ -101,11 +101,11 @@ describe('AgendaPage', () => {
     expect(screen.queryByText('Llegué / estoy afuera')).not.toBeInTheDocument();
   });
 
-  it('links to technician schedules in Settings instead of rendering a technicians tab', () => {
+  it('keeps technician schedules out of Agenda', () => {
     renderAgenda(<AgendaPage data={[]} state="empty" />);
 
     expect(screen.queryByRole('tab', { name: 'Técnicos' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Configurar horarios de técnicos' })).toHaveAttribute('href', '/panel/app/settings#schedule');
+    expect(screen.queryByRole('link', { name: 'Configurar horarios de técnicos' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Días y horarios de atención')).not.toBeInTheDocument();
     expect(fetchTechnicians).not.toHaveBeenCalled();
     expect(getTechnicianSchedule).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe('AgendaPage', () => {
   it('keeps technician configuration out of the agenda register', () => {
     renderAgenda(<AgendaPage data={[]} state="empty" />);
     expect(screen.queryByRole('tab', { name: 'Técnicos' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Configurar horarios de técnicos' })).toHaveAttribute('href', '/panel/app/settings#schedule');
+    expect(screen.queryByRole('link', { name: 'Configurar horarios de técnicos' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Días y horarios de atención')).not.toBeInTheDocument();
   });
 
