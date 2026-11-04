@@ -18,12 +18,23 @@ from app.chat.slot_window import (
 )
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import Case, Conversation, Message, MessageDirection, MessageType, User
+from app.models import (
+    Appointment,
+    AppointmentStatus,
+    Case,
+    Conversation,
+    Message,
+    MessageDirection,
+    MessageType,
+    User,
+)
 from app.services import scheduling
 from app.services import technician_schedule
 from app.services.settings import (
+    MESSAGE_DEFAULTS,
     get_booking_lead_minutes,
     get_hours_timezone,
+    get_message,
     get_reply_texts,
     get_service_duration,
 )
@@ -321,6 +332,35 @@ def _technician_name(session, technician_id: int) -> str:
     return name or TEAM_FALLBACK
 
 
+# Conversación #54: una visita ya confirmada no se vuelve a ofertar sola.
+# `_booking_offer` se limpia al confirmar, así que sin este guard cualquier turno
+# que el clasificador mandara a `booking` abría una oferta desde cero -- el cliente
+# respondió "no tengo mas informacion" al pedido de evidencia y recibió horarios
+# otra vez, como si nada estuviera agendado. El pedido explícito de otra visita sí
+# abre una oferta: por eso la lista es de frases, no de "cualquier turno".
+_ANOTHER_VISIT_MARKERS = (
+    "otra visita", "nueva visita", "otra cita", "agendar otra", "agendar de nuevo",
+    "segunda visita", "reagendar",
+)
+
+
+def _asks_another_visit(text: str) -> bool:
+    normalized = _fold(text)
+    return any(marker in normalized for marker in _ANOTHER_VISIT_MARKERS)
+
+
+def _booked_appointment(session, state: ConversationState) -> Appointment | None:
+    """The visit this conversation already holds, if any."""
+    return session.scalar(
+        select(Appointment)
+        .join(Case, Case.id == Appointment.case_id)
+        .where(Case.conversation_id == state.conversation_id)
+        .where(Appointment.status == AppointmentStatus.BOOKED)
+        .order_by(Appointment.starts_at.asc())
+        .limit(1)
+    )
+
+
 def booking(state: ConversationState) -> dict:
     """Offer frozen slots or commit exactly one customer-selected slot."""
     message = state.window[-1] if state.window else {}
@@ -331,6 +371,17 @@ def booking(state: ConversationState) -> dict:
         conversation = session.get(Conversation, state.conversation_id)
         offer = dict((conversation.captured_data or {}).get("_booking_offer") or {}) if conversation else {}
         if not offer:
+            if _booked_appointment(session, state) is not None and not _asks_another_visit(text):
+                # No offer to reuse and nothing to book: invite the customer to
+                # continue instead of re-opening the agenda. A refusal must not be
+                # thanked, so the decline text is the one without "Con gusto".
+                return {
+                    "replies": [
+                        get_message(
+                            session, "smalltalk_decline", MESSAGE_DEFAULTS["smalltalk_decline"]
+                        )
+                    ]
+                }
             return _new_offer(session, state, now, texts)
         try:
             created_at = datetime.fromisoformat(offer["created_at"])

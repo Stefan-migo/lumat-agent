@@ -752,3 +752,87 @@ def test_a_second_unservable_preference_hands_off_instead_of_looping(mock_openai
     assert "asesor" in third[0].lower(), third[0]
     with SessionLocal() as session:
         assert session.get(Conversation, conv_id).state.value == "human"
+
+
+def _booked_visit(case_id, customer_id, technician_id, day) -> int:
+    """A confirmed visit on the case, the state the owner hit in conversación #54."""
+    from datetime import datetime as _dt, time as _time, timezone as _tz
+
+    with SessionLocal() as session:
+        start = _dt.combine(day, _time(14, 0), tzinfo=_tz.utc)
+        appointment = Appointment(
+            service="Visita técnica", customer_id=customer_id, case_id=case_id,
+            technician_id=technician_id, local_start=start.replace(tzinfo=None),
+            timezone="UTC", starts_at=start, ends_at=start + timedelta(hours=1),
+            duration_minutes=60,
+        )
+        session.add(appointment)
+        session.commit()
+        return appointment.id
+
+
+def _force_intent(monkeypatch, intent: str) -> None:
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent, "_llm_classify",
+        lambda _text, **_kwargs: {
+            "intent": intent, "service": None, "priority": None, "status": None,
+            "injection": False, "fields": {}, "template_id": None,
+        },
+    )
+
+
+def test_a_confirmed_visit_is_not_offered_again(mock_openai_chat, monkeypatch):
+    """Conversación #54: after the booking, the evidence decline re-offered slots.
+
+    `booking()` opened a fresh offer whenever no `_booking_offer` was stored, and a
+    confirmation clears it -- so any turn the classifier sent here offered slots
+    again, as if nothing had been booked. The customer asked "¿ya agendaste mi
+    visita por que me ofreces nuevamente horarios?" and the thread escalated.
+    """
+    conv_id, customer_id, case_id, tech_id, _ = _seed_conversation(captured={
+        "name": "Florencio", "comuna": "Las Condes", "address": "Calle 1",
+        "email": "florencio@example.cl", "consent": "si",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": "hoy o mañana", "_evidence_asked": True,
+    })
+    _booked_visit(case_id, customer_id, tech_id, _local_today() + timedelta(days=1))
+    _force_intent(monkeypatch, "solicitar_visita")
+
+    replies = _invoke(
+        conv_id,
+        _add_message(
+            conv_id, "no tengo mas informacion. solo que no esta funcionando",
+            "wamid.no-reoffer",
+        ),
+    )
+
+    assert len(replies) == 1
+    assert "Tengo estos horarios disponibles" not in replies[0]
+    assert "¿Te puedo ayudar en algo más?" in replies[0]
+    with SessionLocal() as session:
+        captured = session.get(Conversation, conv_id).captured_data or {}
+    assert "_booking_offer" not in captured
+
+
+def test_an_explicit_request_for_another_visit_still_offers(mock_openai_chat, monkeypatch):
+    """The guard is narrow: asking for another visit on purpose still books."""
+    conv_id, customer_id, case_id, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Las Condes", "address": "Calle 1",
+        "email": "ana@example.cl",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": "flexible", "consent": "si",
+    })
+    wanted = _local_today() + timedelta(days=2)
+    _booked_visit(case_id, customer_id, tech_id, _local_today() + timedelta(days=1))
+    with SessionLocal() as session:
+        _day_block(session, tech_id, wanted, hour=10, hours=2)
+        session.commit()
+    _force_intent(monkeypatch, "solicitar_visita")
+
+    replies = _invoke(
+        conv_id, _add_message(conv_id, "quiero agendar otra visita", "wamid.another-visit")
+    )
+
+    assert any("Tengo estos horarios disponibles" in reply for reply in replies)
