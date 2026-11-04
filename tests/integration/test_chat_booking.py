@@ -580,6 +580,62 @@ def test_a_franja_that_leaves_nothing_widens_instead_of_dead_ending(mock_openai_
     assert "1." in replies[0]
 
 
+def test_hour_request_includes_exact_floor_and_excludes_earlier_slots(mock_openai_chat):
+    wanted = _local_today() + timedelta(days=5)
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        _day_block(session, tech_id, wanted, hour=16, hours=2)
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.hour.ask"))
+    replies = _invoke(
+        conv_id, _add_message(conv_id, "después de las 17 hrs", "wamid.hour.request")
+    )
+
+    assert len(replies) == 1
+    assert "17:00" in replies[0]
+    assert "16:00" not in replies[0]
+    assert "16:30" not in replies[0]
+    assert "asesor" not in replies[0].lower()
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "bot"
+
+
+def test_hour_floor_with_no_slot_that_day_explains_next_day_offer(mock_openai_chat):
+    wanted = _local_today() + timedelta(days=5)
+    next_day = wanted + timedelta(days=1)
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        _day_block(session, tech_id, wanted, hour=16, hours=1)
+        _day_block(session, tech_id, next_day, hour=9, hours=2)
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.hour.fallback.ask"))
+    replies = _invoke(
+        conv_id,
+        _add_message(conv_id, f"para el {_weekday_name(wanted)} después de las 17", "wamid.hour.fallback"),
+    )
+
+    assert len(replies) == 1
+    # The notice must name the hour asked, so the check scopes to the OFFERED
+    # slots: a 17:00 offer would read "a las 17:00" inside the numbered list.
+    offered = replies[0].split("Te propongo")[1]
+    assert "17:00" not in offered
+    assert "no me quedan horarios" in replies[0].lower()
+    assert "a partir de las 17:00" in replies[0].lower()
+    assert wanted.strftime("%d/%m/%Y") not in replies[0]
+    assert next_day.strftime("%d/%m/%Y") in replies[0]
+    assert "asesor" not in replies[0].lower()
+
+
 def test_no_me_sirve_with_an_open_offer_pages_instead_of_handing_off(mock_openai_chat):
     """S3: the measured dead end, with the words the customer actually typed.
 

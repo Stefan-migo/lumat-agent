@@ -2,7 +2,9 @@
 
 from datetime import date, time
 
-from app.chat.slot_window import SlotWindow, resolve_window
+import pytest
+
+from app.chat.slot_window import SlotWindow, resolve_window, window_label
 
 # 2026-10-27 is a Tuesday: every expectation below is anchored to the day the
 # production conversation and the three harness conversations actually happened.
@@ -166,6 +168,24 @@ def test_abbreviated_month_keeps_the_requested_day():
     assert window.franja == (time(13, 0), time(18, 0))
 
 
+@pytest.mark.parametrize("text", [
+    "después de las 17", "después de las 17 hrs", "a las 17",
+    "cerca de las 17", "desde las 17", "17:00", "17 hrs",
+])
+def test_requested_hour_is_parsed_as_an_inclusive_floor(text):
+    window = _resolve(text)
+
+    assert window is not None
+    assert window.desde == time(17, 0)
+
+
+def test_mas_tarde_uses_the_afternoon_floor():
+    window = _resolve("podría ser más tarde")
+
+    assert window is not None
+    assert window.desde == time(13, 0)
+
+
 def test_every_shipped_month_abbreviation_resolves():
     expected = {
         "ene": date(2027, 1, 5), "feb": date(2027, 2, 5), "mar": date(2027, 3, 5),
@@ -179,3 +199,27 @@ def test_every_shipped_month_abbreviation_resolves():
     for abbreviation, day in expected.items():
         window = _resolve(f"el 5 de {abbreviation}", today=date(2026, 10, 29))
         assert window is not None and window.day == day, abbreviation
+
+
+def test_an_hour_inside_a_stated_franja_is_twelve_hour_clock():
+    """S3: "a las 3 de la tarde" is 15:00, never 03:00.
+
+    The hour parser reads the digits, so a customer who already said which half of
+    the day wins: without this, the S4 notice told them "a partir de las 03:00".
+    """
+    afternoon = _resolve("a las 3 de la tarde")
+    morning = _resolve("a las 3 de la mañana")
+
+    assert afternoon is not None and afternoon.desde == time(15, 0)
+    assert morning is not None and morning.desde == time(3, 0)
+
+
+def test_the_notice_label_reads_after_para():
+    """S4: `booking_window_unavailable` renders "Para {{momento}} no me quedan…"."""
+    day = date(2026, 11, 6)
+
+    with_day = window_label(SlotWindow(day=day, desde=time(17, 0)))
+    without_day = window_label(SlotWindow(desde=time(17, 0)))
+
+    assert with_day == "el viernes 06/11 a partir de las 17:00"
+    assert without_day == "las 17:00 en adelante"

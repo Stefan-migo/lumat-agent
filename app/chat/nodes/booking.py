@@ -44,6 +44,7 @@ DEFAULT_DURATION_MINUTES = 60
 _MORE_SLOTS_MARKERS = (
     "mas horario", "otros horario", "otro horario", "otra hora", "otras horas",
     "mas opcion", "otras opciones", "siguientes horarios",
+    "mas tarde", "mas temprano", "cerca de las", "despues de las",
     "otro dia", "otros dias", "otra fecha", "otras fechas",
     "no puedo en esos", "no puedo en esas", "no me sirve", "no me sirven",
     "ninguno me sirve", "ninguna me sirve",
@@ -125,12 +126,15 @@ def _search_slots(
     days = 7
     if window is not None and window.day is not None:
         days = max(days, (window.day - today).days + 1)
-    return scheduling.open_slots_for_assignment(
+    assignments = scheduling.open_slots_for_assignment(
         session, now=now, days=days, duration_minutes=duration, limit=limit,
         # S1: a visit offered for "right now" cannot be staffed.
         lead_minutes=get_booking_lead_minutes(session),
         window=window,
     )
+    if window is not None and window.desde is not None:
+        assignments = [slot for slot in assignments if slot[2] >= window.desde]
+    return assignments
 
 
 def slots_for_window(
@@ -164,7 +168,8 @@ def slots_for_window(
             if assignments:
                 return assignments, True
         return [], False
-    widened = _search_slots(session, now, today, duration_minutes, None, limit)
+    widened_window = SlotWindow(desde=window.desde) if window.desde is not None else None
+    widened = _search_slots(session, now, today, duration_minutes, widened_window, limit)
     return widened, bool(widened)
 
 
@@ -327,6 +332,13 @@ def booking(state: ConversationState) -> dict:
             # spending the single clarification the handoff sits behind.
             requested = resolve_window(text, today=local_today(session, now))
             if requested is not None:
+                captured_window = _requested_window(session, state, now)
+                if requested.day is None and captured_window is not None:
+                    requested = SlotWindow(
+                        day=captured_window.day,
+                        franja=requested.franja or captured_window.franja,
+                        desde=requested.desde,
+                    )
                 rebuilt = _new_offer(
                     session, state, now, texts,
                     window=requested, attempts=attempts + 1, unchanged_against=offer,
