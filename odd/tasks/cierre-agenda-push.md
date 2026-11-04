@@ -124,11 +124,11 @@ declara markup propio sin ninguna clase.
 
 | ID | Spec | Qué | Verificación |
 |---|---|---|---|
-| T1 | S1, S2 | `closure_gate`: calificadores temporales en `_COURTESY_TOKENS` y cierre por dos negativas consecutivas leídas de `state.window` (sin persistir contadores) | unit de `is_farewell` + integración del par de negativas y del calificador; `quick` |
-| T2 | S3 | Mensajes honestos y separados para (a) navegador sin soporte, (b) servidor sin push configurado, (c) permiso denegado | tests de `PushSettings` para los tres casos; `npm run build` + `npm test` |
-| T3 | S4 | **Parent-owned** · claves VAPID en prod, `.env` con backup, `api` recreado, endpoint devolviendo clave pública, procedimiento en `docs/ops.md` | `curl` del endpoint antes/después + `push_subscriptions` + registro en `docs/ops.md` §2.9 |
-| T4 | S5, S6 | Panel de vencidas con el vocabulario del design system y sus estados; link de horarios retirado | tests de `OverdueVisitsPanel`/`AgendaPage` + `npm run build` + `npm test` |
-| T5 | S7 | `AGENTS.md`, skill `design-system`, sección de Agenda en `DESIGN_SYSTEM.md` y test estructural de markup sin clases | el test estructural falla con el `OverdueVisitsPanel` del lote anterior y pasa con el nuevo |
+| T1 | S1, S2 | `closure_gate`: calificadores temporales en `_COURTESY_TOKENS` y cierre por dos negativas consecutivas leídas de `state.window` (sin persistir contadores) | **Delivered** · `8aff0a65`: RED sin la implementación, GREEN con ella (integración 20, `focused` y `quick` en 0) |
+| T2 | S3 | Mensajes honestos y separados para (a) navegador sin soporte, (b) servidor sin push configurado, (c) permiso denegado | **Delivered** · `152c21b8`: 6 casos de `PushSettings`, `npm run build` exit 0 |
+| T3 | S4 | **Parent-owned** · claves VAPID en prod, `.env` con backup, `api` recreado, endpoint devolviendo clave pública, procedimiento en `docs/ops.md` | **Keys in place, endpoint pending the deploy** · `9c168a5a`: par VAPID en `/opt/lumat/infra/.env` (backup `infra/.env.bak-20261104T162254Z`, 600, par verificado firmando un header); el `api` no puede verlas hasta que el release reenvíe las variables |
+| T4 | S5, S6 | Panel de vencidas con el vocabulario del design system y sus estados; link de horarios retirado | **Delivered** · `c477edf6`: 63 casos enfocados + 12 de stories, `npm run build` exit 0 |
+| T5 | S7 | `AGENTS.md`, skill `design-system`, sección de Agenda en `DESIGN_SYSTEM.md` y test estructural de markup sin clases | **Delivered** · `6eb9a141`: el chequeo falla con 14 contenedores sin clase y pasa con el baseline; las 3 entradas del panel de vencidas se retiraron en `c477edf6` |
 
 Los commits van por unidad (T1, T2, T3, T4, T5), con sus tests y docs al lado del comportamiento.
 
@@ -201,3 +201,32 @@ Lo que corregí del lote del worker, y por qué:
 Entorno del worktree (costó dos intentos): no hay `.venv` local y `db/migrate.sh` sólo respeta `PYTHON` cuando
 falta el `.venv`; se resolvió con un symlink `.venv` → el del worktree principal y `web/node_modules` → el del
 principal. La base de test del worktree escucha en 5701.
+
+### L5 — corte de entrega: dos PRs, no uno
+
+La rama llegó a **650 líneas autoradas en 3 commits** (doc ODD 203, T1 151, T5 296) y el trabajo que falta (T2,
+T3, T4) ronda otras 550. Un solo PR sería una revisión de ~1200 líneas, que es exactamente lo que la disciplina
+de work units prohíbe. Corte declarado:
+
+- **PR 1 (listo para revisar)**: `docs(odd)` + T1 (cierre de conversación) + T5 (design system: skill, AGENTS,
+  contrato de Agenda, chequeo estructural y baseline). Historia: el bot cierra y el próximo cambio de panel no
+  puede volver a inventar diseño.
+- **PR 2 (después del 1)**: T2 (mensajes de push) + T3 (VAPID en producción y `docs/ops.md` §2.8.3) + T4 (panel
+  de visitas vencidas + retiro del link de horarios).
+
+Los PRs y el deploy los decide el owner; la rama no se pushea sin ese pedido.
+
+### L6 — T4 entregado y corregido; cierre en curso
+
+El band de vencidas quedó con clases BEM y CSS por tokens (`overdue-visits__*`), sin un solo hex crudo, y el link
+de horarios se retiró con sus tres aserciones invertidas a ausencia deliberada. Dos correcciones propias sobre
+lo que devolvió el worker:
+
+1. **`aria-label` que no contenía el texto visible.** El botón masivo decía «Cerrar 3 visitas seleccionadas» y
+exponía «Cerrar visitas seleccionadas»: viola label-in-name (WCAG 2.5.3). Se quitó el `aria-label`; los tres
+tests consultan ahora por el texto visible con una expresión regular.
+2. **Dos modificadores sin reglas.** `overdue-visits__result--success/--error` se aplicaban sin CSS; se les dio
+borde y fondo con `--success-*` y `--danger-*`, sin que el color sea el único canal (el texto ya lo dice).
+
+Verificado: `npx vitest run` de los 3 archivos enfocados → 63 casos; stories de Agenda → 12; `npm run build`
+exit 0; el chequeo estructural queda verde con el baseline en 11 entradas.
