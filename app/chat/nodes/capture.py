@@ -391,8 +391,23 @@ def _phrase_reply(session, texts: dict[str, str], key: str, captured: dict, *, p
     """
     return phrase(
         session, key, render_reply(texts, key),
-        facts=phrase_facts(captured, pending), pending=pending,
+        facts=_offered_facts(captured, pending), pending=pending,
     )
+
+
+def _offered_facts(captured: dict, pending) -> dict:
+    """The facts the rewrite may name, marking them as used (S1, agenda-horarios).
+
+    `phrasing.facts` stays pure: it decides WHICH one fact is still fresh. The
+    node remembers it here, on the captured payload it is already rewriting, so
+    the next question cannot name it again.
+    """
+    offered = phrase_facts(captured, pending)
+    named = [key for key in offered if key != "pending"]
+    if named:
+        used = [str(key) for key in (captured.get("_facts_used") or ())]
+        captured["_facts_used"] = used + [key for key in named if key not in used]
+    return offered
 
 
 def _phrase_question(session, captured: dict, fields: list[str], questions: dict[str, str]) -> str:
@@ -400,7 +415,7 @@ def _phrase_question(session, captured: dict, fields: list[str], questions: dict
     rendered = _ask_text(fields, questions)
     return phrase(
         session, "capture_question", rendered,
-        facts=phrase_facts(captured, fields), pending=fields,
+        facts=_offered_facts(captured, fields), pending=fields,
     )
 
 

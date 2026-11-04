@@ -28,18 +28,61 @@ _FORWARD_GUARDED = {
 
 
 def facts(captured: dict[str, Any] | None = None, pending: Any = ()) -> dict[str, Any]:
-    """Return only safe known capture facts plus the fields currently asked."""
+    """Return the ONE fact just captured, plus the fields currently asked.
+
+    S1 (agenda-horarios): this used to hand the rewrite every captured value on
+    every turn, so the model faithfully re-sent the whole recap -- "Ramiro, para
+    coordinar el calefont en Huechuraba el viernes despues del mediodia, cual es
+    tu correo?" -- question after question. The customer had already said all of
+    it; the sentence read as a tic.
+
+    Now the rewrite gets the single fact the last answer produced (the most
+    recently asked field that has a value), and only once: the capture node
+    records what it offered in `_facts_used`, so a fact already named is never
+    named again. Everything else stays as known history rather than being
+    restated. A fact is never invented and `unknown` is still not a fact.
+    """
     captured = captured or {}
-    aliases = {
-        "nombre": captured.get("name"), "comuna": captured.get("comuna"),
-        "equipo": captured.get("equipment") or captured.get("equipment_type"),
-        "problema": captured.get("failure"), "disponibilidad": captured.get("availability"),
-    }
-    safe = {key: value for key, value in aliases.items()
-            if isinstance(value, str) and value and value != "unknown"}
+    used = {str(key) for key in (captured.get("_facts_used") or ())}
+    available: dict[str, str] = {}
+    for alias, sources in _FACT_FIELDS.items():
+        value = next((captured.get(source) for source in sources), None)
+        if isinstance(value, str) and value and value != "unknown":
+            available[alias] = value
+    fresh = [alias for alias in available if alias not in used]
+    safe: dict[str, Any] = {}
+    if fresh:
+        latest = _latest_asked_alias(captured)
+        safe[latest if latest in fresh else fresh[0]] = available[
+            latest if latest in fresh else fresh[0]
+        ]
     fields = pending if isinstance(pending, (list, tuple, set, frozenset)) else [pending]
     safe["pending"] = [str(field) for field in fields if field]
     return safe
+
+
+# S1: the aliases the rewrite may name as context, and the capture fields they
+# come from. `equipment_type` is the extractor slot for the same fact as
+# `equipment`, so both sources map to one alias.
+_FACT_FIELDS: dict[str, tuple[str, ...]] = {
+    "problema": ("failure",),
+    "equipo": ("equipment", "equipment_type"),
+    "comuna": ("comuna",),
+    "disponibilidad": ("availability",),
+    "nombre": ("name",),
+}
+
+
+def _latest_asked_alias(captured: dict[str, Any]) -> str | None:
+    """The alias of the most recently asked capture field, when it has one."""
+    asked = captured.get("_asked")
+    if not isinstance(asked, dict):
+        return None
+    for field in reversed(list(asked)):
+        for alias, sources in _FACT_FIELDS.items():
+            if str(field) in sources:
+                return alias
+    return None
 
 
 def _fold(text: str) -> str:
