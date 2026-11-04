@@ -6,6 +6,41 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.2] - 2026-11-04
+
+El bot cierra la conversación cuando el cliente insiste en irse; el panel deja de culpar al navegador por un
+push que al servidor le faltaba configurar; la band de visitas vencidas entra al sistema de diseño; y el
+próximo cambio de panel ya no puede inventar diseño sin que un chequeo lo frene.
+
+### Corregido
+
+- Cierre: una despedida con calificador temporal ("no, eso sería todo **por ahora**") vuelve a cerrar, y dos
+  negativas seguidas separadas por una pregunta del bot cierran la conversación reusando la causa `farewell`.
+  Antes, el único cierre era ``chao``: la conversación #25 de producción pasó cuatro negativas contestadas con
+  "¿Te puedo ayudar en algo más?". Una negativa con contenido ("no tengo agua caliente") no cuenta, y una
+  negativa a mitad de captura tampoco.
+- Push: `PushSettings` distingue tres causas —el navegador no tiene las APIs, el servidor no tiene clave
+  VAPID, el operador denegó el permiso— y sólo la primera culpa al navegador. Producción llevaba semanas
+  diciendo "este navegador no admite push" con cero variables `VAPID_*` en el `.env`.
+- Agenda: la band de visitas vencidas deja de ser markup sin clases y sigue el contrato de
+  `web/DESIGN_SYSTEM.md`; el link "Configurar horarios de técnicos" sale de la página, porque los horarios se
+  configuran en Configuración.
+
+### Agregado
+
+- `infra/docker-compose.yml` reenvía `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` al servicio
+  `api`. Sin ese reenvío las claves del `.env` nunca llegan al contenedor: es la segunda mitad del defecto de
+  push. `docs/ops.md` §2.8.3 documenta generación, forma de la clave privada, verificación y rotación.
+- `web/src/components/panelSurfaces.test.ts`: falla cuando un contenedor de lista de `pages/` o `shared/` no
+  declara `className`, con la deuda previa registrada en un baseline que falla en las dos direcciones.
+
+### Cambiado
+
+- La skill `design-system` se reescribe contra este repositorio (`web/DESIGN_SYSTEM.md`, `tokens.css`,
+  primitives, Storybook, BEM) en lugar de un `DESIGN.md` inexistente y Tailwind, que este panel no usa.
+  `AGENTS.md` nombra `web/DESIGN_SYSTEM.md` como lectura obligatoria para trabajo de panel, y
+  `DESIGN_SYSTEM.md` documenta el contrato de visitas vencidas de Agenda.
+
 ## [2026.11.1] - 2026-11-04
 
 El chatbot deja de tropezar en los cuatro puntos donde se perdía una conversación: la cobertura ya
