@@ -134,3 +134,38 @@ def test_courtesy_alone_or_around_content_does_not_close(phrase):
 )
 def test_long_closing_with_courtesy_is_still_a_farewell(phrase):
     assert is_farewell(phrase)
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "no, eso seria todo gracias",
+        "no eso seria todo gracias",
+        "no, nada mas gracias",
+        "no, gracias, eso es todo",
+    ],
+)
+def test_a_refusal_does_not_cancel_an_explicit_closing(phrase):
+    """Measured (conversación #53): the loop the owner reported.
+
+    `_COURTESY_TOKENS` accepted "gracias", "dale", "listo"… but not "no", so one
+    refusal in front of the closing phrase cancelled it. The turn fell to
+    `smalltalk` and the bot answered "Con gusto. ¿Te puedo ayudar en algo más?"
+    three times to a customer who was leaving.
+    """
+    assert is_farewell(phrase)
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "no",
+        "no gracias",
+        "no, nada",
+        "no, el calefont era viejo",
+        "no, tengo mas informacion para pasar",
+    ],
+)
+def test_a_refusal_alone_or_with_content_is_not_a_farewell(phrase):
+    """The explicit closing phrase is still required: a bare "no" never ends the chat."""
+    assert not is_farewell(phrase)

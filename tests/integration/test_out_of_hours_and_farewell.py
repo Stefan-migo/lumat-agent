@@ -206,3 +206,24 @@ def test_closure_message_overrides_are_used(mock_openai_chat):
     assert _turn(_start_conversation(), "chau", "wamid.override.1") == [farewell]
     _set_closed_hours()
     assert _turn(_start_conversation(), "hola", "wamid.override.2") == [notice]
+
+
+@pytest.mark.parametrize("text", ["chau", "no, eso seria todo gracias"])
+def test_a_farewell_closes_the_conversation(text, mock_openai_chat):
+    """Owner decision (#53): a clear goodbye ends the conversation, not just the turn.
+
+    The reply was already the farewell, but the conversation stayed `bot`, so the
+    owner saw a thread that never finished. A closed conversation opens a new one
+    on the next inbound message, which is what makes the closure real.
+    """
+    from app.chat.state import ConvState
+    from app.models import Conversation
+
+    conversation_id = _start_conversation()
+    replies = _turn(conversation_id, text, f"wamid.close.{text[:3]}")
+
+    assert replies == [FAREWELL]
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        assert conversation.state == ConvState.CLOSED
+        assert conversation.closed_at is not None
