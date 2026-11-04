@@ -11,6 +11,7 @@ vi.mock("../../api", () => ({
 describe("PushSettings", () => {
   it("explains fallback when push is unsupported", () => {
     render(<PushSettings supported={false} />);
+    expect(screen.getByText(/este navegador no admite notificaciones push/i)).toBeInTheDocument();
     expect(screen.getByText(/notificaciones por correo o whatsapp/i)).toBeInTheDocument();
   });
 
@@ -90,15 +91,20 @@ describe("PushSettings", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows fallback when push is unconfigured", async () => {
+  it("blames the server, not the browser, when no VAPID key is configured", async () => {
     vi.mocked(fetchPushConfig).mockResolvedValue({ public_key: null });
+    const requestPermission = vi.fn();
+    vi.stubGlobal("Notification", { requestPermission });
     const subscribe = vi.fn();
     Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { ready: Promise.resolve({ pushManager: { subscribe } }) } });
     vi.stubGlobal("PushManager", vi.fn());
     render(<PushSettings supported />);
 
     fireEvent.click(screen.getByRole("button", { name: /activar notificaciones/i }));
-    await waitFor(() => expect(screen.getByText(/no admite push/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/no están configuradas en el servidor/i)).toBeInTheDocument());
+    expect(screen.queryByText(/este navegador no admite/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /activar notificaciones/i })).not.toBeInTheDocument();
+    expect(requestPermission).not.toHaveBeenCalled();
     expect(subscribe).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
