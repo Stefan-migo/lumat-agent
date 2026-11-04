@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.chat.state import ConversationState
 from app.chat.nodes.booking import _resolve, local_today, slots_for_window
-from app.chat.slot_window import resolve_window, window_label
+from app.chat.slot_window import resolve_window, slot_label, when_label, window_label
 from app.chat.nodes.replies import render_reply
 from app.db import session_scope
 from app.models import Appointment, AppointmentStatus, Conversation
@@ -61,7 +61,7 @@ def _appointment_query(customer_id: int, now: datetime):
 
 
 def _appointment_label(appointment: Appointment) -> str:
-    return f"{appointment.local_start.strftime('%d/%m/%Y a las %H:%M')} — {appointment.service}"
+    return f"{when_label(appointment.local_start)} — {appointment.service}"
 
 
 def _start_offer(
@@ -129,7 +129,7 @@ def _new_reschedule_offer(
     }
     _persist_offer(session, state, offer)
     opciones = "\n".join(
-        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
+        f"{index}. {slot_label(date.fromisoformat(slot['date']), time.fromisoformat(slot['time']))}"
         for index, slot in enumerate(slots, 1)
     )
     if widened:
@@ -245,7 +245,7 @@ def manage(state: ConversationState) -> dict:
                     render_reply(
                         texts,
                         "manage_rescheduled",
-                        fecha=appointment.local_start.strftime("%d/%m/%Y a las %H:%M"),
+                        fecha=when_label(appointment.local_start),
                     )
                 ],
             }

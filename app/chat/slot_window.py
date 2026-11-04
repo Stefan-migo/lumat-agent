@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 # The franjas the business actually sells. Weekdays open 09:00-18:00, so a
 # franja is a filter over that window, not a second schedule.
@@ -109,6 +109,13 @@ _AFTERNOON = re.compile(
     r"|\bdespues\s+de\s+las\s+12(?:\s+del\s+(?:medio\s*dia|mediodia))?\b"
 )
 _TOMORROW = re.compile(r"\bmanana(?:\s+mismo)?\b")
+_HOUR = re.compile(
+    r"\b(?:(?:despues\s+de\s+las?|cerca\s+de\s+las?|desde\s+las?|a\s+las?)\s*"
+    r"(\d{1,2})(?::(\d{2}))?|"
+    r"(\d{1,2}):(\d{2})|"
+    r"(\d{1,2})\s*(?:hrs?|horas?))\b"
+)
+_LATER = re.compile(r"\bmas\s+tarde\b")
 
 _DAY_MONTH_YEAR = re.compile(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b")
 _DAY_OF_MONTH = re.compile(r"\b(\d{1,2})\s+de\s+([a-z]+)\b")
@@ -120,10 +127,11 @@ _WEEKDAY_AND_DAY = re.compile(r"\b([a-z]+)\s+(\d{1,2})\b")
 
 @dataclass(frozen=True)
 class SlotWindow:
-    """A requested local ``day`` and/or ``franja``; ``None`` means unconstrained."""
+    """Requested local day, franja and/or inclusive hour floor."""
 
     day: date | None = None
     franja: tuple[time, time] | None = None
+    desde: time | None = None
 
 
 def _fold(value: str) -> str:
@@ -169,9 +177,34 @@ def franja_label(franja: tuple[time, time]) -> str:
     return "la mañana" if franja == MORNING else "la tarde"
 
 
+def slot_label(day: date, clock: time) -> str:
+    """The one rendering of a slot the customer reads: "Viernes 06/11 a las 13:00".
+
+    S5 (agenda-horarios): the owner asked for the weekday by name; a bare
+    "06/11/2026" makes the customer count days in their head. One formatter, so
+    the offer, the reschedule list, the confirmation and the panel prompt cannot
+    drift apart.
+    """
+    weekday = _WEEKDAY_LABELS[day.isoweekday() - 1]
+    return f"{weekday.capitalize()} {day:%d/%m} a las {clock:%H:%M}"
+
+
+def when_label(moment: datetime) -> str:
+    """`slot_label` for a stored appointment: a visit the customer already holds."""
+    return slot_label(moment.date(), moment.time().replace(second=0, microsecond=0))
+
+
 def window_label(window: SlotWindow) -> str:
     """Name the window in the customer's own words for the S2 notice."""
 
+    if window.desde is not None:
+        # The notice renders "Para {{momento}} no me quedan horarios", so the label
+        # has to read after "Para": "el viernes 06/11 a partir de las 17:00" and
+        # "las 17:00 en adelante".
+        if window.day is None:
+            return f"las {window.desde:%H:%M} en adelante"
+        label = f"{_WEEKDAY_LABELS[window.day.isoweekday() - 1]} {window.day:%d/%m}"
+        return f"el {label} a partir de las {window.desde:%H:%M}"
     if window.day is None:
         return franja_label(window.franja or AFTERNOON)
     label = f"{_WEEKDAY_LABELS[window.day.isoweekday() - 1]} {window.day:%d/%m}"
@@ -194,6 +227,33 @@ def resolve_window(text: str, *, today: date) -> SlotWindow | None:
     elif _MORNING.search(normalized):
         franja = MORNING
         normalized = _MORNING.sub(" ", normalized)
+
+    hour_match = _HOUR.search(normalized)
+    desde: time | None = None
+    if hour_match:
+        groups = hour_match.groups()
+        if groups[0] is not None:
+            hour, minute = int(groups[0]), int(groups[1] or 0)
+        elif groups[2] is not None:
+            hour, minute = int(groups[2]), int(groups[3])
+        else:
+            hour, minute = int(groups[4]), 0
+        ambiguous_evening_six = (
+            hour == 6
+            and normalized[hour_match.start():].startswith("despues de las 6")
+            and not re.match(r"despues de las 6\s*(?:hrs?|horas?)\b", normalized[hour_match.start():])
+        )
+        if franja == AFTERNOON and 0 < hour < 12:
+            # "a las 3 de la tarde" is 15:00: when the customer already said which
+            # half of the day, the digits are a twelve-hour clock. Without this the
+            # notice told them "a partir de las 03:00".
+            hour += 12
+        if 0 <= hour <= 23 and 0 <= minute <= 59 and not ambiguous_evening_six:
+            desde = time(hour, minute)
+            normalized = normalized[:hour_match.start()] + " " + normalized[hour_match.end():]
+    elif _LATER.search(normalized):
+        desde = AFTERNOON[0]
+        normalized = _LATER.sub(" ", normalized)
 
     day: date | None = None
 
@@ -235,8 +295,8 @@ def resolve_window(text: str, *, today: date) -> SlotWindow | None:
         day = today + timedelta(days=1)
 
     if day is None and any(phrase in normalized for phrase in _ANY_DAY):
-        return SlotWindow(day=None, franja=franja) if franja else None
+        return SlotWindow(day=None, franja=franja, desde=desde) if franja or desde else None
 
-    if day is None and franja is None:
+    if day is None and franja is None and desde is None:
         return None
-    return SlotWindow(day=day, franja=franja)
+    return SlotWindow(day=day, franja=franja, desde=desde)

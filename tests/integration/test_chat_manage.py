@@ -22,7 +22,20 @@ from app.services.settings import (
 from _testdb import admin_database_url
 
 
+_WEEKDAY_NAMES = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+
+
+def _day(moment) -> str:
+    """S5 (agenda-horarios): the format the customer reads, stated independently."""
+    return f"{_WEEKDAY_NAMES[moment.isoweekday() - 1]} {moment:%d/%m}"
+
+
+def _when(moment) -> str:
+    return f"{_day(moment)} a las {moment:%H:%M}"
+
 @pytest.fixture(autouse=True)
+
+
 def clean_manage_db(migrated_db):
     with psycopg.connect(admin_database_url(), autocommit=True) as conn:
         conn.execute(
@@ -180,7 +193,7 @@ def test_reschedule_filters_requested_day_and_formats_slots(mock_openai_chat, mo
     )
 
     assert observed["window"] == slot_window.SlotWindow(day=requested_day)
-    assert "1. " + requested_day.strftime("%d/%m/%Y a las 10:00") in reply[0]
+    assert "1. " + _day(requested_day) + " a las 10:00" in reply[0]
     # The ISO form is what confused the measured customer (`2026-10-28 10:00:00`).
     assert requested_day.isoformat() not in reply[0]
 
@@ -211,7 +224,7 @@ def test_reschedule_fallback_notifies_when_requested_window_is_empty(mock_openai
 
     assert calls == [slot_window.SlotWindow(day=requested_day), slot_window.SlotWindow(day=fallback_day)]
     assert "Para el" in reply[0] and "no me quedan horarios" in reply[0]
-    assert fallback_day.strftime("%d/%m/%Y a las 11:00") in reply[0]
+    assert _day(fallback_day) + " a las 11:00" in reply[0]
 
 
 def test_reschedule_ambiguous_slot_reasks_once_then_hands_off(mock_openai_chat, monkeypatch):

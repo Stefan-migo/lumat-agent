@@ -107,6 +107,60 @@ def test_llm_mode_returns_valid_rewrite(monkeypatch):
     assert phrasing.phrase(object(), "capture_question", "¿En qué comuna te encuentras?", facts={}, pending=["comuna"]) == rewritten
 
 
+def test_the_rewrite_gets_only_the_fact_just_captured(monkeypatch):
+    """S1 (agenda-horarios): one fact, never the whole recap, on every turn.
+
+    With `redaccion: llm` every capture question carried the history the customer
+    had already given -- "Ramiro, para coordinar el calefont en Huechuraba el
+    viernes despues del mediodia, cual es tu correo?" -- because `facts()` handed
+    the rewrite every captured value on every turn. The owner read it as a tic.
+    """
+    captured = {
+        "name": "Ramiro", "equipment": "calefont", "comuna": "Huechuraba",
+        "availability": "viernes despues del mediodia",
+        "_asked": {"failure": 1, "equipment": 1, "comuna": 1, "availability": 1},
+    }
+
+    offered = phrasing.facts(captured, ["email"])
+
+    assert offered["pending"] == ["email"]
+    assert [key for key in offered if key != "pending"] == ["disponibilidad"], offered
+
+
+def test_a_fact_is_offered_once_and_never_again():
+    captured = {"comuna": "Huechuraba", "_asked": {"comuna": 1}, "_facts_used": ["comuna"]}
+
+    assert phrasing.facts(captured, ["availability"]) == {"pending": ["availability"]}
+
+
+def test_no_fact_is_offered_when_none_was_captured():
+    assert phrasing.facts({}, ["comuna"]) == {"pending": ["comuna"]}
+    assert phrasing.facts({"comuna": "unknown"}, ["availability"]) == {
+        "pending": ["availability"]
+    }
+
+
+def test_the_question_marks_the_fact_it_offered_so_the_next_turn_does_not(monkeypatch):
+    """The capture node owns the marking; `facts()` stays pure."""
+    from app.chat.nodes import capture as capture_node
+
+    seen: list[dict] = []
+
+    def fake_phrase(_session, _key, rendered, *, facts, pending):
+        seen.append(facts)
+        return rendered
+
+    monkeypatch.setattr(capture_node, "phrase", fake_phrase)
+
+    questions = {"availability": "¿Qué días y horarios te acomodan?", "email": "¿Cuál es tu correo?"}
+    captured = {"comuna": "Huechuraba", "_asked": {"comuna": 1}}
+    capture_node._phrase_question(object(), captured, ["availability"], questions)
+    capture_node._phrase_question(object(), captured, ["email"], questions)
+
+    assert [key for key in seen[0] if key != "pending"] == ["comuna"]
+    assert [key for key in seen[1] if key != "pending"] == [], seen[1]
+
+
 def test_capture_question_round_trip_keeps_extractor_field(monkeypatch):
     from contextlib import contextmanager
     from app.chat.nodes import capture as capture_node

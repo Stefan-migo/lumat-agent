@@ -45,7 +45,20 @@ from _testdb import admin_database_url  # noqa: E402
 ADMIN_DB_URL = admin_database_url()
 
 
+_WEEKDAY_NAMES = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+
+
+def _day(moment) -> str:
+    """S5 (agenda-horarios): the format the customer reads, stated independently."""
+    return f"{_WEEKDAY_NAMES[moment.isoweekday() - 1]} {moment:%d/%m}"
+
+
+def _when(moment) -> str:
+    return f"{_day(moment)} a las {moment:%H:%M}"
+
 @pytest.fixture(autouse=True)
+
+
 def clean_db(migrated_db):
     """Reset chat + memory tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
@@ -217,7 +230,7 @@ def test_d2_state_carries_latest_booked_appointment():
 
     assert state_with_booking.booking == {
         "service": "Visita técnica",
-        "label": "06/05/2030 a las 15:30",
+        "label": "Lunes 06/05 a las 15:30",
         "status": "booked",
     }
     assert state_without_booking.booking is None

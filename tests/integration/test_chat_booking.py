@@ -19,7 +19,20 @@ from app.services.customers import get_or_create_customer
 from _testdb import admin_database_url
 
 
+_WEEKDAY_NAMES = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+
+
+def _day(moment) -> str:
+    """S5 (agenda-horarios): the format the customer reads, stated independently."""
+    return f"{_WEEKDAY_NAMES[moment.isoweekday() - 1]} {moment:%d/%m}"
+
+
+def _when(moment) -> str:
+    return f"{_day(moment)} a las {moment:%H:%M}"
+
 @pytest.fixture(autouse=True)
+
+
 def clean_booking_db(migrated_db):
     with psycopg.connect(admin_database_url(), autocommit=True) as conn:
         conn.execute(
@@ -169,7 +182,7 @@ def test_booking_confirmation_names_the_selected_technician(mock_openai_chat):
         appointment = session.scalar(
             select(Appointment).where(Appointment.customer_id == customer_id)
         )
-        fecha = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+        fecha = _when(appointment.local_start)
     assert confirmation == [
         f"Tu visita técnica quedó confirmada para el {fecha} con Camila Rojas.",
         REPLY_TEXT_DEFAULTS["capture_evidence"],
@@ -195,7 +208,7 @@ def test_booking_confirmation_uses_team_fallback_when_technician_has_no_name(
         appointment = session.scalar(
             select(Appointment).where(Appointment.customer_id == customer_id)
         )
-        fecha = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+        fecha = _when(appointment.local_start)
     assert confirmation == [
         f"Tu visita técnica quedó confirmada para el {fecha} con nuestro equipo técnico.",
         REPLY_TEXT_DEFAULTS["capture_evidence"],
@@ -473,7 +486,7 @@ def test_offer_honors_the_day_the_customer_asked_for(mock_openai_chat):
     replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.ask"))
 
     assert len(replies) == 1
-    assert wanted.strftime("%d/%m/%Y") in replies[0]
+    assert _day(wanted) in replies[0]
     assert (_local_today() + timedelta(days=2)).strftime("%d/%m/%Y") not in replies[0]
 
 
@@ -500,8 +513,8 @@ def test_sunday_request_widens_to_weekday_and_names_requested_moment(mock_openai
 
     assert len(replies) == 1
     assert replies[0].startswith(f"Para el domingo {sunday:%d/%m} no me quedan horarios.")
-    assert sunday.strftime("%d/%m/%Y") not in replies[0]
-    assert monday.strftime("%d/%m/%Y") in replies[0]
+    assert _day(sunday) not in replies[0]
+    assert _day(monday) in replies[0]
 
 
 def test_offer_says_the_day_is_full_and_offers_the_nearest_later_day(mock_openai_chat):
@@ -525,8 +538,8 @@ def test_offer_says_the_day_is_full_and_offers_the_nearest_later_day(mock_openai
 
     assert len(replies) == 1
     assert "no me quedan horarios" in replies[0]
-    assert later.strftime("%d/%m/%Y") in replies[0]
-    assert earlier.strftime("%d/%m/%Y") not in replies[0]
+    assert _day(later) in replies[0]
+    assert _day(earlier) not in replies[0]
 
 
 def test_question_about_another_day_mid_selection_offers_that_day(mock_openai_chat):
@@ -550,7 +563,7 @@ def test_question_about_another_day_mid_selection_offers_that_day(mock_openai_ch
 
     assert len(second) == 1
     assert "No pude identificar" not in second[0]
-    assert wanted.strftime("%d/%m/%Y") in second[0]
+    assert _day(wanted) in second[0]
     assert "asesor" not in second[0].lower()
 
 
@@ -578,6 +591,62 @@ def test_a_franja_that_leaves_nothing_widens_instead_of_dead_ending(mock_openai_
     # also print a numbered slot, so "1." alone would be a false pass.
     assert "Para la tarde no me quedan horarios" in replies[0]
     assert "1." in replies[0]
+
+
+def test_hour_request_includes_exact_floor_and_excludes_earlier_slots(mock_openai_chat):
+    wanted = _local_today() + timedelta(days=5)
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        _day_block(session, tech_id, wanted, hour=16, hours=2)
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.hour.ask"))
+    replies = _invoke(
+        conv_id, _add_message(conv_id, "después de las 17 hrs", "wamid.hour.request")
+    )
+
+    assert len(replies) == 1
+    assert "17:00" in replies[0]
+    assert "16:00" not in replies[0]
+    assert "16:30" not in replies[0]
+    assert "asesor" not in replies[0].lower()
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "bot"
+
+
+def test_hour_floor_with_no_slot_that_day_explains_next_day_offer(mock_openai_chat):
+    wanted = _local_today() + timedelta(days=5)
+    next_day = wanted + timedelta(days=1)
+    conv_id, _, _, tech_id, _ = _seed_conversation(captured={
+        "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
+        "equipment": "Calefont", "failure": "No enciende", "evidence": "unknown",
+        "availability": f"el {_weekday_name(wanted)}", "_pending": "consent",
+    })
+    with SessionLocal() as session:
+        _day_block(session, tech_id, wanted, hour=16, hours=1)
+        _day_block(session, tech_id, next_day, hour=9, hours=2)
+        session.commit()
+
+    _invoke(conv_id, _add_message(conv_id, "si", "wamid.hour.fallback.ask"))
+    replies = _invoke(
+        conv_id,
+        _add_message(conv_id, f"para el {_weekday_name(wanted)} después de las 17", "wamid.hour.fallback"),
+    )
+
+    assert len(replies) == 1
+    # The notice must name the hour asked, so the check scopes to the OFFERED
+    # slots: a 17:00 offer would read "a las 17:00" inside the numbered list.
+    offered = replies[0].split("Te propongo")[1]
+    assert "17:00" not in offered
+    assert "no me quedan horarios" in replies[0].lower()
+    assert "a partir de las 17:00" in replies[0].lower()
+    assert _day(wanted) not in replies[0]
+    assert _day(next_day) in replies[0]
+    assert "asesor" not in replies[0].lower()
 
 
 def test_no_me_sirve_with_an_open_offer_pages_instead_of_handing_off(mock_openai_chat):

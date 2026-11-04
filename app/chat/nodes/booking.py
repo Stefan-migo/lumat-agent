@@ -9,7 +9,13 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 
 from app.chat.nodes.replies import render_reply
-from app.chat.slot_window import SlotWindow, resolve_window, window_label
+from app.chat.slot_window import (
+    SlotWindow,
+    resolve_window,
+    slot_label,
+    when_label,
+    window_label,
+)
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, Conversation, Message, MessageDirection, MessageType, User
@@ -44,6 +50,7 @@ DEFAULT_DURATION_MINUTES = 60
 _MORE_SLOTS_MARKERS = (
     "mas horario", "otros horario", "otro horario", "otra hora", "otras horas",
     "mas opcion", "otras opciones", "siguientes horarios",
+    "mas tarde", "mas temprano", "cerca de las", "despues de las",
     "otro dia", "otros dias", "otra fecha", "otras fechas",
     "no puedo en esos", "no puedo en esas", "no me sirve", "no me sirven",
     "ninguno me sirve", "ninguna me sirve",
@@ -71,7 +78,7 @@ def _persist_offer(session, state: ConversationState, offer: dict | None) -> Non
 
 def _options(slots: list[dict]) -> str:
     return "\n".join(
-        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
+        f"{index}. {slot_label(date.fromisoformat(slot['date']), time.fromisoformat(slot['time']))}"
         for index, slot in enumerate(slots, 1)
     )
 
@@ -125,12 +132,15 @@ def _search_slots(
     days = 7
     if window is not None and window.day is not None:
         days = max(days, (window.day - today).days + 1)
-    return scheduling.open_slots_for_assignment(
+    assignments = scheduling.open_slots_for_assignment(
         session, now=now, days=days, duration_minutes=duration, limit=limit,
         # S1: a visit offered for "right now" cannot be staffed.
         lead_minutes=get_booking_lead_minutes(session),
         window=window,
     )
+    if window is not None and window.desde is not None:
+        assignments = [slot for slot in assignments if slot[2] >= window.desde]
+    return assignments
 
 
 def slots_for_window(
@@ -164,7 +174,8 @@ def slots_for_window(
             if assignments:
                 return assignments, True
         return [], False
-    widened = _search_slots(session, now, today, duration_minutes, None, limit)
+    widened_window = SlotWindow(desde=window.desde) if window.desde is not None else None
+    widened = _search_slots(session, now, today, duration_minutes, widened_window, limit)
     return widened, bool(widened)
 
 
@@ -279,12 +290,24 @@ def _resolve(text: str, slots: list[dict]) -> int | None:
     normalized = _fold(text)
     matches = [
         index for index, slot in enumerate(slots)
-        if normalized in {
-            _fold(f"{slot['date']} {slot['time']}"),
-            _fold(f"{date.fromisoformat(slot['date']).strftime('%d/%m')} {slot['time'][:5]}"),
-        }
+        if normalized in _accepted_slot_spellings(slot)
     ]
     return matches[0] if len(matches) == 1 else None
+
+
+def _accepted_slot_spellings(slot: dict) -> set[str]:
+    """Every spelling of one slot a customer may type back (S5, agenda-horarios).
+
+    The offer now reads "Viernes 06/11 a las 13:00", so that shape has to resolve,
+    alongside the ISO pair and the older "06/11 13:00".
+    """
+    day = date.fromisoformat(slot["date"])
+    clock = time.fromisoformat(slot["time"])
+    return {
+        _fold(f"{slot['date']} {slot['time']}"),
+        _fold(f"{day:%d/%m} {slot['time'][:5]}"),
+        _fold(slot_label(day, clock)),
+    }
 
 
 # S1 (chatbot-experiencia): the confirmation names the technician that will attend.
@@ -327,6 +350,13 @@ def booking(state: ConversationState) -> dict:
             # spending the single clarification the handoff sits behind.
             requested = resolve_window(text, today=local_today(session, now))
             if requested is not None:
+                captured_window = _requested_window(session, state, now)
+                if requested.day is None and captured_window is not None:
+                    requested = SlotWindow(
+                        day=captured_window.day,
+                        franja=requested.franja or captured_window.franja,
+                        desde=requested.desde,
+                    )
                 rebuilt = _new_offer(
                     session, state, now, texts,
                     window=requested, attempts=attempts + 1, unchanged_against=offer,
@@ -368,10 +398,10 @@ def booking(state: ConversationState) -> dict:
             _persist_offer(session, state, None)
             return _new_offer(session, state, now, texts)
         _persist_offer(session, state, None)
-        slot_label = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+        fecha = when_label(appointment.local_start)
         technician_name = _technician_name(session, appointment.technician_id)
         confirmation = render_reply(
-            texts, "booking_confirmed", fecha=slot_label, tecnico=technician_name
+            texts, "booking_confirmed", fecha=fecha, tecnico=technician_name
         )
         # C2: booking confirmation is the point at which the appointment is real;
         # ask for optional evidence immediately afterwards, never during capture.
