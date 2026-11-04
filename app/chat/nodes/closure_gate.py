@@ -49,6 +49,8 @@ _COURTESY_TOKENS = frozenset({
     "dale", "bueno", "ya", "ok", "oka", "listo", "perfecto", "gracias",
     "muchas", "mil", "genial", "excelente", "amable", "saludos", "cordial",
     "que", "tengas", "buen", "dia", "nuevament",
+    # Temporal qualifiers do not add content after an explicit closing phrase.
+    "por", "ahora", "ahorita", "momento", "el",
 })
 _CLOSING_PHRASES = (
     "eso fue todo",
@@ -58,6 +60,12 @@ _CLOSING_PHRASES = (
     "nada mas",
 )
 _WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
+# A refusal is the whole message, not a sentence that opens with "no".
+# "No tengo agua caliente" is a complaint and must never count towards closing;
+# "No gracias" and a drawn-out "Noooooooooo" do (collapsed below, porque el
+# cliente insistente escribe la negativa con letras repetidas).
+_REFUSAL_OPENERS = frozenset({"no", "nop", "nada", "ninguno", "ninguna"})
+_REPEATED_LETTERS = re.compile(r"(.)\1{2,}")
 
 
 def _fold(text: str) -> str:
@@ -98,6 +106,21 @@ def is_farewell(text: str) -> bool:
     return all(token in CLOSING_TOKENS for token in tokens)
 
 
+def _is_refusal(text: str) -> bool:
+    """Return whether text is a refusal on its own, with nothing else to answer.
+
+    Measured (conversación #25): the customer refused four times in a row and the
+    bot asked "¿Te puedo ayudar en algo más?" after each one until he wrote "Chao".
+    A refusal followed by real content ("no, el calefont era viejo") answers
+    something and stays out of the closing count.
+    """
+    folded = _REPEATED_LETTERS.sub(r"\1", _fold(text or "")).strip()
+    tokens = _WORD_PATTERN.findall(folded)
+    if not tokens or tokens[0] not in _REFUSAL_OPENERS:
+        return False
+    return all(token in _COURTESY_TOKENS for token in tokens[1:])
+
+
 def closure_gate(state: ConversationState) -> dict:
     """Reply to farewells or closed-hours messages before normal flow."""
     if "_pending" in (state.captured or {}):
@@ -106,7 +129,30 @@ def closure_gate(state: ConversationState) -> dict:
     message = state.window[-1] if state.window else {}
     text = message.get("text") or ""
     with session_scope() as session:
-        if is_farewell(text):
+        should_close_after_refusals = False
+        if message.get("direction") == "inbound" and _is_refusal(text):
+            current_index = len(state.window) - 1
+            previous_inbound_index = next(
+                (
+                    index
+                    for index in range(current_index - 1, -1, -1)
+                    if state.window[index].get("direction") == "inbound"
+                ),
+                None,
+            )
+            if previous_inbound_index is not None:
+                between = state.window[previous_inbound_index + 1 : current_index]
+                previous_inbound = state.window[previous_inbound_index]
+                should_close_after_refusals = (
+                    _is_refusal(previous_inbound.get("text") or "")
+                    and any(
+                        entry.get("direction") == "outbound"
+                        and (entry.get("text") or "").strip().endswith("?")
+                        for entry in between
+                    )
+                )
+
+        if is_farewell(text) or should_close_after_refusals:
             # Owner decision (conversación #53): a clear goodbye closes the
             # conversation, not only the turn. The state stayed `bot` and the owner
             # saw a thread that never finished; closing also stops the bot from

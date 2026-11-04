@@ -195,6 +195,83 @@ def test_farewell_gets_farewell(text, mock_openai_chat):
     assert mock_openai_chat == []
 
 
+def test_production_sequence_closes_after_temporal_qualifier(mock_openai_chat):
+    from app.chat.state import ConvState
+    from app.models import Conversation
+
+    conversation_id = _start_conversation()
+    priming_replies = _turn(conversation_id, "¿Qué servicios ofrecen?", "wamid.prod-sequence.0")
+    assert priming_replies == [
+        "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso."
+    ]
+
+    courtesy_replies = _turn(
+        conversation_id, "Perfecto muchas gracias", "wamid.prod-sequence.1"
+    )
+    # The bot answers courtesy with a question, in either of its two configured
+    # forms (thanks vs refusal). The exact text is the classifier double's call,
+    # so the assertion pins the shape the refusal rule depends on.
+    assert len(courtesy_replies) == 1 and courtesy_replies[0].endswith("?")
+    replies = _turn(conversation_id, "No, eso sería todo por ahora", "wamid.prod-sequence.2")
+
+    assert replies == [FAREWELL]
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        assert conversation.state == ConvState.CLOSED
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "state_change",
+            )
+        )
+        assert event is not None
+        assert event.cause == "bot->closed: farewell"
+
+
+def test_two_refusals_close_but_one_refusal_does_not(mock_openai_chat):
+    from app.chat.state import ConvState
+    from app.models import Conversation
+
+    conversation_id = _start_conversation()
+    priming_replies = _turn(conversation_id, "¿Qué servicios ofrecen?", "wamid.refusal.0")
+    assert priming_replies == [
+        "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso."
+    ]
+
+    first_reply = _turn(conversation_id, "No", "wamid.refusal.1")
+    assert len(first_reply) == 1 and first_reply[0].endswith("?")
+    with SessionLocal() as session:
+        assert session.get(Conversation, conversation_id).state == ConvState.BOT
+
+    second_reply = _turn(conversation_id, "Nop", "wamid.refusal.2")
+    assert second_reply == [FAREWELL]
+    with SessionLocal() as session:
+        assert session.get(Conversation, conversation_id).state == ConvState.CLOSED
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "state_change",
+            )
+        )
+        assert event is not None
+        assert event.cause == "bot->closed: farewell"
+
+
+def test_refusal_during_capture_does_not_close(mock_openai_chat):
+    from app.chat.state import ConvState
+    from app.models import Conversation
+
+    conversation_id = _start_conversation()
+    with SessionLocal() as session:
+        session.get(Conversation, conversation_id).captured_data = {"_pending": "name"}
+        session.commit()
+
+    replies = _turn(conversation_id, "No", "wamid.refusal.pending")
+    assert FAREWELL not in replies
+    with SessionLocal() as session:
+        assert session.get(Conversation, conversation_id).state == ConvState.BOT
+
+
 def test_closure_message_overrides_are_used(mock_openai_chat):
     farewell = "Despedida configurada."
     notice = "Aviso de horario configurado."
