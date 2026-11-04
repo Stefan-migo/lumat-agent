@@ -33,10 +33,10 @@ Origen: conversación #52 del harness (`+56901000078`), revisada por el owner el
 
 | ID | Qué | Specs | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | `phrasing`: hechos sólo nuevos en el rewrite + rechazo de borradores que repiten | S1, S2 | inline | `fix(chat): no repetir hechos ya dichos en las preguntas de captura` |
-| T2 | `slot_window` gana piso de hora; `booking` filtra por hora, ofrece el día siguiente y reconoce la hora como respuesta | S3, S4, S6 | worker | `feat(chat): interpretar la hora pedida en la oferta de horarios` |
-| T3 | Formato con nombre del día en `booking`, `manage` y `state`, y `_resolve` acepta el formato nuevo | S5 | inline | `feat(chat): mostrar el día de la semana en los horarios ofrecidos` |
-| T4 | Verificación: tests focalizados, `bash scripts/test.sh quick`, y replay en el harness | todas | parent | — |
+| T1 ✅ | `phrasing`: un hecho, el de la última respuesta, y `_facts_used` para no repetirlo | S1, S2 | inline | `af8a4254` |
+| T2 ✅ | `slot_window` gana piso de hora; `booking` filtra por hora, ofrece el día siguiente y reconoce la hora como respuesta | S3, S4, S6 | worker + parent | `bed5e7ad` |
+| T3 ✅ | Formato con nombre del día en `booking`, `manage` y `state`, y `_resolve` acepta el formato nuevo | S5 | inline | `ff4958c8` |
+| T4 | Verificación: tests focalizados, `quick`, `full` y replay en el harness | todas | parent | — |
 
 ## Log
 
@@ -64,3 +64,20 @@ Origen: conversación #52 del harness (`+56901000078`), revisada por el owner el
   de las 17" no matchea `_AFTERNOON` ni `_MORE_SLOTS_MARKERS`. El cupo de las 17:00 **sí existía**:
   el 2026-11-06 los técnicos `mgonzalez` y `jperez` tienen ventana 12:00–21:00 UTC = 09:00–18:00
   hora Chile, y la oferta sólo mostró los primeros 3 del universo (`PAGE_SIZE = 3`).
+
+- **L4 (entrega de T2):** el worker dejó T2 en `partial` con dos defectos reales que la revisión
+  encontró y corrigió el parent: (a) su test de integración asertaba `"17:00" not in reply` cuando
+  el aviso S4 **debe** nombrar la hora pedida — se acotó la aserción a la lista ofrecida; (b) el
+  label componía `"Para a partir de las 17:00 del lunes 09/11…"`, que no es español — `window_label`
+  se reescribió para leerse después de `Para`. Se agregó además el turno de 12 h: `"a las 3 de la
+  tarde"` resolvía `03:00` y ahora resuelve `15:00`.
+
+- **L5 (frontera del slice):** la feature cierra con **517 líneas autoradas** en 4 commits, por
+  encima del slice de ~400. Se entrega como un solo PR porque las tres unidades son una misma
+  superficie (la conversación de agenda) y separarlas obligaría a un PR encadenado sobre
+  `booking.py`; el tamaño se declara en el PR.
+
+- **L6 (verificación, con lo que falla por entorno):** `quick` en la worktree deja 4 fallos en
+  `tests/unit/test_panel_memory_routes.py` (401 en el panel). **No son de este cambio**: fallan
+  igual en el commit base `0318883c` dentro de la misma worktree y pasan en el worktree principal.
+  Queda registrado para que nadie lo lea como regresión.
