@@ -92,6 +92,17 @@ services:
       META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?set META_ACCESS_TOKEN in infra/.env}
       META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:?set META_PHONE_NUMBER_ID in infra/.env}
       PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:?set PANEL_SESSION_SECRET in infra/.env}
+      # Panel web push (VAPID). Optional: without them `GET /panel/api/push/config`
+      # answers `public_key: null`, the operator sees "push not configured on the
+      # server", and every notification falls back to email/WhatsApp. These MUST
+      # be forwarded here: the api service declares its environment explicitly, so
+      # adding them only to infra/.env leaves the container without them — which is
+      # exactly how production ran with zero VAPID keys while the panel blamed the
+      # browser. VAPID_PRIVATE_KEY is the base64url PKCS8 DER on ONE line (no PEM),
+      # the form py_vapid's `Vapid.from_string` accepts (docs/ops.md §2.8.3).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contacto@lumat.cl}
       # Admin bootstrap (T7.2): consumed by db/seed.sh at deploy time inside
       # the container (`docker compose exec api db/seed.sh`) — never needed by
       # the running app, defaults are fine for dev (seed fails loudly if the
