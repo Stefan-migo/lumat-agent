@@ -6,6 +6,41 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-04
+
+El chatbot deja de tropezar en los cuatro puntos donde se perdía una conversación: la cobertura ya
+no rechaza una comuna por un punto o una letra mal escrita; las preguntas de captura dejan de
+repetir el resumen completo en cada turno; una hora pedida ("después de las 17") se interpreta y se
+responde con los cupos que quedan a esa hora, o con el día siguiente y el motivo; y la despedida
+cierra la conversación en vez de contestar "Con gusto" en loop. Con la visita agendada, el bot ya no
+vuelve a ofrecer horarios.
+
+### Corregido
+
+- Cobertura: `normalize_comuna` descarta la puntuación y `comuna_cubierta` tolera un typo cuando
+  exactamente una comuna configurada está a esa distancia; un empate no resuelve hacia "sí". Un
+  cliente que escribía "Huechuraba." o "Huchuraba" recibía "no tenemos visitas técnicas ahí".
+- Captura: el rewrite de las preguntas recibe un solo hecho, el de la última respuesta, y no repite
+  los que el cliente ya dio.
+- Agenda: `SlotWindow` gana un piso de hora ("después de las 17", "cerca de las 17", "más tarde"),
+  `booking` filtra por ese piso y, si ese día no queda cupo, dice por qué y propone el día
+  siguiente. Con la franja dicha, los dígitos se leen en reloj de doce horas ("a las 3 de la tarde"
+  es 15:00).
+- Agenda: los cupos y las visitas se muestran con el día de la semana — `Viernes 06/11 a las 13:00`
+  — en la oferta, la reprogramación, la confirmación y el contexto del panel.
+- Cierre: "no, eso sería todo gracias" ya es una despedida (un "no" delante no la cancela) y el
+  farewell pasa la conversación a `closed`.
+- Cierre: un rechazo se contesta sin el prefijo "Con gusto", con el mensaje nuevo
+  `messages.smalltalk_decline`.
+- Reservas: con una visita ya confirmada, `booking` no abre otra oferta salvo pedido explícito de
+  otra visita.
+- Tests: los dos tests de precio dependían del mes (fijaban la tarifa de marzo-octubre) y dejaban
+  `main` rojo desde el 1 de noviembre.
+
+### Notas de despliegue
+
+- **Sin migraciones nuevas**: deploy sólo de código. Rollback disponible: `v2026.10.14` (`84f0a7bc`).
+
 ## [2026.10.14] - 2026-10-31
 
 El panel del asistente y la ventana de conversación quedan usables de punta a punta: se ve el
