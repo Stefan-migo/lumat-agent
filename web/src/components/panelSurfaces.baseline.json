@@ -1,0 +1,61 @@
+{
+  "note": "Known surfaces whose list container carries no className. Recorded when the check was written (2026-11-04) so new offenders fail immediately while existing pages are styled in their own changes. Delete an entry in the same change that styles it; the check fails on a stale entry. Pattern: docs/kb/drift-baseline.json.",
+  "entries": [
+    {
+      "entry": "pages/AdvancedDashboard.tsx: <ul aria-label=\"Tendencia diaria\">",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AdvancedDashboard.tsx: <ul aria-label=\"Detalle del período\">",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AgentChat.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AppointmentDetail.tsx: <ol aria-label=\"Historial de la visita\">",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AssistantWorkspace.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AssistantWorkspace.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AssistantWorkspace.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/AssistantWorkspace.tsx: <ul aria-label={`Versiones de ${artifact.filename}`}>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/NotificationCenter.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/Settings.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "pages/Settings.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "shared/OverdueVisitsPanel.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "shared/OverdueVisitsPanel.tsx: <ul aria-label=\"Resultados del cierre\">",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    },
+    {
+      "entry": "shared/OverdueVisitsPanel.tsx: <ul>",
+      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
+    }
+  ]
+}

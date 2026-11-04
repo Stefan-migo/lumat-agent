@@ -34,13 +34,27 @@ carrying every rule in this file:
 | Skill | Load it when |
 |---|---|
 | `rapso-session` | the conversation turns to analysis, decisions, brainstorming, or planning before ODD |
-| `design-system` | building or reviewing UI |
+| `design-system` | any change under `web/src/` — read `web/DESIGN_SYSTEM.md` before writing markup |
 | `component-adapter` | wiring a component to the project's data and API layer |
 | `design-agent-lead` | coordinating a multi-part frontend change |
 | `panel-section-analysis` | analysing or changing a panel section |
 
 The retired Rapsodia persona, Ponytail pack and SDD pipeline are **not** part of this runtime. There
 is no `rapso-persona` skill: this file plus the skills above carry what the project needs.
+
+## Panel UI — `web/DESIGN_SYSTEM.md` is the authority
+
+Any change that renders a panel surface reads `web/DESIGN_SYSTEM.md` first: the page-architecture
+entry of the page you touch, `## Implementation rules for coding agents`, and `## Acceptance
+checklist`. It is not optional for "small" panel additions — the page-architecture entry decides how
+a new section composes, and `DESIGN_SYSTEM.md:367` already says an absent section is not permission
+to improvise. Adding a section means amending that entry in the same change.
+
+Why this is written here, and not only in the skill: on 2026-11-04 the "Visitas vencidas" band shipped
+to production as bare `<ul>`/`<li>` with zero classes, and CI, the panel workflow and review were all
+green. Nothing in this file named the design authority, and the `design-system` skill pointed at a
+`DESIGN.md` that does not exist. Tests do not read CSS, so no suite can catch an unstyled surface on
+its own.
 
 ## Graphify — Mandatory Graph Check
 
