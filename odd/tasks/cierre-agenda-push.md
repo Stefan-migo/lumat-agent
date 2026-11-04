@@ -230,3 +230,18 @@ borde y fondo con `--success-*` y `--danger-*`, sin que el color sea el único c
 
 Verificado: `npx vitest run` de los 3 archivos enfocados → 63 casos; stories de Agenda → 12; `npm run build`
 exit 0; el chequeo estructural queda verde con el baseline en 11 entradas.
+
+### L7 — cierre: las dos suites completas
+
+- **Backend `full`**: exit 0, 6m 14s, hasta 100%. Advertencias preexistentes (pooling del modelo FastEmbed, ninguna
+  falla).
+- **Panel `npm test`**: la primera corrida dio **1 falla de 1392** en
+  `AppShell > keeps the push deep link landing on the single standalone push settings page`. Causa real y
+  legítima: la página de push ahora exige las tres capacidades (`PushManager`, `Notification`,
+  `serviceWorker`) porque sin ellas el botón no puede funcionar, y el test de AppShell sólo simulaba
+  `PushManager`. Se completó el test, no se aflojó el componente: **segunda corrida exit 0, 120 archivos / 1392
+  casos**. La suite completa atrapó exactamente la clase de regresión que un archivo enfocado no ve.
+- `shape` → exit 0 (ninguna superficie de shape tocada: el compose y los docs no están en la lista).
+
+Cierre del worktree: `.venv` y `web/node_modules` son symlinks locales (gitignoreados) y la base de test en 5701
+queda levantada hasta el cleanup del worktree.
