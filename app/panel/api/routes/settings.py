@@ -116,6 +116,10 @@ class MessagesBody(BaseModel):
     kb_miss_offer: str
     farewell: str
     out_of_hours: str
+    # Conversación #53: a refusal is answered without the gratitude prefix. Optional
+    # with the shipped text so the panel keeps saving the map it already sends; the
+    # GET snapshot exposes it for the editor.
+    smalltalk_decline: str = settings_service.MESSAGE_DEFAULTS["smalltalk_decline"]
 
 
 class MessageTemplatesBody(BaseModel):

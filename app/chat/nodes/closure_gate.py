@@ -6,7 +6,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 
-from app.chat.state import ConversationState
+from app.chat.state import ConvState, ConversationState, set_conversation_state
 from app.services.settings import (
     MESSAGE_DEFAULTS,
     get_hours_closure_enabled,
@@ -16,6 +16,7 @@ from app.services.settings import (
     is_open_at,
 )
 from app.db import session_scope
+from app.models import Conversation
 
 
 CLOSING_TOKENS = frozenset({
@@ -39,6 +40,12 @@ CLOSING_TOKENS = frozenset({
 # Measured: "dale, muchas gracias, eso era todo" was answered with another sales
 # question.
 _COURTESY_TOKENS = frozenset({
+    # "no" belongs here and not in CLOSING_TOKENS: a refusal cancels a closing when
+    # it is the whole message, and must not cancel one when it merely precedes it.
+    # Measured (conversación #53): "no, eso seria todo gracias" was not a farewell,
+    # fell to smalltalk and the bot answered "Con gusto. ¿Te puedo ayudar en algo
+    # más?" three times to a customer who was leaving.
+    "no", "nop",
     "dale", "bueno", "ya", "ok", "oka", "listo", "perfecto", "gracias",
     "muchas", "mil", "genial", "excelente", "amable", "saludos", "cordial",
     "que", "tengas", "buen", "dia", "nuevament",
@@ -100,6 +107,15 @@ def closure_gate(state: ConversationState) -> dict:
     text = message.get("text") or ""
     with session_scope() as session:
         if is_farewell(text):
+            # Owner decision (conversación #53): a clear goodbye closes the
+            # conversation, not only the turn. The state stayed `bot` and the owner
+            # saw a thread that never finished; closing also stops the bot from
+            # answering it again (HH-1) and opens a fresh one on the next message.
+            conversation = session.get(Conversation, state.conversation_id)
+            if conversation is not None:
+                set_conversation_state(
+                    session, conversation, ConvState.CLOSED, cause="farewell", actor="bot"
+                )
             return {
                 "replies": [
                     get_message(session, "farewell", MESSAGE_DEFAULTS["farewell"])

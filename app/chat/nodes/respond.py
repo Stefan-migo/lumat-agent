@@ -444,6 +444,21 @@ def _answer_from_kb(
     return response.choices[0].message.content or fallback
 
 
+_REFUSAL_OPENERS = frozenset({"no", "nop", "nada", "ninguno", "ninguna"})
+
+
+def _declines(text: str) -> bool:
+    """True when the turn opens with a refusal rather than with thanks."""
+    folded = "".join(
+        char
+        for char in unicodedata.normalize("NFD", (text or "").casefold())
+        if not unicodedata.combining(char)
+    ).strip()
+    if not folded or "?" in folded:
+        return False
+    return folded.split()[0].strip(",.;:!") in _REFUSAL_OPENERS
+
+
 def respond(state: ConversationState) -> dict:
     """Answer the current message: clarification / KB-grounded / cannot-answer."""
     text = _current_text(state)
@@ -451,8 +466,13 @@ def respond(state: ConversationState) -> dict:
         return {}
 
     if state.intent == "smalltalk":
+        # A refusal is not something to be grateful for. Measured (conversación
+        # #53): the bot asked for evidence, the customer said "no, no tengo mas
+        # informacion para pasar", and the courtesy reply thanked them before
+        # asking whether they needed anything else.
+        key = "smalltalk_decline" if _declines(text) else "smalltalk"
         with session_scope() as session:
-            reply = get_message(session, "smalltalk", MESSAGE_DEFAULTS["smalltalk"])
+            reply = get_message(session, key, MESSAGE_DEFAULTS[key])
         return {"replies": [reply]}
 
     # T5/D13: a preset message the classifier picked answers this turn, ahead of

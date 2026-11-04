@@ -151,3 +151,42 @@ def test_acknowledgements_reach_the_classifier_instead_of_the_farewell(
         state = ConversationState.from_db(session, conversation_id)
         assert state.unknown_count == 0
         assert state.escalate is False
+
+
+def test_a_refusal_is_not_thanked(migrated_db, monkeypatch):
+    """Owner decision (#53): a "no" is not something to be grateful for.
+
+    The bot asked for evidence, the customer declined with "no, no tengo mas
+    informacion para pasar", and the courtesy reply thanked them for the refusal
+    before asking whether they needed anything else. The question stays; the
+    gratitude prefix does not.
+    """
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    conversation_id = _conversation()
+
+    def classify(_text, **_kwargs):
+        return {
+            "intent": "smalltalk",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {},
+            "template_id": None,
+        }
+
+    from app.chat.nodes import classify_intent
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+
+    replies = _turn(
+        conversation_id, "no, no tengo mas informacion para pasar", "wamid.decline.evidence"
+    )
+
+    # The graph may prepend its greeting on the first turn; the rule under test is
+    # that the courtesy prefix is not used to answer a refusal.
+    assert "¿Te puedo ayudar en algo más?" in replies[0]
+    assert "Con gusto" not in replies[0]
