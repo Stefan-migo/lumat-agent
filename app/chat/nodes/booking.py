@@ -9,7 +9,13 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 
 from app.chat.nodes.replies import render_reply
-from app.chat.slot_window import SlotWindow, resolve_window, window_label
+from app.chat.slot_window import (
+    SlotWindow,
+    resolve_window,
+    slot_label,
+    when_label,
+    window_label,
+)
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, Conversation, Message, MessageDirection, MessageType, User
@@ -72,7 +78,7 @@ def _persist_offer(session, state: ConversationState, offer: dict | None) -> Non
 
 def _options(slots: list[dict]) -> str:
     return "\n".join(
-        f"{index}. {datetime.combine(date.fromisoformat(slot['date']), time.fromisoformat(slot['time'])):%d/%m/%Y a las %H:%M}"
+        f"{index}. {slot_label(date.fromisoformat(slot['date']), time.fromisoformat(slot['time']))}"
         for index, slot in enumerate(slots, 1)
     )
 
@@ -284,12 +290,24 @@ def _resolve(text: str, slots: list[dict]) -> int | None:
     normalized = _fold(text)
     matches = [
         index for index, slot in enumerate(slots)
-        if normalized in {
-            _fold(f"{slot['date']} {slot['time']}"),
-            _fold(f"{date.fromisoformat(slot['date']).strftime('%d/%m')} {slot['time'][:5]}"),
-        }
+        if normalized in _accepted_slot_spellings(slot)
     ]
     return matches[0] if len(matches) == 1 else None
+
+
+def _accepted_slot_spellings(slot: dict) -> set[str]:
+    """Every spelling of one slot a customer may type back (S5, agenda-horarios).
+
+    The offer now reads "Viernes 06/11 a las 13:00", so that shape has to resolve,
+    alongside the ISO pair and the older "06/11 13:00".
+    """
+    day = date.fromisoformat(slot["date"])
+    clock = time.fromisoformat(slot["time"])
+    return {
+        _fold(f"{slot['date']} {slot['time']}"),
+        _fold(f"{day:%d/%m} {slot['time'][:5]}"),
+        _fold(slot_label(day, clock)),
+    }
 
 
 # S1 (chatbot-experiencia): the confirmation names the technician that will attend.
@@ -380,10 +398,10 @@ def booking(state: ConversationState) -> dict:
             _persist_offer(session, state, None)
             return _new_offer(session, state, now, texts)
         _persist_offer(session, state, None)
-        slot_label = appointment.local_start.strftime("%d/%m/%Y a las %H:%M")
+        fecha = when_label(appointment.local_start)
         technician_name = _technician_name(session, appointment.technician_id)
         confirmation = render_reply(
-            texts, "booking_confirmed", fecha=slot_label, tecnico=technician_name
+            texts, "booking_confirmed", fecha=fecha, tecnico=technician_name
         )
         # C2: booking confirmation is the point at which the appointment is real;
         # ask for optional evidence immediately afterwards, never during capture.

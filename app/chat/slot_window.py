@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 # The franjas the business actually sells. Weekdays open 09:00-18:00, so a
 # franja is a filter over that window, not a second schedule.
@@ -175,6 +175,23 @@ def _weekday_and_day(today: date, weekday: int, day: int) -> date | None:
 
 def franja_label(franja: tuple[time, time]) -> str:
     return "la mañana" if franja == MORNING else "la tarde"
+
+
+def slot_label(day: date, clock: time) -> str:
+    """The one rendering of a slot the customer reads: "Viernes 06/11 a las 13:00".
+
+    S5 (agenda-horarios): the owner asked for the weekday by name; a bare
+    "06/11/2026" makes the customer count days in their head. One formatter, so
+    the offer, the reschedule list, the confirmation and the panel prompt cannot
+    drift apart.
+    """
+    weekday = _WEEKDAY_LABELS[day.isoweekday() - 1]
+    return f"{weekday.capitalize()} {day:%d/%m} a las {clock:%H:%M}"
+
+
+def when_label(moment: datetime) -> str:
+    """`slot_label` for a stored appointment: a visit the customer already holds."""
+    return slot_label(moment.date(), moment.time().replace(second=0, microsecond=0))
 
 
 def window_label(window: SlotWindow) -> str:

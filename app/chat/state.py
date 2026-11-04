@@ -20,6 +20,7 @@ from typing import Annotated
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.chat.slot_window import when_label
 from app.models import (
     Appointment,
     AppointmentStatus,
@@ -288,7 +289,7 @@ class ConversationState:
             booking=(
                 {
                     "service": appointment.service,
-                    "label": appointment.local_start.strftime("%d/%m/%Y a las %H:%M"),
+                    "label": when_label(appointment.local_start),
                     "status": appointment.status.value,
                 }
                 if appointment

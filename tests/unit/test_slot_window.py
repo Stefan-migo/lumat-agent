@@ -1,10 +1,10 @@
 """S1 (agenda-preferencia): the window a customer asked for, read deterministically."""
 
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 
 import pytest
 
-from app.chat.slot_window import SlotWindow, resolve_window, window_label
+from app.chat.slot_window import SlotWindow, resolve_window, slot_label, when_label, window_label
 
 # 2026-10-27 is a Tuesday: every expectation below is anchored to the day the
 # production conversation and the three harness conversations actually happened.
@@ -223,3 +223,15 @@ def test_the_notice_label_reads_after_para():
 
     assert with_day == "el viernes 06/11 a partir de las 17:00"
     assert without_day == "las 17:00 en adelante"
+
+
+def test_slot_label_names_the_weekday_first():
+    """S5: "Viernes 06/11 a las 13:00" -- the owner's requested shape."""
+    assert slot_label(date(2026, 11, 6), time(13, 0)) == "Viernes 06/11 a las 13:00"
+    assert slot_label(date(2026, 11, 9), time(9, 30)) == "Lunes 09/11 a las 09:30"
+
+
+def test_when_label_renders_a_stored_appointment_the_same_way():
+    moment = datetime(2026, 11, 6, 13, 0, 45, tzinfo=timezone.utc)
+
+    assert when_label(moment) == "Viernes 06/11 a las 13:00"
