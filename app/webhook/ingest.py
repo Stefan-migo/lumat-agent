@@ -38,11 +38,13 @@ from app.db import session_scope
 from app.models import (
     Conversation,
     ConversationState,
+    DeliveryStatus,
     ConversationEvent,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
+    User,
 )
 from app.services.customers import (
     get_or_create_customer,
@@ -51,6 +53,7 @@ from app.services.customers import (
 )
 from app.services.events import publish_event
 from app.services.notify import acknowledge_emergency_if_ack, send_pending_emergency_reminders
+from app.services.audit import record_audit
 from app.services.send import deliver_outbound
 
 logger = logging.getLogger(__name__)
@@ -179,6 +182,101 @@ def _message_error_131051(raw: dict) -> bool:
     )
 
 
+def _delivery_error(status: dict) -> tuple[str, str | None]:
+    """Format Meta's status errors into the operator-facing one-line reason."""
+    errors = status.get("errors") or []
+    parts: list[str] = []
+    codes: list[str] = []
+    for error in errors:
+        if not isinstance(error, dict):
+            continue
+        code = error.get("code")
+        title = error.get("title")
+        message = error.get("message") or (error.get("error_data") or {}).get("details")
+        if code is not None:
+            codes.append(str(code))
+        detail = ": ".join(str(part) for part in (code, title) if part is not None)
+        if message:
+            detail = f"{detail} — {message}" if detail else str(message)
+        if detail:
+            parts.append(detail)
+    return ("; ".join(parts) or "Meta no informó el motivo")[:2000], ",".join(codes) or None
+
+
+def apply_delivery_statuses(statuses: list[dict]) -> None:
+    """Apply Meta delivery callbacks without allowing stale statuses to regress."""
+    for status in statuses:
+        wamid = status.get("id") if isinstance(status, dict) else None
+        state = status.get("status") if isinstance(status, dict) else None
+        if not wamid or not state:
+            logger.warning("Meta delivery status ignored: missing id or status")
+            continue
+        with session_scope() as session:
+            row = session.scalar(
+                select(Message).where(
+                    Message.wamid == wamid,
+                    Message.direction == MessageDirection.OUTBOUND,
+                ).with_for_update()
+            )
+            if row is None:
+                logger.warning("Meta delivery status ignored for unknown wamid=%s", wamid)
+                continue
+            if state == "failed":
+                if row.delivery_status == DeliveryStatus.FAILED:
+                    continue
+                error, code = _delivery_error(status)
+                row.delivery_status = DeliveryStatus.FAILED
+                row.delivery_error = error
+                actor = session.scalar(select(User.username).where(User.id == row.author_id))
+                record_audit(
+                    session,
+                    actor=actor or "system",
+                    action="message.delivery_failed",
+                    entity="message",
+                    entity_id=str(row.id),
+                    after={
+                        "conversation_id": row.conversation_id,
+                        "request_id": row.request_id,
+                        "status": "failed",
+                        "error": row.delivery_error,
+                        "cause": "Meta rejected delivery",
+                        "wamid": wamid,
+                        "code": code,
+                    },
+                )
+            elif state in {"delivered", "read"}:
+                if row.delivery_status != DeliveryStatus.SENT:
+                    continue
+                timestamp = status.get("timestamp")
+                try:
+                    delivered_at = datetime.fromtimestamp(int(timestamp), timezone.utc)
+                except (TypeError, ValueError, OverflowError):
+                    logger.warning("Meta delivery status ignored: invalid timestamp for wamid=%s", wamid)
+                    continue
+                if row.delivered_at is None or delivered_at > row.delivered_at:
+                    row.delivered_at = delivered_at
+            # `sent` and anything else Meta may add later need no transition:
+            # `sent` is already written when Meta accepts the message (the wamid
+            # comes from that same response), and S2 forbids letting a late
+            # `sent` walk a `failed` row back.
+
+
+def iter_delivery_statuses(payload: dict) -> Iterable[dict]:
+    """Yield Meta delivery status objects from a webhook payload.
+
+    Kept separate from `iter_inbound_messages` on purpose: this one drives writes,
+    and a generator that writes as a side effect of being consumed silently skips
+    its work for any caller that stops iterating early. The ingestion path calls
+    it explicitly; readers of inbound messages stay pure.
+    """
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value") or {}
+            for status in value.get("statuses") or []:
+                if isinstance(status, dict):
+                    yield status
+
+
 def iter_inbound_messages(payload: dict) -> Iterable[NormalizedMessage]:
     """Yield normalized inbound messages from a Meta webhook payload.
 
@@ -187,6 +285,9 @@ def iter_inbound_messages(payload: dict) -> Iterable[NormalizedMessage]:
     """
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
+            if (change.get("value") or {}).get("statuses"):
+                # Handled by `iter_delivery_statuses`; not an ignored change.
+                continue
             if not _change_is_message_event(change):
                 logger.debug(
                     "webhook change ignored: field=%s error=%s (WH-6)",
@@ -308,6 +409,10 @@ def ingest_payload(payload: dict) -> int:
     boundary (WH-4); processing happens later in the background sweep.
     """
     inserted = 0
+    # Delivery callbacks are applied before the inbound insert, in their own
+    # transaction: they update already-persisted outbound rows and must not be
+    # nested inside the inbound session.
+    apply_delivery_statuses(list(iter_delivery_statuses(payload)))
     with session_scope() as session:
         for normalized in iter_inbound_messages(payload):
             if not normalized.phone_e164:

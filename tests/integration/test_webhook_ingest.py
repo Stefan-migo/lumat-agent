@@ -37,6 +37,7 @@ from app.models import (  # noqa: E402
     Conversation,
     ConversationEvent,
     ConversationState,
+    DeliveryStatus,
     AuditLog,
     Customer,
     CustomerState,
@@ -95,6 +96,10 @@ def _payload(messages: list[dict], field: str = "messages", value_extra: dict | 
 def _count_messages() -> int:
     with SessionLocal() as session:
         return session.scalar(select(func.count(Message.id)))
+
+
+def _statuses_payload(statuses: list[dict]) -> dict:
+    return _payload([], value_extra={"statuses": statuses})
 
 
 def _count_inbound() -> int:
@@ -409,6 +414,97 @@ def test_error_131051_on_message_object_skipped(client, monkeypatch):
     resp = _post(client, _payload([raw]))
     assert resp.status_code == 200
     assert _count_messages() == 0
+
+
+# ---------------------------------------------------------------------------
+# Meta delivery statuses (S1-S3)
+# ---------------------------------------------------------------------------
+
+
+def _outbound_message(wamid: str, delivery_status: DeliveryStatus) -> int:
+    with SessionLocal() as session:
+        customer = Customer(phone_e164=f"+5691234{len(wamid):04d}")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        message = Message(
+            wamid=wamid,
+            conversation_id=conversation.id,
+            direction=MessageDirection.OUTBOUND,
+            msg_type=MessageType.TEXT,
+            text="mensaje",
+            status=MessageStatus.PROCESSED,
+            delivery_status=delivery_status,
+        )
+        session.add(message)
+        session.commit()
+        return message.id
+
+
+def test_failed_status_updates_message_and_audits_once(client, monkeypatch):
+    monkeypatch.setattr(router_module, "sweep_received", lambda limit=50: 0)
+    message_id = _outbound_message("wamid.meta-failed", DeliveryStatus.SENT)
+    failed = {
+        "id": "wamid.meta-failed",
+        "status": "failed",
+        "errors": [{"code": 131053, "title": "Media upload error", "message": "Audio rejected"}],
+    }
+
+    assert _post(client, _statuses_payload([failed])).status_code == 200
+    with SessionLocal() as session:
+        row = session.get(Message, message_id)
+        assert row.delivery_status == DeliveryStatus.FAILED
+        assert row.delivery_error == "131053: Media upload error — Audio rejected"
+        audits = session.scalars(select(AuditLog).where(
+            AuditLog.action == "message.delivery_failed", AuditLog.entity_id == str(message_id)
+        )).all()
+        assert len(audits) == 1
+        audit_count = session.scalar(select(func.count(AuditLog.id)))
+
+    assert _post(client, _statuses_payload([failed])).status_code == 200
+    with SessionLocal() as session:
+        row = session.get(Message, message_id)
+        assert row.delivery_status == DeliveryStatus.FAILED
+        assert row.delivery_error == "131053: Media upload error — Audio rejected"
+        assert session.scalar(select(func.count(AuditLog.id))) == audit_count
+
+    assert _post(client, _statuses_payload([{
+        "id": "wamid.meta-failed", "status": "sent"
+    }])).status_code == 200
+    with SessionLocal() as session:
+        row = session.get(Message, message_id)
+        assert row.delivery_status == DeliveryStatus.FAILED
+        assert row.delivery_error == "131053: Media upload error — Audio rejected"
+        assert session.scalar(select(func.count(AuditLog.id))) == audit_count
+
+
+def test_status_for_unknown_wamid_does_not_create_rows(client, monkeypatch):
+    monkeypatch.setattr(router_module, "sweep_received", lambda limit=50: 0)
+    before = _count_messages()
+    assert _post(client, _statuses_payload([{
+        "id": "wamid.unknown", "status": "failed", "errors": [{"code": 1}]
+    }])).status_code == 200
+    assert _count_messages() == before
+    assert _count_messages() == 0
+
+
+def test_delivered_status_marks_sent_but_not_failed(client, monkeypatch):
+    monkeypatch.setattr(router_module, "sweep_received", lambda limit=50: 0)
+    sent_id = _outbound_message("wamid.delivered", DeliveryStatus.SENT)
+    failed_id = _outbound_message("wamid.already-failed", DeliveryStatus.FAILED)
+    assert _post(client, _statuses_payload([
+        {"id": "wamid.delivered", "status": "delivered", "timestamp": "1723000000"},
+        {"id": "wamid.already-failed", "status": "read", "timestamp": "1723000000"},
+    ])).status_code == 200
+    with SessionLocal() as session:
+        sent = session.get(Message, sent_id)
+        failed = session.get(Message, failed_id)
+        assert sent.delivery_status == DeliveryStatus.SENT
+        assert sent.delivered_at is not None
+        assert failed.delivery_status == DeliveryStatus.FAILED
+        assert failed.delivered_at is None
 
 
 # ---------------------------------------------------------------------------
