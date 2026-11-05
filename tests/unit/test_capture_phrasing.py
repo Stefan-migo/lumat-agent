@@ -161,6 +161,51 @@ def test_the_question_marks_the_fact_it_offered_so_the_next_turn_does_not(monkey
     assert [key for key in seen[1] if key != "pending"] == [], seen[1]
 
 
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        (
+            "Cuéntame qué falla tiene la caldera: ¿no enciende?",
+            "Entiendo. Cuéntame qué falla tiene la caldera: ¿no enciende?",
+        ),
+        (
+            "Cuéntame qué pasa con el equipo: ¿no enciende?",
+            "Entiendo, es un problema con tu caldera. Cuéntame qué pasa con el equipo: ¿no enciende?",
+        ),
+    ],
+)
+def test_failure_question_acknowledges_equipment_once(monkeypatch, question, expected):
+    from app.chat.nodes import capture as capture_node
+
+    monkeypatch.setattr(capture_node, "get_capture_ack", lambda _session: "Entiendo. ")
+    monkeypatch.setattr(capture_node, "_field_questions", lambda _session: {})
+    monkeypatch.setattr(capture_node, "_phrase_question", lambda *_args: question)
+    captured = {"equipment_type": "caldera", "_asked": {"failure": 1}}
+
+    reply = capture_node._render_capture_question(object(), captured, ["failure"])
+
+    assert reply == expected
+    assert reply.count("Entiendo") == 1
+    assert reply.casefold().count("caldera") == 1
+    if "qué pasa con el equipo" in question:
+        assert captured["_acked"] == "Entiendo, es un problema con tu caldera."
+
+
+def test_non_failure_question_keeps_configured_ack_with_equipment_on_record(monkeypatch):
+    from app.chat.nodes import capture as capture_node
+
+    monkeypatch.setattr(capture_node, "get_capture_ack", lambda _session: "Entiendo. ")
+    monkeypatch.setattr(capture_node, "_field_questions", lambda _session: {})
+    monkeypatch.setattr(capture_node, "_phrase_question", lambda *_args: "¿En qué comuna estás?")
+    captured = {"equipment_type": "caldera", "_asked": {"failure": 1}}
+
+    reply = capture_node._render_capture_question(object(), captured, ["comuna"])
+
+    assert reply == "Entiendo. ¿En qué comuna estás?"
+    assert reply.count("Entiendo") == 1
+    assert "caldera" not in reply.casefold()
+
+
 def test_capture_question_round_trip_keeps_extractor_field(monkeypatch):
     from contextlib import contextmanager
     from app.chat.nodes import capture as capture_node
