@@ -736,13 +736,20 @@ def _render_capture_question(
     no reply ever said "caldera" (T5b, gate G6 on `super-burst-contradiccion`).
     """
     ask = _phrase_question(session, captured, batch, _field_questions(session))
-    ack = _render_capture_ack(session, captured)
-    if ack:
-        ask = f"{ack}{ask}"
     label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
-    if batch == ["failure"] and label:
-        ask = f"Entiendo, es un problema con tu {label}. {ask}"
-    return ask
+    if batch == ["failure"] and label and label.casefold() not in ask.casefold():
+        # T5b: the rewritten question can already name the equipment (as in the
+        # measured reply), so adding its label beside the configured ack repeats
+        # both the greeting and the appliance. Use one equipment-aware ack here.
+        equipment_ack = f"Entiendo, es un problema con tu {label}. "
+        if equipment_ack.strip() == (captured.get("_acked") or "").strip():
+            ack = ""
+        else:
+            captured["_acked"] = equipment_ack.strip()
+            ack = equipment_ack
+    else:
+        ack = _render_capture_ack(session, captured)
+    return f"{ack}{ask}"
 
 
 # S3: the three fields a returning customer should not have to retype. `name` is

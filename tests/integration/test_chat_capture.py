@@ -131,6 +131,21 @@ def _customer() -> Customer:
 # ---------------------------------------------------------------------------
 
 
+def test_first_diagnosis_question_acknowledges_equipment_once(mock_openai_chat):
+    conv_id = _start_conversation()
+
+    replies = _turn(
+        conv_id,
+        "soy Roberta, necesito arreglar mi caldera",
+        "wamid.capture-ack-duplicado",
+    )
+
+    diagnosis_question = " ".join(replies)
+    assert "Entiendo" in diagnosis_question
+    assert diagnosis_question.count("Entiendo") == 1
+    assert "caldera" in diagnosis_question.casefold()
+
+
 def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     conv_id = _start_conversation()
 
