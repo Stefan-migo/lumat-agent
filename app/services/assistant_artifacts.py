@@ -6,6 +6,7 @@ updated in place or deleted. The current version is the row with the highest `ve
 """
 
 import hashlib
+import logging
 import mimetypes
 from pathlib import Path
 from uuid import uuid4
@@ -43,8 +44,12 @@ def remove_files_after_commit(session: Session, paths: list[str]) -> None:
     event.listen(session, "after_rollback", _after_rollback)
 
 from app.config import get_settings
-from app.models import AssistantArtifact, InternalChatThread
+from app.models import AssistantArtifact, InternalChatThread, Project, ProjectFile, ProjectFolder, User
 from app.services.audit import record_audit
+from app.services import project_files
+from app.services.projects import normalize_slug
+
+logger = logging.getLogger(__name__)
 
 MAX_ARTIFACT_CONTENT_CHARS = 200_000
 
@@ -168,6 +173,75 @@ def append_revision(
                                                "version": row.version,
                                                "previous_version": latest.version})
     return row, True
+
+
+def save_or_append(
+    session: Session, thread: InternalChatThread, filename: str, content: str, actor: str
+) -> tuple[AssistantArtifact, bool]:
+    """Create one named deliverable or append its next content revision."""
+    name = safe_artifact_filename(filename)
+    data = _validated_bytes(content)
+    digest = hashlib.sha256(data).hexdigest()
+    current = next((row for row in list_artifacts(session, thread.id) if row.filename == name), None)
+    if current is None:
+        return store_artifact(session, thread, name, content, actor), True
+    if current.sha256 == digest:
+        return current, False
+    return append_revision(session, thread, current, content, actor)
+
+
+def publish_artifact(
+    session: Session, thread: InternalChatThread, artifact: AssistantArtifact, actor: str
+) -> ProjectFile | None:
+    """Best-effort publication of an artifact into its owning project's outputs folder."""
+    try:
+        slug = normalize_slug(thread.proyecto) if thread.proyecto else ""
+        if not slug or slug == "default":
+            return None
+        project = session.scalar(select(Project).where(
+            Project.slug == slug, Project.owner_id == thread.user_id
+        ))
+        owner = session.get(User, thread.user_id)
+        if project is None or owner is None:
+            return None
+        try:
+            project_files.allowed_project_file(artifact.filename, artifact.content_type, artifact.size)
+        except ValueError:
+            return None
+        folder = session.scalar(select(ProjectFolder).where(
+            ProjectFolder.project_id == project.id,
+            ProjectFolder.name == "outputs",
+            ProjectFolder.parent_id.is_(None),
+        ))
+        if folder is None:
+            folder = project_files.create_project_folder(session, project, owner, "outputs")
+        row = session.scalar(select(ProjectFile).where(
+            ProjectFile.project_id == project.id,
+            ProjectFile.source_artifact_root_id == artifact.root_id,
+        ))
+        content = Path(artifact.stored_path).read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        if row is None:
+            row = project_files.store_project_file(
+                session, project, owner, artifact.filename, artifact.content_type, content, folder_id=folder.id
+            )
+            row.source_artifact_root_id = artifact.root_id
+            action = "assistant_artifact.published"
+        else:
+            Path(row.stored_path).write_bytes(content)
+            row.size = len(content)
+            row.sha256 = digest
+            row.folder_id = folder.id
+            action = "assistant_artifact.republished"
+        record_audit(session, actor=actor, action=action, entity="project_file", entity_id=str(row.id),
+                     after={"project_id": project.id, "artifact_root_id": artifact.root_id,
+                            "artifact_id": artifact.id, "version": artifact.version,
+                            "filename": artifact.filename})
+        session.flush()
+        return row
+    except Exception as exc:
+        logger.warning("assistant artifact publication degraded: %s", exc)
+        return None
 
 
 def list_artifacts(session: Session, thread_id: int) -> list[AssistantArtifact]:

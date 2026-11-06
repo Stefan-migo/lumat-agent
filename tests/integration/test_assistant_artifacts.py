@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import AssistantArtifact, AuditLog, InternalChatThread, User
+from app.models import AssistantArtifact, AuditLog, InternalChatThread, User, Project, ProjectFile, ProjectFolder
 from app.services.assistant_artifacts import (
     append_revision,
     delete_artifact,
@@ -18,6 +18,8 @@ from app.services.assistant_artifacts import (
     owned_thread,
     revision_chain,
     store_artifact,
+    save_or_append,
+    publish_artifact,
 )
 from app.services.users import hash_password
 
@@ -384,6 +386,137 @@ def test_delete_artifact_endpoint_is_owner_scoped_and_removes_the_artifact(clien
     missing = client.delete(f"/panel/api/chat/threads/{thread_id}/artifacts/999999")
     assert missing.status_code == 404
     assert missing.json()["detail"] == "artifact not found"
+    get_settings.cache_clear()
+
+
+def test_save_or_append_deduplicates_and_revises_same_filename(monkeypatch, tmp_path):
+    with SessionLocal() as session:
+        _owner, thread, first = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-dedup-owner")
+        same, changed = save_or_append(session, thread, "report.md", "abc", "assistant")
+        assert changed is False
+        assert same.id == first.id
+        assert len(list_artifacts(session, thread.id)) == 1
+
+        revision, changed = save_or_append(session, thread, "report.md", "different", "assistant")
+        assert changed is True
+        assert revision.root_id == first.root_id
+        assert revision.version == 2
+        assert len(list_artifacts(session, thread.id)) == 1
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_publish_artifact_reuses_project_file_in_outputs(monkeypatch, tmp_path):
+    with SessionLocal() as session:
+        monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+        get_settings.cache_clear()
+        owner = User(username="artifact-publish-owner", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        project = Project(owner_id=owner.id, slug="publish-project", name="Project", purpose="Test", purpose_embedding=[0.0] * 384)
+        session.add(project)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, proyecto=project.slug)
+        session.add(thread)
+        session.flush()
+        artifact = store_artifact(session, thread, "report.md", "first", "assistant")
+        published = publish_artifact(session, thread, artifact, "assistant")
+        assert published.project_id == project.id
+        folder = session.get(ProjectFolder, published.folder_id)
+        assert folder.name == "outputs" and folder.parent_id is None
+        first_digest = published.sha256
+        updated, changed = append_revision(session, thread, artifact, "second", "assistant")
+        republished = publish_artifact(session, thread, updated, "assistant")
+        assert republished.id == published.id
+        assert republished.sha256 != first_digest
+        assert Path(republished.stored_path).read_bytes() == b"second"
+        from app.services.project_files import list_project_files, read_file_text
+        assert [row.id for row in list_project_files(session, project.id)] == [published.id]
+        assert read_file_text(list_project_files(session, project.id)[0])["text"] == "second"
+        audits = session.scalars(select(AuditLog).where(
+            AuditLog.action.in_(("assistant_artifact.published", "assistant_artifact.republished"))
+        )).all()
+        assert [row.action for row in audits] == ["assistant_artifact.published", "assistant_artifact.republished"]
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_assemble_context_lists_current_thread_artifact(monkeypatch, tmp_path):
+    from app.chat.assistant.nodes import assemble_context_node
+
+    with SessionLocal() as session:
+        _owner, thread, artifact = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-context-owner")
+        assembled = assemble_context_node({
+            "session": session, "thread_id": thread.id, "actor_role": "admin", "content": "hello",
+        })
+        inventory = next(item for item in assembled["context"]["items"] if item["source"] == "thread_artifacts")
+        assert f'- artifact #{artifact.id} "report.md" v1 (3 B)' in inventory["content"]
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_assemble_context_inventory_is_bounded(monkeypatch, tmp_path):
+    from app.chat.assistant.nodes import _ARTIFACT_INVENTORY_LIMIT, assemble_context_node
+
+    with SessionLocal() as session:
+        _owner, thread, _artifact = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-bound-owner")
+        for index in range(_ARTIFACT_INVENTORY_LIMIT + 3):
+            store_artifact(session, thread, f"extra-{index}.md", f"body {index}", "assistant")
+
+        assembled = assemble_context_node({
+            "session": session, "thread_id": thread.id, "actor_role": "admin", "content": "hello",
+        })
+        inventory = next(item for item in assembled["context"]["items"] if item["source"] == "thread_artifacts")
+        listed = [line for line in inventory["content"].splitlines() if line.startswith("- artifact #")]
+        assert len(listed) == _ARTIFACT_INVENTORY_LIMIT
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_deleting_the_thread_artifact_keeps_the_published_file(monkeypatch, tmp_path):
+    with SessionLocal() as session:
+        monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+        get_settings.cache_clear()
+        owner = User(username="artifact-keep-owner", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        project = Project(owner_id=owner.id, slug="keep-project", name="Project", purpose="Test", purpose_embedding=[0.0] * 384)
+        session.add(project)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, proyecto=project.slug)
+        session.add(thread)
+        session.flush()
+        artifact = store_artifact(session, thread, "keep.md", "keep me", "assistant")
+        published = publish_artifact(session, thread, artifact, "assistant")
+
+        delete_artifact(session, thread.id, artifact.id)
+
+        assert get_artifact(session, thread.id, artifact.id) is None
+        assert session.get(ProjectFile, published.id) is not None
+        assert Path(published.stored_path).read_bytes() == b"keep me"
+        session.rollback()
+    get_settings.cache_clear()
+
+
+def test_default_and_disallowed_artifacts_are_not_published(monkeypatch, tmp_path):
+    with SessionLocal() as session:
+        monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+        get_settings.cache_clear()
+        owner = User(username="artifact-no-publish-owner", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, proyecto="default")
+        session.add(thread)
+        session.flush()
+        artifact = store_artifact(session, thread, "report.md", "content", "assistant")
+        assert publish_artifact(session, thread, artifact, "assistant") is None
+        html = store_artifact(session, thread, "page.html", "<html>", "assistant")
+        project = Project(owner_id=owner.id, slug="publish-project", name="Project", purpose="Test", purpose_embedding=[0.0] * 384)
+        session.add(project)
+        session.flush()
+        thread.proyecto = project.slug
+        assert publish_artifact(session, thread, html, "assistant") is None
+        session.rollback()
     get_settings.cache_clear()
 
 

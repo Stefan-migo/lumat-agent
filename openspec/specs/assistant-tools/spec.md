@@ -350,3 +350,39 @@ The assistant MUST provide a read-only per-customer operational drill-down conta
 - GIVEN a request for a customer outside the resolved read scope or a failure while reading operational history
 - WHEN the drill-down is attempted
 - THEN the result reports an explicit error state rather than silence or an empty successful result
+
+### Requirement: AT-15 — Live Thread Artifact Inventory and Deduplicated Save
+The assistant MUST include the current artifacts of its thread in assembled context, bounded to the configured inventory limit, with each artifact's id, filename, version and size and guidance to edit it with `artifact.update`. `artifact.save` MUST reuse the current artifact root when the sanitized filename already exists in the thread: identical content MUST return the current revision unchanged without a new row, blob or audit, and different content MUST append a revision under the same root.
+
+#### Scenario: Current artifacts are available deterministically
+- GIVEN a thread with current artifacts
+- WHEN assistant context is assembled
+- THEN the bounded inventory lists each artifact id, filename, version and size and directs edits through `artifact.update`
+
+#### Scenario: Same named deliverable is deduplicated or revised
+- GIVEN a thread with a current artifact of the requested filename
+- WHEN `artifact.save` receives identical or different content
+- THEN identical content returns the current row without a new revision, while different content creates the next version under the same root
+
+### Requirement: AT-16 — Automatic Project Outputs Publication
+When a thread artifact is created or revised and its thread resolves to an owned project, the assistant MUST publish its bytes as a project file inside the root `outputs` folder. Publication MUST be best effort and MUST NOT fail the artifact operation when project resolution, owner lookup, allowed-file validation or publication fails. A revision MUST update the existing project file identified by project and artifact root, preserving its row identity and updating its bytes, size and digest. Publication MUST be audited as `assistant_artifact.published` or `assistant_artifact.republished`. The published file MUST survive deletion of the thread artifact.
+
+#### Scenario: Creation and revisions publish idempotently
+- GIVEN an artifact in a thread associated with an owned project
+- WHEN it is created and later revised
+- THEN one file in the project's `outputs` folder is created and then updated in place with the current bytes and an audit record
+
+#### Scenario: Unavailable or unsupported publication is non-fatal
+- GIVEN a default/unresolved project, missing owner, or artifact file type rejected by project file policy
+- WHEN the artifact is saved or revised
+- THEN the artifact operation succeeds without publishing a project file
+
+#### Scenario: Other project threads can read published output
+- GIVEN a published artifact file in a project's `outputs` folder
+- WHEN another thread of that project lists and reads project files
+- THEN it sees and reads the published file without access to the source thread
+
+#### Scenario: Published file survives artifact deletion
+- GIVEN a project file published from a thread artifact
+- WHEN the thread artifact is deleted
+- THEN the project file and its bytes remain available

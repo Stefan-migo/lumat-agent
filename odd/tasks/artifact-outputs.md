@@ -78,6 +78,11 @@ after={"project_id", "artifact_root_id", "artifact_id", "version", "filename"})`
 del hilo. Publicar en `outputs` no abre una escritura nueva de clase A: es la consecuencia declarada de un
 artifact que el owner ya autorizó en su hilo, y su alcance es solo el proyecto de ese hilo.
 
+**S13 — Borrar el artifact del hilo no borra el archivo publicado.**
+`artifact.delete` sigue borrando la cadena de revisiones y sus blobs del hilo; el archivo del proyecto
+sobrevive como un archivo normal de `outputs`. Son dos superficies distintas: la × del sidebar del hilo no
+es una orden de borrado sobre el proyecto. Ante la duda, no destruir.
+
 ## Fuera de alcance
 
 - `PANEL_KB_UNAVAILABLE`: un fallo de retrieval sigue cortando con su mensaje degradado. Es honesto, no es
@@ -120,6 +125,18 @@ artifact que el owner ya autorizó en su hilo, y su alcance es solo el proyecto 
       folder`. Commit propio: la migración es riesgo alto (ítem 1).
 - [ ] **T11 — Cierre.** `bash scripts/test.sh full` y `bash scripts/test.sh shape origin/main`; verificación
       independiente del diff completo (riesgo alto declarado en T9).
+
+## Delivery
+
+This branch exceeds the ~400 authored changed lines of a single review slice, so the boundary is
+declared here as a chain. Push, PR creation and merge remain the owner's decision.
+
+- **PR 1 — el rechazo** (`807fb9fd`): S1-S3. Self-contained, no schema change: the turn answers from its
+own tool evidence and an unsupported turn explains itself instead of a fixed sentence.
+- **PR 2 — el artifact** (`d09013dc` plus the behavior commit that follows it): S4-S13. It opens with
+the migration alone (`Risk: item 1`) so schema review never shares a commit with behavior.
+- Branch `odd/artifact-outputs-refusal` is cut at `807fb9fd` as the head of PR 1; this branch stays the
+  head of PR 2.
 
 ## Log
 
@@ -193,3 +210,22 @@ decision: retrieve_kb        <- la evidencia del tool se descarta
 Consecuencia: `odd/tasks/assistant-grounding-gate.md:201-221` ya había declarado esta salida como el
 primer item a revisar "if the panel assistant starts refusing questions it should answer", y pidió como
 evidencia el uso real. L6 es esa evidencia.
+
+**L7 — evidencia del cierre de S4-S13 y desvíos declarados (2026-11-06).**
+
+- `bash scripts/test.sh db tests/integration/test_assistant_artifacts.py` → **18 passed**.
+- `bash scripts/test.sh quick` → verde tras reconciliar el seam del test unitario.
+- Desvío 1 (orden de commits): el plan decía un commit por slice. El corte real es **migración+modelo
+  primero** y **comportamiento después**, porque `publish_artifact` no depende de `save_or_append` y
+  separar los slices exigía staging por hunks de cuatro archivos compartidos, con riesgo de dejar un
+  commit intermedio roto. La protección que importa —que la migración de riesgo alto se revise sola— se
+  cumple igual.
+- Desvío 2 (defecto del writer, corregido): `assemble_context_node` unía el inventario con `"\\n"`
+  literal, así que el bloque llegaba como una sola línea. Lo encontró el test del tope de S4 que agregué
+  en la revisión; el test original del writer usaba `in` sobre el texto y no lo veía. Lección: un test
+  por pertenencia no prueba la forma del payload.
+- Desvío 3 (seam de test): `tests/unit/test_assistant_tools.py` mockeaba `store_artifact`; el path real
+  es `save_or_append`. Se actualizó el double y ninguna aserción se relajó. El archivo no estaba en las
+  superficies que recibió el writer: omisión del orquestador, corregida inline.
+- Cobertura agregada en la revisión: tope del inventario (S4) y borrado del artifact que conserva el
+  archivo publicado (S13: el índice sin FK es lo que lo hace cierto).

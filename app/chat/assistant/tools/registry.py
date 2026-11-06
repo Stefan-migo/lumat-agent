@@ -807,11 +807,15 @@ def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = No
     if thread is None:
         raise ToolValidationError("no accessible chat thread for artifacts")
     try:
-        row = assistant_artifacts.store_artifact(session, thread, args.filename, args.content, actor="assistant")
+        row, changed = assistant_artifacts.save_or_append(session, thread, args.filename, args.content, actor="assistant")
     except ValueError as exc:
         raise ToolValidationError(str(exc)) from exc
+    assistant_artifacts.publish_artifact(session, thread, row, actor="assistant")
     return {
         "artifact_id": row.id,
+        "root_id": row.root_id,
+        "version": row.version,
+        "changed": changed,
         "filename": row.filename,
         "content_type": row.content_type,
         "size": row.size,
@@ -831,6 +835,7 @@ def _update_artifact(session, args: ArtifactUpdateArgs, *, owner_id: int | None 
         revision, changed = assistant_artifacts.append_revision(session, thread, row, args.content, actor="assistant")
     except ValueError as exc:
         raise ToolValidationError(str(exc)) from exc
+    assistant_artifacts.publish_artifact(session, thread, revision, actor="assistant")
     return {
         "artifact_id": revision.id,
         "root_id": revision.root_id,
