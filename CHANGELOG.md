@@ -6,6 +6,22 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.4] - 2026-11-06
+
+El audio que se envía desde el panel vuelve a llegar al WhatsApp del cliente. Fallaba en el contenedor, no en el
+códec: el navegador graba un MP4 **fragmentado** (`moof`), Meta acepta la subida y rechaza el envío con 131053.
+
+### Corregido
+
+- `normalize_audio` deja de confiar en la lista de contenedores que Meta documenta como aceptados: sólo devuelve
+  intacto un archivo que ya es Ogg/Opus, y todo lo demás se remuxea (copia los samples cuando ya son Opus,
+  reencodea cuando no). Medido en producción: un MP4 fragmentado de AAC 48 kHz mono, 5,38 s y 124 KB fallaba
+  con `131053: Media upload error`, y el mismo archivo remuxeado sale Ogg/Opus de 42 KB.
+- Un fallo de entrega ya se puede reintentar cuando el mensaje lleva medios: el `meta_media_id` cacheado apuntaba
+  a un medio que Meta nunca iba a procesar y «Reintentar entrega» reenviaba ese mismo id. Se limpia en los dos
+  caminos que pueden producir un fallo — el envío rechazado y el callback de estado, que es por donde llega el
+  131053 real. Un resultado `unknown` conserva su id, para no duplicar un mensaje que quizá salió.
+
 ## [2026.11.3] - 2026-11-04
 
 El bot deja de saludar dos veces en la primera pregunta de diagnóstico, y el panel deja de dar por enviado un
