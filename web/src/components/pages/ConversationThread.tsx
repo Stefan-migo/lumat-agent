@@ -15,6 +15,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { Markdown } from "../shared/Markdown";
+import { MessageAudio } from "../shared/MessageAudio";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { caseStatusLabel, caseStatusTone, conversationLabel } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
@@ -44,7 +45,9 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
       case "video":
         return <video className="conversation-thread__video" src={mediaUrl} controls aria-label={message.caption || "Video adjunto"} />;
       case "audio":
-        return <div className="conversation-thread__audio"><span>Audio adjunto</span><audio src={mediaUrl} controls aria-label={message.caption || "Audio adjunto"} /></div>;
+        // Voice notes get a designed player (panel-polish S3): the native widget drew a white pill
+        // over the bubble and stayed at 0:00 / 0:00 until the media was fully buffered.
+        return <MessageAudio src={mediaUrl} label={message.caption || "Audio adjunto"} />;
       case "document":
         return <a className="conversation-thread__document" href={mediaUrl} download={message.filename || true}>{message.filename || message.caption || "Descargar documento"}</a>;
       default:
@@ -240,8 +243,12 @@ export function ConversationThread({ conversationId, data: controlledData, state
     // Any other value is deliberately ignored: an unknown menu action must never mutate state
     // (previously anything unexpected fell through to emergency acknowledgement).
   };
-  const desktopActions = conversation ? <><Button disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={conversationMenuItems()} onSelect={runMenuAction} /></> : null;
-  const mobileActions = conversation ? <Menu trigger="icon" align="end" collisionPadding={8} label="Más acciones de la conversación" disabled={busy} items={conversationMenuItems({ includeTake: true, includeInfo: true })} onSelect={runMenuAction} /> : null;
+  // One control per slot, ordered once in the markup: take, info, client, then the overflow menu
+  // last. The mobile block in ConversationThread.css drops the take and info controls and keeps the
+  // mobile menu, so both layouts read in the order the owner asked for (S1/S2, panel-polish).
+  const takeAction = conversation ? <Button className="conversation-thread__take" disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button> : null;
+  const desktopMenu = conversation ? <span className="conversation-thread__menu conversation-thread__menu--desktop"><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={conversationMenuItems()} onSelect={runMenuAction} /></span> : null;
+  const mobileMenu = conversation ? <span className="conversation-thread__menu conversation-thread__menu--mobile"><Menu trigger="icon" align="end" collisionPadding={8} label="Más acciones de la conversación" disabled={busy} items={conversationMenuItems({ includeTake: true, includeInfo: true })} onSelect={runMenuAction} /></span> : null;
   const loadError = fetched.error;
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
@@ -262,9 +269,11 @@ export function ConversationThread({ conversationId, data: controlledData, state
         <span className="conversation-thread__id">· #{conversation.id}</span>
         <span role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></span>
         <div className="conversation-thread__header-actions">
-          {interactive ? <><span className="conversation-thread__actions-desktop">{desktopActions}</span><span className="conversation-thread__actions-mobile">{mobileActions}</span></> : null}
-          <Button variant="secondary" aria-label="Detalles del cliente" aria-pressed={detailOpen} onClick={() => setDetailOpen((open) => !open)}><Icon icon={Info} size="sm" /></Button>
-          <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Cliente</Button>
+          {interactive ? takeAction : null}
+          <Button className="conversation-thread__info" variant="secondary" aria-label="Detalles del cliente" aria-pressed={detailOpen} onClick={() => setDetailOpen((open) => !open)}><Icon icon={Info} size="sm" /></Button>
+          <Button className="conversation-thread__client" variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Cliente</Button>
+          {interactive ? desktopMenu : null}
+          {interactive ? mobileMenu : null}
         </div>
       </header> : null}
         {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>El histórico guardado sigue disponible.</span></p> : null}

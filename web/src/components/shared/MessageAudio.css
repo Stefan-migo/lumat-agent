@@ -1,0 +1,41 @@
+/* Voice-note player inside a thread bubble (panel-polish S3). Tokens only: it has to read the same
+   on the light inbound bubble and on the dark outbound one, so the inverted tone lives in the
+   `--outbound` override at the end and not in a hardcoded colour here. */
+.message-audio { display: flex; align-items: center; gap: var(--space-2); min-width: 0; width: 100%; --message-audio-accent: var(--primary-700); --message-audio-track: var(--border-strong); }
+/* The media element stays in the DOM as the engine; its native widget is what this replaces. */
+.message-audio__engine { display: none; }
+
+.message-audio__toggle { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: calc(var(--space-8) + var(--space-1)); height: calc(var(--space-8) + var(--space-1)); padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--primary-700); color: var(--surface); cursor: pointer; transition: background var(--duration-fast) var(--ease-out); }
+.message-audio__toggle:hover { background: var(--primary-800); }
+.message-audio__toggle:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+/* Reduced motion is a design-system rule, not a nicety. */
+@media (prefers-reduced-motion: reduce) {
+  .message-audio__toggle { transition: none; }
+}
+/* Touch-first widths get the 44px target the Button contract asks for. */
+@media (hover: none) {
+  .message-audio__toggle { width: calc(var(--space-8) + var(--space-3)); height: calc(var(--space-8) + var(--space-3)); }
+}
+
+/* The seek slider is a real range input (keyboard seeking for free). Chromium and Firefox draw the
+   track thinner than a hairline and ignore the panel tokens, so both vendor tracks and thumbs are
+   styled from the two local tokens below — no hex value outside tokens.css. */
+.message-audio__seek { flex: 1 1 auto; min-width: 0; height: var(--space-4); margin: 0; padding: 0; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.message-audio__seek:disabled { cursor: default; opacity: 0.5; }
+.message-audio__seek:focus-visible { border-radius: var(--radius-pill); outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.message-audio__seek::-webkit-slider-runnable-track { height: var(--space-1); border-radius: var(--radius-pill); background: var(--message-audio-track); }
+.message-audio__seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--space-3); height: var(--space-3); margin-top: calc((var(--space-1) - var(--space-3)) / 2); border: 0; border-radius: 50%; background: var(--message-audio-accent); }
+.message-audio__seek::-moz-range-track { height: var(--space-1); border-radius: var(--radius-pill); background: var(--message-audio-track); }
+.message-audio__seek::-moz-range-thumb { width: var(--space-3); height: var(--space-3); border: 0; border-radius: 50%; background: var(--message-audio-accent); }
+
+.message-audio__time { flex: 0 0 auto; font-size: var(--text-xs); font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0.85; }
+
+.message-audio__error { margin: 0; font-size: var(--text-sm); }
+.message-audio__download { color: inherit; text-decoration: underline; }
+
+/* Outbound bubbles are --primary-800 with --surface text (primitives.css), so the control inverts
+   instead of disappearing into the background and the slider swaps its two tokens. */
+.ai-agent-grammar__bubble--outbound .message-audio { --message-audio-accent: var(--primary-300); --message-audio-track: var(--primary-600); }
+.ai-agent-grammar__bubble--outbound .message-audio__toggle { background: var(--surface); color: var(--primary-800); }
+.ai-agent-grammar__bubble--outbound .message-audio__toggle:hover { background: var(--primary-100); }
+.ai-agent-grammar__bubble--outbound .message-audio__download { color: var(--surface); }
