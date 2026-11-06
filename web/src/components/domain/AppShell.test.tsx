@@ -696,6 +696,36 @@ describe('AppShell — native History API routing', () => {
 });
 
 describe('AppShell — agent shell grammar', () => {
+  it('decrements the shell unread badge when a notification is read on the full page', async () => {
+    window.history.replaceState({}, '', '/panel/app/notifications');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/panel/api/notifications/1/read') return new Response(JSON.stringify({ notification: { id: 1, read_at: '2026-09-03T12:00:01Z' } }), { status: 200 });
+      if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [{ id: 1, user_id: 1, operation_id: 1, title: 'Aviso urgente', content: 'Caso nuevo', source: 'case', channel: 'email', status: 'sent', read_at: null, created_at: null }] }), { status: 200 });
+      return new Response('{}', { status: 200 });
+    });
+    const { container } = render(<AppShell user={admin} />);
+
+    expect(await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' })).toBeInTheDocument();
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Marcar como leída' }));
+    expect(await headerActions(container).findByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
+    expect(screen.getByText('Leída')).toBeInTheDocument();
+  });
+
+  it('keeps mark-all working from the notification popover', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/panel/api/notifications/read-all') return new Response(JSON.stringify({ ok: true, read: 1 }), { status: 200 });
+      if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [{ id: 1, user_id: 1, operation_id: 1, title: 'Aviso', content: 'Caso', source: 'case', channel: 'email', status: 'sent', read_at: null, created_at: null }] }), { status: 200 });
+      return new Response('{}', { status: 200 });
+    });
+    const { container } = render(<AppShell user={admin} />);
+    await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' });
+    await userEvent.setup().click(headerActions(container).getByRole('button', { name: 'Notificaciones (1 sin leer)' }));
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Marcar todas como leídas' }));
+    expect(await headerActions(container).findByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
+  });
+
   it('opens the notification popover and navigates to the full center', async () => {
     const user = userEvent.setup();
     const logout = vi.fn();

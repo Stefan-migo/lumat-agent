@@ -449,6 +449,15 @@ unfinished surface, not a minimal one.
 - Disabled composers explain the exact reason. Do not use “Bot pausado” when the state means the bot is active; copy must reflect the actual state transition.
 - State actions use direct labels: `Tomar conversación`, `Cerrar conversación`, `Devolver al agente`, and `Enviar respuesta`.
 
+### Notificaciones
+
+- Keep the notification center as the single destination at every width; the mobile bell navigates here rather than opening a separate sheet or popover.
+- Each row shows a title, content, source, channel, and a readable timestamp. Unread state carries the visible label `Sin leer`, not colour alone.
+- The `Solo no leídas` checkbox remains a visibly labelled filter. Distinguish loading, session/permission errors, an empty inbox, and an empty filtered result.
+- Marking one notification read updates its row and the shell unread count immediately, then reconciles with the API response. A failed request restores the unread action and shows a recoverable error beside that row.
+- Keep the API's existing mark-one-read and mark-all-read actions; do not add notification actions or a second surface.
+- At narrow widths rows stack and controls remain usable with touch targets of at least 44px.
+
 ### Casos
 
 - Emergencies and unacknowledged items sort or surface before routine cases.

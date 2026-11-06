@@ -34,10 +34,6 @@
       "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
     },
     {
-      "entry": "pages/NotificationCenter.tsx: <ul>",
-      "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
-    },
-    {
       "entry": "pages/Settings.tsx: <ul>",
       "reason": "pre-existing surface: styled before the DESIGN_SYSTEM list grammar was enforced"
     },

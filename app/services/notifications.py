@@ -322,6 +322,33 @@ def _process_push_fallback(session: Session, operation: NotificationOperation) -
     process_operation(session, fallback.id)
 
 
+def _notify_admins_of_permanent_failure(session: Session, operation: NotificationOperation) -> None:
+    """Record an exhausted operation in the panel without push or realtime fan-out."""
+    if operation.source_entity == "notification_failure":
+        return
+    notice = create_operation(
+        session,
+        recipient="panel",
+        channel="panel",
+        content=f"La operación de notificación {operation.id} falló permanentemente: {operation.error or 'error desconocido'}",
+        source_entity="notification_failure",
+        source_id=f"notification-failure:{operation.id}",
+        idempotency_key=f"notification-failure:{operation.id}",
+        status="sent",
+        delivered_at=datetime.now(timezone.utc),
+    )
+    admins = session.scalars(select(User).where(User.role == UserRole.ADMIN)).all()
+    for admin in admins:
+        create_panel_notification(
+            session,
+            user_id=admin.id,
+            operation_id=notice.id,
+            title="Falló una notificación",
+            content=notice.content,
+            source="notification_failure",
+        )
+
+
 def process_operation(
     session: Session, operation_id: int, *, now: datetime | None = None, deliver=None
 ) -> bool:
@@ -368,6 +395,7 @@ def process_operation(
             record_audit(session, actor="system", action="notification.attempt_failed",
                          entity="notification_operation", entity_id=str(operation.id),
                          after={"attempt": operation.attempts, "error": error, "status": operation.status})
+            _notify_admins_of_permanent_failure(session, operation)
             session.flush()
             return False
         if operation.channel == "push":
@@ -379,6 +407,7 @@ def process_operation(
         if operation.attempts >= operation.max_attempts:
             operation.status = "permanently_failed"
             record_audit(session, actor="system", action="notification.exhausted", entity="notification_operation", entity_id=str(operation.id), after={"attempts": operation.attempts, "error": error})
+            _notify_admins_of_permanent_failure(session, operation)
         else:
             operation.status = "retryable"
             operation.next_attempt_at = now + timedelta(minutes=2 ** (operation.attempts - 1))
