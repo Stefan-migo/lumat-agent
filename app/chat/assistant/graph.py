@@ -42,15 +42,15 @@ def _after_guardrails(state: AssistantState) -> str:
     if _is_terminal_plan_failure(state):
         return END
     decision = (state.get("guardrails") or {}).get("decision")
-    if decision == "grounding_refusal":
-        return END
     if decision == "retrieve_kb":
         return "retrieve_kb"
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
 
 
 def _after_retrieve_kb(state: AssistantState) -> str:
-    return END if (state.get("guardrails") or {}).get("decision") in {"grounding_refusal", "kb_unavailable"} else "respond_stream"
+    # A retrieval failure is honest and ends the turn. An empty retrieval is not a verdict, it is a
+    # turn without support: the responder explains it instead of a fixed sentence ending the graph.
+    return END if (state.get("guardrails") or {}).get("decision") == "kb_unavailable" else "respond_stream"
 
 
 def _after_execute(state: AssistantState) -> str:

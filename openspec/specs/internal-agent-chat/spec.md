@@ -41,38 +41,61 @@ The agent MUST use the separate `AssistantState` graph for panel requests and pe
 
 ### Requirement: IAC-14 — Grounded Knowledge Responses
 
-The panel assistant MUST retrieve knowledge-base evidence before answering a non-conversational
-knowledge question, MUST answer only from non-empty retrieved chunks, and MUST return a deterministic
-clarification without an LLM answer when retrieval has no evidence. Short purely social messages MAY
-remain conversational; tool turns MUST retain their existing execution behavior.
+The panel assistant MUST answer every non-tool turn through the responder: no fixed sentence may replace
+the model's answer and no path may end the turn with a canned refusal. Before answering a
+non-conversational turn that has no tool evidence, it MUST retrieve knowledge-base evidence and MUST pass
+non-empty chunks to the responder in a bounded `<kb>` block.
+
+A turn that already executed a tool step MUST answer from that step's evidence and MUST NOT be routed to
+knowledge-base retrieval, whether the step succeeded or failed: the result is the turn's evidence.
+
+When retrieval returns no chunks and the turn has no tool evidence, the responder MUST run under an
+explicit no-evidence directive: it MUST state what it understood, which source it checked or would need,
+that it has no evidence for the answer, and the operator's concrete next step. It MUST NOT assert prices,
+policies, schedules or any other business fact without evidence, and MUST NOT claim an action that no
+tool result of the turn supports.
+
+Short purely social messages MAY remain conversational, and a greeting-prefixed knowledge question MUST
+NOT be exempt.
 
 When retrieval itself fails, the assistant MUST report the knowledge base as unavailable with degraded
-evidence and MUST NOT return the clarification: a failure is not an absence of evidence.
+evidence and MUST NOT present the failure as an absence of evidence.
 
 #### Scenario: Knowledge question with evidence
 
-- GIVEN a non-conversational panel question
+- GIVEN a non-conversational panel question with no tool step
 - WHEN retrieval returns non-empty knowledge-base chunks
 - THEN the responder receives them in a bounded `<kb>` evidence block and answers from that block
 
 #### Scenario: Knowledge question without evidence
 
-- GIVEN a non-conversational panel question
+- GIVEN a non-conversational panel question with no tool step
 - WHEN retrieval returns no non-empty chunks
-- THEN the assistant returns the deterministic panel clarification without calling the responder
+- THEN the responder runs with the no-evidence directive and no fixed sentence replaces its answer
+- AND the answer states what it checked, that it lacks the evidence, and the operator's concrete next step
+
+#### Scenario: Turn with its own tool evidence
+
+- GIVEN a turn that already executed at least one tool step
+- WHEN the reply is not another tool call
+- THEN the responder answers from that step's evidence and knowledge-base retrieval is not consulted
+- AND a failed step explains the failure instead of a fixed refusal
 
 #### Scenario: Knowledge base unavailable
 
 - GIVEN a non-conversational panel question
 - WHEN knowledge-base retrieval fails
 - THEN the assistant returns the knowledge-base-unavailable message with `degraded` evidence and does not call the responder
-- AND it MUST NOT return the clarification reserved for an empty retrieval
+- AND it MUST NOT present the failure as an absence of evidence
 
 #### Scenario: Conversational exemption
 
 - GIVEN a short purely social message
 - WHEN the panel assistant handles it
 - THEN it remains conversational and a greeting-prefixed knowledge question is not exempt
+
+(Previously: an empty retrieval returned a deterministic clarification without calling the responder, and
+a turn that had already run a tool lost its evidence to the same path.)
 
 ### Requirement: IAC-3 — Panel States
 
