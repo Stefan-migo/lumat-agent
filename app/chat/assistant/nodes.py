@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 _TOOL_EVIDENCE_LIMIT = 4_500
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
+_ARTIFACT_INVENTORY_LIMIT = 10
 MAX_ASSISTANT_TOOL_STEPS = 6
 # Bodies loaded for the responder every turn, even when the planner does not
 # declare them. Scoped to the responder: the planner keeps seeing only the
@@ -478,6 +479,18 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
         reference, pinned_skills = pinned_context(state["session"], thread)
         if reference:
             context["items"].append({"source": "pinned_resources", "content": reference})
+        try:
+            from app.services.assistant_artifacts import list_artifacts
+
+            artifacts = list_artifacts(state["session"], thread.id)[-_ARTIFACT_INVENTORY_LIMIT:][::-1]
+            if artifacts:
+                lines = [
+                    "Artifacts of this thread — rewrite one with artifact.update(artifact_id=...), do not save a second file with the same name:",
+                    *(f'- artifact #{row.id} "{row.filename}" v{row.version} ({row.size} B)' for row in artifacts),
+                ]
+                context["items"].append({"source": "thread_artifacts", "content": "\n".join(lines)})
+        except Exception as exc:
+            logger.warning("Skipping unavailable assistant artifact inventory: %s", exc)
         if effective is not None:
             effective["pinned_skills"] = pinned_skills
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}

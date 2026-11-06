@@ -204,8 +204,14 @@ def test_artifact_save_is_typed_bounded_and_serializes_only_download_metadata(mo
 
     monkeypatch.setattr("app.chat.assistant.tools.registry.assistant_artifacts.owned_thread", lambda *_args: SimpleNamespace(id=5))
     monkeypatch.setattr(
-        "app.chat.assistant.tools.registry.assistant_artifacts.store_artifact",
-        lambda *_args, **_kwargs: SimpleNamespace(id=9, thread_id=5, filename="r.md", content_type="text/markdown", size=3),
+        "app.chat.assistant.tools.registry.assistant_artifacts.save_or_append",
+        lambda *_args, **_kwargs: (
+            SimpleNamespace(
+                id=9, root_id=9, version=1, thread_id=5, filename="r.md",
+                content_type="text/markdown", size=3,
+            ),
+            True,
+        ),
     )
     result = execute_tool(SimpleNamespace(), "artifact.save", {"filename": "r.md", "content": "abc"}, owner_id=1, trusted_thread_id=5, role="admin")
     assert result["result"]["download_path"] == "/panel/api/chat/threads/5/artifacts/9/download"

@@ -39,6 +39,48 @@ def test_empty_kb_retrieval_reaches_the_responder_as_a_no_evidence_turn(monkeypa
     assert _after_retrieve_kb({**_respond_state(), **result}) == "respond_stream"
 
 
+def test_no_evidence_is_a_declared_assistant_state_channel():
+    """A state key nobody declared is dropped by LangGraph, so the directive would be dead text."""
+    from app.chat.assistant.state import AssistantState
+
+    assert "no_evidence" in AssistantState.__annotations__
+    assert "no_evidence" in build_assistant_graph().channels
+
+
+def test_no_evidence_reaches_the_responder_through_the_graph(monkeypatch):
+    """The empty-retrieval flag must cross a graph channel or the directive is never injected."""
+    from app.chat.assistant import graph as graph_module
+
+    seen: dict = {}
+
+    def fake_respond(state):
+        seen.update(state)
+        return {"response": "ok", "status": "completed"}
+
+    monkeypatch.setattr(graph_module, "assemble_context_node", lambda state: {})
+    monkeypatch.setattr(graph_module, "panel_cost_gate", lambda state: {"cost_mode": "normal"})
+    monkeypatch.setattr(graph_module, "memory_bootstrap", lambda state: {})
+    monkeypatch.setattr(graph_module, "plan_llm", lambda state: {
+        "plan": {"kind": "respond", "tool": None}, "status": "planned",
+    })
+    monkeypatch.setattr(graph_module, "guardrails", lambda state: {
+        "guardrails": {"decision": "retrieve_kb"}, "status": "responding",
+    })
+    monkeypatch.setattr(graph_module, "retrieve_kb", lambda state: {
+        "guardrails": {"decision": "respond"}, "no_evidence": True, "status": "responding", "evidence": [],
+    })
+    monkeypatch.setattr(graph_module, "execute", fake_respond)
+    monkeypatch.setattr(graph_module, "collect_evidence", lambda state: {})
+    monkeypatch.setattr(graph_module, "memory_capture_node", lambda state: {})
+
+    graph_module.build_assistant_graph().invoke({
+        "thread_id": 1, "user_id": 1, "content": "¿cuáles son las tarifas?",
+        "tool_results": [], "tool_steps": 0, "evidence": [],
+    })
+
+    assert seen.get("no_evidence") is True
+
+
 def test_turn_with_executed_tool_evidence_skips_kb_retrieval():
     state = _respond_state(
         content="ok actualiza el checklist con customers.search probado",
