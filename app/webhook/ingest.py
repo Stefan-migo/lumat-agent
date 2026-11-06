@@ -183,7 +183,16 @@ def _message_error_131051(raw: dict) -> bool:
 
 
 def _delivery_error(status: dict) -> tuple[str, str | None]:
-    """Format Meta's status errors into the operator-facing one-line reason."""
+    """Format Meta's status errors into the operator-facing one-line reason.
+
+    `error_data.details` is the only field that says what actually went wrong.
+    Meta fills `title` and `message` with the same useless pair -- measured on
+    131053, both read "Media upload error" -- while the detail carries the real
+    verdict, for example "Audio file uploaded with mimetype as audio/ogg, however
+    on processing it is of type application/octet-stream". Preferring `message`
+    threw that away on every audio failure and left the operator with a code and
+    no cause.
+    """
     errors = status.get("errors") or []
     parts: list[str] = []
     codes: list[str] = []
@@ -192,14 +201,16 @@ def _delivery_error(status: dict) -> tuple[str, str | None]:
             continue
         code = error.get("code")
         title = error.get("title")
-        message = error.get("message") or (error.get("error_data") or {}).get("details")
+        error_data = error.get("error_data") or {}
+        detail_text = error_data.get("details") if isinstance(error_data, dict) else None
+        reason = detail_text or error.get("message")
         if code is not None:
             codes.append(str(code))
-        detail = ": ".join(str(part) for part in (code, title) if part is not None)
-        if message:
-            detail = f"{detail} — {message}" if detail else str(message)
-        if detail:
-            parts.append(detail)
+        head = ": ".join(str(part) for part in (code, title) if part is not None)
+        if reason:
+            head = f"{head} — {reason}" if head else str(reason)
+        if head:
+            parts.append(head)
     return ("; ".join(parts) or "Meta no informó el motivo")[:2000], ",".join(codes) or None
 
 
@@ -247,6 +258,9 @@ def apply_delivery_statuses(statuses: list[dict]) -> None:
                         "cause": "Meta rejected delivery",
                         "wamid": wamid,
                         "code": code,
+                        # The formatted line can only carry 2000 chars; the raw
+                        # array is what makes a wrong formatter recoverable.
+                        "meta_errors": str(status.get("errors"))[:2000],
                     },
                 )
             elif state in {"delivered", "read"}:
