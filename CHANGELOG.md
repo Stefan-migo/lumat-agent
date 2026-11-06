@@ -6,6 +6,31 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.3] - 2026-11-04
+
+El bot deja de saludar dos veces en la primera pregunta de diagnóstico, y el panel deja de dar por enviado un
+mensaje que Meta rechazó: los estados de entrega del webhook ya no se descartan, así que un fallo de audio
+aparece con su código en vez de quedar como «enviado».
+
+### Corregido
+
+- Captura: la primera pregunta de diagnóstico saludaba dos veces y nombraba el equipo dos veces
+  («Entiendo, es un problema con tu caldera. Entiendo. Cuéntame qué falla tiene la caldera: …»). El
+  reconocimiento configurable y el prefijo de equipo de T5b se sumaban; ahora hay uno solo: si la pregunta ya
+  nombra el equipo se usa el texto configurable, y si no, la frase del equipo es el reconocimiento. El equipo
+  sigue nombrado (G6 no regresa) y la supresión de repeticiones se mantiene.
+- Webhook: los callbacks de estado de Meta llegan como `value.statuses` y el filtro de ingesta los descartaba
+  antes de que nada pudiera leerlos. Consecuencia medida en producción: cuatro audios salientes quedaron en
+  `delivery_status = sent`, con `wamid` y sin error, mientras el cliente no los recibía. Ahora `failed`
+  actualiza la fila, guarda el motivo desde `errors[]` (código, título y detalle, hasta 2000 caracteres) y deja
+  auditoría; `delivered` y `read` escriben `delivered_at`.
+
+### Cambiado
+
+- Un `sent` tardío ya no devuelve a `sent` una fila `failed`: Meta confirma el envío antes de intentar la
+  entrega, así que un `sent` posterior no es evidencia de que el fallo no ocurrió. Un `wamid` desconocido no
+  crea filas y el router sigue respondiendo 200, porque un no-200 hace que Meta reintente.
+
 ## [2026.11.2] - 2026-11-04
 
 El bot cierra la conversación cuando el cliente insiste en irse; el panel deja de culpar al navegador por un
