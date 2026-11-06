@@ -6,6 +6,20 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.6] - 2026-11-06
+
+El audio que se envía desde el panel llega al cliente. La causa no era el contenedor ni el códec: Meta aceptaba
+el archivo y lo rechazaba al procesarlo, y lo que distinguía a los archivos rechazados era cómo se habían
+producido.
+
+### Corregido
+
+- `normalize_audio` convierte en **dos pasos**, decodificando a PCM antes de encodear Ogg/Opus. Medido: la
+  grabación del navegador convertida en un paso la rechazaba Meta siempre, y la misma grabación pasando por WAV
+  la aceptaba siempre; los envíos se intercalaron para descartar el azar. El archivo de entrada arranca en un
+  timestamp negativo (retardo del codificador) y la conversión directa conservaba ese origen. Se retira el camino
+  de copia de samples: conservar los bytes de Opus era lo que arrastraba el problema.
+
 ## [2026.11.5] - 2026-11-06
 
 Un fallo de entrega deja de llegar al operador como un código sin motivo: Meta pone la causa real en
