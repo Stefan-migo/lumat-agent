@@ -437,6 +437,7 @@ def _outbound_message(wamid: str, delivery_status: DeliveryStatus) -> int:
             text="mensaje",
             status=MessageStatus.PROCESSED,
             delivery_status=delivery_status,
+            meta_media_id="poisoned-mid",
         )
         session.add(message)
         session.commit()
@@ -457,6 +458,9 @@ def test_failed_status_updates_message_and_audits_once(client, monkeypatch):
         row = session.get(Message, message_id)
         assert row.delivery_status == DeliveryStatus.FAILED
         assert row.delivery_error == "131053: Media upload error — Audio rejected"
+        # Meta answered the send with a wamid and rejected the media afterwards, so
+        # the cached id is the poisoned one: a retry has to upload again.
+        assert row.meta_media_id is None
         audits = session.scalars(select(AuditLog).where(
             AuditLog.action == "message.delivery_failed", AuditLog.entity_id == str(message_id)
         )).all()

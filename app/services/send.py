@@ -180,6 +180,9 @@ def _finalize_delivery(message_id: int, status: DeliveryStatus, error: str) -> N
         row = session.get(Message, message_id)
         row.delivery_status = status
         row.delivery_error = error[:2000]
+        if status == DeliveryStatus.FAILED:
+            # Meta 131053 rejects the send for an uploaded media id it will never process.
+            row.meta_media_id = None
         actor = session.scalar(select(User.username).where(User.id == row.author_id))
         cause = (
             "Meta rejected delivery"

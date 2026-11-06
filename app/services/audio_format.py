@@ -1,14 +1,14 @@
-"""Normalize an operator-uploaded audio file into a container Meta accepts.
+"""Normalize operator audio to the measured WhatsApp-safe container, Ogg/Opus.
 
-WhatsApp Cloud API accepts `audio/aac`, `audio/amr`, `audio/mpeg`, `audio/mp4` and `audio/ogg`,
-and for ogg it requires the Opus codec. Browsers do not produce all of those: Chromium records
-`audio/webm;codecs=opus`, which Meta rejects outright, and that is why the panel could receive an
-audio but never send one.
+Production files measured on 2026-11-06 were AAC 48 kHz mono, 5.38 seconds and 124 KB, with
+fragmented MP4 boxes ordered `ftyp`, `moov`, `moof`, `mdat`. Meta accepted the upload but rejected
+the send with 131053. Remuxing that file produced Ogg/Opus at 48 kHz mono, 5.38 seconds and
+42,378 bytes. The documented list of accepted containers was not sufficient evidence that every
+file in those containers could be sent; this is why those passthroughs were removed.
 
-The Opus samples inside a Chromium recording are already valid, so the fix is a *container remux*
-(`-c:a copy`): the recording keeps its exact audio and only the wrapper changes. A codec Meta
-cannot take at all is decoded once into Opus. Whatever Meta already accepts is returned untouched,
-so Firefox (ogg) and Safari (mp4) uploads keep their original bytes.
+Ogg/Opus uploads already have the measured output shape and remain untouched. Other Opus audio
+(such as browser WebM recordings) is remuxed with `-c:a copy`, preserving its encoded samples;
+other codecs are encoded to Opus.
 """
 
 from __future__ import annotations
@@ -17,19 +17,11 @@ import subprocess
 import uuid
 from pathlib import Path
 
-# Containers Meta accepts for an audio message (Meta docs: "Audio messages"). For ogg the codec
-# must be Opus; the base container alone is explicitly not supported.
-ACCEPTED_AUDIO_TYPES = frozenset({"audio/aac", "audio/amr", "audio/mpeg", "audio/mp4", "audio/ogg"})
+# Only this measured-and-normalized output container is passed through to Meta.
+ACCEPTED_AUDIO_TYPES = frozenset({"audio/ogg"})
 
-# Suffix per accepted type: an operator upload is renamed to match what is actually stored, so the
-# panel, the audit row and Meta all describe the same file.
-AUDIO_SUFFIXES = {
-    "audio/aac": ".aac",
-    "audio/amr": ".amr",
-    "audio/mpeg": ".mp3",
-    "audio/mp4": ".m4a",
-    "audio/ogg": ".ogg",
-}
+# Suffixes for the containers normalize_audio may return; the stored filename matches the bytes.
+AUDIO_SUFFIXES = {"audio/ogg": ".ogg"}
 
 NORMALIZED_CONTENT_TYPE = "audio/ogg"
 FFMPEG_TIMEOUT_SECONDS = 120.0
@@ -81,21 +73,17 @@ def _run_ffmpeg(source: Path, target: Path, *, copy_audio: bool) -> None:
 
 
 def normalize_audio(path: Path, content_type: str) -> tuple[Path, str]:
-    """Return a Meta-acceptable audio file and its content type.
+    """Return an Ogg/Opus audio file and its content type.
 
-    The original path is returned unchanged when the upload is already acceptable; otherwise a
-    new `.ogg` file is written next to it and the caller owns its cleanup.
+    Ogg/Opus is returned unchanged; all other uploads are written to a new `.ogg` file beside
+    the source, and the caller owns its cleanup.
     """
     path = Path(path)
     # Browsers append codec parameters (`audio/ogg;codecs=opus`, `audio/webm;codecs=opus`), which
     # Meta does not accept in the upload `type` field. The container is what decides.
     base_type = content_type.split(";", 1)[0].strip().lower()
-    accepted = base_type in ACCEPTED_AUDIO_TYPES
     codec = audio_codec(path)
-    # `audio/ogg` is only acceptable with Opus, so the codec decides even when the container is
-    # already in the accepted set. Other accepted containers are taken at face value: Meta is the
-    # authority on their codec, and rewriting them would change bytes nobody asked to change.
-    if accepted and (base_type != "audio/ogg" or codec == "opus"):
+    if base_type in ACCEPTED_AUDIO_TYPES and codec == "opus":
         return path, base_type
 
     target = path.parent / f"{path.stem}-{uuid.uuid4().hex[:8]}.ogg"

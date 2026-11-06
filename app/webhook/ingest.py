@@ -227,6 +227,11 @@ def apply_delivery_statuses(statuses: list[dict]) -> None:
                 error, code = _delivery_error(status)
                 row.delivery_status = DeliveryStatus.FAILED
                 row.delivery_error = error
+                # The real 131053 arrives here, not as a rejected send: Meta answers
+                # the send with a wamid and fails the media afterwards. Dropping the
+                # cached id is what lets `Reintentar entrega` upload the file again
+                # instead of re-sending an id Meta will never process.
+                row.meta_media_id = None
                 actor = session.scalar(select(User.username).where(User.id == row.author_id))
                 record_audit(
                     session,
