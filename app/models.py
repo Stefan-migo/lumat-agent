@@ -1028,6 +1028,7 @@ class ProjectFile(Base):
     kb_document_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("kb_documents.id", ondelete="SET NULL"))
     # 055: the containing folder; null is the project root.
     folder_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("project_folders.id", ondelete="SET NULL"))
+    source_artifact_root_id: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = _ts()
 
 
