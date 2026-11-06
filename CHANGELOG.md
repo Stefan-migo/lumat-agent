@@ -6,6 +6,17 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.5] - 2026-11-06
+
+Un fallo de entrega deja de llegar al operador como un código sin motivo: Meta pone la causa real en
+`error_data.details` y repetía «Media upload error» en `title` y `message`, que era el campo que se leía.
+
+### Corregido
+
+- El motivo de un fallo de entrega prefiere `error_data.details`, y el array crudo de errores queda guardado en la
+  auditoría (`meta_errors`), para que un formateador equivocado no vuelva a destruir la evidencia. Medido con el
+  131053 de audio: antes el operador leía `131053: Media upload error — Media upload error`, sin causa.
+
 ## [2026.11.4] - 2026-11-06
 
 El audio que se envía desde el panel vuelve a llegar al WhatsApp del cliente. Fallaba en el contenedor, no en el
