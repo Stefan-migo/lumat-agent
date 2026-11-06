@@ -111,6 +111,9 @@ class AssistantState(TypedDict, total=False):
     compaction: dict
     extension_hooks: dict
     kb_chunks: list[dict]
+    # Set by `retrieve_kb` when retrieval returned nothing. It must be declared here: LangGraph drops
+    # a write to an undeclared channel, which would leave the no-evidence directive as dead text.
+    no_evidence: bool
     legacy_compat: bool
     resume: bool
     cost_mode: Literal["normal", "conservative", "blocked"]

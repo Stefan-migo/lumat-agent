@@ -473,6 +473,41 @@ def test_assemble_context_inventory_is_bounded(monkeypatch, tmp_path):
     get_settings.cache_clear()
 
 
+def test_identical_save_neither_writes_a_blob_nor_audits_a_republish(monkeypatch, tmp_path):
+    """S5: re-saving the same bytes is a no-op for the artifact and for its published copy."""
+    with SessionLocal() as session:
+        monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+        get_settings.cache_clear()
+        owner = User(username="artifact-idempotent-owner", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        project = Project(owner_id=owner.id, slug="idempotent-project", name="Project", purpose="Test", purpose_embedding=[0.0] * 384)
+        session.add(project)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, proyecto=project.slug)
+        session.add(thread)
+        session.flush()
+
+        first, created = save_or_append(session, thread, "same.md", "body", "assistant")
+        publish_artifact(session, thread, first, "assistant")
+        again, created_again = save_or_append(session, thread, "same.md", "body", "assistant")
+        publish_artifact(session, thread, again, "assistant")
+
+        assert created is True
+        assert created_again is False
+        assert again.id == first.id
+        actions = [
+            row.action for row in session.scalars(
+                select(AuditLog).where(AuditLog.action.like("assistant_artifact.%")).order_by(AuditLog.id)
+            )
+        ]
+        assert actions == ["assistant_artifact.created", "assistant_artifact.published"]
+        published = session.scalar(select(ProjectFile).where(ProjectFile.project_id == project.id))
+        assert published.sha256 == first.sha256
+        session.rollback()
+    get_settings.cache_clear()
+
+
 def test_deleting_the_thread_artifact_keeps_the_published_file(monkeypatch, tmp_path):
     with SessionLocal() as session:
         monkeypatch.setenv("MEDIA_DIR", str(tmp_path))

@@ -182,6 +182,12 @@ def save_or_append(
     name = safe_artifact_filename(filename)
     data = _validated_bytes(content)
     digest = hashlib.sha256(data).hexdigest()
+    # Artifact writes for one thread serialize here. Two concurrent first saves of the same filename
+    # would otherwise both read no current row and each open its own root, which is the duplicate this
+    # function exists to prevent. The lock order is thread then root, always.
+    session.scalar(
+        select(InternalChatThread.id).where(InternalChatThread.id == thread.id).with_for_update()
+    )
     current = next((row for row in list_artifacts(session, thread.id) if row.filename == name), None)
     if current is None:
         return store_artifact(session, thread, name, content, actor), True
@@ -193,7 +199,12 @@ def save_or_append(
 def publish_artifact(
     session: Session, thread: InternalChatThread, artifact: AssistantArtifact, actor: str
 ) -> ProjectFile | None:
-    """Best-effort publication of an artifact into its owning project's outputs folder."""
+    """Best-effort publication of an artifact into its owning project's outputs folder.
+
+    A savepoint bounds every write below: a publication that cannot complete must leave the artifact
+    operation intact, and a failed flush would otherwise poison the caller's transaction and lose the
+    artifact row the turn exists to produce.
+    """
     try:
         slug = normalize_slug(thread.proyecto) if thread.proyecto else ""
         if not slug or slug == "default":
@@ -208,36 +219,42 @@ def publish_artifact(
             project_files.allowed_project_file(artifact.filename, artifact.content_type, artifact.size)
         except ValueError:
             return None
-        folder = session.scalar(select(ProjectFolder).where(
-            ProjectFolder.project_id == project.id,
-            ProjectFolder.name == "outputs",
-            ProjectFolder.parent_id.is_(None),
-        ))
-        if folder is None:
-            folder = project_files.create_project_folder(session, project, owner, "outputs")
-        row = session.scalar(select(ProjectFile).where(
-            ProjectFile.project_id == project.id,
-            ProjectFile.source_artifact_root_id == artifact.root_id,
-        ))
         content = Path(artifact.stored_path).read_bytes()
         digest = hashlib.sha256(content).hexdigest()
-        if row is None:
-            row = project_files.store_project_file(
-                session, project, owner, artifact.filename, artifact.content_type, content, folder_id=folder.id
-            )
-            row.source_artifact_root_id = artifact.root_id
-            action = "assistant_artifact.published"
-        else:
-            Path(row.stored_path).write_bytes(content)
-            row.size = len(content)
-            row.sha256 = digest
-            row.folder_id = folder.id
-            action = "assistant_artifact.republished"
-        record_audit(session, actor=actor, action=action, entity="project_file", entity_id=str(row.id),
-                     after={"project_id": project.id, "artifact_root_id": artifact.root_id,
-                            "artifact_id": artifact.id, "version": artifact.version,
-                            "filename": artifact.filename})
-        session.flush()
+        with session.begin_nested():
+            folder = session.scalar(select(ProjectFolder).where(
+                ProjectFolder.project_id == project.id,
+                ProjectFolder.name == "outputs",
+                ProjectFolder.parent_id.is_(None),
+            ))
+            if folder is None:
+                folder = project_files.create_project_folder(session, project, owner, "outputs")
+            row = session.scalar(select(ProjectFile).where(
+                ProjectFile.project_id == project.id,
+                ProjectFile.source_artifact_root_id == artifact.root_id,
+            ))
+            if row is None:
+                row = project_files.store_project_file(
+                    session, project, owner, artifact.filename, artifact.content_type, content,
+                    folder_id=folder.id,
+                )
+                row.source_artifact_root_id = artifact.root_id
+                action = "assistant_artifact.published"
+            elif row.sha256 == digest:
+                # The published copy already carries these exact bytes: nothing to write and nothing to
+                # audit. Re-saving an unchanged deliverable is the duplicate this feature removes, and
+                # re-parenting a file the operator may have moved would be an unasked-for mutation.
+                return row
+            else:
+                Path(row.stored_path).write_bytes(content)
+                row.size = len(content)
+                row.sha256 = digest
+                action = "assistant_artifact.republished"
+            record_audit(session, actor=actor, action=action, entity="project_file", entity_id=str(row.id),
+                         after={"project_id": project.id, "artifact_root_id": artifact.root_id,
+                                "artifact_id": artifact.id, "version": artifact.version,
+                                "filename": artifact.filename})
+            session.flush()
         return row
     except Exception as exc:
         logger.warning("assistant artifact publication degraded: %s", exc)

@@ -229,3 +229,32 @@ evidencia el uso real. L6 es esa evidencia.
   superficies que recibió el writer: omisión del orquestador, corregida inline.
 - Cobertura agregada en la revisión: tope del inventario (S4) y borrado del artifact que conserva el
   archivo publicado (S13: el índice sin FK es lo que lo hace cierto).
+
+**L8 — verificación independiente y su corrección (2026-11-06).**
+
+El verificador independiente (`gentle-ai-verify`, read-only, sin pytest) encontró un bloqueante que los
+tests del writer no podían ver:
+
+- **F1 (bloqueante, S3 no se cumplía).** `retrieve_kb` escribía `no_evidence` en el estado, pero
+  `AssistantState` no lo declaraba (`state.py:113` declaraba `kb_chunks` al lado), y **LangGraph descarta
+  las escrituras a canales no declarados** (`langgraph/pregel/_algo.py:308-312`). La directiva
+  `{{no_evidence}}` se sustituía siempre por `""`: texto muerto. El test unitario pasaba porque armaba el
+  estado a mano y nunca cruzaba el grafo. **Corregido**: el canal declarado, y dos tests de regresión —
+  el canal existe en `AssistantState.__annotations__` y en `build_assistant_graph().channels`, y el flag
+  sobrevive hasta `respond_stream` en un grafo real con nodos stub.
+- **F2.** Un `artifact.save` idéntico reescribía el archivo publicado y auditaba `republished`. Ahora
+  `publish_artifact` no escribe ni audita si el `sha256` publicado ya coincide, y no re-parenta un archivo
+  que el operador haya movido.
+- **F3.** Dos primeros saves concurrentes del mismo filename podían abrir dos raíces. `save_or_append`
+  toma la fila del hilo con `FOR UPDATE`; orden de locks: hilo y después raíz.
+- **F4.** Un flush fallido dentro de la publicación envenenaba la sesión y se perdía el artifact. La
+  publicación vive ahora en un `SAVEPOINT`; un fallo revierte solo la publicación.
+- **F5 (aceptado).** El nombre del artifact viaja al `<context>` sin escapar, la misma clase de carrier
+  que el historial del hilo; sin privilegio nuevo. Se deja declarado.
+- **F6.** El inventario mostraba los 10 roots más viejos. Ahora muestra los más recientes primero.
+
+**Stall de `tests/functional/test_seed_dev.py`, medido.** Las dos primeras corridas del `full` murieron en
+su `pytest-timeout` de 120 s. Diferencial contra el worktree `main` intacto: el mismo test aislado
+**pasa**, en 1m46s (106 s) de un techo de 120 s. No es un test que se caiga por sí solo ni una regresión
+de este branch: vive a 14 s del techo y cualquier carga concurrente lo empuja. No se baja el techo ni se
+sube el timeout.

@@ -482,7 +482,7 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
         try:
             from app.services.assistant_artifacts import list_artifacts
 
-            artifacts = list_artifacts(state["session"], thread.id)[:_ARTIFACT_INVENTORY_LIMIT]
+            artifacts = list_artifacts(state["session"], thread.id)[-_ARTIFACT_INVENTORY_LIMIT:][::-1]
             if artifacts:
                 lines = [
                     "Artifacts of this thread — rewrite one with artifact.update(artifact_id=...), do not save a second file with the same name:",
