@@ -30,6 +30,11 @@ def _packet_hashes(path: Path) -> list[str]:
     return [line.split(",", 1)[0] for line in result.stdout.strip().splitlines()]
 
 
+def _start_time(path: Path) -> float:
+    raw = _probe(path, "format=start_time")
+    return float(raw) if raw and raw != "N/A" else 0.0
+
+
 def test_fragmented_mp4_is_normalized_to_ogg_opus(tmp_path):
     source = tmp_path / "fragmented.mp4"
     _ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=0.4", "-c:a", "aac", "-movflags", "frag_keyframe+empty_moov", str(source))
@@ -54,7 +59,13 @@ def test_ogg_opus_is_returned_untouched(tmp_path):
     assert _probe(output, "stream=codec_name") == "opus"
 
 
-def test_webm_opus_is_remuxed_to_ogg_without_changing_samples(tmp_path):
+def test_webm_opus_is_re_encoded_to_ogg_through_pcm(tmp_path):
+    """The copy path is gone on purpose.
+
+    Copying Opus samples out of a browser container kept the source's negative start
+    timestamp, and that shape is what Meta refused with 131053 while identical audio
+    through an intermediate WAV was accepted. Bit-exactness was the wrong trade.
+    """
     source = tmp_path / "voice.webm"
     _ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=0.4", "-c:a", "libopus", str(source))
     source_packets = _packet_hashes(source)
@@ -65,7 +76,26 @@ def test_webm_opus_is_remuxed_to_ogg_without_changing_samples(tmp_path):
     assert output != source
     assert _probe(output, "format=format_name") == "ogg"
     assert _probe(output, "stream=codec_name") == "opus"
-    assert _packet_hashes(output) == source_packets
+    assert _packet_hashes(output) != source_packets
+
+
+def test_a_browser_recording_is_normalized_to_a_zero_origin(tmp_path):
+    """The property the failing production file violated.
+
+    A real `MediaRecorder` MP4 reports a negative start time (encoder delay). Encoding
+    it straight into libopus kept that origin and Meta answered 131053 every time;
+    two steps through PCM start at zero and Meta accepted it. A synthetic fixture does
+    not reproduce the delay, so this pins the output property that the two-step path
+    guarantees, and the docstring keeps the measurement it stands for.
+    """
+    source = tmp_path / "recording.mp4"
+    _ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=0.4", "-c:a", "aac",
+            "-movflags", "frag_keyframe+empty_moov", str(source))
+
+    output, _ = normalize_audio(source, "audio/mp4")
+
+    assert _start_time(output) == 0
+    assert _probe(output, "format=format_name") == "ogg"
 
 
 def test_unreadable_audio_raises_normalization_error(tmp_path):
