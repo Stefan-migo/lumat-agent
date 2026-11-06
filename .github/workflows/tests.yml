@@ -11,7 +11,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 15 matches the `panel` job. The budget has to cover `uv sync`, the apt
+    # install below and the suite, and on 2026-11-04 three `test` jobs were
+    # cancelled at 10 minutes while still inside `apt-get install ffmpeg` — the
+    # required check failing for a reason the diff had nothing to do with, and
+    # every one of those reruns then passed in about five minutes.
+    timeout-minutes: 15
     env:
       # Disposable localhost credentials for a throwaway container — not project
       # secrets, so no repository secret is wired.
@@ -47,8 +52,10 @@ jobs:
       - run: uv sync --frozen
       # app/services/audio_format.py shells out to ffmpeg to remux a Chromium recording into the
       # ogg/opus container Meta requires, and the production image installs it for the same reason.
-      # Stated here instead of relying on the runner image carrying it.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      # Stated here instead of relying on the runner image carrying it — but installed only when the
+      # image does not already have it, so a run does not pay two minutes of apt for nothing and, more
+      # importantly, does not spend part of its budget on the step that kept cancelling the job.
+      - run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
       - run: uv run pytest tests/
 
   # The panel gate. `uv run pytest` only covers the Python side, so a TypeScript
