@@ -10,7 +10,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: on 2026-11-06 the `latest` image for this job had
+    # no ffmpeg, the guarded install spent 14 minutes in `apt-get` and the job was
+    # cancelled at its limit without running a single test. A gate cannot depend on
+    # whichever image `latest` resolves to that day.
+    runs-on: ubuntu-24.04
     # 15 matches the `panel` job. The budget has to cover `uv sync`, the apt
     # install below and the suite, and on 2026-11-04 three `test` jobs were
     # cancelled at 10 minutes while still inside `apt-get install ffmpeg` — the
@@ -55,7 +59,11 @@ jobs:
       # Stated here instead of relying on the runner image carrying it — but installed only when the
       # image does not already have it, so a run does not pay two minutes of apt for nothing and, more
       # importantly, does not spend part of its budget on the step that kept cancelling the job.
-      - run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+      # Bounded on purpose: an apt that hangs must fail this step with a readable
+      # message inside the job's budget, not consume the budget and report the job as
+      # cancelled while the suite never ran.
+      - run: command -v ffmpeg || (timeout 300 bash -c 'sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg')
+      - run: ffmpeg -version | head -1
       - run: uv run pytest tests/
 
   # The panel gate. `uv run pytest` only covers the Python side, so a TypeScript
@@ -74,7 +82,7 @@ jobs:
   # If it flakes again, lower vitest concurrency or harden the slow suite —
   # never delete it.
   panel:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
