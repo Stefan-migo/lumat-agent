@@ -48,13 +48,24 @@ MAX_ASSISTANT_TOOL_STEPS = 6
 # declare them. Scoped to the responder: the planner keeps seeing only the
 # skill index ({name, description}), never these bodies (D8).
 ALWAYS_ON_RESPONDER_SKILLS = ("memoria-tukulpan",)
-PANEL_GROUNDING_REFUSAL = (
-    "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
-    "Reformula la consulta o aporta más contexto."
-)
 PANEL_KB_UNAVAILABLE = (
     "La base de conocimiento no está disponible para esta consulta. "
     "No pude consultarla; un operador deberá revisarla."
+)
+# The responder is never replaced by a fixed sentence: an unsupported turn has to say what it looked
+# for, what it is missing and what the operator can do. The prohibition is what preserves the
+# grounding guarantee; the explanation is what removes the dead end.
+NO_EVIDENCE_DIRECTIVE = (
+    "<no_evidence>\n"
+    "This turn has no tool result and no retrieved knowledge-base chunk. Do not answer from general "
+    "knowledge and do not deny the request with a boilerplate sentence. Instead: state what you "
+    "understood the request to be; say which source you checked or which one you would need "
+    "(knowledge base, a project file, or a tool the operator can name); say plainly that you have no "
+    "evidence for it; and give the operator the concrete next step (name the exact client, case, date "
+    "or document, or ask for the tool that reads it). Never state prices, policies, schedules or any "
+    "other business fact without evidence behind it, and never claim an action you did not run in "
+    "this turn.\n"
+    "</no_evidence>"
 )
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
@@ -571,6 +582,32 @@ def _responder_system_prompt(state, config) -> str:
     return f"{persona}\n\n{skills}" if skills else persona
 
 
+def _responder_prompt(state, config) -> str:
+    """Render the responder template for this turn, including the no-evidence directive."""
+    prompt = config.prompts["respond"]
+    tool_statement = (
+        "A panel tool has already run for this request. Use its evidence to answer with text only; "
+        "you must not emit tool-call markup."
+        if state.get("tool_result") is not None
+        else "No panel tool ran for this request in this turn. The listed tools are available "
+        "to this assistant; never state that you cannot use or execute them. Answer with text "
+        "only; you must not emit tool-call markup."
+    )
+    for key, value in {
+        "user_input": state["content"],
+        "available_tools": ", ".join(_effective_tools(state)),
+        "tool_statement": tool_statement,
+        "tool_evidence": _render_tool_evidence(state),
+        "kb_evidence": _render_kb_evidence(state),
+        "context": _context_text(state),
+        "no_evidence": NO_EVIDENCE_DIRECTIVE if state.get("no_evidence") else "",
+    }.items():
+        prompt = prompt.replace("{{" + key + "}}", str(value))
+    if state.get("cost_directive"):
+        prompt += "\n\n" + state["cost_directive"]
+    return prompt
+
+
 def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
     return tool_name in AUTONOMOUS_WRITE_ALLOWLIST and type(thread_id) is int and thread_id > 0
 
@@ -582,6 +619,11 @@ def _is_conversational_turn(content: str) -> bool:
         return False
     words = re.findall(r"[\wáéíóúüñ]+", text)
     return bool(words) and all(word in _SOCIAL_WORDS for word in words)
+
+
+def _has_turn_evidence(state: AssistantState) -> bool:
+    """True when this turn already ran at least one tool step, successful or failed."""
+    return bool(state.get("tool_steps")) and bool(state.get("tool_results"))
 
 
 def guardrails(state: AssistantState) -> AssistantState:
@@ -621,7 +663,11 @@ def guardrails(state: AssistantState) -> AssistantState:
             "status": "responding",
         }
     if plan_data.get("kind") != "tool" or not tool_name:
-        decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
+        # A turn that already executed a tool keeps its own evidence. Routing it to the knowledge
+        # base discards the result and, on an empty retrieval, replaces the answer with a refusal:
+        # the measured case is a tool turn whose follow-up plan answered from nothing at all.
+        conversational = _has_turn_evidence(state) or _is_conversational_turn(state.get("content", ""))
+        decision = "respond" if conversational else "retrieve_kb"
         return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
     whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
@@ -918,15 +964,17 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
             and chunk["content"].strip()
         ]
     if not chunks:
+        # No evidence is a turn without support, not a verdict: the responder explains it instead of
+        # a fixed sentence cutting the turn before the model ever sees it.
         return {
-            "guardrails": {**state.get("guardrails", {}), "decision": "grounding_refusal"},
+            "guardrails": {**state.get("guardrails", {}), "decision": "respond"},
+            "no_evidence": True,
             "evidence": [make_evidence(
                 tool="kb.retrieve",
                 status="completed",
                 detail="No grounded knowledge-base evidence found",
             )],
-            "response": PANEL_GROUNDING_REFUSAL,
-            "status": "completed",
+            "status": "responding",
         }
     return {
         "kb_chunks": chunks,
@@ -1059,26 +1107,7 @@ def execute(state: AssistantState) -> AssistantState:
         from app.services.prompts import load_assistant_config
 
         config = load_assistant_config(role=state.get("actor_role"))
-        prompt = config.prompts["respond"]
-        tool_statement = (
-            "A panel tool has already run for this request. Use its evidence to answer with text only; "
-            "you must not emit tool-call markup."
-            if state.get("tool_result") is not None
-            else "No panel tool ran for this request in this turn. The listed tools are available "
-            "to this assistant; never state that you cannot use or execute them. Answer with text "
-            "only; you must not emit tool-call markup."
-        )
-        for key, value in {
-            "user_input": state["content"],
-            "available_tools": ", ".join(_effective_tools(state)),
-            "tool_statement": tool_statement,
-            "tool_evidence": _render_tool_evidence(state),
-            "kb_evidence": _render_kb_evidence(state),
-            "context": _context_text(state),
-        }.items():
-            prompt = prompt.replace("{{" + key + "}}", str(value))
-        if state.get("cost_directive"):
-            prompt += "\n\n" + state["cost_directive"]
+        prompt = _responder_prompt(state, config)
         try:
             client = _assistant_client()
             model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL)

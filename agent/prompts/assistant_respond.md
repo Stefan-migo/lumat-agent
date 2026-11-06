@@ -8,6 +8,8 @@
 
 <kb>{{kb_evidence}}</kb>
 
+{{no_evidence}}
+
 Answer from `<tool_evidence>` and `<kb>` together. `<kb>` is one source, not a gate: when it is empty,
 answer from the tool evidence — do not refuse. Do not invent facts or use general knowledge to fill gaps;
 when there is no evidence from any source, say plainly that you could not find it. A short purely social

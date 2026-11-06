@@ -26,18 +26,56 @@ def test_grounding_graph_routes_knowledge_respond_to_retrieval():
     assert _after_guardrails({**_respond_state(), **result}) == "retrieve_kb"
 
 
-def test_empty_kb_retrieval_returns_deterministic_clarification_without_responder(monkeypatch):
-    responder_calls = []
-    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: responder_calls.append(True))
+def test_empty_kb_retrieval_reaches_the_responder_as_a_no_evidence_turn(monkeypatch):
     monkeypatch.setattr("app.services.kb.retrieve", lambda *args, **kwargs: [])
 
     result = nodes.retrieve_kb(_respond_state())
 
-    assert result["response"] == "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. Reformula la consulta o aporta más contexto."
-    assert result["status"] == "completed"
+    assert result["no_evidence"] is True
+    assert result["status"] == "responding"
+    assert result["guardrails"]["decision"] == "respond"
+    assert "response" not in result, "no fixed sentence may replace the responder"
     assert result["evidence"][0]["tool"] == "kb.retrieve"
-    assert responder_calls == []
-    assert "escalate" not in result
+    assert _after_retrieve_kb({**_respond_state(), **result}) == "respond_stream"
+
+
+def test_turn_with_executed_tool_evidence_skips_kb_retrieval():
+    state = _respond_state(
+        content="ok actualiza el checklist con customers.search probado",
+        tool_results=[{"tool": "artifact.update", "status": "completed", "result": {"artifact_id": 6, "version": 2}}],
+        tool_steps=1,
+    )
+
+    result = guardrails(state)
+
+    assert result["guardrails"]["decision"] == "respond"
+    assert _after_guardrails({**state, **result}) == "respond_stream"
+
+
+def test_turn_with_a_failed_tool_step_still_answers_from_its_evidence():
+    state = _respond_state(
+        content="lista las conversaciones del panel",
+        tool_results=[{"tool": "conversations.list", "status": "error", "error": "unavailable"}],
+        tool_steps=1,
+    )
+
+    result = guardrails(state)
+
+    assert result["guardrails"]["decision"] == "respond"
+
+
+def test_responder_prompt_carries_the_no_evidence_directive_only_when_unsupported():
+    from app.services.prompts import load_assistant_config
+
+    config = load_assistant_config()
+
+    unsupported = nodes._responder_prompt(_respond_state(no_evidence=True), config)
+    supported = nodes._responder_prompt(_respond_state(), config)
+
+    assert nodes.NO_EVIDENCE_DIRECTIVE in unsupported
+    assert nodes.NO_EVIDENCE_DIRECTIVE not in supported
+    assert "{{" not in unsupported, "every template placeholder must be filled"
+    assert "{{" not in supported, "every template placeholder must be filled"
 
 
 def test_non_empty_kb_retrieval_reaches_responder_as_bounded_evidence(monkeypatch):
@@ -68,7 +106,7 @@ def test_kb_retrieval_failure_reports_degraded_unavailability_without_responder(
         result = error
 
     assert isinstance(result, dict)
-    assert result["response"] != nodes.PANEL_GROUNDING_REFUSAL
+    assert result["response"] == nodes.PANEL_KB_UNAVAILABLE
     assert "base de conocimiento" in result["response"].lower()
     assert any(
         item["status"] == "degraded" and item["tool"] == "kb.retrieve"
@@ -91,8 +129,8 @@ def test_kb_retrieval_filters_non_string_content_without_raising(monkeypatch, co
         result = error
 
     assert isinstance(result, dict)
-    assert result["response"] == nodes.PANEL_GROUNDING_REFUSAL
-    assert result["status"] == "completed"
+    assert result["no_evidence"] is True
+    assert result["status"] == "responding"
 
 
 def test_kb_retrieval_without_session_opens_its_own_scope(monkeypatch):
@@ -114,7 +152,7 @@ def test_kb_retrieval_without_session_opens_its_own_scope(monkeypatch):
 
     result = nodes.retrieve_kb(_respond_state(session=None))
 
-    assert result["response"] == nodes.PANEL_GROUNDING_REFUSAL
+    assert result["no_evidence"] is True
     assert retrieved_sessions == [opened_session]
 
 

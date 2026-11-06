@@ -256,7 +256,8 @@ The assistant MUST expose `assistant.capabilities` as a read-only tool with no a
 #### Scenario: Business grounding remains unchanged
 - GIVEN a business question without sufficient bounded `<kb>` evidence
 - WHEN the assistant evaluates the question
-- THEN it retains the existing knowledge-base grounding refusal rather than using the capability inventory
+- THEN the answer carries no business fact without evidence behind it rather than using the capability inventory
+- AND the assistant explains what it checked, what it lacks and the operator's next step instead of returning a fixed clarification
 
 ### Requirement: AT-13 — Bounded Single-URL Reader
 
