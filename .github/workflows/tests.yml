@@ -15,12 +15,14 @@ jobs:
     # cancelled at its limit without running a single test. A gate cannot depend on
     # whichever image `latest` resolves to that day.
     runs-on: ubuntu-24.04
-    # 15 matches the `panel` job. The budget has to cover `uv sync`, the apt
+    # 20, not 15: the ffmpeg install shares this budget with the suite and the
+    # mirror's speed is not ours. The install itself is bounded below, so a hang
+    # fails with a readable message instead of eating the job. The budget has to cover `uv sync`, the apt
     # install below and the suite, and on 2026-11-04 three `test` jobs were
     # cancelled at 10 minutes while still inside `apt-get install ffmpeg` — the
     # required check failing for a reason the diff had nothing to do with, and
     # every one of those reruns then passed in about five minutes.
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       # Disposable localhost credentials for a throwaway container — not project
       # secrets, so no repository secret is wired.
@@ -59,10 +61,19 @@ jobs:
       # Stated here instead of relying on the runner image carrying it — but installed only when the
       # image does not already have it, so a run does not pay two minutes of apt for nothing and, more
       # importantly, does not spend part of its budget on the step that kept cancelling the job.
-      # Bounded on purpose: an apt that hangs must fail this step with a readable
-      # message inside the job's budget, not consume the budget and report the job as
-      # cancelled while the suite never ran.
-      - run: command -v ffmpeg || (timeout 300 bash -c 'sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg')
+      # The runner image does not reliably ship ffmpeg: measured on 2026-11-06, one run
+      # found it and installed nothing (21 s), another had no ffmpeg and the download of
+      # ~60 MB of packages ran past its bound twice. So the packages are cached and the
+      # install only happens on a cold cache.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: apt-ffmpeg-ubuntu-24.04-v1
+      # Bounded: a hang must fail this step with a readable message, not consume the
+      # job's budget and report `cancelled` while the suite never ran.
+      - run: command -v ffmpeg || (timeout 600 bash -c 'sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg')
       - run: ffmpeg -version | head -1
       - run: uv run pytest tests/
 
