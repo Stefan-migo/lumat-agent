@@ -168,6 +168,19 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
     setNotificationState({ status: 'ready', unread: 0 });
   };
 
+  // Single source of truth for the badge: the notification list itself. An incrementing counter
+  // drifted, because the page reports the optimistic value and then the reconciled one and both calls
+  // can land before a re-render — measured in the browser as 3 unread → 1 after a single click.
+  useEffect(() => {
+    setNotificationState((state) => state.status === 'ready'
+      ? { status: 'ready', unread: notifications.filter((notification) => notification.read_at === null).length }
+      : state);
+  }, [notifications]);
+
+  const updateNotificationReadState = (id: number, readAt: string | null) => {
+    setNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
+  };
+
   useEffect(() => {
     const parsed = routeForRole(parsePanelPath(`${window.location.pathname}${window.location.search}`), user.role);
     const canonicalPath = pathForRoute(parsed);
@@ -219,7 +232,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
-     : view === 'notifications' ? <NotificationCenter />
+     : view === 'notifications' ? <NotificationCenter onNotificationRead={updateNotificationReadState} />
      : view === 'push' ? <PushSettings />
                 : view === 'chat' ? <AgentChat role={user.role} userId={user.id} userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />

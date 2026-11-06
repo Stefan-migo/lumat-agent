@@ -292,6 +292,23 @@ def maybe_alert_owner(
     )
     session.flush()
     _email_owner_alert(session, scope, entity_id, percent, spend, limit)
+    threshold = action.rsplit(".", 1)[-1]
+    try:
+        from app.services.notifications import notify_admins
+
+        notify_admins(
+            session,
+            title="Alerta de costo",
+            content=(
+                f"El gasto {scope} {entity_id} alcanzó {percent:.0f}% del límite "
+                f"(${spend:.2f} de ${limit:.2f})."
+            ),
+            source="cost_alert",
+            source_id=entity_id,
+            dedupe_key=f"cost-alert:{scope}:{entity_id}:{threshold}",
+        )
+    except Exception:
+        logger.exception("cost alert panel notification failed for %s %s", scope, entity_id)
     return True
 
 
