@@ -244,6 +244,47 @@ it('offers emergency acknowledgement from the mobile action menu', async () => {
   expect(await screen.findByRole('menuitem', { name: 'Reconocer emergencia' })).toBeInTheDocument();
 });
 
+// ODD panel-polish S1/S2 — the operator's own report about this band. On desktop the overflow menu
+// belongs at the end of the row, after take/info/client. On a phone the info control was dead: the
+// panel it toggles is `display: none` below the mobile breakpoint, so the chat information has to be
+// reachable from the overflow menu instead of from a button that does nothing.
+describe('conversation header action order', () => {
+  const headerData = { ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+5694' } }, messages: thread.messages };
+
+  it('places the three-dot menu after take, info and client', () => {
+    render(<ConversationThread data={headerData} state="ready" interactive />);
+    const actions = document.querySelector('.conversation-thread__header-actions');
+    expect(actions).not.toBeNull();
+    const names = [...actions!.querySelectorAll('button')].map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '');
+    expect(names).toEqual([
+      'Tomar conversación',
+      'Detalles del cliente',
+      'Cliente',
+      'Acciones de la conversación',
+      'Más acciones de la conversación',
+    ]);
+  });
+
+  it('hides the take, info and desktop menu controls below the mobile breakpoint', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/pages/ConversationThread.css'), 'utf8');
+    const mobile = css.match(/@media \(max-width: 39\.99rem\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(mobile).not.toBe('');
+    for (const selector of ['.conversation-thread__take', '.conversation-thread__info', '.conversation-thread__menu--desktop']) {
+      expect(mobile).toMatch(new RegExp(`${selector.replace('.', '\\.')}[^{]*\\{\\s*display:\\s*none;`));
+    }
+    expect(mobile).toMatch(/\.conversation-thread__menu--mobile[^{]*\{\s*display:\s*(?:flex|inline-flex|block);/);
+  });
+
+  it('opens the chat information from the overflow menu it now lives in', async () => {
+    const user = userEvent.setup();
+    render(<ConversationThread data={headerData} state="ready" interactive />);
+    await user.click(screen.getByRole('button', { name: 'Más acciones de la conversación' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Información del chat' }));
+    expect(await screen.findByRole('heading', { name: 'Información del chat' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
+  });
+});
+
 it('gives every inspector details element its own summary', async () => {
   const user = userEvent.setup();
   render(<ConversationThread data={{ ...thread, conversation: {

@@ -71,9 +71,11 @@
 .ai-agent-grammar__header-copy { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
 .ai-agent-grammar__header-copy h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
 
-/* Desktop shows "Tomar conversación" + "…"; mobile keeps everything behind "…" plus the info sheet. */
-.conversation-thread__actions-desktop, .conversation-thread__actions-mobile { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.conversation-thread__actions-mobile { display: none; }
+/* The header band orders its controls once, in the markup: take, info, client, overflow menu last
+   (owner request, panel-polish S1 — the three dots close the row). Narrow screens drop the take and
+   info controls and route the chat information through the overflow menu; see the mobile block. */
+.conversation-thread__menu { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.conversation-thread__menu--mobile { display: none; }
 
 /* Composer: closed-window warning, locked row, closed note (reference ConversationThread.png). */
 .ai-agent-grammar__window-warning { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--warning-border); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning); }
@@ -122,6 +124,9 @@
   /* The chat is the primary surface: below this width the details live in the "Información del
      chat" sheet, opened from the conversation menu, instead of floating over the thread. */
   .conversation-thread__detail { display: none; }
-  .conversation-thread__actions-desktop { display: none; }
-  .conversation-thread__actions-mobile { display: flex; }
+  /* The info control toggles a panel that is hidden at this width, so on a phone it did nothing.
+     The chat information is the "Información del chat" item inside the overflow menu instead, and
+     the menu stays the last control in the row (panel-polish S2). */
+  .conversation-thread__take, .conversation-thread__info, .conversation-thread__menu--desktop { display: none; }
+  .conversation-thread__menu--mobile { display: flex; }
 }
