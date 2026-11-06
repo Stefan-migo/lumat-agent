@@ -15,14 +15,14 @@ jobs:
     # cancelled at its limit without running a single test. A gate cannot depend on
     # whichever image `latest` resolves to that day.
     runs-on: ubuntu-24.04
-    # 20, not 15: the ffmpeg install shares this budget with the suite and the
-    # mirror's speed is not ours. The install itself is bounded below, so a hang
-    # fails with a readable message instead of eating the job. The budget has to cover `uv sync`, the apt
+    # 25, not 15: on a cold cache the ffmpeg install shares this budget with the
+    # suite and the mirror's speed is not ours. The install is bounded at 900 s
+    # below, so a hang still fails readably instead of eating the job. The budget has to cover `uv sync`, the apt
     # install below and the suite, and on 2026-11-04 three `test` jobs were
     # cancelled at 10 minutes while still inside `apt-get install ffmpeg` — the
     # required check failing for a reason the diff had nothing to do with, and
     # every one of those reruns then passed in about five minutes.
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       # Disposable localhost credentials for a throwaway container — not project
       # secrets, so no repository secret is wired.
@@ -62,19 +62,35 @@ jobs:
       # image does not already have it, so a run does not pay two minutes of apt for nothing and, more
       # importantly, does not spend part of its budget on the step that kept cancelling the job.
       # The runner image does not reliably ship ffmpeg: measured on 2026-11-06, one run
-      # found it and installed nothing (21 s), another had no ffmpeg and the download of
-      # ~60 MB of packages ran past its bound twice. So the packages are cached and the
-      # install only happens on a cold cache.
+      # found it and installed nothing (21 s) and others had to download ~60 MB from a
+      # mirror moving at ~50 KB/s, which outlasted two different bounds. The packages are
+      # therefore cached.
+      #
+      # The cached path is a directory this user owns. Caching `/var/cache/apt/archives`
+      # directly does not work: the save step tars the whole path and dies on the
+      # root-owned `lock` and `partial` entries with `Permission denied`, so the cache is
+      # never written and every run starts cold again.
       - uses: actions/cache@v4
         with:
-          path: |
-            /var/cache/apt/archives
-            /var/lib/apt/lists
-          key: apt-ffmpeg-ubuntu-24.04-v1
-      # Bounded: a hang must fail this step with a readable message, not consume the
-      # job's budget and report `cancelled` while the suite never ran.
-      - run: command -v ffmpeg || (timeout 600 bash -c 'sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg')
-      - run: ffmpeg -version | head -1
+          path: ~/.cache/apt-ffmpeg
+          key: apt-ffmpeg-debs-ubuntu-24.04-v1
+      # Bounded: a hang must fail this step with a readable message, not consume the job.
+      - name: Ensure ffmpeg
+        run: |
+          set -euo pipefail
+          if command -v ffmpeg >/dev/null; then ffmpeg -version | head -1; exit 0; fi
+          timeout 300 sudo apt-get update
+          if compgen -G "$HOME/.cache/apt-ffmpeg/*.deb" >/dev/null; then
+            echo "using cached packages: $(ls -1 "$HOME"/.cache/apt-ffmpeg/*.deb | wc -l)"
+            sudo cp -n "$HOME"/.cache/apt-ffmpeg/*.deb /var/cache/apt/archives/
+          else
+            timeout 600 bash -c 'sudo apt-get install -y --download-only --no-install-recommends ffmpeg'
+            mkdir -p "$HOME/.cache/apt-ffmpeg"
+            sudo cp -n /var/cache/apt/archives/*.deb "$HOME/.cache/apt-ffmpeg/" || true
+            echo "cached packages: $(ls -1 "$HOME"/.cache/apt-ffmpeg/*.deb 2>/dev/null | wc -l)"
+          fi
+          timeout 600 sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
       - run: uv run pytest tests/
 
   # The panel gate. `uv run pytest` only covers the Python side, so a TypeScript
