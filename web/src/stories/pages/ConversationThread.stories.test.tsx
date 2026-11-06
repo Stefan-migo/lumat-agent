@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConversationThread } from "../../components/pages/ConversationThread";
-import { ConversationThreadBubbles, ConversationThreadView, ConversationThreadWithManyMessagesView, InteractiveConversationThreadView } from "./ConversationThread.stories";
-import { conversations, messages } from "./_shared/mockData/conversations";
+import { ConversationThreadAudioView, ConversationThreadBubbles, ConversationThreadView, ConversationThreadWithManyMessagesView, InteractiveConversationThreadView } from "./ConversationThread.stories";import { conversations, messages } from "./_shared/mockData/conversations";
 
 const conversation = conversations[0];
 describe("ConversationThread", () => {
@@ -49,6 +48,14 @@ describe("ConversationThread", () => {
     for (const label of ["Devolver al agente", "Cerrar conversación", "Reconocer emergencia"]) {
       expect(await screen.findByRole("menuitem", { name: label })).toBeInTheDocument();
     }
+  });
+
+  it("renders the audio story with a player in both bubble tones", () => {
+    render(<ConversationThreadAudioView />);
+    const players = screen.getAllByRole("group", { name: /audio/i });
+    expect(players).toHaveLength(2);
+    expect(players[0].closest(".ai-agent-grammar__bubble")).not.toHaveClass("ai-agent-grammar__bubble--outbound");
+    expect(players[1].closest(".ai-agent-grammar__bubble")).toHaveClass("ai-agent-grammar__bubble--outbound");
   });
 
   it("shows the message disclosure in the many-messages story", () => {

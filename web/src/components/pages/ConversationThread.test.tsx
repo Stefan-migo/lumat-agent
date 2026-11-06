@@ -129,13 +129,21 @@ describe('conversation message media', () => {
     expect(video).toHaveAttribute('aria-label');
   });
 
-  it('renders audio with controls and a compact accessible label', () => {
+  it('renders audio with the designed player instead of the browser widget', () => {
     render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'audio' })] }} state="ready" />);
     const audio = document.querySelector('audio');
     expect(audio).toHaveAttribute('src', '/panel/api/conversations/9/messages/20/media');
-    expect(audio).toHaveAttribute('controls');
-    expect(audio).toHaveAttribute('aria-label');
-    expect(screen.getByText('Audio adjunto')).toBeInTheDocument();
+    // The reported problem was the native pill drawn over the bubble; this is the surface replacing it.
+    expect(audio).not.toHaveAttribute('controls');
+    expect(screen.getByRole('group', { name: 'Audio adjunto' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reproducir audio' })).toBeInTheDocument();
+    expect(screen.queryByText('Audio adjunto')).not.toBeInTheDocument();
+  });
+
+  it('keeps the audio player inside the outbound bubble when Lumat sent it', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'audio', direction: 'outbound' as const })] }} state="ready" />);
+    const row = screen.getByLabelText(/mensaje saliente/i);
+    expect(row).toContainElement(screen.getByRole('group', { name: /audio/i }));
   });
 
   it('renders documents as download links labelled with their caption', () => {

@@ -15,6 +15,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { Markdown } from "../shared/Markdown";
+import { MessageAudio } from "../shared/MessageAudio";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { caseStatusLabel, caseStatusTone, conversationLabel } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
@@ -44,7 +45,9 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
       case "video":
         return <video className="conversation-thread__video" src={mediaUrl} controls aria-label={message.caption || "Video adjunto"} />;
       case "audio":
-        return <div className="conversation-thread__audio"><span>Audio adjunto</span><audio src={mediaUrl} controls aria-label={message.caption || "Audio adjunto"} /></div>;
+        // Voice notes get a designed player (panel-polish S3): the native widget drew a white pill
+        // over the bubble and stayed at 0:00 / 0:00 until the media was fully buffered.
+        return <MessageAudio src={mediaUrl} label={message.caption || "Audio adjunto"} />;
       case "document":
         return <a className="conversation-thread__document" href={mediaUrl} download={message.filename || true}>{message.filename || message.caption || "Descargar documento"}</a>;
       default:
