@@ -6,6 +6,34 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.11.7] - 2026-11-06
+
+El panel deja de esconder lo que no tiene estilo y lo que no avisa. Las notificaciones se leen en el teléfono
+sobre una superficie diseñada y el marcado como leída actualiza en el acto; las alertas de costo y las
+operaciones de notificación agotadas pasan a avisar a los administradores. La conversación suma su player de
+audio y el asistente publica los artefactos del hilo como salidas del proyecto.
+
+### Agregado
+
+- Player de nota de voz dentro de la burbuja de la conversación: play/pausa, búsqueda por teclado y duración
+  real leída del archivo, con el tono invertido en la burbuja saliente. Reemplaza el widget nativo del navegador,
+  que dibujaba una píldora blanca y se quedaba en `0:00 / 0:00` hasta tener el archivo completo.
+- Página de notificaciones diseñada: título, contenido, origen y canal en español de operador, hora legible,
+  etiqueta `Sin leer` en lugar de sólo color, y estados de carga, sin permiso, error, vacío y filtro vacío.
+- Push para las alertas de costo, que hasta ahora llegaban sólo por correo al owner, y aviso en el panel cuando
+  una operación de notificación agota sus reintentos en vez de morir detrás del fallback.
+- Los artefactos del hilo del asistente se publican como salidas del proyecto y queda registrado el artefacto
+  del que vino cada archivo publicado (migración `063_artifact_outputs`).
+
+### Corregido
+
+- El header de la conversación cierra la fila con el menú de tres puntos, y en mobile ya no ofrece el botón de
+  información: prendía un panel oculto por debajo del breakpoint. La información del chat vive en el menú.
+- Marcar una notificación como leída actualiza la fila y el contador del shell sin recargar. El contador se
+  deriva de la lista: incrementarlo bajaba de a dos cuando la respuesta y el valor optimista llegaban juntos.
+- El asistente responde con la evidencia del turno en lugar de una negativa cuando hay material, y la
+  publicación queda acotada.
+
 ## [2026.11.6] - 2026-11-06
 
 El audio que se envía desde el panel llega al cliente. La causa no era el contenedor ni el códec: Meta aceptaba
