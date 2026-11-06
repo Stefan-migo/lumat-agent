@@ -1,6 +1,6 @@
 # ODD — artifact-outputs: el artifact deja de morir en el hilo
 
-Worktree `../lumat-agent-odd-artifact-outputs`, rama `odd/artifact-outputs`, base `main` (`47c6d0ba`).
+Worktree `../lumat-agent-odd-artifact-outputs`, rama `odd/artifact-outputs`, base `main` (`25c6f45a`).
 
 Tres defectos medidos en la DB de dev (`infra-db-1`, proyecto `test`, usuario 1) sobre el asistente del
 panel, no recitados:
@@ -258,3 +258,22 @@ su `pytest-timeout` de 120 s. Diferencial contra el worktree `main` intacto: el 
 **pasa**, en 1m46s (106 s) de un techo de 120 s. No es un test que se caiga por sí solo ni una regresión
 de este branch: vive a 14 s del techo y cualquier carga concurrente lo empuja. No se baja el techo ni se
 sube el timeout.
+
+**L9 — evidencia de cierre (2026-11-06).**
+
+- `bash scripts/test.sh full` → **EXIT=0**, 9m 32s, **3503 tests** (conteo por `--collect-only`), corrida
+  aislada sin carga ajena y sin bajar el techo de 120 s.
+- `bash scripts/test.sh quick` → EXIT=0.
+- `bash scripts/test.sh db tests/integration/test_assistant_artifacts.py` → 19 passed.
+- `bash scripts/test.sh db tests/integration/test_migrations.py` → 42 passed.
+- `bash scripts/test.sh shape origin/main` → exit 3: toca `app/models.py`, `db/migrations/063_*` y los
+  prompts, por eso el `full` era obligatorio.
+- Corrida 1 del `full` (job-1): murió en el `pytest-timeout` de `test_seed_dev`. Corrida 2 (job-3):
+  completo, 6m 38s, un fallo real y propio — el ledger de migraciones no tenía la 063. Corregido en
+  `d3fdadfc` manteniendo la lista exacta. Corrida 3 (job-4): verde.
+- `origin/main..HEAD`: 6 commits, worktree limpio.
+
+**Límites conocidos al cierre.** (1) `test_seed_dev` vive a ~14 s del techo de 120 s: un `full` bajo carga
+concurrente puede caer ahí, y no es una regresión de este branch. (2) F5 del verificador queda declarado y
+sin tocar. (3) El archivo publicado en `outputs/` muestra solo la versión vigente; el historial completo
+sigue en la cadena de revisiones del hilo. Si el owner quiere historial en `outputs/`, es un cambio aparte.
