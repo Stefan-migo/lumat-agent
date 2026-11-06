@@ -29,8 +29,8 @@ mejorar el dise;o."
 
 | ID | Spec | Route | Commit |
 |---|---|---|---|
-| T1 | S1, S2 | inline — header layout + mobile menu wiring | `feat(panel): reorder conversation header actions and move chat info into the mobile menu` |
-| T2 | S3 | inline — new message audio player + tests | `feat(panel): render audio messages with a designed player` |
+| T1 | S1, S2 | inline — header layout + mobile menu wiring | `1e5cbc95` |
+| T2 | S3 | inline — new message audio player + tests | `ce9ec6c6` (player), `4e8e48d8` (thread wiring + story) |
 
 ## Log
 
@@ -52,3 +52,19 @@ mejorar el dise;o."
 Image evidence read from the three attached screenshots (desktop header `Tomar conversación · ... · i ·
 Cliente`; mobile header `Cerrada · ... · i · Cliente`; audio bubble `Audio adjunto` + native white
 player `0:00 / 0:00` with `02:51` under it).
+
+**L2 (evidence, T1 + T2 done)**
+
+- Browser measurement on the isolated stack (`localhost:5173` → api `:8002`), conversation #1:
+  desktop visible controls in DOM order `Volver · Tomar conversación · Detalles del cliente · Cliente ·
+  Acciones de la conversación` (dots last); mobile `Volver · Cliente · Más acciones de la
+  conversación` with menu items `Información del chat · Tomar conversación · Devolver al agente ·
+  Cerrar conversación`.
+- The 1280 px header wraps to two rows with this conversation's data, but the same measurement on the
+  pre-change code with the same rows gives 100 px against 92 px now: the wrap is pre-existing (long
+  `Atención humana` badge plus the phone), not a regression of this change.
+- Voice-note player measured in both tones with a real 7 s file: inbound grey track with a green
+  thumb, outbound mint track inside the dark bubble, total reads `0:07` from `loadedmetadata`.
+- Gate: `npm run build` (tsc -b + vite build) OK; `npx vitest run` 1405 tests / 121 files green.
+- Slice boundary: 460 authored lines across the three commits, past the ~400-line slice. Everything
+  below belongs to the next batch of owner items and needs its own review slice.
