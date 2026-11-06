@@ -66,27 +66,42 @@ def test_media_delivery_never_falls_back_to_empty_text(tmp_path, monkeypatch):
     assert b'"type":"text"' not in send_route.calls[0].request.content
 
 
-def test_retry_reuses_uploaded_meta_media_id(tmp_path, monkeypatch):
+def test_retry_reuploads_media_after_failed_delivery(tmp_path, monkeypatch):
     monkeypatch.setattr(get_settings(), "media_dir", str(tmp_path / "media"))
     actor_id, conversation_id = _seed()
     source = tmp_path / "image.png"
     source.write_bytes(b"x")
     with respx.mock(base_url="https://graph.facebook.com") as router:
-        upload = router.post("/v20.0/123456789/media").mock(return_value=httpx.Response(200, json={"id": "mid"}))
-        sends = router.post("/v20.0/123456789/messages").mock(side_effect=[httpx.Response(400, json={"error": {"message": "no"}}), httpx.Response(200, json={"messages": [{"id": "wid"}]})])
+        upload = router.post("/v20.0/123456789/media").mock(side_effect=[httpx.Response(200, json={"id": "poisoned-mid"}), httpx.Response(200, json={"id": "fresh-mid"})])
+        sends = router.post("/v20.0/123456789/messages").mock(side_effect=[httpx.Response(400, json={"error": {"message": "131053: Media upload error"}}), httpx.Response(200, json={"messages": [{"id": "wid"}]})])
         # A failed Meta send is recorded on the row (the text path behaves the same way);
         # the retry endpoint is what surfaces the failure to the operator.
         _send(actor_id, conversation_id, source)
         with SessionLocal() as session:
             row = session.scalar(select(Message).where(Message.request_id == "media-1"))
             assert row.delivery_status == DeliveryStatus.FAILED
-            assert row.meta_media_id == "mid"
+            assert row.meta_media_id is None
             row_id = row.id
         from app.services.conversations import retry_operator_message
         with SessionLocal() as session:
             row = session.get(Message, row_id)
             retry_operator_message(session, conversation_id, row_id, session.get(User, actor_id), "retry-1", "failed")
-    assert upload.call_count == 1 and sends.call_count == 2
+    assert upload.call_count == 2 and sends.call_count == 2
+    assert b'"id":"poisoned-mid"' in sends.calls[0].request.content
+    assert b'"id":"fresh-mid"' in sends.calls[1].request.content
+
+
+def test_unknown_delivery_keeps_uploaded_media_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(get_settings(), "media_dir", str(tmp_path / "media"))
+    actor_id, conversation_id = _seed()
+    source = tmp_path / "image.png"
+    source.write_bytes(b"x")
+    with respx.mock(base_url="https://graph.facebook.com") as router:
+        router.post("/v20.0/123456789/media").mock(return_value=httpx.Response(200, json={"id": "uncertain-mid"}))
+        router.post("/v20.0/123456789/messages").mock(side_effect=httpx.ConnectError("connection lost"))
+        row = _send(actor_id, conversation_id, source)
+    assert row.delivery_status == DeliveryStatus.UNKNOWN
+    assert row.meta_media_id == "uncertain-mid"
 
 
 def test_idempotency_window_and_state_follow_text_rules(tmp_path, monkeypatch):
