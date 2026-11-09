@@ -6,6 +6,24 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+### Corregido
+
+- Una ráfaga de mensajes del cliente es un solo turno. Antes, "Hola" y luego "¿Cómo estás?" antes de la
+  respuesta producían dos mensajes del bot —el segundo una línea enlatada que no respondía nada— y podían
+  correr dos turnos en paralelo sobre la misma conversación, el segundo con el historial incompleto. El
+  pipeline ahora espera una ventana corta de silencio (`BURST_IDLE_SECONDS`, 3 s por defecto), serializa los
+  turnos por conversación y responde una sola vez con la ráfaga completa.
+- El número de turno cuenta turnos contestados y no mensajes persistidos (migración
+  `064_conversation_turn_count`), así un primer contacto que llega en dos mensajes ya no pierde el saludo de
+  primer contacto.
+
+### Agregado
+
+- Respuesta propia para las preguntas sociales sin contenido: "¿Cómo estás?" deja de recibir la línea de
+  cortesía y se contesta con un mensaje fijo editable desde la configuración (`messages.social`), fusionado con
+  el saludo cuando es el primer contacto.
+
+
 ## [2026.11.7] - 2026-11-06
 
 El panel deja de esconder lo que no tiene estilo y lo que no avisa. Las notificaciones se leen en el teléfono

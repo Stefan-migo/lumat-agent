@@ -584,9 +584,13 @@ def test_processing_failure_marks_failed(monkeypatch, migrated_db):
         session.commit()
         mid = msg.id
 
+    # B1: `sweep_received` runs the burst through `process_turn`; patching
+    # `process_message` no longer intercepts it and the sweep reached the real
+    # send path. Patch the seam the sweep actually uses.
     monkeypatch.setattr(
-        ingest, "process_message", lambda session, message: (_ for _ in ()).throw(RuntimeError("boom"))
+        ingest, "process_turn", lambda session, messages: (_ for _ in ()).throw(RuntimeError("boom"))
     )
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.0)
     ingest.sweep_received()
 
     with SessionLocal() as session:
@@ -1130,3 +1134,177 @@ def test_first_contact_survives_a_burst(
 
     assert len(outbound) == 1
     assert outbound[0].text.startswith("Hola, Max.")
+
+
+def test_burst_window_merges_a_message_that_arrives_during_the_wait(
+    migrated_db, mock_openai_chat, mock_meta_send, monkeypatch
+):
+    """S1: the silence window is what makes two webhooks ONE turn.
+
+    Without the wait, the first sweep answers "Hola" alone and the second message
+    opens a second turn: exactly what production did. The test starts the sweep,
+    lets the customer's second message land while it waits, and expects one reply.
+    """
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.5)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912340000", name="Max")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56912340000")
+        session.add(conv)
+        session.flush()
+        conversation_id = conv.id
+        session.add(
+            Message(
+                wamid="wamid.wait1",
+                conversation_id=conv.id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="Hola",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+
+    sweep = threading.Thread(target=ingest.sweep_received)
+    sweep.start()
+    time.sleep(0.15)
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.wait2",
+                conversation_id=conversation_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="Necesito una visita para revisar la caldera",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+    sweep.join(20.0)
+    assert not sweep.is_alive()
+
+    with SessionLocal() as session:
+        rows = list(
+            session.scalars(
+                select(Message).where(Message.conversation_id == conversation_id)
+            )
+        )
+    outbound = [row for row in rows if row.direction == MessageDirection.OUTBOUND]
+    assert len(outbound) == 1
+    assert all(row.status == MessageStatus.PROCESSED for row in rows)
+
+
+def test_failed_turn_releases_the_conversation_lock(migrated_db, monkeypatch):
+    """S4: a turn that explodes must not wedge the conversation.
+
+    The lock lives in a module-level registry, so a leak would silently stop every
+    later message of that conversation from being answered.
+    """
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.0)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912341111")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56912341111")
+        session.add(conv)
+        session.flush()
+        conversation_id = conv.id
+        session.add(
+            Message(
+                wamid="wamid.lock1",
+                conversation_id=conv.id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="primero",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(ingest, "run_conversation", explode)
+    ingest.sweep_received()
+
+    with SessionLocal() as session:
+        assert session.scalar(
+            select(Message.status).where(Message.wamid == "wamid.lock1")
+        ) == MessageStatus.FAILED
+
+    reached = []
+    monkeypatch.setattr(ingest, "run_conversation", lambda session, message: reached.append(message.id))
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.lock2",
+                conversation_id=conversation_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="segundo",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(ingest, "deliver_outbound", lambda *args: None)
+    ingest.sweep_received()
+
+    assert len(reached) == 1, "the lock leaked: the next message was never answered"
+
+
+def test_media_failure_does_not_make_a_burst_answer_twice(
+    migrated_db, mock_openai_chat, mock_meta_send, monkeypatch
+):
+    """S1/WH-4: a burst whose photo fails still answers once, and the photo retries."""
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.0)
+    media_url = "https://lookaside.example/burst-photo"
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912342222")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56912342222")
+        session.add(conv)
+        session.flush()
+        conversation_id = conv.id
+        session.add_all(
+            [
+                Message(
+                    wamid="wamid.media1",
+                    conversation_id=conv.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text="Mira la foto de la caldera",
+                    status=MessageStatus.RECEIVED,
+                ),
+                Message(
+                    wamid="wamid.media2",
+                    conversation_id=conv.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.IMAGE,
+                    media_url=media_url,
+                    status=MessageStatus.RECEIVED,
+                ),
+            ]
+        )
+        session.commit()
+
+    with respx.mock:
+        respx.get(media_url).mock(return_value=httpx.Response(500))
+        ingest.sweep_received()
+
+    with SessionLocal() as session:
+        rows = list(
+            session.scalars(
+                select(Message).where(Message.conversation_id == conversation_id)
+            )
+        )
+    outbound = [row for row in rows if row.direction == MessageDirection.OUTBOUND]
+    photo = next(row for row in rows if row.wamid == "wamid.media2")
+    text = next(row for row in rows if row.wamid == "wamid.media1")
+
+    assert len(outbound) == 1
+    assert text.status == MessageStatus.PROCESSED
+    assert photo.status == MessageStatus.RECEIVED
+    assert photo.media_attempts == 1

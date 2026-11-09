@@ -56,13 +56,14 @@ respuestas" se actualizan al comportamiento nuevo, no se borran.
 | T1 | S4 | inline — lock por conversación en el sweep, RED de concurrencia primero | `88a1cd22` |
 | T2 | S1 | inline — ventana de silencio + drenaje de la conversación + ráfaga colapsada en el turno | `9a0ad123` |
 | T3 | S3 | inline — contador de turnos por conversación (migración 064) | `9a0ad123` |
-| T4 | S2 | worker — familia social: clave `messages.social`, detección determinista, respuesta fusionada | — |
-| T5 | S2 | worker — campo en el panel de configuración + doc de superficies | — |
+| T4 | S2 | worker + parent — familia social: clave `messages.social`, detección determinista, respuesta fusionada | `c17cda89` |
+| T5 | S2 | worker + parent — campo en el panel de configuración + tipo de la API + stories | `c17cda89` |
 | T6 | S5 | inline — cerrar: `quick`, `db` focalizado, `full` de frontera, CHANGELOG | — |
 
-Frontera de entrega: T1–T3 cierran el primer slice (`822` líneas cambiadas sobre `origin/main`), más
-allá del slice de ~400 líneas; el feature se entrega en PR encadenados (slice 1: T1–T3, slice 2:
-T4–T6), no en un PR único.
+Frontera de entrega: el feature acumula `994` líneas sobre `origin/main`, muy por encima del slice de ~400.
+Se entrega en PR encadenados: **slice 1** `88a1cd22` + `9a0ad123` (lock por conversación, ráfaga = un turno,
+contador de turnos) y **slice 2** `c17cda89` (línea social + campo del panel), con este documento y el
+CHANGELOG en el slice que abra la entrega.
 
 Riesgo alto declarado: T1 (concurrencia, ítem 4) y T3 (migración, ítem 1). Cada uno va en su propio
 commit para que la revisión pueda tomarlos solos.
@@ -101,3 +102,28 @@ pierde con una ráfaga.
   en un solo bloque. Medido: sin ese filtro fallaban `test_chat_state` y los 25 de `test_chat_booking`.
 - `state.turn` pasa a `turn_count + 1` (migración 064 con backfill desde el historial inbound), así el
   primer contacto en ráfaga sigue siendo turno 1.
+
+**L5 — revisión de la entrega del worker (2026-11-09):** el worker dejó T4/T5 en `partial`. Tres defectos
+reales, corregidos por el parent:
+1. `is_greeting_only` devolvía `True` para un turno social: rompía el nombre del predicado y arrastraba
+   `has_content`, que decide si el saludo es el corto o el largo. Se separó: `is_greeting_only` vuelve a su
+   semántica y `_flow_start` corta la clasificación con `is_greeting_only(state) or is_social_only(state)`.
+2. El test de frontera del panel dejaba `social: ""` en el fixture: la validación del panel exige todo mensaje
+   no vacío, así que el guardado no llamaba a `fetch` y el test fallaba con "Number of calls: 0". El fixture
+   ahora trae un texto real y el cuerpo esperado lo refleja.
+3. `types.ts` no tenía `social`, así que el worker lo había resuelto con un tipo local y un `as`; `tsc -b`
+   después falló en `SettingsEmail.test.tsx` por el campo faltante. Se agregó al tipo de la API, se quitaron
+   los casts y se arreglaron los dos fixtures restantes.
+También hubo que actualizar `test_retry_storm_single_processing_pass`: con el contador de turnos esos tres
+mensajes son el primer contacto, así que la respuesta es el saludo corto y no una aclaración.
+
+**L6 — lo que encontró la suite completa (2026-11-09), y la corrección:**
+1. `test_greeting_variants[hola cómo va?]`: la familia social se comía un modismo de saludo. "¿cómo va?" y
+   "¿qué tal?" son cómo este cliente dice *hola*, no preguntas sobre el asistente. `_SOCIAL_QUESTION_ENDINGS`
+   queda sólo con `como estas` y `todo bien`; el resto sigue siendo saludo.
+2. `test_chat_manage::test_preset_answer_preempts_the_kb_miss_path`: el seeder insertaba un inbound "ya
+   contestado" sin tocar `turn_count`, así que el turno invocado se veía como primer contacto y recibía el
+   saludo. El seeder ahora declara `turn_count = 1`, que es lo que de verdad representa.
+3. El cierre con `full` se trabó una vez por correr dos suites a la vez contra la misma base de test
+   (`suite-truncate-stall`): una transacción `idle in transaction` bloqueando el `TRUNCATE` del fixture. No era
+   código; se limpiaron los backends y se corrió sola.

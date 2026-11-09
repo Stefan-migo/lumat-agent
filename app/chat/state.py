@@ -64,11 +64,17 @@ def collapse_trailing_burst(window: list[dict]) -> list[dict]:
         return window
     if window[-1].get("status") != "processing":
         return window
+    if window[-1].get("msg_type") == "other":
+        # Meta onboarding/system text is not the customer speaking: merging it into
+        # the utterance is the "onboarding text entered as customer content" defect
+        # the ingest guard already avoids for the graph run.
+        return window
     start = len(window) - 1
     while (
         start > 0
         and window[start - 1].get("direction") == "inbound"
         and window[start - 1].get("status") == "processing"
+        and window[start - 1].get("msg_type") != "other"
     ):
         start -= 1
     if start == len(window) - 1:

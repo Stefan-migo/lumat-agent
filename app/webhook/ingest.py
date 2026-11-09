@@ -656,8 +656,11 @@ def process_turn(session, messages: list[Message]) -> None:
         ConversationState.HUMAN,
         ConversationState.CLOSED,
     }:
-        for message in messages:
-            message.status = MessageStatus.PROCESSED  # HH-5: persisted, never retried
+        # HH-5: persisted, never retried by the bot. Only the messages whose media
+        # resolved are consumed: a failed download keeps its `received` status and
+        # is retried by the sweep, with the five-attempt ceiling and its event.
+        for message in participants:
+            message.status = MessageStatus.PROCESSED
         return
     for message in participants:
         if message.text:
