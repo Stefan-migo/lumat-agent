@@ -151,3 +151,18 @@ Avisos que quedan abiertos, aceptados y documentados: la espera de silencio corr
 conversaciones pendientes ≈ 30 s de cola), el lock es de proceso y nada en código impone el worker único
 (D1), y no hay test del backfill de la migración 064 ni uno que garantice `turn_count` exacto con turnos
 fallidos. El verificador dejó listas las propuestas para esos tres.
+
+**L8 — cierre (2026-11-09).** Evidencia real, no intención:
+- `bash scripts/test.sh full` sobre `f46e6b37`, sola, base de test limpia: **exit 0**, cero `FAILED`/`ERROR`.
+- `bash scripts/test.sh db` focalizado: `test_webhook_ingest.py` (43), `test_chat_state.py`, `test_smalltalk.py`,
+  `test_greeting_variants.py`, `test_chat_booking.py`, `test_chat_manage.py`, `test_functional_api_kb_settings.py`.
+- Panel: `npm ci` → `npm run build` (tsc -b + vite) → `npx vitest run` = **1408 passed**.
+- `gentle-ai review assess` con `workspaceRoot` del worktree: `risk: high` (escalación ítem 4), `nativeRisk:
+  passive`, `reviewDue: false` → no corresponde review nativo; sí corresponde el verificador independiente,
+  que corrió y cuyos hallazgos están en L7.
+- Commits: `bda51a0b` doc, `88a1cd22` lock, `9a0ad123` ráfaga = un turno + migración 064, `c17cda89` social +
+  panel, `ba656943` modismos de saludo, `8217a0f1` seeders, `42599426` variantes de S2, `9e777d0f` caminos de
+  falla, `f46e6b37` este registro.
+
+Sin push, sin PR, sin merge: la entrega es decisión del owner. El worktree y la rama `odd/chat-rafagas` quedan
+en pie para los PR encadenados.
