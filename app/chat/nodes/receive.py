@@ -100,10 +100,11 @@ def is_greeting_only(state: ConversationState) -> bool:
     return all(token in GREETING_WORDS or token in GREETING_FILLERS for token in tokens)
 
 
+# Only questions ABOUT the assistant, not greeting idioms: "¿cómo va?" and
+# "¿qué tal?" are how this customer says hello, and `test_greeting_variants` pins
+# that they stay a greeting. "como estas" and "todo bien" ask how the bot is.
 _SOCIAL_QUESTION_ENDINGS = (
     ("como", "estas"),
-    ("que", "tal"),
-    ("como", "va"),
     ("todo", "bien"),
 )
 
