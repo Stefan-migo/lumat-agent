@@ -37,7 +37,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
 # `artifact.update` joins `artifact.save`: it can only rewrite an artifact the assistant itself
 # produced in the thread it already owns, so it needs no approval of its own.
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({
-    "memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete",
+    "memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.pdf", "artifact.update", "artifact.delete",
 })
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 USER_AXIS_LIMIT = 2
@@ -318,6 +318,48 @@ class ArtifactUpdateArgs(BaseModel):
 class ArtifactDeleteArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     artifact_id: int = Field(gt=0)
+
+
+class PdfTable(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    columns: list[str] = Field(min_length=1, max_length=8)
+    rows: list[list[str]] = Field(default_factory=list, max_length=200)
+
+    @field_validator("columns")
+    @classmethod
+    def validate_columns(cls, value: list[str]) -> list[str]:
+        if any(len(column) > 200 for column in value):
+            raise ValueError("PDF table cells must be at most 200 characters")
+        return value
+
+    @field_validator("rows")
+    @classmethod
+    def validate_rows(cls, value: list[list[str]]) -> list[list[str]]:
+        if any(len(cell) > 200 for row in value for cell in row):
+            raise ValueError("PDF table cells must be at most 200 characters")
+        return value
+
+
+class PdfSection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    heading: str = Field(min_length=1, max_length=200)
+    body: str | None = Field(default=None, max_length=4000)
+    table: PdfTable | None = None
+
+
+class ArtifactPdfArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=200)
+    subtitle: str | None = Field(default=None, max_length=300)
+    sections: list[PdfSection] = Field(min_length=1, max_length=40)
+
+    @field_validator("filename")
+    @classmethod
+    def validate_pdf_filename(cls, value: str) -> str:
+        if not value.endswith(".pdf"):
+            raise ValueError("filename must end in .pdf")
+        return value
 
 
 def _plain(value: Any) -> Any:
@@ -823,6 +865,31 @@ def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = No
     }
 
 
+def _artifact_pdf(session, args: ArtifactPdfArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
+    from app.services.reports import render_report_pdf
+
+    thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
+    if thread is None:
+        raise ToolValidationError("no accessible chat thread for artifacts")
+    content = render_report_pdf(args)
+    filename = assistant_artifacts.safe_artifact_filename(args.filename)
+    try:
+        row, changed = assistant_artifacts.save_or_append(session, thread, filename, content, actor="assistant")
+    except ValueError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    assistant_artifacts.publish_artifact(session, thread, row, actor="assistant")
+    return {
+        "artifact_id": row.id,
+        "root_id": row.root_id,
+        "version": row.version,
+        "changed": changed,
+        "filename": row.filename,
+        "content_type": row.content_type,
+        "size": row.size,
+        "download_path": f"/panel/api/chat/threads/{row.thread_id}/artifacts/{row.id}/download",
+    }
+
+
 def _update_artifact(session, args: ArtifactUpdateArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
     """Append the next revision of one artifact the assistant produced in its own thread."""
     thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
@@ -947,6 +1014,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "read_project_file": ToolDefinition("read_project_file", ProjectReadFileArgs, True, _read_project_file, "Read one project file's exact extracted text. For a large file, page it with offset/limit and continue from the returned next_offset.", tier="default"),
     "view_image": ToolDefinition("view_image", ViewImageArgs, True, _view_image, "View an image on demand: a project file or a thread attachment, returned to the model as a vision part.", tier="default"),
     "artifact.save": ToolDefinition("artifact.save", ArtifactSaveArgs, False, _save_artifact, "Save a downloadable file artifact for the current conversation.", tier="default"),
+    "artifact.pdf": ToolDefinition("artifact.pdf", ArtifactPdfArgs, False, _artifact_pdf, "Render a professional PDF report from a structured spec (not HTML) and publish it to the project's outputs folder.", tier="default"),
     "artifact.update": ToolDefinition("artifact.update", ArtifactUpdateArgs, False, _update_artifact, "Rewrite an artifact you already saved in this conversation, as a new version. The previous version is kept. Pass the artifact_id returned by artifact.save or artifact.update; use artifact.save when you mean to create a different file.", tier="default"),
     "artifact.delete": ToolDefinition("artifact.delete", ArtifactDeleteArgs, False, _delete_artifact, "Delete an artifact you saved in this conversation, with every version it has. Pass the artifact_id returned by artifact.save or artifact.update.", tier="default"),
     "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),
@@ -970,6 +1038,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "view_image": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "artifact.save": frozenset(UserRole),
+    "artifact.pdf": frozenset(UserRole),
     "artifact.update": frozenset(UserRole),
     "artifact.delete": frozenset(UserRole),
     "memory.read": frozenset(UserRole),
@@ -1050,7 +1119,7 @@ def execute_tool(
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "view_image", "artifact.save", "artifact.update", "artifact.delete", "skill.propose"} or (
+    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "view_image", "artifact.save", "artifact.pdf", "artifact.update", "artifact.delete", "skill.propose"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
@@ -1102,7 +1171,7 @@ def execute_tool(
     if not definition.read_only and not autonomous_write and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
-        if name in {"artifact.save", "artifact.update", "artifact.delete"}:
+        if name in {"artifact.save", "artifact.pdf", "artifact.update", "artifact.delete"}:
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id))
         elif name == "view_image":
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id, proyecto=proyecto, project_id=project_id))

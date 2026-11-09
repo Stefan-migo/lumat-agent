@@ -27,6 +27,7 @@ DEFAULT_TOOLS = {
     "read_project_file",
     "view_image",
     "artifact.save",
+    "artifact.pdf",
     "artifact.update",
     "artifact.delete",
     "skill.propose",

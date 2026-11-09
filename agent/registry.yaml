@@ -100,6 +100,7 @@ assistant:
     - view_image
     - skill.propose
     - artifact.save
+    - artifact.pdf
     - artifact.update
     - artifact.delete
     - project.create

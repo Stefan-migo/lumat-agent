@@ -575,3 +575,42 @@ def test_delete_artifact_keeps_blobs_when_the_transaction_rolls_back(monkeypatch
         assert [item.id for item in list_artifacts(session, thread_id)] == [second_id]
         assert sorted(p.name for p in (tmp_path / "assistant_artifacts" / str(thread_id)).iterdir()) == blobs
     get_settings.cache_clear()
+
+
+
+def test_artifact_pdf_saves_and_publishes_idempotently(monkeypatch, tmp_path):
+    from app.chat.assistant.tools.registry import execute_tool
+
+    with SessionLocal() as session:
+        monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
+        get_settings.cache_clear()
+        owner = User(username="artifact-pdf-owner", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        project = Project(owner_id=owner.id, slug="pdf-project", name="PDF Project", purpose="Test", purpose_embedding=[0.0] * 384)
+        session.add(project)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, proyecto=project.slug)
+        session.add(thread)
+        session.flush()
+        args = {"filename": "report.pdf", "title": "Quarterly report", "sections": [{"heading": "Summary", "body": "Findings"}]}
+        first = execute_tool(session, "artifact.pdf", args, role="admin", whitelist={"artifact.pdf"}, trusted_thread_id=thread.id, owner_id=owner.id)
+        session.flush()
+        first = first["result"]
+        artifact = session.get(AssistantArtifact, first["artifact_id"])
+        assert artifact.content_type == "application/pdf"
+        assert Path(artifact.stored_path).read_bytes().startswith(b"%PDF-")
+        published = session.scalar(select(ProjectFile).where(ProjectFile.project_id == project.id))
+        assert published is not None and published.content_type == "application/pdf"
+        folder = session.get(ProjectFolder, published.folder_id)
+        assert folder.name == "outputs" and folder.parent_id is None
+        second = execute_tool(session, "artifact.pdf", args, role="admin", whitelist={"artifact.pdf"}, trusted_thread_id=thread.id, owner_id=owner.id)
+        session.flush()
+        second = second["result"]
+        assert second["changed"] is False
+        assert len(list_artifacts(session, thread.id)) == 1
+        assert session.scalars(select(ProjectFile).where(ProjectFile.project_id == project.id)).all() == [published]
+        actions = session.scalars(select(AuditLog.action).where(AuditLog.action.in_(("assistant_artifact.published", "assistant_artifact.republished")))).all()
+        assert actions == ["assistant_artifact.published"]
+        session.rollback()
+    get_settings.cache_clear()

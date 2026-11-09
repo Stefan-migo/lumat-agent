@@ -386,3 +386,16 @@ When a thread artifact is created or revised and its thread resolves to an owned
 - GIVEN a project file published from a thread artifact
 - WHEN the thread artifact is deleted
 - THEN the project file and its bytes remain available
+
+### Requirement: AT-17 — Structured PDF Report Artifacts
+The assistant MUST expose `artifact.pdf` as a write tool that accepts only a structured report specification, never model-supplied HTML, CSS, or resource paths. The filename MUST end in `.pdf`; the title MUST contain 1–200 characters, the optional subtitle MUST contain at most 300 characters, and the specification MUST contain 1–40 sections. Each section MUST have a 1–200 character heading, an optional body of at most 4,000 characters, and an optional table with 1–8 columns, at most 200 rows, and string cells of at most 200 characters. All argument models MUST forbid extra fields. Rendering MUST use Jinja2 with autoescape enabled AND a URL fetcher that refuses every URL, including HTTP, HTTPS, file, data, and relative URLs; these MUST remain independent injection controls. The resulting PDF MUST be stored as a normal `application/pdf` thread artifact and, when the thread resolves to an owned project, published into its root `outputs` folder using the existing filename identity and revision rules. Saving identical PDF bytes MUST return `changed: false` without a new artifact revision or a `republished` audit.
+
+#### Scenario: Structured bounds and independent rendering defenses
+- GIVEN a structured PDF report specification within the declared filename, title, subtitle, section, heading, body, column, row, and cell bounds, with text containing HTML-like markup
+- WHEN `artifact.pdf` renders the report
+- THEN the HTML body text is escaped by Jinja2 autoescape, the refusing URL fetcher rejects all resource URL schemes independently, and the output is a valid PDF without accepting HTML/CSS/path fields
+
+#### Scenario: PDF artifact publication and unchanged save
+- GIVEN a thread associated with an owned project and a valid structured report specification
+- WHEN `artifact.pdf` saves the resulting PDF and the same specification is saved again with identical rendered bytes
+- THEN the PDF artifact has content type `application/pdf`, one project file is published inside the root `outputs` folder, and the unchanged save returns `changed: false` without a new revision or `assistant_artifact.republished` audit
