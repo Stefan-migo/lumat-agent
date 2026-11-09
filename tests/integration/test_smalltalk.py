@@ -55,6 +55,72 @@ def _events(conversation_id: int, event: str) -> list[ConversationEvent]:
         ))
 
 
+def test_social_only_uses_configured_social_reply_without_classification(migrated_db, monkeypatch):
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    conversation_id = _conversation()
+    _turn(conversation_id, "hola", "wamid.social.seed")
+
+    def classify(*_args, **_kwargs):
+        raise AssertionError("social-only turns must not reach classification")
+
+    from app.chat.nodes import classify_intent
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+
+    replies = _turn(conversation_id, "¿Cómo estás?", "wamid.social.question")
+
+    assert replies == ["¡Todo bien, gracias por preguntar! ¿En qué te puedo ayudar?"]
+    assert SMALLTALK_REPLY not in replies[0]
+
+
+def test_first_contact_social_burst_fuses_greeting_and_social_reply(migrated_db, monkeypatch):
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    conversation_id = _conversation()
+
+    def classify(*_args, **_kwargs):
+        raise AssertionError("social-only turns must not reach classification")
+
+    from app.chat.nodes import classify_intent
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+
+    replies = _turn(conversation_id, "hola, ¿cómo estás?", "wamid.social.first")
+
+    assert len(replies) == 1
+    assert "Hola, soy Max" in replies[0]
+    assert "¡Todo bien, gracias por preguntar! ¿En qué te puedo ayudar?" in replies[0]
+
+
+def test_content_with_social_question_reaches_classification(migrated_db, monkeypatch):
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    conversation_id = _conversation()
+    observed = []
+
+    def classify(text, **_kwargs):
+        observed.append(text)
+        return {
+            "intent": "unknown", "service": None, "priority": None, "status": None,
+            "injection": False, "fields": {}, "template_id": None,
+        }
+
+    from app.chat.nodes import classify_intent
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+
+    _turn(conversation_id, "hola, necesito una visita", "wamid.social.content")
+
+    assert observed == ["hola, necesito una visita"]
+
+
 def test_smalltalk_answers_courtesy_and_breaks_the_unknown_streak(migrated_db, monkeypatch):
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(

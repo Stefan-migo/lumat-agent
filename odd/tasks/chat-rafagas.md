@@ -53,12 +53,16 @@ respuestas" se actualizan al comportamiento nuevo, no se borran.
 
 | ID | S# | Route | Commit |
 |---|---|---|---|
-| T1 | S4 | inline — lock por conversación en el sweep, RED de concurrencia primero | — |
-| T2 | S1 | inline — ventana de silencio + drenaje de la conversación + ráfaga colapsada en el turno | — |
-| T3 | S3 | inline — contador de turnos por conversación (migración 064) | — |
-| T4 | S2 | inline — familia social: clave `messages.social`, detección determinista, respuesta fusionada | — |
-| T5 | S2 | inline — campo en el panel de configuración + doc de superficies | — |
+| T1 | S4 | inline — lock por conversación en el sweep, RED de concurrencia primero | `88a1cd22` |
+| T2 | S1 | inline — ventana de silencio + drenaje de la conversación + ráfaga colapsada en el turno | `9a0ad123` |
+| T3 | S3 | inline — contador de turnos por conversación (migración 064) | `9a0ad123` |
+| T4 | S2 | worker — familia social: clave `messages.social`, detección determinista, respuesta fusionada | — |
+| T5 | S2 | worker — campo en el panel de configuración + doc de superficies | — |
 | T6 | S5 | inline — cerrar: `quick`, `db` focalizado, `full` de frontera, CHANGELOG | — |
+
+Frontera de entrega: T1–T3 cierran el primer slice (`822` líneas cambiadas sobre `origin/main`), más
+allá del slice de ~400 líneas; el feature se entrega en PR encadenados (slice 1: T1–T3, slice 2:
+T4–T6), no en un PR único.
 
 Riesgo alto declarado: T1 (concurrencia, ítem 4) y T3 (migración, ítem 1). Cada uno va en su propio
 commit para que la revisión pueda tomarlos solos.
@@ -86,3 +90,14 @@ Max saludo con dos mensajes. Hola. y luego muy rapido antes que el agente contes
 POST encola su propio `sweep_received` (`app/webhook/router.py:69`), no hay lock por conversación, y
 `state.turn` cuenta mensajes persistidos (`app/chat/state.py:269`), no turnos: el primer contacto se
 pierde con una ráfaga.
+
+**L4 — decisiones de implementación tomadas al escribir T1–T3 (2026-11-09):**
+- La exclusividad por conversación es un lock en proceso, como `RateLimiter`: el diseño corre un solo
+  worker (D1). Un advisory lock de Postgres queda como camino de salida documentado; un row lock no
+  sirve porque el grafo persiste en sesiones separadas y se bloquearía contra su propia escritura
+  (medido: el primer intento con la transacción del claim abierta colgó la suite).
+- El colapso de la ráfaga es sobre la corrida entrante **en vuelo** (`status = processing`), no sobre
+  todo historial: un takeover humano deja muchos inbound seguidos sin outbound y no debe reescribirse
+  en un solo bloque. Medido: sin ese filtro fallaban `test_chat_state` y los 25 de `test_chat_booking`.
+- `state.turn` pasa a `turn_count + 1` (migración 064 con backfill desde el historial inbound), así el
+  primer contacto en ráfaga sigue siendo turno 1.

@@ -66,7 +66,7 @@ from app.chat.nodes.handoff import handoff
 from app.chat.nodes.handoff_gate import handoff_gate
 from app.chat.nodes.manage import manage
 from app.chat.nodes.orchestrate import orchestrate
-from app.chat.nodes.receive import is_greeting_only, receive
+from app.chat.nodes.receive import is_greeting_only, is_social_only, receive
 from app.chat.nodes.respond import respond
 from app.chat.nodes.summary import summary
 from app.chat.state import ConversationState
@@ -149,7 +149,8 @@ def _flow_start(state: ConversationState) -> str:
     "Hola" as `unknown_intent`, and two of those in a row hand the conversation
     to a human.
     """
-    if is_greeting_only(state):
+    if is_greeting_only(state) or is_social_only(state):
+        # S2 (chat-rafagas): `receive` already answered the social question.
         return END
     return "classify_intent"
 

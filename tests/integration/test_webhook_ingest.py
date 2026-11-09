@@ -48,7 +48,7 @@ from app.models import (  # noqa: E402
     MessageStatus,
     MessageType,
 )
-from app.services.settings import REPLY_TEXT_DEFAULTS  # noqa: E402
+from app.services.settings import MESSAGE_DEFAULTS, REPLY_TEXT_DEFAULTS  # noqa: E402
 from app.webhook import ingest  # noqa: E402
 from app.webhook import router as router_module  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -374,10 +374,11 @@ def test_retry_storm_single_processing_pass(
     assert all(r.status == MessageStatus.PROCESSED for r in rows)
     outbound = [r for r in rows if r.direction == MessageDirection.OUTBOUND]
     # chat-rafagas S1: the three messages are one burst, so one turn and one reply.
-    # The three inbound rows are persisted before the sweep runs, so no turn here
-    # is the first contact and the greeting never applies.
+    # chat-rafagas S3: and being the FIRST turn, it carries the first-contact
+    # greeting instead of a clarification (the three inbound rows persist before
+    # the sweep, which used to make this look like turn 3).
     assert len(outbound) == 1
-    assert "no te entend" in (outbound[0].text or "").lower()
+    assert outbound[0].text == MESSAGE_DEFAULTS["greeting_short"]
 
 
 # ---------------------------------------------------------------------------

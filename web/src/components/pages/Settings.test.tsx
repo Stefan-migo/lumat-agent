@@ -43,7 +43,7 @@ const settings = (overrides: Partial<SettingsWithOptions> = {}): SettingsWithOpt
   email: { host: "localhost", port: 25, from_address: "notificaciones@lumat.cl", user: "", tls: "none", password: { configured: false, masked: "" } },
   scope_rules: { general: "bot_resolve" }, keywords: ["gas"], tone: "cercano",
   options: { tones: ["cercano", "formal", "directo"], tarifa_labels: { visita_tecnica: "Visita técnica", mantencion_calefont: "Mantención de calefont", mantencion_caldera: "Mantención de caldera", lavado_red: "Lavado de red" } },
-  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", smalltalk: "Con gusto.", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
+  messages: { greeting: "Hola", greeting_short: "Hola, ¿qué necesitas?", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", smalltalk: "Con gusto.", social: "Bien, gracias.", cannot_answer: "No sé", clarification: "¿Cuál?",  cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" },
   templates: [],
   hours: { timezone: "America/Santiago", schedule: [{ days: [1], open: "09:00", close: "18:00" }] },
   tarifa: { visita_tecnica: [{ desde_mes: 1, hasta_mes: 12, valor: 30000 }], mantencion_calefont: [{ desde_mes: 1, hasta_mes: 12, valor: 50000 }], mantencion_caldera: [{ desde_mes: 1, hasta_mes: 12, valor: 80000 }], lavado_red: [{ desde_mes: 1, hasta_mes: 12, valor: 140000 }] },
@@ -495,7 +495,7 @@ describe("Settings", () => {
     expect(screen.getByRole("tab", { name: /^Saludo corto con nombre/ })).toBeInTheDocument();
   });
 
-  it("edits the short greeting and saves all ten messages", async () => {
+  it("edits the short greeting and saves all twelve messages", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
@@ -512,7 +512,7 @@ describe("Settings", () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/messages", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ greeting: "Hola", greeting_short: "Hola, cuéntame", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", smalltalk: "Con gusto.", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" }),
+      body: JSON.stringify({ greeting: "Hola", greeting_short: "Hola, cuéntame", greeting_name: "Hola, Ana", greeting_short_name: "Hola, Ana", smalltalk: "Con gusto.", social: "Bien, gracias.", cannot_answer: "No sé", clarification: "¿Cuál?", cannot_understand_offer: "¿Visita o persona?", kb_miss_offer: "No tengo ese dato.", farewell: "Chao", out_of_hours: "Cerrado" }),
     })));
   });
 
@@ -530,14 +530,15 @@ describe("Settings", () => {
     expect(screen.getAllByRole("tabpanel").find((panel) => panel.getAttribute("aria-labelledby")?.includes("trigger-farewell"))).toBeInTheDocument();
   });
 
-  it("shows the 11 fixed messages, filters them, and previews inside the selected editor", async () => {
+  it("shows the 12 fixed messages, filters them, and previews inside the selected editor", async () => {
     const user = userEvent.setup();
     renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Mensajes");
-    expect(screen.getByText("11 mensajes")).toBeInTheDocument();
+    expect(screen.getByText("12 mensajes")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Pregunta social" })).toBeInTheDocument();
     expect(screen.getAllByText("Mensaje fijo")).toHaveLength(1);
     const list = screen.getByRole("tablist", { name: "Plantillas de mensajes" });
-    expect(within(list).getAllByRole("tab")).toHaveLength(11);
+    expect(within(list).getAllByRole("tab")).toHaveLength(12);
     expect(within(list).queryByText("Mensaje fijo")).not.toBeInTheDocument();
     expect(within(list).getByRole("tab", { name: "Despedida" })).toHaveTextContent("Despedida");
     expect(within(list).queryByText("Cierre de conversación")).not.toBeInTheDocument();
