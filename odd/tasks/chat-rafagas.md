@@ -60,9 +60,10 @@ respuestas" se actualizan al comportamiento nuevo, no se borran.
 | T5 | S2 | worker + parent — campo en el panel de configuración + tipo de la API + stories | `c17cda89` |
 | T6 | S5 | inline — cerrar: `quick`, `db` focalizado, `full` de frontera, CHANGELOG | — |
 
-Frontera de entrega: el feature acumula `994` líneas sobre `origin/main`, muy por encima del slice de ~400.
+Frontera de entrega: el feature acumula ~1394 líneas sobre `origin/main`, muy por encima del slice de ~400.
 Se entrega en PR encadenados: **slice 1** `88a1cd22` + `9a0ad123` (lock por conversación, ráfaga = un turno,
-contador de turnos) y **slice 2** `c17cda89` (línea social + campo del panel), con este documento y el
+contador de turnos), **slice 2** `c17cda89` + `42599426` (línea social configurable y sus variantes), **slice 3**
+`9e777d0f` (caminos de falla del burst que encontró la verificación independiente), con este documento y el
 CHANGELOG en el slice que abra la entrega.
 
 Riesgo alto declarado: T1 (concurrencia, ítem 4) y T3 (migración, ítem 1). Cada uno va en su propio
@@ -127,3 +128,26 @@ mensajes son el primer contacto, así que la respuesta es el saludo corto y no u
 3. El cierre con `full` se trabó una vez por correr dos suites a la vez contra la misma base de test
    (`suite-truncate-stall`): una transacción `idle in transaction` bloqueando el `TRUNCATE` del fixture. No era
    código; se limpiaron los backends y se corrió sola.
+
+**L7 — verificación independiente (`gentle-ai-verify`, 2026-11-09).** PASS en los cinco focos de riesgo
+(concurrencia, ciclo del lock, semántica del burst, migración, colapso), con dos bloqueantes y varios avisos.
+Resuelto en `9e777d0f` y `42599426`:
+
+1. **B1** — `test_processing_failure_marks_failed` parcheaba `process_message`, que el sweep ya no llama: el
+   test corría el turno real de primer contacto y llegaba a un `httpx.post` sin mockear a graph.facebook.com,
+   pasando sólo porque la llamada fallaba. Parcha `process_turn`.
+2. **B2** — `¿qué tal?` no recibía la línea social: S2 lo nombra explícitamente. La detección ahora cubre
+   `como estas`, `como anda(s)`, `que tal`, `como va` y `todo bien`, con dos guardas: un modismo precedido por
+   palabra de saludo sigue siendo saludo (`hola cómo va?`), y `todo bien` sólo cuenta como pregunta social si
+   el mensaje trae signo de interrogación (es también como el cliente cierra un trabajo).
+3. **Estado humano** marcaba `PROCESSED` un mensaje cuya descarga de media falló, sin reintento ni evento:
+   ahora sólo se consumen los mensajes cuya media se resolvió.
+4. **Texto de sistema de Meta** (`MessageType.OTHER`) podía colarse en la ráfaga: el colapso lo excluye, igual
+   que ya lo hacía la corrida del grafo.
+5. **Sin test para la ventana de silencio**: borrar el `sleep` dejaba la suite verde. Se agregó el test de
+   "el segundo mensaje llega durante la espera y la respuesta es una sola".
+
+Avisos que quedan abiertos, aceptados y documentados: la espera de silencio corre dentro del lock (10
+conversaciones pendientes ≈ 30 s de cola), el lock es de proceso y nada en código impone el worker único
+(D1), y no hay test del backfill de la migración 064 ni uno que garantice `turn_count` exacto con turnos
+fallidos. El verificador dejó listas las propuestas para esos tres.
