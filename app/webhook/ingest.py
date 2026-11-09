@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -364,6 +365,36 @@ rate_limiter = RateLimiter()
 
 
 # ---------------------------------------------------------------------------
+# Per-conversation turn lock (chat-rafagas S4)
+# ---------------------------------------------------------------------------
+
+# conversation_id -> lock. In-process, like `RateLimiter`: the design runs a
+# single worker (D1), so a process-local lock is the whole coordination surface.
+# The upgrade path when a second worker appears is a Postgres advisory lock
+# keyed by conversation. A row lock is NOT an option: the graph persists the
+# conversation in separate sessions, so holding FOR UPDATE across the turn
+# deadlocks against its own writes.
+#
+# Measured in production (Engram `chat/burst-de-mensajes`): two webhook POSTs
+# enqueue two background sweeps, and without this lock each one runs its own
+# `run_conversation` for the same conversation. The second turn then rebuilds
+# state before the first reply is persisted and answers two consecutive user
+# messages with no bot turn in between.
+_turn_locks: dict[int, threading.Lock] = {}
+_turn_locks_guard = threading.Lock()
+
+
+def _turn_lock(conversation_id: int) -> threading.Lock:
+    """The turn lock for one conversation, created on first use.
+
+    Never pruned: each entry is a bare lock and the project's volume is tens of
+    conversations a day — the same tradeoff `RateLimiter` already accepts.
+    """
+    with _turn_locks_guard:
+        return _turn_locks.setdefault(conversation_id, threading.Lock())
+
+
+# ---------------------------------------------------------------------------
 # Persistence (WH-4 persist-before-process, WH-5 dedup by wamid)
 # ---------------------------------------------------------------------------
 
@@ -549,6 +580,46 @@ def reset_stale_processing() -> int:
         return result.rowcount
 
 
+def _process_claimed(message_id: int) -> int:
+    """Run one already-claimed message through the pipeline.
+
+    Returns 1 when the message was consumed (processed, or a media failure that
+    exhausted its retries) and 0 when it goes back to `received` for the next
+    sweep. Called with the conversation's turn lock held — see `_turn_lock`.
+    """
+    try:
+        with session_scope() as session:
+            message = session.get(Message, message_id)
+            process_message(session, message)
+        return 1
+    except MediaDownloadError:
+        with session_scope() as session:
+            message = session.get(Message, message_id)
+            message.media_attempts += 1
+            if message.media_attempts >= 5:
+                message.status = MessageStatus.PROCESSED
+                message.stored_path = None
+                session.add(ConversationEvent(
+                    conversation_id=message.conversation_id,
+                    event="media_unavailable",
+                    cause=f"Media download failed after 5 attempts for message {message_id}",
+                    actor="system",
+                ))
+            else:
+                message.status = MessageStatus.RECEIVED
+        if message.media_attempts >= 5:
+            logger.error("media download failed for message %s after %s attempts; media unavailable", message_id, message.media_attempts)
+            return 1
+        logger.warning("media download failed for message %s; will retry on next sweep", message_id)
+        return 0
+    except Exception:
+        logger.exception("processing failed for message %s; marking failed", message_id)
+        with session_scope() as session:
+            message = session.get(Message, message_id)
+            message.status = MessageStatus.FAILED
+        return 0
+
+
 def sweep_received(limit: int = 50) -> int:
     """Process messages stuck in `received` (BackgroundTask + startup sweep).
 
@@ -562,15 +633,21 @@ def sweep_received(limit: int = 50) -> int:
     Failures: media download -> back to `received` (retry); anything else ->
     `failed` (raw payload still stored). Hard-crash rows stay `processing`
     until the next boot's `reset_stale_processing`.
+
+    Exclusivity (chat-rafagas S4): the claim is per message, but a turn belongs
+    to the conversation, so every processed message takes its conversation's
+    turn lock first. Two sweeps started by two webhook POSTs then run their
+    turns in order instead of in parallel.
     """
     with session_scope() as session:
-        claimed_ids = session.scalars(
-            select(Message.id)
+        claimed = session.execute(
+            select(Message.id, Message.conversation_id)
             .where(Message.status == MessageStatus.RECEIVED)
             .order_by(Message.id)
             .limit(limit)
             .with_for_update(skip_locked=True)
         ).all()
+        claimed_ids = [row.id for row in claimed]
         if claimed_ids:
             session.execute(
                 update(Message)
@@ -579,37 +656,12 @@ def sweep_received(limit: int = 50) -> int:
             )
 
     processed = 0
-    for message_id in claimed_ids:
-        try:
-            with session_scope() as session:
-                message = session.get(Message, message_id)
-                process_message(session, message)
-            processed += 1
-        except MediaDownloadError:
-            with session_scope() as session:
-                message = session.get(Message, message_id)
-                message.media_attempts += 1
-                if message.media_attempts >= 5:
-                    message.status = MessageStatus.PROCESSED
-                    message.stored_path = None
-                    session.add(ConversationEvent(
-                        conversation_id=message.conversation_id,
-                        event="media_unavailable",
-                        cause=f"Media download failed after 5 attempts for message {message_id}",
-                        actor="system",
-                    ))
-                else:
-                    message.status = MessageStatus.RECEIVED
-            if message.media_attempts >= 5:
-                logger.error("media download failed for message %s after %s attempts; media unavailable", message_id, message.media_attempts)
-                processed += 1
-            else:
-                logger.warning("media download failed for message %s; will retry on next sweep", message_id)
-        except Exception:
-            logger.exception("processing failed for message %s; marking failed", message_id)
-            with session_scope() as session:
-                message = session.get(Message, message_id)
-                message.status = MessageStatus.FAILED
+    for message_id, conversation_id in claimed:
+        # S4: claims are per message, but a turn belongs to the conversation.
+        # The lock makes the second sweep wait for the running turn instead of
+        # opening a parallel one; its own message is then processed in order.
+        with _turn_lock(conversation_id):
+            processed += _process_claimed(message_id)
 
     # EM-4 escalation (T4.3.2): reminder emails for unacked emergencies — a
     # lightweight call in the same sweep (startup + webhook BackgroundTask),

@@ -20,6 +20,8 @@ Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 import hashlib
 import hmac
 import json
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -917,3 +919,85 @@ def test_startup_sweep_reprocesses_received(migrated_db, mock_openai_chat, mock_
 
     with SessionLocal() as session:
         assert session.get(Message, mid).status == MessageStatus.PROCESSED
+
+
+# ---------------------------------------------------------------------------
+# Per-conversation exclusivity (chat-rafagas S4)
+# ---------------------------------------------------------------------------
+
+
+def test_same_conversation_never_runs_two_turns_at_once(migrated_db, monkeypatch):
+    """S4: a message arriving mid-turn waits; it never opens a parallel turn.
+
+    Two webhook POSTs enqueue two background sweeps, so the pipeline can enter
+    `process_message` twice for the same conversation. Today each entry runs its
+    own `run_conversation`: the second turn rebuilds state before the first reply
+    is persisted and the model answers two consecutive user messages with no bot
+    in between -- measured in production (Engram `chat/burst-de-mensajes`).
+    """
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56911112222", name="Max")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56911112222")
+        session.add(conv)
+        session.flush()
+        conversation_id = conv.id
+        session.add(
+            Message(
+                wamid="wamid.ex1",
+                conversation_id=conv.id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="Hola",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+
+    active = {"now": 0, "peak": 0}
+    guard = threading.Lock()
+    in_turn = threading.Event()
+    release = threading.Event()
+
+    def slow_turn(session, message):
+        with guard:
+            active["now"] += 1
+            active["peak"] = max(active["peak"], active["now"])
+        in_turn.set()
+        release.wait(5.0)
+        with guard:
+            active["now"] -= 1
+        return []
+
+    monkeypatch.setattr(ingest, "run_conversation", slow_turn)
+    # chat-rafagas T2 adds the silence window; this test pins exclusivity only.
+    monkeypatch.setattr(ingest, "BURST_IDLE_SECONDS", 0.0, raising=False)
+
+    first = threading.Thread(target=ingest.sweep_received)
+    first.start()
+    assert in_turn.wait(5.0), "the first sweep never started the turn"
+
+    # The customer's second message arrives while the first turn is running.
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.ex2",
+                conversation_id=conversation_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="¿Cómo estás?",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+
+    second = threading.Thread(target=ingest.sweep_received)
+    second.start()
+    time.sleep(0.3)  # window for the second sweep to enter a parallel turn
+    release.set()
+    first.join(10.0)
+    second.join(10.0)
+
+    assert not first.is_alive() and not second.is_alive()
+    assert active["peak"] == 1, "two turns of the same conversation overlapped"
