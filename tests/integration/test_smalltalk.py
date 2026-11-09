@@ -7,6 +7,7 @@ from app.chat.graph import run_conversation
 from app.chat.state import ConversationState, get_or_create_conversation
 from app.db import SessionLocal
 from app.models import (
+    Conversation,
     ConversationEvent,
     Message,
     MessageDirection,
@@ -72,7 +73,7 @@ def test_social_only_uses_configured_social_reply_without_classification(migrate
 
     replies = _turn(conversation_id, "¿Cómo estás?", "wamid.social.question")
 
-    assert replies == ["¡Todo bien, gracias por preguntar! ¿En qué te puedo ayudar?"]
+    assert replies == ["¡Todo bien, gracias por preguntar!"]
     assert SMALLTALK_REPLY not in replies[0]
 
 
@@ -94,7 +95,7 @@ def test_first_contact_social_burst_fuses_greeting_and_social_reply(migrated_db,
 
     assert len(replies) == 1
     assert "Hola, soy Max" in replies[0]
-    assert "¡Todo bien, gracias por preguntar! ¿En qué te puedo ayudar?" in replies[0]
+    assert "¡Todo bien, gracias por preguntar!" in replies[0]
 
 
 def test_content_with_social_question_reaches_classification(migrated_db, monkeypatch):
@@ -256,3 +257,64 @@ def test_a_refusal_is_not_thanked(migrated_db, monkeypatch):
     # that the courtesy prefix is not used to answer a refusal.
     assert "¿Te puedo ayudar en algo más?" in replies[0]
     assert "Con gusto" not in replies[0]
+
+
+def test_custom_social_text_reaches_the_reply(migrated_db, monkeypatch):
+    """S2: the warm line is the owner's, not the shipped default.
+
+    "Línea fija cálida configurable" is the owner's decision: the panel writes
+    `messages.social` and the turn must render what was written.
+    """
+    from app.services.settings import set_setting
+
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    conversation_id = _conversation()
+    with SessionLocal() as session:
+        # A later turn: the first contact would legitimately fuse the greeting.
+        session.get(Conversation, conversation_id).turn_count = 1
+        set_setting(session, "messages.social", "Aquí andamos, ¿y tú?")
+        session.commit()
+
+    replies = _turn(conversation_id, "¿Cómo estás?", "wamid.social.custom")
+
+    assert replies == ["Aquí andamos, ¿y tú?"]
+
+
+def test_social_boundary_only_counts_a_question_about_the_bot(migrated_db, monkeypatch):
+    """S2 boundary: "todo bien" closes a job; "¿todo bien?" asks about the bot.
+
+    Answering a closing statement with the social line would be the same class of
+    defect the feature fixes, so the statement form keeps its classification path.
+    """
+    from app.chat.nodes.receive import is_social_only
+
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    conversation_id = _conversation()
+
+    def social(text: str) -> bool:
+        with SessionLocal() as session:
+            session.add(
+                Message(
+                    wamid=f"wamid.social.{abs(hash(text))}",
+                    conversation_id=conversation_id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text=text,
+                    status=MessageStatus.RECEIVED,
+                )
+            )
+            session.commit()
+            return is_social_only(ConversationState.from_db(session, conversation_id))
+
+    assert social("todo bien, gracias") is False
+    assert social("¿todo bien?") is True
+    assert social("hola cómo va?") is False  # a greeting idiom, not a social question
+    assert social("¿qué tal?") is True

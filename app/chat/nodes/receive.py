@@ -100,13 +100,32 @@ def is_greeting_only(state: ConversationState) -> bool:
     return all(token in GREETING_WORDS or token in GREETING_FILLERS for token in tokens)
 
 
-# Only questions ABOUT the assistant, not greeting idioms: "¿cómo va?" and
-# "¿qué tal?" are how this customer says hello, and `test_greeting_variants` pins
-# that they stay a greeting. "como estas" and "todo bien" ask how the bot is.
+# Questions about the assistant itself (S2: "¿Cómo estás?", "¿qué tal? y
+# variantes"). Some of these double as greeting idioms, so a greeting word in
+# front of one keeps the message a greeting: "hola cómo va?" is how this customer
+# says hello, and `test_greeting_variants` pins that it stays one.
 _SOCIAL_QUESTION_ENDINGS = (
     ("como", "estas"),
+    ("como", "anda"),
+    ("como", "andas"),
+    ("que", "tal"),
+    ("como", "va"),
     ("todo", "bien"),
 )
+_GREETING_IDIOMS = frozenset({("que", "tal"), ("como", "va")})
+# Endings that are also ordinary statements: "todo bien" closes a job, so it only
+# counts as a social question when the customer actually asked with a question
+# mark. `_normalized_inbound` strips punctuation, hence the raw check.
+_STATEMENT_ENDINGS = frozenset({("todo", "bien")})
+
+
+def _asks_a_question(state: ConversationState) -> bool:
+    """True when the customer's latest message carries a question mark."""
+    inbound = next(
+        (message for message in reversed(state.window) if message.get("direction") == "inbound"),
+        None,
+    )
+    return "?" in ((inbound or {}).get("text") or "")
 
 
 def is_social_only(state: ConversationState) -> bool:
@@ -122,7 +141,11 @@ def is_social_only(state: ConversationState) -> bool:
     for ending in _SOCIAL_QUESTION_ENDINGS:
         if tuple(tokens[-len(ending):]) != ending:
             continue
-        prefix = tokens[:-len(ending)]
+        if ending in _GREETING_IDIOMS and any(token in GREETING_WORDS for token in tokens):
+            continue
+        if ending in _STATEMENT_ENDINGS and not _asks_a_question(state):
+            continue
+        prefix = tokens[: -len(ending)]
         if all(token in GREETING_WORDS or token in GREETING_FILLERS for token in prefix):
             return True
     return False
