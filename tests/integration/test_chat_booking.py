@@ -60,6 +60,9 @@ def _seed_conversation(*, captured=None, service="Visita técnica", service_dura
         if service_durations is not None:
             set_setting(session, "booking.service_durations", service_durations)
         conv_id, customer_id, case_id, technician_id = conv.id, customer.id, case.id, technician.id
+        # chat-rafagas S3: the seeded message is an already-answered turn, so the
+        # turn each test invokes next is turn 2 and gets no first-contact greeting.
+        conv.turn_count = 1
         inbound = Message(
             wamid="wamid.booking.seed", conversation_id=conv.id,
             direction=MessageDirection.INBOUND, msg_type=MessageType.TEXT,
