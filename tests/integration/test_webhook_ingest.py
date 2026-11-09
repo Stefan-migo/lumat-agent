@@ -352,9 +352,14 @@ def test_wamid_dedup_keeps_single_row(client, monkeypatch):
     assert _count_messages() == 1
 
 
-def test_retry_storm_single_processing_pass(client, mock_openai_chat, mock_meta_send):
+def test_retry_storm_single_processing_pass(
+    client, mock_openai_chat, mock_meta_send, monkeypatch
+):
     """WH-7: a batch re-delivered 10x yields exactly one processing pass each.
-    Each processed inbound also produces one bot reply (B3 behavior)."""
+
+    Since chat-rafagas S1 the three messages are also ONE burst, so the batch gets
+    one reply instead of three: the dedup guarantee (3 unique wamids, never 30) is
+    what this test pins, and the reply count follows the turn model."""
     batch = [
         _message("wamid.r1", text="a"),
         _message("wamid.r2", text="b"),
@@ -368,22 +373,11 @@ def test_retry_storm_single_processing_pass(client, mock_openai_chat, mock_meta_
     assert _count_inbound() == 3  # dedup: 3 unique wamids, never 30
     assert all(r.status == MessageStatus.PROCESSED for r in rows)
     outbound = [r for r in rows if r.direction == MessageDirection.OUTBOUND]
-    # Three unknown turns under D17: rephrase, then offer the two paths (the bot
-    # stays active), then derive. 3 outbound rows, one per failure. The three
-    # inbound rows are persisted before the sweep runs, so no turn here is the
-    # first contact and the greeting never applies.
-    assert len(outbound) == 3
-    assert any("entend" in (m.text or "") for m in outbound)  # failure 1: rephrase
-    assert any("coordinar una visita" in (m.text or "") for m in outbound)  # failure 2: offer
-    assert any(
-        REPLY_TEXT_DEFAULTS["handoff_unknown_intent_thrice"] in (m.text or "")
-        for m in outbound
-    )  # failure 3: derive
-    assert any("coordinar una visita" in (m.text or "") for m in outbound)  # offer
-    assert sum(
-        REPLY_TEXT_DEFAULTS["handoff_unknown_intent_thrice"] in (m.text or "")
-        for m in outbound
-    ) == 1  # handoff reply answered exactly once
+    # chat-rafagas S1: the three messages are one burst, so one turn and one reply.
+    # The three inbound rows are persisted before the sweep runs, so no turn here
+    # is the first contact and the greeting never applies.
+    assert len(outbound) == 1
+    assert "no te entend" in (outbound[0].text or "").lower()
 
 
 # ---------------------------------------------------------------------------
@@ -750,7 +744,11 @@ def test_media_download_failure_retries_via_sweep(
     monkeypatch.setattr(
         ingest,
         "get_settings",
-        lambda: SimpleNamespace(media_dir=str(tmp_path), meta_access_token="meta-test-token"),
+        lambda: SimpleNamespace(
+            media_dir=str(tmp_path),
+            meta_access_token="meta-test-token",
+            burst_idle_seconds=0.0,
+        ),
     )
 
     # First sweep: download fails (500) -> stays 'received', retried later
@@ -798,7 +796,7 @@ def test_media_download_stops_after_five_failures(
         session.commit()
         mid = msg.id
     monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(
-        media_dir=str(tmp_path), meta_access_token="meta-test-token"))
+        media_dir=str(tmp_path), meta_access_token="meta-test-token", burst_idle_seconds=0.0))
     with respx.mock:
         respx.get(media_url).mock(return_value=httpx.Response(500))
         for _ in range(5):
@@ -840,7 +838,7 @@ def test_downloaded_media_metadata_survives_graph_failure(
         session.commit()
         message_id = message.id
     monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(
-        media_dir=str(tmp_path), meta_access_token="meta-test-token"))
+        media_dir=str(tmp_path), meta_access_token="meta-test-token", burst_idle_seconds=0.0))
     monkeypatch.setattr(ingest, "run_conversation", lambda *args: (_ for _ in ()).throw(RuntimeError("graph failed")))
     with respx.mock:
         respx.get(media_url).mock(return_value=httpx.Response(
@@ -879,7 +877,11 @@ def test_media_download_uses_bearer_token(
     monkeypatch.setattr(
         ingest,
         "get_settings",
-        lambda: SimpleNamespace(media_dir=str(tmp_path), meta_access_token="meta-test-token"),
+        lambda: SimpleNamespace(
+            media_dir=str(tmp_path),
+            meta_access_token="meta-test-token",
+            burst_idle_seconds=0.0,
+        ),
     )
     with respx.mock:
         route = respx.get(media_url).mock(
@@ -972,7 +974,7 @@ def test_same_conversation_never_runs_two_turns_at_once(migrated_db, monkeypatch
 
     monkeypatch.setattr(ingest, "run_conversation", slow_turn)
     # chat-rafagas T2 adds the silence window; this test pins exclusivity only.
-    monkeypatch.setattr(ingest, "BURST_IDLE_SECONDS", 0.0, raising=False)
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.0)
 
     first = threading.Thread(target=ingest.sweep_received)
     first.start()
@@ -1001,3 +1003,129 @@ def test_same_conversation_never_runs_two_turns_at_once(migrated_db, monkeypatch
 
     assert not first.is_alive() and not second.is_alive()
     assert active["peak"] == 1, "two turns of the same conversation overlapped"
+
+
+def test_burst_of_two_messages_produces_one_reply(
+    migrated_db, mock_openai_chat, mock_meta_send, monkeypatch
+):
+    """S1: messages sent before the bot answers are ONE turn with ONE reply.
+
+    Production 2026-11-06 17:12: the customer wrote "Hola" and then the rest of
+    the request before the bot answered, and received two messages -- the second
+    one a canned line that answered nothing. The burst here carries content so the
+    classifier runs: a greeting-only burst short-circuits in `receive` and never
+    reaches it.
+    """
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.0)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56933334444", name="Max Escanilla")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56933334444")
+        session.add(conv)
+        session.flush()
+        conversation_id = conv.id
+        session.add_all(
+            [
+                Message(
+                    wamid="wamid.burst1",
+                    conversation_id=conv.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text="Hola",
+                    status=MessageStatus.RECEIVED,
+                ),
+                Message(
+                    wamid="wamid.burst2",
+                    conversation_id=conv.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text="Necesito una visita para revisar la caldera",
+                    status=MessageStatus.RECEIVED,
+                ),
+            ]
+        )
+        session.commit()
+
+    assert ingest.sweep_received() == 2
+
+    with SessionLocal() as session:
+        rows = list(
+            session.scalars(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.id)
+            )
+        )
+    outbound = [row for row in rows if row.direction == MessageDirection.OUTBOUND]
+    assert len(outbound) == 1, "a burst must receive exactly one reply"
+    assert all(row.status == MessageStatus.PROCESSED for row in rows)
+
+    # The turn reads the burst as ONE customer utterance, so the classifier sees
+    # both messages instead of only the last one.
+    inputs = [
+        body["messages"][-1]["content"].split("<user_input>")[1].split("</user_input>")[0]
+        for body in mock_openai_chat
+        if "<user_input>" in body["messages"][-1]["content"]
+    ]
+    assert inputs, "the turn never reached the classifier"
+    assert any(
+        "Hola" in text and "Necesito una visita" in text for text in inputs
+    )
+
+
+def test_first_contact_survives_a_burst(
+    migrated_db, mock_openai_chat, mock_meta_send, monkeypatch
+):
+    """S3: a new customer who writes twice still gets the first-contact greeting.
+
+    `state.turn` used to count persisted inbound rows, so "Hola" + "¿Cómo estás?"
+    arriving together made the very first turn look like turn 2 and every
+    `turn <= 1` rule (the greeting header among them) was skipped.
+    """
+    monkeypatch.setattr(ingest, "_burst_idle_seconds", lambda: 0.0)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56966667777", name="Max")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(customer_id=customer.id, wa_phone="+56966667777")
+        session.add(conv)
+        session.flush()
+        conversation_id = conv.id
+        session.add_all(
+            [
+                Message(
+                    wamid="wamid.first1",
+                    conversation_id=conv.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text="Hola",
+                    status=MessageStatus.RECEIVED,
+                ),
+                Message(
+                    wamid="wamid.first2",
+                    conversation_id=conv.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text="¿Cómo estás?",
+                    status=MessageStatus.RECEIVED,
+                ),
+            ]
+        )
+        session.commit()
+
+    assert ingest.sweep_received() == 2
+
+    with SessionLocal() as session:
+        outbound = list(
+            session.scalars(
+                select(Message).where(
+                    Message.conversation_id == conversation_id,
+                    Message.direction == MessageDirection.OUTBOUND,
+                )
+            )
+        )
+        assert session.get(Conversation, conversation_id).turn_count == 1
+
+    assert len(outbound) == 1
+    assert outbound[0].text.startswith("Hola, Max.")

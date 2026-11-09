@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # Media downloads (design Webhook Pipeline: media -> media/ volume)
     media_dir: str = "media"
 
+    # chat-rafagas S1: seconds of silence the webhook pipeline waits for before it
+    # answers, so "Hola" + the real question sent a few hundred ms apart arrive as
+    # ONE turn and receive ONE reply. 0 disables the wait (tests, replay).
+    burst_idle_seconds: float = 3.0
+
     # Panel (design D7; AP-1): secret used to SIGN the Starlette session
     # cookie. Required at boot — an unsigned session cookie would be
     # forgeable. SH-2: env-only, never in the repo.

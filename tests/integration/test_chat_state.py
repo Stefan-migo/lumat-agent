@@ -185,7 +185,10 @@ def test_d2_state_rebuilt_from_db():
 
     assert state.conversation_id == conv_id
     assert state.phone == "+56912345678"
-    assert state.turn == 3
+    # S3 (chat-rafagas): `turn` counts answered turns (migration 064), not inbound
+    # rows. Three unanswered messages are the first turn, and the window keeps them
+    # as written because none of them carries the in-flight `processing` marker.
+    assert state.turn == 1
     assert [m["text"] for m in state.window] == ["primero", "segundo", "tercero"]
     assert state.captured == {}
     assert state.intent is None

@@ -44,6 +44,44 @@ GREETING_HEADER = MESSAGE_DEFAULTS["greeting"]
 GREETING_SHORT_HEADER = MESSAGE_DEFAULTS["greeting_short"]
 
 
+def collapse_trailing_burst(window: list[dict]) -> list[dict]:
+    """Merge the customer's trailing inbound run into ONE utterance.
+
+    chat-rafagas S1: every message the customer sent before the bot answered is
+    one turn. Merging here, in the window the whole graph reads, keeps the blast
+    radius to one place: `window[-1]["text"]` still means "what the customer is
+    saying now", and the transcript shows the burst as one line instead of two
+    user turns with no bot reply in between (which is what production answered
+    badly on 2026-11-06).
+
+    Only the in-flight burst is merged: `processing` is the marker the webhook
+    sweep sets on the messages of the turn it is about to run. History keeps the
+    rows it already wrote, so a conversation whose inbound history has no bot
+    replies between messages (a human takeover, an older crash) is not rewritten
+    into a single blob.
+    """
+    if len(window) < 2 or window[-1].get("direction") != "inbound":
+        return window
+    if window[-1].get("status") != "processing":
+        return window
+    start = len(window) - 1
+    while (
+        start > 0
+        and window[start - 1].get("direction") == "inbound"
+        and window[start - 1].get("status") == "processing"
+    ):
+        start -= 1
+    if start == len(window) - 1:
+        return window
+    burst = window[start:]
+    texts = [message["text"] for message in burst if message.get("text")]
+    if not texts:
+        return window
+    merged = dict(burst[-1])
+    merged["text"] = "\n".join(texts)
+    return [*window[:start], merged]
+
+
 def conversation_transcript(window: list[dict], limit: int = 6) -> str:
     """Render recent prior turns, excluding the current message."""
     prior_messages = window[:-1]
@@ -245,16 +283,17 @@ class ConversationState:
             .order_by(Message.id.desc())
             .limit(WINDOW_SIZE)
         ).all()
-        window = [
+        window = collapse_trailing_burst([
             {
                 "id": m.id,
                 "direction": m.direction.value,
                 "msg_type": m.msg_type.value,
                 "text": m.text,
+                "status": m.status.value,
                 "created_at": m.created_at,
             }
             for m in reversed(last_messages)
-        ]
+        ])
         appointment = session.scalar(
             select(Appointment)
             .where(
@@ -269,12 +308,11 @@ class ConversationState:
             .order_by(Appointment.starts_at.desc())
             .limit(1)
         )
-        turn = session.scalar(
-            select(func.count(Message.id)).where(
-                Message.conversation_id == conversation_id,
-                Message.direction == "inbound",
-            )
-        ) or 0
+        # S3 (chat-rafagas): a turn is a burst, not a message. Counting inbound
+        # rows made a first contact that arrived as two messages look like turn 2,
+        # which silently disabled every `turn <= 1` first-contact rule. The counter
+        # holds the turns already answered, so this run is the next one.
+        turn = conversation.turn_count + 1
         # HH-3: persist the consecutive unknown-intent streak across state rebuilds (D2).
         unknown_count = unknown_streak(session, conversation_id)
         return cls(
