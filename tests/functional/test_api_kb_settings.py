@@ -948,6 +948,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "greeting_short_name",
         "smalltalk",
         "smalltalk_decline",
+        "social",
         "cannot_answer",
         "clarification",
         "cannot_understand_offer",
@@ -1082,6 +1083,8 @@ def test_settings_update_messages_audited(client, make_user):
         "greeting_short_name": "Hola Ana editado breve",
         "smalltalk": "Con gusto, editado.",
         "smalltalk_decline": "¿Te puedo ayudar en algo más?",
+        # chat-rafagas S2: the social question is owner-editable like the rest.
+        "social": "¡Todo bien, editado!",
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
         "cannot_understand_offer": "¿Visita o persona?",
@@ -1102,9 +1105,9 @@ def test_settings_update_messages_audited(client, make_user):
         f"messages.{key}" for key in value
     }
     assert all(audit.actor == "adm" for audit in audits)
-    assert client.get("/panel/api/settings").json()["messages"]["cannot_understand_offer"] == (
-        "¿Visita o persona?"
-    )
+    snapshot = client.get("/panel/api/settings").json()
+    assert snapshot["messages"]["cannot_understand_offer"] == "¿Visita o persona?"
+    assert snapshot["messages"]["social"] == "¡Todo bien, editado!"
 
 
 def test_settings_update_hours_audited(client, make_user):

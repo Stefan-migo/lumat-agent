@@ -58,6 +58,9 @@ def _seed_conversation():
             local_time=datetime.now(timezone.utc).time().replace(minute=0, second=0, microsecond=0),
             timezone_name="UTC", duration_minutes=60, actor="test",
         )
+        # chat-rafagas S3: the seeded message is an already-answered turn, so the
+        # turn the test invokes next is turn 2 and gets no first-contact greeting.
+        conversation.turn_count = 1
         inbound = Message(
             wamid="wamid.manage.seed", conversation_id=conversation.id,
             direction=MessageDirection.INBOUND, msg_type=MessageType.TEXT,

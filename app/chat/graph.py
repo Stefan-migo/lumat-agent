@@ -52,6 +52,7 @@ from dataclasses import replace
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.chat.nodes.capture import capture
@@ -65,12 +66,19 @@ from app.chat.nodes.handoff import handoff
 from app.chat.nodes.handoff_gate import handoff_gate
 from app.chat.nodes.manage import manage
 from app.chat.nodes.orchestrate import orchestrate
-from app.chat.nodes.receive import is_greeting_only, receive
+from app.chat.nodes.receive import is_greeting_only, is_social_only, receive
 from app.chat.nodes.respond import respond
 from app.chat.nodes.summary import summary
 from app.chat.state import ConversationState
 from app.chat.subgraphs.research_triage import build_research_triage_subgraph
-from app.models import InternalChatThread, Message, MessageDirection, MessageStatus, MessageType
+from app.models import (
+    Conversation,
+    InternalChatThread,
+    Message,
+    MessageDirection,
+    MessageStatus,
+    MessageType,
+)
 from app.services.memory import persist_memory_session
 from app.services import llm
 
@@ -141,7 +149,8 @@ def _flow_start(state: ConversationState) -> str:
     "Hola" as `unknown_intent`, and two of those in a row hand the conversation
     to a human.
     """
-    if is_greeting_only(state):
+    if is_greeting_only(state) or is_social_only(state):
+        # S2 (chat-rafagas): `receive` already answered the social question.
         return END
     return "classify_intent"
 
@@ -367,6 +376,14 @@ def run_conversation(session: Session, message: Message) -> list[str]:
     if greeting:
         replies = [f"{greeting}\n\n{replies[0]}", *replies[1:]] if replies else [greeting]
     persist_replies(session, state, replies)
+    # S3 (chat-rafagas): the turn is answered, so the conversation advances. This
+    # is the only place a turn is counted, which is what makes `state.turn` mean
+    # "turns so far" instead of "messages persisted".
+    session.execute(
+        update(Conversation)
+        .where(Conversation.id == state.conversation_id)
+        .values(turn_count=Conversation.turn_count + 1)
+    )
     # CM-8: flush any memory written during the turn before END so the next
     # turn's from_db sees it (per-turn session memory).
     persist_memory_session(session, state)

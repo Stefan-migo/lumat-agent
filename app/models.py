@@ -309,6 +309,10 @@ class Conversation(Base):
     version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     summary: Mapped[str | None] = mapped_column(Text)
     captured_data: Mapped[dict | None] = mapped_column(JSONB)  # 003: CM-2 capture state
+    # 064 / chat-rafagas S3: turns the bot has answered in this conversation. A
+    # turn is one burst of customer messages, not one message, so a first contact
+    # that arrives as "Hola" + "¿Cómo estás?" is still turn 1.
+    turn_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _ts()
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
