@@ -179,3 +179,34 @@ lo rompe.
 **Command evidence:** RED — `bash scripts/test.sh db tests/integration/test_assistant_project_file_writes.py` failed on the missing backup ID and missing refusal; GREEN — the same command passed (7 tests). `bash scripts/test.sh quick` passed (100%).
 
 **L8 — verifier corrections.** The independent verifier found the dev Compose Dockerfile path resolved outside the repository root, an outdated evidence-size fixture, a title-ending-backslash that broke the PDF page frame, a CI apt cache path that differed from the guarded script, missing-blob updates surfacing as 500s, and no aggregate PDF content bound. Fixed those delivery/test/rendering/handler defects here and added regression coverage. Known limits: update writes the replacement blob before the database row flushes, so a failed flush leaves bytes recoverable from the `.bak` artifact; a `.bak` name reuses an existing thread artifact with that name; and a project file whose backup exceeds the 5 MB artifact cap cannot be updated (fails closed).
+
+**L9 — evidencia de cierre técnico (2026-11-09).**
+
+- `bash scripts/test.sh full` sobre el branch → **EXIT=0**, 7m11s.
+- `origin/main` mergeado al branch (`c2a8a64c`, merge limpio). Trajo 30 archivos y 1368 inserciones de
+  otra feature en vuelo, incluida `db/migrations/064_conversation_turn_count.sql`; sin colisión con este
+  trabajo, que no agrega migraciones.
+- `bash scripts/test.sh full` sobre el árbol combinado → **EXIT=0**, 9m39s. Obligatorio por `AGENTS.md`
+  (después de mergear `origin/main`) y porque el árbol que se mergearía no era el testeado.
+- `bash scripts/test.sh shape origin/main` → exit 3 (`agent/personas/assistant.md`, `agent/registry.yaml`).
+- Cuatro commits, worktree limpio: `00f7983a` delivery (`Risk: item 5`), `9e172fe4` render y tool
+  (`Risk: item 2`), `dbfc7a0c` escritura de archivos con respaldo (`Risk: item 1`), `7c7fbb8c` la
+  reparación del verificador.
+
+**Verificación independiente: qué encontró y qué se hizo.** Bloqueante real: el contenedor de desarrollo
+no podía construir (`context: ..` + `dockerfile: Dockerfile.api`, con el archivo en `infra/`), probado con
+`docker compose build --print`, no leyendo. Defectos reales: el caché de debs de CI apuntaba a un
+directorio que el script ya no usa; el marco de página del PDF desaparecía con un título terminado en `\`
+porque el texto del usuario estaba dentro de un string CSS; el spec no tenía tope agregado (13 MB de HTML
+admisibles antes de que el límite de artifact lo rechazara); un blob ausente salía como 500. Regresión de
+capacidad medida por mí: el turno de 4 pasos necesita 4.675 caracteres de evidencia y el techo era 4.500,
+así que el paso del dashboard se expulsaba; el techo quedó en 5.500 con la medición en el comentario.
+
+**Límites declarados, no defectos abiertos.** `project_file.update` escribe el blob antes de que su fila
+haga flush (los bytes son recuperables desde el `.bak`); un `.bak` reusa un artifact del hilo con ese
+nombre si existe; un archivo cuyo respaldo supera el tope de 5 MB de artifact no se puede actualizar (falla
+cerrado); el payload de `assistant.capabilities` puede consumir hasta 4.000 caracteres del presupuesto de
+evidencia, así que cada tool nueva que engorde el catálogo acerca el techo al borde.
+
+**Entrega pendiente de autorización del owner.** Este trabajo no se publicó: la autorización de la feature
+anterior no se hereda.
