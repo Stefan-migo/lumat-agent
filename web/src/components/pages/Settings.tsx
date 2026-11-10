@@ -29,7 +29,7 @@ import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
-const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
+const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", social: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 type SettingsOptions = { tones: string[]; tarifa_labels: Partial<Record<keyof SettingsData["tarifa"], string>> };
@@ -72,6 +72,7 @@ const MESSAGE_TEMPLATES = [
   { id: "greeting_short", label: "Saludo corto cuando falta el nombre", description: "Cuando el cliente ya contó qué necesita; pregunta su nombre", icon: MessageCircle },
   { id: "greeting_short_name", label: "Saludo corto con nombre", description: "Cuando el cliente ya contó qué necesita y su nombre está cargado", icon: MessageCircle },
   { id: "smalltalk", label: "Cortesía", description: "Respuesta a agradecimientos y conversación social", icon: MessageCircle },
+  { id: "social", label: "Pregunta social", description: "Respuesta cuando el cliente pregunta cómo está el asistente", icon: MessageCircle },
   { id: "cannot_answer", label: "Cuando no puede responder", description: "Derivación a un asesor", icon: Headset },
   { id: "clarification", label: "Aclaración", description: "Mensaje no entendido", icon: CircleHelp },
   { id: "cannot_understand_offer", label: "Oferta tras segundo fallo", description: "Ofrece coordinar una visita o hablar con una persona", icon: Headset },

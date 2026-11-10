@@ -110,6 +110,8 @@ class MessagesBody(BaseModel):
     greeting_name: str
     greeting_short_name: str
     smalltalk: str
+    # Keep older panel clients saving their existing fixed-message map.
+    social: str = settings_service.MESSAGE_DEFAULTS["social"]
     cannot_answer: str
     clarification: str
     cannot_understand_offer: str

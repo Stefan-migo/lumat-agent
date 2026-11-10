@@ -100,13 +100,68 @@ def is_greeting_only(state: ConversationState) -> bool:
     return all(token in GREETING_WORDS or token in GREETING_FILLERS for token in tokens)
 
 
+# Questions about the assistant itself (S2: "¿Cómo estás?", "¿qué tal? y
+# variantes"). Some of these double as greeting idioms, so a greeting word in
+# front of one keeps the message a greeting: "hola cómo va?" is how this customer
+# says hello, and `test_greeting_variants` pins that it stays one.
+_SOCIAL_QUESTION_ENDINGS = (
+    ("como", "estas"),
+    ("como", "anda"),
+    ("como", "andas"),
+    ("que", "tal"),
+    ("como", "va"),
+    ("todo", "bien"),
+)
+_GREETING_IDIOMS = frozenset({("que", "tal"), ("como", "va")})
+# Endings that are also ordinary statements: "todo bien" closes a job, so it only
+# counts as a social question when the customer actually asked with a question
+# mark. `_normalized_inbound` strips punctuation, hence the raw check.
+_STATEMENT_ENDINGS = frozenset({("todo", "bien")})
+
+
+def _asks_a_question(state: ConversationState) -> bool:
+    """True when the customer's latest message carries a question mark."""
+    inbound = next(
+        (message for message in reversed(state.window) if message.get("direction") == "inbound"),
+        None,
+    )
+    return "?" in ((inbound or {}).get("text") or "")
+
+
+def is_social_only(state: ConversationState) -> bool:
+    """True for a short question about the assistant with no service content.
+
+    Greeting words and polite greeting fillers may precede the question, but
+    unrelated content (including thanks) keeps its existing classification path.
+    """
+    text = _normalized_inbound(state)
+    if not text or len(text) > _MAX_GREETING_LENGTH:
+        return False
+    tokens = text.split()
+    for ending in _SOCIAL_QUESTION_ENDINGS:
+        if tuple(tokens[-len(ending):]) != ending:
+            continue
+        if ending in _GREETING_IDIOMS and any(token in GREETING_WORDS for token in tokens):
+            continue
+        if ending in _STATEMENT_ENDINGS and not _asks_a_question(state):
+            continue
+        prefix = tokens[: -len(ending)]
+        if all(token in GREETING_WORDS or token in GREETING_FILLERS for token in prefix):
+            return True
+    return False
+
+
 def has_content(state: ConversationState) -> bool:
     """True when the inbound text states something beyond a bare greeting.
 
     Media-only turns (no text) have no content: the file is evidence, not a
-    stated need, so they keep the full greeting.
+    stated need, so they keep the full greeting. A social-only question carries no
+    need either (`¿Cómo estás?` does not say what the customer wants), so it also
+    keeps the full greeting, which is the one that asks.
     """
-    return bool(_normalized_inbound(state)) and not is_greeting_only(state)
+    return bool(_normalized_inbound(state)) and not (
+        is_greeting_only(state) or is_social_only(state)
+    )
 
 
 def _greeting(session, state: ConversationState, *, short: bool) -> str:
@@ -131,16 +186,20 @@ def _first_turn_header(session, state: ConversationState) -> str:
 def receive(state: ConversationState) -> dict:
     """Handle the incoming message at the start of the graph run.
 
-    `state.turn` counts inbound messages (1 = first contact). The first turn
+    `state.turn` counts answered turns (1 = first contact). The first turn
     sets `first_turn_greeting` (fused into one message by `run_conversation`);
-    media receives an evidence acknowledgement while normal turns continue to
-    downstream nodes.
+    social-only questions receive a deterministic reply, media receives an
+    evidence acknowledgement, and normal turns continue downstream.
     """
     updates: dict = {}
     if state.turn <= 1:
         with session_scope() as session:
             updates["first_turn_greeting"] = _first_turn_header(session, state)
-    elif is_greeting_only(state):
+    if is_social_only(state):
+        # S2: answer the question deterministically; do not classify or route it.
+        with session_scope() as session:
+            updates["replies"] = [get_message(session, "social")]
+    elif state.turn > 1 and is_greeting_only(state):
         # S1: greeting the bot again is answered, not classified. The greeting
         # never increments `unknown_intent` nor counts as an attempt.
         with session_scope() as session:

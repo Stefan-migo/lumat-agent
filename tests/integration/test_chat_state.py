@@ -185,7 +185,10 @@ def test_d2_state_rebuilt_from_db():
 
     assert state.conversation_id == conv_id
     assert state.phone == "+56912345678"
-    assert state.turn == 3
+    # S3 (chat-rafagas): `turn` counts answered turns (migration 064), not inbound
+    # rows. Three unanswered messages are the first turn, and the window keeps them
+    # as written because none of them carries the in-flight `processing` marker.
+    assert state.turn == 1
     assert [m["text"] for m in state.window] == ["primero", "segundo", "tercero"]
     assert state.captured == {}
     assert state.intent is None
@@ -476,3 +479,76 @@ def test_state_booking_still_reads_the_next_appointment():
     assert state.booking is not None
     assert state.booking["status"] == "booked"
     assert expected is not None
+
+
+def test_collapse_only_merges_the_in_flight_burst():
+    """S1/S5: history that is not `processing` is never rewritten into one blob.
+
+    A human takeover leaves consecutive inbound rows with no bot reply between
+    them. Merging those into the model's window would corrupt the history the
+    operator reads, so only the rows the sweep marked `processing` merge.
+    """
+    conv_id = _seed(["primero", "segundo"])
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.inflight",
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="tercero",
+                status=MessageStatus.PROCESSING,
+            )
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        state = ConversationState.from_db(session, conv_id)
+
+    assert [message["text"] for message in state.window] == ["primero", "segundo", "tercero"]
+
+
+def test_turn_count_advances_once_per_burst():
+    """S3: `turn_count` counts answered turns, and `state.turn` is the next one."""
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56988889999")
+        conv = get_or_create_conversation(session, customer, "+56988889999")
+        session.commit()
+        conversation_id = conv.id
+
+    monkeypatch_replies = []
+    from app.chat import graph as graph_module
+
+    for text in ("primer turno", "segundo turno"):
+        with SessionLocal() as session:
+            message = Message(
+                wamid=f"wamid.turns.{text[:6]}",
+                conversation_id=conversation_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text=text,
+                status=MessageStatus.PROCESSING,
+            )
+            session.add(message)
+            session.commit()
+
+            def _reply(state, _session=session):
+                _reply.seen = state.turn
+                return {"replies": ["ok"]}
+
+            original = graph_module.build_graph
+            graph_module.build_graph = lambda: type(
+                "G", (), {"invoke": staticmethod(lambda state: _reply(state))}
+            )()
+            try:
+                graph_module.run_conversation(session, message)
+                session.commit()  # SessionLocal alone never commits
+            finally:
+                graph_module.build_graph = original
+            monkeypatch_replies.append(_reply.seen)
+
+    with SessionLocal() as session:
+        assert session.get(Conversation, conversation_id).turn_count == 2
+        assert ConversationState.from_db(session, conversation_id).turn == 3
+
+    assert monkeypatch_replies == [1, 2]

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 import httpx
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.chat.graph import run_conversation
@@ -364,6 +365,36 @@ rate_limiter = RateLimiter()
 
 
 # ---------------------------------------------------------------------------
+# Per-conversation turn lock (chat-rafagas S4)
+# ---------------------------------------------------------------------------
+
+# conversation_id -> lock. In-process, like `RateLimiter`: the design runs a
+# single worker (D1), so a process-local lock is the whole coordination surface.
+# The upgrade path when a second worker appears is a Postgres advisory lock
+# keyed by conversation. A row lock is NOT an option: the graph persists the
+# conversation in separate sessions, so holding FOR UPDATE across the turn
+# deadlocks against its own writes.
+#
+# Measured in production (Engram `chat/burst-de-mensajes`): two webhook POSTs
+# enqueue two background sweeps, and without this lock each one runs its own
+# `run_conversation` for the same conversation. The second turn then rebuilds
+# state before the first reply is persisted and answers two consecutive user
+# messages with no bot turn in between.
+_turn_locks: dict[int, threading.Lock] = {}
+_turn_locks_guard = threading.Lock()
+
+
+def _turn_lock(conversation_id: int) -> threading.Lock:
+    """The turn lock for one conversation, created on first use.
+
+    Never pruned: each entry is a bare lock and the project's volume is tens of
+    conversations a day — the same tradeoff `RateLimiter` already accepts.
+    """
+    with _turn_locks_guard:
+        return _turn_locks.setdefault(conversation_id, threading.Lock())
+
+
+# ---------------------------------------------------------------------------
 # Persistence (WH-4 persist-before-process, WH-5 dedup by wamid)
 # ---------------------------------------------------------------------------
 
@@ -485,52 +516,181 @@ def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> Do
     return DownloadedMedia(dest, mime or "application/octet-stream", dest.name, len(resp.content))
 
 
-def process_message(session, message: Message) -> None:
-    """Process one inbound message: media download, conversation run, delivery.
+# How long the pipeline waits for the customer to stop typing before it answers.
+# Chat-rafagas S1: people send "Hola" and the real question as two messages a few
+# hundred milliseconds apart, and answering the first one immediately is what
+# broke production on 2026-11-06. Read from settings on every call so ops can
+# change it without a deploy, and so tests can zero it.
+def _burst_idle_seconds() -> float:
+    return float(get_settings().burst_idle_seconds)
 
-    The LangGraph conversation run (T3.2+) answers the customer, persists the
-    outbound replies (T3.5) and delivers them via Meta (T3.6). The status
-    transition received -> processed happens after a successful run; a failed
-    download keeps the message `received` so the sweep retries it (WH-4).
 
-    HH-5 (T4.4): during `human` state the webhook keeps persisting every
-    message (complete history retained) but the bot never runs again — the
-    human owns the channel in H1 (replies from the WhatsApp app on the same
-    number, no panel reply). Ack handling still runs (a customer "ok" acks an
-    unacked emergency); no LLM call, no outbound delivery.
+# Messages to skip while draining one conversation: a failed media download goes
+# back to `received` on purpose, and re-processing it in the same pass would spin.
+def _received_ids(conversation_id: int) -> list[int]:
+    with session_scope() as session:
+        return list(
+            session.scalars(
+                select(Message.id)
+                .where(
+                    Message.conversation_id == conversation_id,
+                    Message.status == MessageStatus.RECEIVED,
+                )
+                .order_by(Message.id)
+            )
+        )
 
-    CI-4: media-only inbound (photo/video/audio/document) runs the graph too,
-    so it is acknowledged as case evidence, not escalated by itself.
+
+def _conversations_with_received(limit: int) -> list[int]:
+    """Conversations that own at least one `received` message, oldest first."""
+    with session_scope() as session:
+        return list(
+            session.scalars(
+                select(Message.conversation_id)
+                .where(Message.status == MessageStatus.RECEIVED)
+                .group_by(Message.conversation_id)
+                .order_by(func.min(Message.id))
+                .limit(limit)
+            )
+        )
+
+
+def _wait_for_burst_to_settle(conversation_id: int) -> None:
+    """Sleep until the customer has been quiet for `_burst_idle_seconds()`.
+
+    The clock is the newest `received` row's `created_at`, not the process clock:
+    a row persisted by another sweep still measures when the customer wrote it.
     """
-    if message.media_url:
-        settings = get_settings()
+    idle = _burst_idle_seconds()
+    if idle <= 0:
+        return
+    with session_scope() as session:
+        newest = session.scalar(
+            select(func.max(Message.created_at)).where(
+                Message.conversation_id == conversation_id,
+                Message.status == MessageStatus.RECEIVED,
+            )
+        )
+    if newest is None:
+        return
+    remaining = idle - (datetime.now(timezone.utc) - newest).total_seconds()
+    if remaining > 0:
+        logger.debug(
+            "waiting %.2fs for conversation %s to finish its burst", remaining, conversation_id
+        )
+        time.sleep(remaining)
+
+
+def _prepare_media(session, message: Message) -> bool:
+    """Download the media of one burst message.
+
+    True when the message takes part in the turn; False when it does not: a
+    failed download either goes back to `received` for the next sweep (WH-4) or,
+    after five attempts, is consumed with a `media_unavailable` event so a broken
+    file cannot pin the conversation.
+    """
+    if not message.media_url:
+        return True
+    settings = get_settings()
+    try:
         media = download_media(
             message.media_url, message.wamid, settings.meta_access_token, settings.media_dir
         )
-        message.stored_path = str(media.path)
-        message.content_type = media.content_type
-        message.filename = media.filename
-        message.size_bytes = media.size_bytes
-        session.commit()
-    if message.direction == MessageDirection.INBOUND:
+    except MediaDownloadError:
+        message.media_attempts += 1
+        if message.media_attempts >= 5:
+            message.status = MessageStatus.PROCESSED
+            message.stored_path = None
+            session.add(ConversationEvent(
+                conversation_id=message.conversation_id,
+                event="media_unavailable",
+                cause=f"Media download failed after 5 attempts for message {message.id}",
+                actor="system",
+            ))
+            logger.error(
+                "media download failed for message %s after %s attempts; media unavailable",
+                message.id, message.media_attempts,
+            )
+            return False
+        message.status = MessageStatus.RECEIVED
+        logger.warning(
+            "media download failed for message %s; will retry on next sweep", message.id
+        )
+        return False
+    message.stored_path = str(media.path)
+    message.content_type = media.content_type
+    message.filename = media.filename
+    message.size_bytes = media.size_bytes
+    session.commit()
+    return True
+
+
+def process_turn(session, messages: list[Message]) -> None:
+    """Process one conversational turn: the customer's burst, then the reply.
+
+    Chat-rafagas S1: every inbound message the customer sent before the bot
+    answered is one turn, so the graph runs ONCE through the last message of the
+    burst and `ConversationState.from_db` collapses the trailing inbound run into
+    a single utterance. N messages still produce one WhatsApp reply.
+
+    Media is resolved per message first; a message whose download failed does not
+    take part in the turn (it stays `received` for the sweep, or is consumed after
+    five attempts). The status transition received -> processed happens after a
+    successful run.
+
+    HH-5 (T4.4): during `human` state the webhook keeps persisting every message
+    (complete history retained) but the bot never runs again — the human owns the
+    channel in H1 (replies from the WhatsApp app on the same number, no panel
+    reply). Ack handling still runs per message (a customer "ok" acks an unacked
+    emergency); no LLM call, no outbound delivery.
+
+    CI-4: media-only inbound (photo/video/audio/document) runs the graph too, so
+    it is acknowledged as case evidence, not escalated by itself.
+    """
+    if not messages:
+        return
+    participants = [message for message in messages if _prepare_media(session, message)]
+    conversation_id = messages[-1].conversation_id
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is not None and conversation.state in {
+        ConversationState.HUMAN,
+        ConversationState.CLOSED,
+    }:
+        # HH-5: persisted, never retried by the bot. Only the messages whose media
+        # resolved are consumed: a failed download keeps its `received` status and
+        # is retried by the sweep, with the five-attempt ceiling and its event.
+        for message in participants:
+            message.status = MessageStatus.PROCESSED
+        return
+    for message in participants:
         if message.text:
             # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
             # case BEFORE the graph runs — deterministic, audited, no-op otherwise.
             acknowledge_emergency_if_ack(session, message.conversation_id, message.text)
-        conversation = session.get(Conversation, message.conversation_id)
-        if conversation is not None and conversation.state in {
-            ConversationState.HUMAN,
-            ConversationState.CLOSED,
-        }:
-            message.status = MessageStatus.PROCESSED  # HH-5: persisted, never retried
-            return
-        # Meta onboarding text entered as customer content produced unknown_intent in production.
-        if message.msg_type is not MessageType.OTHER and (
-            message.text or message.msg_type in MEDIA_EVIDENCE_TYPES
-        ):
-            run_conversation(session, message)
-            deliver_outbound(session, message.conversation_id)
-    message.status = MessageStatus.PROCESSED
+    # Meta onboarding text entered as customer content produced unknown_intent in production.
+    runnable = [
+        message
+        for message in participants
+        if message.msg_type is not MessageType.OTHER
+        and (message.text or message.msg_type in MEDIA_EVIDENCE_TYPES)
+    ]
+    if runnable:
+        run_conversation(session, runnable[-1])
+        deliver_outbound(session, conversation_id)
+    # Only the messages that took part are consumed: one whose download failed is
+    # back in `received` on purpose (WH-4), and the sweep retries it.
+    for message in participants:
+        message.status = MessageStatus.PROCESSED
+
+
+def process_message(session, message: Message) -> None:
+    """One inbound message through the pipeline (a turn of one message).
+
+    Kept as the single-message entry point: the emergency ack, handoff and
+    platform-message suites call it directly. `sweep_received` uses
+    `process_turn` because a webhook burst is one turn.
+    """
+    process_turn(session, [message])
 
 
 def reset_stale_processing() -> int:
@@ -549,67 +709,92 @@ def reset_stale_processing() -> int:
         return result.rowcount
 
 
-def sweep_received(limit: int = 50) -> int:
-    """Process messages stuck in `received` (BackgroundTask + startup sweep).
+def _run_burst(conversation_id: int, message_ids: list[int]) -> int:
+    """Run ONE turn for a whole burst; returns how many messages were consumed.
 
-    Claim pattern (WH-7: no duplicate side effects): a short transaction
-    SELECTs received ids FOR UPDATE SKIP LOCKED and flips them to `processing`
-    (releasing the locks), then each message is processed in its OWN session.
-    Holding the FOR UPDATE lock across the graph run would deadlock — the
-    graph nodes persist in separate sessions (case, captured, cost_llm on the
-    very row the sweep would be locking).
-
-    Failures: media download -> back to `received` (retry); anything else ->
-    `failed` (raw payload still stored). Hard-crash rows stay `processing`
-    until the next boot's `reset_stale_processing`.
+    `processing` is the operator-visible in-flight marker, and the row
+    `reset_stale_processing` recovers after a hard crash. Called with the
+    conversation's turn lock held — see `_turn_lock`.
     """
+    consumed = 0
+    failed = False
+    # The claim is its own short transaction on purpose: holding it open across
+    # the graph run deadlocks against the graph's own writes in separate sessions
+    # (case, captured, cost_llm touch these rows).
     with session_scope() as session:
-        claimed_ids = session.scalars(
-            select(Message.id)
-            .where(Message.status == MessageStatus.RECEIVED)
-            .order_by(Message.id)
-            .limit(limit)
-            .with_for_update(skip_locked=True)
-        ).all()
-        if claimed_ids:
+        session.execute(
+            update(Message)
+            .where(Message.id.in_(message_ids))
+            .values(status=MessageStatus.PROCESSING)
+        )
+    with session_scope() as session:
+        messages = list(
+            session.scalars(
+                select(Message).where(Message.id.in_(message_ids)).order_by(Message.id)
+            )
+        )
+        try:
+            process_turn(session, messages)
+        except Exception:
+            logger.exception("processing failed for messages %s; marking failed", message_ids)
+            failed = True
+        consumed = sum(
+            1 for message in messages if message.status is MessageStatus.PROCESSED
+        )
+    if failed:
+        with session_scope() as session:
             session.execute(
                 update(Message)
-                .where(Message.id.in_(claimed_ids))
-                .values(status=MessageStatus.PROCESSING)
+                .where(Message.id.in_(message_ids))
+                .values(status=MessageStatus.FAILED)
             )
+        return 0
+    return consumed
 
+
+def _drain_conversation(conversation_id: int) -> int:
+    """Answer every pending message of one conversation, one burst at a time.
+
+    Loops because a new message can land while the turn is running: a customer
+    who writes again right after the reply opens a new burst, not a lost message.
+    `attempted` keeps a failed media download (back in `received` on purpose)
+    from spinning in the same pass — the next sweep retries it.
+    """
     processed = 0
-    for message_id in claimed_ids:
-        try:
-            with session_scope() as session:
-                message = session.get(Message, message_id)
-                process_message(session, message)
-            processed += 1
-        except MediaDownloadError:
-            with session_scope() as session:
-                message = session.get(Message, message_id)
-                message.media_attempts += 1
-                if message.media_attempts >= 5:
-                    message.status = MessageStatus.PROCESSED
-                    message.stored_path = None
-                    session.add(ConversationEvent(
-                        conversation_id=message.conversation_id,
-                        event="media_unavailable",
-                        cause=f"Media download failed after 5 attempts for message {message_id}",
-                        actor="system",
-                    ))
-                else:
-                    message.status = MessageStatus.RECEIVED
-            if message.media_attempts >= 5:
-                logger.error("media download failed for message %s after %s attempts; media unavailable", message_id, message.media_attempts)
-                processed += 1
-            else:
-                logger.warning("media download failed for message %s; will retry on next sweep", message_id)
-        except Exception:
-            logger.exception("processing failed for message %s; marking failed", message_id)
-            with session_scope() as session:
-                message = session.get(Message, message_id)
-                message.status = MessageStatus.FAILED
+    attempted: set[int] = set()
+    while True:
+        if not [mid for mid in _received_ids(conversation_id) if mid not in attempted]:
+            return processed
+        _wait_for_burst_to_settle(conversation_id)
+        burst = [mid for mid in _received_ids(conversation_id) if mid not in attempted]
+        if not burst:
+            return processed
+        attempted.update(burst)
+        processed += _run_burst(conversation_id, burst)
+
+
+def sweep_received(limit: int = 50) -> int:
+    """Process conversations holding `received` messages (background + boot).
+
+    Claim pattern (WH-7: no duplicate side effects): the exclusivity unit is the
+    CONVERSATION, not the message (chat-rafagas S4). Two webhook POSTs enqueue two
+    sweeps, and a per-message claim let both open a turn on the same conversation.
+    Each conversation now takes its turn lock, waits for the burst to settle
+    (S1: `_burst_idle_seconds()`), marks the whole burst `processing`, and runs a
+    single turn through its last message, so N messages produce one reply.
+
+    Holding a row lock across the graph run would deadlock — the graph nodes
+    persist in separate sessions (case, captured, cost_llm) — which is why the
+    lock is process-local and the rows carry only the `processing` marker.
+
+    Failures: media download -> back to `received` (retry); anything else ->
+    `failed` (raw payload still stored). Hard-crash rows stay `processing` until
+    the next boot's `reset_stale_processing`.
+    """
+    processed = 0
+    for conversation_id in _conversations_with_received(limit):
+        with _turn_lock(conversation_id):
+            processed += _drain_conversation(conversation_id)
 
     # EM-4 escalation (T4.3.2): reminder emails for unacked emergencies — a
     # lightweight call in the same sweep (startup + webhook BackgroundTask),

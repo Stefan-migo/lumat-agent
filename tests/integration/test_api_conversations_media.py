@@ -50,7 +50,8 @@ def test_downloaded_media_is_stored_and_served_inline(
     # Both sides must agree on the directory: ingest writes the file and the route
     # serves it only when the stored path resolves inside `settings.media_dir`.
     monkeypatch.setattr(ingest, "get_settings", lambda: SimpleNamespace(
-        media_dir=get_settings().media_dir, meta_access_token="test-token"
+        media_dir=get_settings().media_dir, meta_access_token="test-token",
+        burst_idle_seconds=0.0,
     ))
     with respx.mock:
         respx.get("https://lookaside.example/photo").mock(

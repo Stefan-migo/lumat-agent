@@ -265,6 +265,9 @@ MESSAGE_DEFAULTS: dict[str, str] = {
     "greeting_name": "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?",
     "greeting_short_name": "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso.",
     "smalltalk": "Con gusto. ¿En qué más te puedo ayudar?",
+    # No closing question: on first contact the greeting already asks, and asking
+    # twice in one message is what the fused first-contact reply used to do.
+    "social": "¡Todo bien, gracias por preguntar!",
     # A refusal is not a favour: same question, no gratitude prefix.
     "smalltalk_decline": "¿Te puedo ayudar en algo más?",
     "cannot_answer": (
@@ -1073,6 +1076,7 @@ _FIXED_MESSAGE_LABELS: dict[str, str] = {
     "greeting_name": "saludo con nombre",
     "greeting_short_name": "saludo breve con nombre",
     "smalltalk": "mensaje de cortesía",
+    "social": "respuesta a una pregunta social",
     "smalltalk_decline": "mensaje de cortesía tras un rechazo",
     "cannot_answer": "respuesta cuando no puede responder",
     "clarification": "aclaración",

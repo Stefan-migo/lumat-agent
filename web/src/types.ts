@@ -509,6 +509,7 @@ export interface Settings {
     greeting_name: string;
     greeting_short_name: string;
     smalltalk: string;
+    social: string;
     cannot_answer: string;
     clarification: string;
     cannot_understand_offer: string;
