@@ -16,6 +16,11 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 - El número de turno cuenta turnos contestados y no mensajes persistidos (migración
   `064_conversation_turn_count`), así un primer contacto que llega en dos mensajes ya no pierde el saludo de
   primer contacto.
+- Enviar un documento —o cualquier archivo de más de 1 MB— desde la conversación del panel fallaba: nginx
+  cortaba el cuerpo con su límite por defecto de 1 MB antes de que la API viera la petición, así que el
+  operador recibía un error sin explicación y el intento no dejaba rastro en la auditoría. El techo del panel
+  queda en 100 MB, alineado con el límite de documentos de Meta, y el panel ahora dice qué pasó en vez de
+  mostrar la página del proxy.
 
 ### Agregado
 
