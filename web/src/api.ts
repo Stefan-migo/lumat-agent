@@ -35,6 +35,14 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const raw = await res.text().catch(() => '');
+    // A 413 is nginx refusing the body, not the api answering: the body is the
+    // proxy's HTML page, and showing it to the operator ("no pude enviar el
+    // archivo") hides the only actionable fact. Production, 2026-11-09: nginx's
+    // 1 MB default cut every operator upload above it; the ceiling now lives in
+    // infra/nginx/panel.lumat.cl.conf and mirrors MEDIA_SIZE_LIMITS.
+    if (res.status === 413) {
+      throw new ApiError(res.status, 'El archivo supera el límite de subida del panel (100 MB).');
+    }
     let detail = raw.trim();
     let structuredDetail: ApiError['structuredDetail'];
     try {
@@ -59,6 +67,14 @@ async function apiFetchBlobResponse(path: string): Promise<Response> {
   const res = await fetch(path, { credentials: 'include' });
   if (!res.ok) {
     const raw = await res.text().catch(() => '');
+    // A 413 is nginx refusing the body, not the api answering: the body is the
+    // proxy's HTML page, and showing it to the operator ("no pude enviar el
+    // archivo") hides the only actionable fact. Production, 2026-11-09: nginx's
+    // 1 MB default cut every operator upload above it; the ceiling now lives in
+    // infra/nginx/panel.lumat.cl.conf and mirrors MEDIA_SIZE_LIMITS.
+    if (res.status === 413) {
+      throw new ApiError(res.status, 'El archivo supera el límite de subida del panel (100 MB).');
+    }
     let detail = raw.trim();
     try {
       const payload = JSON.parse(raw) as { detail?: unknown };

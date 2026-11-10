@@ -35,6 +35,25 @@ describe('apiFetch', () => {
     );
   });
 
+  it('turns a proxy 413 into a message the operator can act on', async () => {
+    // nginx answers with its own HTML page, not with the api's JSON: production
+    // 2026-11-09 rejected every panel upload above 1 MB before the api saw it.
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response('<html><head><title>413 Request Entity Too Large</title></head></html>', {
+        status: 413,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    );
+
+    const failure = await apiFetch('/panel/api/conversations/1/media').catch((error) => error);
+
+    expect(failure).toBeInstanceOf(ApiError);
+    expect((failure as ApiError).status).toBe(413);
+    expect((failure as ApiError).detail).toBe(
+      'El archivo supera el límite de subida del panel (100 MB).',
+    );
+  });
+
   it('throws ApiError with status and detail from a non-2xx JSON body', async () => {
     const body = { detail: 'unauthorized' };
     vi.mocked(globalThis.fetch).mockResolvedValue(
