@@ -378,6 +378,18 @@ class ArtifactPdfArgs(BaseModel):
     subtitle: str | None = Field(default=None, max_length=300)
     sections: list[PdfSection] = Field(min_length=1, max_length=40)
 
+    @model_validator(mode="after")
+    def validate_aggregate_content(self):
+        content_length = len(self.title) + len(self.subtitle or "")
+        for section in self.sections:
+            content_length += len(section.heading) + len(section.body or "")
+            if section.table is not None:
+                content_length += sum(map(len, section.table.columns))
+                content_length += sum(len(cell) for row in section.table.rows for cell in row)
+        if content_length > 60_000:
+            raise ValueError("PDF report content must not exceed 60000 characters")
+        return self
+
     @field_validator("filename")
     @classmethod
     def validate_pdf_filename(cls, value: str) -> str:
@@ -941,7 +953,10 @@ def _update_project_file(session, args: ProjectFileUpdateArgs, *, owner_id: int 
     changed = sha256 != previous_sha256
     backup_row = None
     if changed:
-        previous_bytes = Path(row.stored_path).read_bytes()
+        try:
+            previous_bytes = Path(row.stored_path).read_bytes()
+        except FileNotFoundError as exc:
+            raise ToolValidationError("stored project file content is unavailable") from exc
         file_path = Path(row.filename)
         backup_filename = assistant_artifacts.safe_artifact_filename(
             f"{file_path.stem}.bak{file_path.suffix}"

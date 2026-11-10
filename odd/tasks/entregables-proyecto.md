@@ -86,26 +86,28 @@ tablas legibles, tipografía con fallback DejaVu). No reusa los tokens del panel
 The branch exceeds the ~400 authored changed lines of a single review slice, so the boundary is declared
 here as a chain. Push, PR creation and merge remain the owner's decision.
 
-- **PR 1 — delivery and PDF** : the dependency commit (`222aaede`, `Risk: item 5`) opens the chain, then
-the render and the tool (`Risk: item 2`). A reviewer can take the dependency alone before reading any
-rendering code.
-- **PR 2 — project file writes**: `project_file.save` / `project_file.update` (S5-S7), gated by the
-existing approval machinery.
+- **PR 1 — delivery and PDF** (`00f7983a`, `9e172fe4`): the dependency commit (`Risk: item 5`) opens the
+chain, then the render and the tool (`Risk: item 2`). A reviewer can take the dependency alone before
+reading any rendering code.
+- **PR 2 — project file writes and the review repair** (`dbfc7a0c`, `dbc43e7a`): the two class-A file tools
+(`Risk: item 1`, mitigated by the mandatory backup), and then what the independent review found — a dev
+container that could not build, a dead CI cache, a page frame that vanished on a backslash title, and an
+unbounded report spec. The repair sits at the head because it spans both surfaces.
 
 ## Tasks
 
-- [ ] **T1 — Delivery primero (riesgo ítem 5).** `pyproject.toml` + `Dockerfile` runtime +
+- [x] **T1 — Delivery primero (riesgo ítem 5).** `pyproject.toml` + `Dockerfile` runtime +
       `infra/Dockerfile.api` + `infra/docker-compose.yml` + job `test` de CI. Commit propio: la feature no
       puede testearse sin esto y la revisión de dependencias no debe compartir commit con la lógica.
       *Check:* `uv sync` resuelve y un contenedor nuevo renderiza un PDF de prueba.
-- [ ] **T2 — Slice A RED.** Tests que fallan: la spec rechaza HTML y campos extra; los bordes de S1; el
+- [x] **T2 — Slice A RED.** Tests que fallan: la spec rechaza HTML y campos extra; los bordes de S1; el
       fetcher rechaza `http`, `https`, `file` y `data`; el HTML escapa `<script>` en un `body`; un render real
       produce bytes que empiezan con `%PDF-`; el tool guarda el artifact con `application/pdf` y lo publica en
       `outputs/`; un guardado idéntico devuelve `changed: false`.
-- [ ] **T3 — Slice A GREEN.** `app/services/reports.py` (render + fetcher + template Jinja2 con autoescape),
+- [x] **T3 — Slice A GREEN.** `app/services/reports.py` (render + fetcher + template Jinja2 con autoescape),
       `ArtifactPdfArgs`/`PdfSection`/`PdfTable` en el registry, `save_or_append` aceptando bytes,
       `artifact.pdf` en `agent/registry.yaml` y en `agent/personas/assistant.md`.
-- [ ] **T4 — Slice A spec + commit.** AT-17 en `openspec/specs/assistant-tools/spec.md`.
+- [x] **T4 — Slice A spec + commit.** AT-17 en `openspec/specs/assistant-tools/spec.md`.
       `feat(assistant): render professional PDF reports from a structured spec`.
 - [x] **T5 — Slice B RED.** Tests: `project_file.save` crea en la raíz y en una carpeta existente; rechaza
       un tipo no permitido y un hilo `default`; `project_file.update` reemplaza la misma fila con nuevo
@@ -175,3 +177,5 @@ lo rompe.
 **L7 — Slice B implemented in worktree, pending owner commit.** RED was observed because `project_file.save` / `project_file.update` did not exist; focused integration and quick checks passed GREEN. Both tools remain class-A and outside the autonomous allowlist. The panel only moves project files, so `project_file.update` introduced a new destructive capability. The owner chose that any text file may be updated only after its previous bytes are backed up in a same-thread artifact published under `outputs/`; if backup storage fails, the update is refused. Implemented the `.bak` artifact, fail-closed behavior, and backup ID in the result and audit.
 
 **Command evidence:** RED — `bash scripts/test.sh db tests/integration/test_assistant_project_file_writes.py` failed on the missing backup ID and missing refusal; GREEN — the same command passed (7 tests). `bash scripts/test.sh quick` passed (100%).
+
+**L8 — verifier corrections.** The independent verifier found the dev Compose Dockerfile path resolved outside the repository root, an outdated evidence-size fixture, a title-ending-backslash that broke the PDF page frame, a CI apt cache path that differed from the guarded script, missing-blob updates surfacing as 500s, and no aggregate PDF content bound. Fixed those delivery/test/rendering/handler defects here and added regression coverage. Known limits: update writes the replacement blob before the database row flushes, so a failed flush leaves bytes recoverable from the `.bak` artifact; a `.bak` name reuses an existing thread artifact with that name; and a project file whose backup exceeds the 5 MB artifact cap cannot be updated (fails closed).

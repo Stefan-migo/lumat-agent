@@ -72,7 +72,7 @@ jobs:
       # never written and every run starts cold again.
       - uses: actions/cache@v4
         with:
-          path: ~/.cache/apt-ffmpeg
+          path: ~/.cache/apt-runtime
           key: apt-runtime-debs-ubuntu-24.04-v1
       # Bounded: a hang must fail this step with a readable message, not consume the job.
       - name: Ensure PDF and audio runtime libraries

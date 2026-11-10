@@ -181,6 +181,21 @@ def test_update_noop_creates_no_backup_or_outputs_file():
         session.rollback()
 
 
+def test_update_missing_blob_fails_closed_and_leaves_row_unchanged(tmp_path):
+    with SessionLocal() as session:
+        owner, project, thread = _setup(session, "update-missing-blob")
+        row = store_project_file(session, project, owner, "notes.md", "text/markdown", b"previous")
+        row.stored_path = str(tmp_path / "missing-blob.md")
+        session.flush()
+        original = (row.stored_path, row.size, row.sha256)
+
+        with pytest.raises(ToolValidationError, match="stored project file content is unavailable"):
+            _run(session, owner, thread, "project_file.update", {"file_id": row.id, "content": "replacement"})
+
+        assert (row.stored_path, row.size, row.sha256) == original
+        session.rollback()
+
+
 def test_update_refuses_when_backup_cannot_be_stored(monkeypatch):
     with SessionLocal() as session:
         owner, project, thread = _setup(session, "update-backup-failure")

@@ -697,7 +697,7 @@ def test_tool_evidence_keeps_inventory_for_omitted_payloads():
     from app.chat.assistant.nodes import _render_tool_evidence
 
     evidence = _render_tool_evidence({"tool_results": [
-        {"tool": "project.find", "status": "completed", "arguments": {"query": "A"}, "result": {"padding": "x" * 5_000}},
+        {"tool": "project.find", "status": "completed", "arguments": {"query": "A"}, "result": {"padding": "x" * (_TOOL_EVIDENCE_LIMIT + 500)} },
         {"tool": "appointments.upcoming", "status": "degraded", "arguments": {"limit": 3}, "result": [{"appointment": 1}]},
         {"tool": "memory.search", "status": "completed", "arguments": {"query": "B"}, "result": [{"memory": 1}]},
     ]})

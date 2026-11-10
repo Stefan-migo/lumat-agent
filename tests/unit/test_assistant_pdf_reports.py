@@ -90,12 +90,22 @@ def test_pdf_filename_must_end_in_pdf_and_subtitle_has_limit():
     ArtifactPdfArgs.model_validate(_minimal_args(subtitle="x" * 300))
 
 
-def test_pdf_models_accept_every_inclusive_s1_boundary():
+def test_pdf_args_accept_title_subtitle_and_section_field_boundaries():
     ArtifactPdfArgs.model_validate({
         "filename": "report.pdf", "title": "x" * 200,
-        "subtitle": "x" * 300, "sections": [{"heading": "x" * 200, "body": "x" * 4000,
-        "table": {"columns": ["x" * 200] * 8, "rows": [["x" * 200] * 8 for _ in range(200)]}}] * 40,
+        "subtitle": "x" * 300, "sections": [{"heading": "x" * 200, "body": "x" * 4000}],
     })
+
+
+def test_pdf_aggregate_content_limit_accepts_just_under_and_rejects_over():
+    sections = [{"heading": "h" * 200, "body": "b" * 4000} for _ in range(14)]
+    sections.append({"heading": "h" * 200, "body": "b" * 998})
+    under_limit = {"filename": "report.pdf", "title": "x", "sections": sections}
+
+    ArtifactPdfArgs.model_validate(under_limit)
+    sections[-1]["body"] += "bb"
+    with pytest.raises(ValidationError):
+        ArtifactPdfArgs.model_validate(under_limit)
 
 
 def test_pdf_template_escapes_body_and_fetcher_refuses_every_scheme():

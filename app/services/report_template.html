@@ -7,13 +7,13 @@
     @page {
       size: A4;
       margin: 28mm 18mm 22mm;
-      @top-left { content: "{{ spec.title }}"; font-size: 9pt; color: #52605a; }
-      @top-right { content: "{{ generated_on }}"; font-size: 9pt; color: #52605a; }
       @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 9pt; color: #52605a; }
     }
     body { font-family: "DejaVu Sans", sans-serif; color: #202923; font-size: 10pt; line-height: 1.55; }
-    h1 { font-size: 24pt; margin: 0 0 5mm; }
-    .subtitle { color: #52605a; font-size: 12pt; margin: 0 0 12mm; }
+    .report-header { border-bottom: 1px solid #ccd6d0; padding-bottom: 5mm; margin: 0 0 9mm; }
+    h1 { font-size: 24pt; margin: 0 0 4mm; }
+    .subtitle { color: #52605a; font-size: 12pt; margin: 0 0 3mm; }
+    .generated-on { color: #52605a; font-size: 9pt; margin: 0; }
     section { break-inside: avoid; margin: 0 0 10mm; }
     h2 { font-size: 15pt; margin: 0 0 3mm; }
     p { white-space: pre-wrap; }
@@ -25,8 +25,11 @@
   </style>
 </head>
 <body>
-  <h1>{{ spec.title }}</h1>
-  <p class="subtitle">{% if spec.subtitle %}{{ spec.subtitle }}{% endif %} <span>Generated {{ generated_on }}</span></p>
+  <header class="report-header">
+    <h1>{{ spec.title }}</h1>
+    <p class="subtitle">{% if spec.subtitle %}{{ spec.subtitle }}{% endif %}</p>
+    <p class="generated-on">Generated {{ generated_on }}</p>
+  </header>
   {% for section in spec.sections %}
   <section>
     <h2>{{ section.heading }}</h2>
