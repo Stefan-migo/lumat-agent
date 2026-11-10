@@ -175,11 +175,40 @@ put credentials or session cookies in the repository or shell history.
 - [ ] Confirm the deployed KB matches `docs/kb` (§2.5): run the seed in report
   mode against the release and require `kb · consistente con docs/kb`. A release
   whose documents drifted ships prose that contradicts the configuration.
+- [ ] Send a **document larger than 1 MB** from a conversation thread (a PDF is
+  the natural case) and confirm it arrives. This is the check that would have
+  caught the 1 MB nginx ceiling in §2.1.3, which silently rejected every operator
+  upload from the release until 2026-11-09.
 
 Record the tag, timestamp, operator, and any failed check in the release record
 (§2.9). These panel checks require the VPS DNS, TLS certificates, and valid
 panel credentials; they are not reproducible in the local repository test
 environment.
+
+### 2.1.3 Panel upload limits (nginx + api)
+
+The panel's uploads — conversation media (image, video, audio, document), voice
+notes and assistant attachments — POST through `location ^~ /panel/api/` in
+`infra/nginx/panel.lumat.cl.conf`. **nginx defaults `client_max_body_size` to
+1 MB and it is not inherited from anywhere else in this stack**, so that location
+carries an explicit `client_max_body_size 100m`.
+
+The api validates again, per type, in `MEDIA_SIZE_LIMITS`
+(`app/services/conversations.py`): image 5 MB, video and audio 16 MB, document
+100 MB (Meta's own document ceiling). Two consequences worth knowing:
+
+- A file above 100 MB is refused by **nginx with a plain 413**, before auth and
+  before any audit row exists. The SPA maps that status to "El archivo supera el
+  límite de subida del panel (100 MB)"; if the message ever reads as raw HTML, the
+  SPA is older than the api.
+- A file between nginx's ceiling and the api's per-type limit is refused by the
+  api with a 422 carrying the exact limit (`document file exceeds the 100 MB
+  limit`), and the operator sees that text.
+
+Measured 2026-11-09 on production: a 2 MB POST returned `413` after nginx
+uploaded ~130 KB, a 200-byte POST returned `401` (reached the api). The only
+document delivered before the fix was 121 KB; the operator's attempt never
+reached the api and left no trace in `audit_log`.
 
 ### 2.1.1 T7.2 deploy rehearsal record — rehearsal complete, VPS pending
 
