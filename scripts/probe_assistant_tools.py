@@ -55,6 +55,8 @@ ARGUMENT_FIXTURES: dict[str, dict[str, Any]] = {
     "project.list": {"limit": 1},
     "list_project_files": {"limit": 1},
     "read_project_file": {"file_id": 1, "offset": 0, "limit": 100},
+    "project_file.save": {"filename": "probe.md", "content": "probe"},
+    "project_file.update": {"file_id": 1, "content": "probe updated"},
     "view_image": {"source": "project", "id": 1},
     "artifact.save": {"filename": "probe.txt", "content": "probe"},
     "artifact.pdf": {

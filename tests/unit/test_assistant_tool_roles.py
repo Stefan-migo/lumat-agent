@@ -44,6 +44,11 @@ def test_role_tool_matrix_is_enforced(role, tool_name, monkeypatch):
             call()
 
 
+def test_project_file_write_tools_are_allowed_to_admin_and_operator_only():
+    for name in ("project_file.save", "project_file.update"):
+        assert registry.ROLE_TOOL_ALLOWLIST[name] == frozenset({UserRole.ADMIN, UserRole.OPERADOR})
+
+
 def test_artifact_pdf_is_allowed_to_every_role():
     assert registry.ROLE_TOOL_ALLOWLIST["artifact.pdf"] == frozenset(UserRole)
 

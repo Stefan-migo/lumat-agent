@@ -34,6 +34,8 @@ DEFAULT_TOOLS = {
     "project.find",
     "list_project_files",
     "read_project_file",
+    "project_file.save",
+    "project_file.update",
     "view_image",
     "artifact.save",
     "artifact.pdf",

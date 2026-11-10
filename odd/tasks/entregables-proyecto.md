@@ -107,13 +107,13 @@ existing approval machinery.
       `artifact.pdf` en `agent/registry.yaml` y en `agent/personas/assistant.md`.
 - [ ] **T4 — Slice A spec + commit.** AT-17 en `openspec/specs/assistant-tools/spec.md`.
       `feat(assistant): render professional PDF reports from a structured spec`.
-- [ ] **T5 — Slice B RED.** Tests: `project_file.save` crea en la raíz y en una carpeta existente; rechaza
+- [x] **T5 — Slice B RED.** Tests: `project_file.save` crea en la raíz y en una carpeta existente; rechaza
       un tipo no permitido y un hilo `default`; `project_file.update` reemplaza la misma fila con nuevo
       `sha256`; rechaza un archivo de otro proyecto, uno publicado por un artifact, y un tipo no textual;
       ambas escrituras requieren aprobación (no están en la allowlist autónoma) y dejan auditoría.
-- [ ] **T6 — Slice B GREEN + spec + commit.** `ProjectFileSaveArgs`/`ProjectFileUpdateArgs`, handlers,
+- [x] **T6 — Slice B GREEN + spec + commit.** `ProjectFileSaveArgs`/`ProjectFileUpdateArgs`, handlers,
       `agent/registry.yaml`, persona, AT-18/AT-19. `feat(assistant): let the agent save and update text files
-      in its project`.
+      in its project` (commit remains owner-owned).
 - [ ] **T7 — Cierre.** `scripts/test.sh full` (la rama toca shapes: `agent/registry.yaml`, prompts, persona,
       `app/models.py` no, pero `agent/*` sí), `scripts/test.sh shape origin/main`, verificación independiente
       del diff completo (ítems 2 y 5), y entrega en cadena como la feature anterior.
@@ -171,3 +171,7 @@ lo rompe.
 
 **Evidencia de que el control existe y se usa** (sonda propia, antes de aceptar el reporte del writer):
 `url_fetcher` se invoca con `http://example.com/x.png` y el render no hace ninguna petición.
+
+**L7 — Slice B implemented in worktree, pending owner commit.** RED was observed because `project_file.save` / `project_file.update` did not exist; focused integration and quick checks passed GREEN. Both tools remain class-A and outside the autonomous allowlist. The panel only moves project files, so `project_file.update` introduced a new destructive capability. The owner chose that any text file may be updated only after its previous bytes are backed up in a same-thread artifact published under `outputs/`; if backup storage fails, the update is refused. Implemented the `.bak` artifact, fail-closed behavior, and backup ID in the result and audit.
+
+**Command evidence:** RED — `bash scripts/test.sh db tests/integration/test_assistant_project_file_writes.py` failed on the missing backup ID and missing refusal; GREEN — the same command passed (7 tests). `bash scripts/test.sh quick` passed (100%).

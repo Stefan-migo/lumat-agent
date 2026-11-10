@@ -11,6 +11,11 @@ def test_artifact_pdf_accepts_a_probe_fixture_case():
     TOOL_REGISTRY["artifact.pdf"].args_model.model_validate(fixture)
 
 
+def test_project_file_write_tools_have_real_probe_fixtures():
+    assert ARGUMENT_FIXTURES["project_file.save"] == {"filename": "probe.md", "content": "probe"}
+    assert ARGUMENT_FIXTURES["project_file.update"] == {"file_id": 1, "content": "probe updated"}
+
+
 def test_every_registered_tool_has_a_valid_fixture_or_named_skip_reason():
     registered = set(TOOL_REGISTRY)
     covered = set(ARGUMENT_FIXTURES) | set(SKIP_REASONS)
