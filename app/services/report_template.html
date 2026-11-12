@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ spec.title }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 28mm 18mm 22mm;
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 9pt; color: #52605a; }
+    }
+    body { font-family: "DejaVu Sans", sans-serif; color: #202923; font-size: 10pt; line-height: 1.55; }
+    .report-header { border-bottom: 1px solid #ccd6d0; padding-bottom: 5mm; margin: 0 0 9mm; }
+    h1 { font-size: 24pt; margin: 0 0 4mm; }
+    .subtitle { color: #52605a; font-size: 12pt; margin: 0 0 3mm; }
+    .generated-on { color: #52605a; font-size: 9pt; margin: 0; }
+    section { break-inside: avoid; margin: 0 0 10mm; }
+    h2 { font-size: 15pt; margin: 0 0 3mm; }
+    p { white-space: pre-wrap; }
+    table { width: 100%; border-collapse: collapse; margin: 5mm 0; font-size: 9pt; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+    th, td { border: 1px solid #aab5ae; padding: 2.2mm; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { background: #edf1ee; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <h1>{{ spec.title }}</h1>
+    <p class="subtitle">{% if spec.subtitle %}{{ spec.subtitle }}{% endif %}</p>
+    <p class="generated-on">Generated {{ generated_on }}</p>
+  </header>
+  {% for section in spec.sections %}
+  <section>
+    <h2>{{ section.heading }}</h2>
+    {% if section.body is not none %}<p>{{ section.body }}</p>{% endif %}
+    {% if section.table %}
+    <table>
+      <thead><tr>{% for column in section.table.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for row in section.table.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endfor %}
+</body>
+</html>

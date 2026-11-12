@@ -97,9 +97,12 @@ assistant:
     - project.find
     - list_project_files
     - read_project_file
+    - project_file.save
+    - project_file.update
     - view_image
     - skill.propose
     - artifact.save
+    - artifact.pdf
     - artifact.update
     - artifact.delete
     - project.create

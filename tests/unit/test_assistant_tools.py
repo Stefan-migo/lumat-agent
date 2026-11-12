@@ -102,6 +102,50 @@ def test_conversation_inspection_tools_are_in_assistant_whitelist():
     assert "conversations.transcript" in whitelist
 
 
+def test_project_file_writes_are_approval_gated_and_validate_exact_arguments():
+    from app.chat.assistant.tools.registry import is_tool_allowed_for_role
+
+    assert {"project_file.save", "project_file.update"} <= set(load_assistant_config().tools_whitelist)
+    for name, valid in (
+        ("project_file.save", {"filename": "notes.md", "content": "notes"}),
+        ("project_file.update", {"file_id": 1, "content": "notes"}),
+    ):
+        tool = get_tool(name)
+        assert tool.read_only is False
+        assert tool.tier == "default"
+        assert name in APPROVED_WRITE_ALLOWLIST
+        assert name not in AUTONOMOUS_WRITE_ALLOWLIST
+        assert is_tool_allowed_for_role(name, "admin") is True
+        assert is_tool_allowed_for_role(name, "operador") is True
+        assert is_tool_allowed_for_role(name, "tecnico") is False
+        with pytest.raises(ValueError):
+            tool.args_model.model_validate({**valid, "extra": True})
+
+    save = get_tool("project_file.save").args_model
+    update = get_tool("project_file.update").args_model
+    assert save.model_validate({"filename": "a.md", "content": "x"}).content == "x"
+    assert len(save.model_validate({"filename": "n" * 251 + ".txt", "content": "x"}).filename) == 255
+    assert len(save.model_validate({"filename": "notes.txt", "content": "x" * 200_000}).content) == 200_000
+    assert len(update.model_validate({"file_id": 1, "content": "x" * 200_000}).content) == 200_000
+    for args in (
+        {"filename": "", "content": "x"},
+        {"filename": "notes.pdf", "content": "x"},
+        {"filename": "n" * 256 + ".txt", "content": "x"},
+        {"filename": "notes.txt", "content": ""},
+        {"filename": "notes.txt", "content": "x" * 200_001},
+        {"filename": "notes.txt", "content": "x", "folder": "f" * 121},
+    ):
+        with pytest.raises(ValueError):
+            save.model_validate(args)
+    for args in (
+        {"file_id": 0, "content": "x"},
+        {"file_id": 1, "content": ""},
+        {"file_id": 1, "content": "x" * 200_001},
+    ):
+        with pytest.raises(ValueError):
+            update.model_validate(args)
+
+
 def test_settings_update_is_a_typed_bounded_write_tool():
     from app.chat.assistant.tools.registry import (
         APPROVED_WRITE_ALLOWLIST,
@@ -1350,7 +1394,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
 
 def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset(
-        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete"}
+        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete", "artifact.pdf"}
     )
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
@@ -1451,7 +1495,7 @@ def test_memory_correction_rejects_rows_outside_agent_ownership(row_kwargs):
 
 def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset(
-        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete"}
+        {"memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete", "artifact.pdf"}
     )
     row = SimpleNamespace(id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
 

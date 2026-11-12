@@ -76,9 +76,9 @@ def owned_thread(session: Session, thread_id: int | None, owner_id: int | None) 
     )
 
 
-def _validated_bytes(content: str) -> bytes:
-    """The content bounds every artifact write shares: non-empty and under the configured limit."""
-    data = content.encode("utf-8")
+def _validated_bytes(content: str | bytes) -> bytes:
+    """Coerce and bound every artifact write; text remains UTF-8 encoded."""
+    data = content.encode("utf-8") if isinstance(content, str) else content
     if not data:
         raise ValueError("artifact content is empty")
     if len(data) > get_settings().assistant_artifact_max_bytes:
@@ -176,7 +176,7 @@ def append_revision(
 
 
 def save_or_append(
-    session: Session, thread: InternalChatThread, filename: str, content: str, actor: str
+    session: Session, thread: InternalChatThread, filename: str, content: str | bytes, actor: str
 ) -> tuple[AssistantArtifact, bool]:
     """Create one named deliverable or append its next content revision."""
     name = safe_artifact_filename(filename)
@@ -190,10 +190,10 @@ def save_or_append(
     )
     current = next((row for row in list_artifacts(session, thread.id) if row.filename == name), None)
     if current is None:
-        return store_artifact(session, thread, name, content, actor), True
+        return store_artifact(session, thread, name, data, actor), True
     if current.sha256 == digest:
         return current, False
-    return append_revision(session, thread, current, content, actor)
+    return append_revision(session, thread, current, data, actor)
 
 
 def publish_artifact(

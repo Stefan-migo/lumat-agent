@@ -386,3 +386,72 @@ When a thread artifact is created or revised and its thread resolves to an owned
 - GIVEN a project file published from a thread artifact
 - WHEN the thread artifact is deleted
 - THEN the project file and its bytes remain available
+
+### Requirement: AT-17 — Structured PDF Report Artifacts
+The assistant MUST expose `artifact.pdf` as a write tool that accepts only a structured report specification, never model-supplied HTML, CSS, or resource paths. The filename MUST end in `.pdf`; the title MUST contain 1–200 characters, the optional subtitle MUST contain at most 300 characters, and the specification MUST contain 1–40 sections. Each section MUST have a 1–200 character heading, an optional body of at most 4,000 characters, and an optional table with 1–8 columns, at most 200 rows, and string cells of at most 200 characters. All argument models MUST forbid extra fields. Rendering MUST use Jinja2 with autoescape enabled AND a URL fetcher that refuses every URL, including HTTP, HTTPS, file, data, and relative URLs; these MUST remain independent injection controls. The resulting PDF MUST be stored as a normal `application/pdf` thread artifact and, when the thread resolves to an owned project, published into its root `outputs` folder using the existing filename identity and revision rules. Saving identical PDF bytes MUST return `changed: false` without a new artifact revision or a `republished` audit.
+
+#### Scenario: Structured bounds and independent rendering defenses
+- GIVEN a structured PDF report specification within the declared filename, title, subtitle, section, heading, body, column, row, and cell bounds, with text containing HTML-like markup
+- WHEN `artifact.pdf` renders the report
+- THEN the HTML body text is escaped by Jinja2 autoescape, the refusing URL fetcher rejects all resource URL schemes independently, and the output is a valid PDF without accepting HTML/CSS/path fields
+
+#### Scenario: PDF artifact publication and unchanged save
+- GIVEN a thread associated with an owned project and a valid structured report specification
+- WHEN `artifact.pdf` saves the resulting PDF and the same specification is saved again with identical rendered bytes
+- THEN the PDF artifact has content type `application/pdf`, one project file is published inside the root `outputs` folder, and the unchanged save returns `changed: false` without a new revision or `assistant_artifact.republished` audit
+
+### Requirement: AT-18 — Approval-Gated Project Text File Save
+The assistant MUST expose `project_file.save` as a default-tier write requiring the owner's class-A approval. It MUST resolve the authenticated thread and its project by normalized thread slug and matching thread owner, and fail closed when either the project or owner is unavailable with guidance to use `artifact.save` for a thread deliverable. It MUST accept only `.md`, `.txt`, or `.csv` files accepted by the project-file policy, with a filename of 1–255 characters, content of 1–200,000 characters, and an optional folder name of at most 120 characters. A requested folder MUST already exist at the project root. The tool MUST store the bytes through the project-file service and audit `project_file.assistant_saved`; it MUST NOT create folders or expose delete, rename, or move operations.
+
+#### Scenario: Save text at root or in an existing folder with approval and audit
+- GIVEN an owned project thread, valid text content, and optionally an existing root folder
+- WHEN the owner approves `project_file.save`
+- THEN the file is created at the project root or in that folder and an assistant audit records project, filename, size, and folder id
+
+#### Scenario: Reject non-text filenames
+- GIVEN a requested filename outside `.md`, `.txt`, and `.csv`
+- WHEN `project_file.save` is validated or executed
+- THEN the tool fails closed without creating a file
+
+#### Scenario: Missing project directs to thread deliverables
+- GIVEN a thread without an owned project or a resolvable owner
+- WHEN `project_file.save` is executed
+- THEN it fails with an explicit message that the thread has no project and directs the assistant to `artifact.save`
+
+#### Scenario: Missing folder is not created
+- GIVEN a folder name that does not identify an existing root folder in the project
+- WHEN `project_file.save` is executed
+- THEN it fails closed and creates neither a folder nor a file
+
+### Requirement: AT-19 — Approval-Gated Project Text File Update
+The assistant MUST expose `project_file.update` as a default-tier write requiring the owner's class-A approval. It MUST resolve the thread project using the same ownership rules as AT-18 and retrieve the requested file only within that project. It MUST reject missing files, files with `source_artifact_root_id` (whose source of truth is `artifact.update`), non-text suffixes, and content rejected by project-file size policy. Before a changed update overwrites the existing blob, it MUST read and save the previous bytes as an artifact in the same thread, named with the file's stem plus `.bak` plus its suffix (for example, `notes.md` becomes `notes.bak.md`), using the safe artifact filename policy, and publish that artifact into the project's root `outputs` folder. If the backup cannot be stored, the update MUST fail with `ToolValidationError` and leave the target file unchanged. After successful backup and publication, the changed update MUST overwrite the existing blob, update its size and SHA-256, preserve the row identity, and audit `project_file.assistant_updated` with previous and new SHA-256 values plus `backup_artifact_id`; the returned result MUST also include `backup_artifact_id`. Identical content MUST write nothing, add no audit or backup, and return `changed: false`. The assistant MUST NOT gain delete, rename, or move tools.
+
+#### Scenario: Update preserves identity and audits changed content
+- GIVEN an approved update for a text file in the thread's project
+- WHEN the content differs from the stored bytes
+- THEN the existing row keeps its id, the blob, size, and SHA-256 are updated, and an assistant audit records both digests
+
+#### Scenario: Artifact-published file cannot be updated directly
+- GIVEN a project file carrying `source_artifact_root_id`
+- WHEN `project_file.update` is executed
+- THEN it fails closed and directs the assistant to `artifact.update`
+
+#### Scenario: Changed content is recoverable from a published backup
+- GIVEN an approved update for a text file in the thread's project
+- WHEN the content differs from the stored bytes
+- THEN the previous bytes are stored in a same-thread artifact named with the `.bak` suffix before the target is changed, the artifact is published in the project's root `outputs` folder, the live file contains the new content, and the result and audit identify the backup artifact
+
+#### Scenario: Refuse an update when its backup cannot be stored
+- GIVEN an approved update for a text file and a failure to store the backup artifact
+- WHEN `project_file.update` is executed
+- THEN it raises `ToolValidationError` and leaves the target file bytes, size, and SHA-256 unchanged
+
+#### Scenario: Identical content is a no-op
+- GIVEN an approved update whose content has the same SHA-256 as the stored file
+- WHEN `project_file.update` is executed
+- THEN it returns `changed: false` without writing bytes, changing the row, or adding an audit
+
+#### Scenario: Approval is required for both project file writes
+- GIVEN either project file write tool
+- WHEN it is registered and invoked
+- THEN it belongs to `APPROVED_WRITE_ALLOWLIST`, is absent from `AUTONOMOUS_WRITE_ALLOWLIST`, and cannot execute without exact owner approval

@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS = 20
 APPROVED_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
+    "project_file.save",
+    "project_file.update",
     "project.create",
     "project.rename",
     "project.archive",
@@ -37,7 +39,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
 # `artifact.update` joins `artifact.save`: it can only rewrite an artifact the assistant itself
 # produced in the thread it already owns, so it needs no approval of its own.
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({
-    "memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.update", "artifact.delete",
+    "memory.write", "memory.update", "memory.delete", "artifact.save", "artifact.pdf", "artifact.update", "artifact.delete",
 })
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 USER_AXIS_LIMIT = 2
@@ -283,6 +285,28 @@ class ProjectReadFileArgs(BaseModel):
     limit: int = Field(default=project_files.MAX_FILE_TEXT_CHARS, ge=1, le=project_files.MAX_FILE_TEXT_CHARS)
 
 
+class ProjectFileSaveArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1, max_length=200_000)
+    folder: str | None = Field(default=None, max_length=120)
+
+    @field_validator("filename")
+    @classmethod
+    def require_text_filename(cls, value: str) -> str:
+        from pathlib import Path
+
+        if Path(value).suffix.lower() not in {".md", ".txt", ".csv"}:
+            raise ValueError("project file writes support text files only (.md, .txt, .csv)")
+        return value
+
+
+class ProjectFileUpdateArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    file_id: int = Field(gt=0)
+    content: str = Field(min_length=1, max_length=200_000)
+
+
 class ViewImageArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: Literal["project", "thread"]
@@ -318,6 +342,60 @@ class ArtifactUpdateArgs(BaseModel):
 class ArtifactDeleteArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     artifact_id: int = Field(gt=0)
+
+
+class PdfTable(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    columns: list[str] = Field(min_length=1, max_length=8)
+    rows: list[list[str]] = Field(default_factory=list, max_length=200)
+
+    @field_validator("columns")
+    @classmethod
+    def validate_columns(cls, value: list[str]) -> list[str]:
+        if any(len(column) > 200 for column in value):
+            raise ValueError("PDF table cells must be at most 200 characters")
+        return value
+
+    @field_validator("rows")
+    @classmethod
+    def validate_rows(cls, value: list[list[str]]) -> list[list[str]]:
+        if any(len(cell) > 200 for row in value for cell in row):
+            raise ValueError("PDF table cells must be at most 200 characters")
+        return value
+
+
+class PdfSection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    heading: str = Field(min_length=1, max_length=200)
+    body: str | None = Field(default=None, max_length=4000)
+    table: PdfTable | None = None
+
+
+class ArtifactPdfArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=200)
+    subtitle: str | None = Field(default=None, max_length=300)
+    sections: list[PdfSection] = Field(min_length=1, max_length=40)
+
+    @model_validator(mode="after")
+    def validate_aggregate_content(self):
+        content_length = len(self.title) + len(self.subtitle or "")
+        for section in self.sections:
+            content_length += len(section.heading) + len(section.body or "")
+            if section.table is not None:
+                content_length += sum(map(len, section.table.columns))
+                content_length += sum(len(cell) for row in section.table.rows for cell in row)
+        if content_length > 60_000:
+            raise ValueError("PDF report content must not exceed 60000 characters")
+        return self
+
+    @field_validator("filename")
+    @classmethod
+    def validate_pdf_filename(cls, value: str) -> str:
+        if not value.endswith(".pdf"):
+            raise ValueError("filename must end in .pdf")
+        return value
 
 
 def _plain(value: Any) -> Any:
@@ -802,12 +880,140 @@ def _view_image(session, args: ViewImageArgs, *, owner_id: int | None = None, tr
     return {"image": {"source": args.source, "id": args.id, "filename": filename, "mime": mime}}
 
 
+def _resolve_project_file_target(session, thread_id: int | None, owner_id: int | None):
+    from sqlalchemy import select
+    from app.models import Project, User
+
+    thread = assistant_artifacts.owned_thread(session, thread_id, owner_id)
+    if thread is None:
+        raise ToolValidationError("no accessible chat thread for project files")
+    slug = projects.normalize_slug(thread.proyecto) if thread.proyecto else ""
+    project = session.scalar(select(Project).where(
+        Project.slug == slug, Project.owner_id == thread.user_id,
+    )) if slug and slug != "default" else None
+    owner = session.get(User, thread.user_id)
+    if project is None or owner is None:
+        raise ToolValidationError("thread has no project; use artifact.save for a thread deliverable")
+    return project, owner, thread
+
+
+def _text_project_file_kind(filename: str, content_type: str | None, size: int) -> str:
+    from pathlib import Path
+
+    if Path(filename).suffix.lower() not in {".md", ".txt", ".csv"}:
+        raise ToolValidationError("project file writes support text files only (.md, .txt, .csv)")
+    try:
+        return project_files.allowed_project_file(filename, content_type, size)
+    except ValueError as exc:
+        raise ToolValidationError(str(exc)) from exc
+
+
+def _save_project_file(session, args: ProjectFileSaveArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
+    from sqlalchemy import select
+    from app.models import ProjectFolder
+    from app.services.audit import record_audit
+
+    project, owner, _thread = _resolve_project_file_target(session, trusted_thread_id, owner_id)
+    content = args.content.encode("utf-8")
+    _text_project_file_kind(args.filename, None, len(content))
+    folder_id = None
+    if args.folder is not None:
+        folder = session.scalar(select(ProjectFolder).where(
+            ProjectFolder.project_id == project.id,
+            ProjectFolder.name == args.folder,
+            ProjectFolder.parent_id.is_(None),
+        ))
+        if folder is None:
+            raise ToolValidationError("project folder not found")
+        folder_id = folder.id
+    row = project_files.store_project_file(session, project, owner, args.filename, None, content, folder_id=folder_id)
+    record_audit(session, actor="assistant", action="project_file.assistant_saved", entity="project_file",
+                 entity_id=str(row.id), after={"project_id": project.id, "filename": row.filename,
+                                               "size": row.size, "folder_id": row.folder_id})
+    session.flush()
+    return {"file_id": row.id, "filename": row.filename, "size": row.size,
+            "content_type": row.content_type, "folder": args.folder}
+
+
+def _update_project_file(session, args: ProjectFileUpdateArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
+    import hashlib
+    from pathlib import Path
+    from app.services.audit import record_audit
+
+    project, _owner, thread = _resolve_project_file_target(session, trusted_thread_id, owner_id)
+    row = project_files.get_project_file(session, project.id, args.file_id)
+    if row is None:
+        raise ToolValidationError("project file not found")
+    if row.source_artifact_root_id is not None:
+        raise ToolValidationError("project file is published from an artifact; use artifact.update")
+    content = args.content.encode("utf-8")
+    _text_project_file_kind(row.filename, row.content_type, len(content))
+    previous_sha256 = row.sha256
+    sha256 = hashlib.sha256(content).hexdigest()
+    changed = sha256 != previous_sha256
+    backup_row = None
+    if changed:
+        try:
+            previous_bytes = Path(row.stored_path).read_bytes()
+        except FileNotFoundError as exc:
+            raise ToolValidationError("stored project file content is unavailable") from exc
+        file_path = Path(row.filename)
+        backup_filename = assistant_artifacts.safe_artifact_filename(
+            f"{file_path.stem}.bak{file_path.suffix}"
+        )
+        try:
+            backup_row, _backup_changed = assistant_artifacts.save_or_append(
+                session, thread, backup_filename, previous_bytes, actor="assistant"
+            )
+        except ValueError as exc:
+            raise ToolValidationError(str(exc)) from exc
+        published_backup = assistant_artifacts.publish_artifact(session, thread, backup_row, actor="assistant")
+        if published_backup is None:
+            raise ToolValidationError("project file backup could not be published")
+        Path(row.stored_path).write_bytes(content)
+        row.size = len(content)
+        row.sha256 = sha256
+        record_audit(session, actor="assistant", action="project_file.assistant_updated", entity="project_file",
+                     entity_id=str(row.id), after={"project_id": project.id, "file_id": row.id,
+                                                   "filename": row.filename, "size": row.size,
+                                                   "previous_sha256": previous_sha256, "sha256": sha256,
+                                                   "backup_artifact_id": backup_row.id})
+        session.flush()
+    return {"file_id": row.id, "filename": row.filename, "size": row.size, "changed": changed,
+            **({"backup_artifact_id": backup_row.id} if backup_row is not None else {})}
+
+
 def _save_artifact(session, args: ArtifactSaveArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
     thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
     if thread is None:
         raise ToolValidationError("no accessible chat thread for artifacts")
     try:
         row, changed = assistant_artifacts.save_or_append(session, thread, args.filename, args.content, actor="assistant")
+    except ValueError as exc:
+        raise ToolValidationError(str(exc)) from exc
+    assistant_artifacts.publish_artifact(session, thread, row, actor="assistant")
+    return {
+        "artifact_id": row.id,
+        "root_id": row.root_id,
+        "version": row.version,
+        "changed": changed,
+        "filename": row.filename,
+        "content_type": row.content_type,
+        "size": row.size,
+        "download_path": f"/panel/api/chat/threads/{row.thread_id}/artifacts/{row.id}/download",
+    }
+
+
+def _artifact_pdf(session, args: ArtifactPdfArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None):
+    from app.services.reports import render_report_pdf
+
+    thread = assistant_artifacts.owned_thread(session, trusted_thread_id, owner_id)
+    if thread is None:
+        raise ToolValidationError("no accessible chat thread for artifacts")
+    content = render_report_pdf(args)
+    filename = assistant_artifacts.safe_artifact_filename(args.filename)
+    try:
+        row, changed = assistant_artifacts.save_or_append(session, thread, filename, content, actor="assistant")
     except ValueError as exc:
         raise ToolValidationError(str(exc)) from exc
     assistant_artifacts.publish_artifact(session, thread, row, actor="assistant")
@@ -945,8 +1151,11 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace.", tier="default"),
     "list_project_files": ToolDefinition("list_project_files", ProjectListFilesArgs, True, _list_project_files, "List the current project's stored files.", tier="default"),
     "read_project_file": ToolDefinition("read_project_file", ProjectReadFileArgs, True, _read_project_file, "Read one project file's exact extracted text. For a large file, page it with offset/limit and continue from the returned next_offset.", tier="default"),
+    "project_file.save": ToolDefinition("project_file.save", ProjectFileSaveArgs, False, _save_project_file, "Save a text file in the current project after owner approval.", tier="default"),
+    "project_file.update": ToolDefinition("project_file.update", ProjectFileUpdateArgs, False, _update_project_file, "Update an existing text file in the current project after owner approval.", tier="default"),
     "view_image": ToolDefinition("view_image", ViewImageArgs, True, _view_image, "View an image on demand: a project file or a thread attachment, returned to the model as a vision part.", tier="default"),
     "artifact.save": ToolDefinition("artifact.save", ArtifactSaveArgs, False, _save_artifact, "Save a downloadable file artifact for the current conversation.", tier="default"),
+    "artifact.pdf": ToolDefinition("artifact.pdf", ArtifactPdfArgs, False, _artifact_pdf, "Render a professional PDF report from a structured spec (not HTML) and publish it to the project's outputs folder.", tier="default"),
     "artifact.update": ToolDefinition("artifact.update", ArtifactUpdateArgs, False, _update_artifact, "Rewrite an artifact you already saved in this conversation, as a new version. The previous version is kept. Pass the artifact_id returned by artifact.save or artifact.update; use artifact.save when you mean to create a different file.", tier="default"),
     "artifact.delete": ToolDefinition("artifact.delete", ArtifactDeleteArgs, False, _delete_artifact, "Delete an artifact you saved in this conversation, with every version it has. Pass the artifact_id returned by artifact.save or artifact.update.", tier="default"),
     "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),
@@ -968,8 +1177,11 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "project_file.save": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "project_file.update": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "view_image": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "artifact.save": frozenset(UserRole),
+    "artifact.pdf": frozenset(UserRole),
     "artifact.update": frozenset(UserRole),
     "artifact.delete": frozenset(UserRole),
     "memory.read": frozenset(UserRole),
@@ -1050,7 +1262,7 @@ def execute_tool(
     # Project tools carry no thread signal, so they always require the authenticated
     # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
     # own-scope read/search already fail closed on a missing thread in their handler.
-    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "view_image", "artifact.save", "artifact.update", "artifact.delete", "skill.propose"} or (
+    owner_scoped = name.startswith("project.") or name in {"list_project_files", "read_project_file", "project_file.save", "project_file.update", "view_image", "artifact.save", "artifact.pdf", "artifact.update", "artifact.delete", "skill.propose"} or (
         name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
     )
     if owner_scoped and owner_id is None:
@@ -1102,7 +1314,7 @@ def execute_tool(
     if not definition.read_only and not autonomous_write and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
-        if name in {"artifact.save", "artifact.update", "artifact.delete"}:
+        if name in {"artifact.save", "artifact.pdf", "artifact.update", "artifact.delete", "project_file.save", "project_file.update"}:
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id))
         elif name == "view_image":
             result = _plain(definition.handler(session, parsed, owner_id=owner_id, trusted_thread_id=trusted_thread_id, proyecto=proyecto, project_id=project_id))

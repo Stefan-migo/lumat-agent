@@ -1,0 +1,6 @@
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+
+# This development container renders PDFs; the upstream uv image carries no pango.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 libfontconfig1 libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*

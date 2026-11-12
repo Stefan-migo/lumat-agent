@@ -28,7 +28,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # audio/webm with Opus and Meta only takes audio/ogg with Opus (app/services/audio_format.py).
 # --no-install-recommends keeps the image to the binaries the remux path actually uses.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 libfontconfig1 libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 # Non-root app user (SH-1: the api never runs as root; SH-2 read-only fs).
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser

@@ -37,10 +37,12 @@ from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, veri
 
 logger = logging.getLogger(__name__)
 
-# Bounds the responder's tool evidence by characters. Measured: a four-step read-only turn with a
-# 34-tool catalog quotes ~3,980 characters once redundant payloads are deduplicated, so the cap
-# leaves room for every executed step instead of evicting the oldest one when the catalog grows.
-_TOOL_EVIDENCE_LIMIT = 4_500
+# Bounds the responder's tool evidence by characters. Measured: a capped four-step read-only turn
+# quotes 4,675 characters once the repeated `assistant.capabilities` payload is deduplicated, and that
+# one payload may legally reach CAPABILITIES_TEXT_LIMIT (4,000) on its own, so a 4,500 cap evicted the
+# dashboard step as soon as three tools joined the catalog. 5,500 keeps every executed step of that turn
+# and leaves headroom of roughly two more catalog entries.
+_TOOL_EVIDENCE_LIMIT = 5_500
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 _ARTIFACT_INVENTORY_LIMIT = 10
