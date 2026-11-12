@@ -93,7 +93,9 @@ def test_conversation_transcript_is_a_typed_bounded_read_only_tool():
         tool.args_model.model_validate({"conversation_id": 0})
     with pytest.raises(ValueError):
         tool.args_model.model_validate({"conversation_id": 5, "extra": True})
-    assert tool.args_model.model_validate({"conversation_id": 5}).limit == 20
+    # Ten messages plus their events is what the detail share of the evidence budget holds with
+    # readable bodies; the model can still ask for a wider window explicitly.
+    assert tool.args_model.model_validate({"conversation_id": 5}).limit == 10
 
 
 def test_conversation_inspection_tools_are_in_assistant_whitelist():
@@ -1266,18 +1268,59 @@ def test_web_search_missing_api_key_fails_fast(monkeypatch):
         BraveSearch().search("safe query")
 
 
+@pytest.mark.parametrize("tool_name", ["conversations.list", "conversations.search"])
+def test_conversation_tools_project_public_fields_and_preserve_paging(monkeypatch, tool_name):
+    conversation = SimpleNamespace(
+        id=1, wa_phone="+56912345678", state=SimpleNamespace(value="bot"),
+        summary="S" * 500, last_message_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        captured_data={"private": "excluded"},
+    )
+    rows = [
+        (SimpleNamespace(
+            id=index, wa_phone=f"+5690000000{index}", state=SimpleNamespace(value="bot"),
+            summary=None, last_message_at=None,
+        ), f"Customer {index}")
+        for index in range(2)
+    ] + [(conversation, "Ana Example")]
+    calls = []
+    monkeypatch.setattr(
+        "app.services.conversations.list_conversations",
+        lambda session, query, limit: calls.append((query, limit)) or rows,
+    )
+
+    arguments = {"limit": 1, "offset": 2}
+    if tool_name == "conversations.search":
+        arguments["query"] = "Ana"
+    result = execute_tool(SimpleNamespace(), tool_name, arguments, role="admin")["result"]
+
+    assert calls == [("Ana" if tool_name == "conversations.search" else None, 3)]
+    assert result["fields"] == ["id", "customer_name", "phone", "state", "summary", "last_message_at"]
+    assert len(result["rows"]) == 1
+    assert result["rows"][0] == [
+        1, "Ana Example", "+56912345678", "bot", "S" * 49 + "…",
+        "2026-01-01T00:00",
+    ]
+    assert "captured_data" not in json.dumps(result)
+
+
 def test_conversations_and_appointments_use_service_seams(monkeypatch):
-    conversation = SimpleNamespace(id=1)
+    conversation = SimpleNamespace(
+        id=1, wa_phone="+56912345678", state=SimpleNamespace(value="bot"),
+        summary="summary", last_message_at=None,
+    )
     appointment = SimpleNamespace(id=2, starts_at=datetime.now(timezone.utc) + timedelta(days=1))
     monkeypatch.setattr(
         "app.services.conversations.list_conversations",
-        lambda session, query, limit: [conversation],
+        lambda session, query, limit: [(conversation, "Ana")],
     )
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.scheduling.list_for_range",
         lambda *args, **kwargs: [(appointment, None, None, None, None)],
     )
-    assert execute_tool(SimpleNamespace(), "conversations.search", {"query": "a"}, role="admin")["result"] == [{"id": 1}]
+    assert execute_tool(SimpleNamespace(), "conversations.search", {"query": "a"}, role="admin")["result"] == {
+        "fields": ["id", "customer_name", "phone", "state", "summary", "last_message_at"],
+        "rows": [[1, "Ana", "+56912345678", "bot", "summary", None]],
+    }
     assert execute_tool(SimpleNamespace(), "appointments.upcoming", {}, role="admin")["result"][0]["id"] == 2
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import json
 import shutil
 import uuid
 
@@ -34,28 +35,37 @@ LEGAL_TRANSITIONS = {
 }
 
 
-def list_conversations(session: Session, query: str | None = None, limit: int = 20) -> list[Conversation]:
-    """Bounded conversation read projection for panel consumers."""
-    statement = select(Conversation).join(Customer, Customer.id == Conversation.customer_id)
+def list_conversations(session: Session, query: str | None = None, limit: int = 20) -> list[tuple[Conversation, str | None]]:
+    """Return conversations with only the joined customer name needed by the assistant tool."""
+    statement = select(Conversation, Customer.name).join(Customer, Customer.id == Conversation.customer_id)
     if query:
         statement = statement.where(
             Customer.name.ilike(f"%{query}%") | Conversation.wa_phone.contains(query)
         )
-    return list(session.scalars(statement.order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc()).limit(limit)))
+    return list(session.execute(
+        statement.order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc()).limit(limit)
+    ).all())
+
+
+# One detail tool may not exceed what the box can hold alone, so this mirrors `web.fetch`'s own
+# `MAX_PAYLOAD = 3_600`: reading one conversation is the answer for that turn, and starving it to a
+# listing's share would cut twenty messages to fifty characters each. The rendered evidence adds its
+# provenance header on top, which is why the bound sits one header below the detail share.
+TRANSCRIPT_JSON_LIMIT = 4_200
+TRANSCRIPT_MESSAGE_BODY_LIMIT = 500
+_TRANSCRIPT_TRUNCATION_MARKER = "…[truncated]"
 
 
 def conversation_transcript(session: Session, conversation_id: int, limit: int = 20) -> dict:
-    """Bounded read-only transcript of one conversation for the assistant (S6).
-
-    Reads the last `limit` messages (returned oldest-first) plus the conversation
-    events, so the assistant can diagnose why the bot behaved as it did.
-    """
+    """Return the newest messages and events, retaining every selected row within a text budget."""
     conversation = session.get(Conversation, conversation_id)
     if conversation is None:
         raise ValueError("conversation not found")
 
+    # Minute precision: forty rows of microseconds cost more than the bodies they timestamp, and the
+    # order of a transcript is carried by its position, not by its seconds.
     def _iso(value):
-        return value.isoformat() if value is not None else None
+        return value.strftime("%Y-%m-%dT%H:%M") if value is not None else None
 
     total = session.scalar(
         select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
@@ -78,7 +88,7 @@ def conversation_transcript(session: Session, conversation_id: int, limit: int =
         )
     )
     events.reverse()
-    return {
+    payload = {
         "conversation": {
             "id": conversation.id,
             "customer_id": conversation.customer_id,
@@ -103,6 +113,29 @@ def conversation_transcript(session: Session, conversation_id: int, limit: int =
             for event in events
         ],
     }
+
+    def bound(value: str | None, cap: int) -> str | None:
+        if value is None or len(value) <= cap:
+            return value
+        return value[: max(0, cap - len(_TRANSCRIPT_TRUNCATION_MARKER))] + _TRANSCRIPT_TRUNCATION_MARKER
+
+    # Keep every selected message and event. One cap, applied to every text field, lowered until the
+    # serialized payload fits: an even cut is predictable and repeats the same amount of each body,
+    # where shaving only the longest field until the total fits would leave one message long and its
+    # neighbours butchered. Each field that was cut carries the marker.
+    slots = [(payload["conversation"], "summary", payload["conversation"]["summary"])]
+    slots.extend((message, "text", message["text"]) for message in payload["messages"])
+    slots.extend((event, "cause", event["cause"]) for event in payload["events"])
+    cap = TRANSCRIPT_MESSAGE_BODY_LIMIT
+    while True:
+        for row, key, original in slots:
+            row[key] = bound(original, cap)
+        size = len(json.dumps(payload, ensure_ascii=False, default=str))
+        if size <= TRANSCRIPT_JSON_LIMIT or cap <= len(_TRANSCRIPT_TRUNCATION_MARKER):
+            break
+        cap = max(len(_TRANSCRIPT_TRUNCATION_MARKER), cap * TRANSCRIPT_JSON_LIMIT // size)
+
+    return payload
 
 
 def _audits(session: Session, conversation_id: int) -> list[AuditLog]:

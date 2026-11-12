@@ -30,7 +30,7 @@ MAX_BYTES = 512_000
 ALLOWED_CONTENT_TYPES = frozenset({"text/html", "application/xhtml+xml", "text/plain"})
 WEB_FETCH_TIMEOUT = httpx.Timeout(5.0, connect=3.0)
 USER_AGENT = "Mozilla/5.0 (compatible; LumatReader/1.0)"
-#: The reader owns its bound, so a full result always fits `_TOOL_EVIDENCE_LIMIT` (4,000) with room.
+#: The reader owns its bound, so a full result always fits `_TOOL_EVIDENCE_LIMIT` (5,500) with room.
 #: `MAX_TEXT` bounds the raw text, but the evidence travels as JSON: one quote becomes `\"` and one
 #: control character becomes `\uXXXX`. The serialized payload is what has to fit, so it is measured.
 MAX_PAYLOAD = 3_600
