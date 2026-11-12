@@ -711,6 +711,71 @@ def test_tool_evidence_keeps_inventory_for_omitted_payloads():
     assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
 
 
+def _capability_line(name, description, access="read-only"):
+    return f"{name} — {description} ({access})"
+
+
+def test_capability_evidence_reports_names_without_registry_descriptions():
+    """S1/T1: the responder shares one budget across every executed step, and the full inventory text
+    at 38 tools left no room for the step beside it. The projection keeps the count, every name and
+    its access class; the descriptions stay where they are already read, the planner's catalog."""
+    payload = {
+        "tool_count": 3,
+        "capabilities": "Available in this turn's scope:\n" + "\n".join([
+            _capability_line("customers.search", "Search customer records. Use offset to page forward through results."),
+            _capability_line("artifact.delete", "Delete an artifact and all of its versions.", "write"),
+            _capability_line("settings.update", "Propose a live chatbot settings change for approval.", "write"),
+        ]),
+    }
+
+    evidence = _render_tool_evidence({"tool_results": [
+        {"tool": "assistant.capabilities", "status": "completed", "arguments": {}, "result": payload},
+    ]})
+
+    assert '"tool_count": 3' in evidence
+    for name in ("customers.search", "artifact.delete", "settings.update"):
+        assert name in evidence
+    assert "Search customer records" not in evidence
+    assert "Propose a live chatbot settings change" not in evidence
+    # The access class is what tells the operator whether the assistant can act alone.
+    assert evidence.count("(read-only)") == 1
+    assert evidence.count("(write)") == 2
+
+
+def test_capability_evidence_leaves_room_for_the_steps_beside_it():
+    """S2/S4/S5: the relation the budget comment used to carry is a test now, and every size comes
+    from the real catalog and from _TOOL_EVIDENCE_LIMIT. A catalog that outgrows the budget fails
+    here, cheaply, instead of evicting a step in the full suite."""
+    from app.chat.assistant.tools.registry import MAX_ITEMS, CapabilitiesArgs, _assistant_capabilities
+    from app.services.prompts import load_assistant_config
+
+    whitelist = load_assistant_config().tools_whitelist
+    # The inventory is above the generic item bound, so projecting it as a returned list would drop
+    # every tool past the twentieth without a word.
+    assert len(whitelist) > MAX_ITEMS
+    capability = {
+        "tool": "assistant.capabilities",
+        "status": "completed",
+        "arguments": {},
+        "result": _assistant_capabilities(None, CapabilitiesArgs(), whitelist=frozenset(whitelist)),
+    }
+
+    alone = _render_tool_evidence({"tool_results": [capability]})
+    for name in whitelist:
+        assert name in alone
+    # S5: the inventory may spend at most half the shared budget, so the rest of the turn has room.
+    assert len(alone) <= _TOOL_EVIDENCE_LIMIT // 2
+
+    turn = _render_tool_evidence({"tool_results": [
+        capability,
+        {"tool": "dashboard.summary", "status": "completed", "arguments": {"window_days": 7}, "result": {"contacts": 12}},
+        {"tool": "customers.search", "status": "completed", "arguments": {"query": "ana"}, "result": [{"name": "Ana"}]},
+    ]})
+    assert len(turn) <= _TOOL_EVIDENCE_LIMIT
+    # The step the old 4,500 ceiling evicted.
+    assert '"contacts"' in turn
+
+
 def test_stalled_chain_is_explained_with_tools_already_run():
     from app.chat.assistant.nodes import _render_tool_evidence
 
