@@ -81,3 +81,9 @@ trabajo aparte», y la consecuencia empieza cuando la base tiene linaje.
 Retomamos el hilo del chatbot de Lumat en Fase 3. Leé odd/handoffs/chatbot-fase-3-ficha-de-caso.md y
 odd/analysis/lumatdata/03-defectos-y-mejoras.md (D1, D5, D7). Arrancá con la ficha del caso.
 ```
+
+**L2 — cortes de revisión (slice boundaries).** La unidad se entrega en cortes de ~400 líneas
+autoradas: corte 1 = T1 (migración + modelos) + T2 (constructor de la ficha) + T3 (inyección en
+`respond`), cerrado en `dd0dcd99` con 847 líneas sobre `origin/main`. Corte 2 = T4 (linaje) y T5
+(`decide_spending`), que van en commits propios. Si el corte 2 supera el tamaño razonable, se abre
+como PR encadenado sobre el corte 1 en vez de engordar el mismo PR.
