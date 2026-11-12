@@ -229,6 +229,30 @@ _CUSTOMER_COMPLAINT_PHRASINGS = (
     "me devolvieron el equipo roto y nadie responde",
     "me estafaron con el presupuesto",
     "quiero que me devuelvan la plata",
+    # The anchored pattern (see `_COMPLAINT_UPSET_PATTERN`) excludes the courtesy
+    # CLITIC, so every upset shape the old bare word reached must still reach a human.
+    # This half is what an earlier candidate failed: whitelisting "estoy/quedé + molesto"
+    # lost "estoy bastante/re/sumamente/realmente/algo/medio molesto", "me siento molesto",
+    # "sigo molesto" and "muy molesto" while the courtesy half stayed green — 15 silent
+    # recall regressions behind 49 passing tests. Found by independent verification.
+    "estoy bastante molesto con el servicio",
+    "estoy algo molesto con la demora",
+    "estoy sumamente molesto con el servicio",
+    "estoy realmente molesto con el servicio",
+    "estoy re molesto con el servicio",
+    "estoy medio molesto con el servicio",
+    "me siento molesto con el servicio",
+    "me tiene molesto el servicio",
+    "me tienen molesta las respuestas",
+    "sigo molesto con el servicio",
+    "muy molesto con el servicio",
+    "molesto con el servicio, todavia no vienen",
+    # Forms the old bare word never reached at all: the typo without the accent, the
+    # progressive "ando", and the plural of one household filing one complaint.
+    "quedo molesto con el trabajo",
+    "ando molesto con el servicio",
+    "estamos molestos con el servicio",
+    "me molestan los cobros",
 )
 
 # Decided NOT to be part of the trigger (2026-09-23, unit complaint-gap-non-goal).
@@ -246,6 +270,25 @@ _BENIGN_MESSAGES_THAT_MUST_NOT_TRIGGER = (
     "mi calefont no enciende",
     "cuanto cuesta la revision anual",
     "el tecnico puede venir el martes",
+    # Measured on the real WhatsApp corpus (34 conversations, 2.049 customer
+    # messages, nov-2025..nov-2026): `molesto`/`molesta` fired on Chilean courtesy,
+    # not on a complaint, in 3 of 3 occurrences. These three are the customer's
+    # messages with their typos kept, one per source conversation.
+    "maxi como estas?, te molesto con la ultima pls?, el agua de duchas esta impecable",  # Javier Galvez
+    "pero te molesto el fin de seman un minuto cuando puedas para subirlo",  # Monica Dawabe
+    "te molesto con una pregunta, la casa no logra calentarse a 22 grados",  # Pabla Leiva
+    # The courtesy family the clitic exclusion has to keep out, including the le/les
+    # forms and the one that ends in "te " ("bastante molesto" must NOT be blocked —
+    # that is why each lookbehind carries its own \b).
+    "te molesto de nuevo con lo mismo",
+    "te molesto un ratito, cuando puedes venir",
+    "te molesta si vengo el martes en la tarde",
+    "disculpa que te moleste, a que hora vienen",
+    "les molesto con una consulta rapida",
+    "le molesto con una duda",
+    "no quiero molestarlo mas, solo saber si viene",
+    "te molesto con el cuento de la caldera",
+    "perdon por la molestia, a que hora viene",
 )
 
 

@@ -51,8 +51,6 @@ _COMPLAINT_WORDS = (
     "queja",
     "quejas",
     "quejo",
-    "molesto",
-    "molesta",
     "enojado",
     "enojada",
     "devolver",
@@ -95,6 +93,26 @@ _COMPLAINT_WORD_PATTERN = re.compile(
 _COMPLAINT_PHRASE_PATTERN = re.compile(
     "|".join(re.escape(p) for p in _COMPLAINT_PHRASES), re.IGNORECASE
 )
+# `molesto`/`molesta` cannot be bare words: in Chilean Spanish the verb "te molesto"
+# is how a polite customer OPENS a request ("te molesto con una pregunta"). Measured
+# on the real WhatsApp corpus (34 conversations, 2.049 customer messages, nov-2025 to
+# nov-2026), the bare word fired on 3 of 3 occurrences and every one was courtesy, not
+# a complaint.
+#
+# The fix excludes the COURTESY CLITIC ("te/le/les molesto") instead of whitelisting
+# the upset shape. Whitelisting a verb + adverb list looks tidier and loses real
+# complaints: "estoy bastante molesto", "estoy re molesto", "me siento molesto",
+# "sigo molesto", "muy molesto con el servicio" all reached a human before and stopped
+# reaching one under that approach. Excluding the clitic keeps every form the bare word
+# caught, drops just the polite ones, and additionally recovers the plural complaint
+# ("estamos molestos", "me molestan") that no version reached before.
+#
+# The `\b` inside each lookbehind is load-bearing: a plain `(?<!te )` would also block
+# "bastante molesto", which ends in "te ".
+_COMPLAINT_UPSET_PATTERN = re.compile(
+    r"\b(?<!\bte )(?<!\ble )(?<!\bles )molest[oa]s?n?\b",
+    re.IGNORECASE,
+)
 
 
 def _current_message(state: ConversationState) -> dict | None:
@@ -124,6 +142,8 @@ def evaluate_handoff(state: ConversationState) -> str | None:
     if is_human_request(text):
         return "persona"
     if _COMPLAINT_WORD_PATTERN.search(text):
+        return "complaint"
+    if _COMPLAINT_UPSET_PATTERN.search(text):
         return "complaint"
     if _COMPLAINT_PHRASE_PATTERN.search(text):
         if _answers_active_offer(state, text):
