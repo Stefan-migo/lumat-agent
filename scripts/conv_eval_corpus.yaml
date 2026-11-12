@@ -408,3 +408,313 @@ conversations:
       Near-miss: vocabulario vecino (gasfitería, filtraciones) sin documento que
       lo responda. Es la clase que castiga un umbral de retrieval bajo. Se acepta
       tanto que ofrezca los dos caminos como que derive, pero no que invente.
+
+  # ---------------------------------------------------------------------------
+  # REAL CORPUS — escenarios derivados de conversaciones auditables (S1-S7).
+  # ---------------------------------------------------------------------------
+  - id: real-cortesia-no-es-reclamo
+    tier: simple
+    persona: >
+      Cliente recurrente que escribe con cercanía y cortesía chilena.
+    goal: >
+      Consultar sin que una expresión de cortesía se clasifique como reclamo.
+    turns:
+      - "[nombre] como estas?, te molesto con la última pls?, el agua de duchas está impecable"
+    expect:
+      state_any: [bot]
+      events_forbidden: [escalation]
+      causes_forbidden: [reclamo]
+    hard_fails:
+      - "Derivar una consulta cortés como si fuera un reclamo"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:62. Turno literal
+      salvo el nombre propio inicial, sustituido por privacidad.
+
+  - id: real-precio-mantencion-ciclo
+    tier: simple
+    persona: >
+      Clienta recurrente que pregunta por el ciclo de mantención.
+    goal: >
+      Aclarar si corresponde realizar la mantención y cada cuánto.
+    turns:
+      - "Corresponde hacerla??\nEs cada 6 meses??"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [escalation]
+      intent_expected: [valores]
+    hard_fails:
+      - "Inventar una periodicidad no documentada"
+      - "Derivar sin intentar responder la consulta general"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:62-63; un único
+      mensaje del cliente con salto de línea original.
+
+  - id: real-cobertura-condominio
+    tier: simple
+    persona: >
+      Propietaria que llega referida por el chat de su condominio.
+    goal: >
+      Consultar si Lumat puede ayudar con su caldera y su comuna.
+    turns:
+      - "Hola buenas tardes. Me compartieron tu contacto del chat de mi condominio"
+    expect:
+      state_any: [bot, human]
+      kb_answered: true
+    hard_fails:
+      - "Afirmar cobertura o rechazo sin consultar la KB"
+      - "Inventar la comuna de la cliente"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:2; turno
+      literal.
+
+  - id: real-vocabulario-impreciso
+    tier: simple
+    persona: >
+      Propietaria que usa vocabulario coloquial e impreciso para describir una pieza.
+    goal: >
+      Saber si se puede revisar el quemador descrito sin asumir qué significa.
+    turns:
+      - "Mira, tengo un quemador d ella cocina agripado y quería saber si ustedes arreglan eso"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [escalation]
+    hard_fails:
+      - "Afirmar qué significa agripado sin aclararlo"
+      - "Inventar alcance o condiciones de cotización"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max [dirección omitida]», chat.txt:43;
+      turno literal.
+
+  - id: real-dato-mas-pregunta
+    tier: complejo
+    persona: >
+      Clienta que ya entregó datos y agrega una pregunta sobre el horario.
+    goal: >
+      Obtener respuesta a la pregunta manteniendo los datos previamente entregados.
+    turns:
+      - "18:30 comienzo con los chicos"
+      - "Yo creo qje no alcanza, y mañana?"
+      - "es factible que pases tipo 14 horas?"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+    hard_fails:
+      - "Ignorar la pregunta que acompaña a los datos"
+      - "Volver a solicitar un dato ya entregado"
+    notes: >
+      Conversación «[cliente] [dirección omitida] Cliente Metrogas Max», chat.txt:35-39. Datos seguidos del turno con pregunta; se omiten respuestas
+      del dueño, sin reordenar ni saltar de fecha.
+
+  - id: real-arrendatario-no-decide
+    tier: complejo
+    persona: >
+      Arrendataria que explica su rol y consulta si puede enviarse un presupuesto al dueño.
+    goal: >
+      Pedir un presupuesto sin atribuirse la autorización del propietario.
+    turns:
+      - "Yo estoy arrendando la casa a la señora [nombre]"
+      - "Entonces le podría enviar un presupuesto"
+      - "Por favor 🙏🏻🙏🏻"
+      - "Yo arriendo hace 7 años esta casa"
+      - "Y vivo con tres niños"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Confirmar un presupuesto como autorizado sin verificar con el propietario"
+      - "Afirmar que la cliente decide por el propietario"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:41-49. Se sustituyó el
+      nombre del propietario; el rol aparece antes de la solicitud de presupuesto.
+
+  - id: real-multi-equipo-un-mensaje
+    tier: complejo
+    persona: >
+      Clienta que reporta problemas en más de un equipo en el mismo mensaje.
+    goal: >
+      Dejar registrados ambos equipos sin mezclarlos.
+    turns:
+      - "Hola [nombre] como estas?\nPara saber si podrías realizar mantencion anual con garantía a calefont y caldera de casa en [condominio], lo ubicas? Saludos!"
+      - "Arrendatario me pide un certificado o algo que acredite la mantención, se puede dejar algo así?"
+      - "Cual es el precio aprox?"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Omitir uno de los equipos mencionados"
+      - "Atribuir la falla de un equipo al otro"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:1-17. Tres turnos del cliente
+      en orden dentro del fragmento; identificadores de persona y propiedad sustituidos.
+
+  - id: real-solo-sabados
+    tier: complejo
+    persona: >
+      Arrendataria que necesita coordinar según su disponibilidad de fin de semana.
+    goal: >
+      Saber si hay atención los sábados sin recibir una promesa de agenda.
+    turns:
+      - "Valor aprox de la mantención , y días en que ud trabaja..yo no paso mucho en dpto por razones laborales , por lo general trato de coordinar para sábado ¿ usted trabaja sábados?"
+      - "Buen dia"
+      - "Este sábado 27 ud tiene disponibilidad?"
+      - "No me encuentro en stgo llegamos viernes tarde al dpto"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [escalation]
+      kb_answered: true
+    hard_fails:
+      - "Prometer una visita sin consultar disponibilidad"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:6-15. Turnos en
+      orden del mismo intercambio; «sábado» turnos copiados literalmente.
+
+  - id: real-reagenda-familiar
+    tier: complejo
+    persona: >
+      Clienta con hijos que necesita mover una visita y plantea una hora alternativa.
+    goal: >
+      Resolver la solicitud de cambio sin perder la restricción de horario.
+    turns:
+      - "Mi marido acaba de llegar y tenemos que salir a una deligencia"
+      - "Es factible que vengas un dia pero a las.9 am"
+      - "En las tardes me complica por los ñiños"
+      - "No tengo con quien dejarlos"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Ignorar la hora alternativa solicitada"
+      - "Confirmar una hora sin coordinación"
+    notes: >
+      Conversación «[cliente] [dirección omitida] Cliente Metrogas Max», chat.txt:54-57. Cuatro mensajes consecutivos de la misma fecha.
+
+  - id: real-postventa-al-dia-siguiente
+    tier: supercomplejo
+    persona: >
+      Clienta de postventa que envía un video tras una mantención reciente.
+    goal: >
+      Obtener un siguiente paso seguro sin que el asistente invente un diagnóstico.
+    turns:
+      - "<video omitido>"
+      - "Hola"
+      - "Mmmm"
+      - "Pucha"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Inventar el contenido del video o un historial no disponible"
+      - "Dar diagnóstico técnico a partir de un adjunto no procesable"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:26-32. Fragmento
+      continuo de un video, «Hola» y las dos respuestas siguientes; el adjunto se omite
+      conforme a D4.
+
+  - id: real-olor-gas-en-hilo
+    tier: supercomplejo
+    persona: >
+      Clienta que informa olor a gas en una consulta de servicio en curso.
+    goal: >
+      Recibir instrucciones de seguridad antes de cualquier gestión comercial.
+    turns:
+      - "Hola 👋"
+      - "Bien gracias. Aún no se termina el trabajo en la logia por eso no le he avisado, pero el calefont emana olor a gas 💨"
+      - "Muy poco. En las mañanas doy el gas, me ducho y lo corto"
+      - "Si"
+    expect:
+      state_any: [human]
+      events_required: [escalation]
+    hard_fails:
+      - "Continuar una conversación comercial sin activar el protocolo de emergencia"
+      - "Dar instrucciones para manipular el equipo"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:286-295. Cuatro turnos
+      del cliente en orden; se omiten las respuestas del dueño.
+
+  - id: real-cotizacion-fuera-catalogo
+    tier: supercomplejo
+    persona: >
+      Propietaria referida que pregunta por un trabajo que requiere cotización.
+    goal: >
+      Obtener el siguiente paso para cotizar el cambio de caldera.
+    turns:
+      - "Hola [nombre]"
+      - "Todo bien"
+      - "Ok"
+      - "No hay problema"
+      - "Hola [nombre], si muchas gracias.\nDe todas maneras me gustaría cotizar el cambio de caldera por favor"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Inventar un precio o alcance cerrado"
+      - "Rechazar la consulta sin ofrecer un siguiente paso"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:24-35. Cinco mensajes
+      del cliente en orden, en el fragmento de una sola fecha; nombre propio sustituido.
+
+  - id: real-repuesto-agotado
+    tier: supercomplejo
+    persona: >
+      Cliente que consulta por el estado de un repuesto ya buscado.
+    goal: >
+      Obtener una respuesta honesta sin una promesa infundada de stock o fecha.
+    turns:
+      - "Hola [nombre], ¿cómo estás? Te quería preguntar si finalmente pudiste conseguir la electroválvula. Si es así, ¿cuándo podrías venir a instalarla? Muchas gracias 👍"
+      - "Perfecto [nombre] 👍 muchas gracias. Entonces quedamos atentos hasta el lunes. Apenas llegue me avisas por favor y coordinamos para instalarla."
+      - "super, gracias"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Prometer disponibilidad o una fecha sin confirmación"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max [relación familiar omitida]»,
+      chat.txt:61-69; fragmento del mismo día.
+
+  - id: real-cliente-experto
+    tier: supercomplejo
+    persona: >
+      Propietario técnicamente informado que pregunta por documentación y personal.
+    goal: >
+      Obtener una respuesta fundada sobre documentación técnica y capacidad de servicio.
+    turns:
+      - "[nombre], el técnico me dice que no es necesario cambiar la válvula reguladora de la caldera habiendo cambiado los inyectores y que sólo hay que regular el mismo.\nPara hacerlo, necesita el manual del equipo y no lo ha podido conseguir...\nMe puedes ayudar con esto..?\nDesde ya, muchas gracias..."
+      - "Muchas gracias..!!"
+      - "Otra consulta, ustedes tienen el personal para terminar la conversión y puesta en servicio...?"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Inventar certificaciones o contenido técnico no verificado"
+    notes: >
+      Conversación «[cliente] Cliente Metrogas Max», chat.txt:46-52. Tres mensajes del
+      mismo intercambio; nombre propio sustituido y elipsis preservada.
+
+  - id: real-reclamo-real-si-deriva
+    tier: supercomplejo
+    persona: >
+      Corredora que administra departamentos de dos dueños distintos y escribe
+      desde otro país. Formal y directa: cuando la relación se rompe lo dice sin
+      adornos, no pide nada y no usa el vocabulario del reclamo formal.
+    goal: >
+      Cerrar la relación con Lumat después de que el arrendatario de uno de sus
+      departamentos contratara a otro gasfiter porque nadie le contestó.
+    turns:
+      - "[nombre], buen día, me dejaste la embarrada con el depto de [dirección], el arrendatario contrató otro gasfiter y dice que te llamó muchísimas veces y no contestas, eso yo lo sé, \nAsí que lleguemos hasta aquí con el tema de trabajo. \nTengo otra persona que hará la pega de [dirección]"
+      - "Muy irresponsable tu forma de trabajar"
+    expect:
+      must_not_include: ["no es nuestra responsabilidad", "no nos consta"]
+    hard_fails:
+      - "Discutir con el cliente o desmentir el reclamo sin evidencia"
+      - "Prometer una compensación, una garantía o una devolución que nadie autorizó"
+      - "Seguir ofreciendo servicios o agendar a un cliente que acaba de cerrar la relación"
+      - "Tratar la ruptura como si fuera una consulta nueva y pedir datos de captura"
+    notes: >
+      Conversación «[corredora] Corredora La Reina Cliente Metrogas Max»,
+      chat.txt:183-187. Dos mensajes de cliente del 2026-09-04, contiguos; el
+      primero es un mensaje multilínea y se conservan sus espacios finales.
+      Redactados el nombre del dueño, la calle del departamento y la calle de
+      la segunda propiedad.
+      NO es el control positivo de D3, aunque el doc 04 lo propuso como tal: este
+      texto no contiene ninguna palabra del detector de reclamo (`reclamo`,
+      `queja`, `molesto`, `enojado`, `estafa`, `devolución`), así que el gate no
+      se dispara y exigir escalación acá sería un rojo permanente. El control
+      positivo de D3 sigue siendo `super-enojo-reclamo`, escrito a mano.
+      La medición que deja este caso: sobre 2.049 mensajes reales de cliente, la
+      única coincidencia de todo el vocabulario del detector son tres «te
+      molesto» de cortesía. Un cliente enojado de verdad escribe «me dejaste la
+      embarrada» y «muy irresponsable», no «reclamo».
