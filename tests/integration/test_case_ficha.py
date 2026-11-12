@@ -17,7 +17,7 @@ from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from app.db import SessionLocal
@@ -308,3 +308,98 @@ def test_ficha_is_empty_without_history():
         session.flush()
 
         assert build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago") == ""
+
+
+# --------------------------------------------------------------------------
+# Injection (S2): the ficha reaches the respond prompt, before the transcript,
+# and the six-message window is untouched.
+# --------------------------------------------------------------------------
+
+
+def _seed_kb_doc(text: str) -> None:
+    from app.models import DocumentFormat, KbVisibility
+    from app.services import kb as kb_service
+
+    with SessionLocal() as session:
+        kb_service.ingest_document(
+            session,
+            title="Manual de prueba",
+            fmt=DocumentFormat.MD,
+            content=text.encode(),
+            visibility=KbVisibility.CUSTOMER,
+        )
+        session.commit()
+
+
+def _conversation_with_history():
+    """A returning customer with one closed maintenance and a KB that answers."""
+    from app.chat.state import get_or_create_conversation
+    from app.services.customers import get_or_create_customer
+
+    _seed_kb_doc("cuanto cuesta la revision anual 15000")
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56987650001")
+        customer.address = "Av. Siempre Viva 742"
+        customer.comuna = "Maipú"
+        _work(session, customer, service="Mantención caldera", days_ago=41)
+        conversation = get_or_create_conversation(session, customer, "+56987650001")
+        session.commit()
+        return conversation.id, customer.id
+
+
+def _turn(conv_id: int, text: str, wamid: str) -> list[str]:
+    from app.chat.graph import run_conversation
+    from app.models import Message, MessageDirection, MessageStatus, MessageType
+
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid=wamid,
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text=text,
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+        message = session.scalars(
+            select(Message).where(Message.conversation_id == conv_id, Message.wamid == wamid)
+        ).one()
+        replies = run_conversation(session, message)
+        session.commit()
+        return replies
+
+
+def _respond_prompt(captured: list[dict]) -> str:
+    """The user content of the last respond call (the one with <kb>), not classify."""
+    for body in reversed(captured):
+        content = body["messages"][-1]["content"]
+        if "<kb>" in content:
+            return content
+    raise AssertionError("no respond LLM call was made")
+
+
+def test_the_case_ficha_reaches_the_prompt_before_the_transcript(mock_openai_chat):
+    """S2: the block is injected in respond, ahead of <conversation>."""
+    conv_id, _ = _conversation_with_history()
+
+    replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.ficha1")
+
+    assert replies
+    user = _respond_prompt(mock_openai_chat)
+    assert "<ficha>" in user
+    assert "Mantención caldera" in user
+    assert "Av. Siempre Viva 742" in user
+    assert user.index("<ficha>") < user.index("<conversation>")
+
+
+def test_the_transcript_window_stays_at_six_messages(mock_openai_chat):
+    """S2: the handoff keeps layer 1 as it is — six messages, no more."""
+    conv_id, _ = _conversation_with_history()
+    for index in range(8):
+        _turn(conv_id, "cuanto cuesta la revision anual", f"wamid.w{index}")
+
+    user = _respond_prompt(mock_openai_chat)
+    transcript = user.split("<conversation>")[1].split("</conversation>")[0]
+    assert transcript.count("Cliente:") + transcript.count("Asistente:") == 6

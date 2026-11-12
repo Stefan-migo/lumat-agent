@@ -52,7 +52,7 @@ AGENT_KEYS = (
 
 def test_prompt_respond_template(repo_root):
     assert _read(repo_root, "prompts/respond.md") == (
-        "<conversation>{{conversation}}</conversation>\n\n"
+        "{{ficha}}<conversation>{{conversation}}</conversation>\n\n"
         "<booking>{{booking}}</booking>\n\n"
         "<fecha>{{fecha}}</fecha>\n\n"
         "<tarifario>{{tarifario}}</tarifario>\n\n"
@@ -170,6 +170,7 @@ def test_render_substitutes_all_slots():
     # AC-5 "All variables provided": every {{name}} is replaced.
     out = prompts.render(
         "prompts/respond.md",
+        ficha="<ficha>memoria del caso</ficha>\n\n",
         conversation="<prior turns>",
         booking="No booking.",
         fecha="2026-03-15",
@@ -178,7 +179,7 @@ def test_render_substitutes_all_slots():
         user_input="hola",
     )
     assert out == (
-        "<conversation><prior turns></conversation>\n\n"
+        "<ficha>memoria del caso</ficha>\n\n<conversation><prior turns></conversation>\n\n"
         "<booking>No booking.</booking>\n\n"
         "<fecha>2026-03-15</fecha>\n\n"
         "<tarifario>Visita técnica: $30.000</tarifario>\n\n"
@@ -189,7 +190,9 @@ def test_render_substitutes_all_slots():
 def test_render_missing_var_raises():
     # AC-5 "Missing variable": rendering without a required var raises.
     with pytest.raises(KeyError):
-        prompts.render("prompts/respond.md", conversation="", booking="", kb_text="x")
+        prompts.render(
+            "prompts/respond.md", ficha="", conversation="", booking="", kb_text="x"
+        )
 
 
 def test_render_unknown_var_raises():
@@ -316,7 +319,7 @@ def test_respond_answer_from_kb_persona_and_template(respond_client):
         + "\nResponde con un tono cercano, amable y claro."
     )
     assert call["messages"][1]["content"] == prompts.render(
-        "prompts/respond.md", conversation="(sin mensajes previos)",
+        "prompts/respond.md", ficha="", conversation="(sin mensajes previos)",
         booking="El cliente no tiene ninguna visita agendada.",
         fecha="2026-03-15", tarifario="Visita técnica: $30.000",
         kb_text="chunk uno\nchunk dos", user_input="hola"
