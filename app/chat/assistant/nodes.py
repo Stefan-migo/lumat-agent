@@ -744,6 +744,19 @@ def _omission_marker(omitted: int) -> str:
     return f"[{omitted} earlier tool result(s) omitted]\n"
 
 
+def _cut_with_marker(text: str, available: int) -> str:
+    """Cut `text` to `available` characters and say how many characters were dropped.
+
+    The marker's own length depends on the number it carries, so the retained slice is recomputed
+    with the marker in hand. Two passes settle it; the loop is bounded so a rounding surprise cannot
+    turn a brake into a spin.
+    """
+    retained = max(0, available)
+    for _ in range(4):
+        retained = max(0, available - len(f"[{len(text) - max(0, retained)} characters dropped]"))
+    return text[:retained] + f"[{len(text) - retained} characters dropped]"
+
+
 def _project_capability_evidence(payload):
     """Reduce the capability inventory to its count plus one name/access entry per tool.
 
@@ -839,9 +852,13 @@ def _render_tool_evidence(state: AssistantState) -> str:
             kept.append(item)
             quoted.add(signature)
         elif not kept:
-            # Preserve the newest result's provenance and as much payload as the bound permits.
-            reserve = len(inventory) + len(inventory_lines) + len(marker) + 2
-            kept.append(item[:max(0, _TOOL_EVIDENCE_LIMIT - reserve)] + "…")
+            # Preserve the newest result's provenance and label the payload tail lost to the brake.
+            available = _TOOL_EVIDENCE_LIMIT - len(inventory) - len(inventory_lines) - len(marker)
+            header, separator, payload_text = item.partition("\n")
+            if separator:
+                kept.append(header + separator + _cut_with_marker(payload_text, available - len(header) - len(separator)))
+            else:
+                kept.append(_cut_with_marker(item, available))
             quoted.add(signature)
             break
         else:

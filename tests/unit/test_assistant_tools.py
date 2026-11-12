@@ -652,6 +652,34 @@ def test_list_project_files_returns_safe_project_file_metadata(monkeypatch):
     assert "sha256" not in serialized
 
 
+def test_read_project_file_page_is_bounded_and_keeps_cursor_before_text(monkeypatch):
+    from pydantic import ValidationError
+
+    from app.chat.assistant.tools.registry import ProjectReadFileArgs, _project_read_file_page_limit
+
+    page_limit = _project_read_file_page_limit()
+    assert ProjectReadFileArgs(file_id=3).limit == page_limit
+    with pytest.raises(ValidationError):
+        ProjectReadFileArgs(file_id=3, limit=page_limit + 1)
+
+    row = SimpleNamespace(id=3, filename="a.txt")
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
+    monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.get_project_file", lambda *_args: row)
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.project_files.read_file_text",
+        lambda _row, **kwargs: {
+            "kind": "text", "chars": 10000, "offset": kwargs["offset"],
+            "next_offset": kwargs["offset"] + kwargs["limit"], "truncated": True, "text": "page",
+        },
+    )
+
+    result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")["result"]
+
+    assert result["next_offset"] == page_limit
+    keys = list(result)
+    assert max(keys.index(key) for key in ("kind", "chars", "offset", "next_offset", "truncated")) < keys.index("text")
+
+
 def test_read_project_file_returns_exact_text_and_honest_image_state(monkeypatch):
     row = SimpleNamespace(id=3, filename="a.pdf")
     monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
@@ -678,6 +706,33 @@ def test_read_project_file_rejects_missing_file(monkeypatch):
 def test_project_file_tools_deny_technician_role(name):
     with pytest.raises(ToolValidationError, match="not authorized"):
         execute_tool(SimpleNamespace(), name, {}, owner_id=1, role="tecnico")
+
+
+def test_project_list_and_find_return_explicit_project_projections(monkeypatch):
+    project = SimpleNamespace(
+        id=7, slug="gas", name="Gas service", purpose="P" * 500,
+        created_at=datetime(2026, 1, 2, tzinfo=timezone.utc), owner_id=1,
+        purpose_embedding=[0.1, 0.2], config={"private": "must not leak"},
+    )
+    monkeypatch.setattr("app.chat.assistant.tools.registry.projects.list", lambda *_args, **_kwargs: [project])
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.find",
+        lambda *_args, **_kwargs: ProjectResult(project, []),
+    )
+
+    listed = execute_tool(SimpleNamespace(), "project.list", {}, owner_id=1, role="admin")["result"]
+    found = execute_tool(SimpleNamespace(), "project.find", {"query": "gas"}, owner_id=1, role="admin")["result"]
+
+    expected_keys = {"id", "slug", "name", "purpose", "created_at"}
+    assert set(listed[0]) == expected_keys
+    assert set(found["project"]) == expected_keys
+    assert listed[0]["purpose"] == found["project"]["purpose"]
+    assert len(listed[0]["purpose"]) <= 120
+    assert listed[0]["purpose"].endswith("…")
+    assert listed[0]["created_at"] == "2026-01-02T00:00:00+00:00"
+    assert "owner_id" not in json.dumps([listed, found])
+    assert "purpose_embedding" not in json.dumps([listed, found])
+    assert "must not leak" not in json.dumps([listed, found])
 
 
 def test_project_tools_fail_closed_without_authenticated_owner(monkeypatch):
