@@ -17,7 +17,10 @@ from app.chat.assistant.approval import (
     validate_execution,
 )
 from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS
-from app.models import InternalChatMessage, InternalChatThread, Message, User
+from app.models import (
+    Conversation, ConversationEvent, ConversationState, Customer, InternalChatMessage,
+    InternalChatThread, Message, MessageDirection, MessageType, User,
+)
 from app.services.agent_chat import (
     STALE_RUN_SECONDS,
     _generate_thread_title,
@@ -64,6 +67,144 @@ def _wait_for_run(client, thread_id: int, run_id: str) -> dict:
             return result
         time.sleep(0.05)
     raise AssertionError("assistant run did not finish")
+
+
+def test_conversation_tool_projection_measured_at_twelve_and_twenty_rows(migrated_db):
+    from app.chat.assistant.tools.registry import _plain, execute_tool
+    from app.services.conversations import list_conversations
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56999120000", name="Ana Example")
+        session.add(customer)
+        session.flush()
+        session.add_all([
+            Conversation(
+                customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT,
+                summary=(
+                    "Consulta por servicio de calefont: el cliente pide revisión del equipo, "
+                    "consulta plazos de visita y pregunta si cubre la garantía del año pasado."
+                ),
+                captured_data={"service": "repair"},
+                last_message_at=datetime(2026, 11, 12, 14, 2, 11, tzinfo=timezone.utc),
+            )
+            for _ in range(20)
+        ])
+        session.flush()
+
+        old_rows = [conversation for conversation, _name in list_conversations(session, limit=20)]
+        for count in (12, 20):
+            before = len(json.dumps([_plain(row) for row in old_rows[:count]], ensure_ascii=False))
+            after = len(json.dumps(
+                execute_tool(session, "conversations.list", {"limit": count}, role="admin")["result"],
+                ensure_ascii=False,
+            ))
+            print(f"conversations.list rows={count}: before={before} after={after}")
+        projected = execute_tool(session, "conversations.list", {"limit": 20}, role="admin")["result"]
+        assert projected["fields"] == ["id", "customer_name", "phone", "state", "summary", "last_message_at"]
+        assert len(projected["rows"]) == 20
+        assert all(row[1] == "Ana Example" for row in projected["rows"])
+        session.rollback()
+
+
+def test_conversation_transcript_truncates_bodies_and_total_without_dropping_rows(migrated_db):
+    from app.chat.assistant.nodes import _DETAIL_EVIDENCE_SHARE, _TOOL_EVIDENCE_LIMIT, _render_tool_evidence
+    from app.services.conversations import TRANSCRIPT_JSON_LIMIT, conversation_transcript
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56999123456", name="Transcript Customer")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT)
+        session.add(conversation)
+        session.flush()
+        session.add_all([
+            Message(
+                conversation_id=conversation.id, direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT, text=f"message-{index}-" + "x" * 5000,
+            )
+            for index in range(20)
+        ])
+        session.add_all([
+            ConversationEvent(conversation_id=conversation.id, event=f"event-{index}", cause="y" * 5000)
+            for index in range(20)
+        ])
+        session.flush()
+
+        transcript = conversation_transcript(session, conversation.id, limit=20)
+        before_payload = {
+            "conversation": {
+                "id": conversation.id, "customer_id": customer.id, "wa_phone": conversation.wa_phone,
+                "state": conversation.state.value, "summary": conversation.summary,
+                "last_message_at": None, "closed_at": None,
+            },
+            "messages": [
+                {"direction": MessageDirection.INBOUND.value, "msg_type": MessageType.TEXT.value,
+                 "text": f"message-{index}-" + "x" * 5000, "created_at": None}
+                for index in range(20)
+            ],
+            "messages_total": 20,
+            "events": [
+                {"event": f"event-{index}", "cause": "y" * 5000, "created_at": None}
+                for index in range(20)
+            ],
+        }
+        print(
+            "conversations.transcript chars: "
+            f"before={len(json.dumps(before_payload, ensure_ascii=False))} "
+            f"after={len(json.dumps(transcript, ensure_ascii=False))}"
+        )
+        evidence = _render_tool_evidence({"tool_results": [{
+            "tool": "conversations.transcript", "status": "completed", "arguments": {"limit": 20},
+            "result": transcript,
+        }]})
+
+        assert len(transcript["messages"]) == 20
+        assert len(transcript["events"]) == 20
+        assert transcript["messages_total"] == 20
+        assert all("truncated" in message["text"] for message in transcript["messages"])
+        assert all(len(message["text"]) <= 500 for message in transcript["messages"])
+        assert all("truncated" in event["cause"] for event in transcript["events"])
+        assert len(json.dumps(transcript, ensure_ascii=False)) <= TRANSCRIPT_JSON_LIMIT
+        # A detail tool may spend more of the box than a listing: reading this one conversation is the
+        # answer for the turn, so its share mirrors web.fetch's own MAX_PAYLOAD.
+        assert len(evidence) <= _TOOL_EVIDENCE_LIMIT * _DETAIL_EVIDENCE_SHARE
+        assert "truncated" in evidence
+        session.rollback()
+
+
+def test_conversation_transcript_of_a_normal_conversation_needs_no_truncation(migrated_db):
+    """The bound must not touch ordinary traffic: twenty messages of a hundred characters each arrive
+    whole, because the shrink loop only runs when the payload is actually over the budget."""
+    from app.services.conversations import TRANSCRIPT_JSON_LIMIT, conversation_transcript
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56999123457", name="Ordinary Customer")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT)
+        session.add(conversation)
+        session.flush()
+        session.add_all([
+            Message(
+                conversation_id=conversation.id, direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT, text=f"mensaje {index} " + "x" * 48,
+            )
+            for index in range(10)
+        ])
+        session.add_all([
+            ConversationEvent(conversation_id=conversation.id, event=f"event-{index}", cause="captured") for index in range(10)
+        ])
+        session.flush()
+
+        transcript = conversation_transcript(session, conversation.id)
+        size = len(json.dumps(transcript, ensure_ascii=False))
+        print(f"conversations.transcript ordinary chars: {size}")
+
+        assert size <= TRANSCRIPT_JSON_LIMIT
+        assert len(transcript["messages"]) == 10 and len(transcript["events"]) == 10
+        assert not any("truncated" in message["text"] for message in transcript["messages"])
+        assert all(message["created_at"] for message in transcript["messages"])
+        session.rollback()
 
 
 def test_stream_events_emits_live_stage_and_terminal_status():

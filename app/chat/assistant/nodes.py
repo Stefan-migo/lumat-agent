@@ -45,6 +45,13 @@ logger = logging.getLogger(__name__)
 # what stops one tool from eating the turn. tests/unit/test_assistant_tool_loop.py derives that
 # relation from this constant and from the real catalog, so a widening inventory fails there.
 _TOOL_EVIDENCE_LIMIT = 5_500
+# How much of the box one result may spend, by the job it does. Two listings must coexist in a turn
+# (`conversations.list` then `customers.search`), so each may take a bit less than half. A detail tool
+# -- one conversation's transcript, one fetched page -- is the answer for its turn, so it may take
+# more; what it must never do is take so much that the box cannot hold it once, which is why each of
+# those tools carries its own byte bound and this share only pins the relation.
+_LISTING_EVIDENCE_SHARE = 0.45
+_DETAIL_EVIDENCE_SHARE = 0.78
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 _ARTIFACT_INVENTORY_LIMIT = 10

@@ -69,6 +69,7 @@ class QueryArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str | None = Field(default=None, max_length=200)
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+    offset: int = Field(default=0, ge=0, le=10_000)
 
 
 class CapabilitiesArgs(BaseModel):
@@ -117,7 +118,10 @@ class ChatbotConversationsArgs(BaseModel):
 class ConversationTranscriptArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     conversation_id: int = Field(gt=0)
-    limit: int = Field(default=MAX_ITEMS, ge=1, le=MAX_ITEMS)
+    # Ten messages plus their events is what the detail share holds with readable bodies: forty rows
+    # spend almost the whole allowance on structure alone and leave ~20 characters per message. A
+    # wider window is still available by asking for it, bounded as everything else is.
+    limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
 
 
 class SettingsUpdateArgs(BaseModel):
@@ -430,12 +434,42 @@ def _search_customers(session, args: SearchArgs):
     ]
 
 
+CONVERSATION_SUMMARY_PREVIEW_CHARS = 50
+
+
+def _conversation_stamp(value):
+    """Minute precision: a listing says how recent a conversation is, not its microseconds."""
+    return value.strftime("%Y-%m-%dT%H:%M") if value is not None else None
+
+
 def _search_conversations(session, args: QueryArgs):
     # The conversation service imports panel serializers; defer it to avoid
     # loading the panel router during assistant registry import.
     from app.services import conversations
 
-    return conversations.list_conversations(session, args.query, args.limit)
+    rows = conversations.list_conversations(session, args.query, args.limit + args.offset)
+    # A header plus positional rows, not one object per conversation: the field names would cost more
+    # than the data they label at twenty rows. `_plain` never sees these rows, so the item bound cannot
+    # cut a conversation out silently, and no database column reaches the responder by accident.
+    fields = ["id", "customer_name", "phone", "state", "summary", "last_message_at"]
+    return {
+        "fields": fields,
+        "rows": [
+            [
+                conversation.id,
+                customer_name,
+                conversation.wa_phone,
+                conversation.state.value,
+                (
+                    conversation.summary[: CONVERSATION_SUMMARY_PREVIEW_CHARS - 1] + "…"
+                    if conversation.summary and len(conversation.summary) > CONVERSATION_SUMMARY_PREVIEW_CHARS
+                    else conversation.summary
+                ),
+                _conversation_stamp(conversation.last_message_at),
+            ]
+            for conversation, customer_name in rows[args.offset : args.offset + args.limit]
+        ],
+    }
 
 
 def _upcoming_appointments(session, args: AppointmentArgs, *, role: str | None = None, owner_id: int | None = None):
