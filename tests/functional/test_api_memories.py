@@ -617,7 +617,10 @@ def test_api_memory_surfaces_on_ficha_e2e(client, make_user):
     # 3) the ficha surfaces the memo (CR-7) and both rows exist
     ficha = client.get(f"/panel/api/clients/{customer_id}", follow_redirects=False)
     assert ficha.status_code == 200
-    assert ficha.json()["memo"] == "acta del cierre final"
+    # S2: a close appends a DATED entry, so the panel surfaces the date too.
+    date_part, _, acta_part = ficha.json()["memo"].partition(": ")
+    assert acta_part == "acta del cierre final"
+    assert len(date_part) == 10 and date_part.count("-") == 2, date_part
 
     listed = client.get(f"/panel/api/clients/{customer_id}/memories", follow_redirects=False)
     assert all(memory["scope"] == "customer" for memory in listed.json()["memories"])

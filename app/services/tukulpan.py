@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import hashlib
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -58,6 +59,11 @@ DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
 AGENT_SCOPE = "agent"
 MEMORY_DECAY_DAYS = 30
+CUSTOMER_MEMO_MAX_CHARS = 3_000
+SESSION_MAX_CHARS = 2_000
+MEMORY_CONTEXT_MAX_CHARS = 1_500
+# A customer memo is a sequence of dated entries; an entry starts at this prefix.
+_MEMO_ENTRY_START = re.compile(r"^\d{4}-\d{2}-\d{2}: ")
 DECAYING_TYPES = frozenset({MemoryType.SUMMARY, MemoryType.SESSION, MemoryType.DISCOVERY})
 
 __all__ = [
@@ -68,6 +74,9 @@ __all__ = [
     "FTS_BOOST",
     "MEM_MIN_SIM",
     "MEMORY_DECAY_DAYS",
+    "CUSTOMER_MEMO_MAX_CHARS",
+    "SESSION_MAX_CHARS",
+    "MEMORY_CONTEXT_MAX_CHARS",
     "DECAYING_TYPES",
     "REL_MIN_SIM",
     "WRITABLE_PROYECTO",
@@ -707,25 +716,35 @@ def load_customer_context(session: Session, customer_id: int) -> str:
         for row in list_for_entity(session, scope="customer", entity_id=str(customer_id))
         if row.status is not MemoryStatus.ARCHIVED
     ]
+    rows.sort(key=lambda row: row.last_seen_at or row.updated_at, reverse=True)
+    rows.sort(key=lambda row: row.pin, reverse=True)
     relation_map = relations.latest_relations(session, [row.id for row in rows])
     now = datetime.now(timezone.utc)
-    return "\n".join(
-        (
-            f"{m.titulo}"
+    rendered = []
+    for memory in rows:
+        line = (
+            f"{memory.titulo}"
             + (
-                f" (stale since {m.review_after.date().isoformat()})"
-                if _is_stale(m.review_after, now=now)
+                f" (stale since {memory.review_after.date().isoformat()})"
+                if _is_stale(memory.review_after, now=now)
                 else ""
             )
             + (
-                f" ({relations.relation_annotation(m.id, relation_map[m.id])})"
-                if m.id in relation_map
+                f" ({relations.relation_annotation(memory.id, relation_map[memory.id])})"
+                if memory.id in relation_map
                 else ""
             )
-            + f": {m.contenido}"
+            + f": {memory.contenido}"
         )
-        for m in rows
-    )
+        candidate = "\n".join([*rendered, line])
+        if len(candidate) <= MEMORY_CONTEXT_MAX_CHARS:
+            rendered.append(line)
+        elif not rendered:
+            # A single memory larger than the whole budget must still reach the
+            # prompt: dropping it silently would hand the model an empty context
+            # for the only thing we know about that customer.
+            rendered.append(line[: MEMORY_CONTEXT_MAX_CHARS - 1] + "…")
+    return "\n".join(rendered)
 
 
 def persist_memory_session(session: Session, state: Any) -> None:
@@ -745,9 +764,17 @@ def persist_memory_session(session: Session, state: Any) -> None:
         entity_id=str(state.customer_id),
         topic_key="session",
     )
-    combined = (
-        f"{previous.contenido}\n{text}" if previous and previous.contenido else text
-    )
+    turns = previous.contenido.split("\n") if previous and previous.contenido else []
+    # One turn is one line, for the same reason a memo entry is: a multi-line
+    # message would be split by the next read and the cap would drop half a turn.
+    turns.append(" ".join(text.split()))
+    while len(turns) > 1 and len("\n".join(turns)) > SESSION_MAX_CHARS:
+        turns.pop(0)
+    combined = "\n".join(turns)
+    # A single message longer than the whole session budget still matters; keep
+    # it truncated instead of exceeding the cap.
+    if len(combined) > SESSION_MAX_CHARS:
+        combined = combined[: SESSION_MAX_CHARS - 1] + "…"
     upsert(
         session,
         scope="customer",
@@ -773,6 +800,23 @@ def _current_turn_text(state: Any) -> str:
     return entry.get("text") or ""
 
 
+def _memo_entries(content: str) -> list[str]:
+    """Split a customer memo into whole dated entries.
+
+    An entry starts at a `YYYY-MM-DD: ` line. Any line without that prefix —
+    including a legacy memo the old writer stored with its newlines intact —
+    belongs to the entry before it, so the cap drops whole entries and never
+    half of one.
+    """
+    entries: list[str] = []
+    for line in content.splitlines():
+        if not entries or _MEMO_ENTRY_START.match(line):
+            entries.append(line)
+        else:
+            entries[-1] = f"{entries[-1]}\n{line}"
+    return [entry for entry in entries if entry.strip()]
+
+
 # ---------------------------------------------------------------------------
 # S3 — close event: customer_memo + typed observations (MEM-4, MEM-5, CM-9)
 # ---------------------------------------------------------------------------
@@ -781,10 +825,9 @@ def _current_turn_text(state: Any) -> str:
 def close_conversation(session: Session, conversation: Conversation, *, acta_text: str) -> None:
     """Close-time handler: upsert the customer_memo and persist observations.
 
-    MEM-4/CM-9: upserts the customer_memo (`scope=customer`,
-    `topic_key='customer_memo'`) under the conversation's customer, reusing the
-    CM-5 acta content (`conversation.summary`) VERBATIM — the acta is consumed,
-    never rewritten (CM-9 boundary). Then derives and persists the typed
+    MEM-4/CM-9: appends a dated CM-5 acta entry to the customer's
+    `customer_memo` (`scope=customer`, `topic_key='customer_memo'`), preserving
+    previous entries within the bounded memo. Then derives and persists the typed
     observations for the close (MEM-5) against persisted data (case row,
     message flow, prior closes) since a panel close has no in-run
     `ConversationState`.
@@ -792,22 +835,39 @@ def close_conversation(session: Session, conversation: Conversation, *, acta_tex
     KB-style contract: the caller owns the session and commits.
     """
     customer_id = conversation.customer_id
-    memo = upsert(
-        session,
-        scope="customer",
-        entity_id=str(customer_id),
-        topic_key="customer_memo",
-        tipo=MemoryType.CUSTOMER_MEMO,
-        titulo="customer_memo",
-        # Reuse the CM-5 acta verbatim. A conversation with no summary yet
-        # degrades to an empty memo rather than inventing content (CM-9).
-        contenido=acta_text or "",
-        producer=MemoryProducer.SYSTEM,
-        origin_thread_id=str(conversation.id),
-    )
-    from app.services import relations
+    if acta_text and acta_text.strip():
+        previous = get_by_key(
+            session,
+            scope="customer",
+            entity_id=str(customer_id),
+            topic_key="customer_memo",
+        )
+        entries = _memo_entries(previous.contenido if previous and previous.contenido else "")
+        # One entry is one line: an acta carrying newlines would be split by the
+        # next close, and the cap would drop half an entry.
+        entry = f"{datetime.now(timezone.utc).date().isoformat()}: {' '.join(acta_text.split())}"
+        entries.append(entry)
+        while len(entries) > 1 and len("\n".join(entries)) > CUSTOMER_MEMO_MAX_CHARS:
+            entries.pop(0)
+        # A single acta longer than the whole cap still belongs to the customer:
+        # truncate it with a visible marker rather than exceed the budget.
+        memo_content = "\n".join(entries)
+        if len(memo_content) > CUSTOMER_MEMO_MAX_CHARS:
+            memo_content = memo_content[: CUSTOMER_MEMO_MAX_CHARS - 1] + "…"
+        memo = upsert(
+            session,
+            scope="customer",
+            entity_id=str(customer_id),
+            topic_key="customer_memo",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="customer_memo",
+            contenido=memo_content,
+            producer=MemoryProducer.SYSTEM,
+            origin_thread_id=str(conversation.id),
+        )
+        from app.services import relations
 
-    relations.judge_memory_relations(session, memo)
+        relations.judge_memory_relations(session, memo)
     _record_observations(session, conversation)
 
 
@@ -854,15 +914,50 @@ def _record_observations(session: Session, conversation: Conversation) -> None:
 def _write_observation(
     session: Session, customer_id: int, tipo: ObservationType, detalle: dict
 ) -> None:
-    """Insert a customer-scoped observation row (MEM-5). Caller commits."""
-    session.add(
-        MemoryObservation(
-            scope="customer",
-            entity_id=str(customer_id),
-            tipo=tipo,
-            detalle=detalle,
+    """Stage or update a customer observation in the configured recurrence window."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(days=get_settings().obs_recur_window_days)
+    candidates = session.execute(
+        select(MemoryObservation)
+        .where(
+            MemoryObservation.scope == "customer",
+            MemoryObservation.entity_id == str(customer_id),
+            MemoryObservation.tipo == tipo,
         )
-    )
+        .order_by(MemoryObservation.created_at.desc())
+    ).scalars().all()
+    existing = None
+    for row in candidates:
+        try:
+            last_seen = datetime.fromisoformat(str((row.detalle or {}).get("last_seen", "")))
+        except ValueError:
+            last_seen = row.created_at
+        if last_seen is not None and last_seen >= window_start:
+            existing = row
+            break
+    if existing is not None:
+        # `occurrences` is an occurrence counter. Legacy rows may carry a `count`
+        # key that held the configured threshold instead, so it is preserved
+        # untouched and never read as a count.
+        existing.detalle = {
+            **(existing.detalle or {}),
+            **{key: value for key, value in detalle.items() if key not in {"occurrences", "last_seen"}},
+            "occurrences": int((existing.detalle or {}).get("occurrences", 1)) + 1,
+            "last_seen": now.isoformat(),
+        }
+    else:
+        session.add(
+            MemoryObservation(
+                scope="customer",
+                entity_id=str(customer_id),
+                tipo=tipo,
+                detalle={
+                    **{key: value for key, value in detalle.items() if key not in {"occurrences", "last_seen"}},
+                    "occurrences": 1,
+                    "last_seen": now.isoformat(),
+                },
+            )
+        )
     session.flush()
 
 
