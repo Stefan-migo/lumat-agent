@@ -70,6 +70,7 @@ El humano de referencia contesta en minutos, recuerda meses de historial y sosti
   - «Te molesto con una pregunta, la casa no logra calentarse a 22 grados» (Pabla Leiva)
 - Tasa de falso positivo medida: **100%**. El cliente más educado del país recibe «te atiende una persona» por saludar.
 - Arreglo: quitar `molesto`/`molesta` de la lista, o exigir la forma «estoy molesto» / «me molesta que».
+- **Medición posterior (2026-11-12), sobre el vocabulario completo y no sólo `molesto`:** en los 2.049 mensajes reales de cliente, la única coincidencia de **todo** el detector —palabras y frases— son las tres cortesías. **Cero reclamos reales disparan el gate.** Un cliente enojado escribe «me dejaste la embarrada» y «muy irresponsable tu forma de trabajar». Consecuencia: el arreglo del clítico fue correcto, pero deja el disparador sin tráfico que lo ejercite; su vocabulario hay que medirlo igual que se midió el falso positivo. Detalle en `04-corpus-desde-casos-reales.md` §4.1.
 
 ### D4 · Un adjunto derivación: no hay visión ni transcripción en el bot de clientes
 **Severidad: alta (techo de valor).**

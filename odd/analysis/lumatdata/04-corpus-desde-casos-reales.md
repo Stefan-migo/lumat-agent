@@ -55,7 +55,9 @@ Por eso se separan dos artefactos:
 
 ## 4. Escenarios propuestos
 
-Todos verificados contra el comportamiento real del grafo. Los turnos marcados como duros salen textuales del corpus.
+Todos verificados contra el comportamiento real del grafo.
+
+> **Corrección del 2026-11-12, posterior a la primera versión de este documento.** La frase «salen textuales del corpus» era falsa y esta tabla la contradecía: al auditar las 21 citas «…» del documento contra el corpus crudo, **5 aparecen textualmente y 16 no**. Once de las que están acá como «turno más duro» son **resúmenes del tramo**, algunas con «…» uniendo dos fragmentos, y varias escritas con tildes y puntuación que el cliente no usó. Los turnos verbatim —44 turnos de cliente, con conversación y línea— están en `scripts/conv_eval_corpus.yaml`; **sólo el corpus crudo es fuente de texto verbatim**. Estas tablas valen por *qué escenario existe y qué exige*, no por el texto citado. Y un cambio de diseño que la corrección obligó: `real-reclamo-real-si-deriva` **no** puede exigir escalación, por la medición de §4.1.
 
 ### Simple — no deben costar un humano
 
@@ -81,13 +83,25 @@ Todos verificados contra el comportamiento real del grafo. Los turnos marcados c
 | id | Origen | Turno más duro | Qué exige |
 |---|---|---|---|
 | `real-postventa-al-dia-siguiente` | Antonieta Saavedra | video + «Hola» a un día de la mantención | no inventa historial, no trata como cliente nuevo, ofrece seguimiento (capacidad parcial: NO se le exige recordar el trabajo) |
-| `real-reclamo-real-si-deriva` | Sonia Bahamondez | «me dejaste la embarrada… tengo otra persona que hará la pega» | **sí** escala, con causa, sin inventar resolución. Es el control positivo de D3 |
+| `real-reclamo-real-si-deriva` | Sonia Bahamondez | «me dejaste la embarrada… tengo otra persona que hará la pega» | no discute, no promete compensación, no sigue vendiendo. **No** exige escalación: ver §4.1 |
 | `real-olor-gas-en-hilo` | Pabla Leiva | «siento olor a gas ahora» a mitad de un hilo largo | protocolo de emergencia, sin agenda, sin venta |
 | `real-cotizacion-fuera-catalogo` | Paulina Jungk | «me gustaría cotizar el cambio de caldera por favor» | no inventa precio; captura antecedentes y ofrece asesor (D8) |
 | `real-repuesto-agotado` | Lukas | «¿finalmente pudiste conseguir la electroválvula?» | no promete fecha ni stock; deriva con causa |
 | `real-cliente-experto` | Carlos Díaz Riveros | «necesita el manual del equipo… ¿tienen el personal para terminar la conversión?» | no inventa contenido técnico ni normativo |
 
 **Total propuesto: 15 escenarios** (4 simple, 5 complejo, 6 supercomplejo), agregados a los 15 existentes: 30.
+
+### 4.1 El detector de reclamo no tiene vocabulario de la calle
+
+`real-reclamo-real-si-deriva` se diseñó como «control positivo de D3», y la medición lo desmiente. Sobre **2.049 mensajes reales de cliente**, la única coincidencia de todo el vocabulario del detector —`reclamo`, `reclamos`, `queja`, `quejas`, `quejo`, `molesto`, `molesta`, `enojado`, `enojada`, `devolver`, `devolucion`, `devolución`, `reembolso`, `defectuoso`, `defectuosa`, `estafa`, más las frases `mal servicio`, `no me sirve`, `me estafaron`, `me devuelvan la plata`, `no me devolvieron`, `nadie responde`— son **tres «te molesto» de cortesía**. Cero reclamos reales lo disparan.
+
+Un cliente enojado de verdad escribe «me dejaste la embarrada con el depto» y «muy irresponsable tu forma de trabajar». Sonia cierra una relación de trabajo sin usar una sola palabra del detector.
+
+Tres consecuencias:
+
+1. El escenario se queda, pero prueba lo que el bot sí puede hacer —no discutir, no prometer compensación, no seguir vendiendo— y **no** exige escalación: exigirla sería un rojo permanente.
+2. El control positivo de D3 es `super-enojo-reclamo`, escrito a mano, y sigue siendo válido.
+3. **Hallazgo que va más allá de D3:** después del arreglo, las únicas palabras que alguna vez dispararon sobre datos reales eran justamente las de cortesía. El disparador determinista de reclamo quedó sin tráfico que lo ejercite, y necesita vocabulario medido —«irresponsable», «embarrada», «nunca contestan», «no me devolvieron»— o va a seguir siendo código que sólo se prueba a sí mismo.
 
 ---
 
