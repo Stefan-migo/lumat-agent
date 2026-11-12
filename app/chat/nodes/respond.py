@@ -26,9 +26,13 @@ from app.chat.nodes.configured_answers import configuration_reply
 from app.chat.state import ConversationState, conversation_transcript
 from app.chat.service_catalogue import canonical_service
 from app.db import session_scope
-from app.models import Conversation, KbVisibility, Message
+from app.models import Conversation, ConversationEvent, Customer, KbVisibility, Message
 from app.services import kb, prompts
-from app.services.case_ficha import build_case_ficha
+from app.services.case_ficha import (
+    SPENDING_QUESTION_REPLY,
+    asks_about_money,
+    build_case_ficha,
+)
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
 from app.services.realtime import record_activity
@@ -507,6 +511,39 @@ def respond(state: ConversationState) -> dict:
         with session_scope() as session:
             reply = get_message(session, message_key, fallback)
         return {"replies": [reply]}
+
+    with session_scope() as session:
+        # D7/S8: one question about who decides, only when money is on the table
+        # and only once per conversation. A turn the bot did not understand has
+        # already been answered above: understanding comes before asking.
+        customer_id = getattr(state, "customer_id", None)
+        customer = session.get(Customer, customer_id) if customer_id else None
+        if (
+            customer is not None
+            and customer.decide_spending == "duda"
+            and asks_about_money(text, state.intent)
+        ):
+            already_asked = session.scalar(
+                select(ConversationEvent.id)
+                .where(
+                    ConversationEvent.conversation_id == state.conversation_id,
+                    ConversationEvent.event == "spending_question",
+                )
+                .limit(1)
+            )
+            if already_asked is None:
+                session.add(
+                    ConversationEvent(
+                        conversation_id=state.conversation_id,
+                        event="spending_question",
+                        cause="decide_spending:duda",
+                        actor="bot",
+                    )
+                )
+                session.flush()
+                return {
+                    "replies": [get_message(session, "spending_question", SPENDING_QUESTION_REPLY)]
+                }
 
     with session_scope() as session:
         if state.retrieval is not None:

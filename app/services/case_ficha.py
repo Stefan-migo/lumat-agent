@@ -30,6 +30,7 @@ no window, because inventing one is exactly the money defect D7 is about.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
@@ -68,6 +69,101 @@ def _fold(text: str | None) -> str:
     """Case-fold and strip accents, the same normalisation the gates use."""
     decomposed = unicodedata.normalize("NFKD", (text or "").casefold())
     return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+_SPENDING_EVIDENCE: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "no",
+        (
+            "soy arrendatario",
+            "soy arrendataria",
+            "arriendo la casa",
+            "arriendo el departamento",
+            "consulto con el dueno",
+            "consulto con la duena",
+            "lo consulto con el dueno",
+            "lo consulto con la duena",
+            "te escribo de parte de",
+            "hablo de parte de",
+            "escribo de parte de",
+            "administro la propiedad",
+            "administro el edificio",
+            "no es mi casa",
+            "no es mi departamento",
+            "no soy el dueno",
+            "no soy la duena",
+            "no soy propietario",
+        ),
+    ),
+    (
+        "si",
+        (
+            "soy el dueno",
+            "soy la duena",
+            "soy propietario",
+            "soy propietaria",
+            "yo decido",
+            "yo tomo la decision",
+            "yo pago el trabajo",
+        ),
+    ),
+    (
+        "duda",
+        (
+            "el dueno es",
+            "la duena es",
+            "el arrendador",
+            "la arrendadora",
+            "el propietario es",
+            "le pregunto al dueno",
+            "pregunto al dueno",
+        ),
+    ),
+)
+
+
+def spending_evidence(text: str) -> str | None:
+    """Extract explicit spending-decision evidence without a model call."""
+    folded = _fold(text)
+    for value, phrases in _SPENDING_EVIDENCE:
+        if any(
+            re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", folded)
+            for phrase in phrases
+        ):
+            return value
+    return None
+
+
+def observe_spending(session: Session, customer: Customer, text: str) -> Customer:
+    """Apply explicit evidence; named owners only lower `si` to `duda`.
+
+    A named owner is uncertainty, not proof that the writer cannot decide, and
+    must never erase the stronger evidence already stored as `no`.
+    """
+    evidence = spending_evidence(text)
+    if evidence in ("no", "si"):
+        customer.decide_spending = evidence
+    elif evidence == "duda" and customer.decide_spending == "si":
+        customer.decide_spending = "duda"
+    return customer
+
+
+def asks_about_money(text: str, intent: str | None = None) -> bool:
+    """True when the turn explicitly has a money-related intent or wording."""
+    if intent == "valores":
+        return True
+    folded = _fold(text)
+    terms = (
+        "precio", "precios", "cuanto", "valor", "valores", "tarifa", "presupuesto",
+        "cotizacion", "cotizar", "cobrar", "cobro", "pago", "pagar", "boleta",
+        "factura", "garantia", "costo", "costar", "plata", "lucas",
+    )
+    return any(re.search(rf"(?<![a-z0-9]){term}(?![a-z0-9])", folded) for term in terms)
+
+
+SPENDING_QUESTION_REPLY = (
+    "¿Tú decides la contratación y el pago de este trabajo, o coordinamos con quien es dueño?"
+)
 
 
 def _clip(value: str | None, limit: int) -> str:

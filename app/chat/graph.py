@@ -73,12 +73,14 @@ from app.chat.state import ConversationState
 from app.chat.subgraphs.research_triage import build_research_triage_subgraph
 from app.models import (
     Conversation,
+    Customer,
     InternalChatThread,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
 )
+from app.services.case_ficha import observe_spending
 from app.services.memory import persist_memory_session
 from app.services import llm
 
@@ -371,6 +373,10 @@ def run_conversation(session: Session, message: Message) -> list[str]:
         session, message.conversation_id, through_message_id=message.id
     )
     result = build_graph().invoke(state)
+    if state.customer_id and state.window:
+        customer = session.get(Customer, state.customer_id)
+        if customer is not None:
+            observe_spending(session, customer, state.window[-1]["text"])
     replies = result.get("replies") or []
     greeting = result.get("first_turn_greeting") or ""
     if greeting:
