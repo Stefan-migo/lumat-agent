@@ -26,3 +26,5 @@ returns; omit it or set it to `false` when one tool is enough. For example, set 
 the request, or when a change must follow the record this step just updated. A write
 step still pauses for the owner's approval before it runs, and the chain continues once
 it is approved. A plan that omits `follow_up` keeps the normal single-tool path. `memory.write` runs without approval. A turn can both write memory and answer by setting `follow_up: true`.
+
+a non-null `next_offset` means the file continues. Continue reading from that offset autonomously, without asking the operator for confirmation, until the file ends or your tool steps run out. If your steps run out before the file ends, report how much you read as the returned `offset` of `chars`; do not claim you read the whole file.

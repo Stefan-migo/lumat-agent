@@ -61,9 +61,9 @@ def test_registry_scopes_projects_and_memory_to_authenticated_owner(fake_embedde
         thread_b = InternalChatThread(user_id=user_b.id)
         session.add_all((thread_a, thread_b))
         session.flush()
-        for user in (user_a, user_b):
+        for suffix, user in (("a", user_a), ("b", user_b)):
             session.add(Project(
-                slug="field-ops", name="Field Ops", purpose="Field operations",
+                slug="field-ops", name="Field Ops", purpose=f"Field operations {suffix}",
                 purpose_embedding=[0.0] * 384, owner_id=user.id,
             ))
         session.flush()
@@ -81,7 +81,11 @@ def test_registry_scopes_projects_and_memory_to_authenticated_owner(fake_embedde
         session.flush()
 
         listed = execute_tool(session, "project.list", {}, owner_id=user_b.id, role="admin")
-        assert {row["owner_id"] for row in listed["result"] if row["slug"] == "field-ops"} == {user_b.id}
+        # The listing is a projection, so scoping is proven by whose row comes back, not by reading an
+        # owner column that no longer travels.
+        field_ops = [row for row in listed["result"] if row["slug"] == "field-ops"]
+        assert [row["purpose"] for row in field_ops] == ["Field operations b"]
+        assert set(field_ops[0]) == {"id", "slug", "name", "purpose", "created_at"}
 
         own = execute_tool(
             session, "memory.read", {"scope": "own"}, trusted_thread_id=thread_b.id,
