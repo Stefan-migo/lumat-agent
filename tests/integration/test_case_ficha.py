@@ -14,13 +14,15 @@ Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 """
 
 from uuid import uuid4
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from app.db import SessionLocal
-from app.models import Case, Customer, CustomerState
+from app.models import Case, Customer, CustomerEquipment, CustomerState
+from app.services.case_ficha import FICHA_MAX_CHARS, build_case_ficha
 
 
 def _phone() -> str:
@@ -133,3 +135,176 @@ def test_decide_spending_accepts_exactly_three_values():
                 {"id": customer.id},
             )
             session.flush()
+
+
+# --------------------------------------------------------------------------
+# The ficha itself (S1, S3): deterministic, bounded, rebuilt from the database.
+# --------------------------------------------------------------------------
+
+NOW = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
+
+
+def _ficha_customer(session, *, address="Av. Siempre Viva 742", comuna="Maipú", decide_spending="si"):
+    customer = Customer(
+        phone_e164=_phone(),
+        name="Pabla",
+        comuna=comuna,
+        address=address,
+        state=CustomerState.NUEVO,
+        decide_spending=decide_spending,
+    )
+    session.add(customer)
+    session.flush()
+    return customer
+
+
+def _work(session, customer, *, service, days_ago, status="cerrado", address=None, summary=None):
+    case = Case(
+        customer_id=customer.id,
+        service=service,
+        status=status,
+        summary=summary,
+        created_at=NOW - timedelta(days=days_ago),
+    )
+    if address is not None:
+        case.bundle = {"captured": {"address": address}}
+    session.add(case)
+    session.flush()
+    return case
+
+
+def test_ficha_names_the_property_and_the_equipment():
+    """S1/S3: what equipment, at which property, in one bounded block."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        session.add(
+            CustomerEquipment(
+                customer_id=customer.id,
+                equipment_type="Calefont",
+                brand="Junkers",
+                model="Hydromax",
+                age="8 años",
+            )
+        )
+        session.flush()
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "Av. Siempre Viva 742" in ficha
+        assert "Maipú" in ficha
+        assert "Calefont" in ficha and "Junkers" in ficha
+
+
+def test_ficha_lists_the_prior_work_with_its_date_and_status():
+    """S1: what was intervened and when — the fact a 500-turn thread loses."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        _work(session, customer, service="Mantención caldera", days_ago=41)
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "Mantención caldera" in ficha
+        assert "02/10/2026" in ficha
+
+
+def test_ficha_names_the_property_of_a_work_done_at_another_address():
+    """S3: 8 of 34 real properties belong to someone else — never "mi casa"."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        _work(
+            session,
+            customer,
+            service="Mantención calefont",
+            days_ago=10,
+            address="Los Aromos 1150, Ñuñoa",
+        )
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "Los Aromos 1150" in ficha
+        assert "otra propiedad" in ficha.lower()
+
+
+def test_ficha_states_the_warranty_window_of_a_published_service():
+    """S1 + D3: maintenance: one year; red wash: six months; nothing invented."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        _work(session, customer, service="Mantención caldera", days_ago=41)
+        _work(session, customer, service="Lavado de red", days_ago=100)
+        _work(session, customer, service="Cambio de caldera", days_ago=200)
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "02/10/2027" in ficha  # maintenance of 02/10/2026 + 1 year
+        assert "04/02/2027" in ficha  # red wash of 04/08/2026 + 6 months
+        # The unlisted service has no published warranty: no window is invented.
+        assert ficha.count("garantía vigente") == 2
+
+
+def test_ficha_lists_what_is_still_pending():
+    """S1: "qué quedó pendiente" is the open case, not a guess."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        _work(session, customer, service="Caldera no calienta", days_ago=1, status="abierto")
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "Caldera no calienta" in ficha
+        assert "Pendiente" in ficha
+
+
+def test_ficha_reports_who_decides_the_spending():
+    """S5/S7: the fact travels inside the ficha that respond injects."""
+    with SessionLocal() as session:
+        tenant = _ficha_customer(session, decide_spending="no")
+        owner = _ficha_customer(session, decide_spending="si")
+
+        assert "no decide" in build_case_ficha(
+            session, tenant.id, now=NOW, timezone_name="America/Santiago"
+        ).lower()
+        assert "decide" in build_case_ficha(
+            session, owner.id, now=NOW, timezone_name="America/Santiago"
+        ).lower()
+
+
+def test_ficha_is_bounded_and_deterministic():
+    """S1: a hard 1.500-character ceiling, and the same rows give the same text."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        for index in range(3):
+            session.add(
+                CustomerEquipment(
+                    customer_id=customer.id,
+                    equipment_type="Calefont",
+                    brand=f"Junkers {index}",
+                    details="no enciende y pierde agua por la base",
+                )
+            )
+        for index in range(8):
+            # Eight real work lines plus three equipment lines cannot fit:
+            # the ceiling has to cut, not the section limit.
+            _work(
+                session,
+                customer,
+                service=f"Trabajo {index} mantención de caldera y lavado de red",
+                days_ago=index * 7 + 1,
+            )
+
+        first = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+        second = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert len(first) <= FICHA_MAX_CHARS
+        assert first == second
+        # The cut is visible and honest: it says less than the data it holds.
+        assert first.rstrip().endswith("…")
+        assert "Trabajo 7" not in first
+
+
+def test_ficha_is_empty_without_history():
+    """A first contact with nothing stored injects no block at all."""
+    with SessionLocal() as session:
+        customer = Customer(phone_e164=_phone(), state=CustomerState.NUEVO)
+        session.add(customer)
+        session.flush()
+
+        assert build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago") == ""
