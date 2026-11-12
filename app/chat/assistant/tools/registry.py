@@ -243,9 +243,14 @@ class RecipeArgs(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+# A listing's default page has to fit its share of the evidence box with every row whole; a wider page
+# is still available, and degrades by naming the steps it omitted instead of shredding the rows it kept.
+_LISTING_PAGE_DEFAULT = 10
+
+
 class ProjectListArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    limit: int = Field(default=MAX_ITEMS, ge=1, le=MAX_ITEMS)
+    limit: int = Field(default=_LISTING_PAGE_DEFAULT, ge=1, le=MAX_ITEMS)
 
 
 class ProjectFindArgs(BaseModel):
@@ -279,14 +284,35 @@ class ProjectMergeArgs(BaseModel):
 
 class ProjectListFilesArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    limit: int = Field(default=MAX_ITEMS, ge=1, le=MAX_ITEMS)
+    limit: int = Field(default=_LISTING_PAGE_DEFAULT, ge=1, le=MAX_ITEMS)
+
+
+# The page itself is not the whole result: the provenance header, the cursor fields and JSON escaping
+# ride on top of it. This is the room they get, so a full page never trips the brake.
+_PAGE_METADATA_RESERVE = 400
+
+
+def _project_read_file_page_limit() -> int:
+    # Resolve lazily: nodes imports this registry, so importing its budget constants at module load
+    # time would create a cycle. The page limit remains tied to the one evidence-box contract.
+    from app.chat.assistant.nodes import _DETAIL_EVIDENCE_SHARE, _TOOL_EVIDENCE_LIMIT
+
+    return int(_DETAIL_EVIDENCE_SHARE * _TOOL_EVIDENCE_LIMIT) - _PAGE_METADATA_RESERVE
 
 
 class ProjectReadFileArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     file_id: int = Field(gt=0)
     offset: int = Field(default=0, ge=0)
-    limit: int = Field(default=project_files.MAX_FILE_TEXT_CHARS, ge=1, le=project_files.MAX_FILE_TEXT_CHARS)
+    limit: int = Field(default_factory=_project_read_file_page_limit, ge=1)
+
+    @field_validator("limit")
+    @classmethod
+    def enforce_evidence_page_limit(cls, value: int) -> int:
+        maximum = _project_read_file_page_limit()
+        if value > maximum:
+            raise ValueError(f"limit must be at most {maximum}")
+        return value
 
 
 class ProjectFileSaveArgs(BaseModel):
@@ -490,10 +516,25 @@ def _upcoming_appointments(session, args: AppointmentArgs, *, role: str | None =
             for row in scheduling.list_for_range(session, now.date(), now.date() + timedelta(days=30), "UTC")
         ]
     return [
-        appointment
+        _appointment_projection(appointment)
         for appointment in appointments
         if appointment.starts_at is not None and now <= appointment.starts_at < window_end
     ][: args.limit]
+
+
+def _appointment_projection(appointment):
+    """An agenda row is what the turn needs to name a visit, not every column the table carries."""
+    status = getattr(appointment, "status", None)
+    return {
+        "id": appointment.id,
+        "service": getattr(appointment, "service", None),
+        "starts_at": getattr(appointment, "starts_at", None),
+        "ends_at": getattr(appointment, "ends_at", None),
+        "status": getattr(status, "value", status),
+        "technician_id": getattr(appointment, "technician_id", None),
+        "customer_id": getattr(appointment, "customer_id", None),
+        "case_id": getattr(appointment, "case_id", None),
+    }
 
 
 def _open_cases(session, args: CasesArgs):
@@ -798,12 +839,35 @@ def _web_fetch(_session, args: WebFetchArgs):
     return webfetch.read_page(args.url)
 
 
+PROJECT_PURPOSE_PREVIEW_CHARS = 100
+
+
+def _project_projection(project):
+    purpose = getattr(project, "purpose", "") or ""
+    if len(purpose) > PROJECT_PURPOSE_PREVIEW_CHARS:
+        purpose = purpose[: PROJECT_PURPOSE_PREVIEW_CHARS - 1] + "…"
+    return {
+        "id": project.id,
+        "slug": project.slug,
+        "name": project.name,
+        "purpose": purpose,
+        "created_at": project.created_at,
+    }
+
+
 def _project_list(session, args: ProjectListArgs, *, owner_id: int | None = None):
-    return projects.list(session, owner_id=owner_id)[: args.limit]
+    return [_project_projection(project) for project in projects.list(session, owner_id=owner_id)[: args.limit]]
 
 
 def _project_find(session, args: ProjectFindArgs, *, owner_id: int | None = None, _approval=None):
-    return projects.find(session, args.query, owner_id=owner_id, _approval=_approval)
+    result = projects.find(session, args.query, owner_id=owner_id, _approval=_approval)
+    project = result.project
+    projected = _project_projection(project) if project is not None and not isinstance(project, str) else project
+    return {
+        "project": projected,
+        "candidates": result.candidates,
+        "requires_approval": result.requires_approval,
+    }
 
 
 def _project_create(session, args: ProjectCreateArgs, *, owner_id: int | None = None, _approval=None):
@@ -882,7 +946,13 @@ def _read_project_file(session, args: ProjectReadFileArgs, *, owner_id: int | No
     row = project_files.get_project_file(session, project.id, args.file_id)
     if row is None:
         raise ToolValidationError("project file not found")
-    return {"file_id": row.id, "filename": row.filename, **project_files.read_file_text(row, offset=args.offset, limit=args.limit)}
+    page = project_files.read_file_text(row, offset=args.offset, limit=args.limit)
+    return {
+        "file_id": row.id,
+        "filename": row.filename,
+        **{key: page[key] for key in ("kind", "chars", "offset", "next_offset", "truncated", "limit") if key in page},
+        "text": page.get("text", ""),
+    }
 
 
 def _view_image(session, args: ViewImageArgs, *, owner_id: int | None = None, trusted_thread_id: int | None = None, proyecto: str = "default", project_id: int | None = None):

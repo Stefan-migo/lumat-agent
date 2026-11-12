@@ -20,6 +20,14 @@ def test_plan_prompt_prefers_tool_over_asking():
     assert "instead of asking permission" in prompt
 
 
+def test_plan_prompt_reads_project_files_autonomously_and_reports_partial_progress():
+    prompt = _read("prompts/assistant_plan.md")
+    assert "a non-null `next_offset` means the file continues" in prompt
+    assert "without asking the operator for confirmation" in prompt
+    assert "report how much you read as the returned `offset` of `chars`" in prompt
+    assert "do not claim you read the whole file" in prompt
+
+
 def test_respond_prompt_no_longer_gates_on_kb_alone():
     prompt = _read("prompts/assistant_respond.md")
     assert "not a gate" in prompt

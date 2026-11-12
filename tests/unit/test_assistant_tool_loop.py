@@ -693,6 +693,24 @@ def test_tool_evidence_headers_name_tool_status_and_arguments():
     assert '[{"name": "Ana"}]' in evidence
 
 
+def test_single_oversized_tool_payload_announces_dropped_character_count():
+    import re
+
+    from app.chat.assistant.nodes import _render_tool_evidence
+
+    evidence = _render_tool_evidence({"tool_results": [{
+        "tool": "project.find", "status": "completed", "arguments": {},
+        "result": {"padding": "x" * (_TOOL_EVIDENCE_LIMIT + 500)},
+    }]})
+
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
+    match = re.search(r"\[(\d+) characters dropped\]", evidence)
+    assert match, "single-payload truncation must announce the number of characters dropped"
+    payload = {"padding": "x" * (_TOOL_EVIDENCE_LIMIT + 500)}
+    visible_payload = evidence.split("\n", 1)[1].rsplit("[", 1)[0]
+    assert int(match.group(1)) == len(json.dumps(payload, ensure_ascii=False)) - len(visible_payload)
+
+
 def test_tool_evidence_keeps_inventory_for_omitted_payloads():
     from app.chat.assistant.nodes import _render_tool_evidence
 
