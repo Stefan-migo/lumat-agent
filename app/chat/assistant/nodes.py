@@ -37,11 +37,13 @@ from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, veri
 
 logger = logging.getLogger(__name__)
 
-# Bounds the responder's tool evidence by characters. Measured: a capped four-step read-only turn
-# quotes 4,675 characters once the repeated `assistant.capabilities` payload is deduplicated, and that
-# one payload may legally reach CAPABILITIES_TEXT_LIMIT (4,000) on its own, so a 4,500 cap evicted the
-# dashboard step as soon as three tools joined the catalog. 5,500 keeps every executed step of that turn
-# and leaves headroom of roughly two more catalog entries.
+# Bounds the responder's tool evidence by characters. Measured on the 38-tool catalog: a capped
+# read-only turn that chains assistant.capabilities, dashboard.summary and customers.search quotes
+# 1,751 characters, of which the projected capability inventory is 1,236 (32 per tool). Quoted in
+# full, that same inventory alone was 4,019 and the turn needed 4,675, so the step beside it was
+# evicted. The ceiling stays where it is: raising it only buys catalog growth, and the projection is
+# what stops one tool from eating the turn. tests/unit/test_assistant_tool_loop.py derives that
+# relation from this constant and from the real catalog, so a widening inventory fails there.
 _TOOL_EVIDENCE_LIMIT = 5_500
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
@@ -735,6 +737,35 @@ def _omission_marker(omitted: int) -> str:
     return f"[{omitted} earlier tool result(s) omitted]\n"
 
 
+def _project_capability_evidence(payload):
+    """Reduce the capability inventory to its count plus one name/access entry per tool.
+
+    `assistant.capabilities` answers with one line per whitelisted tool, and at the current 38 tools
+    that text is ~4,100 characters -- three quarters of the budget the entire responder turn shares
+    across every executed step. The planner already receives name, description and argument schema
+    for the same whitelist every turn (`_planner_tool_catalog`), so quoting the descriptions again
+    here buys the responder nothing it cannot read there. What the evidence still owes it is which
+    tools this turn could use, how many, and which of those write.
+
+    The projection is built here, never returned from the tool: the tool's own result stays complete,
+    and a returned list would be cut to `MAX_ITEMS` by `_plain` and lose tools in silence.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    text = payload.get("capabilities")
+    if not isinstance(text, str):
+        return payload
+    tools = []
+    for line in text.splitlines():
+        if " — " not in line:
+            # The scope header ("Available in this turn's scope:") names no tool.
+            continue
+        name, _, tail = line.partition(" — ")
+        access = tail[tail.rfind(" ("):].strip() if " (" in tail else ""
+        tools.append(f"{name.strip()} {access}".strip())
+    return {"tool_count": payload.get("tool_count", len(tools)), "tools": tools}
+
+
 def _render_tool_evidence(state: AssistantState) -> str:
     results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
     if not results:
@@ -748,6 +779,8 @@ def _render_tool_evidence(state: AssistantState) -> str:
         arguments = json.dumps(result.get("arguments") or {}, ensure_ascii=False, sort_keys=True, default=str)
         header = f"tool={tool} status={status} arguments={arguments}"
         payload = result.get("result")
+        if tool == "assistant.capabilities":
+            payload = _project_capability_evidence(payload)
         rendered = header
         if payload is not None:
             rendered += "\n" + json.dumps(payload, ensure_ascii=False, default=str)
