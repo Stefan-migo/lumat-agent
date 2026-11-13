@@ -94,9 +94,12 @@ sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
   'DATABASE_URL=postgresql://lumat:$POSTGRES_PASSWORD@db:5432/lumat db/migrate.sh'
 ```
 
-Debe aplicar, en orden, `064_conversation_turn_count`, `065_case_ficha`, `066_commitments`,
-`067_message_transcript`, y terminar en `migrations up to date`. Las cuatro son **aditivas**: crean
-columnas, una tabla y un índice; no reescriben ni borran una sola fila.
+Las cuatro —`064_conversation_turn_count`, `065_case_ficha`, `066_commitments`,
+`067_message_transcript`— se aplican **solas** al arrancar el contenedor, antes de uvicorn, así que la
+corrida explícita de arriba las va a mostrar como `skip ... (already applied)` y terminar en
+`migrations up to date`. Eso es lo esperado: prueba idempotencia, no aplicación. Para confirmar que
+aplicaron, mirá `schema_migrations` (el bloque de abajo). Las cuatro son **aditivas**: crean columnas,
+una tabla y un índice; no reescriben ni borran una sola fila.
 
 Verificación del esquema, después:
 
@@ -127,11 +130,14 @@ Dos, ambos documentados en `docs/ops.md`:
 crontab -l
 ```
 
-Con las banderas apagadas (el default) los dos jobs corren y no le escriben a nadie:
+Con las banderas apagadas (el default) ninguno de los dos le escribe a un cliente, pero **no hacen lo
+mismo**:
 
-- `transcribe` imprime `Transcription disabled; processed 0 audio message(s)`.
-- `followup` **sí registra eventos** — el detector corre siempre. Un contador distinto de cero en
-  `lumat-followup.log` no es un mensaje enviado.
+- `transcribe` es un no-op completo: imprime `Transcription disabled; processed 0 audio message(s)` y
+  no toca la base.
+- `followup` **sí escribe**: registra los eventos `idle_thread` y `commitment_overdue` en
+  `conversation_events`. Un contador distinto de cero en `lumat-followup.log` no es un mensaje
+  enviado, es el detector trabajando.
 
 ## Smoke obligatorio
 

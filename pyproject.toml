@@ -31,8 +31,9 @@ dependencies = [
     "pywebpush>=2.5.0",
     "weasyprint>=70.0",
     "faster-whisper>=1.2.1",
-    # faster-whisper 1.2.1 calls av.open(metadata_errors=...), which av 19 removed;
-    # the lock resolves av 19 for Python >= 3.12, so pin below it.
+    # faster-whisper 1.2.1 calls av.open(metadata_errors=...), which av 19 removed.
+    # Without this, the resolver picks av 19 for Python >= 3.12 and every audio
+    # fails at runtime; av 18.1.0 ships an abi3 wheel that works on 3.14.
     "av>=18,<19",
 ]
 
