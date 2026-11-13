@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
+from app.chat.nodes import classify_intent as classify_node
 from app.chat.nodes.classify_intent import _parse_classification
+from app.chat.state import ConversationState
 from app.services.prompts import FALLBACKS
 
 PERSONA = "agent/personas/classify.md"
@@ -66,3 +70,36 @@ def test_legacy_single_intent_payload_keeps_existing_fields():
     result = _parse(payload)
     assert {key: value for key, value in result.items() if key != "intents"} == payload
     assert result["intents"] == ["consulta"]
+
+
+def test_conversation_state_has_empty_intents_by_default():
+    state = ConversationState(customer_id=1, conversation_id=2, phone="+56912345678")
+    assert state.intents == []
+
+
+def test_classify_node_returns_intents_in_its_update(monkeypatch):
+    monkeypatch.setattr(
+        classify_node,
+        "_llm_classify",
+        lambda *_args, **_kwargs: {
+            "intent": "consulta",
+            "intents": ["consulta", "valores"],
+            "injection": False,
+            "fields": {},
+            "template_id": None,
+        },
+    )
+    monkeypatch.setattr(classify_node, "session_scope", nullcontext)
+    monkeypatch.setattr(classify_node, "_store_classification", lambda *_args: {})
+    monkeypatch.setattr(classify_node, "record_activity", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(classify_node, "get_scope_mode", lambda *_args: "bot_resolve")
+    state = ConversationState(
+        customer_id=1,
+        conversation_id=2,
+        phone="+56912345678",
+        window=[{"id": 3, "text": "¿cuánto cuesta?", "direction": "inbound"}],
+    )
+
+    update = classify_node.classify_intent(state)
+
+    assert update["intents"] == ["consulta", "valores"]

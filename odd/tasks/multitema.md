@@ -44,3 +44,10 @@ de las puertas no cambia. La detección de inyección no cambia.
 ```
 - ok d 9 tambien arrancarlo.
 ```
+
+**L2 — D9 cerrado con dos decisiones de la implementación.** El rescate se evaluó después de la
+inyección y antes de escribir el evento `classified`, así que el `cause` que lee `unknown_streak` ya
+lleva la intención rescatada y el turno no cuenta como incomprensión. El vocabulario quedó acotado a lo
+que tiene destino claro: «instalación», «mantención» y «filtración» se dejaron fuera porque D2 no fija a
+qué intención corresponden, y mapearlos habría sido inventar una regla. `intents` vive ahora en
+`ConversationState`, no sólo en el dict del nodo, así que el estado lo conserva durante el turno.

@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 
 from app.chat.human_request import is_human_request
 from app.chat.state import ConversationState, conversation_transcript, unknown_streak
@@ -71,6 +72,14 @@ _INTENT_LABELS = frozenset(
         "unknown",
     }
 )
+_RESCUE_RULES = (
+    ("calefont", re.compile(r"\b(?:calefont|calefon)\b")),
+    ("caldera", re.compile(r"\bcaldera\b")),
+    ("calefaccion", re.compile(r"\b(?:calefaccion|radiadores?|termostato|estufa)\b")),
+    ("solicitar_visita", re.compile(r"\b(?:visitas?|tecnicos?|agendar)\b")),
+    ("valores", re.compile(r"\b(?:precios?|valores?|tarifas?|cuanto\s+cuesta)\b")),
+    ("postventa", re.compile(r"\b(?:garantia|postventa)\b")),
+)
 
 
 def is_injection(text: str) -> bool:
@@ -86,6 +95,24 @@ def is_explicit_human_request(text: str) -> bool:
 
 def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
+
+
+def _rescue_intents(text: str) -> list[str]:
+    """Map known business vocabulary to ordered intents without another LLM call."""
+    decomposed = unicodedata.normalize("NFD", text.casefold())
+    normalized = "".join(
+        char for char in decomposed if unicodedata.category(char) != "Mn"
+    )
+    matches = []
+    for order, (intent, pattern) in enumerate(_RESCUE_RULES):
+        matches.extend(
+            (match.start(), order, intent) for match in pattern.finditer(normalized)
+        )
+    ordered = []
+    for _position, _order, intent in sorted(matches):
+        if intent not in ordered:
+            ordered.append(intent)
+    return ordered
 
 
 def _template_block(templates: list) -> str:
@@ -242,6 +269,7 @@ def classify_intent(state: ConversationState) -> dict:
             )
         return {
             "intent": "injection",
+            "intents": [],
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
@@ -299,9 +327,15 @@ def classify_intent(state: ConversationState) -> dict:
             )
         return {
             "intent": "injection",
+            "intents": [],
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+
+    if result["intent"] == "unknown":
+        rescued = _rescue_intents(text)
+        if rescued:
+            result = {**result, "intent": rescued[0], "intents": rescued}
 
     if result["intent"] == "smalltalk":
         # Courtesy is an understood turn: it breaks the unknown streak, but it
