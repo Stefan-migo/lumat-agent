@@ -119,3 +119,29 @@ de precio sigue respondiendo desde el tarifario publicado, sin pasar por ficha n
 deliberado porque informar un precio publicado no es confirmar un precio para ese trabajo; **A4**
 «arriendo la casa» es ambiguo (un propietario también arrienda) y quedó en el grupo `no`, sujeto a
 medición con el corpus.
+
+**L4 — el gate `full` no cerraba, y no era el cambio.** La primera corrida de `bash scripts/test.sh
+full` murió sin resumen: `pytest-timeout` con `timeout_method = "thread"` mata el proceso entero, así
+que no imprime qué test colgó, y el `exit 0` que se veía era el del `tail` del pipe. Con el log
+completo redirigido a archivo, el frame culpable era
+`tests/spec/test_projects_spec.py::test_project_slug_is_normalized_and_unique`: `projects.create`
+embebe de verdad, `app/services/kb.py` construye `TextEmbedding` sin `cache_dir`, fastembed busca el
+modelo en su ruta por defecto —que en este host no está poblada— e intenta bajarlo de HuggingFace.
+El modelo sí está en `/home/stefan/.cache/lumat-fastembed` (241 MB): con
+`FASTEMBED_CACHE_PATH=/home/stefan/.cache/lumat-fastembed` el archivo pasa (18 passed en 65 s).
+
+Es preexistente y ajeno a esta feature: el diff no toca `kb.py`, `projects.py` ni nada de embeddings.
+El gate se corre con esa variable exportada.
+
+**L5 — resultado del gate `full`.** Con `FASTEMBED_CACHE_PATH` exportado la suite corrió completa en
+9m59s: **una sola falla**, `tests/integration/test_assistant_artifacts.py::test_artifact_pdf_saves_and_publishes_idempotently`
+(`assert second["changed"] is False` → `True`), y todo lo demás en verde.
+
+No es de esta feature y no es contaminación entre archivos — pasa sola y pasa con su archivo completo
+(20 passed). La causa es que WeasyPrint no produce bytes estables: el mismo HTML renderizado dos veces
+con un segundo de diferencia da hashes distintos, y `app/services/assistant_artifacts.py` decide
+«cambió» comparando el `sha256` de los bytes. Es una prueba dependiente del reloj, preexistente, en
+código que este diff no toca (`reports.py`, `assistant_artifacts.py`).
+
+Queda como defecto del arnés de tests, a decisión del owner: congelar el reloj o comparar el contenido
+lógico en vez del PDF.
