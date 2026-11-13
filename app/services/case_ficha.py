@@ -90,9 +90,20 @@ _SPENDING_EVIDENCE: tuple[tuple[str, tuple[str, ...]], ...] = (
             "administro el edificio",
             "no es mi casa",
             "no es mi departamento",
+            # Negations FIRST: "no soy propietaria" contains the self-declaration
+            # "soy propietaria", so without these the customer's disclaimer would
+            # authorise them (verified defect, B3).
             "no soy el dueno",
             "no soy la duena",
+            "no soy dueno",
+            "no soy duena",
             "no soy propietario",
+            "no soy propietaria",
+            "no soy el propietario",
+            "no soy la propietaria",
+            "no decido",
+            "no lo decido yo",
+            "no pago el trabajo",
         ),
     ),
     (
@@ -149,14 +160,21 @@ def observe_spending(session: Session, customer: Customer, text: str) -> Custome
 
 
 def asks_about_money(text: str, intent: str | None = None) -> bool:
-    """True when the turn explicitly has a money-related intent or wording."""
+    """True when the turn explicitly has a money-related intent or wording.
+
+    Bare "cuanto" is not money: "¿cuánto demora la mantención?" asks time, and
+    burning the single ask on it would silence the real question for the whole
+    conversation (verified defect, B4).
+    """
     if intent == "valores":
         return True
     folded = _fold(text)
     terms = (
-        "precio", "precios", "cuanto", "valor", "valores", "tarifa", "presupuesto",
+        "precio", "precios", "valor", "valores", "tarifa", "presupuesto",
         "cotizacion", "cotizar", "cobrar", "cobro", "pago", "pagar", "boleta",
         "factura", "garantia", "costo", "costar", "plata", "lucas",
+        "cuanto cuesta", "cuanto sale", "cuanto vale", "cuanto cobra",
+        "cuanto cobran", "cuanto es",
     )
     return any(re.search(rf"(?<![a-z0-9]){term}(?![a-z0-9])", folded) for term in terms)
 
@@ -245,6 +263,13 @@ def _work_address(case: Case) -> str | None:
 
 
 def _work_line(case: Case, zone: ZoneInfo, now: datetime, home: str | None) -> str:
+    """One work, with its warranty window stated as it actually stands.
+
+    D3/S7: the line names the *expiry*, never a blanket "vigente". A maintenance
+    from 2024 whose year has passed is reported as expired, and a work that has
+    not been performed yet (open case) carries no warranty at all — claiming one
+    is the money mistake the feature exists to prevent (verified defect, B1).
+    """
     day = _day(case.created_at, zone)
     service = case.service or "Trabajo sin servicio registrado"
     status = case.status or "abierto"
@@ -253,9 +278,14 @@ def _work_line(case: Case, zone: ZoneInfo, now: datetime, home: str | None) -> s
     if address and _fold(address) != _fold(home):
         line += f" · en {address} (otra propiedad)"
     months = warranty_months(case.service)
-    if months is not None:
+    if months is not None and not case_is_open(case):
         expires = _add_months(_local(case.created_at, zone).date(), months)
-        line += f" · garantía vigente hasta {expires.strftime('%d/%m/%Y')} ({WARRANTY_NOTE[months]})"
+        note = WARRANTY_NOTE[months]
+        stamped = expires.strftime("%d/%m/%Y")
+        if expires >= _local(now, zone).date():
+            line += f" · garantía vigente hasta {stamped} ({note})"
+        else:
+            line += f" · garantía vencida el {stamped} ({note})"
     return line
 
 
@@ -330,38 +360,54 @@ def build_case_ficha(
     if equipment:
         head.append("Equipos: " + "; ".join(_equipment_line(item) for item in equipment))
 
-    detail: list[str] = []
-    if works:
-        detail.append("Trabajos previos:")
-        detail.extend(_work_line(case, zone, now, home) for case in works)
+    # S1/S7: what is pending, the next visit and who decides the spending are the
+    # lines that change what the bot does. They are reserved FIRST and survive the
+    # ceiling; the work history is what gets cut, oldest first (verified defect,
+    # B2: appending them last dropped them even when 112 characters were free).
+    tail: list[str] = []
     pending = [case for case in works if case_is_open(case)]
     if pending:
-        detail.append("Pendiente de nuestra parte:")
-        detail.extend(
+        tail.append("Pendiente de nuestra parte:")
+        tail.extend(
             f"- {case.service or 'Trabajo sin servicio registrado'} "
             f"(abierto desde el {_day(case.created_at, zone)})"
             for case in pending
         )
     if appointment is not None:
-        detail.append(
+        tail.append(
             "Próxima visita: "
             f"{appointment.service} el {appointment.local_start.strftime('%d/%m/%Y %H:%M')}"
         )
-    detail.append(_decide_spending_line(decide_spending))
+    tail.append(_decide_spending_line(decide_spending))
 
-    kept = list(head)
-    truncated = False
-    for line in detail:
-        if len("\n".join([*kept, line])) > FICHA_MAX_CHARS:
-            truncated = True
-            break
-        kept.append(line)
-    if truncated:
-        # Deterministic cut, never a half line: the ceiling is the contract.
-        while len(kept) > 1 and len("\n".join([*kept, "…"])) > FICHA_MAX_CHARS:
-            kept.pop()
-        if len("\n".join([*kept, "…"])) <= FICHA_MAX_CHARS:
-            kept.append("…")
-        else:
-            kept = [_clip(head[0], FICHA_MAX_CHARS)]
-    return "\n".join(kept)
+    # If the reserved part alone is over the ceiling, the equipment lines go
+    # first: the property and the safety lines are what the reply depends on.
+    while len(head) > 1 and len("\n".join([*head, *tail])) > FICHA_MAX_CHARS:
+        head.pop()
+
+    history: list[str] = []
+    dropped = 0
+    if works:
+        for case in works:
+            line = _work_line(case, zone, now, home)
+            if len("\n".join([*head, *history, "Trabajos previos:", line, *tail])) > FICHA_MAX_CHARS:
+                dropped = len(works) - (len(history))
+                break
+            history.append(line)
+        if history:
+            history.insert(0, "Trabajos previos:")
+        elif works:
+            dropped = len(works)
+
+    kept = [*head, *history]
+    if dropped:
+        marker = [*kept, "…"]
+        if len("\n".join([*marker, *tail])) <= FICHA_MAX_CHARS:
+            kept = marker
+    kept = [*kept, *tail]
+
+    rendered = "\n".join(kept)
+    if len(rendered) > FICHA_MAX_CHARS:
+        # The ceiling is the contract: a pathological row cannot break the prompt.
+        rendered = _clip(rendered, FICHA_MAX_CHARS)
+    return rendered

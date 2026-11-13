@@ -531,7 +531,11 @@ def respond(state: ConversationState) -> dict:
                 )
                 .limit(1)
             )
-            if already_asked is None:
+            if already_asked is None and (
+                # Same guard as the kb_miss telemetry below: a synthetic state
+                # without a persisted conversation cannot own the row (FK).
+                session.get(Conversation, state.conversation_id) is not None
+            ):
                 session.add(
                     ConversationEvent(
                         conversation_id=state.conversation_id,

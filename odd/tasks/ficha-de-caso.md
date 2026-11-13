@@ -65,13 +65,13 @@ trabajo aparte», y la consecuencia empieza cuando la base tiene linaje.
 
 ## Tasks
 
-| ID | Specs | Route | Commit |
-|---|---|---|---|
-| T1 | S4, S5 | Migración `065_case_ficha.sql` + modelos (`cases.origin_case_id`, `customers.decide_spending`) | `feat(db):` propio (item 1) |
-| T2 | S1, S3, D3 | `app/services/case_ficha.py` + tests: constructor determinista, cota, propiedad, garantía | `feat(chat):` |
-| T3 | S2 | Inyección `<ficha>` antes de `<conversation>` en `respond` + persona | `feat(chat):` |
-| T4 | S4 | Linaje en `app/services/cases.py` (`get_or_create_case`, `create_manual_case`) + tests | `feat(cases):` |
-| T5 | S5, S6, S7, S8 | `decide_spending`: extractor, persistencia por turno, pregunta única, hecho en ficha y persona | `feat(chat):` |
+| ID | Specs | Route | Commit | Estado |
+|---|---|---|---|---|
+| T1 | S4, S5 | Migración `065_case_ficha.sql` + modelos (`cases.origin_case_id`, `customers.decide_spending`) | `3192ab77` `feat(db):` | hecho |
+| T2 | S1, S3, D3 | `app/services/case_ficha.py` + tests: constructor determinista, cota, propiedad, garantía | `13c6684f` `feat(chat):` | hecho |
+| T3 | S2 | Inyección `<ficha>` antes de `<conversation>` en `respond` + persona | `dd0dcd99` `feat(chat):` | hecho |
+| T4 | S4 | Linaje en `app/services/cases.py` (`get_or_create_case`, `create_manual_case`) + tests | `a8e6c648` `feat(cases):` | hecho |
+| T5 | S5, S6, S7, S8 | `decide_spending`: extractor, persistencia por turno, pregunta única, hecho en ficha y persona | `a79631ce` `feat(chat):` | hecho |
 
 ## Log
 
@@ -87,3 +87,35 @@ autoradas: corte 1 = T1 (migración + modelos) + T2 (constructor de la ficha) + 
 `respond`), cerrado en `dd0dcd99` con 847 líneas sobre `origin/main`. Corte 2 = T4 (linaje) y T5
 (`decide_spending`), que van en commits propios. Si el corte 2 supera el tamaño razonable, se abre
 como PR encadenado sobre el corte 1 en vez de engordar el mismo PR.
+
+**L3 — verificación independiente: cuatro defectos que la implementación no veía.** La verificación
+read-only sobre el diff completo devolvió veredicto por spec y cuatro bloqueantes, todos corregidos en
+el mismo corte antes de la suite final:
+
+1. **B1, la garantía se anunciaba siempre «vigente».** `_work_line` estampaba `garantía vigente hasta
+   ...` sin comparar con hoy ni mirar el estado del caso: una mantención de hace 916 días se anunciaba
+   vigente, y una abierta (trabajo aún no hecho) también. Es exactamente la afirmación de plata que S7
+   existe para evitar, y viajaba como hecho al prompt. Ahora: sólo casos cerrados, y `vigente` /
+   `vencida` según el vencimiento contra la fecha del turno.
+2. **B2, el corte se comía «Decide el gasto» y «Pendiente».** El tope cortaba en la primera línea que
+   no entraba, y la cola de seguridad iba al final: con el propio escenario de la prueba, 1.388
+   caracteres y 112 libres dejaban fuera la línea de 68. Ahora la cola se **reserva primero** y lo que
+   se corta es el historial de trabajos, del más viejo al más nuevo, con el marcador `…` donde se
+   cortó.
+3. **B3, una negación se leía como autodeclaración.** «no soy propietaria» contiene «soy propietaria»,
+   así que el descargo del cliente lo re-autorizaba y pisaba un `no` probado. Se agregaron las
+   variantes negadas al grupo `no` (que se evalúa primero), incluida la femenina.
+4. **B4, «¿cuánto demora?» quemaba la pregunta única.** El término suelto `cuanto` marcaba dinero en un
+   turno que pregunta tiempo, y como el evento queda registrado, la pregunta legítima ya no salía
+   nunca en esa conversación. Ahora son frases de precio («cuanto cuesta/sale/vale/cobra»).
+
+Además se corrigieron dos hallazgos menores que no bloqueaban: la evidencia del turno se observa
+**antes** del grafo (A2: responder «yo decido» y que la ficha siga diciendo «sin confirmar» era
+incoherente) y la inserción del evento lleva el mismo guardia de conversación persistida que usa
+`kb_miss` en la misma función (A3).
+
+Quedan como decisión del owner, no como deuda de este corte: **A1** con `decide_spending = no` un turno
+de precio sigue respondiendo desde el tarifario publicado, sin pasar por ficha ni persona — es
+deliberado porque informar un precio publicado no es confirmar un precio para ese trabajo; **A4**
+«arriendo la casa» es ambiguo (un propietario también arrienda) y quedó en el grupo `no`, sujeto a
+medición con el corpus.

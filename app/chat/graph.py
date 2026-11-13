@@ -372,11 +372,16 @@ def run_conversation(session: Session, message: Message) -> list[str]:
     state = ConversationState.from_db(
         session, message.conversation_id, through_message_id=message.id
     )
-    result = build_graph().invoke(state)
+    # D7/S5: observe the customer's own words BEFORE the graph runs, so the turn
+    # that says "no es mi casa, arriendo" already answers with the value it just
+    # established instead of with last turn's (verified defect, A2). The flush is
+    # what makes it visible: the graph reads the customer in its own session.
     if state.customer_id and state.window:
         customer = session.get(Customer, state.customer_id)
         if customer is not None:
             observe_spending(session, customer, state.window[-1]["text"])
+            session.flush()
+    result = build_graph().invoke(state)
     replies = result.get("replies") or []
     greeting = result.get("first_turn_greeting") or ""
     if greeting:

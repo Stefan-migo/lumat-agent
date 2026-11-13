@@ -94,3 +94,22 @@ def test_asks_about_money_detects_price_and_ignores_heating_phrase():
 def test_money_intent_alone_puts_money_at_stake():
     """S8: the classifier's `valores` intent counts even without a price word."""
     assert asks_about_money("y eso?", intent="valores") is True
+
+
+def test_negated_proprietor_is_not_a_self_declaration():
+    """S5/S6: a negation must never read as the D2 self-declaration."""
+    assert spending_evidence("no soy propietaria, es de mi suegra") == "no"
+    assert spending_evidence("no soy la propietaria de la casa") == "no"
+    assert spending_evidence("no decido yo, lo ve mi marido") == "no"
+
+
+def test_duration_question_is_not_money():
+    """S8: "¿cuánto demora?" asks time, not pesos; it must not burn the ask."""
+    assert asks_about_money("¿cuánto demora la mantención?") is False
+    assert asks_about_money("cuanto se demoran en venir") is False
+
+
+def test_price_question_is_still_money():
+    """The narrowing must not lose the price questions it exists for."""
+    assert asks_about_money("¿cuánto sale la mantención?") is True
+    assert asks_about_money("¿cuánto cobran por la visita?") is True

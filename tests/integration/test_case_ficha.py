@@ -295,8 +295,9 @@ def test_ficha_is_bounded_and_deterministic():
 
         assert len(first) <= FICHA_MAX_CHARS
         assert first == second
-        # The cut is visible and honest: it says less than the data it holds.
-        assert first.rstrip().endswith("…")
+        # The cut is visible and honest: it says less than the data it holds, and
+        # the marker sits where the history was cut, not after the safety lines.
+        assert "\n…\n" in first
         assert "Trabajo 7" not in first
 
 
@@ -403,3 +404,55 @@ def test_the_transcript_window_stays_at_six_messages(mock_openai_chat):
     user = _respond_prompt(mock_openai_chat)
     transcript = user.split("<conversation>")[1].split("</conversation>")[0]
     assert transcript.count("Cliente:") + transcript.count("Asistente:") == 6
+
+
+def test_ficha_does_not_call_a_past_warranty_current():
+    """D3/S7: an expired warranty window is not "vigente"."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        _work(session, customer, service="Mantención caldera", days_ago=916)
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "garantía vigente" not in ficha
+        assert "garantía vencida" in ficha
+
+
+def test_ficha_claims_no_warranty_for_work_not_yet_done():
+    """D3/S7: an open case has no warranty — the work has not happened."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        _work(session, customer, service="Mantención calefont", days_ago=1, status="abierto")
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert "garantía" not in ficha
+
+
+def test_ficha_keeps_who_decides_and_what_is_pending_when_it_truncates():
+    """S7/S1: the lines that change what the bot does survive the ceiling."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session, decide_spending="no")
+        for index in range(3):
+            session.add(
+                CustomerEquipment(
+                    customer_id=customer.id,
+                    equipment_type="Calefont",
+                    brand=f"Junkers {index}",
+                    details="no enciende y pierde agua por la base",
+                )
+            )
+        for index in range(8):
+            _work(
+                session,
+                customer,
+                service=f"Trabajo {index} mantención de caldera y lavado de red",
+                days_ago=index * 7 + 1,
+            )
+
+        ficha = build_case_ficha(session, customer.id, now=NOW, timezone_name="America/Santiago")
+
+        assert len(ficha) <= FICHA_MAX_CHARS
+        assert "Decide el gasto: no" in ficha
+        # The history is what got cut, not the safety tail.
+        assert "Trabajo 7" not in ficha
