@@ -476,6 +476,9 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
     "hours.closure_enabled": False,
+    "followup.idle_enabled": False,
+    "followup.idle_hours": 24,
+    "followup.idle_template_name": "",
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
     # last N days). Panel-editable via the generic settings KV surface.
     "kpi.window_days": 7,
@@ -881,6 +884,24 @@ def get_hours_closure_enabled(session: Session) -> bool:
     """Return whether the chat's out-of-hours closure gate is enabled."""
     enabled = get_setting(session, "hours.closure_enabled", default=False)
     return enabled if isinstance(enabled, bool) else False
+
+
+def get_followup_idle_enabled(session: Session) -> bool:
+    """Whether idle-thread messages may be sent; off unless explicitly enabled."""
+    enabled = get_setting(session, "followup.idle_enabled", default=False)
+    return enabled if isinstance(enabled, bool) else False
+
+
+def get_followup_idle_hours(session: Session) -> int:
+    """Idle-thread age threshold in hours, defaulting safely to 24."""
+    hours = get_setting(session, "followup.idle_hours", default=24)
+    return hours if isinstance(hours, int) and not isinstance(hours, bool) and hours > 0 else 24
+
+
+def get_followup_idle_template_name(session: Session) -> str:
+    """Owner-configured WhatsApp template name, or empty when unset/invalid."""
+    name = get_setting(session, "followup.idle_template_name", default="")
+    return name.strip() if isinstance(name, str) else ""
 
 
 def is_open_at(*, schedule: list, timezone_name: str, now: datetime) -> bool:
