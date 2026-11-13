@@ -62,6 +62,8 @@
    own tokens and its own inverted tone for the dark outbound bubble. */
 .conversation-thread__image-link { display: inline-block; max-width: min(100%, 24rem); }
 .conversation-thread__image { display: block; max-width: 100%; max-height: 20rem; border-radius: var(--radius-md); object-fit: contain; }
+.conversation-thread__sticker { display: block; width: 9.375rem; max-width: 100%; max-height: 9.375rem; object-fit: contain; }
+.ai-agent-grammar__bubble--sticker { width: fit-content; max-width: none; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .conversation-thread__video { display: block; width: min(100%, 28rem); max-height: 20rem; border-radius: var(--radius-md); }
 .conversation-thread__document { color: var(--corp-primary); overflow-wrap: anywhere; }
 .conversation-thread__media-caption { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
