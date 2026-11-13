@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 
 from app.chat.human_request import is_human_request
 from app.chat.state import ConversationState, conversation_transcript, unknown_streak
@@ -54,6 +55,31 @@ _INJECTION_PATTERNS = (
     r"admin(istrador)?",
 )
 _INJECTION_RE = re.compile("|".join(_INJECTION_PATTERNS), re.IGNORECASE)
+_INTENT_LABELS = frozenset(
+    {
+        "consulta",
+        "calefont",
+        "caldera",
+        "calefaccion",
+        "solicitar_visita",
+        "cancelar_visita",
+        "reagendar_visita",
+        "valores",
+        "postventa",
+        "emergencia",
+        "persona",
+        "smalltalk",
+        "unknown",
+    }
+)
+_RESCUE_RULES = (
+    ("calefont", re.compile(r"\b(?:calefont|calefon)\b")),
+    ("caldera", re.compile(r"\bcaldera\b")),
+    ("calefaccion", re.compile(r"\b(?:calefaccion|radiadores?|termostato|estufa)\b")),
+    ("solicitar_visita", re.compile(r"\b(?:visitas?|tecnicos?|agendar)\b")),
+    ("valores", re.compile(r"\b(?:precios?|valores?|tarifas?|cuanto\s+cuesta)\b")),
+    ("postventa", re.compile(r"\b(?:garantia|postventa)\b")),
+)
 
 
 def is_injection(text: str) -> bool:
@@ -69,6 +95,24 @@ def is_explicit_human_request(text: str) -> bool:
 
 def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
+
+
+def _rescue_intents(text: str) -> list[str]:
+    """Map known business vocabulary to ordered intents without another LLM call."""
+    decomposed = unicodedata.normalize("NFD", text.casefold())
+    normalized = "".join(
+        char for char in decomposed if unicodedata.category(char) != "Mn"
+    )
+    matches = []
+    for order, (intent, pattern) in enumerate(_RESCUE_RULES):
+        matches.extend(
+            (match.start(), order, intent) for match in pattern.finditer(normalized)
+        )
+    ordered = []
+    for _position, _order, intent in sorted(matches):
+        if intent not in ordered:
+            ordered.append(intent)
+    return ordered
 
 
 def _template_block(templates: list) -> str:
@@ -121,19 +165,47 @@ def _llm_classify(
         )
     content = response.choices[0].message.content or "{}"
     parsed = json.loads(content)
+    if not isinstance(parsed, dict):
+        parsed = {}
+    result = _parse_classification(parsed)
     # The model was handed the catalog; only an offered id may survive (D13).
     offered = {t.get("id") for t in catalog if isinstance(t, dict)}
     picked = parsed.get("template_id")
+    result["template_id"] = (
+        picked if isinstance(picked, str) and picked in offered else None
+    )
+    return result
+
+
+def _parse_classification(parsed: dict) -> dict:
+    """Normalize the additive intents field without changing primary intent."""
+    intent = parsed.get("intent") or "unknown"
+    primary_known = isinstance(intent, str) and intent in _INTENT_LABELS
+    raw_intents = parsed.get("intents")
+    if not primary_known or not isinstance(raw_intents, list):
+        intents = ["unknown"] if not primary_known else [intent]
+    elif any(
+        not isinstance(label, str) or label not in _INTENT_LABELS
+        for label in raw_intents
+    ):
+        intents = [intent]
+    else:
+        # Keep `intent` authoritative and first; preserve the model's order for
+        # the remaining unique, known labels.
+        intents = [intent]
+        intents.extend(
+            label for label in raw_intents if label != intent and label not in intents
+        )
     return {
-        "intent": parsed.get("intent") or "unknown",
+        "intent": intent,
+        "intents": intents,
         "service": parsed.get("service"),
         "priority": parsed.get("priority"),
         "status": parsed.get("status"),
         "injection": bool(parsed.get("injection")),
         # CI-3b: same call also extracts any capture fields present in the text.
         "fields": parsed.get("fields") or {},
-        # T4/D3: the preset-message id this turn selected (None when none fits).
-        "template_id": picked if isinstance(picked, str) and picked in offered else None,
+        "template_id": parsed.get("template_id"),
     }
 
 
@@ -197,6 +269,7 @@ def classify_intent(state: ConversationState) -> dict:
             )
         return {
             "intent": "injection",
+            "intents": [],
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
@@ -219,7 +292,12 @@ def classify_intent(state: ConversationState) -> dict:
                 )
             )
             session.flush()
-        return {"intent": "unknown", "extracted": {}, "template_id": None}
+        return {
+            "intent": "unknown",
+            "intents": ["unknown"],
+            "extracted": {},
+            "template_id": None,
+        }
 
     if result.get("intent") == "persona" and not is_explicit_human_request(text):
         # V4 §A3 / E1 T05: "¿cómo estás?" is not "quiero hablar con una persona".
@@ -227,7 +305,14 @@ def classify_intent(state: ConversationState) -> dict:
             "classify_intent: persona downgraded to unknown in conversation %s",
             state.conversation_id,
         )
-        result = {**result, "intent": "unknown"}
+        result = {
+            **result,
+            "intent": "unknown",
+            "intents": [
+                "unknown",
+                *(label for label in result.get("intents", []) if label != "unknown"),
+            ],
+        }
 
     if result.get("injection"):
         logger.warning("LLM flagged injection in conversation %s", state.conversation_id)
@@ -242,9 +327,15 @@ def classify_intent(state: ConversationState) -> dict:
             )
         return {
             "intent": "injection",
+            "intents": [],
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+
+    if result["intent"] == "unknown":
+        rescued = _rescue_intents(text)
+        if rescued:
+            result = {**result, "intent": rescued[0], "intents": rescued}
 
     if result["intent"] == "smalltalk":
         # Courtesy is an understood turn: it breaks the unknown streak, but it
@@ -259,6 +350,7 @@ def classify_intent(state: ConversationState) -> dict:
             )
         return {
             "intent": "smalltalk",
+            "intents": result.get("intents", ["smalltalk"]),
             "extracted": _extracted(result),
             "template_id": result.get("template_id"),
         }
@@ -268,6 +360,7 @@ def classify_intent(state: ConversationState) -> dict:
             # CM-2 field answers are not comprehension failures (HH-3).
             return {
                 "intent": "unknown",
+                "intents": result.get("intents", ["unknown"]),
                 "extracted": _extracted(result),
                 "template_id": result.get("template_id"),
             }
@@ -282,6 +375,7 @@ def classify_intent(state: ConversationState) -> dict:
             )
         return {
             "intent": "unknown",
+            "intents": result.get("intents", ["unknown"]),
             "unknown_count": unknown_count,
             "escalate": unknown_count >= 3,
             "escalate_reason": "unknown_intent_thrice" if unknown_count >= 3 else None,
@@ -304,6 +398,7 @@ def classify_intent(state: ConversationState) -> dict:
         if get_scope_mode(session, result["intent"]) == "always_escalate":
             return {
                 "intent": result["intent"],
+                "intents": result.get("intents", [result["intent"]]),
                 "escalate": True,
                 "escalate_reason": "scope_always_escalate",
                 "extracted": _extracted(result),
@@ -312,6 +407,7 @@ def classify_intent(state: ConversationState) -> dict:
             }
     return {
         "intent": result["intent"],
+        "intents": result.get("intents", [result["intent"]]),
         "extracted": _extracted(result),
         "template_id": result.get("template_id"),
         **case_update,
