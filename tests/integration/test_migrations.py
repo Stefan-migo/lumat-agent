@@ -819,6 +819,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("064_conversation_turn_count",),
         ("065_case_ficha",),
         ("066_commitments",),
+        ("067_message_transcript",),
     ]
 
 

@@ -476,9 +476,16 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
     "hours.closure_enabled": False,
+    # D10: follow-up of idle threads and overdue commitments. The detector always
+    # runs; the send needs the flag, a template name and a thread never followed up.
     "followup.idle_enabled": False,
     "followup.idle_hours": 24,
     "followup.idle_template_name": "",
+    # D3/S4: local, bounded audio transcription (the worker remains opt-in).
+    "transcription.enabled": False,
+    "transcription.model": "small",
+    "transcription.window_days": 7,
+    "transcription.max_seconds": 180,
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
     # last N days). Panel-editable via the generic settings KV surface.
     "kpi.window_days": 7,
@@ -902,6 +909,28 @@ def get_followup_idle_template_name(session: Session) -> str:
     """Owner-configured WhatsApp template name, or empty when unset/invalid."""
     name = get_setting(session, "followup.idle_template_name", default="")
     return name.strip() if isinstance(name, str) else ""
+def get_transcription_enabled(session: Session) -> bool:
+    """Return whether local audio transcription is enabled; malformed values disable it."""
+    enabled = get_setting(session, "transcription.enabled", default=False)
+    return enabled if isinstance(enabled, bool) else False
+
+
+def get_transcription_model(session: Session) -> str:
+    """Return the configured Whisper model, or the local default when malformed."""
+    model = get_setting(session, "transcription.model", default="small")
+    return model.strip() if isinstance(model, str) and model.strip() else "small"
+
+
+def get_transcription_window_days(session: Session) -> int:
+    """Return the positive sweep window in days, falling back when malformed."""
+    days = get_setting(session, "transcription.window_days", default=7)
+    return days if isinstance(days, int) and not isinstance(days, bool) and days > 0 else 7
+
+
+def get_transcription_max_seconds(session: Session) -> int:
+    """Return the positive audio duration limit, falling back when malformed."""
+    seconds = get_setting(session, "transcription.max_seconds", default=180)
+    return seconds if isinstance(seconds, int) and not isinstance(seconds, bool) and seconds > 0 else 180
 
 
 def is_open_at(*, schedule: list, timezone_name: str, now: datetime) -> bool:
