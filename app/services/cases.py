@@ -74,6 +74,17 @@ def set_case_status(case: Case, status: str | None) -> None:
         case.closed_at = None
 
 
+def _latest_case_origin(session: Session, customer_id: int) -> int | None:
+    """T4/S4: declare the customer's latest prior case without reopening it."""
+    previous = session.scalar(
+        select(Case)
+        .where(Case.customer_id == customer_id)
+        .order_by(Case.created_at.desc(), Case.id.desc())
+        .limit(1)
+    )
+    return previous.id if previous is not None else None
+
+
 def get_or_create_case(session: Session, conversation_id: int, customer_id: int) -> Case:
     """Return the conversation's latest case, creating a bare one if needed."""
     case = session.scalar(
@@ -83,7 +94,11 @@ def get_or_create_case(session: Session, conversation_id: int, customer_id: int)
         .limit(1)
     )
     if case is None:
-        case = Case(conversation_id=conversation_id, customer_id=customer_id)
+        case = Case(
+            conversation_id=conversation_id,
+            customer_id=customer_id,
+            origin_case_id=_latest_case_origin(session, customer_id),
+        )
         session.add(case)
         session.flush()
         customer = session.get(Customer, customer_id)
@@ -102,8 +117,14 @@ def get_or_create_case(session: Session, conversation_id: int, customer_id: int)
 def create_manual_case(
     session: Session, customer_id: int, service: str, *, summary: str | None = None
 ) -> Case:
-    """Create an open case entered by an operator, without a conversation."""
-    case = Case(conversation_id=None, customer_id=customer_id, service=service, summary=summary)
+    """Create an open case entered by an operator, without a conversation (T4/S4 lineage)."""
+    case = Case(
+        conversation_id=None,
+        customer_id=customer_id,
+        service=service,
+        summary=summary,
+        origin_case_id=_latest_case_origin(session, customer_id),
+    )
     session.add(case)
     session.flush()
     customer = session.get(Customer, customer_id)

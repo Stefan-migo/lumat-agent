@@ -816,6 +816,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("062_user_nullable_refs",),
         ("063_artifact_outputs",),
         ("064_conversation_turn_count",),
+        ("065_case_ficha",),
     ]
 
 

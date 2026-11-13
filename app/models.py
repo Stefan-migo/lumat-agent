@@ -254,6 +254,15 @@ class Customer(Base):
     email: Mapped[str | None] = mapped_column(String(200))
     comuna: Mapped[str | None] = mapped_column(String(100))
     address: Mapped[str | None] = mapped_column(Text)
+    # 065: D7 — does this person decide the spending for the work? Three states,
+    # default `si` (no evidence to the contrary). `duda` means "there is a hint
+    # that someone else decides, not a proof" and is what makes the bot ask the
+    # single question when money is on the table; `no` means the conversation
+    # proved it. Written by `app/services/case_ficha.py` from the customer's own
+    # words, never guessed from the intent.
+    decide_spending: Mapped[str] = mapped_column(
+        String(10), default="si", server_default="si"
+    )
     state: Mapped[CustomerState] = mapped_column(
         pg_enum(CustomerState, "customer_state"),
         default=CustomerState.NUEVO,
@@ -385,6 +394,7 @@ class Case(Base):
     __table_args__ = (
         Index("idx_cases_conversation_id", "conversation_id"),
         Index("idx_cases_customer_id", "customer_id"),
+        Index("idx_cases_origin_case_id", "origin_case_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -394,6 +404,11 @@ class Case(Base):
     customer_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("customers.id"), nullable=False
     )
+    # 065: D5 — the case this one comes from. A post-service visit DECLARES the
+    # work it follows (Antonieta the day after the maintenance, Marcelo Aceituno
+    # with a year-long warranty) instead of existing as an unrelated row. Null
+    # for a first case; the prior case is never reopened or rewritten.
+    origin_case_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cases.id"))
     # 007: created_at (panel ordering + KPI windows, T5.3/T5.5).
     created_at: Mapped[datetime] = _ts()
     service: Mapped[str | None] = mapped_column(String(100))
