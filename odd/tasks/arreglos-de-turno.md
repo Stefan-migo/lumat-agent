@@ -65,3 +65,8 @@ precio de un trabajo sin tarifa es una pregunta, no una falla nueva que diagnost
 clasificador determinista respondía antes; la sonda y la prueba de grafo que quedó en
 `tests/integration/test_quote_required.py` sí: el mismo turno, por el grafo, contesta la cotización y
 no pide diagnóstico.
+
+**L4 — gate de cierre del corte 1.** `scripts/test.sh shape origin/main` → sin superficies nuevas (exit 0).
+`scripts/test.sh full` con `FASTEMBED_CACHE_PATH` exportado → **exit 0**, una corrida completa sin una
+sola línea `FAILED` ni `ERROR`. La nota del addendum de tests aplica igual: `-qq` suprime la línea de
+conteo, así que la señal es el código de salida y la ausencia de fallas, no un número en el log.
