@@ -330,3 +330,35 @@ def test_a_first_turn_schedule_mention_keeps_starting_the_capture():
     )
 
     assert orchestrate(state) == {"next_step": "capture"}
+
+
+def test_a_price_question_about_an_unpriced_work_is_answered_not_diagnosed():
+    """S2/D8: "cuanto cuesta cambiar la caldera" is measured, and answered.
+
+    The classifier returns `caldera` for it, so `CAPTURE_INTENTS` sent the turn to
+    capture and production answered "cuéntame qué pasa con el equipo": the price
+    question was never answered and the quote step in `respond` was unreachable.
+    """
+    state = _capture_state(
+        "cuanto cuesta cambiar la caldera", pending=(), intent="caldera"
+    )
+
+    assert orchestrate(state) == {"next_step": "respond"}
+
+
+def test_a_device_report_about_the_same_device_still_starts_the_capture():
+    """PRESERVE: the same intent, without a price question, is a fault to capture."""
+    state = _capture_state("la caldera no calienta la casa", pending=(), intent="caldera")
+
+    assert orchestrate(state) == {"next_step": "capture"}
+
+
+def test_a_published_service_price_question_is_not_a_quote_question():
+    """The quote step must not pre-empt the tariff: that path answers the figure."""
+    from app.chat.nodes.orchestrate import _is_quote_question
+
+    state = _capture_state(
+        "cuanto cuesta la mantencion de caldera", pending=(), intent="caldera"
+    )
+
+    assert _is_quote_question(state) is False

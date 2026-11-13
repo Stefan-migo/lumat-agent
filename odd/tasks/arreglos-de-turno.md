@@ -31,6 +31,12 @@ clasificador». El tarifario publicado sigue respondiendo los cuatro servicios q
 cortesía no se lee como reclamo (D3, `7603ecd1`) y el orden de las puertas no cambia: urgencia >
 presupuesto > derivación > LLM.
 
+## Decisiones de diseño
+
+- **D1 · D8 no inventa un precio ni un flujo nuevo.** El trabajo fuera de tarifario no tiene cifra publicada, así que la respuesta lo dice y pide los antecedentes en el mismo mensaje —los datos del equipo y qué necesita—, que es lo que el humano hacía en un turno. La captura de esos antecedentes ocurre por el flujo que ya existe (`capture`), no por un mecanismo paralelo.
+- **D2 · El paso se reconoce por frase, no por modelo.** La tabla de frases sale de la demanda medida en el corpus: cambio e instalación de caldera, encimera, quemador de cocina, bypass, diseño de red, conversión GLP→GN, filtración, filtro y termostato. Un trabajo que no está en la tabla y no aparece en la KB conserva el camino actual.
+- **D3 · El orden no cambia.** Un servicio con precio publicado sigue respondiendo desde el tarifario; el paso de cotización sólo ocupa el lugar del «no tengo ese dato».
+
 ## Tasks
 
 | ID | Specs | Route | Commit |
@@ -45,3 +51,17 @@ presupuesto > derivación > LLM.
 ```
 ok quiero terminar todos los D antes de volver a deployar
 ```
+
+**L2 — el paso de cotización estaba inalcanzable.** El primer intento lo colgó de la rama de KB
+miss de `respond`, y la sonda sobre el grafo real mostró por qué no sirve: «cuanto cuesta cambiar la
+caldera» lo clasifica como `caldera`, `_dispatch` lo manda a `capture`, y el cliente lee «Entiendo, es
+un problema con tu caldera. Cuéntame qué pasa con el equipo…». `respond` nunca corre, así que la rama
+nueva era código muerto para los ocho trabajos que D8 mide. Corregido con una bandera de ruteo
+(`quote_question`) en `_dispatch`, en el mismo lugar donde el arreglo T4 puso la suya: preguntar el
+precio de un trabajo sin tarifa es una pregunta, no una falla nueva que diagnosticar. Va antes de
+`CAPTURE_INTENTS` y después de `mid_capture`, para no romper la agenda a mitad de captura.
+
+**L3 — la verificación de ese ruteo es de punta a punta.** El writer no pudo observarla porque el
+clasificador determinista respondía antes; la sonda y la prueba de grafo que quedó en
+`tests/integration/test_quote_required.py` sí: el mismo turno, por el grafo, contesta la cotización y
+no pide diagnóstico.
