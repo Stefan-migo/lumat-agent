@@ -153,6 +153,39 @@ describe('conversation message media', () => {
     expect(link).toHaveAttribute('download');
   });
 
+  it('renders an available sticker as an image without a download link', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'sticker' })] }} state="ready" />);
+    expect(screen.getByRole('img', { name: 'Sticker de WhatsApp' })).toHaveAttribute('src', '/panel/api/conversations/9/messages/20/media');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('marks the sticker image and removes the surrounding bubble chrome', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'sticker' })] }} state="ready" />);
+    const image = screen.getByRole('img', { name: 'Sticker de WhatsApp' });
+    const bubble = image.closest('.ai-agent-grammar__bubble');
+    expect(image).toHaveClass('conversation-thread__sticker');
+    expect(bubble).toHaveClass('ai-agent-grammar__bubble--sticker');
+    expect(bubble?.querySelector('.conversation-thread__bubble-meta')).toBeNull();
+  });
+
+  it('shows the unavailable notice for a sticker instead of a broken image', () => {
+    render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ msg_type: 'sticker', media_available: false })] }} state="ready" />);
+    expect(screen.getByText('Este archivo no está disponible.')).toHaveAttribute('role', 'status');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('preserves images inside their link and documents as download links', () => {
+    render(<ConversationThread data={{ ...thread, messages: [
+      mediaMessage({ msg_type: 'image' }),
+      mediaMessage({ id: 21, msg_type: 'document', media_download_url: '/panel/api/conversations/9/messages/21/media', caption: 'informe.pdf' }),
+    ] }} state="ready" />);
+    const image = screen.getByRole('img', { name: 'Imagen adjunta' });
+    expect(image.closest('a')).toHaveAttribute('href', '/panel/api/conversations/9/messages/20/media');
+    const documentLink = screen.getByRole('link', { name: 'informe.pdf' });
+    expect(documentLink).toHaveAttribute('href', '/panel/api/conversations/9/messages/21/media');
+    expect(documentLink).toHaveAttribute('download');
+  });
+
   it('shows an unavailable notice instead of media when the backend file is missing', () => {
     render(<ConversationThread data={{ ...thread, messages: [mediaMessage({ media_available: false })] }} state="ready" />);
     expect(screen.getAllByRole('status').some((status) => /archivo.*no está disponible/i.test(status.textContent ?? ''))).toBe(true);
