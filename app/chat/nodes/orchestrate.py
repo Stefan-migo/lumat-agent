@@ -23,9 +23,11 @@ without a DB or LLM.
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 
 from app.chat.nodes.capture import is_social_only
-from app.chat.nodes.respond import asks_about_schedule
+from app.chat.nodes.respond import asks_about_schedule, quotes_required
 from app.chat.state import ConversationState
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,7 @@ def _dispatch(
     mid_capture: bool = False,
     template_id: str | None = None,
     question: bool = False,
+    quote_question: bool = False,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
@@ -62,6 +65,8 @@ def _dispatch(
     flags ride along so the downstream node knows why it was chosen.
     ``question`` marks a mid-capture message that asks something (S16): it is
     answered and the pending field resumes, whatever intent the classifier gave.
+    ``quote_question`` marks a turn that asks the price of work outside the
+    published tariff (D8): it is answered, not turned into a diagnostic capture.
     """
     # T4.4: any post-classification escalation (2x unknown, injection, SS-1
     # always_escalate) converges on handoff, reason preserved (route.py:25-30).
@@ -114,6 +119,13 @@ def _dispatch(
         return {"next_step": "capture"}
     if intent in {"cancelar_visita", "reagendar_visita"}:
         return {"next_step": "manage"}
+    if quote_question:
+        # S2/D8: "cuanto cuesta cambiar la caldera" classified as `caldera` and
+        # landed in capture, which answered "cuéntame qué pasa con el equipo" —
+        # the price question was never answered and the quote step in `respond`
+        # was unreachable for the eight measured works. Asking the price of that
+        # work is a question, not a new fault to diagnose.
+        return {"next_step": "respond"}
     if intent in CAPTURE_INTENTS:
         return {"next_step": "capture"}
     if intent in RETRIEVAL_INTENTS:
@@ -134,26 +146,59 @@ def is_tool_whitelisted(whitelist: tuple[str, ...] | list[str] | None, tool: str
     return bool(whitelist) and tool in whitelist
 
 
+def _normalise_interrogative_text(text: str) -> str:
+    """Case-fold and remove accents for explicit interrogative marker matching."""
+    decomposed = unicodedata.normalize("NFKD", (text or "").casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def asks_explicitly(text: str) -> bool:
+    """True when a turn has explicit question punctuation or a question marker.
+
+    `cuando` is intentionally excluded: it also appears in statements like
+    "cuando llegue". Marker matching uses word boundaries so `pueden` cannot
+    match as a substring of another word.
+    """
+    if "?" in text or "¿" in text:
+        return True
+    normalized = _normalise_interrogative_text(text)
+    return re.search(r"\b(?:cuanto|pueden|se\s+puede)\b", normalized) is not None
+
+
 def _is_question(state: ConversationState) -> bool:
-    """A mid-capture message that asks something (S16, S4/T4).
+    """A mid-capture message that asks something (S16, S4/T4, T1/S1).
 
-    A question mark is the deterministic signal the classifier contract honours.
-    Two guards keep answers in the capture flow: extraction (an answer phrased as
-    a question, "¿puede ser el sábado?") and the social set (a greeting like
-    "Hola, ¿cómo estás?" is answered by capture, never sent to retrieval).
+    Social-only turns stay in capture. Explicit question punctuation or a
+    question marker answers a question even when extraction also found a field;
+    schedule/coverage terms remain the final fallback for the measured T4 shape.
 
-    S4/T4 adds the measured shape that those guards missed: "carlos. pero dime
-    altiro si atienden sabado, eso es lo que necesito saber" has no question mark
-    and yields an extracted name, so it was stored as the name and the Saturday
-    question went unanswered. Naming a schedule or coverage term is enough to
-    answer it and then resume the capture.
+    S1/D2 removed the old `not state.extracted` conjunction on purpose. It guarded
+    the answer-phrased-as-a-question shape ("¿puede ser el sábado?"), and it cost
+    every turn that brings data AND a question: 303 of 2.157 real customer
+    messages (14%) were stored as a field answer and the question went
+    unanswered. Extraction is already applied before this decision, so answering
+    the question loses nothing — and the capture agenda resumes right after
+    (`_after_research_triage`).
     """
     text = (state.window[-1].get("text") or "") if state.window else ""
     if is_social_only(text):
         return False
-    if "?" in text and not state.extracted:
+    if asks_explicitly(text):
         return True
     return asks_about_schedule(text)
+
+
+def _is_quote_question(state: ConversationState) -> bool:
+    """A turn that asks the price of work with no published tariff (S2/D8).
+
+    Without this flag the classifier's device intent wins: "cuanto cuesta cambiar
+    la caldera" comes back as `caldera`, capture asks what the equipment is doing,
+    and the customer's price question is never answered.
+    """
+    if not _is_question(state):
+        return False
+    text = (state.window[-1].get("text") or "") if state.window else ""
+    return quotes_required(text)
 
 
 def orchestrate(state: ConversationState) -> dict:
@@ -171,6 +216,7 @@ def orchestrate(state: ConversationState) -> dict:
         mid_capture="_pending" in (state.captured or {}),
         template_id=getattr(state, "template_id", None),
         question=_is_question(state),
+        quote_question=_is_quote_question(state),
     )
     if decision.get("active_sub_agent"):
         logger.info(

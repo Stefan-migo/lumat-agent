@@ -131,6 +131,30 @@ def tariff_service(question: str) -> str | None:
     return None
 
 
+_QUOTE_REQUIRED_PHRASES: tuple[str, ...] = (
+    "cambio de caldera",
+    "cambiar de caldera",
+    "cambiar la caldera",
+    "instalacion de caldera",
+    "instalacion caldera",
+    "encimera",
+    "quemador de cocina",
+    "bypass",
+    "diseno de red",
+    "conversion glp gn",
+    "conversion a gas natural",
+    "filtracion",
+    "filtro",
+    "termostato",
+)
+
+
+def quotes_required(text: str) -> bool:
+    """True when a turn names work that requires an individual quotation."""
+    normalized = _normalise_question(text)
+    return any(re.search(rf"\b{re.escape(phrase)}\b", normalized) for phrase in _QUOTE_REQUIRED_PHRASES)
+
+
 def tariff_price_reply(session, state: ConversationState) -> str | None:
     """The published price for the service this turn asks about (L2 debt).
 
@@ -172,6 +196,10 @@ KB_UNAVAILABLE_REPLY = (
     "Un asesor de Lumat revisará tu consulta y te contactará."
 )
 CLARIFICATION_REPLY = MESSAGE_DEFAULTS["clarification"]
+QUOTE_REQUIRED_REPLY = (
+    "Ese trabajo no está en el tarifario porque se cotiza según cada caso. "
+    "Para preparar una cotización, necesitamos los datos del equipo y saber qué necesitas."
+)
 
 # T5/D8: preset-message slot vocabulary -> ConversationState sources. The system
 # always fills them; a missing/"unknown" value renders as an empty string.
@@ -573,6 +601,12 @@ def respond(state: ConversationState) -> dict:
             price_reply = tariff_price_reply(session, state)
             if price_reply is not None:
                 return {"replies": [price_reply]}
+            if quotes_required(text):
+                return {
+                    "replies": [
+                        get_message(session, "quote_required_offer", QUOTE_REQUIRED_REPLY)
+                    ]
+                }
             # D18: offer both paths without deriving; CM-6 still records the miss.
             miss_context = f"intent={state.intent}"
             log_unresolved(

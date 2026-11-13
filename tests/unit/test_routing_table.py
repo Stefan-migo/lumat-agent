@@ -265,6 +265,48 @@ def test_a_schedule_question_without_a_question_mark_is_answered_and_resumes():
     }
 
 
+def test_question_mark_with_extracted_field_answers_then_resumes():
+    state = _capture_state(
+        "es factible que pases tipo 14 horas?",
+        extracted={"availability": "14 horas"},
+    )
+
+    assert orchestrate(state) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_inverted_question_with_extracted_field_answers_then_resumes():
+    state = _capture_state(
+        "¿A las 14 puede ser?",
+        extracted={"availability": "14 horas"},
+    )
+
+    assert orchestrate(state) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_explicit_interrogative_marker_without_punctuation_answers_then_resumes():
+    state = _capture_state("¿me pueden confirmar el horario")
+
+    assert orchestrate(state) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_interrogative_marker_requires_word_boundary():
+    assert orchestrate(_capture_state("los clientespueden revisar el equipo")) == {
+        "next_step": "capture"
+    }
+
+
 def test_a_location_statement_mid_capture_stays_a_field_answer():
     """T5/T5a: `estoy en providencia` answers the commune, it does not ask."""
     assert orchestrate(_capture_state("no era calefont, es una caldera, y estoy en providencia")) == {
@@ -288,3 +330,35 @@ def test_a_first_turn_schedule_mention_keeps_starting_the_capture():
     )
 
     assert orchestrate(state) == {"next_step": "capture"}
+
+
+def test_a_price_question_about_an_unpriced_work_is_answered_not_diagnosed():
+    """S2/D8: "cuanto cuesta cambiar la caldera" is measured, and answered.
+
+    The classifier returns `caldera` for it, so `CAPTURE_INTENTS` sent the turn to
+    capture and production answered "cuéntame qué pasa con el equipo": the price
+    question was never answered and the quote step in `respond` was unreachable.
+    """
+    state = _capture_state(
+        "cuanto cuesta cambiar la caldera", pending=(), intent="caldera"
+    )
+
+    assert orchestrate(state) == {"next_step": "respond"}
+
+
+def test_a_device_report_about_the_same_device_still_starts_the_capture():
+    """PRESERVE: the same intent, without a price question, is a fault to capture."""
+    state = _capture_state("la caldera no calienta la casa", pending=(), intent="caldera")
+
+    assert orchestrate(state) == {"next_step": "capture"}
+
+
+def test_a_published_service_price_question_is_not_a_quote_question():
+    """The quote step must not pre-empt the tariff: that path answers the figure."""
+    from app.chat.nodes.orchestrate import _is_quote_question
+
+    state = _capture_state(
+        "cuanto cuesta la mantencion de caldera", pending=(), intent="caldera"
+    )
+
+    assert _is_quote_question(state) is False
