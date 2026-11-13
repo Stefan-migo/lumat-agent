@@ -34,7 +34,8 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
   const author = messageAuthor(message, customerId, customerName);
   const outbound = message.direction === "outbound";
   const isText = message.msg_type === "text";
-  const hasMedia = !isText && (Boolean(message.media_url || message.media_download_url) || ["image", "video", "audio", "document"].includes(message.msg_type));
+  const isSticker = message.msg_type === "sticker";
+  const hasMedia = !isText && (Boolean(message.media_url || message.media_download_url) || ["image", "video", "audio", "document", "sticker"].includes(message.msg_type));
   const mediaUrl = message.media_download_url;
   const mediaLabel = message.caption || message.filename || "Archivo adjunto";
   const unavailable = hasMedia && message.media_available === false;
@@ -50,6 +51,8 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
         return <MessageAudio src={mediaUrl} label={message.caption || "Audio adjunto"} />;
       case "document":
         return <a className="conversation-thread__document" href={mediaUrl} download={message.filename || true}>{message.filename || message.caption || "Descargar documento"}</a>;
+      case "sticker":
+        return <img className="conversation-thread__sticker" src={mediaUrl} alt="Sticker de WhatsApp" />;
       default:
         return <a className="conversation-thread__document" href={mediaUrl} download>{message.caption || "Archivo adjunto"}</a>;
     }
@@ -59,17 +62,19 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
       {/* One author label, above the outgoing bubble only: the mockup drops the per-message avatars
           that used to sit on both sides and keeps the speaker as text. */}
       {outbound ? <span className="ai-agent-grammar__message-meta">{author}</span> : null}
-      <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
-        {isText ? <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span> : <>
-          {message.text ? <span>{message.text}</span> : null}
-          {mediaContent}
-          {hasMedia && message.caption ? <p className="conversation-thread__media-caption">{message.caption}</p> : null}
+      <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}${isSticker ? " ai-agent-grammar__bubble--sticker" : ""}`}>
+        {isSticker ? mediaContent : <>
+          {isText ? <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span> : <>
+            {message.text ? <span>{message.text}</span> : null}
+            {mediaContent}
+            {hasMedia && message.caption ? <p className="conversation-thread__media-caption">{message.caption}</p> : null}
+          </>}
+          {message.delivery_status === "failed" ? <span className="ai-agent-grammar__message-error" role="alert">Entrega fallida{message.delivery_error ? `: ${message.delivery_error}` : ""}</span> : null}
+          <span className="conversation-thread__bubble-meta">
+            <span>{message.created_at?.slice(11, 16) ?? "—"}</span>
+            {outbound && message.delivery_status === "sent" ? <span className="conversation-thread__bubble-check" role="img" aria-label="Entregado"><Icon icon={CheckCheck} size="sm" /></span> : null}
+          </span>
         </>}
-        {message.delivery_status === "failed" ? <span className="ai-agent-grammar__message-error" role="alert">Entrega fallida{message.delivery_error ? `: ${message.delivery_error}` : ""}</span> : null}
-        <span className="conversation-thread__bubble-meta">
-          <span>{message.created_at?.slice(11, 16) ?? "—"}</span>
-          {outbound && message.delivery_status === "sent" ? <span className="conversation-thread__bubble-check" role="img" aria-label="Entregado"><Icon icon={CheckCheck} size="sm" /></span> : null}
-        </span>
       </div>
     </div>
   </div>;
