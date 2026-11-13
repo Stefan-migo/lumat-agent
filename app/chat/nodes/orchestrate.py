@@ -23,6 +23,8 @@ without a DB or LLM.
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 
 from app.chat.nodes.capture import is_social_only
 from app.chat.nodes.respond import asks_about_schedule
@@ -134,24 +136,43 @@ def is_tool_whitelisted(whitelist: tuple[str, ...] | list[str] | None, tool: str
     return bool(whitelist) and tool in whitelist
 
 
-def _is_question(state: ConversationState) -> bool:
-    """A mid-capture message that asks something (S16, S4/T4).
+def _normalise_interrogative_text(text: str) -> str:
+    """Case-fold and remove accents for explicit interrogative marker matching."""
+    decomposed = unicodedata.normalize("NFKD", (text or "").casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
 
-    A question mark is the deterministic signal the classifier contract honours.
-    Two guards keep answers in the capture flow: extraction (an answer phrased as
-    a question, "¿puede ser el sábado?") and the social set (a greeting like
-    "Hola, ¿cómo estás?" is answered by capture, never sent to retrieval).
 
-    S4/T4 adds the measured shape that those guards missed: "carlos. pero dime
-    altiro si atienden sabado, eso es lo que necesito saber" has no question mark
-    and yields an extracted name, so it was stored as the name and the Saturday
-    question went unanswered. Naming a schedule or coverage term is enough to
-    answer it and then resume the capture.
+def asks_explicitly(text: str) -> bool:
+    """True when a turn has explicit question punctuation or a question marker.
+
+    `cuando` is intentionally excluded: it also appears in statements like
+    "cuando llegue". Marker matching uses word boundaries so `pueden` cannot
+    match as a substring of another word.
     """
+    if "?" in text or "¿" in text:
+        return True
+    normalized = _normalise_interrogative_text(text)
+    return re.search(r"\b(?:cuanto|pueden|se\s+puede)\b", normalized) is not None
+
+
+def _is_question(state: ConversationState) -> bool:
+    """A mid-capture message that asks something (S16, S4/T4, T1/S1).
+
+    Social-only turns stay in capture. Explicit question punctuation or a
+    question marker answers a question even when extraction also found a field;
+    schedule/coverage terms remain the final fallback for the measured T4 shape.
+
+    S1/D2 removed the old `not state.extracted` conjunction on purpose. It guarded
+    the answer-phrased-as-a-question shape ("¿puede ser el sábado?"), and it cost
+    every turn that brings data AND a question: 303 of 2.157 real customer
+    messages (14%) were stored as a field answer and the question went
+    unanswered. Extraction is already applied before this decision, so answering
+    the question loses nothing — and the capture agenda resumes right after
+    (`_after_research_triage`)."""
     text = (state.window[-1].get("text") or "") if state.window else ""
     if is_social_only(text):
         return False
-    if "?" in text and not state.extracted:
+    if asks_explicitly(text):
         return True
     return asks_about_schedule(text)
 
