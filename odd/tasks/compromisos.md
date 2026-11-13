@@ -49,3 +49,14 @@ saliente. La sección del panel es consecuencia del linaje, como en la Fase 3.
 ```
 - ok d6 lo iniciamos entonces
 ```
+
+**L2 — el gate de T1.** `scripts/test.sh shape origin/main` → `app/models.py`, `tests/conftest.py` y
+`db/migrations/066_commitments.sql`: exit 3. `scripts/test.sh full` con `FASTEMBED_CACHE_PATH` →
+**exit 0**, sin una sola línea `FAILED` ni `ERROR`.
+
+**L3 — dos defectos del arnés que el corte destapó.** La tabla nueva no estaba en el truncado por
+test (`tests/conftest.py`): las filas habrían sobrevivido de una prueba a la siguiente, el mismo
+defecto de aislamiento que ya apareció con los artefactos del asistente. Y la idempotencia no
+funcionaba: el proyecto corre con `autoflush=False`, así que la segunda llamada no veía su propia
+fila y el índice único reventaba en vez de devolver la promesa existente. El servicio ahora hace
+`flush()`, y el índice queda como red de seguridad.
