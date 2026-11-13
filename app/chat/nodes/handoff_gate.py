@@ -153,10 +153,12 @@ def evaluate_handoff(state: ConversationState) -> str | None:
 
 
 def is_media_evidence(message: dict | None) -> bool:
-    """A media message with no text: case evidence, never a handoff trigger (CI-4)."""
-    return bool(message) and message.get("msg_type") in MEDIA_EVIDENCE_TYPES and not (
-        message.get("text") or ""
-    )
+    """Media without recognized text remains evidence; a transcript is utterance text."""
+    if not message or message.get("msg_type") not in MEDIA_EVIDENCE_TYPES:
+        return False
+    if message.get("msg_type") == MessageType.AUDIO.value and message.get("transcript"):
+        return False
+    return not (message.get("text") or "")
 
 
 def handoff_gate(state: ConversationState) -> dict:

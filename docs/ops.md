@@ -629,6 +629,24 @@ keeps rows that can no longer receive anything. Delete those rows (or ask each
 operator to reactivate) as part of a rotation; do not leave them to be counted as
 deliveries.
 
+### 2.8.4 Audio transcription sweep cron
+
+The audio sweep runs outside the webhook path and processes only recent inbound
+audio while `transcription.enabled` is true (the default is false). Install it
+under **`deploy`'s own crontab** with the append form, alongside the other
+containerized jobs:
+
+```bash
+( crontab -l 2>/dev/null; echo '*/5 * * * * /usr/bin/docker exec lumat-api-1 python -m app.ops.transcribe >> /home/deploy/lumat-transcribe.log 2>&1' ) | crontab -
+crontab -l
+```
+
+Verification: `crontab -l` shows the entry, and
+`/home/deploy/lumat-transcribe.log` gains one `Processed N audio message(s)`
+line per run (or `Transcription disabled; processed 0 audio message(s)` while
+the flag is off). The interval matches the notification and automation sweeps;
+the bounded batch keeps each run finite.
+
 ### 2.9 Release record
 
 One row per deploy; it is the evidence that the tagged release is in production.
