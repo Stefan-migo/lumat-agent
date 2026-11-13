@@ -74,8 +74,26 @@ def _audio_duration_seconds(path: str | Path) -> float:
     return float(result.stdout.strip())
 
 
+def _record_untranscribed_attempt(message, reason: str) -> None:
+    """Retire a failed/skipped attempt so it cannot starve newer sweep rows."""
+    message.transcript_attempts = (message.transcript_attempts or 0) + 1
+    logger.warning(
+        "Skipping audio transcription for message %s: %s (attempt %s)",
+        message.id,
+        reason,
+        message.transcript_attempts,
+    )
+
+
 def transcribe_message(session: Session, message) -> str | None:
-    """Transcribe an eligible inbound audio message without raising on failure."""
+    """Transcribe eligible inbound audio, counting untranscribed exits as attempts.
+
+    Missing files and overlong audio have no transcript to persist. Counting
+    those skips is still necessary: otherwise they remain at the head of the
+    sweep's bounded, creation-ordered batch and can starve newer audio forever.
+    """
+    if message.transcript is not None:
+        return None
     if not get_transcription_enabled(session):
         return None
     if message.direction != MessageDirection.INBOUND or message.msg_type != MessageType.AUDIO:
@@ -85,23 +103,26 @@ def transcribe_message(session: Session, message) -> str | None:
 
     path = Path(message.stored_path)
     if not path.is_file():
+        _record_untranscribed_attempt(message, "stored audio file does not exist")
         return None
 
     try:
         duration = _audio_duration_seconds(path)
         max_seconds = get_transcription_max_seconds(session)
         if duration > max_seconds:
-            logger.info(
-                "Skipping audio transcription for message %s: %.2f seconds exceeds %s",
-                message.id,
-                duration,
-                max_seconds,
+            _record_untranscribed_attempt(
+                message,
+                f"duration {duration:.2f}s exceeds maximum {max_seconds}s",
             )
             return None
         transcript = transcribe_path(path, model_name=get_transcription_model(session))
     except Exception:
         message.transcript_attempts = (message.transcript_attempts or 0) + 1
-        logger.exception("Audio transcription failed for message %s", message.id)
+        logger.exception(
+            "Audio transcription failed for message %s (attempt %s)",
+            message.id,
+            message.transcript_attempts,
+        )
         return None
 
     message.transcript = transcript

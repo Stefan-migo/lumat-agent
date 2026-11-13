@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_BATCH_SIZE = 50
 
 
+def _eligible_filters(now: datetime, window_days: int) -> tuple:
+    cutoff = now - timedelta(days=window_days)
+    return (
+        Message.direction == MessageDirection.INBOUND,
+        Message.msg_type == MessageType.AUDIO,
+        Message.stored_path.is_not(None),
+        Message.transcript.is_(None),
+        Message.transcript_attempts < 3,
+        Message.created_at >= cutoff,
+    )
+
+
 def _sweep(limit: int, *, now: datetime | None = None) -> tuple[int, bool]:
     now = now or datetime.now(timezone.utc)
     with session_scope() as session:
@@ -24,30 +36,37 @@ def _sweep(limit: int, *, now: datetime | None = None) -> tuple[int, bool]:
             logger.info("Audio transcription is disabled; no messages processed")
             return 0, False
 
-        cutoff = now - timedelta(days=get_transcription_window_days(session))
-        messages = session.scalars(
-            select(Message)
-            .where(
-                Message.direction == MessageDirection.INBOUND,
-                Message.msg_type == MessageType.AUDIO,
-                Message.stored_path.is_not(None),
-                Message.transcript.is_(None),
-                Message.transcript_attempts < 3,
-                Message.created_at >= cutoff,
-            )
+        window_days = get_transcription_window_days(session)
+        filters = _eligible_filters(now, window_days)
+        message_ids = session.scalars(
+            select(Message.id)
+            .where(*filters)
             .order_by(Message.created_at, Message.id)
             .limit(limit)
-            .with_for_update(skip_locked=True)
         ).all()
 
-        for message in messages:
-            transcript = transcribe_message(session, message)
-            logger.info(
-                "Transcription sweep processed message %s (%s)",
-                message.id,
-                "transcribed" if transcript is not None else "no transcript returned",
-            )
-        return len(messages), True
+    processed = 0
+    for message_id in message_ids:
+        try:
+            with session_scope() as session:
+                message = session.scalar(
+                    select(Message)
+                    .where(Message.id == message_id, *_eligible_filters(now, window_days))
+                    .with_for_update(skip_locked=True)
+                )
+                if message is None:
+                    continue
+                transcript = transcribe_message(session, message)
+                processed += 1
+                logger.info(
+                    "Transcription sweep processed message %s (%s)",
+                    message.id,
+                    "transcribed" if transcript is not None else "no transcript returned",
+                )
+        except Exception:
+            logger.exception("Transcription sweep failed for message %s; continuing", message_id)
+
+    return processed, True
 
 
 def run(limit: int = DEFAULT_BATCH_SIZE, *, now: datetime | None = None) -> int:

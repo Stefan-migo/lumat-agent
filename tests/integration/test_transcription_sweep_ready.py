@@ -22,6 +22,7 @@ def _message(
     direction=MessageDirection.INBOUND,
     attempts=0,
     stored_path=None,
+    transcript=None,
 ):
     customer = Customer(phone_e164=f"+569{uuid4().int % 100_000_000:08d}")
     session.add(customer)
@@ -38,6 +39,7 @@ def _message(
         direction=direction,
         msg_type=msg_type,
         stored_path=str(path),
+        transcript=transcript,
         transcript_attempts=attempts,
     )
     session.add(message)
@@ -130,7 +132,40 @@ def test_missing_stored_path_is_skipped(monkeypatch, tmp_path):
         assert (message.transcript, message.transcript_at, message.transcript_attempts) == before
 
 
-def test_missing_audio_file_is_skipped(monkeypatch, tmp_path):
+def test_audio_longer_than_limit_increments_attempt_without_transcript(monkeypatch, tmp_path, caplog):
+    with SessionLocal() as session:
+        _enable(session)
+        message = _message(session, tmp_path)
+        monkeypatch.setattr(transcription, "_audio_duration_seconds", lambda path: 181)
+        monkeypatch.setattr(
+            transcription,
+            "transcribe_path",
+            lambda path, **kwargs: pytest.fail("long audio must not be transcribed"),
+        )
+
+        assert transcription.transcribe_message(session, message) is None
+        assert message.transcript is None
+        assert message.transcript_attempts == 1
+        assert f"message {message.id}" in caplog.text
+        assert "exceeds maximum 180s" in caplog.text
+
+
+def test_audio_with_existing_transcript_is_not_overwritten(monkeypatch, tmp_path):
+    with SessionLocal() as session:
+        _enable(session)
+        message = _message(session, tmp_path, attempts=1, transcript="original")
+        before = (message.transcript, message.transcript_at, message.transcript_attempts)
+        monkeypatch.setattr(
+            transcription,
+            "transcribe_path",
+            lambda path, **kwargs: pytest.fail("existing transcript must be preserved"),
+        )
+
+        assert transcription.transcribe_message(session, message) is None
+        assert (message.transcript, message.transcript_at, message.transcript_attempts) == before
+
+
+def test_missing_audio_file_is_skipped(monkeypatch, tmp_path, caplog):
     with SessionLocal() as session:
         _enable(session)
         message = _message(session, tmp_path, stored_path=tmp_path / "missing.ogg")
@@ -142,4 +177,8 @@ def test_missing_audio_file_is_skipped(monkeypatch, tmp_path):
         )
 
         assert transcription.transcribe_message(session, message) is None
-        assert (message.transcript, message.transcript_at, message.transcript_attempts) == before
+        assert message.transcript is None
+        assert message.transcript_at is None
+        assert message.transcript_attempts == before[2] + 1
+        assert f"message {message.id}" in caplog.text
+        assert "stored audio file does not exist" in caplog.text

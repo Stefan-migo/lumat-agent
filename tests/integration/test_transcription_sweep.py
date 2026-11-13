@@ -55,9 +55,10 @@ def _settings(*, enabled: bool, window_days: int = 7):
 def audio_factory(tmp_path):
     created: list[tuple[int, int, int]] = []
 
-    def create(*, days_ago=0, attempts=0, transcript=None):
-        path = tmp_path / f"voice-{uuid4().hex}.ogg"
-        path.write_bytes(b"audio")
+    def create(*, days_ago=0, attempts=0, transcript=None, exists=True, label="voice"):
+        path = tmp_path / f"{label}-{uuid4().hex}.ogg"
+        if exists:
+            path.write_bytes(b"audio")
         with SessionLocal() as session:
             customer = Customer(phone_e164=f"+569{uuid4().int % 100_000_000:08d}")
             session.add(customer)
@@ -163,6 +164,58 @@ def test_sweep_skips_audio_with_three_attempts(audio_factory, monkeypatch):
         assert transcribe.run(limit=10) == 0
 
     assert _message(message_id).transcript_attempts == 3
+
+
+def test_bad_audio_rows_do_not_block_a_healthy_row_in_the_batch(audio_factory, monkeypatch):
+    too_long_one = audio_factory(label="too-long")
+    too_long_two = audio_factory(label="too-long")
+    missing = audio_factory(exists=False, label="missing")
+    healthy = audio_factory(label="healthy")
+    monkeypatch.setattr(
+        transcription,
+        "_audio_duration_seconds",
+        lambda path: 1 if "healthy" in str(path) else 181,
+    )
+    monkeypatch.setattr(
+        transcription,
+        "transcribe_path",
+        lambda path, **kwargs: "healthy audio transcript",
+    )
+
+    with _settings(enabled=True):
+        assert transcribe.run(limit=4) == 4
+
+    for message_id in (too_long_one, too_long_two, missing):
+        message = _message(message_id)
+        assert message.transcript is None
+        assert message.transcript_attempts == 1
+    assert _message(healthy).transcript == "healthy audio transcript"
+
+
+def test_sweep_commits_each_message_and_continues_after_one_transaction_fails(
+    audio_factory, monkeypatch, caplog
+):
+    first = audio_factory(label="first")
+    failing = audio_factory(label="failing")
+    last = audio_factory(label="last")
+
+    def transcribe_one(session, message):
+        if message.id == failing:
+            message.transcript = "must roll back"
+            raise RuntimeError("transaction probe")
+        message.transcript = f"transcript-{message.id}"
+        return message.transcript
+
+    monkeypatch.setattr(transcribe, "transcribe_message", transcribe_one)
+
+    with _settings(enabled=True):
+        assert transcribe.run(limit=3) == 2
+
+    assert _message(first).transcript == f"transcript-{first}"
+    assert _message(failing).transcript is None
+    assert _message(last).transcript == f"transcript-{last}"
+    assert f"message {failing}" in caplog.text
+    assert "transaction probe" in caplog.text
 
 
 def test_sweep_does_not_retranscribe_audio_with_transcript(audio_factory, monkeypatch):

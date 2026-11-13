@@ -1,4 +1,5 @@
-import sys
+import ast
+from pathlib import Path
 
 import pytest
 
@@ -17,8 +18,31 @@ class FakeSession:
         return None
 
 
-def test_importing_transcription_does_not_import_faster_whisper():
-    assert "faster_whisper" not in sys.modules
+def test_faster_whisper_import_is_nested_inside_the_lazy_accessor():
+    tree = ast.parse(Path(transcription.__file__).read_text())
+    top_level_imports = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        and (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.startswith("faster_whisper")
+            or isinstance(node, ast.Import)
+            and any(alias.name.startswith("faster_whisper") for alias in node.names)
+        )
+    ]
+    accessor = next(
+        node for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "get_model"
+    )
+    lazy_imports = [
+        node for node in ast.walk(accessor)
+        if isinstance(node, ast.ImportFrom) and node.module == "faster_whisper"
+    ]
+
+    assert top_level_imports == []
+    assert len(lazy_imports) == 1
 
 
 def test_transcribe_path_uses_the_injectable_model(monkeypatch, tmp_path):
@@ -66,10 +90,10 @@ def test_transcription_settings_default_to_documented_values():
 def test_transcribe_message_skips_audio_longer_than_configured_limit(monkeypatch, tmp_path):
     audio = tmp_path / "long.ogg"
     audio.write_bytes(b"audio")
-    message = type("Message", (), {"id": 1, "direction": "inbound", "msg_type": "audio", "stored_path": str(audio), "transcript_attempts": 0})()
+    message = type("Message", (), {"id": 1, "direction": "inbound", "msg_type": "audio", "stored_path": str(audio), "transcript": None, "transcript_attempts": 0})()
     session = type("Session", (), {"get": lambda self, model, key: type("Setting", (), {"value": True if key == "transcription.enabled" else 180})()})()
     monkeypatch.setattr(transcription, "_audio_duration_seconds", lambda path: 181)
     monkeypatch.setattr(transcription, "get_model", lambda: pytest.fail("must not load model"))
 
     assert transcription.transcribe_message(session, message) is None
-    assert message.transcript_attempts == 0
+    assert message.transcript_attempts == 1
