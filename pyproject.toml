@@ -1,6 +1,6 @@
 [project]
 name = "lumatagent"
-version = "2026.11.8"
+version = "2026.11.9"
 description = "LumatAgent — AI WhatsApp assistant for Lumat (gasfitería, Chile) and its operations panel."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,9 @@ dependencies = [
     "pywebpush>=2.5.0",
     "weasyprint>=70.0",
     "faster-whisper>=1.2.1",
+    # faster-whisper 1.2.1 calls av.open(metadata_errors=...), which av 19 removed;
+    # the lock resolves av 19 for Python >= 3.12, so pin below it.
+    "av>=18,<19",
 ]
 
 [dependency-groups]
