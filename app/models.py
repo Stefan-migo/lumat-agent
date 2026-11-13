@@ -389,6 +389,37 @@ class Message(Base):
     created_at: Mapped[datetime] = _ts()
 
 
+class Commitment(Base):
+    """A verbatim promise made in a conversation, with only declared due dates."""
+
+    __tablename__ = "commitments"
+    __table_args__ = (
+        Index("idx_commitments_conversation_id", "conversation_id"),
+        Index("idx_commitments_customer_id", "customer_id"),
+        Index("idx_commitments_status_due_at", "status", "due_at"),
+        Index("uq_commitments_source_message_id", "source_message_id", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("conversations.id"), nullable=True
+    )
+    customer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("customers.id"), nullable=False
+    )
+    source_message_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("messages.id"), nullable=True
+    )
+    promise_text: Mapped[str] = mapped_column(Text, nullable=False)
+    actor: Mapped[str] = mapped_column(String(20), nullable=False)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pendiente", server_default="pendiente"
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts()
+
+
 class Case(Base):
     __tablename__ = "cases"
     __table_args__ = (
