@@ -12,6 +12,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -330,7 +331,13 @@ class Conversation(Base):
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
+        CheckConstraint("transcript_attempts >= 0", name="messages_transcript_attempts_check"),
         Index("idx_messages_conversation_id", "conversation_id"),
+        Index(
+            "idx_messages_audio_transcript_pending",
+            "created_at",
+            postgresql_where=text("msg_type = 'audio' AND direction = 'inbound' AND transcript IS NULL"),
+        ),
         # mirrors the partial unique index from the migration (WH-5)
         Index(
             "uq_messages_wamid_inbound",
@@ -370,6 +377,9 @@ class Message(Base):
     filename: Mapped[str | None] = mapped_column(Text)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     caption: Mapped[str | None] = mapped_column(Text)
+    transcript: Mapped[str | None] = mapped_column(Text)
+    transcript_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    transcript_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     media_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     status: Mapped[MessageStatus] = mapped_column(
         pg_enum(MessageStatus, "message_status"),

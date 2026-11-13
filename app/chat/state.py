@@ -29,6 +29,7 @@ from app.models import (
     ConversationState as ConvState,
     Customer,
     Message,
+    MessageType,
 )
 from app.services.customers import get_or_create_customer
 from app.services.memory import load_customer_context, close_conversation
@@ -294,7 +295,12 @@ class ConversationState:
                 "id": m.id,
                 "direction": m.direction.value,
                 "msg_type": m.msg_type.value,
-                "text": m.text,
+                "transcript": m.transcript,
+                "text": (
+                    m.transcript
+                    if m.msg_type == MessageType.AUDIO and m.transcript
+                    else m.text
+                ),
                 "status": m.status.value,
                 "created_at": m.created_at,
             }
