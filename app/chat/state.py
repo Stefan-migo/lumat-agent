@@ -222,6 +222,8 @@ class ConversationState:
     phone: str
     turn: int = 0
     intent: str | None = None
+    # D9: topics detected in this turn, retained for downstream multi-topic handling.
+    intents: list[str] = field(default_factory=list)
     case: dict = field(default_factory=dict)
     captured: dict = field(default_factory=dict)
     # CI-3b: capturable fields extracted from this turn's free text by the
