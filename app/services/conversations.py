@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
+import logging
 import shutil
 import uuid
 
@@ -16,9 +17,12 @@ from app.chat.state import set_conversation_state
 from app.config import get_settings
 from app.models import AuditLog, Conversation, ConversationEvent, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
+from app.services.commitments import record_from_message
 from app.services.audio_format import AUDIO_SUFFIXES, normalize_audio
 from app.services.send import deliver_message
 from app.webhook.ingest import _safe_filename
+
+logger = logging.getLogger(__name__)
 
 
 def _to_conversation_dict(conversation: Conversation) -> dict:
@@ -275,6 +279,12 @@ def send_operator_message(session: Session, conversation_id: int, actor: User, t
     )
     session.add(message)
     session.flush()
+    try:
+        with session.begin_nested():
+            record_from_message(session, message, actor="operador")
+            session.flush()
+    except Exception:
+        logger.exception("Could not extract commitment from operator message %s", message.id)
     conversation.last_message_at = datetime.now(timezone.utc)
     record_audit(session, actor=actor.username, action="message.send_requested", entity="message", entity_id=str(message.id), after={"request_id": request_id, "conversation_id": conversation_id, "text": text})
     session.commit()

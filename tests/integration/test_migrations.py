@@ -48,6 +48,7 @@ EXPECTED_TABLES = {
     "audit_log",
     "customer_notes",  # 002_customer_notes.sql (CR-4 internal staff notes)
     "customer_equipment",  # 035_customer_equipment.sql (D5)
+    "commitments",  # 066_commitments.sql (D6)
     "cases",
     "memories",  # 009_memory.sql (MEM-1 persistent memory layer)
     "memory_relations",
@@ -817,6 +818,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("063_artifact_outputs",),
         ("064_conversation_turn_count",),
         ("065_case_ficha",),
+        ("066_commitments",),
     ]
 
 
