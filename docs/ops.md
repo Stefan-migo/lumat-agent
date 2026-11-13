@@ -647,6 +647,27 @@ line per run (or `Transcription disabled; processed 0 audio message(s)` while
 the flag is off). The interval matches the notification and automation sweeps;
 the bounded batch keeps each run finite.
 
+### 2.8.5 Follow-up sweep cron
+
+The follow-up sweep detects conversations whose newest message is inbound and
+older than `followup.idle_hours`, and commitments still pending past their due
+date. Detection is always on and records one `conversation_events` row per fact;
+**sending** requires `followup.idle_enabled` (default false), a
+`followup.idle_template_name` that the owner has had approved by Meta, and a
+thread that was never followed up before. With the flag off this job writes
+nothing to a customer.
+
+```bash
+( crontab -l 2>/dev/null; echo '*/5 * * * * /usr/bin/docker exec lumat-api-1 python -m app.ops.followup >> /home/deploy/lumat-followup.log 2>&1' ) | crontab -
+crontab -l
+```
+
+Verification: `crontab -l` shows the entry, and
+`/home/deploy/lumat-followup.log` gains one line per run with the number of facts
+recorded. While the flag is off the count can be non-zero — that is the detector
+working, not a message sent. A template name without Meta's approval fails at
+send time and is logged; nothing else in the sweep is affected.
+
 ### 2.9 Release record
 
 One row per deploy; it is the evidence that the tagged release is in production.
