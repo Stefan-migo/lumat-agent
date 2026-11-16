@@ -428,7 +428,7 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
     # other caller is the panel. Revisit if a third booking origin appears.
     origin = "assistant" if actor == "assistant" else "panel"
     publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service, "origin": origin}, dedupe_key=dedupe_key)
-    notify_admins(session, title="Nueva visita agendada", content=f"Se agendó una visita de {service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
+    notify_admins(session, title="Nueva visita agendada", content=f"Se agendó una visita de {service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key, recipient_user_ids=[appointment.technician_id], destination_entity="appointment", destination_id=appointment.id)
     return appointment
 
 
@@ -444,7 +444,7 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     customer = session.get(Customer, appointment.customer_id)
     dedupe_key = f"appointment:{appointment.id}:cancelled"
     publish_event(session, event_type="appointment.cancelled", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id, "recipient": customer.phone_e164 if customer else None, "reason": reason}, dedupe_key=dedupe_key)
-    notify_admins(session, title="Visita cancelada", content=f"Se canceló la visita de {appointment.service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
+    notify_admins(session, title="Visita cancelada", content=f"Se canceló la visita de {appointment.service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key, recipient_user_ids=[appointment.technician_id], destination_entity="appointment", destination_id=appointment.id)
     return appointment
 
 
@@ -470,7 +470,7 @@ def close(session: Session, appointment: Appointment, *, outcome: AppointmentSta
         dedupe_key=dedupe_key,
     )
     if outcome is AppointmentStatus.NO_SHOW:
-        notify_admins(session, title="Visita no realizada", content=f"La visita de {appointment.service} quedó marcada como no asistida.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
+        notify_admins(session, title="Visita no realizada", content=f"La visita de {appointment.service} quedó marcada como no asistida.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key, recipient_user_ids=[appointment.technician_id], destination_entity="appointment", destination_id=appointment.id)
     return appointment
 
 
@@ -513,7 +513,7 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
         },
         dedupe_key=dedupe_key,
     )
-    notify_admins(session, title="Visita reagendada", content=f"Se actualizó la fecha de la visita de {appointment.service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key)
+    notify_admins(session, title="Visita reagendada", content=f"Se actualizó la fecha de la visita de {appointment.service}.", source="appointment", source_id=appointment.id, dedupe_key=dedupe_key, recipient_user_ids=[appointment.technician_id], destination_entity="appointment", destination_id=appointment.id)
     return appointment
 
 

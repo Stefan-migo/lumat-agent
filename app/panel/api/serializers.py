@@ -477,7 +477,10 @@ def to_panel_notification_dict(notification: PanelNotification) -> dict:
     return {
         "id": notification.id, "user_id": notification.user_id, "operation_id": notification.operation_id,
         "title": notification.title, "content": notification.content, "source": notification.source,
-        "channel": operation.channel if operation else None, "status": notification.status,
+        "channel": operation.channel if operation else None,
+        "source_entity": operation.source_entity if operation else None,
+        "source_id": operation.source_id if operation else None,
+        "status": notification.status,
         "read_at": _iso(notification.read_at), "created_at": _iso(notification.created_at),
     }
 

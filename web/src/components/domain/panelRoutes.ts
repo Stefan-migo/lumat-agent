@@ -91,6 +91,15 @@ export function pathForRoute(route: PanelRoute): string {
   return base;
 }
 
+export function notificationDestination(sourceEntity: string | null | undefined, sourceId: string | null | undefined): PanelRoute | null {
+  if (sourceId == null || !/^[1-9]\d*$/.test(sourceId)) return null;
+  const id = Number(sourceId);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  if (sourceEntity === 'appointment') return { view: 'agenda', appointmentId: id };
+  if (sourceEntity === 'conversation') return { view: 'conversations', conversationId: id };
+  return null;
+}
+
 export function isConversationRoute(route: PanelRoute): boolean {
   return route.view === 'conversations';
 }

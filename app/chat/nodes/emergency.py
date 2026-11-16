@@ -121,6 +121,16 @@ def emergency(state: ConversationState) -> dict:
                     source="emergencia",
                     source_id=case.id,
                     dedupe_key=f"emergencia:{case.id}",
+                    # The notice is about the case, but the place to act on it is the conversation
+                    # where it happened: that is where the operator reads it and answers.
+                    destination_entity="conversation",
+                    destination_id=conversation.id,
+                    # `responsible_id` is the assignment the panel already owns: the operator who
+                    # took this conversation. No new field, no second notion of ownership.
+                    recipient_user_ids=(
+                        [conversation.responsible_id]
+                        if conversation.responsible_id is not None else None
+                    ),
                 )
             except Exception:
                 logger.exception(

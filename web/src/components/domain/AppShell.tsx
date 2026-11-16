@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { getChatThread, listActiveRuns, listNotifications, markAllNotificationsRead } from '../../api';
-import type { ActiveRun, NotificationsResponse, PanelNotification } from '../../types';
+import { getChatThread, listActiveRuns } from '../../api';
+import type { ActiveRun, PanelNotification } from '../../types';
 import type { User } from '../../types';
-import type { NotificationState, PanelView } from './PanelShell';
+import type { PanelView } from './PanelShell';
 import { PanelShell, isAdminOnlyView } from './PanelShell';
-import { isDetailRoute, parsePanelPath, pathForRoute, type PanelRoute } from './panelRoutes';
+import { isDetailRoute, notificationDestination, parsePanelPath, pathForRoute, type PanelRoute } from './panelRoutes';
 import { canOpen, defaultViewForRole } from './panelAccess';
 import { Dashboard } from '../pages/Dashboard';
 import { ClientesList } from '../pages/ClientesList';
@@ -28,9 +28,9 @@ import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { SelfProfile } from '../pages/SelfProfile';
 import { UserFicha } from '../pages/UserFicha';
-import { realtimeClient } from '../../realtime';
 import { useToast } from '../primitives/Toast';
 import { assistantRunKey, decideAssistantRunAlerts, disappearedAssistantRuns, type AssistantRunOutcome } from './assistantRunAlerts';
+import { useNotifications } from '../../hooks/useNotifications';
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 5_000;
 // A run can start while the shell is idle — a message sent from a background tab, or an approval
@@ -74,8 +74,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const { show: showToast } = useToast();
   const activeRunsRef = useRef<ActiveRun[]>([]);
   const [conversationRefresh, setConversationRefresh] = useState(0);
-  const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
-  const [notifications, setNotifications] = useState<PanelNotification[]>([]);
+  const notificationData = useNotifications();
 
   useEffect(() => {
     let current = true;
@@ -136,49 +135,11 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
     };
   }, [route.view, route.threadId, showToast]);
 
-  useEffect(() => {
-    let mounted = true;
-    void listNotifications().then((response: NotificationsResponse) => {
-       if (mounted) {
-         setNotifications(response.notifications);
-         setNotificationState({ status: 'ready', unread: response.notifications.filter((notification) => notification.read_at === null).length });
-       }
-    }).catch(() => {
-      if (mounted) setNotificationState({ status: 'error' });
-    });
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = realtimeClient.subscribe((event) => {
-      if (event.type !== 'notification') return;
-      void listNotifications().then((response) => {
-        setNotifications(response.notifications);
-        setNotificationState({ status: 'ready', unread: response.notifications.filter((notification) => notification.read_at === null).length });
-      }).catch(() => setNotificationState({ status: 'error' }));
-    });
-    realtimeClient.connect();
-    return () => { unsubscribe(); };
-  }, []);
-
-  const markAllRead = async () => {
-    await markAllNotificationsRead();
-    const now = new Date().toISOString();
-    setNotifications((current) => current.map((notification) => ({ ...notification, read_at: notification.read_at ?? now })));
-    setNotificationState({ status: 'ready', unread: 0 });
-  };
-
-  // Single source of truth for the badge: the notification list itself. An incrementing counter
-  // drifted, because the page reports the optimistic value and then the reconciled one and both calls
-  // can land before a re-render — measured in the browser as 3 unread → 1 after a single click.
-  useEffect(() => {
-    setNotificationState((state) => state.status === 'ready'
-      ? { status: 'ready', unread: notifications.filter((notification) => notification.read_at === null).length }
-      : state);
-  }, [notifications]);
-
-  const updateNotificationReadState = (id: number, readAt: string | null) => {
-    setNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
+  const openNotification = (notification: PanelNotification) => {
+    const destination = notificationDestination(notification.source_entity, notification.source_id);
+    if (!destination) return;
+    void notificationData.markRead(notification.id);
+    navigateToRoute(destination);
   };
 
   useEffect(() => {
@@ -232,7 +193,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
-     : view === 'notifications' ? <NotificationCenter onNotificationRead={updateNotificationReadState} />
+     : view === 'notifications' ? <NotificationCenter notifications={notificationData.notifications} state={notificationData.state} unreadOnly={notificationData.unreadOnly} onUnreadOnlyChange={notificationData.setUnreadOnly} onMarkRead={notificationData.markRead} pendingReadIds={notificationData.pendingReadIds} readErrors={notificationData.readErrors} onOpenNotification={openNotification} />
      : view === 'push' ? <PushSettings />
                 : view === 'chat' ? <AgentChat role={user.role} userId={user.id} userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
@@ -242,7 +203,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} collapseRail={view === "chat"} breadcrumbView={view} onBack={onBack} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} collapseRail={view === "chat"} breadcrumbView={view} onBack={onBack} onNavigate={navigate} onLogout={onLogout} notificationState={notificationData.state} notifications={notificationData.allNotifications} onOpenNotification={openNotification} onMarkAllNotificationsRead={notificationData.markAllRead} markAllNotificationsPending={notificationData.markAllPending} markAllNotificationsError={notificationData.markAllError} inspector={inspector}>
       {page}
     </PanelShell>
   );

@@ -1,57 +1,62 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { NotificationCenter } from "./NotificationCenter";
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { NotificationCenter } from './NotificationCenter';
+import type { PanelNotification } from '../../types';
 
-describe("NotificationCenter", () => {
-  it("renders newest notifications and exposes unread filtering", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ notifications: [
-      { id: 1, title: "Nueva visita", content: "Caso 9", source: "case", channel: "email", status: "sent", read_at: null, created_at: "2026-09-03T12:00:00Z" },
-    ] }), { status: 200 }));
-    render(<NotificationCenter />);
-    expect(await screen.findByText("Nueva visita")).toBeInTheDocument();
-    expect(screen.getByLabelText("Solo no leídas")).toBeInTheDocument();
+const notifications: PanelNotification[] = [
+  { id: 1, user_id: 1, operation_id: 1, title: 'Nueva visita', content: 'Caso 9', source: 'appointment', source_entity: 'appointment', source_id: '9', channel: 'panel', status: 'sent', read_at: null, created_at: '2026-09-03T12:00:00Z' },
+  { id: 2, user_id: 1, operation_id: 2, title: 'Emergencia', content: 'Revisar conversación', source: 'emergencia', source_entity: 'conversation', source_id: '22', channel: 'panel', status: 'sent', read_at: null, created_at: null },
+  { id: 3, user_id: 1, operation_id: 3, title: 'Costo cercano', content: 'Límite próximo', source: 'cost_alert', source_entity: null, source_id: null, channel: 'panel', status: 'sent', read_at: null, created_at: null },
+  { id: 4, user_id: 1, operation_id: 4, title: 'Falló el envío', content: 'Entrega permanente fallida', source: 'notification_failure', source_entity: null, source_id: null, channel: 'panel', status: 'sent', read_at: null, created_at: null },
+];
+
+function renderCenter(overrides: Partial<React.ComponentProps<typeof NotificationCenter>> = {}) {
+  const props: React.ComponentProps<typeof NotificationCenter> = {
+    notifications,
+    state: { status: 'ready', unread: 4 },
+    unreadOnly: false,
+    onUnreadOnlyChange: vi.fn(),
+    onMarkRead: vi.fn(),
+    pendingReadIds: [],
+    readErrors: {},
+    onOpenNotification: vi.fn(),
+    ...overrides,
+  };
+  return { ...render(<NotificationCenter {...props} />), props };
+}
+
+describe('NotificationCenter', () => {
+  it('renders source labels and makes only known destination rows actionable', () => {
+    const { props } = renderCenter();
+    expect(screen.getByRole('heading', { name: 'Notificaciones' })).toBeInTheDocument();
+    expect(screen.getByText('Origen: Agenda')).toBeInTheDocument();
+    expect(screen.getByText('Origen: Emergencias')).toBeInTheDocument();
+    expect(screen.getByText('Origen: Alertas de costo')).toBeInTheDocument();
+    expect(screen.getByText('Origen: Fallos de notificación')).toBeInTheDocument();
+    for (const icon of ['lucide-calendar-days', 'lucide-shield-alert', 'lucide-circle-dollar-sign', 'lucide-circle-alert']) {
+      expect(document.querySelector(`.${icon}`)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: /Nueva visita\. Ir a la visita/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Emergencia\. Ir a la conversación/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Costo cercano' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Falló el envío' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Nueva visita\. Ir a la visita/ }));
+    expect(props.onOpenNotification).toHaveBeenCalledWith(notifications[0]);
   });
 
-  it("marks a row read immediately without refetching the list and refetches when the filter changes", async () => {
-    let listRequests = 0;
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      if (String(input).includes("/read")) return new Response(JSON.stringify({ notification: { id: 1, read_at: "2026-09-03T12:00:01Z" } }), { status: 200 });
-      listRequests += 1;
-      return new Response(JSON.stringify({ notifications: [{ id: 1, title: "Nueva visita", content: "Caso 9", source: "case", channel: "email", status: "sent", read_at: null, created_at: null }] }), { status: 200 });
-    });
-    render(<NotificationCenter />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Marcar como leída" }));
-    expect(await screen.findByText("Leída")).toBeInTheDocument();
-    expect(listRequests).toBe(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/panel/api/notifications/1/read",
-      expect.objectContaining({ method: "POST" }),
-    );
-    fireEvent.click(screen.getByLabelText("Solo no leídas"));
-    await waitFor(() => expect(listRequests).toBe(2));
+  it('uses the shared unread filter and exposes marking pending/error states', () => {
+    const onUnreadOnlyChange = vi.fn();
+    renderCenter({ onUnreadOnlyChange, pendingReadIds: [1], readErrors: { 1: 'No pudimos marcar la notificación como leída.' } });
+    fireEvent.click(screen.getByLabelText('Solo no leídas'));
+    expect(onUnreadOnlyChange).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('button', { name: 'Marcando…' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('No pudimos marcar la notificación como leída');
   });
 
-  it("restores a row and announces the failure when marking it read is rejected", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      if (String(input).includes("/read")) return new Response("failure", { status: 500 });
-      return new Response(JSON.stringify({ notifications: [{ id: 1, title: "Nueva visita", content: "Caso 9", source: "case", channel: "email", status: "sent", read_at: null, created_at: null }] }), { status: 200 });
-    });
-    render(<NotificationCenter />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Marcar como leída" }));
-    expect(await screen.findByRole("button", { name: "Marcar como leída" })).toBeInTheDocument();
-    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos marcar la notificación como leída");
-  });
-
-  it("renders accessible empty and failed source states", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(JSON.stringify({ notifications: [] }), { status: 200 }),
-    );
-    const { rerender } = render(<NotificationCenter />);
-    expect(await screen.findByText("No hay notificaciones")).toBeInTheDocument();
-    fetchMock.mockResolvedValueOnce(new Response("failure", { status: 500 }));
-    rerender(<NotificationCenter key="failed" />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar las notificaciones");
+  it('renders loading and error states', () => {
+    const { rerender } = renderCenter({ state: { status: 'loading' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando notificaciones');
+    rerender(<NotificationCenter notifications={[]} state={{ status: 'error' }} unreadOnly={false} onUnreadOnlyChange={vi.fn()} onMarkRead={vi.fn()} pendingReadIds={[]} readErrors={{}} onOpenNotification={vi.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('No pudimos cargar las notificaciones');
   });
 });

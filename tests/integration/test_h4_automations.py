@@ -278,8 +278,11 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
             "appointment.booked", "appointment.no_show", "appointment.booked", "appointment.completed",
         ]
         panel_rows = session.scalars(select(PanelNotification).order_by(PanelNotification.id)).all()
-        # One row per admin for each notifiable event — booked x3, rescheduled,
-        # cancelled and no_show; `appointment.completed` is intentionally silent.
-        assert len(panel_rows) == 6
-        assert {row.user_id for row in panel_rows} == {admin.id}
+        # One row per recipient for each notifiable event — booked x3, rescheduled, cancelled and
+        # no_show; `appointment.completed` is intentionally silent. The audience is every admin plus
+        # the technician the visit is assigned to, so the person who has to show up is told too.
+        assert len(panel_rows) == 12
+        assert {row.user_id for row in panel_rows} == {admin.id, technician.id}
+        # The operation stays single; what fans out is the per-user row. No user gets two.
+        assert len({(row.user_id, row.operation_id) for row in panel_rows}) == len(panel_rows)
         assert {row.operation.channel for row in panel_rows} == {"panel"}
