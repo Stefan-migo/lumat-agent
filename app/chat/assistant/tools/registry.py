@@ -16,6 +16,7 @@ from typing import Annotated, Any, Callable, Literal
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 from app.models import AssistantAttachment, InternalChatThread, KbVisibility, MemoryVisibility, UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
+from app.chat.assistant.budgets import PROJECT_READ_FILE_PAGE_LIMIT
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
@@ -287,31 +288,30 @@ class ProjectListFilesArgs(BaseModel):
     limit: int = Field(default=_LISTING_PAGE_DEFAULT, ge=1, le=MAX_ITEMS)
 
 
-# The page itself is not the whole result: the provenance header, the cursor fields and JSON escaping
-# ride on top of it. This is the room they get, so a full page never trips the brake.
-_PAGE_METADATA_RESERVE = 400
-
-
+# Page-size arithmetic and its metadata reserve are documented in budgets.py.
 def _project_read_file_page_limit() -> int:
-    # Resolve lazily: nodes imports this registry, so importing its budget constants at module load
-    # time would create a cycle. The page limit remains tied to the one evidence-box contract.
-    from app.chat.assistant.nodes import _DETAIL_EVIDENCE_SHARE, _TOOL_EVIDENCE_LIMIT
-
-    return int(_DETAIL_EVIDENCE_SHARE * _TOOL_EVIDENCE_LIMIT) - _PAGE_METADATA_RESERVE
+    return PROJECT_READ_FILE_PAGE_LIMIT
 
 
 class ProjectReadFileArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     file_id: int = Field(gt=0)
     offset: int = Field(default=0, ge=0)
-    limit: int = Field(default_factory=_project_read_file_page_limit, ge=1)
+    limit: int = Field(default=PROJECT_READ_FILE_PAGE_LIMIT, ge=1, le=PROJECT_READ_FILE_PAGE_LIMIT)
 
-    @field_validator("limit")
+    @field_validator("limit", mode="before")
     @classmethod
-    def enforce_evidence_page_limit(cls, value: int) -> int:
-        maximum = _project_read_file_page_limit()
-        if value > maximum:
-            raise ValueError(f"limit must be at most {maximum}")
+    def clamp_evidence_page_limit(cls, value: object) -> object:
+        if value is None:
+            return PROJECT_READ_FILE_PAGE_LIMIT
+        numeric = value
+        if isinstance(value, str):
+            try:
+                numeric = int(value)
+            except ValueError:
+                return value
+        if isinstance(numeric, int) and not isinstance(numeric, bool):
+            return min(numeric, PROJECT_READ_FILE_PAGE_LIMIT)
         return value
 
 
