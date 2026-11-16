@@ -29,6 +29,18 @@ del cliente en el repo, no hay migración.
 | T4 | Corrida scripted completa y baseline registrado en `odd/evals/` | S4, S6 | inline | `docs(evals): record the corpus-derived baseline` |
 | T5 | Actualizar el estado del doc 04 y el encabezado del corpus | S3, S5 | inline | junto a T4 |
 
+## Estado de las tareas
+
+| ID | Estado | Commit |
+|---|---|---|
+| T1 | hecho | `f9c540cd` |
+| T2 | parcial — 22 de 34 conversaciones con escenario | `adf4aa02` |
+| T3 | parcial — 7 escenarios nuevos, 4 citas corregidas | `adf4aa02` |
+| T4 | pendiente — corte 2 | — |
+| T5 | pendiente — corte 2 | — |
+
+**Frontera de corte (2026-11-16):** el corte 1 cierra en 466 líneas autoradas en 3 commits. Quedan **12 conversaciones sin escenario** (listadas en L5) y el baseline scripted (T4) para el corte 2, sobre rama nueva desde `main` con este corte mergeado.
+
 ## Log
 
 **L1 (pedido del owner, verbatim):**
