@@ -45,6 +45,9 @@ from app.chat.assistant.budgets import (
     _TOOL_EVIDENCE_LIMIT,
 )
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
+# The validation message travels into the repair prompt and the persisted guardrails snapshot, so it
+# is one bounded line: enough to name the bound, never the whole pydantic traceback.
+_ARGUMENTS_ERROR_LIMIT = 200
 _ARTIFACT_INVENTORY_LIMIT = 10
 MAX_ASSISTANT_TOOL_STEPS = 6
 # Bodies loaded for the responder every turn, even when the planner does not
@@ -123,6 +126,38 @@ def bounded_fallback(reason: str) -> PlannerOutput:
         summary="No pude planificar esa solicitud de forma segura. Inténtalo nuevamente.",
         requires_approval=False,
     )
+
+
+def _arguments_error_text(exc: Exception) -> str:
+    """Name the bound a plan missed, in one bounded line, from the boundary's own words.
+
+    `str(ValidationError)` starts with a count line ("1 validation error for SearchArgs"), which tells
+    a repairing model nothing. The field and its message are what a correction needs; anything else
+    falls back to the exception text, flattened and bounded because it ends up in a prompt and in the
+    persisted guardrails snapshot.
+    """
+    details = getattr(exc, "errors", None)
+    errors = details() if callable(details) else None
+    if isinstance(errors, list) and errors:
+        first = errors[0] or {}
+        location = ".".join(str(part) for part in first.get("loc") or ())
+        message = str(first.get("msg") or "")
+        text = f"{location}: {message}" if location else message
+    else:
+        text = str(exc)
+    return text.strip().replace("\n", " ")[:_ARGUMENTS_ERROR_LIMIT] or type(exc).__name__
+
+
+
+    """Build the bounded, persisted diagnosis for one planner failure."""
+    raw_text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False, default=str)
+    return {
+        "reason": reason,
+        "stage": stage,
+        "exception_type": type(error).__name__,
+        "exception": str(error)[:_PLANNER_FAILURE_EXCERPT_LIMIT],
+        "raw_excerpt": raw_text[:_PLANNER_FAILURE_EXCERPT_LIMIT],
+    }
 
 
 def _planner_failure(reason: str, stage: str, error: Exception, raw: object = "") -> dict[str, str]:
@@ -401,9 +436,11 @@ def repair_plan(state: AssistantState) -> AssistantState:
         previous_plan = None
     whitelisted = "true" if guard.get("whitelisted") else "false"
     arguments_valid = "true" if guard.get("arguments_valid") else "false"
+    arguments_error = guard.get("arguments_error") or ""
     rejection = (
         f"Guardrails rejected the previous plan: whitelisted={whitelisted}; "
         f"arguments_valid={arguments_valid}. Return a corrected plan only.\n"
+        + (f"Arguments error: {arguments_error}\n" if arguments_error else "")
         + (
             f"Previous plan: {json.dumps(previous_plan, ensure_ascii=False, separators=(',', ':'))}\n"
             if previous_plan is not None
@@ -759,12 +796,15 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
     whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
+    arguments_error = ""
     if whitelisted:
         try:
             arguments_valid = bool(get_tool(tool_name).args_model.model_validate(plan_data.get("arguments", {})))
-        except Exception:
-            pass
-    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
+        except Exception as exc:
+            # Keep the boundary's own words. A repair turn that is told only "invalid" cannot know
+            # which bound it missed.
+            arguments_error = _arguments_error_text(exc)
+    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "arguments_error": arguments_error, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
     if not whitelisted or not arguments_valid:
         diagnosis = _planner_failure(
             "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails"), plan_data

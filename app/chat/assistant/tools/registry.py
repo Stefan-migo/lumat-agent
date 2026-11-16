@@ -310,6 +310,11 @@ class ProjectReadFileArgs(BaseModel):
                 numeric = int(value)
             except ValueError:
                 return value
+        # JSON has one number type: a model that asks for 6000.0 means the same page as one that asks
+        # for 6000, and answering one of them with a rejected plan is the defect this ceiling exists
+        # to avoid. A fractional limit is still refused -- it is not a page size anyone can read.
+        if isinstance(numeric, float) and numeric.is_integer():
+            numeric = int(numeric)
         if isinstance(numeric, int) and not isinstance(numeric, bool):
             return min(numeric, PROJECT_READ_FILE_PAGE_LIMIT)
         return value

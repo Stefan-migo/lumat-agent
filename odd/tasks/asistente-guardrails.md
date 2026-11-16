@@ -24,6 +24,10 @@ fuera de rango, y ningún techo puede quedar invisible para quien tiene que resp
 
 - **S3** Un `limit` mayor que el techo se **acota** al techo y el turno ejecuta; `read_project_file`
   deja de poder rechazar un plan por pedir una página más grande que la que existe.
+  - *Alcance del acotado (A1/A2 de la verificación independiente)*: `limit: null` significa "sin
+    límite" y se resuelve al default (antes era error de tipo); `6000.0` se acota igual que `6000`,
+    porque JSON tiene un solo tipo numérico y un modelo que pide `6000.0` pidió la misma página.
+    Un límite fraccionario (`3.7`) y los no numéricos se siguen rechazando.
 
 - **S4** Un plan que falla guardrails recibe **un** turno de reparación acotado, con el error de
   validación devuelto al planificador. Si el segundo plan es válido, el turno ejecuta. Si vuelve a
@@ -107,3 +111,23 @@ fuera de rango, y ningún techo puede quedar invisible para quien tiene que resp
      plan anterior en el mensaje final—. El texto visible no cambia.
   Motivo: los dos tests afirmaban exactamente lo que la decisión del owner cambia. Ningún otro test
   existente se tocó.
+
+- **L7** (2026-11-16, resultado de la verificación independiente y qué se hizo con él): veredicto
+  7/7 S# cumplen, **cero bloqueantes**, cinco advertencias. Se arreglaron dos:
+  - **A2** `6000.0` se rechazaba mientras `6000` se acotaba: misma clase de defecto que el original.
+  - **A3** el prompt de reparación publicaba sólo `arguments_valid=false` sin decir *qué* límite se
+    rompió (el `except Exception: pass` de guardrails descartaba el error de pydantic). Ahora
+    `_arguments_error_text()` publica `campo: mensaje` en una línea acotada a 200 caracteres, que
+    también queda en el snapshot persistido de `guardrails`.
+  Se aceptan y quedan documentadas tres, con motivo:
+  - **A1** `limit: null` ahora se acepta (antes era error de tipo). Es la misma clase: un plan que
+    pide "una página y ya" no puede morir. No amplía capacidad: el default es el mismo techo.
+  - **A4** con `follow_up: true`, un segundo `unsafe_plan` después de una reparación exitosa no recibe
+    una segunda reparación y el turno termina en el texto de siempre, descartando la evidencia ya
+    ejecutada. Es el tope de "un intento por turno" que pide S4, y en `base` ese mismo caso también
+    cortaba en el fallback: no es regresión. Si el owner quiere, se reabre con un tope por paso.
+  - **A5** un fallo de proveedor *dentro* de la reparación cierra el turno con el texto exacto, mientras
+    que un fallo de proveedor en `plan_llm` conserva el camino al respondedor. Camino nuevo, sin
+    equivalente previo, coherente con el tope de S4.
+- Probes del verificador incorporados: `tests/unit/test_assistant_guardrails_repair_probes.py`
+  (13 casos sobre el grafo real con guardrails y `execute_tool` reales).
