@@ -37,23 +37,17 @@ from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, veri
 
 logger = logging.getLogger(__name__)
 
-# Bounds the responder's tool evidence by characters. Measured on the 38-tool catalog: a capped
-# read-only turn that chains assistant.capabilities, dashboard.summary and customers.search quotes
-# 1,751 characters, of which the projected capability inventory is 1,236 (32 per tool). Quoted in
-# full, that same inventory alone was 4,019 and the turn needed 4,675, so the step beside it was
-# evicted. The ceiling stays where it is: raising it only buys catalog growth, and the projection is
-# what stops one tool from eating the turn. tests/unit/test_assistant_tool_loop.py derives that
-# relation from this constant and from the real catalog, so a widening inventory fails there.
-_TOOL_EVIDENCE_LIMIT = 5_500
-# How much of the box one result may spend, by the job it does. Two listings must coexist in a turn
-# (`conversations.list` then `customers.search`), so each may take a bit less than half. A detail tool
-# -- one conversation's transcript, one fetched page -- is the answer for its turn, so it may take
-# more; what it must never do is take so much that the box cannot hold it once, which is why each of
-# those tools carries its own byte bound and this share only pins the relation.
-_LISTING_EVIDENCE_SHARE = 0.45
-_DETAIL_EVIDENCE_SHARE = 0.78
-_KB_EVIDENCE_LIMIT = 4_000
+# Shared evidence budgets and their rationale live in budgets.py.
+from app.chat.assistant.budgets import (
+    _DETAIL_EVIDENCE_SHARE,
+    _KB_EVIDENCE_LIMIT,
+    _LISTING_EVIDENCE_SHARE,
+    _TOOL_EVIDENCE_LIMIT,
+)
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
+# The validation message travels into the repair prompt and the persisted guardrails snapshot, so it
+# is one bounded line: enough to name the bound, never the whole pydantic traceback.
+_ARGUMENTS_ERROR_LIMIT = 200
 _ARTIFACT_INVENTORY_LIMIT = 10
 MAX_ASSISTANT_TOOL_STEPS = 6
 # Bodies loaded for the responder every turn, even when the planner does not
@@ -132,6 +126,38 @@ def bounded_fallback(reason: str) -> PlannerOutput:
         summary="No pude planificar esa solicitud de forma segura. Inténtalo nuevamente.",
         requires_approval=False,
     )
+
+
+def _arguments_error_text(exc: Exception) -> str:
+    """Name the bound a plan missed, in one bounded line, from the boundary's own words.
+
+    `str(ValidationError)` starts with a count line ("1 validation error for SearchArgs"), which tells
+    a repairing model nothing. The field and its message are what a correction needs; anything else
+    falls back to the exception text, flattened and bounded because it ends up in a prompt and in the
+    persisted guardrails snapshot.
+    """
+    details = getattr(exc, "errors", None)
+    errors = details() if callable(details) else None
+    if isinstance(errors, list) and errors:
+        first = errors[0] or {}
+        location = ".".join(str(part) for part in first.get("loc") or ())
+        message = str(first.get("msg") or "")
+        text = f"{location}: {message}" if location else message
+    else:
+        text = str(exc)
+    return text.strip().replace("\n", " ")[:_ARGUMENTS_ERROR_LIMIT] or type(exc).__name__
+
+
+
+    """Build the bounded, persisted diagnosis for one planner failure."""
+    raw_text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False, default=str)
+    return {
+        "reason": reason,
+        "stage": stage,
+        "exception_type": type(error).__name__,
+        "exception": str(error)[:_PLANNER_FAILURE_EXCERPT_LIMIT],
+        "raw_excerpt": raw_text[:_PLANNER_FAILURE_EXCERPT_LIMIT],
+    }
 
 
 def _planner_failure(reason: str, stage: str, error: Exception, raw: object = "") -> dict[str, str]:
@@ -367,6 +393,101 @@ PLANNER_REPAIR_DIRECTIVE = (
 )
 
 
+def _planner_messages(state: AssistantState) -> list[dict]:
+    """Build the effective system/user planner prompt, shared by planning and repair."""
+    from app.services.prompts import load_assistant_config
+
+    config = load_assistant_config(role=state.get("actor_role"))
+    user_prompt = config.prompts["plan"]
+    available_tools = _planner_tool_catalog(list(_effective_tools(state)))
+    available_skills = json.dumps(
+        [{"name": skill.name, "description": skill.description} for skill in _effective_skill_index(state)],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    for key, value in {
+        "user_input": state["content"],
+        "available_tools": available_tools,
+        "available_skills": available_skills,
+        "context": _planner_context_text(state),
+    }.items():
+        user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
+    if state.get("cost_directive"):
+        user_prompt += "\n\n" + state["cost_directive"]
+    tool_images = _tool_image_parts(state)
+    user_content: object = [{"type": "text", "text": user_prompt}, *tool_images] if tool_images else user_prompt
+    return [
+        {"role": "system", "content": _effective_persona(state, config)},
+        {"role": "user", "content": user_content},
+    ]
+
+
+def repair_plan(state: AssistantState) -> AssistantState:
+    """Give one guardrails-rejected plan a single, explicitly bounded correction turn."""
+    diagnosis = ((state.get("planner") or {}).get("failure") or {})
+    guard = state.get("guardrails") or {}
+    try:
+        previous_plan = json.loads(diagnosis.get("raw_excerpt", "{}"))
+    except (TypeError, json.JSONDecodeError):
+        # A truncated excerpt is not the plan: the persisted excerpt is bounded, so a long plan arrives
+        # cut. `state["plan"]` cannot stand in for it either -- guardrails already replaced it with the
+        # bounded fallback by the time this node runs -- and showing the model a plan it never wrote is
+        # worse than showing it none. The rejection below names the reason either way.
+        previous_plan = None
+    whitelisted = "true" if guard.get("whitelisted") else "false"
+    arguments_valid = "true" if guard.get("arguments_valid") else "false"
+    arguments_error = guard.get("arguments_error") or ""
+    rejection = (
+        f"Guardrails rejected the previous plan: whitelisted={whitelisted}; "
+        f"arguments_valid={arguments_valid}. Return a corrected plan only.\n"
+        + (f"Arguments error: {arguments_error}\n" if arguments_error else "")
+        + (
+            f"Previous plan: {json.dumps(previous_plan, ensure_ascii=False, separators=(',', ':'))}\n"
+            if previous_plan is not None
+            else ""
+        )
+        + f"{PLANNER_REPAIR_DIRECTIVE}"
+    )
+    messages = [*_planner_messages(state)]
+    if previous_plan is not None:
+        messages.append({"role": "assistant", "content": json.dumps(previous_plan, ensure_ascii=False)})
+    messages.append({"role": "user", "content": rejection})
+    raw_text, _completion, call_failure = _planner_call(messages, state, "planner_guardrails_repair")
+    repaired = None
+    valid = False
+    if call_failure is None:
+        try:
+            raw = load_planner_payload(raw_text)
+            repaired, valid, parse_failure = parse_planner_output(raw, raw_text=raw_text)
+        except json.JSONDecodeError as exc:
+            parse_failure = _planner_failure("invalid_json", "parse", exc, raw_text)
+        if not valid:
+            call_failure = parse_failure
+    result: AssistantState = {"plan_repair_attempted": True}
+    if valid and repaired is not None:
+        result.update({
+            "planner": {**repaired.model_dump(), "valid": True},
+            "plan": repaired.model_dump(),
+            "status": "planned",
+            "response": None,
+        })
+        return result
+    failure = call_failure or diagnosis or _planner_failure(
+        "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails")
+    )
+    _log_planner_failure(failure)
+    fallback = bounded_fallback(failure["reason"])
+    result.update({
+        "plan_repair_terminal": True,
+        "planner": {**fallback.model_dump(), "valid": False, "failure": failure},
+        "plan": fallback.model_dump(),
+        "guardrails": {**guard, "decision": "fallback"},
+        "response": fallback.summary,
+        "status": "responding",
+    })
+    return result
+
+
 def _planner_call(messages: list[dict], state: AssistantState, call_key: str) -> tuple[str, object, dict[str, str] | None]:
     """Run one paid planner call and read its text, keeping today's bounded diagnoses."""
     try:
@@ -403,27 +524,7 @@ def _read_planner_plan(raw_text: str) -> tuple[PlannerOutput | None, bool, dict[
 
 def plan_llm(state: AssistantState) -> AssistantState:
     """Ask the configured provider for a strict plan on every production turn."""
-    from app.services.prompts import load_assistant_config
-
-    config = load_assistant_config(role=state.get("actor_role"))
-    user_prompt = config.prompts["plan"]
-    available_tools = _planner_tool_catalog(list(_effective_tools(state)))
-    available_skills = json.dumps(
-        [{"name": skill.name, "description": skill.description} for skill in _effective_skill_index(state)],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    for key, value in {"user_input": state["content"], "available_tools": available_tools,
-                       "available_skills": available_skills, "context": _planner_context_text(state)}.items():
-        user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
-    if state.get("cost_directive"):
-        user_prompt += "\n\n" + state["cost_directive"]
-    tool_images = _tool_image_parts(state)
-    user_content: object = [{"type": "text", "text": user_prompt}, *tool_images] if tool_images else user_prompt
-    messages: list[dict] = [
-        {"role": "system", "content": _effective_persona(state, config)},
-        {"role": "user", "content": user_content},
-    ]
+    messages = _planner_messages(state)
     raw_text, completion, diagnosis = _planner_call(messages, state, "planner")
     planner: PlannerOutput | None = None
     valid = False
@@ -695,12 +796,15 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
     whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
+    arguments_error = ""
     if whitelisted:
         try:
             arguments_valid = bool(get_tool(tool_name).args_model.model_validate(plan_data.get("arguments", {})))
-        except Exception:
-            pass
-    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
+        except Exception as exc:
+            # Keep the boundary's own words. A repair turn that is told only "invalid" cannot know
+            # which bound it missed.
+            arguments_error = _arguments_error_text(exc)
+    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "arguments_error": arguments_error, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
     if not whitelisted or not arguments_valid:
         diagnosis = _planner_failure(
             "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails"), plan_data

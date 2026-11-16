@@ -115,6 +115,10 @@ class AssistantState(TypedDict, total=False):
     # a write to an undeclared channel, which would leave the no-evidence directive as dead text.
     no_evidence: bool
     legacy_compat: bool
+    # In-memory only: caps guardrails repair to one provider call in a single turn.
+    plan_repair_attempted: bool
+    # Set only when repair_plan itself failed, so routing terminates that terminal fallback.
+    plan_repair_terminal: bool
     resume: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
     cost_directive: str
