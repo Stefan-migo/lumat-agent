@@ -71,6 +71,23 @@ fuera de rango, y ningún techo puede quedar invisible para quien tiene que resp
   resultado en el cierre de la sesión; el plan de `gentle-ai review assess` con el ítem 2 escalado
   exigió verificador separado.
 
+## Delivery
+
+Tamaño real acumulado: **734 líneas autoradas en 4 commits** (el motor avisa a partir de ~400).
+
+| Commit | Líneas | Contenido |
+|---|---|---|
+| `b9bcac74` | 396 | S2-S5: contrato publicado, acotado, turno de reparación, y sus tests |
+| `cac86102` | 105 | S6 + ficha de la feature |
+| `3429c742` | 7 | evidencia real de `full` y la trampa del `-qq` |
+| `21027ee7` | 226 | A2/A3 del verificador + sus 13 probes |
+
+Decisión pendiente del owner (la entrega no es mía): **un PR de 734 líneas** o **dos PRs encadenados**
+—contrato+acotado (S2/S3) y reparación (S4/S5)—, que exige re-cortar `b9bcac74`, porque ahí viajan las
+tres unidades juntas: el acotado deja inalcanzable el `le=` que publica S2, y la reparación no tendría
+nada que corregir sin el techo publicado. Partirlos es posible pero artificial; queda a criterio del
+owner.
+
 ## Log
 
 - **L1** (2026-11-16, pedido del owner, verbatim):
