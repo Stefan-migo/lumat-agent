@@ -211,6 +211,39 @@ def test_push_failure_creates_and_delivers_policy_fallback(monkeypatch):
         assert delivered == [("+56944444444", "Fallback case")]
 
 
+def test_panel_notification_payload_includes_operation_destination_for_legacy_rows():
+    from app.panel.api.serializers import to_panel_notification_dict
+
+    user_id = _user("destination-admin")
+    with SessionLocal() as session:
+        operation = notifications.create_operation(
+            session, recipient="admin", channel="panel", content="Destination",
+            source_entity="appointment", source_id="42", idempotency_key="destination:42",
+            user_id=user_id,
+        )
+        row = session.scalar(select(PanelNotification).where(PanelNotification.operation_id == operation.id))
+        payload = to_panel_notification_dict(row)
+        assert payload["source_entity"] == "appointment"
+        assert payload["source_id"] == "42"
+
+        # An old panel row still obtains its destination from its existing operation.
+        old_operation = NotificationOperation(
+            recipient="panel", channel="panel", content="Old row", source_entity="case",
+            source_id="9", idempotency_key="destination:legacy", status="sent",
+        )
+        session.add(old_operation)
+        session.flush()
+        legacy = PanelNotification(
+            user_id=user_id, operation_id=old_operation.id, title="Old", content="Old row",
+            source="case", status="sent",
+        )
+        session.add(legacy)
+        session.flush()
+        legacy_payload = to_panel_notification_dict(legacy)
+        assert legacy_payload["source_entity"] == "case"
+        assert legacy_payload["source_id"] == "9"
+
+
 def test_notification_ordering_handles_mixed_results():
     user_id = _user("ordering-admin")
     with SessionLocal() as session:

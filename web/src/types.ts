@@ -177,7 +177,7 @@ export interface MemoryRelation {
 }
 export interface PendingMemoryRelationsResponse { relations: MemoryRelation[]; }
 
-export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
+export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; source_entity?: string | null; source_id?: string | null; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
 export interface NotificationsResponse { notifications: PanelNotification[]; }
 
 export type InternalChatStatus = 'processing' | 'processed' | 'failed' | 'approval_pending' | 'rejected' | 'cancelled';

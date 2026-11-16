@@ -589,6 +589,136 @@ describe('AppShell (T6.4)', () => {
   });
 });
 
+describe('AppShell — notification destinations and shared state', () => {
+  it('opens a visit notification and marks it read from the popover', async () => {
+    window.history.replaceState({}, '', '/panel/app/');
+    const calls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      calls.push(path);
+      if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [{ id: 31, user_id: 1, operation_id: 9, title: 'Visita reagendada', content: 'Una visita cambió de horario.', source: 'appointment', source_entity: 'appointment', source_id: '7', channel: 'panel', status: 'sent', read_at: null, created_at: null }] }), { status: 200 });
+      if (path === '/panel/api/notifications/31/read') return new Response(JSON.stringify({ notification: { id: 31, read_at: '2026-09-03T12:00:01Z' } }), { status: 200 });
+      if (path === '/panel/api/appointments/7') return new Response(JSON.stringify({ appointment: { id: 7, service: 'Visita técnica', customer_id: 2, case_id: 3, technician_id: 4, local_start: '2026-09-26T10:00:00', timezone: 'America/Santiago', starts_at: '2026-09-26T13:00:00Z', ends_at: '2026-09-26T14:00:00Z', duration_minutes: 60, status: 'booked', history: [] }, customer: { id: 2, name: 'Ana' }, case: { id: 3, conversation_id: null }, conversation_summary: null }), { status: 200 });
+      return new Response('{}', { status: 200 });
+    });
+    const { container } = render(<AppShell user={operador} />);
+    await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' });
+    const user = userEvent.setup();
+    await user.click(headerActions(container).getByRole('button', { name: 'Notificaciones (1 sin leer)' }));
+    await user.click(await screen.findByRole('button', { name: /Visita reagendada/i }));
+    expect(window.location.pathname).toBe('/panel/app/agenda/7');
+    expect(calls).toContain('/panel/api/notifications/31/read');
+    expect(await screen.findByRole('heading', { name: 'Visita técnica' })).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('opens a conversation notification and marks it read from the center', async () => {
+    window.history.replaceState({}, '', '/panel/app/notifications');
+    const calls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      calls.push(path);
+      if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [{ id: 41, user_id: 1, operation_id: 11, title: 'Emergencia en curso', content: 'Atiende la conversación.', source: 'emergencia', source_entity: 'conversation', source_id: '19', channel: 'panel', status: 'sent', read_at: null, created_at: null }] }), { status: 200 });
+      if (path === '/panel/api/notifications/41/read') return new Response(JSON.stringify({ notification: { id: 41, read_at: '2026-09-03T12:00:01Z' } }), { status: 200 });
+      if (path === '/panel/api/conversations/19') return new Response(JSON.stringify({ conversation: { id: 19, customer_id: 2, state: 'human', created_at: '2026-09-03T12:00:00Z', customer: { id: 2, name: 'Cliente' } }, messages: [], messages_total: 0 }), { status: 200 });
+      return new Response('{}', { status: 200 });
+    });
+    render(<AppShell user={admin} />);
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Emergencia en curso/ }));
+    expect(window.location.pathname).toBe('/panel/app/conversations/19');
+    expect(calls).toContain('/panel/api/notifications/41/read');
+    expect(await screen.findByRole('heading', { name: 'Cliente', level: 1 })).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('reflects mark-all from the popover in the center and rolls back visibly on failure', async () => {
+    window.history.replaceState({}, '', '/panel/app/');
+    let markAllCalls = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/panel/api/notifications/read-all') {
+        markAllCalls += 1;
+        return markAllCalls === 1 ? new Response('failure', { status: 500 }) : new Response(JSON.stringify({ ok: true, read: 1 }), { status: 200 });
+      }
+      if (path === '/panel/api/notifications') return new Response(JSON.stringify({ notifications: [{ id: 32, user_id: 1, operation_id: 10, title: 'Alerta de costo', content: 'Límite cercano.', source: 'cost_alert', source_entity: null, source_id: null, channel: 'panel', status: 'sent', read_at: null, created_at: null }] }), { status: 200 });
+      return new Response('{}', { status: 200 });
+    });
+    const { container } = render(<AppShell user={admin} />);
+    const user = userEvent.setup();
+    await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' });
+    await user.click(headerActions(container).getByRole('button', { name: 'Notificaciones (1 sin leer)' }));
+    await user.click(screen.getByRole('button', { name: 'Marcar todas como leídas' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos marcar todas las notificaciones como leídas');
+    expect(headerActions(container).getByRole('button', { name: 'Notificaciones (1 sin leer)' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Marcar todas como leídas' }));
+    expect(await headerActions(container).findByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ver todas las notificaciones' }));
+    expect(await screen.findByText('Leída')).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('debounces realtime bursts and refreshes on socket recovery and window focus', async () => {
+    vi.useFakeTimers();
+    try {
+      let requestCount = 0;
+      const recoveryListeners: Array<() => Promise<void>> = [];
+      vi.spyOn(realtimeClient, 'subscribe').mockImplementation(() => () => true);
+      vi.spyOn(realtimeClient, 'registerRecovery').mockImplementation((listener) => { recoveryListeners.push(listener); return () => true; });
+      vi.spyOn(realtimeClient, 'connect').mockImplementation(() => undefined);
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        const path = new URL(String(input), 'http://localhost').pathname;
+        if (path === '/panel/api/notifications') {
+          requestCount += 1;
+          return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+        }
+        return new Response('{}', { status: 200 });
+      });
+      render(<AppShell user={admin} />);
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(requestCount).toBe(1);
+      const subscriber = vi.mocked(realtimeClient.subscribe).mock.calls.at(-1)?.[0];
+      subscriber?.({ type: 'notification', data: {} });
+      subscriber?.({ type: 'notification', data: {} });
+      subscriber?.({ type: 'notification', data: {} });
+      await act(async () => { await vi.advanceTimersByTimeAsync(599); });
+      expect(requestCount).toBe(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); await Promise.resolve(); });
+      expect(requestCount).toBe(2);
+      await act(async () => { await recoveryListeners[0](); });
+      expect(requestCount).toBe(3);
+      await act(async () => { window.dispatchEvent(new Event('focus')); await Promise.resolve(); await Promise.resolve(); });
+      expect(requestCount).toBe(4);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('keeps a confirmed read when an older notification fetch resolves afterwards', async () => {
+    window.history.replaceState({}, '', '/panel/app/notifications');
+    let resolveOld!: (response: Response) => void;
+    let listCount = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/panel/api/notifications') {
+        listCount += 1;
+        if (listCount === 1) return await new Promise<Response>((resolve) => { resolveOld = resolve; });
+        return new Response(JSON.stringify({ notifications: [{ id: 55, user_id: 1, operation_id: 2, title: 'Emergencia', content: 'Revisar.', source: 'emergencia', source_entity: null, source_id: null, channel: 'panel', status: 'sent', read_at: null, created_at: null }] }), { status: 200 });
+      }
+      if (path === '/panel/api/notifications/55/read') return new Response(JSON.stringify({ notification: { id: 55, read_at: '2026-09-03T12:00:01Z' } }), { status: 200 });
+      return new Response('{}', { status: 200 });
+    });
+    render(<AppShell user={admin} />);
+    await act(async () => { window.dispatchEvent(new Event('focus')); await Promise.resolve(); await Promise.resolve(); });
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Marcar como leída' }));
+    expect(await screen.findByText('Leída')).toBeInTheDocument();
+    await act(async () => { resolveOld(new Response(JSON.stringify({ notifications: [{ id: 55, user_id: 1, operation_id: 2, title: 'Emergencia', content: 'Revisar.', source: 'emergencia', source_entity: null, source_id: null, channel: 'panel', status: 'sent', read_at: null, created_at: null }] }), { status: 200 })); await Promise.resolve(); });
+    expect(screen.getByText('Leída')).toBeInTheDocument();
+    expect(headerActions(document.body).getByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+});
+
 describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () => {
   /** Nav button lookup by aria-label; the sidebar keeps its base
    *  `display: none` in jsdom (no ≥64rem media query), so role queries

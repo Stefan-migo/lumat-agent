@@ -5,9 +5,9 @@ import type { PanelNotification, User } from '../../types';
 
 const user: User = { username: 'ana', role: 'admin' };
 const notifications: PanelNotification[] = [
-  { id: 1, user_id: 1, operation_id: 1, title: 'Atención humana requerida', content: 'Carla Núñez necesita hablar con una persona.', source: 'case', channel: 'whatsapp', status: 'sent', read_at: null, created_at: new Date(Date.now() - 5 * 60_000).toISOString() },
-  { id: 2, user_id: 1, operation_id: 2, title: 'Nueva visita agendada', content: 'Pedro Soto · Visita de diagnóstico', source: 'appointment', channel: 'whatsapp', status: 'sent', read_at: null, created_at: new Date(Date.now() - 20 * 60_000).toISOString() },
-  { id: 3, user_id: 1, operation_id: 3, title: 'Documento procesado', content: 'El manual de servicios ya está disponible.', source: 'document', channel: 'email', status: 'sent', read_at: new Date().toISOString(), created_at: new Date(Date.now() - 60 * 60_000).toISOString() },
+  { id: 1, user_id: 1, operation_id: 1, title: 'Emergencia detectada', content: 'Carla Núñez necesita atención prioritaria.', source: 'emergencia', source_entity: 'conversation', source_id: '44', channel: 'panel', status: 'sent', read_at: null, created_at: new Date(Date.now() - 5 * 60_000).toISOString() },
+  { id: 2, user_id: 1, operation_id: 2, title: 'Nueva visita agendada', content: 'Pedro Soto · Visita de diagnóstico', source: 'appointment', source_entity: 'appointment', source_id: '7', channel: 'panel', status: 'sent', read_at: null, created_at: new Date(Date.now() - 20 * 60_000).toISOString() },
+  { id: 3, user_id: 1, operation_id: 3, title: 'Alerta de costo', content: 'El gasto se acerca al límite configurado.', source: 'cost_alert', source_entity: null, source_id: null, channel: 'panel', status: 'sent', read_at: new Date().toISOString(), created_at: new Date(Date.now() - 60 * 60_000).toISOString() },
 ];
 
 const meta = {

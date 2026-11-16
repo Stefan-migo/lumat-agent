@@ -7,7 +7,6 @@ import {
   BookOpen,
   Bot,
   Calendar,
-  CalendarDays,
   Check,
   CheckCheck,
   ChevronLeft,
@@ -34,6 +33,8 @@ import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
 import { Tabs } from "../primitives/Tabs";
 import { canOpen, footerViewsForRole } from "./panelAccess";
+import { notificationSourcePresentation } from "../../notifications/labels";
+import { notificationDestination } from "./panelRoutes";
 
 export function formatNotificationTime(createdAt: string | null, now = new Date()): string {
   if (!createdAt) return "";
@@ -48,12 +49,6 @@ export function formatNotificationTime(createdAt: string | null, now = new Date(
   const relative = new Intl.RelativeTimeFormat("es-CL", { numeric: "always" }).format(value, unit);
   return relative.replace(/^hace\s+/i, "Hace ").replace(new RegExp(`\\s${unit === "month" ? "mes(es)?" : unit === "year" ? "año(s)?" : unit === "week" ? "semana(s)?" : unit === "day" ? "día(s)?" : unit === "hour" ? "hora(s)?" : unit === "minute" ? "minuto(s)?" : "segundo(s)?"}$`, "i"), ` ${shortUnit}`);
 }
-
-const NOTIFICATION_SOURCE_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
-  case: { icon: UserRound, tone: "case" },
-  appointment: { icon: CalendarDays, tone: "appointment" },
-  customer: { icon: Users, tone: "customer" },
-};
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "chatbot-metrics" | "users" | "projects" | "profile";
 
@@ -128,6 +123,9 @@ export interface PanelShellProps {
   notificationState?: NotificationState;
   notifications?: PanelNotification[];
   onMarkAllNotificationsRead?: () => void | Promise<void>;
+  onOpenNotification?: (notification: PanelNotification) => void;
+  markAllNotificationsPending?: boolean;
+  markAllNotificationsError?: string | null;
 }
 
 export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
@@ -365,6 +363,9 @@ export function PanelShell({
   notificationState = { status: "loading" },
   notifications = [],
   onMarkAllNotificationsRead,
+  onOpenNotification,
+  markAllNotificationsPending = false,
+  markAllNotificationsError,
 }: PanelShellProps) {
   const currentBreadcrumbView = breadcrumbView ?? currentView;
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
@@ -627,20 +628,23 @@ export function PanelShell({
                         <Tabs ariaLabel="Filtrar notificaciones" activeTab={notificationTab} onTabChange={setNotificationTab} tabs={[
                           { id: "all", label: "Todas" }, { id: "unread", label: <>No leídas <span className="panel-shell__notifications-count">{unread.length}</span></> },
                         ]}>{() => null}</Tabs>
-                        {unread.length > 0 ? <button type="button" className="panel-shell__notifications-mark-all" onClick={() => void onMarkAllNotificationsRead?.()}><Icon icon={CheckCheck} />Marcar todas como leídas</button> : null}
+                        {unread.length > 0 || markAllNotificationsPending ? <button type="button" className="panel-shell__notifications-mark-all" disabled={markAllNotificationsPending} onClick={() => void onMarkAllNotificationsRead?.()}><Icon icon={CheckCheck} />{markAllNotificationsPending ? "Marcando…" : "Marcar todas como leídas"}</button> : null}
                       </div> : null}
+                      {markAllNotificationsError ? <p role="alert">{markAllNotificationsError}</p> : null}
                       <ul className="panel-shell__notifications-list">
                         {visible.map((notification) => {
-                          const source = NOTIFICATION_SOURCE_ICONS[notification.source] ?? { icon: Bell, tone: "default" };
-                          return <li key={notification.id} className={`panel-shell__notification${notification.read_at === null ? " panel-shell__notification--unread" : ""}`}>
-                            <span className={`panel-shell__notification-icon panel-shell__notification-icon--${source.tone}`}><Icon icon={source.icon} /></span>
+                          const source = notificationSourcePresentation(notification.source);
+                          const destination = notificationDestination(notification.source_entity, notification.source_id);
+                          const copy = <><span role="img" aria-label={source.label} className={`panel-shell__notification-icon panel-shell__notification-icon--${source.tone}`}><Icon icon={source.icon} /></span>
                             {notification.read_at === null ? <span className="panel-shell__notification-dot" aria-label="No leída" /> : null}
-                            <div className="panel-shell__notification-copy"><strong>{notification.title}</strong><p>{notification.content}</p></div>
-                            <small>{formatNotificationTime(notification.created_at)}</small>
-                            {/* PanelNotification has no destination entity id; rows intentionally do not navigate. */}
-                          </li>;
+                            <span className="panel-shell__notification-copy"><strong>{notification.title}</strong><span>{notification.content}</span></span>
+                            <small>{formatNotificationTime(notification.created_at)}</small></>;
+                          const rowClass = `panel-shell__notification${notification.read_at === null ? " panel-shell__notification--unread" : ""}`;
+                          return destination
+                            ? <li key={notification.id}><button type="button" className={rowClass} aria-label={`${notification.title}. ${notification.content}. Ir a ${destination.view === "agenda" ? "la visita" : "la conversación"}`} style={{ width: "100%", border: 0, background: "transparent", color: "inherit", textAlign: "left", font: "inherit", cursor: "pointer" }} onClick={() => onOpenNotification?.(notification)}>{copy}</button></li>
+                            : <li key={notification.id} className={rowClass}>{copy}</li>;
                         })}
-                        {notifications.length === 0 ? <li className="panel-shell__notification-empty"><span className="panel-shell__notification-empty-icon"><Icon icon={Bell} /><Icon icon={Check} /></span><strong>No tienes notificaciones</strong><p>Aquí verás las novedades de tus conversaciones, visitas y documentos.</p></li> : visible.length === 0 ? <li className="panel-shell__notification-empty"><strong>No hay notificaciones no leídas</strong></li> : null}
+                        {notifications.length === 0 ? <li className="panel-shell__notification-empty"><span className="panel-shell__notification-empty-icon"><Icon icon={Bell} /><Icon icon={Check} /></span><strong>No tienes notificaciones</strong><p>Aquí verás avisos de visitas, emergencias, alertas de costo y fallos de notificación.</p></li> : visible.length === 0 ? <li className="panel-shell__notification-empty"><strong>No hay notificaciones no leídas</strong></li> : null}
                       </ul>
                       {notifications.length > 0 ? <div className="panel-shell__notifications-footer"><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones<Icon icon={ArrowRight} /></button></div> : null}
                     </>;

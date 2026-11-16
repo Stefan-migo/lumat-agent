@@ -66,8 +66,20 @@ describe("PanelShell rail contract (2C-1)", () => {
     await user.click(within(document.querySelector(".panel-shell__header-actions") as HTMLElement).getByRole("button", { name: "Notificaciones" }));
     const dialog = screen.getByRole("dialog", { name: "Notificaciones" });
     expect(within(dialog).getByText("No tienes notificaciones")).toBeInTheDocument();
-    expect(within(dialog).getByText("Aquí verás las novedades de tus conversaciones, visitas y documentos.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Aquí verás avisos de visitas, emergencias, alertas de costo y fallos de notificación.")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Marcar todas como leídas" })).not.toBeInTheDocument();
+  });
+
+  it("names the destination of actionable notification buttons", async () => {
+    const user = userEvent.setup();
+    const onOpenNotification = vi.fn();
+    render(<PanelShell user={admin} notifications={[{ ...notifications[1], source_entity: "appointment", source_id: "7" }]} notificationState={{ status: "ready", unread: 1 }} onOpenNotification={onOpenNotification}><p>Contenido</p></PanelShell>);
+    await user.click(within(document.querySelector(".panel-shell__header-actions") as HTMLElement).getByRole("button", { name: "Notificaciones (1 sin leer)" }));
+    const visitButton = within(screen.getByRole("dialog", { name: "Notificaciones" })).getByRole("button", { name: /ir a la visita/i });
+    visitButton.focus();
+    await user.keyboard("{Enter}");
+    expect(onOpenNotification).toHaveBeenCalledOnce();
+    expect(visitButton).toHaveFocus();
   });
 
   it("formats notification timestamps as Chilean relative time", () => {
