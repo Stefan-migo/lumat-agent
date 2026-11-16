@@ -68,8 +68,11 @@ fuera de rango, y ningún techo puede quedar invisible para quien tiene que resp
   final de conteo**. La evidencia válida es el código de salida más la ausencia de `FAILED`/`ERROR`;
   no hay que confundir “no hay resumen” con “no corrió”.
 - Verificación independiente (`gentle-ai-verify`, read-only) sobre `git diff 9d7a6f8e..HEAD`:
-  resultado en el cierre de la sesión; el plan de `gentle-ai review assess` con el ítem 2 escalado
-  exigió verificador separado.
+  **7/7 S# cumplen, cero bloqueantes**, cinco advertencias (A1-A5). A2 y A3 se arreglaron en
+  `21027ee7`; A1, A4 y A5 se aceptan y quedan explicadas en L7. Sus 13 probes se incorporaron como
+  `tests/unit/test_assistant_guardrails_repair_probes.py`.
+- Gate final sobre el árbol definitivo (`906549d7`): `pytest_exit=0`, **cero** líneas `FAILED`/`ERROR`,
+  progreso hasta `[100%]`, 10m54s. `bash scripts/test.sh shape 9d7a6f8e` → ninguna shape surface tocada.
 
 ## Delivery
 
