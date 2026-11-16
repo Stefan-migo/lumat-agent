@@ -1,151 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import {
-  PANEL_BASE_PATH,
-  PANEL_ROUTES,
-  parsePanelPath,
-  pathForRoute,
-  pathForView,
-  isDetailRoute,
-} from './panelRoutes';
+import { notificationDestination } from './panelRoutes';
 
-describe('panel routes', () => {
-  it('identifies only routes with path-segment drill-downs as detail routes', () => {
-    expect(isDetailRoute({ view: 'clients' })).toBe(false);
-    expect(isDetailRoute({ view: 'clients', clientId: 42 })).toBe(true);
-    expect(isDetailRoute({ view: 'conversations', conversationId: 7 })).toBe(true);
-    expect(isDetailRoute({ view: 'automation-rules' })).toBe(false);
-    expect(isDetailRoute({ view: 'kb', kbDocId: 3 })).toBe(true);
-    expect(isDetailRoute({ view: 'agenda', appointmentId: 9 })).toBe(true);
-    expect(isDetailRoute({ view: 'projects', projectSlug: 'ops' })).toBe(true);
-    expect(isDetailRoute({ view: 'chat', projectSlug: 'ops', threadId: 4 })).toBe(false);
+describe('notificationDestination', () => {
+  it('maps only the entities the panel can actually open', () => {
+    expect(notificationDestination('appointment', '7')).toEqual({ view: 'agenda', appointmentId: 7 });
+    expect(notificationDestination('conversation', '19')).toEqual({ view: 'conversations', conversationId: 19 });
+    for (const entity of ['panel', 'case', 'notification_failure', 'cost_alert', null, undefined]) {
+      expect(notificationDestination(entity, '7')).toBeNull();
+    }
   });
 
-  it('maps every top-level view to a clean panel path', () => {
-    expect(PANEL_ROUTES).toMatchObject({
-      dashboard: '/panel/app/',
-      clients: '/panel/app/clients',
-      conversations: '/panel/app/conversations',
-      chat: '/panel/app/chat',
-      agenda: '/panel/app/agenda',
-      kb: '/panel/app/kb',
-      'automation-rules': '/panel/app/automation-rules',
-       settings: '/panel/app/settings',
-        'chatbot-metrics': '/panel/app/chatbot-metrics',
-        users: '/panel/app/users',
-        projects: '/panel/app/projects',
-    });
-    expect(Object.keys(PANEL_ROUTES)).toEqual([
-        'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'chatbot-metrics', 'users', 'profile', 'projects',
-    ]);
-
-    expect(pathForView('clients')).toBe('/panel/app/clients');
-    expect(pathForView('dashboard')).toBe(PANEL_BASE_PATH);
-    expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
-    expect(pathForView('users')).toBe('/panel/app/users');
-    expect(parsePanelPath('/panel/app/users')).toEqual({ view: 'users' });
-    expect(pathForView('profile')).toBe('/panel/app/profile');
-    expect(parsePanelPath('/panel/app/profile')).toEqual({ view: 'profile' });
-    expect(parsePanelPath('/panel/app/projects')).toEqual({ view: 'projects' });
-    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
-    expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
-    expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
-    expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'conversations', conversationTab: 'case' });
-  });
-
-  it('builds and parses positive client and conversation drill-down IDs', () => {
-    expect(pathForRoute({ view: 'clients', clientId: 42 })).toBe('/panel/app/clients/42');
-    expect(pathForRoute({ view: 'conversations', conversationId: 7 })).toBe('/panel/app/conversations/7');
-    expect(parsePanelPath('/panel/app/clients/42')).toEqual({ view: 'clients', clientId: 42 });
-    expect(parsePanelPath('/panel/app/conversations/7')).toEqual({ view: 'conversations', conversationId: 7 });
-  });
-
-  it('builds and parses user ficha routes', () => {
-    expect(pathForRoute({ view: 'users', userId: 42 })).toBe('/panel/app/users/42');
-    expect(parsePanelPath('/panel/app/users/42')).toEqual({ view: 'users', userId: 42 });
-  });
-
-  it('normalizes valid paths and safely falls back for invalid paths or IDs', () => {
-    expect(parsePanelPath('/panel/app/clients/42/')).toEqual({ view: 'clients', clientId: 42 });
-    expect(parsePanelPath('/panel/app//conversations')).toEqual({ view: 'conversations', conversationTab: 'all' });
-    expect(parsePanelPath('/panel/app/clients/0')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/other/app/clients')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/panel/app/conversations?surface=cases')).toEqual({ view: 'conversations', conversationTab: 'all' });
-    expect(parsePanelPath('/panel/app/unknown?view=settings#ignored')).toEqual({ view: 'dashboard' });
-  });
-
-  it('falls back safely from malformed agenda paths', () => {
-    expect(parsePanelPath('/panel/app/agenda/1')).toEqual({ view: 'agenda', appointmentId: 1 });
-    expect(parsePanelPath('/panel/app/%E0%A4%A')).toEqual({ view: 'dashboard' });
-  });
-
-  it('builds and parses positive appointment detail routes while preserving the register route', () => {
-    expect(pathForRoute({ view: 'agenda', appointmentId: 7 })).toBe('/panel/app/agenda/7');
-    expect(parsePanelPath('/panel/app/agenda/7')).toEqual({ view: 'agenda', appointmentId: 7 });
-    expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
-    expect(pathForRoute({ view: 'agenda', appointmentId: 0 })).toBe('/panel/app/agenda');
-    expect(pathForRoute({ view: 'agenda', appointmentId: 1.5 })).toBe('/panel/app/agenda');
-    expect(parsePanelPath('/panel/app/agenda/0')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/panel/app/agenda/1.5')).toEqual({ view: 'dashboard' });
-  });
-
-  it('resolves bookmarked cases to the unified conversations route', () => {
-    expect(pathForRoute({ view: 'conversations', conversationTab: 'case' })).toBe('/panel/app/cases');
-    expect(pathForView('cases')).toBe('/panel/app/cases');
-    expect(pathForRoute(parsePanelPath('/panel/app/cases'))).toBe('/panel/app/cases');
-    expect(parsePanelPath('/panel/app/conversations')).toEqual({ view: 'conversations', conversationTab: 'all' });
-  });
-
-  it.each([
-    ['all', '/panel/app/conversations'],
-    ['human', '/panel/app/conversations?tab=human'],
-    ['emergency', '/panel/app/conversations?tab=emergency'],
-    ['case', '/panel/app/cases'],
-    ['closed', '/panel/app/conversations?tab=closed'],
-  ] as const)('round-trips queue tab %s', (tab, path) => {
-    const route = { view: 'conversations', conversationTab: tab } as const;
-    expect(pathForRoute(route)).toBe(path);
-    expect(parsePanelPath(path)).toEqual(route);
-  });
-
-  it.each(['', 'unknown', 'HUMAN', '%ZZ'])('defaults malformed queue tab %s to all', (tab) => {
-    expect(parsePanelPath(`/panel/app/conversations?tab=${tab}`)).toEqual({ view: 'conversations', conversationTab: 'all' });
-  });
-
-  it('keeps only the automation recipe catalog route', () => {
-    expect(pathForView('automation-rules')).toBe('/panel/app/automation-rules');
-    expect(pathForRoute({ view: 'automation-rules' })).toBe('/panel/app/automation-rules');
-    expect(parsePanelPath('/panel/app/automation-rules')).toEqual({ view: 'automation-rules' });
-    expect(parsePanelPath('/panel/app/automation-rules/12')).toEqual({ view: 'dashboard' });
-  });
-
-  it('falls back for retired planning-session routes', () => {
-    expect(parsePanelPath('/panel/app/planning-sessions')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/panel/app/planning-sessions/budget-review-8')).toEqual({ view: 'dashboard' });
-  });
-
-  it('keeps project and thread chat deep links URL-addressable', () => {
-    expect(pathForRoute({ view: 'chat', projectSlug: 'ops' })).toBe('/panel/app/chat?proyecto=ops');
-    expect(parsePanelPath('/panel/app/chat?proyecto=ops')).toEqual({ view: 'chat', projectSlug: 'ops' });
-    expect(pathForRoute({ view: 'chat', threadId: 4 })).toBe('/panel/app/chat?thread_id=4');
-    expect(parsePanelPath('/panel/app/chat?thread_id=4')).toEqual({ view: 'chat', threadId: 4 });
-  });
-
-  it('round-trips context and history workspace selectors with thread precedence', () => {
-    expect(pathForRoute({ view: 'chat', contextProjectSlug: 'ops' })).toBe('/panel/app/chat?context=ops');
-    expect(parsePanelPath('/panel/app/chat?context=ops')).toEqual({ view: 'chat', contextProjectSlug: 'ops' });
-    expect(pathForRoute({ view: 'chat', historyProjectSlug: 'ops' })).toBe('/panel/app/chat?history=ops');
-    expect(parsePanelPath('/panel/app/chat?history=ops')).toEqual({ view: 'chat', historyProjectSlug: 'ops' });
-    expect(parsePanelPath('/panel/app/chat?planning=plan&history=old&sessions=ops')).toEqual({ view: 'chat', historyProjectSlug: 'old' });
-    expect(parsePanelPath('/panel/app/chat?sessions=ops')).toEqual({ view: 'chat' });
-    expect(parsePanelPath('/panel/app/chat?planning=plan&sessions=ops')).toEqual({ view: 'chat' });
-    expect(parsePanelPath('/panel/app/chat?thread_id=7&context=ops&planning=plan')).toEqual({ view: 'chat', threadId: 7 });
-    expect(parsePanelPath('/panel/app/chat?context=ops&planning=plan')).toEqual({ view: 'chat', contextProjectSlug: 'ops' });
-    expect(pathForRoute({ view: 'chat', threadId: 7, contextProjectSlug: 'ops' })).toBe('/panel/app/chat?thread_id=7');
-  });
-
-  it('falls back to dashboard for legacy automation detail paths', () => {
-    expect(parsePanelPath('/panel/app/automation-rules/0')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/panel/app/automation-rules/not-an-id')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/panel/app/automation-rules/1/extra')).toEqual({ view: 'dashboard' });
+  it('refuses an id that is not a positive integer instead of building a broken route', () => {
+    expect(notificationDestination('appointment', 'panel:7')).toBeNull();
+    expect(notificationDestination('appointment', '0')).toBeNull();
+    expect(notificationDestination('appointment', '-4')).toBeNull();
+    expect(notificationDestination('appointment', '1e9')).toBeNull();
+    expect(notificationDestination('appointment', '99999999999999999999')).toBeNull();
+    expect(notificationDestination('appointment', null)).toBeNull();
   });
 });

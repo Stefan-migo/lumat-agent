@@ -121,6 +121,10 @@ def emergency(state: ConversationState) -> dict:
                     source="emergencia",
                     source_id=case.id,
                     dedupe_key=f"emergencia:{case.id}",
+                    # The notice is about the case, but the place to act on it is the conversation
+                    # where it happened: that is where the operator reads it and answers.
+                    destination_entity="conversation",
+                    destination_id=conversation.id,
                     recipient_user_ids=(
                         [conversation.assigned_user_id]
                         if conversation.assigned_user_id is not None else None

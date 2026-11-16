@@ -188,15 +188,27 @@ def notify_admins(
     source_id: str | int,
     dedupe_key: str,
     recipient_user_ids: list[int] | None = None,
+    destination_entity: str | None = None,
+    destination_id: str | int | None = None,
 ) -> None:
+    """Fan one panel notice out to the admins plus any explicit recipients.
+
+    `source` and `source_id` describe the *category* the panel renders (an icon and a label); they
+    are not a destination. The destination is a separate, explicit pair, because those two disagree:
+    an emergency is categorised as `emergencia` but is acted on in the conversation it came from, and
+    its `source_id` is the case. Whatever a caller does not name stays `panel`, which navigates
+    nowhere -- a channel identity is not a business entity, and pretending otherwise is how a
+    notification ends up with a link that never resolves.
+    """
     now = datetime.now(timezone.utc)
+    navigable = destination_entity is not None and destination_id is not None
     operation = create_operation(
         session,
         recipient="panel",
         channel="panel",
         content=content,
-        source_entity="panel",
-        source_id=f"panel:{source_id}",
+        source_entity=destination_entity if navigable else "panel",
+        source_id=str(destination_id) if navigable else f"panel:{source_id}",
         idempotency_key=f"panel:{dedupe_key}",
         status="sent",
         delivered_at=now,
