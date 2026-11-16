@@ -56,6 +56,8 @@ def to_customer_dict(customer: Customer) -> dict:
         "email": customer.email,
         "comuna": customer.comuna,
         "address": customer.address,
+        "direccion_lat": customer.direccion_lat,
+        "direccion_lon": customer.direccion_lon,
         "state": customer.state.value,
         "allowed_transitions": [state.value for state in CUSTOMER_STATE_TRANSITIONS[customer.state]],
         "consent_status": customer.consent_status,

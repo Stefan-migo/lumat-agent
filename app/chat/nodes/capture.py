@@ -457,6 +457,9 @@ def _merge_extracted(
         if item.get("direction", "inbound") == "inbound" and item.get("text")
     }
     current_text = _current_text(state)
+    current_pending = captured.get("_pending") or []
+    if isinstance(current_pending, str):
+        current_pending = [current_pending]
     skipped = set(captured.get("_skipped") or [])
     for field, value in (extracted or {}).items():
         if field not in EXTRACTABLE_FIELDS or not isinstance(value, str):
@@ -502,7 +505,12 @@ def _merge_extracted(
             ):
                 captured[field] = value
         elif field in {"failure", "address"}:
-            if value not in prior_texts:
+            repeated_pending_address = (
+                field == "address"
+                and field in current_pending
+                and _normalize(value) == _normalize(current_text)
+            )
+            if value not in prior_texts or repeated_pending_address:
                 captured[field] = value
         else:
             captured[field] = value
@@ -516,7 +524,6 @@ def _validate_address_candidate(captured: dict, state: ConversationState) -> dic
     if (
         not isinstance(candidate, str)
         or not candidate
-        or captured.get("_contact_offered")
         or not (candidate_is_new or candidate_was_deferred)
     ):
         return None
@@ -541,8 +548,20 @@ def _validate_address_candidate(captured: dict, state: ConversationState) -> dic
         # without treating the typed address as trusted or replacing an older
         # address; the customer still gets the normal reformulation.
         captured.pop("address", None)
-        captured["direccion_estado"] = "sin_referencia"
-        captured["direccion_fuente"] = "cliente"
+        # The master had no reference for this candidate, so it cannot change the
+        # outcome attached to a different address already stored on the ficha.
+        with session_scope() as session:
+            customer = session.get(Customer, state.customer_id)
+            stored_address = customer.address if customer is not None else None
+            stored_comuna = customer.comuna if customer is not None else None
+        if stored_address and (
+            stored_address != candidate or stored_comuna != captured.get("comuna")
+        ):
+            captured.pop("direccion_estado", None)
+            captured.pop("direccion_fuente", None)
+        else:
+            captured["direccion_estado"] = "sin_referencia"
+            captured["direccion_fuente"] = "cliente"
         captured["_pending"] = ["address"]
         return _reask_pending(captured, ["address"], state)
     if (captured.get("_asked") or {}).get("address", 0) >= MAX_ASKS_PER_FIELD:

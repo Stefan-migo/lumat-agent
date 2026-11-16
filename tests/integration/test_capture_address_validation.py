@@ -50,7 +50,9 @@ def _start_capture(*, stored_address=None, stored_state=None, consent=False):
         return customer.id, conversation.id
 
 
-def _pending_address_state(customer_id, conversation_id, text, *, commune="Ñuñoa", captured=None):
+def _pending_address_state(
+    customer_id, conversation_id, text, *, commune="Ñuñoa", captured=None, window=None
+):
     data = {
         "failure": "no enciende", "equipment": "unknown", "comuna": commune,
         "availability": "mañana", "name": "Ana", "email": "ana@example.cl",
@@ -60,7 +62,7 @@ def _pending_address_state(customer_id, conversation_id, text, *, commune="Ñuñ
     return ConversationState(
         customer_id=customer_id, conversation_id=conversation_id,
         phone="+56912345678", captured=data,
-        extracted={"address": text}, window=[{"text": text}],
+        extracted={"address": text}, window=window or [{"text": text}],
     )
 
 
@@ -131,6 +133,28 @@ def test_second_failure_offers_pin_and_insistence_persists_client_state():
     assert stored["direccion_validada_at"] is not None
 
 
+def test_repeating_the_pending_address_after_pin_offer_persists_client_state():
+    customer_id, conversation_id = _start_capture()
+    first_text = "Avenida Irarrázaval 65"
+    first = capture_node.capture(
+        _pending_address_state(customer_id, conversation_id, first_text)
+    )
+    assert "pin" in first["replies"][0].lower() or "ubicación" in first["replies"][0].lower()
+
+    repeated = capture_node.capture(_pending_address_state(
+        customer_id, conversation_id, first_text, captured=first["captured"],
+        window=[{"text": first_text, "direction": "inbound"},
+                {"text": first_text, "direction": "inbound"}],
+    ))
+    stored = _read_customer(customer_id)
+
+    assert repeated["captured"]["address"] == first_text
+    assert repeated["captured"]["direccion_estado"] == "cliente"
+    assert stored["address"] == first_text
+    assert stored["direccion_estado"] == "cliente"
+    assert stored["direccion_fuente"] == "cliente"
+
+
 def test_colina_persists_sin_referencia_not_no_encontrada():
     customer_id, conversation_id = _start_capture()
 
@@ -143,6 +167,71 @@ def test_colina_persists_sin_referencia_not_no_encontrada():
 
     assert stored["direccion_estado"] == "sin_referencia"
     assert stored["direccion_estado"] != "no_encontrada"
+
+
+def test_sin_referencia_attempt_does_not_relabel_the_stored_address():
+    customer_id, conversation_id = _start_capture(
+        stored_address="Avenida Irarrázaval 40", stored_state="validada", consent=True
+    )
+    state = _pending_address_state(
+        customer_id, conversation_id, "Avenida Irarrázaval 42", commune="Colina",
+    )
+
+    with SessionLocal() as session:
+        session.get(Customer, customer_id).comuna = "Ñuñoa"
+        session.commit()
+    capture_node.capture(state)
+    stored = _read_customer(customer_id)
+
+    assert stored["address"] == "Avenida Irarrázaval 40"
+    assert stored["direccion_estado"] == "validada"
+    assert stored["direccion_fuente"] == "callejero"
+
+
+def test_corrected_address_after_stored_contact_offer_is_validated_and_persisted():
+    customer_id, conversation_id = _start_capture(
+        stored_address="Avenida Irarrázaval 40", stored_state="validada", consent=True
+    )
+    with SessionLocal() as session:
+        customer = session.get(Customer, customer_id)
+        customer.comuna = "Ñuñoa"
+        customer.email = "ana@example.cl"
+        customer.created_at = datetime.now(timezone.utc)
+        session.commit()
+
+    initial = {
+        "failure": "no enciende", "equipment": "unknown", "availability": "mañana",
+        "name": "Ana",
+    }
+    offered = capture_node._ask_next(initial, ConversationState(
+        customer_id=customer_id, conversation_id=conversation_id, phone="+56912345678",
+        captured=initial, extracted={}, window=[{"text": "quiero una visita"}],
+    ))
+    refused = capture_node.capture(ConversationState(
+        customer_id=customer_id, conversation_id=conversation_id, phone="+56912345678",
+        captured=offered["captured"], extracted={},
+        window=[{"text": "no, me cambié de casa"}],
+    ))
+    comuna = capture_node.capture(ConversationState(
+        customer_id=customer_id, conversation_id=conversation_id, phone="+56912345678",
+        captured=refused["captured"], extracted={"comuna": "Ñuñoa"},
+        window=[{"text": "Ñuñoa"}],
+    ))
+    email = capture_node.capture(ConversationState(
+        customer_id=customer_id, conversation_id=conversation_id, phone="+56912345678",
+        captured=comuna["captured"], extracted={"email": "ana@example.cl"},
+        window=[{"text": "ana@example.cl"}],
+    ))
+    corrected = "Avenida Irarrázaval 42"
+    result = capture_node.capture(_pending_address_state(
+        customer_id, conversation_id, corrected, captured=email["captured"],
+    ))
+    stored = _read_customer(customer_id)
+
+    assert result["captured"].get("direccion_estado") == "validada", result["captured"]
+    assert stored["address"] == corrected
+    assert stored["direccion_estado"] == "validada"
+    assert stored["direccion_fuente"] == "callejero"
 
 
 def test_recent_stored_validated_contact_is_still_offered_unchanged():
@@ -183,3 +272,5 @@ def test_client_read_model_exposes_database_validation_fields():
     assert read_model["direccion_estado"] == "validada"
     assert read_model["direccion_fuente"] == "callejero"
     assert read_model["direccion_validada_at"] is not None
+    assert read_model["direccion_lat"] is None
+    assert read_model["direccion_lon"] is None
