@@ -70,6 +70,24 @@ llegue a quien tiene que atenderla — no sólo a los admins.
 | T6 | S12 | writer — vocabulario y copy | _pendiente_ |
 | T7 | S1-S12 | inline — verificación por spec, verificador independiente y cierre | _pendiente_ |
 
+## Delivery
+
+Tamaño real: **1166 líneas autoradas en 5 commits**. El motor de slices avisa a partir de ~400.
+
+| Commit | Archivos | Cambio | Contenido |
+|---|---|---|---|
+| `b2da79c1` | 3 | +68 | migración 069 + modelos + `test_migrations` (ítem 1) |
+| `7115f022` | 4 | +166/−12 | audiencia, push por audiencia, `selectinload` |
+| `f28de340` | 2 | +105/−12 | permisos de operaciones y push (ítem 2) |
+| `66444e10` | 13 | +499/−210 | destino, click, fuente única, vocabulario (backend + `web/`) |
+| `7fad152b` | 1 | +94 | esta ficha |
+
+Decisión pendiente del owner (la entrega no es del agente): **un PR de 1166 líneas** o **dos
+encadenados** — `b2da79c1` + `7115f022` + `f28de340` (backend: migración, audiencia, permisos) y
+luego `66444e10` + `7fad152b` (frontend + ficha) —. El encadenado es natural porque el frontend
+consume los campos que expone el serializer del backend, así que el orden ya está dado por el
+diseño.
+
 ## Log
 
 - **L1** (2026-11-16, pedido del owner, verbatim):
