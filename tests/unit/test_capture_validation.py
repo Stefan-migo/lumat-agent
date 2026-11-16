@@ -65,6 +65,20 @@ def test_real_corruptions_are_not_accepted_as_answers(harness, field, turn, extr
         assert turn not in " ".join(result.get("replies", []))
 
 
+def test_old_inbound_answer_is_not_recaptured_for_a_different_pending_field(harness):
+    result = capture_node.capture(ConversationState(
+        customer_id=1, conversation_id=2, phone="+56912345678",
+        captured={"_pending": ["failure"], "_asked": {"failure": 1}},
+        extracted={"failure": "mi calefont no enciende"},
+        window=[
+            {"text": "mi calefont no enciende", "direction": "inbound"},
+            {"text": "Hola, sigo teniendo el mismo problema pero ahora no puedo contestar la pregunta todavía.", "direction": "inbound"},
+        ],
+    ))
+
+    assert "failure" not in result["captured"]
+
+
 def test_email_requires_a_valid_email_but_accepts_it_out_of_turn(harness):
     result = capture_node.capture(make_state(
         "ana@example.cl", captured={"_pending": ["equipment"], "_asked": {"equipment": 1}},
