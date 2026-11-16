@@ -43,8 +43,10 @@ llegue a quien tiene que atenderla — no sólo a los admins.
   de guardarlo.
 
 - **S9** El payload de una notificación expone `source_entity` y `source_id` de su operación. El
-  frontend navega a las entidades conocidas y no navega para el resto. **Sin migración ni backfill**:
-  las filas viejas también navegan porque el dato ya existía en la operación.
+  frontend navega a las entidades conocidas y no navega para el resto. **Sin migración ni backfill.**
+  Las notificaciones creadas **antes** de este cambio no navegan, y no se van a backfillear: el emisor
+  anterior estampaba una identidad de canal (`panel` / `panel:N`), no una entidad. Se acepta a cambio
+  de no inventar un destino retroactivo.
 
 - **S10** Un click en una notificación —en el popover y en el centro— **navega y la marca leída** en el
   mismo gesto, y el estado se refleja en los dos lugares.
@@ -63,7 +65,7 @@ llegue a quien tiene que atenderla — no sólo a los admins.
 
 | ID | Specs | Route | Commit |
 |---|---|---|---|
-| T1 | S5 | writer — migración `069` + modelos | _pendiente_ |
+| T1 | S5 | revertida — `responsible_id` ya existía; sin migración (`fc03b3e6`) | `fc03b3e6` |
 | T2 | S2, S3, S4, S6 | writer — audiencia en el fan-out y en los cuatro puntos de emisión | _pendiente_ |
 | T3 | S7, S8 | writer — permisos de operaciones, paginación y suscripción push | _pendiente_ |
 | T4 | S9, S10 | writer — destino en el payload, mapeo y click | _pendiente_ |
@@ -73,7 +75,7 @@ llegue a quien tiene que atenderla — no sólo a los admins.
 
 ## Delivery
 
-Neto de la rama contra `main`: **23 archivos, +1068/−388**, en 9 commits. El motor de slices avisa a
+Neto de la rama contra el merge-base: **23 archivos, +1069/−388**, en 10 commits. El motor de slices avisa a
 partir de ~400 líneas; entregar como **un solo PR** es decisión del owner.
 
 | Commit | Archivos | Cambio | Contenido |
@@ -104,7 +106,7 @@ para el riesgo declarado: **el ítem 1 ya no aplica** — la rama no cambia el e
   6. Worktree: **«Sí, worktree ODD y rama odd/»**.
 
 - **L3** (2026-11-16, decisiones del agente con derecho a veto del owner, confirmadas): el «asignado»
-  de una emergencia es el de **la conversación que la originó** (`Conversation.assigned_user_id`), no el
+  de una emergencia es el de **la conversación que la originó** (`Conversation.assigned_user_id`, nombre que L5 corrige: el campo real es `responsible_id`), no el
   técnico de una visita, porque la emergencia nace en el chat; y el click **navega y marca leída** en el
   mismo gesto.
 
@@ -127,3 +129,16 @@ para el riesgo declarado: **el ítem 1 ya no aplica** — la rama no cambia el e
   `069_notification_assignment` quedó en `schema_migrations` del test-db y `test_schema_migrations_records_version`
   empezó a fallar por una versión registrada sin archivo. Limpiada a mano. Es exactamente el riesgo
   que el verificador había marcado en el rollback, ocurriendo en vivo.
+
+- **L7** (2026-11-16, error mío con pérdida de cobertura): al crear
+  `web/src/components/domain/panelRoutes.test.ts` lo escribí con `write` sin comprobar que ya existía,
+  y **borré 151 líneas** de tests del contrato de rutas (`parsePanelPath`, `pathForRoute`,
+  `isDetailRoute`, tabs, ids inválidos, paths malformados, query legacy). Lo encontró el verificador
+  comparando contra el merge-base; restaurado íntegro y con el bloque nuevo añadido al final (171
+  líneas, 24 tests verdes). Lección: antes de escribir un archivo, mirá si existe.
+
+- **L8** (2026-11-16, corrección de una cláusula que escribí de memoria): S9 afirmaba que las filas
+  viejas navegarían porque el dato ya estaba en la operación. Es falso: el emisor anterior estampaba
+  `("panel", "panel:N")`. Sin backfill, esas notificaciones quedan sin click para siempre, y se acepta
+  explícitamente en vez de inventar un destino retroactivo. El verificador lo probó con una fila
+  legacy real.
