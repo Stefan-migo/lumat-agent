@@ -15,9 +15,10 @@ cliente cambia de forma y el panel la consume). Verificación independiente obli
 - **S1 — Nada se guarda sin validar.** La dirección que el cliente da en el chat pasa por el validador **antes** de escribirse en `customer.direccion`. Toda escritura lleva su resultado.
 - **S2 — Offline y gratis.** La referencia es el **Maestro de Calles / Ejes Viales con numeración** del INE e IDE Chile (licencia CC BY 4.0), filtrado a `coverage.communes` y versionado como extracto con su archivo de atribución. **Sin API paga, sin geocoder de terceros y sin ninguna llamada de red en el camino de captura.** Un geocoder que se cae no puede bloquear a un cliente.
 - **S3 — Estructura (L1).** Un validador determinista exige tipo de vía (`calle`, `avenida`, `pasaje`, `camino`, `ruta` y sus abreviaturas), nombre y número. «mi casa», «por ahí», «asdf» y cualquier texto sin esos elementos **no son una dirección**.
-- **S4 — Callejero (L2).** Sobre la comuna ya capturada y validada por lista cerrada (`coverage.communes`): si la calle existe en esa comuna y el número cae dentro de un rango oficial → `validada`; si la calle existe y el número queda fuera de todos los rangos → `dudosa`; si la calle no aparece en esa comuna → `no_encontrada`. La comparación de nombres es accent-insensitive con corrección de typos acotada, y respeta la paridad del rango.
+- **S4 — Callejero (L2).** Sobre la comuna ya capturada y validada por lista cerrada (`coverage.communes`): si la calle existe en esa comuna y el número cae dentro de un rango oficial → `validada`; si la calle existe pero el maestro no trae numeración para ella → `sin_numeracion` (la calle se verificó, el número no); si la calle existe y el número queda fuera de todos los rangos → `dudosa`; si la calle no aparece en una comuna que el maestro sí cubre → `no_encontrada`. La comparación de nombres es accent-insensitive con corrección de typos acotada, y respeta la paridad del rango.
+- **S4b — Comuna sin dato no es calle inexistente.** Si el maestro no cubre la comuna, el resultado es `sin_referencia`, nunca `no_encontrada`: no se puede afirmar que una calle no existe en un territorio del que no hay dato. Medido el 2026-11-16: Colina queda fuera de la capa Censo 2017.
 - **S5 — Nunca un rechazo duro.** `dudosa` y `no_encontrada` reformulan la pregunta una vez; a la segunda ofrecen el pin de ubicación de WhatsApp, y si el cliente insiste se guarda igual con su estado. La dirección del error manda: un falso rechazo bloquea a un cliente real que quiere pagar; una dirección inventada cuesta un viaje.
-- **S6 — Resultado persistido.** La ficha del cliente guarda `direccion_estado` (`validada|dudosa|no_encontrada|cliente`), `direccion_fuente` (`callejero|pin|cliente`), `direccion_lat` y `direccion_lon` (nullable), y la API del panel los expone. La superficie visual del panel **no** entra en esta unidad.
+- **S6 — Resultado persistido.** La ficha del cliente guarda `direccion_estado` (`validada|sin_numeracion|dudosa|no_encontrada|sin_referencia|cliente`), `direccion_fuente` (`callejero|pin|cliente`), `direccion_lat` y `direccion_lon` (nullable), y la API del panel los expone. La superficie visual del panel **no** entra en esta unidad. En este corte las coordenadas quedan nulas: el extracto conserva rangos y descarta geometría, así que el origen de las coordenadas es el pin (Fase 2).
 - **S7 — El cliente no repite lo que ya dio.** La revalidación no puede romper la oferta de contacto guardado (`capture_confirm_contact`): una dirección `validada` de menos de un año se sigue ofreciendo tal cual.
 - **S8 — Fuera de alcance.** Geocoders pagos (Google) y online (Nominatim/Photon) en el camino de captura; el parsing de mensajes `location` de WhatsApp (Fase 2, `MessageType.LOCATION` + su propia migración); y la ubicación predial verificada: la interpolación da la calle y el rango, **no** el domicilio exacto.
 
@@ -32,6 +33,20 @@ cliente cambia de forma y el panel la consume). Verificación independiente obli
 | T5 | Integración en `app/chat/nodes/capture.py`: validar antes de guardar, reformular una vez, ofrecer el pin a la segunda | S1, S5, S7 | worker | `feat(chat): validate the address against the street master` |
 | T6 | Exportar el resultado en `app/panel/api/routes/clients.py` + textos de respuesta y su documentación | S5, S6 | worker | junto a T5 |
 | T7 | Verificación independiente del corte (items 1 y 3) | todas | verifier | — |
+
+## Estado de las tareas
+
+| ID | Estado | Commit |
+|---|---|---|
+| T1 | hecho | `cf26ee25` |
+| T2 | hecho | `754eed4e` |
+| T3 | pendiente — corte 2 | — |
+| T4 | pendiente — corte 2 | — |
+| T5 | pendiente — corte 2 | — |
+| T6 | pendiente — corte 3 | — |
+| T7 | pendiente — corte 3 | — |
+
+**Frontera de corte (2026-11-16):** el corte 1 cierra en 415 líneas autoradas en 3 commits (`86c5878c`, `cf26ee25`, `754eed4e`). El validador, la integración en `capture.py` y la verificación independiente van en un corte 2 sobre rama nueva desde `main` con este corte mergeado: el esquema ya está aplicado, así que el corte 2 no necesita migración.
 
 ## Log
 
@@ -48,3 +63,9 @@ Decisión 2026-11-16: se resuelve con el **callejero oficial de Chile** (INE/IDE
 **L3 (orden de trabajo, verbatim):**
 
 > En paralelo, dos worktrees
+
+**L4 (hallazgo de la medición, 2026-11-16).** Al construir el extracto contra la capa real del INE aparecieron dos hechos que el diseño no preveía y que cambiaron S4 y S6:
+
+1. El maestro cubre la Provincia de Santiago: **Colina no está** en la capa Censo 2017. De ahí nace `sin_referencia` (S4b): una comuna sin dato no autoriza a decir «esa calle no existe».
+2. Sólo **51 % de las 6.047 calles del extracto traen numeración** (3.135 con rango, 2.912 sin él). De ahí nace `sin_numeracion` (S4): la calle se verifica, el número no, y eso no es lo mismo que un número contradictorio.
+3. El extracto pesa **145 KB gz** (577 KB crudos) para 6 comunas y 35.604 segmentos: cabe en el repo, y por eso las pruebas del validador son deterministas y offline.
