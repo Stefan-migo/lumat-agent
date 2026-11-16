@@ -176,7 +176,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
         ("wamid.cm2c.6", "lunes o martes en la tarde"),  # availability
         ("wamid.cm2c.7", "Juan Perez"),                # name
         ("wamid.cm2c.8", "juan@mail.cl"),              # email
-        ("wamid.cm2c.9", "Av. Siempre Viva 123"),      # address
+        ("wamid.cm2c.9", "Avenida Irarrázaval 40"),  # address
         ("wamid.cm2c.10", "sí"),                       # consent -> completion
     ]
     for wamid, text in turns:
@@ -192,7 +192,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     assert customer.name == "Juan Perez"
     assert customer.email == "juan@mail.cl"
     assert customer.comuna == "Ñuñoa"
-    assert customer.address == "Av. Siempre Viva 123"
+    assert customer.address == "Avenida Irarrázaval 40"
     assert customer.consent_status is True
     assert customer.consent_at is not None
 
@@ -200,6 +200,7 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     assert captured["name"] == "Juan Perez"
     assert captured["email"] == "juan@mail.cl"
     assert captured["comuna"] == "Ñuñoa"
+    assert captured["direccion_estado"] == "validada"
     assert captured["equipment"] == "Marca X modelo Y, 5 años"
     assert captured["failure"] == "no enciende desde ayer"
     assert "evidence" not in captured

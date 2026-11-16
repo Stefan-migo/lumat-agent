@@ -158,7 +158,7 @@ def test_an_out_of_turn_email_refusal_skips_the_email_not_the_asked_field(harnes
 
 def test_a_refused_email_is_not_asked_again_on_later_turns(harness):
     result = capture_node.capture(make_state(
-        "Calle 1",
+        "Avenida Irarrázaval 40",
         captured={
             "failure": "fuga de agua", "equipment": "calefont", "comuna": "Ñuñoa",
             "availability": "después de las 6", "name": "Jorge",
@@ -169,7 +169,7 @@ def test_a_refused_email_is_not_asked_again_on_later_turns(harness):
 
     replies = " ".join(result.get("replies", [])).lower()
     assert "correo" not in replies
-    assert result["captured"].get("address") == "Calle 1"
+    assert result["captured"].get("address") == "Avenida Irarrázaval 40"
 
 
 def test_ack_uses_configured_text_and_only_non_sensitive_captured_facts(harness, monkeypatch):

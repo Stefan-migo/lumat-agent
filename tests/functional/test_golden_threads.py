@@ -42,7 +42,7 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
     seed_booking_availability,
 ):
     seed_customer_kb(
-        "Juan Pérez, Los Leones 1234. ¿Cuánto cuesta la visita? "
+        "Juan Pérez, Avenida Irarrázaval 40. ¿Cuánto cuesta la visita? "
         "La visita de diagnóstico tiene un valor referencial de prueba de $15.000."
     )
     technician_id = seed_booking_availability()
@@ -59,7 +59,7 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
     # still-missing fields — name/address are extracted from this same message.
     post_message(
         client, "wamid.ci5.book.3",
-        "Juan Pérez, Los Leones 1234. ¿Cuánto cuesta la visita?",
+        "Juan Pérez, Avenida Irarrázaval 40. ¿Cuánto cuesta la visita?",
     )
     with SessionLocal() as session:
         replies = _outbound_texts(session)
@@ -70,7 +70,7 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
     pivot_reply = replies[-1]
     assert any(k in pivot_reply.lower() for k in ("equipo", "horario", "comuna"))
     assert captured.get("name") == "Juan Pérez"
-    assert captured.get("address") == "Los Leones 1234"
+    assert captured.get("address") == "Avenida Irarrázaval 40"
     assert "¿Cuál es tu nombre?" not in pivot_reply
     assert "¿Cuál es tu dirección?" not in pivot_reply
 
@@ -91,6 +91,7 @@ def test_booking_thread_interrupts_for_price_then_resumes_capture(
         customer, conversation = _customer_conversation(session)
         captured = conversation.captured_data or {}
     assert captured.get("_pending") == "consent"
+    assert captured.get("direccion_estado") == "validada"
     assert "consent" not in captured
 
     post_message(client, "wamid.ci5.book.90", "sí")
