@@ -58,7 +58,14 @@ fuera de rango, y ningún techo puede quedar invisible para quien tiene que resp
   → verde, 108 tests.
 - `bash scripts/test.sh shape main` → `shape: no shape surface touched -> targeted tiers are safe`.
 - `bash scripts/test.sh full` (con `FASTEMBED_CACHE_PATH` y redirigido a archivo, nunca por un pipe):
-  el resumen real de pytest queda registrado en el cierre de esta ficha.
+  `pytest_exit=0`, progreso hasta `[100%]`, cero líneas `FAILED`/`ERROR`, 10m56s sobre el árbol
+  commiteado. **Nota de instrumentación**: `pyproject.toml` fija `addopts = "-q"` y el tier `full`
+  agrega otro `-q`, o sea `-qq`, que imprime los puntos y las advertencias pero **suprime la línea
+  final de conteo**. La evidencia válida es el código de salida más la ausencia de `FAILED`/`ERROR`;
+  no hay que confundir “no hay resumen” con “no corrió”.
+- Verificación independiente (`gentle-ai-verify`, read-only) sobre `git diff 9d7a6f8e..HEAD`:
+  resultado en el cierre de la sesión; el plan de `gentle-ai review assess` con el ítem 2 escalado
+  exigió verificador separado.
 
 ## Log
 
