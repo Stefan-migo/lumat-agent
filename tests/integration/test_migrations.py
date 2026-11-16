@@ -820,6 +820,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("065_case_ficha",),
         ("066_commitments",),
         ("067_message_transcript",),
+        ("068_customer_address_validation",),
     ]
 
 

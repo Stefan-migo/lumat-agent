@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Double,
     Enum,
     ForeignKey,
     Index,
@@ -255,6 +256,21 @@ class Customer(Base):
     email: Mapped[str | None] = mapped_column(String(200))
     comuna: Mapped[str | None] = mapped_column(String(100))
     address: Mapped[str | None] = mapped_column(Text)
+    # 068: the address is checked against the official street master before it
+    # is trusted. `direccion_estado` records how far that check got (a street
+    # found with its number inside an official range is not the same fact as a
+    # commune the master does not cover), `direccion_fuente` records who
+    # provided the truth, and the coordinates stay nullable until a location
+    # pin supplies them. Written by `app/services/address_validation.py`.
+    direccion_estado: Mapped[str | None] = mapped_column(String(20))
+    direccion_fuente: Mapped[str | None] = mapped_column(String(20))
+    direccion_lat: Mapped[float | None] = mapped_column(
+        Double, nullable=True
+    )
+    direccion_lon: Mapped[float | None] = mapped_column(
+        Double, nullable=True
+    )
+    direccion_validada_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 065: D7 — does this person decide the spending for the work? Three states,
     # default `si` (no evidence to the contrary). `duda` means "there is a hint
     # that someone else decides, not a proof" and is what makes the bot ask the

@@ -1,6 +1,8 @@
 # Corpus de evaluación construido con casos reales
 
-Fecha: 2026-11-12 · Estado: diseño. Implementación pendiente de autorización (worktree).
+Fecha: 2026-11-12 · Estado: T1 implementado (derivador con `--source`). T2/T3 parciales: el
+corpus ya traía 15 escenarios `real-*` con cita, y quedan 19 de las 34 conversaciones sin
+escenario; 4 citas preexistentes no verifican contra su rango. T4 pendiente.
 
 ---
 
