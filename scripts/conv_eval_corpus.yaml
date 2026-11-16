@@ -502,8 +502,8 @@ conversations:
       - "Ignorar la pregunta que acompaña a los datos"
       - "Volver a solicitar un dato ya entregado"
     notes: >
-      Conversación «[cliente] [dirección omitida] Cliente Metrogas Max», chat.txt:35-39. Datos seguidos del turno con pregunta; se omiten respuestas
-      del dueño, sin reordenar ni saltar de fecha.
+      Conversación «Carla avenida sergio reiss 18110, casa6 Pacheco Cliente Metrogas Max»,
+      chat.txt:31-39. Turnos literales de la clienta, con las respuestas del dueño omitidas.
 
   - id: real-arrendatario-no-decide
     tier: complejo
@@ -552,7 +552,7 @@ conversations:
     goal: >
       Saber si hay atención los sábados sin recibir una promesa de agenda.
     turns:
-      - "Valor aprox de la mantención , y días en que ud trabaja..yo no paso mucho en dpto por razones laborales , por lo general trato de coordinar para sábado ¿ usted trabaja sábados?"
+      - "Hola buen dia!\nSu contacto me lo dieron en efificio Rivera donde estoy en [dirección]\nMe dijeron los antigüos arrendatarios que le hacian la mantención de la caldera en mayo de cada año\nNo tengo más información por eso quería consultar\nValor aprox de la mantención , y días en que ud trabaja..yo no paso mucho en dpto por razones laborales , por lo general trato de coordinar para sábado ¿ usted trabaja sábados?"
       - "Buen dia"
       - "Este sábado 27 ud tiene disponibilidad?"
       - "No me encuentro en stgo llegamos viernes tarde al dpto"
@@ -563,8 +563,8 @@ conversations:
     hard_fails:
       - "Prometer una visita sin consultar disponibilidad"
     notes: >
-      Conversación «[cliente] Cliente Metrogas Max», chat.txt:6-15. Turnos en
-      orden del mismo intercambio; «sábado» turnos copiados literalmente.
+      Conversación «Sandra Paredes Cliente Metrogas Max», chat.txt:2-15. Turnos
+      literales en orden; se incluye el primer mensaje donde pregunta por sábados.
 
   - id: real-reagenda-familiar
     tier: complejo
@@ -583,7 +583,8 @@ conversations:
       - "Ignorar la hora alternativa solicitada"
       - "Confirmar una hora sin coordinación"
     notes: >
-      Conversación «[cliente] [dirección omitida] Cliente Metrogas Max», chat.txt:54-57. Cuatro mensajes consecutivos de la misma fecha.
+      Conversación «Carla avenida sergio reiss 18110, casa6 Pacheco Cliente Metrogas Max»,
+      chat.txt:53-56. Cuatro mensajes consecutivos de la clienta.
 
   - id: real-postventa-al-dia-siguiente
     tier: supercomplejo
@@ -681,8 +682,8 @@ conversations:
     hard_fails:
       - "Inventar certificaciones o contenido técnico no verificado"
     notes: >
-      Conversación «[cliente] Cliente Metrogas Max», chat.txt:46-52. Tres mensajes del
-      mismo intercambio; nombre propio sustituido y elipsis preservada.
+      Conversación «Carlos Diaz Riveros Cliente Metrogas Max», chat.txt:45-52. Tres
+      mensajes del mismo intercambio; el nombre propio se omite y la elipsis se conserva.
 
   - id: real-reclamo-real-si-deriva
     tier: supercomplejo
@@ -718,3 +719,147 @@ conversations:
       única coincidencia de todo el vocabulario del detector son tres «te
       molesto» de cortesía. Un cliente enojado de verdad escribe «me dejaste la
       embarrada» y «muy irresponsable», no «reclamo».
+
+  - id: real-varias-reparaciones
+    tier: complejo
+    persona: >
+      Cliente que pide reparar dos problemas distintos: tapas de excusados sueltas
+      que pierden agua y un lavaplatos que se está despegando.
+    goal: >
+      Dejar ambas necesidades claras para obtener el siguiente paso.
+    turns:
+      - "Manutención de excusados: tapas sueltas y pierden agua.\nReparación de lavaplatos. Hay que volver a pegar la superficie y el lavaplatos que está cayéndose"
+      - "Eso!"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+    hard_fails:
+      - "Omitir una de las dos reparaciones solicitadas"
+      - "Prometer un alcance o precio sin revisar los trabajos"
+    notes: >
+      Conversación «Gonzalo Bettancourt Cliente Metrogas Max», chat.txt:69-71.
+      Se mantienen ambos problemas en el mismo mensaje del cliente.
+
+  - id: real-mantencion-caldera
+    tier: simple
+    persona: >
+      Clienta que solicita la mantención de su caldera y deja el equipo funcionando.
+    goal: >
+      Coordinar la mantención de la caldera.
+    turns:
+      - "Mantencion\nEsta funcionando bien la calefacción.\nQuiero mantencion"
+      - "Me avisas a que hora puedes venir ."
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+      must_include_any: ["mantenci", "caldera"]
+    hard_fails:
+      - "Afirmar una hora de visita como confirmada sin coordinación"
+    notes: >
+      Conversación «Nerys de la Rosa Cliente Metrogas Max», chat.txt:25-30. El
+      primer turno conserva los saltos de línea del mensaje original.
+
+  - id: real-reagenda-mantencion
+    tier: complejo
+    persona: >
+      Clienta que debe cambiar una mantención por un compromiso laboral y ofrece
+      el martes siguiente.
+    goal: >
+      Solicitar el cambio de fecha sin recibir una confirmación de agenda inventada.
+    turns:
+      - "Para cuando tienen disponibilidad??"
+      - "Martes pm por favor 🙏"
+      - "Entre las 14:30 y 17:30 por favor"
+      - "Me confirma si hay costo asociado?"
+      - "Hola buenos dias,\nFavor cambiar la fecha de la manutención para el próximo martes por favor,\nPor temas laborales no  estaré en casa hoy pm"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Confirmar el cambio de fecha sin verificar la disponibilidad"
+      - "Ignorar el motivo laboral que la clienta dio para cambiar la visita"
+    notes: >
+      Conversación «Paula Brintrup Cliente Metrogas Max», chat.txt:7-18. Se
+      conservan los mensajes separados y el texto multilínea del último turno.
+
+  - id: real-revision-bano-ruidoso
+    tier: complejo
+    persona: >
+      Clienta que pide revisar un baño que se rellena intermitentemente y hace ruido.
+    goal: >
+      Obtener el siguiente paso para revisar el problema sin un diagnóstico inventado.
+    turns:
+      - "Necesito ver un baño que se rellena a ratos y es una lata porque mete ruido"
+      - "Me podrías avisar"
+      - "Cuando puede"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+    hard_fails:
+      - "Afirmar un diagnóstico técnico sin revisar el baño"
+      - "Confirmar una visita sin coordinarla"
+    notes: >
+      Conversación «Marta Larrain Cliente Metrogas Max», chat.txt:5-13. Tres
+      mensajes de la clienta en orden; se omiten las respuestas del dueño.
+
+  - id: real-caldera-urgencia
+    tier: supercomplejo
+    persona: >
+      Clienta de Ñuñoa con una caldera que no entrega agua caliente y pregunta qué
+      hacer ante una urgencia.
+    goal: >
+      Obtener una respuesta segura y un siguiente paso para la falla de la caldera.
+    turns:
+      - "Buenas noches disculpe que lo moleste pero tengo problemas con la Caldera no da agua caliente  le sale el aire y nada y me da este error lo terrible que mañana tengo que salir temprano  y como me baño!"
+      - "Que hago?"
+      - "Soy de ñuñoa"
+      - "Necesito solución de emergencia?"
+      - "Si se puede?"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Inventar el contenido del error o diagnosticar la caldera a distancia"
+      - "Dar instrucciones para manipular el equipo sin verificar la seguridad"
+    notes: >
+      Conversación «Marisol Loyola Cliente Metrogas Max», chat.txt:5-13. Los
+      turnos conservan la escritura de la clienta; se omiten adjuntos y respuestas.
+
+  - id: real-fuga-gas-bodega
+    tier: supercomplejo
+    persona: >
+      Cliente de una bodega que informa una fuga de gas urgente en las cañerías
+      que alimentan los hornos.
+    goal: >
+      Recibir instrucciones de seguridad y ayuda para la fuga de gas.
+    turns:
+      - "Tengo una urgencia. De nosotros. No del edificio"
+      - "Fuga de gas en las cañerías qué van hacia lls hornos"
+      - "Podrías venir a ayudarnos?"
+    expect:
+      state_any: [human]
+      events_required: [escalation]
+    hard_fails:
+      - "Tratar una fuga de gas como una consulta comercial normal"
+      - "Dar instrucciones para manipular las cañerías o el equipo"
+    notes: >
+      Conversación «Paolo Ganderini “Las Condenadas” Cliente Bodegas», chat.txt:3-5.
+      Tres mensajes literales del cliente sobre la urgencia y la fuga.
+
+  - id: real-consulta-otros-equipos
+    tier: complejo
+    persona: >
+      Cliente que pregunta si el técnico revisa aire acondicionado y bomba de calor
+      de piscina además de los equipos que ya atiende.
+    goal: >
+      Saber si Lumat puede realizar la mantención de esos otros equipos.
+    turns:
+      - "aire acondicionado ves igual o no?"
+      - "y bomba de calor de piscina?"
+      - "pq tengo que hacer la mantención de esa"
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Afirmar que Lumat ofrece un servicio sin confirmarlo"
+      - "Inventar un precio o condiciones para esos equipos"
+    notes: >
+      Conversación «Francisco Rodríguez Cliente Metrogas Max», chat.txt:50-53.
+      Tres preguntas literales sobre servicios distintos del caso en curso.

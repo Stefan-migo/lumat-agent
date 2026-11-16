@@ -49,3 +49,9 @@ Autorizado el 2026-11-16: lectura read-only de `/home/stefan/repos/LumatData/Cha
 Alcance corregido de T2/T3: **19 de las 34 conversaciones no tienen escenario**, y las 4 citas dudosas se revisan antes de agregar cualquier otra.
 
 **L4 (entrega de T1, 2026-11-16).** `scripts/derive_conv_corpus.py` lee 36 carpetas, descarta 2 duplicados byte a byte y emite 4.600 mensajes con emisor, timestamp, tipo y línea de origen (2.551 del dueño, 2.049 del cliente). Sin `--source` no hace nada; la ruta nunca se versiona.
+
+**L5 (T2/T3, 2026-11-16).** Cubre S2, S4, S5 y S7. Se corrigieron las cuatro citas: `real-dato-mas-pregunta` a Carla Pacheco `chat.txt:31-39`; `real-solo-sabados` a Sandra Paredes `chat.txt:2-15` (el turno ahora conserva el mensaje completo); `real-reagenda-familiar` a Carla Pacheco `chat.txt:53-56`; `real-cliente-experto` a Carlos Díaz Riveros `chat.txt:45-52`. Las cuatro sí proceden de esas conversaciones; sus rangos previos omitían líneas de turnos.
+
+Se agregaron siete escenarios en conversaciones que no estaban cubiertas: `real-varias-reparaciones` (Gonzalo Bettancourt, 69-71), `real-mantencion-caldera` (Nerys de la Rosa, 25-30), `real-reagenda-mantencion` (Paula Brintrup, 7-18), `real-revision-bano-ruidoso` (Marta Larrain, 5-13), `real-caldera-urgencia` (Marisol Loyola, 5-13), `real-fuga-gas-bodega` (Paolo Ganderini, 3-5) y `real-consulta-otros-equipos` (Francisco Rodríguez, 50-53). Total: 37 (11 simple, 13 complejo, 13 supercomplejo); los 15 históricos no se tocaron.
+
+Siguiente slice: 13 conversaciones todavía sin escenario: Camila Covián, Claudio Meneses Liendo, Diego Prado, Héctor Reyes, Hugo Ochoa, Jorge Orihuela, Juan Pereira, Karen Portal los Maitenes, Kathy, Marcelo Aceituno, María Jesús Ríos, Mónica Dawabe y Sofía.
