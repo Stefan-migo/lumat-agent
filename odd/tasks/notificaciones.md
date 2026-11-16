@@ -75,22 +75,37 @@ llegue a quien tiene que atenderla — no sólo a los admins.
 
 ## Delivery
 
-Neto de la rama contra el merge-base: **23 archivos, +1069/−388**, en 10 commits. El motor de slices avisa a
-partir de ~400 líneas; entregar como **un solo PR** es decisión del owner.
+Neto contra el merge-base (`c820be34`): **24 archivos, +1254/−240, en 14 commits**. Un solo PR, por
+decisión del owner.
 
-| Commit | Archivos | Cambio | Contenido |
-|---|---|---|---|
-| `7115f022` | 4 | +166/−12 | audiencia: admins + el responsable de la conversación o el técnico de la visita |
-| `f28de340` | 2 | +105/−12 | permisos de operaciones/retry, paginación, push sin secuestro (ítem 2) |
-| `66444e10` | 13 | +499/−210 | destino, click, fuente única de estado, vocabulario (backend + `web/`) |
-| `85071241` | 1 | +7/−4 | el test de automations, alineado a la audiencia nueva |
-| `8875bbc6` | 6 | +170/−155 | destino explícito en la emisión: la operación deja de nombrar el canal |
-| `fc03b3e6` | 6 | +27/−81 | revierte mi migración duplicada y lee `responsible_id` |
-| `7fad152b`, `3489c9a3` | 2 | +112 | esta ficha y el límite de slice |
+Las unidades, en el orden en que quedaron:
 
-`b2da79c1` (la migración `069`) **no forma parte del neto**: la revierte `fc03b3e6`. Consecuencia
-para el riesgo declarado: **el ítem 1 ya no aplica** — la rama no cambia el esquema. Queda el
-**ítem 2** (permisos), con su verificador independiente.
+| Unidad | Qué |
+|---|---|
+| audiencia | admins + el técnico de la visita + el responsable de la conversación de una emergencia; push por audiencia |
+| permisos | operaciones y retry sólo admin, con paginación; push que no cambia de dueño (ítem 2) |
+| destino | la operación nombra la entidad de negocio; mapeo y click que navega y marca leída |
+| estado | `useNotifications` como fuente única; mark-all, debounce, reconexión, foco, guarda de carrera |
+| vocabulario | las cuatro fuentes reales, con copy honesto |
+
+El conteo de commits incluye un ida y vuelta de dos correcciones mías, no dos features: la migración
+duplicada que hubo que revertir (L5) y el archivo de tests que pisé y hubo que restaurar (L7). El
+código que sobrevive es el de la tabla.
+
+## Verification
+
+Medido sobre el árbol final, ya con `main` mergeado:
+
+- `bash scripts/test.sh quick` → verde.
+- `bash scripts/test.sh db` sobre destino, audiencia, push, h4, automations y permisos → **verde**
+  (incluye `cancel`/`close(NO_SHOW)`/`reschedule`, el nodo real de emergencia y el push por audiencia).
+- `cd web && npm test` → **121 archivos, 1420 pruebas verdes**; `npm run build` (`tsc -b`) → verde.
+- `bash scripts/test.sh shape origin/main` → único shape surface: `app/panel/api/serializers.py`
+  (sin migración, sin modelos: **el ítem 1 de riesgo ya no aplica**; queda el **ítem 2**, permisos).
+- `bash scripts/test.sh full` → `pytest_exit=0`, **cero** líneas `FAILED`/`ERROR`, `[100%]`, 10m00s.
+- Dos verificadores independientes: el primero encontró el bloqueante del destino (S9/S10 no
+  cumplían); el segundo dio **7/7 specs** y encontró el archivo de tests que yo había borrado, las
+  columnas fantasma en la base y el push sin test.
 
 ## Log
 
