@@ -40,9 +40,9 @@ def _admin() -> int:
         return user.id
 
 
-def _technician() -> int:
+def _technician(username: str = "destination-tech") -> int:
     with SessionLocal() as session:
-        user = User(username="destination-tech", password_hash="unused", role=UserRole.TECNICO)
+        user = User(username=username, password_hash="unused", role=UserRole.TECNICO)
         session.add(user)
         session.commit()
         return user.id
@@ -107,6 +107,82 @@ def test_an_emergency_points_at_the_conversation_where_it_happened():
     operation = _operation_for(admin_id)
 
     assert (operation.source_entity, operation.source_id) == ("conversation", str(conversation_id))
+
+
+@pytest.mark.parametrize("event", ["cancel", "close_no_show", "reschedule"])
+def test_every_visit_emitter_points_at_its_own_appointment(event):
+    admin, tech = _admin(), _technician()
+    customer_id = _customer()
+    with SessionLocal() as session:
+        case = Case(customer_id=customer_id, service="calefont")
+        session.add(case)
+        session.flush()
+        first = scheduling.book(
+            session, service="calefont", customer_id=customer_id, case_id=case.id,
+            technician_id=tech, local_date=date(2027, 5, 4), local_time=time(9),
+            timezone_name="UTC", duration_minutes=60, actor="oper",
+        )
+        session.commit()
+        second = scheduling.book(
+            session, service="calefont", customer_id=customer_id, case_id=case.id,
+            technician_id=tech, local_date=date(2027, 5, 5), local_time=time(9),
+            timezone_name="UTC", duration_minutes=60, actor="oper",
+        )
+        session.commit()
+        target = session.get(scheduling.Appointment, second.id)
+        if event == "cancel":
+            scheduling.cancel(session, target, actor="oper")
+        elif event == "close_no_show":
+            scheduling.close(
+                session, target, outcome=scheduling.AppointmentStatus.NO_SHOW, actor="oper"
+            )
+        else:
+            scheduling.reschedule(
+                session, target, local_date=date(2027, 5, 6), local_time=time(11),
+                timezone_name="UTC", duration_minutes=60, technician_id=tech, actor="oper",
+            )
+        session.commit()
+        target_id = target.id
+
+    for user_id in (admin, tech):
+        latest = _operation_for(user_id)
+        assert (latest.source_entity, latest.source_id) == ("appointment", str(target_id))
+
+
+def test_the_emergency_node_itself_points_at_the_conversation(monkeypatch):
+    import app.chat.nodes.emergency as node
+    from app.chat.state import ConversationState
+
+    admin = _admin()
+    responsible = _technician("destination-emergency-responsible")
+    other = _technician("destination-emergency-other")
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56911113333")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(
+            customer_id=customer.id, wa_phone=customer.phone_e164, responsible_id=responsible
+        )
+        session.add(conversation)
+        session.flush()
+        conversation_id, customer_id = conversation.id, customer.id
+        session.commit()
+
+    monkeypatch.setattr(node, "send_emergency_notification", lambda *args, **kwargs: None)
+    node.emergency(ConversationState(
+        customer_id=customer_id,
+        conversation_id=conversation_id,
+        phone="+56911113333",
+        window=[{"text": "hay una fuga de gas"}],
+    ))
+
+    for user_id in (admin, responsible):
+        operation = _operation_for(user_id)
+        assert (operation.source_entity, operation.source_id) == (
+            "conversation", str(conversation_id)
+        )
+    with SessionLocal() as session:
+        assert session.query(PanelNotification).filter_by(user_id=other).count() == 0
 
 
 def test_a_cost_alert_has_no_destination_and_does_not_pretend_to_have_one():
