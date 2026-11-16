@@ -1,8 +1,10 @@
 # Corpus de evaluación construido con casos reales
 
-Fecha: 2026-11-12 · Estado: T1 implementado (derivador con `--source`). T2/T3 parciales: el
-corpus ya traía 15 escenarios `real-*` con cita, y quedan 19 de las 34 conversaciones sin
-escenario; 4 citas preexistentes no verifican contra su rango. T4 pendiente.
+Fecha: 2026-11-12 · Estado: implementado en dos cortes (`#818` y el de cobertura).
+El corpus tiene 42 escenarios: 15 históricos y 27 derivados de conversaciones reales;
+27 de las 34 conversaciones tienen escenario medible y las 8 restantes están justificadas
+en `escenarios-objetivo.md`. Pendiente: el baseline scripted (T4), que necesita una corrida
+con modelo en vivo y una decisión de gasto del owner.
 
 ---
 

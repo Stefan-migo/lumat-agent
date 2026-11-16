@@ -34,10 +34,10 @@ del cliente en el repo, no hay migración.
 | ID | Estado | Commit |
 |---|---|---|
 | T1 | hecho | `f9c540cd` |
-| T2 | parcial — 22 de 34 conversaciones con escenario | `adf4aa02` |
-| T3 | parcial — 7 escenarios nuevos, 4 citas corregidas | `adf4aa02` |
-| T4 | pendiente — corte 2 | — |
-| T5 | pendiente — corte 2 | — |
+| T2 | parcial — 27 de 34 conversaciones con escenario; 7 no promovidas por falta de señal o capacidad pendiente | `adf4aa02` + corte 2 |
+| T3 | parcial — 12 escenarios nuevos en total, 4 citas corregidas | `adf4aa02` + corte 2 |
+| T4 | pendiente — baseline requiere modelo en vivo y decisión de gasto del owner | — |
+| T5 | parcial — feature doc y encabezado actualizados; el doc 04 queda fuera de las superficies autorizadas | corte 2 |
 
 **Frontera de corte (2026-11-16):** el corte 1 cierra en 466 líneas autoradas en 3 commits. Quedan **12 conversaciones sin escenario** (listadas en L5) y el baseline scripted (T4) para el corte 2, sobre rama nueva desde `main` con este corte mergeado.
 
@@ -66,4 +66,6 @@ Alcance corregido de T2/T3: **19 de las 34 conversaciones no tienen escenario**,
 
 Se agregaron siete escenarios en conversaciones que no estaban cubiertas: `real-varias-reparaciones` (Gonzalo Bettancourt, 69-71), `real-mantencion-caldera` (Nerys de la Rosa, 25-30), `real-reagenda-mantencion` (Paula Brintrup, 7-18), `real-revision-bano-ruidoso` (Marta Larrain, 5-13), `real-caldera-urgencia` (Marisol Loyola, 5-13), `real-fuga-gas-bodega` (Paolo Ganderini, 3-5) y `real-consulta-otros-equipos` (Francisco Rodríguez, 50-53). Total: 37 (11 simple, 13 complejo, 13 supercomplejo); los 15 históricos no se tocaron.
 
-Siguiente slice: 13 conversaciones todavía sin escenario: Camila Covián, Claudio Meneses Liendo, Diego Prado, Héctor Reyes, Hugo Ochoa, Jorge Orihuela, Juan Pereira, Karen Portal los Maitenes, Kathy, Marcelo Aceituno, María Jesús Ríos, Mónica Dawabe y Sofía.
+Siguiente slice (corte 2): cinco de las 13 conversaciones listadas recibieron escenario: Claudio Meneses Liendo (`real-claudio-caldera-valvula`, 43-47), Diego Prado (`real-diego-precio-y-duracion`, 14-27), Héctor Reyes (`real-hector-discrepancia-valor`, 46-49), María Jesús Ríos (`real-maria-jesus-evaluacion-caldera`, 13-20) y Mónica Dawabe (`real-monica-diagnostico-no-confirmado`, 211-212). Siete más quedan registradas en `escenarios-objetivo.md`; Camila y Kathy no tienen un desenlace medible, y Hugo, Jorge, Juan, Karen, Marcelo y Sofía requieren recuperación de historial/pendientes o capacidades técnicas aún no disponibles. Total del corpus: 42 (12 simple, 16 complejo, 14 supercomplejo), con 27 de 34 conversaciones representadas.
+
+**L6 (corte 2).** Cubre S2, S3, S4, S5 y S7. Las cinco citas nuevas se verificaron con `derive_conv_corpus.py` antes de escribir el corpus. Ocho conversaciones de la lista L5 no se promovieron: Camila y Kathy por falta de una fricción/desenlace medible; Hugo (D1), Jorge (D6), Karen (D5), Marcelo (D5/D6), Juan (validación de diseño técnico) y Sofía (D11, triage seguro de caldera) por continuidad o capacidad aún no verificable. Sus líneas y razones están en `odd/analysis/lumatdata/escenarios-objetivo.md`. T4 queda pendiente: el baseline scripted requiere modelo en vivo y una decisión de gasto del owner; no se ejecutó `scripts/conv_eval.py`. El estado de esta tarea y el encabezado del corpus se actualizaron; el doc 04 de `odd/analysis/lumatdata/` no se tocó porque no está en las superficies autorizadas.
