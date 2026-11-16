@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import conv_eval as ev  # noqa: E402
+import derive_conv_corpus as derive  # noqa: E402
 
 CORPUS_PATH = REPO_ROOT / "scripts" / "conv_eval_corpus.yaml"
 
@@ -76,6 +77,81 @@ def scenario(**overrides):
 
 def gates_of(scn, obs):
     return ev.evaluate_gates(scn, obs)
+
+
+def test_deriver_preserves_message_sender_timestamp_kind_and_source_line(tmp_path):
+    folder = tmp_path / "Cliente Uno"
+    folder.mkdir()
+    source = (
+        "[1/2/24, 3:04:05 PM] Cliente Uno: Hola\n"
+        "[1/2/24, 3:05:06 PM] Tú: [Video]\n"
+    )
+    (folder / "chat.txt").write_text(source, encoding="utf-8")
+    (folder / "chat.md").write_text("paired export\n", encoding="utf-8")
+
+    result = derive.extract_source(tmp_path)
+
+    assert result["summary"] == {
+        "folders": 1,
+        "unique_conversations": 1,
+        "messages_per_sender": {"Cliente Uno": 1, "Tú": 1},
+        "duplicates_skipped": 0,
+    }
+    assert result["conversations"][0]["messages"] == [
+        {
+            "sender": "Cliente Uno",
+            "timestamp": "2024-02-01T15:04:05",
+            "kind": "text",
+            "line": 1,
+            "text": "Hola",
+        },
+        {
+            "sender": "Tú",
+            "timestamp": "2024-02-01T15:05:06",
+            "kind": "video",
+            "line": 2,
+            "text": "[Video]",
+        },
+    ]
+
+
+def test_deriver_ignores_system_events_without_attaching_their_continuations(tmp_path):
+    folder = tmp_path / "Cliente"
+    folder.mkdir()
+    (folder / "chat.txt").write_text(
+        "[1/2/24, 3:04:05 PM] Cliente: Hola\n"
+        "[1/2/24, 3:05:06 PM] - Los mensajes y las llamadas están cifrados\n"
+        "continuación del aviso\n"
+        "[1/2/24, 3:06:07 PM] Tú: Ya veo\n",
+        encoding="utf-8",
+    )
+    (folder / "chat.md").write_text("paired export", encoding="utf-8")
+
+    result = derive.extract_source(tmp_path)
+
+    assert [message["text"] for message in result["conversations"][0]["messages"]] == [
+        "Hola",
+        "Ya veo",
+    ]
+    assert result["summary"]["messages_per_sender"] == {"Cliente": 1, "Tú": 1}
+
+
+def test_deriver_skips_byte_identical_text_exports_but_counts_folders(tmp_path):
+    for name in ("A", "B"):
+        folder = tmp_path / name
+        folder.mkdir()
+        (folder / "chat.txt").write_bytes(b"[1/2/24, 3:04:05 PM] Cliente: Hola\n")
+        (folder / "chat.md").write_text("paired export", encoding="utf-8")
+
+    result = derive.extract_source(tmp_path)
+
+    assert result["summary"] == {
+        "folders": 2,
+        "unique_conversations": 1,
+        "messages_per_sender": {"Cliente": 1},
+        "duplicates_skipped": 1,
+    }
+    assert len(result["conversations"]) == 1
 
 
 # ---------------------------------------------------------------------------

@@ -40,3 +40,12 @@ del cliente en el repo, no hay migración.
 > Sí, leé los chats desde ahí
 
 Autorizado el 2026-11-16: lectura read-only de `/home/stefan/repos/LumatData/Chat bot IA-20261112T160227Z-1-001/Chat bot IA/chats raw`. Los crudos no se copian ni se commitean.
+
+**L3 (hallazgo del 2026-11-16, al implementar T1).** Dos hechos que cambian el alcance de T2/T3:
+
+1. **El corpus ya traía 15 escenarios `real-*` con cita** (`real-cortesia-no-es-reclamo` … `real-reclamo-real-si-deriva`), además de los 15 históricos: 30 en total. La derivación no arranca de cero; lo que falta es cobertura.
+2. **Cuatro citas preexistentes no verifican**: la auditoría automática no encontró ningún turno dentro del rango citado en `real-dato-mas-pregunta`, `real-solo-sabados`, `real-reagenda-familiar` y `real-cliente-experto`. Se dejan intactas hasta revisarlas contra el chat de origen: una cita que no verifica destruye la trazabilidad que S2 exige.
+
+Alcance corregido de T2/T3: **19 de las 34 conversaciones no tienen escenario**, y las 4 citas dudosas se revisan antes de agregar cualquier otra.
+
+**L4 (entrega de T1, 2026-11-16).** `scripts/derive_conv_corpus.py` lee 36 carpetas, descarta 2 duplicados byte a byte y emite 4.600 mensajes con emisor, timestamp, tipo y línea de origen (2.551 del dueño, 2.049 del cliente). Sin `--source` no hace nada; la ruta nunca se versiona.
