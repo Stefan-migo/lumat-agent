@@ -73,21 +73,22 @@ llegue a quien tiene que atenderla — no sólo a los admins.
 
 ## Delivery
 
-Tamaño real: **1166 líneas autoradas en 5 commits**. El motor de slices avisa a partir de ~400.
+Neto de la rama contra `main`: **23 archivos, +1068/−388**, en 9 commits. El motor de slices avisa a
+partir de ~400 líneas; entregar como **un solo PR** es decisión del owner.
 
 | Commit | Archivos | Cambio | Contenido |
 |---|---|---|---|
-| `b2da79c1` | 3 | +68 | migración 069 + modelos + `test_migrations` (ítem 1) |
-| `7115f022` | 4 | +166/−12 | audiencia, push por audiencia, `selectinload` |
-| `f28de340` | 2 | +105/−12 | permisos de operaciones y push (ítem 2) |
-| `66444e10` | 13 | +499/−210 | destino, click, fuente única, vocabulario (backend + `web/`) |
-| `7fad152b` | 1 | +94 | esta ficha |
+| `7115f022` | 4 | +166/−12 | audiencia: admins + el responsable de la conversación o el técnico de la visita |
+| `f28de340` | 2 | +105/−12 | permisos de operaciones/retry, paginación, push sin secuestro (ítem 2) |
+| `66444e10` | 13 | +499/−210 | destino, click, fuente única de estado, vocabulario (backend + `web/`) |
+| `85071241` | 1 | +7/−4 | el test de automations, alineado a la audiencia nueva |
+| `8875bbc6` | 6 | +170/−155 | destino explícito en la emisión: la operación deja de nombrar el canal |
+| `fc03b3e6` | 6 | +27/−81 | revierte mi migración duplicada y lee `responsible_id` |
+| `7fad152b`, `3489c9a3` | 2 | +112 | esta ficha y el límite de slice |
 
-Decisión pendiente del owner (la entrega no es del agente): **un PR de 1166 líneas** o **dos
-encadenados** — `b2da79c1` + `7115f022` + `f28de340` (backend: migración, audiencia, permisos) y
-luego `66444e10` + `7fad152b` (frontend + ficha) —. El encadenado es natural porque el frontend
-consume los campos que expone el serializer del backend, así que el orden ya está dado por el
-diseño.
+`b2da79c1` (la migración `069`) **no forma parte del neto**: la revierte `fc03b3e6`. Consecuencia
+para el riesgo declarado: **el ítem 1 ya no aplica** — la rama no cambia el esquema. Queda el
+**ítem 2** (permisos), con su verificador independiente.
 
 ## Log
 
