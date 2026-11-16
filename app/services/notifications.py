@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db import session_scope
 from app.models import Appointment, AutomationExecution, AutomationInstallation, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification, PushSubscription, User, UserRole
@@ -187,6 +187,7 @@ def notify_admins(
     source: str,
     source_id: str | int,
     dedupe_key: str,
+    recipient_user_ids: list[int] | None = None,
 ) -> None:
     now = datetime.now(timezone.utc)
     operation = create_operation(
@@ -200,11 +201,12 @@ def notify_admins(
         status="sent",
         delivered_at=now,
     )
-    admins = session.scalars(select(User).where(User.role == UserRole.ADMIN)).all()
-    for admin in admins:
+    audience_ids = set(session.scalars(select(User.id).where(User.role == UserRole.ADMIN)).all())
+    audience_ids.update(recipient_user_ids or ())
+    for user_id in sorted(audience_ids):
         create_panel_notification(
             session,
-            user_id=admin.id,
+            user_id=user_id,
             operation_id=operation.id,
             title=title,
             content=content,
@@ -212,9 +214,8 @@ def notify_admins(
         )
     subscriptions = session.scalars(
         select(PushSubscription)
-        .join(User, User.id == PushSubscription.user_id)
-        .where(User.role == UserRole.ADMIN, PushSubscription.active.is_(True))
-    ).all()
+        .where(PushSubscription.user_id.in_(audience_ids), PushSubscription.active.is_(True))
+    ).all() if audience_ids else []
     for subscription in subscriptions:
         create_operation(
             session,
@@ -234,7 +235,7 @@ def notify_admins(
 
 
 def list_panel_notifications(session: Session, *, user_id: int, unread: bool | None = None, status: str | None = None, source: str | None = None) -> list[PanelNotification]:
-    query = select(PanelNotification).where(PanelNotification.user_id == user_id)
+    query = select(PanelNotification).options(selectinload(PanelNotification.operation)).where(PanelNotification.user_id == user_id)
     if unread is True:
         query = query.where(PanelNotification.read_at.is_(None))
     if status:
