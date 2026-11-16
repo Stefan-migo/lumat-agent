@@ -125,9 +125,11 @@ def emergency(state: ConversationState) -> dict:
                     # where it happened: that is where the operator reads it and answers.
                     destination_entity="conversation",
                     destination_id=conversation.id,
+                    # `responsible_id` is the assignment the panel already owns: the operator who
+                    # took this conversation. No new field, no second notion of ownership.
                     recipient_user_ids=(
-                        [conversation.assigned_user_id]
-                        if conversation.assigned_user_id is not None else None
+                        [conversation.responsible_id]
+                        if conversation.responsible_id is not None else None
                     ),
                 )
             except Exception:

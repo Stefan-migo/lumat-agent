@@ -104,10 +104,10 @@ def test_emergency_audience_includes_conversation_assignee_only_when_assigned():
         customer = Customer(phone_e164="+56911110001")
         session.add(customer)
         session.flush()
-        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, assigned_user_id=assigned)
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, responsible_id=assigned)
         session.add(conversation)
         session.flush()
-        assigned_id = conversation.assigned_user_id
+        assigned_id = conversation.responsible_id
     operation_id, _ = _notify(recipients=[assigned_id], source="emergencia")
     with SessionLocal() as session:
         rows = session.scalars(select(PanelNotification).where(PanelNotification.operation_id == operation_id)).all()

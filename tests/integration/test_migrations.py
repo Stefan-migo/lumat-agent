@@ -821,28 +821,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("066_commitments",),
         ("067_message_transcript",),
         ("068_customer_address_validation",),
-        ("069_notification_assignment",),
     ]
-
-
-def test_migration_069_adds_nullable_assignment_columns_with_set_null_foreign_keys(migrated_db, admin_conn):
-    for table in ("conversations", "cases"):
-        column = admin_conn.execute(
-            "SELECT data_type, is_nullable FROM information_schema.columns "
-            "WHERE table_name = %s AND column_name = 'assigned_user_id'",
-            (table,),
-        ).fetchone()
-        assert column == ("bigint", "YES")
-        constraint = admin_conn.execute(
-            "SELECT confdeltype FROM pg_constraint "
-            "WHERE conrelid = %s::regclass AND conname = %s",
-            (table, f"{table}_assigned_user_id_fkey"),
-        ).fetchone()
-        assert constraint == ("n",)
-        assert admin_conn.execute(
-            "SELECT 1 FROM pg_indexes WHERE tablename = %s AND indexname = %s",
-            (table, f"idx_{table}_assigned_user_id"),
-        ).fetchone() == (1,)
 
 
 def test_migration_060_rewrites_only_the_shipped_acknowledgement(tmp_path):

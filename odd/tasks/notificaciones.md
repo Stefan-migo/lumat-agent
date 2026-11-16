@@ -21,14 +21,15 @@ llegue a quien tiene que atenderla — no sólo a los admins.
   rol `ADMIN`** más el **`Appointment.technician_id` de esa visita**. Una sola fila de panel por
   usuario: si el técnico además es admin, no recibe dos.
 
-- **S3** Una emergencia del chat notifica a todos los `ADMIN` más el **`Conversation.assigned_user_id`
-  de la conversación que la originó**. Si la conversación no tiene asignado, sólo los admins.
+- **S3** Una emergencia del chat notifica a todos los `ADMIN` más el **`Conversation.responsible_id`
+  de la conversación que la originó**. Si la conversación no tiene responsable, sólo los admins.
 
 - **S4** Una alerta de costo y un fallo permanente de notificación siguen siendo **sólo de admins**.
 
-- **S5** `conversations.assigned_user_id` y `cases.assigned_user_id` existen: entero nullable, FK a
-  `users.id` con `ON DELETE SET NULL`, con índice. **Sin backfill**: las filas existentes quedan sin
-  asignar, y una conversación o un caso sin asignar no rompe ninguna audiencia.
+- **S5** Las notificaciones leen la asignación que el panel **ya tenía**: `Conversation.responsible_id`
+  y `Case.responsible_id`, con su endpoint, sus reglas de operador y su auditoría. **No se agrega
+  ninguna columna ni migración**: un segundo concepto de propiedad junto al existente es un defecto,
+  no una mejora heredada.
 
 - **S6** Esta unidad **no emite** un aviso nuevo al asignar una conversación o un caso. Deja el dato y
   la regla probados; el aviso es producto nuevo y no fue pedido.
@@ -110,3 +111,18 @@ diseño.
   `PanelNotification.operation_id` es obligatorio y `NotificationOperation` ya guarda `source_entity` y
   `source_id` (`app/models.py:960-961`), así que exponerlos alcanza y hace navegar también las filas
   viejas.
+
+- **L5** (2026-11-16, corrección de un defecto del plan, no de la implementación): la S5 original pedía
+  crear `assigned_user_id` en `conversations` y `cases`. **Ya existían** `Conversation.responsible_id`
+  y `Case.responsible_id`, con `POST /conversations/{id}/assignment`, reglas (un operador sólo se
+  asigna a sí mismo, el destino debe ser un operador activo), control de versión e idempotencia por
+  `request_id`, más UI en `ClientFicha`, `ConversationsList` y `CaseActions`. Mi auditoría los perdió
+  porque el grep buscó `technician_id|assignee|operator|user_id` y `responsible_id` no estaba en esa
+  lista. Consecuencia: la migración 069 y sus dos columnas se revierten, la audiencia lee
+  `responsible_id`, y la unidad «asignación manual» desaparece porque **ya estaba hecha**. Lección:
+  antes de agregar un campo, buscar el concepto por sus sinónimos, no sólo por el nombre que elegí.
+
+- **L6** (2026-11-16, artefacto de mi propia base): al revertir la 069, la fila
+  `069_notification_assignment` quedó en `schema_migrations` del test-db y `test_schema_migrations_records_version`
+  empezó a fallar por una versión registrada sin archivo. Limpiada a mano. Es exactamente el riesgo
+  que el verificador había marcado en el rollback, ocurriendo en vivo.
