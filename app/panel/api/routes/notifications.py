@@ -2,13 +2,13 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import NotificationOperation, PanelNotification, PushSubscription, User
-from app.panel.api.deps import require_user_json
+from app.panel.api.deps import require_admin_json, require_user_json
 from app.panel.api.serializers import to_notification_dict, to_panel_notification_dict
 from app.panel.deps import get_db
 from app.config import get_settings
@@ -31,9 +31,16 @@ class PushSubscriptionBody(BaseModel):
 
 @router.get("/notification-operations")
 def list_notification_operations(
-    session: Session = Depends(get_db), current: User = Depends(require_user_json)
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db), current: User = Depends(require_admin_json)
 ) -> dict:
-    rows = session.scalars(select(NotificationOperation).order_by(NotificationOperation.created_at.desc())).all()
+    rows = session.scalars(
+        select(NotificationOperation)
+        .order_by(NotificationOperation.created_at.desc(), NotificationOperation.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
     return {"operations": [to_notification_dict(row) for row in rows]}
 
 @router.get("/notifications")
@@ -59,8 +66,16 @@ def save_push_subscription(body: PushSubscriptionBody, session: Session = Depend
     row = session.scalar(select(PushSubscription).where(PushSubscription.endpoint == body.endpoint))
     if row is None:
         session.add(PushSubscription(user_id=current.id, **body.model_dump()))
+    elif row.user_id != current.id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "push_subscription_owned_by_another_user",
+                "message": "push endpoint is already registered to another user",
+            },
+        )
     else:
-        row.user_id, row.p256dh, row.auth, row.user_agent, row.active = current.id, body.p256dh, body.auth, body.user_agent, True
+        row.p256dh, row.auth, row.user_agent, row.active = body.p256dh, body.auth, body.user_agent, True
     session.commit()
     return {"ok": True}
 
@@ -75,7 +90,7 @@ def delete_push_subscription(endpoint: str, session: Session = Depends(get_db), 
 
 @router.post("/notification-operations/{operation_id}/retry")
 def retry_notification_operation(
-    operation_id: int, session: Session = Depends(get_db), current: User = Depends(require_user_json)
+    operation_id: int, session: Session = Depends(get_db), current: User = Depends(require_admin_json)
 ) -> dict:
     operation = session.get(NotificationOperation, operation_id)
     if operation is None:
