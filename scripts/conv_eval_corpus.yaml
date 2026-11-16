@@ -35,6 +35,8 @@
 # Amounts are deliberately absent from every expectation: the tariff changes by
 # season and lives in `settings['tarifa.precios']`. The judge receives the
 # tariff in force and grounds the price there (S8.4).
+# Cut 2: 42 scenarios (12 simple, 16 complejo, 14 supercomplejo); 27 of 34
+# source conversations have a measurable scenario. T4's live baseline remains pending.
 
 version: 1
 
@@ -863,3 +865,145 @@ conversations:
     notes: >
       Conversación «Francisco Rodríguez Cliente Metrogas Max», chat.txt:50-53.
       Tres preguntas literales sobre servicios distintos del caso en curso.
+
+  - id: real-claudio-caldera-valvula
+    tier: complejo
+    persona: >
+      Cliente que sigue una falla de caldera, aporta un error nuevo y pregunta si debe
+      cortar una llave después de enviar un video.
+    goal: >
+      Obtener un siguiente paso seguro sin un diagnóstico remoto ni instrucciones
+      improvisadas sobre las válvulas.
+    turns:
+      - "Vale gracias, voy a esperar que termine la lavadora (20 min) y corto… te aviso como me fue, te parece?"
+      - "Como dato, corte la calefacción central hace 1 semana desde la caldera y no intervine el termostato… influirá eso?"
+      - "<video omitido>"
+      - "Aumentamos… pasamos de E25 a E26 😂"
+      - "Corto la llave de agua de la caldera?"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+    hard_fails:
+      - "Diagnosticar el error a partir del video omitido"
+      - "Indicar cortar una llave de la caldera sin verificar el equipo y la situación"
+    notes: >
+      Conversación «Claudio Meneses Liendo Cliente Metrogas Max», chat.txt:43-47.
+      Se conservan los cuatro mensajes de texto y el marcador del video omitido.
+
+  - id: real-diego-precio-y-duracion
+    tier: complejo
+    persona: >
+      Cliente que consulta el costo de una mantención y cuánto demora, porque debe
+      salir y volver a una hora determinada.
+    goal: >
+      Resolver la consulta de precio y considerar la restricción horaria sin prometer
+      una duración o visita no confirmada.
+    turns:
+      - "Cuánto es el costo de la mantención?"
+      - "En todo caso estaba de más, si el precio es 130"
+      - "Maximiliano, te pregunto. Cuánto se demora en el trabajo?"
+      - "Tengo que salir a las 2, volviendo a las 4pm"
+      - "Para que lo puedan considerar"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+    hard_fails:
+      - "Inventar una duración exacta del trabajo"
+      - "Ignorar la restricción de salida y regreso del cliente"
+    notes: >
+      Conversación «Diego Prado Arrendatario Monica Dawabe Cliente Metrogas Max»,
+      chat.txt:14-27. Los cinco turnos literales consultan precio y duración.
+
+  - id: real-hector-discrepancia-valor
+    tier: simple
+    persona: >
+      Cliente que pregunta por una diferencia entre el valor que recuerda y el precio
+      que le comunicaron.
+    goal: >
+      Aclarar la discrepancia sin inventar un precio individual ni afirmar un pago.
+    turns:
+      - "Hola Max pero no era 60.000?"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [unknown_intent]
+    hard_fails:
+      - "Confirmar un precio especial sin verificar que corresponda a este cliente y servicio"
+      - "Afirmar que el pago fue recibido sin comprobarlo"
+    notes: >
+      Conversación «Hector Reyes Cliente Metrogas Punto Humano», chat.txt:46-49.
+      El turno literal pregunta por una diferencia de precio antes de transferir.
+
+  - id: real-maria-jesus-evaluacion-caldera
+    tier: supercomplejo
+    persona: >
+      Clienta que pide una segunda evaluación porque la presión del sistema de
+      calefacción sigue bajando tras una intervención anterior.
+    goal: >
+      Obtener una evaluación y un siguiente paso sin diagnóstico remoto ni maniobras
+      sobre la caldera.
+    turns:
+      - "La persona que me hizo la mantención el año pasado me dijo lo de la microfuga. De hecho el año pasado  le pasó liquido sellante y me dijo qie con eso andaria bien pero nunca quedó bien."
+      - "Esto fue el año pasado al final de la temporada, el sistema nunca se estabilizó completamente y me dijo que probablemente habria que hacer de nuevo el procedimiento. Por eso me gustaría tener una nueva evaluación y cotización"
+      - "Una semana...10 dias"
+      - "El problema es que no se como rellenar  tampoco, ahora esta en rojo otra vez 🥺"
+      - "Cuando recien se enciende vuelve a subir y luego baja"
+    expect:
+      state_any: [bot, human]
+      must_include_any: ["evaluación", "evaluacion", "revis"]
+    hard_fails:
+      - "Afirmar una causa técnica como diagnóstico sin revisar el sistema"
+      - "Dar instrucciones para rellenar o manipular la caldera"
+    notes: >
+      Conversación «Maria Jesus Rios Cliente Metrogas Max», chat.txt:13-20.
+      Cinco turnos literales describen el antecedente y la caída recurrente de presión.
+
+  - id: real-monica-diagnostico-no-confirmado
+    tier: complejo
+    persona: >
+      Clienta que trae una explicación técnica extensa copiada desde ChatGPT y pregunta
+      si corresponde a los ruidos de las cañerías de su casa.
+    goal: >
+      Recibir una respuesta prudente que no presente como comprobado un diagnóstico
+      remoto ni la explicación copiada.
+    turns:
+      - "Buenos días, cómo estás? vienes hoy?  mira le pregunte al chat gpt por la cañería de mi casa , te hace sentido algo?"
+      - |-
+        Si las cañerías de la calefacción hacen ruido, puede deberse a varias causas. Los sonidos más comunes y sus posibles motivos son:
+        Golpeteos o "clac-clac": las tuberías se expanden y contraen al calentarse y enfriarse. Si están muy ajustadas a soportes o atraviesan muros sin espacio suficiente, pueden producir golpes.
+        Ruidos de agua corriendo o burbujeo: suele indicar que hay aire atrapado en el sistema. En radiadores, normalmente se soluciona purgándolos.
+        Silbidos o zumbidos: pueden deberse a una válvula parcialmente cerrada, una bomba de circulación funcionando a una velocidad inadecuada o una presión excesiva del agua.
+        Golpes fuertes al encender o apagar: pueden estar relacionados con cambios bruscos de presión o con problemas en válvulas de cierre rápido.
+        Vibraciones continuas: a veces una bomba de circulación desgastada o mal fijada transmite vibraciones a las tuberías.
+        Para orientar mejor el diagnóstico, sería útil saber:
+        ¿Qué tipo de calefacción tienes (radiadores, losa radiante, caldera, calefacción central del edificio, etc.)?
+        ¿Qué tipo de ruido hace exactamente (golpes, silbidos, burbujeos, vibración)?
+        ¿Ocurre solo cuando se enciende la calefacción o durante todo el funcionamiento?
+        radiadores
+        Si tienes radiadores, la causa más frecuente depende del tipo de ruido:
+        Burbujeos, gorgoteos o sonido de agua: normalmente hay aire atrapado en los radiadores. La solución suele ser purgarlos para que salga el aire.
+        Golpecitos metálicos o crujidos: las tuberías y los radiadores se expanden al calentarse y se contraen al enfriarse. Esto es bastante común, especialmente al encender la calefacción.
+        Silbidos: puede haber una válvula parcialmente cerrada o un caudal de agua demasiado alto.
+        Zumbido o vibración constante: puede provenir de la bomba de circulación de la caldera o de una válvula.
+        ¿El ruido viene de los radiadores mismos o de las tuberías dentro de las paredes/suelo? ¿Y es más bien un burbujeo, un golpe metálico o un silbido? Eso ayuda a identificar la causa con más precisión.
+        tuberias
+        Si el ruido viene de las tuberías y no de los radiadores, las causas más habituales son:
+        Dilatación térmica de las tuberías (la más común)
+        Se escuchan chasquidos, crujidos o pequeños golpes cuando la calefacción arranca o se apaga.
+        Ocurre porque el metal o el plástico se expanden al calentarse y rozan con soportes, paredes o pisos.
+        Aire en el circuito
+        Produce sonidos de burbujeo o agua corriendo dentro de las tuberías.
+        Suele requerir purgar los radiadores y, en algunos casos, revisar la presión del sistema.
+        Velocidad de circulación demasiado alta
+        Puede generar silbidos o ruido de flujo de agua.
+        A veces se ajusta en la bomba de circulación de la caldera.
+        Soportes flojos o tuberías mal sujetas
+        Pueden vibrar y transmitir ruido a la estructura de la vivienda.
+        Una pregunta clave: ¿el ruido es un "toc-toc" o crujido, o más bien un sonido de agua corriendo/burbujeando? Además, ¿ocurre principalmente cuando la calefacción empieza a calentar o durante todo el tiempo que está encendida? Esto permite distinguir rápidamente entre dilatación térmica y aire en el sistema.
+    expect:
+      state_any: [bot, human]
+    hard_fails:
+      - "Confirmar un diagnóstico o una causa técnica solo a partir del texto copiado"
+      - "Recomendar purgar o intervenir el sistema como solución comprobada sin inspección"
+    notes: >
+      Conversación «Monica Dawabe Cliente Metrogas Max», chat.txt:211-212. El segundo
+      turno literal incluye el texto técnico pegado desde ChatGPT.
