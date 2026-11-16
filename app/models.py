@@ -319,6 +319,7 @@ class Conversation(Base):
     __table_args__ = (
         Index("idx_conversations_customer_id", "customer_id"),
         Index("idx_conversations_responsible_id", "responsible_id"),
+        Index("idx_conversations_assigned_user_id", "assigned_user_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -332,6 +333,9 @@ class Conversation(Base):
         server_default="bot",
     )
     responsible_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    assigned_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     summary: Mapped[str | None] = mapped_column(Text)
     captured_data: Mapped[dict | None] = mapped_column(JSONB)  # 003: CM-2 capture state
@@ -452,6 +456,7 @@ class Case(Base):
         Index("idx_cases_conversation_id", "conversation_id"),
         Index("idx_cases_customer_id", "customer_id"),
         Index("idx_cases_origin_case_id", "origin_case_id"),
+        Index("idx_cases_assigned_user_id", "assigned_user_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -474,6 +479,9 @@ class Case(Base):
     status: Mapped[str | None] = mapped_column(String(50))
     emergency: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     responsible_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    assigned_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     summary: Mapped[str | None] = mapped_column(Text)
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
