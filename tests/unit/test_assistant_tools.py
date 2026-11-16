@@ -652,29 +652,34 @@ def test_list_project_files_returns_safe_project_file_metadata(monkeypatch):
     assert "sha256" not in serialized
 
 
-def test_read_project_file_page_is_bounded_and_keeps_cursor_before_text(monkeypatch):
-    from pydantic import ValidationError
-
-    from app.chat.assistant.tools.registry import ProjectReadFileArgs, _project_read_file_page_limit
+def test_read_project_file_page_is_clamped_and_keeps_cursor_before_text(monkeypatch):
+    from app.chat.assistant.tools.registry import ProjectReadFileArgs, _project_read_file_page_limit, get_tool
 
     page_limit = _project_read_file_page_limit()
+    # The ceiling the planner has to respect is published in the schema it reads, not only enforced
+    # by a validator it cannot see: an invisible bound is a bound the model cannot honour.
+    published = get_tool("read_project_file").schema()["properties"]["limit"]
+    assert published["maximum"] == page_limit
+    assert published["default"] == page_limit
     assert ProjectReadFileArgs(file_id=3).limit == page_limit
-    with pytest.raises(ValidationError):
-        ProjectReadFileArgs(file_id=3, limit=page_limit + 1)
+    assert ProjectReadFileArgs(file_id=3, limit=page_limit + 1).limit == page_limit
 
+    seen: list[dict] = []
     row = SimpleNamespace(id=3, filename="a.txt")
     monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.owned_project", lambda *args, **kwargs: SimpleNamespace(id=7, slug="gas"))
     monkeypatch.setattr("app.chat.assistant.tools.registry.project_files.get_project_file", lambda *_args: row)
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.project_files.read_file_text",
-        lambda _row, **kwargs: {
+        lambda _row, **kwargs: seen.append(kwargs) or {
             "kind": "text", "chars": 10000, "offset": kwargs["offset"],
             "next_offset": kwargs["offset"] + kwargs["limit"], "truncated": True, "text": "page",
         },
     )
 
-    result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3}, owner_id=1, role="admin")["result"]
+    result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3, "limit": 6000}, owner_id=1, role="admin")["result"]
 
+    # Four times the ceiling is asked for; the reader gets one page and the turn survives.
+    assert seen == [{"offset": 0, "limit": page_limit}]
     assert result["next_offset"] == page_limit
     keys = list(result)
     assert max(keys.index(key) for key in ("kind", "chars", "offset", "next_offset", "truncated")) < keys.index("text")

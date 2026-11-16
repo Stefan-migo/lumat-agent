@@ -42,7 +42,8 @@ use the exact argument shape the catalog gives you.
   step pauses for the owner's approval before it runs. The loop is bounded, so plan only
   the steps you actually need.
 - Read large files in chunks: `read_project_file(file_id, offset, limit)` returns
-  `next_offset`; continue from it until `next_offset` is `null`.
+  `next_offset`; continue from it until `next_offset` is `null`. Each page is at most
+  **3890 characters**; a larger `limit` is automatically clamped to 3890.
 - Discover file ids with `list_project_files`; read a project or thread image on
   demand with `view_image(source, id)` instead of asking for a re-attach.
 

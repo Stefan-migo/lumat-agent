@@ -65,7 +65,7 @@ def test_valid_read_runs_through_production_graph_with_history_and_registry_prom
         assert thread.assistant_state["guardrails"]["whitelisted"] is True
 
 
-def test_malformed_or_unwhitelisted_production_plan_falls_back_without_execution(client, monkeypatch):
+def test_malformed_or_unwhitelisted_production_plan_falls_back_after_one_repair(client, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     from app.config import get_settings
     get_settings.cache_clear()
@@ -86,9 +86,16 @@ def test_malformed_or_unwhitelisted_production_plan_falls_back_without_execution
         assert thread.assistant_state["planner"]["valid"] is False
         assert thread.assistant_state["guardrails"]["decision"] == "fallback"
         assert thread.assistant_state["execution_status"] == "completed"
-    # The plan is rejected, so the turn ends on the bounded summary: the planner call and the thread
-    # title, and no responder call dressing the failure as an answer.
-    assert len(captured) == 2
+    # The plan is rejected, so the turn ends on the bounded summary: planner, the single repair turn
+    # and the thread title, and no responder call dressing the failure as an answer.
+    assert len(captured) == 3
     assert captured[0]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
     assert "You are Lumat's internal operations assistant." not in captured[0]["messages"][0]["content"]
+    # The repair turn is a planner turn: same persona, same tool catalog, plus the exact rejection
+    # that has to be corrected. A repair without the catalog cannot fix a whitelist rejection.
+    repair = captured[1]
+    assert repair["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
+    assert "<available_tools>" in repair["messages"][1]["content"]
+    assert "not.allowed" in repair["messages"][-1]["content"]
+    assert "whitelisted=false" in repair["messages"][-1]["content"]
     assert settled["messages"][-1]["content"] == "No pude planificar esa solicitud de forma segura. Inténtalo nuevamente."

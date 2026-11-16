@@ -14,6 +14,7 @@ from app.chat.assistant.nodes import (
     panel_cost_gate,
     plan_llm,
     retrieve_kb,
+    repair_plan,
     tool_loop_head,
     verify_effects,
 )
@@ -36,12 +37,28 @@ def _is_terminal_plan_failure(state: AssistantState) -> bool:
 
 def _after_guardrails(state: AssistantState) -> str:
     if state.get("status") == "approval_pending":
+        # Approval is a human boundary, never a planner-repair opportunity.
+        return END
+    failure = (state.get("planner") or {}).get("failure") or {}
+    decision = (state.get("guardrails") or {}).get("decision")
+    if (
+        decision == "fallback"
+        and failure.get("stage") == "guardrails"
+        and failure.get("reason") == "unsafe_plan"
+        and not state.get("plan_repair_attempted")
+    ):
+        # Only the first unsafe-plan guardrails rejection earns the one repair call.
+        return "repair_plan"
+    if decision == "fallback" and state.get("plan_repair_attempted") and (
+        failure.get("stage") == "guardrails" or state.get("plan_repair_terminal")
+    ):
+        # A second guardrails rejection exhausts the repair allowance; repair_plan's own provider/
+        # parse failure also marks itself terminal. Other later planner failures retain old routing.
         return END
     # A fallback plan is not a plan: it carries `kind: "respond"` only so the turn can end with the
     # bounded summary. Handing it to the responder would dress the failure as a normal answer.
     if _is_terminal_plan_failure(state):
         return END
-    decision = (state.get("guardrails") or {}).get("decision")
     if decision == "retrieve_kb":
         return "retrieve_kb"
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
@@ -83,6 +100,7 @@ def build_assistant_graph():
     builder.add_node("memory_bootstrap", memory_bootstrap)
     builder.add_node("plan_llm", plan_llm)
     builder.add_node("guardrails", guardrails)
+    builder.add_node("repair_plan", repair_plan)
     builder.add_node("retrieve_kb", retrieve_kb)
     builder.add_node("execute_tool", execute)
     builder.add_node("tool_loop_head", tool_loop_head)
@@ -98,7 +116,8 @@ def build_assistant_graph():
         "plan_llm", _after_plan,
         {"guardrails": "guardrails"},
     )
-    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
+    builder.add_conditional_edges("guardrails", _after_guardrails, {"repair_plan": "repair_plan", "execute_tool": "execute_tool", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
+    builder.add_edge("repair_plan", "guardrails")
     builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("execute_tool", _after_execute, {"tool_loop_head": "tool_loop_head", END: END})
     builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "verify_effects": "verify_effects"})
@@ -157,7 +176,7 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
     last_state = None
     stage_nodes = {
         "assemble_context": "planning", "panel_cost_gate": "planning", "plan_llm": "planning",
-        "guardrails": "planning", "execute_tool": "executing",
+        "guardrails": "planning", "repair_plan": "planning", "execute_tool": "executing",
         "respond_stream": "streaming",
         "tool_loop_head": "planning",
         "verify_effects": "verifying",
