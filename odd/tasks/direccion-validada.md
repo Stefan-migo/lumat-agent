@@ -28,7 +28,7 @@ cliente cambia de forma y el panel la consume). Verificación independiente obli
 |---|---|---|---|---|
 | T1 | Migración `068_customer_address_validation.sql` + campos en `Customer` (item 1, commit propio) | S6 | worker | `feat(db): store the address validation outcome on the customer` |
 | T2 | `scripts/build_callejero.py`: fuente oficial → extracto filtrado a `coverage.communes` + `ATTRIBUTION.md` | S2 | worker | `data(geo): vendor the official Chilean street master extract` |
-| T3 | `app/services/callejero.py`: índice, normalización, fuzzy acotado, chequeo de rango con paridad, interpolación | S4 | worker | junto a T2 |
+| T3 | `app/services/callejero.py`: índice, normalización, fuzzy acotado, chequeo de rango con paridad (sin geometría para interpolar; ver S6) | S4 | worker | junto a T2 |
 | T4 | `app/services/address_validation.py`: validador puro, sin DB, sin red | S3, S4, S5 | worker | junto a T2 |
 | T5 | Integración en `app/chat/nodes/capture.py`: validar antes de guardar, reformular una vez, ofrecer el pin a la segunda | S1, S5, S7 | worker | `feat(chat): validate the address against the street master` |
 | T6 | Exportar el resultado en `app/panel/api/routes/clients.py` + textos de respuesta y su documentación | S5, S6 | worker | junto a T5 |
@@ -40,13 +40,21 @@ cliente cambia de forma y el panel la consume). Verificación independiente obli
 |---|---|---|
 | T1 | hecho | `cf26ee25` |
 | T2 | hecho | `754eed4e` |
-| T3 | pendiente — corte 2 | — |
-| T4 | pendiente — corte 2 | — |
+| T3 | hecho — corte 2 | — |
+| T4 | hecho — corte 2 | — |
 | T5 | pendiente — corte 2 | — |
 | T6 | pendiente — corte 3 | — |
 | T7 | pendiente — corte 3 | — |
 
 **Frontera de corte (2026-11-16):** el corte 1 cierra en 415 líneas autoradas en 3 commits (`86c5878c`, `cf26ee25`, `754eed4e`). El validador, la integración en `capture.py` y la verificación independiente van en un corte 2 sobre rama nueva desde `main` con este corte mergeado: el esquema ya está aplicado, así que el corte 2 no necesita migración.
+
+**L5 (corte 2, 2026-11-16).** El validador existe y responde offline: `app/services/callejero.py` carga el extracto una vez, normaliza igual que el build script (con test que impide que deriven) y devuelve el resultado de rango; `app/services/address_validation.py` es puro, sin red ni sesión, y no lanza ante basura. 27 tests unitarios.
+
+Dos agujeros reales encontrados al revisar el corte antes de commitearlo, ambos con test:
+1. **El departamento se leía como numeración.** «Avenida Irarrázaval 40 depto 502» tomaba `502` como número de calle y buscaba «AVENIDA IRARRAZAVAL 40 DEPTO», que no existe: devolvía `no_encontrada` sobre una dirección verdadera, o sea afirmaba que la calle no existe. La cláusula de unidad se matchea primero, y sólo cuando sigue a un número explícito, para que «Pasaje La Torre 5» conserve su propio número.
+2. **La comuna repetida al final rompía el parseo.** «…depto 502, Ñuñoa» no cerraba el ancla. Se descarta la comuna final **sólo si coincide con la capturada**.
+
+Sigue en T5: integrar en `capture.py` (reformular una vez, ofrecer el pin a la segunda, guardar con su estado) y T6 la API del panel.
 
 ## Log
 
