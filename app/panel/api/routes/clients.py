@@ -38,7 +38,7 @@ from app.models import (
 )
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import (
-    to_customer_dict,
+    to_customer_dict as _serialize_customer,
     to_equipment_dict,
     to_memory_dict,
     to_memory_relation_dict,
@@ -116,6 +116,19 @@ def _customer_or_404(session: Session, customer_id: int) -> customers.Customer:
     if customer is None:
         raise HTTPException(status_code=404, detail="customer not found")
     return customer
+
+
+def to_customer_dict(customer: customers.Customer) -> dict:
+    """Add address-validation outcome to every client route read model."""
+    return {
+        **_serialize_customer(customer),
+        "direccion_estado": customer.direccion_estado,
+        "direccion_fuente": customer.direccion_fuente,
+        "direccion_validada_at": (
+            customer.direccion_validada_at.isoformat()
+            if customer.direccion_validada_at is not None else None
+        ),
+    }
 
 
 def _equipment_or_404(
