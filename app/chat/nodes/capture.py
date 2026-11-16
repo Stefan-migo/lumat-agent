@@ -41,6 +41,7 @@ from app.chat.service_catalogue import (
 )
 from app.db import session_scope
 from app.models import Conversation, Customer
+from app.services.address_validation import validate_address
 from app.services.customers import (
     promote_captured_equipment,
     record_consent,
@@ -269,14 +270,33 @@ def _sync_customer_fields(session, state: ConversationState, captured: dict) -> 
     if customer is None:
         return
     clean = {k: v for k, v in captured.items() if v not in ("unknown", None)}
+    prior_address = customer.address
     update_captured_data(
         session,
         customer,
         name=clean.get("name"),
         email=clean.get("email"),
         comuna=clean.get("comuna"),
-        address=clean.get("address"),
+        address=(
+            clean.get("address")
+            if clean.get("direccion_estado") in {
+                "validada", "sin_numeracion", "dudosa", "no_encontrada",
+                "sin_referencia", "cliente",
+            }
+            else None
+        ),
     )
+    if clean.get("direccion_estado"):
+        changed_outcome = (
+            prior_address != clean.get("address")
+            or customer.direccion_estado != clean["direccion_estado"]
+            or customer.direccion_fuente != clean["direccion_fuente"]
+            or customer.direccion_validada_at is None
+        )
+        customer.direccion_estado = clean["direccion_estado"]
+        customer.direccion_fuente = clean["direccion_fuente"]
+        if changed_outcome:
+            customer.direccion_validada_at = datetime.now(timezone.utc)
     promote_captured_equipment(session, customer, state.conversation_id, clean)
 
 
@@ -488,6 +508,57 @@ def _merge_extracted(
             captured[field] = value
 
 
+def _validate_address_candidate(captured: dict, state: ConversationState) -> dict | None:
+    """Validate a newly captured address, deferring only until comuna is known."""
+    candidate = captured.get("address")
+    candidate_is_new = not state.captured.get("address")
+    candidate_was_deferred = bool(captured.get("_address_pending_validation"))
+    if (
+        not isinstance(candidate, str)
+        or not candidate
+        or captured.get("_contact_offered")
+        or not (candidate_is_new or candidate_was_deferred)
+    ):
+        return None
+    if captured.get("comuna") in (None, "", "unknown"):
+        # An out-of-order extraction can precede the commune. Keep it only as a
+        # conversation candidate (never a ficha address), then validate it once
+        # the customer has supplied the commune.
+        captured["_address_pending_validation"] = True
+        return None
+
+    captured.pop("_address_pending_validation", None)
+    outcome = validate_address(candidate, captured["comuna"])
+    if outcome.state in {"validada", "sin_numeracion"}:
+        captured["direccion_estado"] = outcome.state
+        captured["direccion_fuente"] = "callejero"
+        return None
+    if (
+        outcome.state == "sin_referencia"
+        and (captured.get("_asked") or {}).get("address", 0) < MAX_ASKS_PER_FIELD
+    ):
+        # The master cannot speak for this commune. Persist that uncertainty
+        # without treating the typed address as trusted or replacing an older
+        # address; the customer still gets the normal reformulation.
+        captured.pop("address", None)
+        captured["direccion_estado"] = "sin_referencia"
+        captured["direccion_fuente"] = "cliente"
+        captured["_pending"] = ["address"]
+        return _reask_pending(captured, ["address"], state)
+    if (captured.get("_asked") or {}).get("address", 0) >= MAX_ASKS_PER_FIELD:
+        # After the pin offer the customer's own description wins. It is a
+        # deliberate, persisted fallback rather than a hard rejection.
+        captured["direccion_estado"] = "cliente"
+        captured["direccion_fuente"] = "cliente"
+        return None
+
+    captured.pop("address", None)
+    captured.pop("direccion_estado", None)
+    captured.pop("direccion_fuente", None)
+    captured["_pending"] = ["address"]
+    return _reask_pending(captured, ["address"], state)
+
+
 def capture(state: ConversationState) -> dict:
     """Merge this turn's extraction and ask the next missing fields (CI-3b)."""
     captured = dict(state.captured)
@@ -551,6 +622,13 @@ def capture(state: ConversationState) -> dict:
         # character asked for fields called "n" and re-asked forever (the ingest
         # ack test caught it as an unmocked LLM call).
         pending = [pending]
+
+    # Validate classifier-extracted candidates now. Terse pending-field answers
+    # are merged below and pass through the same gate there.
+    address_result = _validate_address_candidate(captured, state)
+    if address_result is not None:
+        return address_result
+
     if isinstance(pending, list) and "failure" in (captured.get("_skipped") or []):
         pending = [field for field in pending if field != "failure"]
         if pending:
@@ -644,11 +722,25 @@ def capture(state: ConversationState) -> dict:
                 )
             if pending[0] not in captured:
                 return _reask_pending(captured, pending, state)
+            if pending[0] == "address":
+                address_result = _validate_address_candidate(captured, state)
+                if address_result is not None:
+                    return address_result
         else:
             return _reask_pending(captured, pending, state)
 
     captured.pop("_pending", None)
     return _ask_next(captured, state)
+
+
+def _address_reask_question(question: str, *, offer_pin: bool) -> str:
+    """Reuse the configured address ask, adding the WhatsApp pin offer on retry."""
+    if not offer_pin:
+        return question
+    return (
+        question.rstrip().removesuffix("?")
+        + " o, si te es más fácil, puedes enviarme tu ubicación con el pin de WhatsApp?"
+    )
 
 
 def _reask_pending(captured: dict, pending: list[str], state: ConversationState) -> dict:
@@ -677,6 +769,10 @@ def _reask_pending(captured: dict, pending: list[str], state: ConversationState)
     captured["_pending"] = pending
     with session_scope() as session:
         ask = _render_capture_question(session, captured, pending)
+        if pending == ["address"]:
+            ask = _address_reask_question(
+                ask, offer_pin=asked.get("address", 0) >= MAX_ASKS_PER_FIELD
+            )
         _persist_captured(session, state, captured)
     return {"captured": captured, "replies": [ask]}
 

@@ -294,7 +294,7 @@ def test_configured_consent_question_is_used(mock_openai_chat):
     replies: list[str] = []
     for index, text in enumerate(
         ["quiero una visita", "No enciende", "Calefont", "Ñuñoa",
-         "mañanas", "Juan", "juan@mail.cl", "Calle 1"],
+         "mañanas", "Juan", "juan@mail.cl", "Avenida Irarrázaval 40"],
         start=1,
     ):
         replies = _turn(conv_id, text, f"wamid.custom-consent{index}")
@@ -327,7 +327,7 @@ def test_capture_does_not_ask_optional_evidence_before_booking(mock_openai_chat)
     all_replies = []
     for index, text in enumerate(
         ["quiero una visita", "No enciende", "Calefont", "Ñuñoa",
-         "mañanas", "Juan", "juan@mail.cl", "Calle 1"],
+         "mañanas", "Juan", "juan@mail.cl", "Avenida Irarrázaval 40"],
         start=1,
     ):
         replies = _turn(conv_id, text, f"wamid.optional{index}")
@@ -390,7 +390,18 @@ def test_cm2_field_answers_do_not_burn_unknown_attempts(mock_openai_chat):
         ) is None
 
 
-def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
+def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat, monkeypatch):
+    from app.chat.nodes import capture as capture_node
+
+    validation_results = []
+    validate = capture_node.validate_address
+
+    def observe_validation(address, commune):
+        result = validate(address, commune)
+        validation_results.append(result)
+        return result
+
+    monkeypatch.setattr(capture_node, "validate_address", observe_validation)
     conv_id = _start_conversation()
     turns = [
         ("quiero una visita", "wamid.comp1"),
@@ -400,7 +411,7 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
         ("manana en la manana", "wamid.comp5"),
         ("Juan", "wamid.comp6"),
         ("juan@mail.cl", "wamid.comp7"),
-        ("Av Siempre Viva 123", "wamid.comp8"),
+        ("Avenida Irarrázaval 40", "wamid.comp8"),
         ("si", "wamid.comp9"),  # consent
     ]
     last_replies = []
@@ -422,11 +433,17 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     assert customer.name == "Juan"
     assert customer.email == "juan@mail.cl"
     assert customer.comuna == "Ñuñoa"
-    assert customer.address == "Av Siempre Viva 123"
+    assert [result.state for result in validation_results] == ["validada"]
+    assert customer.address == "Avenida Irarrázaval 40"
     assert customer.consent_status is True
     assert customer.consent_at is not None
 
+    # Validation metadata is read through a fresh session, separate from capture.
     with SessionLocal() as session:
+        stored_customer = session.get(Customer, customer.id)
+        assert stored_customer.direccion_estado == "validada"
+        assert stored_customer.direccion_fuente == "callejero"
+        assert stored_customer.direccion_validada_at is not None
         equipment = session.scalars(
             select(CustomerEquipment).where(CustomerEquipment.customer_id == customer.id)
         ).all()
@@ -443,7 +460,7 @@ def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
     _turn(conv_id, "calefont", "wamid.equipment0")
     for index, text in enumerate(
         ["No enciende", "Calefont Bosch 10L", "Ñuñoa", "mañana",
-         "Juan", "juan@mail.cl", "Av Siempre Viva 123", "si"],
+         "Juan", "juan@mail.cl", "Avenida Irarrázaval 40", "si"],
         start=1,
     ):
         _turn(conv_id, text, f"wamid.equipment{index}")
@@ -549,7 +566,7 @@ def test_s6_explicit_email_refusal_skips_email_and_reaches_booking(mock_openai_c
     assert all("correo" not in reply.lower() for reply in replies)
     assert any("dirección" in reply.lower() for reply in replies)
 
-    _turn(conv_id, "Calle 1", "wamid.s6-address")
+    _turn(conv_id, "Avenida Irarrázaval 40", "wamid.s6-address")
     _turn(conv_id, "si", "wamid.s6-consent")
     with SessionLocal() as session:
         assert session.get(Conversation, conv_id).state.value == "human"
@@ -569,7 +586,7 @@ def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
     replies = []
     for index, text in enumerate(
         ["quiero una visita", "no enciende", "Calefont", "Ñuñoa",
-         "manana", "Juan", "juan@mail.cl", "Calle 1"],
+         "manana", "Juan", "juan@mail.cl", "Avenida Irarrázaval 40"],
         start=1,
     ):
         replies = _turn(conv_id, text, f"wamid.consent{index}")
@@ -592,11 +609,11 @@ def test_cm3_extracts_multiple_fields_from_one_message(mock_openai_chat, monkeyp
 
     def fake(text: str, message_id: int, conversation: str = "") -> dict:
         result = real(text, message_id, conversation)
-        if "Los Leones" in text:
+        if "Avenida Irarrázaval 40" in text:
             result["fields"] = {
                 "name": "Juan Pérez",
                 "email": "juan@mail.cl",
-                "address": "Los Leones 1234",
+                "address": "Avenida Irarrázaval 40",
             }
         return result
 
@@ -604,12 +621,13 @@ def test_cm3_extracts_multiple_fields_from_one_message(mock_openai_chat, monkeyp
 
     conv_id = _start_conversation()
     _turn(conv_id, "quiero una visita", "wamid.ext1")
-    replies = _turn(conv_id, "Juan Pérez, juan@mail.cl, Los Leones 1234", "wamid.ext2")
+    replies = _turn(conv_id, "Juan Pérez, juan@mail.cl, Avenida Irarrázaval 40", "wamid.ext2")
 
     captured = _conversation_captured(conv_id)
     assert captured["name"] == "Juan Pérez"
     assert captured["email"] == "juan@mail.cl"
-    assert captured["address"] == "Los Leones 1234"
+    assert captured["address"] == "Avenida Irarrázaval 40"
+    assert captured["_address_pending_validation"] is True
 
     # the grouped ask skipped the fields the same message already supplied
     asked = " ".join(replies)
@@ -828,7 +846,7 @@ def test_cm5_summary_stored_on_conversation_and_case(mock_openai_chat):
         ("Juan", "wamid.sum1"),
         ("juan@mail.cl", "wamid.sum2"),
         ("Ñuñoa", "wamid.sum3"),
-        ("Av Siempre Viva 123", "wamid.sum4"),
+        ("Avenida Irarrázaval 40", "wamid.sum4"),
         ("calefont", "wamid.sum5"),
         ("no enciende", "wamid.sum6"),
         ("manana", "wamid.sum7"),
