@@ -165,17 +165,31 @@ def corpus():
     return ev.load_corpus(CORPUS_PATH)
 
 
-def test_shipped_corpus_loads_with_thirty_seven_scenarios(corpus):
+def test_shipped_corpus_loads_with_forty_two_scenarios(corpus):
     assert corpus.version == 1
-    assert len(corpus.scenarios) == 37
-    assert len({s.id for s in corpus.scenarios}) == 37
+    assert len(corpus.scenarios) == 42
+    assert len({s.id for s in corpus.scenarios}) == 42
 
 
 def test_shipped_corpus_covers_the_three_tiers(corpus):
     counts = {}
     for scn in corpus.scenarios:
         counts[scn.tier] = counts.get(scn.tier, 0) + 1
-    assert counts == {"simple": 11, "complejo": 13, "supercomplejo": 13}
+    assert counts == {"simple": 12, "complejo": 16, "supercomplejo": 14}
+
+
+def test_measurable_remaining_real_conversations_have_cited_scenarios(corpus):
+    expected = {
+        "real-claudio-caldera-valvula",
+        "real-diego-precio-y-duracion",
+        "real-hector-discrepancia-valor",
+        "real-maria-jesus-evaluacion-caldera",
+        "real-monica-diagnostico-no-confirmado",
+    }
+    by_id = {scenario.id: scenario for scenario in corpus.scenarios}
+    assert expected <= by_id.keys()
+    for scenario_id in expected:
+        assert "chat.txt:" in by_id[scenario_id].notes
 
 
 def test_shipped_corpus_declares_an_expectation_per_scenario(corpus):
@@ -1061,10 +1075,10 @@ def test_write_report_writes_both_files(tmp_path):
 def test_validate_only_accepts_the_shipped_corpus(capsys):
     assert ev.main(["--validate-only"]) == 0
     captured = capsys.readouterr()
-    assert "37" in captured.out
-    assert "simple 11" in captured.out
-    assert "complejo 13" in captured.out
-    assert "supercomplejo 13" in captured.out
+    assert "42" in captured.out
+    assert "simple 12" in captured.out
+    assert "complejo 16" in captured.out
+    assert "supercomplejo 14" in captured.out
     assert captured.err == ""
 
 
@@ -1081,7 +1095,7 @@ def test_selection_filters_by_tier_and_by_id(corpus):
 
     by_tier = ev._select(corpus, argparse.Namespace(tier="supercomplejo", only=None))
     assert {scn.tier for scn in by_tier} == {"supercomplejo"}
-    assert len(by_tier) == 13
+    assert len(by_tier) == 14
 
     by_id = ev._select(
         corpus, argparse.Namespace(tier=None, only=["simple-saludo-variante"])

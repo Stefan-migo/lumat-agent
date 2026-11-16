@@ -56,3 +56,24 @@ Estos casos pertenecen a la hoja de ruta, no al corpus de regresión: el bot act
 - El caso de la arrendataria sólo puede exigir no afirmar autorización no declarada; la identificación persistente del rol y el contacto con el propietario quedan pendientes de D7.
 - El adjunto de Antonieta se representa como omitido; no se exige reconocer el trabajo previo ni interpretar su video.
 - El caso de «dato + pregunta» requiere responder la pregunta explícita, pero no una memoria persistente más allá del contexto que el turno actual tenga disponible.
+
+## Corte 2 — conversaciones no promovidas al corpus
+
+Estos casos sí fueron revisados contra el derivador. No se agregan al corpus porque el resultado exige continuidad/seguimiento que hoy no está disponible, seguridad técnica que el bot no puede garantizar o no hay una dificultad observable que medir:
+
+- **Camila Covián** (`chat.txt:48-51`): sólo agradecimientos después del servicio; no hay petición ni fricción con un resultado distinto que permita una regresión útil.
+- **Hugo Ochoa** (`chat.txt:101`): «Quería saber que pasó con el calefon» exige recuperar el contexto y estado de un trabajo anterior (D1).
+- **Jorge Orihuela** (`chat.txt:94-95`): pide un informe pendiente y urgente; exige registrar y recuperar una promesa de entrega (D6).
+- **Juan Pereira** (`chat.txt:52`): pide validar el diseño de un bypass que conecta calefont y caldera; el corpus no debe pinnear una recomendación de ingeniería que el bot no puede verificar.
+- **Karen Portal los Maitenes** (`chat.txt:35`): informa que el baño sigue sin calentar después de una intervención y espera volver a revisar lo pendiente; requiere vínculo de postventa (D5) y continuidad del trabajo.
+- **Kathy** (`chat.txt:16`): «Si le aviso» es una respuesta aislada sin solicitud ni desenlace medible.
+- **Marcelo Aceituno** (`chat.txt:76-79`): reporta que el calefont volvió a fallar y solicita recibo para el dueño; requiere recuperar la intervención anterior (D5) y registrar/entregar el comprobante (D6).
+- **Sofía** (`chat.txt:162-184`): la presión sube y la caldera gotea. En el intercambio original se indicó intervenir el radiador para bajar presión (`chat.txt:168-181`); hasta que exista un protocolo de triage seguro, exigir una respuesta que evite esa maniobra no es una capacidad establecida hoy.
+
+### D11 — Triage seguro de fallas hidráulicas de caldera
+
+**Evidencia:** el intercambio de Sofía muestra presión creciente, descarga abundante de agua y goteo (`chat.txt:162-184`); la respuesta observada propone sacar agua de un radiador (`chat.txt:168-181`). El caso de Claudio también pregunta si debe cortar una llave durante un error de caldera (`chat.txt:43-47`).
+
+**Objetivo:** ante presión anormal, fuga de agua o errores de caldera, no diagnosticar a distancia ni indicar maniobras de válvulas/radiadores; dar una pauta de seguridad aprobada y facilitar evaluación técnica.
+
+**Criterio de salida:** escenarios con presión y fuga en curso reciben la pauta segura aprobada sin instrucciones de manipulación no verificadas, y activan evaluación humana cuando corresponde.
