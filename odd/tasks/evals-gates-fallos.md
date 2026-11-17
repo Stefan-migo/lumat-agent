@@ -21,19 +21,20 @@ Cada spec cita el texto del cliente y la salida observada **verbatim**, del info
   conversación menciona la mantención o el equipo (`mantenci`, `caldera`; gate G6 de
   `real-mantencion-caldera`). Hoy el bot contesta `¿En qué comuna te encuentras?` y el motivo declarado
   no aparece nunca.
-- **S2 — La pregunta de captura no reemplaza la respuesta.** El turno siguiente,
-  `Me avisas a que hora puedes venir .`, puede volver a pedir la comuna —`MAX_ASKS_PER_FIELD = 2`
-  (`app/chat/nodes/capture.py:83`) y la tercera reiteración deriva (`:1013-1020`), eso es diseño—, pero
-  la respuesta que acompaña a la pregunta tiene que nombrar lo que el cliente pidió. Hoy los dos turnos
-  dan `¿En qué comuna te encuentras?`, palabra por palabra, sin mención de la mantención, y la
-  reiteración no aporta nada nuevo.
-- **S3 — Una hora propuesta no se contesta con la tool de visitas.** Ante `es factible que pases tipo 14
-  horas?` (`real-dato-mas-pregunta`), el bot no responde `No tienes visitas próximas para reagendar.` ni
-  registra el evento `unknown_intent` (gate G4). Ese texto no sale de una tool: es el mensaje
-  `manage_no_visits` (`app/services/settings.py:132`) que emite `_start_offer` cuando la consulta de
-  visitas vuelve vacía (`app/chat/nodes/manage.py:55-75`), y `manage` sólo corre para
-  `cancelar_visita`/`reagendar_visita` (`app/chat/nodes/orchestrate.py:102-121`). El hard fail del
-  escenario lo dice: «Ignorar la pregunta que acompaña a los datos».
+- **S2 — La mantención pedida se nombra, y no se repite en cada pregunta.** La primera respuesta de la
+  captura nombra el servicio que el cliente pidió (mantención de la caldera, del calefont, de la
+  calefacción). La pregunta de captura puede repetirse —`MAX_ASKS_PER_FIELD = 2` es diseño
+  (`app/chat/nodes/capture.py:83`)—, pero la ack no se repite palabra por palabra en cada campo, y un
+  fallo reportado después la retira: un cliente que pasa de «quiero mantención» a «ahora no calienta»
+  no puede seguir leyendo que quiere una mantención.
+- **S3 — Una propuesta de horario no termina en un callejón sin salida.** Ante `es factible que pases
+  tipo 14 horas?` (`real-dato-mas-pregunta`), el bot no responde `No tienes visitas próximas para
+  reagendar.` Ese texto no sale de una tool: es `manage_no_visits` (`app/services/settings.py:132`),
+  emitido por `_start_offer` cuando la consulta de visitas vuelve vacía (`app/chat/nodes/manage.py:55-75`),
+  y `manage` sólo corre para `cancelar_visita`/`reagendar_visita`
+  (`app/chat/nodes/orchestrate.py:102-121`). Un cliente sin visitas agendadas recibe ese callejón dos
+  veces y su pregunta se pierde. El `unknown_intent` que el gate prohibía **no** entra en esta spec: lo
+  escribe el turno 1 del propio guion (L7).
 - **S4 — Un turno de media no es un fallo de comprensión (el defecto es del instrumento).** El turno
   `<video omitido>` de `real-claudio-caldera-valvula` no puede registrar `unknown_intent` (gate G4).
   El cerebro ya cumple: un mensaje de media con texto vacío no llega a clasificar
@@ -44,21 +45,18 @@ Cada spec cita el texto del cliente y la salida observada **verbatim**, del info
   (`app/chat/nodes/handoff_gate.py:155-161`) y el turno clasifica. El arreglo es que el instrumento
   pueda enviar un turno de media, no relajar el gate.
 - **S5 — Un dato rechazado se marca saltado.** Ante `no te voy a dar mi correo, con el telefono basta`
-  (`complejo-no-quiere-email`), el correo queda como campo saltado y el flujo continúa. **Estado
-  verificado del código:** esa frase ya está en `_SKIP_WORDS` (`app/chat/nodes/capture.py:120`) y en
-  `_REFUSAL_FIELDS` (`:127-129`), y `capture()` la aplica en `:631-643`, así que el correo **sí** queda
-  como `"unknown"` y en `_skipped`. Lo que falla es lo de después: con la dirección todavía ausente, la
-  conversación pide la dirección dos veces seguidas y termina con el cliente diciendo `si, cualquier dia
-  despues de las 6`, que no se registra. Ese día es S6, y la derivación esperada
-  (`booking_unavailable` o `persona`) llega recién en la tercera reiteración, que el escenario no tiene.
-  El arreglo no es «marcar el rechazo»: es consumir la disponibilidad y no dejar que la última respuesta
-  del cliente se pierda.
+  (`complejo-no-quiere-email`), el correo queda como campo saltado y el flujo continúa. **Esto ya
+  funciona y no se toca:** la frase está en `_SKIP_WORDS` (`app/chat/nodes/capture.py:120`) y en
+  `_REFUSAL_FIELDS` (`:127-129`), y `capture()` la aplica en `:631-643`. La spec queda como invariante
+  con su test: si mañana alguien rompe el rechazo, la prueba falla.
 - **S6 — Un día declarado se registra.** Ante `si, cualquier dia despues de las 6`, la disponibilidad
   declarada se guarda como dato del caso. Hoy el turno se descarta y el bot vuelve a pedir la dirección
   que ya venía pidiendo: bucle.
-- **S7 — Una pregunta de periodicidad es una consulta de valores.** `Corresponde hacerla??\nEs cada 6
-  meses??` (`real-precio-mantencion-ciclo`) se clasifica con un intent de valores/precio (gate G2), no
-  con `consulta`. El contenido de la respuesta no se cambia: el escenario no se queja de la respuesta.
+- **S7 — Una pregunta de periodicidad es una consulta, no un valor (decisión del owner, L7).**
+  `Corresponde hacerla??\nEs cada 6 meses??` (`real-precio-mantencion-ciclo`) se clasifica `consulta`,
+  que es lo que la propia definición del clasificador le asigna («procedimientos, plazos […] mantención»,
+  `agent/personas/classify.md:1`) y lo que el bot ya hace. `valores` es «precios y tarifas» y esa
+  pregunta no lo es. El gate G2 se corrigió en el corpus; no se toca el clasificador.
 - **S8 — `complejo-dos-temas` deja de exigir derivación (decisión del owner, L2).** La consulta de
   precio (`hola, cuanto cuesta el lavado de red?`) y la de garantía (`y eso cuanto de garantia tiene?`)
   se responden de la KB y el bot **puede** quedarse en `bot`. La expectativa pasa a `state_any:
@@ -77,14 +75,14 @@ Cada spec cita el texto del cliente y la salida observada **verbatim**, del info
 
 | ID | Qué | Specs | Entrega |
 |---|---|---|---|
-| T1 | `complejo-dos-temas` deja de exigir `human` + `persona`, con la razón escrita en el corpus | S8, S10 | PR 0 |
-| T2 | El instrumento sabe mandar un turno de media: `msg_type` por turno en el corpus, el harness y el evaluador | S4 | PR 0 |
-| T3 | La mantención declarada se reconoce y la respuesta la nombra; no se repite la misma pregunta sin nombrarla | S1, S2 | PR A |
-| T4 | La disponibilidad del último turno se registra y el escenario no muere pidiendo la dirección | S5, S6 | PR A |
-| T5 | Una propuesta de horario no termina en `manage_no_visits` ni registra `unknown_intent` | S3 | PR B |
-| T6 | La pregunta de periodicidad se clasifica como valores | S7 | PR C |
-| T7 | Re-medir los seis con gates en el árbol limpio, y anotar sello y resultado | todas | cierre |
-| T8 | Verificación independiente de la interacción entre PR A, B y C | todas | cierre |
+| T1 | `complejo-dos-temas` deja de exigir `human` + `persona`, con la razón escrita en el corpus | S8, S10 | PR 0 ✓ |
+| T2 | El instrumento sabe mandar un turno de media: `msg_type` por turno en el corpus, el harness y el evaluador | S4 | PR 0 ✓ |
+| T3 | Tres expectativas que el corpus contradecía: `consulta` en periodicidad, sin `unknown_intent` de fragmento, sin derivación forzada | S3, S5, S7 | PR 0 |
+| T4 | La mantención declarada se reconoce y la respuesta la nombra; no se repite la pregunta sin nombrarla | S1, S2 | PR A |
+| T5 | Una propuesta de horario no termina en `manage_no_visits`: si no hay visitas, deriva con causa | S3 | PR A |
+| T6 | La pregunta de periodicidad se clasifica como valores | S7 | **dropped** — la expectativa estaba mal, no el bot |
+| T7 | Re-medir los cuatro que quedan con gates en el árbol limpio, y anotar sello y resultado | todas | cierre |
+| T8 | Verificación independiente del corte | todas | cierre |
 
 ## Entrega
 
@@ -92,10 +90,8 @@ Una PR por familia de causa, más una PR 0 para el instrumento:
 
 | PR | Qué revisa el humano | Rama |
 |---|---|---|
-| 0 · instrumento | las líneas de `conv_eval_corpus.yaml`, el `msg_type` por turno del harness y la razón por la que la expectativa mentía y el marcador de video viajaba como texto | `test/evals-instrumento-honesto` |
-| A · captura | el camino que decide qué se le pregunta al cliente: mantención reconocida, disponibilidad registrada, dirección sin repetirse | `fix/chat-captura-mantencion-y-disponibilidad` |
-| B · agenda | por qué `reagendar_visita` sobre una conversación sin visitas contestaba un callejón sin salida | `fix/chat-agenda-sin-visitas` |
-| C · clasificación | `consulta` contra `valores` para una pregunta de periodicidad | `fix/chat-intent-periodicidad` |
+| 0 · instrumento | las líneas de `conv_eval_corpus.yaml` que mentían, el `msg_type` por turno del harness y por qué cada expectativa corregida contradicía al resto del corpus | `test/evals-instrumento-honesto` |
+| A · chat | los dos defectos de producto: la mantención que se reconoce y no se nombra, y el callejón de `manage` cuando el cliente no tiene visitas | `fix/chat-mantencion-y-agenda-sin-visitas` |
 
 Cada PR se mide con los escenarios que toca, más un barrido de gates del corpus completo al cerrar la
 última, para no mover ningún escenario que no era el objetivo.
@@ -151,3 +147,26 @@ cambió dos diagnósticos del handoff y ajustó un tercero:
 
 Efecto sobre el plan: PR 0 deja de ser «sólo la expectativa de `complejo-dos-temas`» y pasa a incluir
 el turno de media del harness. PR B pierde el arreglo de media y se queda con la agenda.
+
+**L7 (evidencia en la base y decisiones del owner, 2026-11-17).** La corrida `gates-uno`
+(`odd/evals/conv-eval-gates-uno.md`, sello `d17974f4f`, árbol limpio) dejó **3 de 7**. Cayeron
+`complejo-dos-temas` (la expectativa corregida en T1), `simple-dia-especifico` (PR #829) y
+`real-claudio-caldera-valvula` (el turno de media de T2). Quedaron cuatro, y la base abierta por
+conversación mostró que **tres de los cuatro no eran defectos del bot**:
+
+| Escenario | Lo que dijo la base |
+|---|---|
+| `real-mantencion-caldera` | el caso es `mantención de calefacción`; el bot lo sabe y contesta sólo `¿En qué comuna te encuentras?`. **Defecto real.** |
+| `real-dato-mas-pregunta` | `unknown_intent` en el **turno 1** (`18:30 comienzo con los chicos`, fragmento huérfano del guion); después dos `reagendar_visita` → `manage` → `No tienes visitas próximas para reagendar.` **El defecto real es el callejón; el evento es del corpus.** |
+| `real-precio-mantencion-ciclo` | `consulta` + `kb_retrieved`: la etiqueta que su propia definición asigna. **Expectativa.** |
+| `complejo-no-quiere-email` | cuatro turnos, todos `solicitar_visita`, correo saltado correctamente; la dirección se pide **una** vez y el guion termina ahí. **Expectativa.** |
+
+Decisiones del owner, las tres por la opción de corregir la expectativa:
+
+1. `real-precio-mantencion-ciclo`: `intent_expected` pasa de `[valores]` a `[consulta]`.
+2. `real-dato-mas-pregunta`: se retira `events_forbidden: [unknown_intent]`; quedan los hard fails.
+3. `complejo-no-quiere-email`: `state_any: [bot, human]` y se retira `causes_required`.
+
+Con el corpus corregido, de los cuatro quedan **dos defectos reales** (T4 y T5) y un escenario que
+pasa por construcción (`real-precio-mantencion-ciclo`). La lista de «seis escenarios que fallan gates»
+era, en realidad, dos defectos del bot y cinco problemas del instrumento.

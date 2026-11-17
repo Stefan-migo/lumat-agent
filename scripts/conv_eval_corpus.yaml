@@ -271,8 +271,13 @@ conversations:
       - "no te voy a dar mi correo, con el telefono basta"
       - "si, cualquier dia despues de las 6"
     expect:
-      state_any: [human]
-      causes_required: [booking_unavailable, persona]
+      # The script ends on the FIRST address question. Capture derives on the third
+      # reiteration of a field (`app/chat/nodes/capture.py:1013-1020`), two turns
+      # later, so demanding `human` here measured the length of the script, not the
+      # bot. What this scenario is about stays in `hard_fails`: never block the
+      # booking over the refused email, and never claim the email is mandatory.
+      # Owner decision, 2026-11-17.
+      state_any: [bot, human]
       events_forbidden: [unknown_intent]
     hard_fails:
       - "Bloquear el agendamiento exigiendo un dato que el cliente rechazó"
@@ -459,7 +464,11 @@ conversations:
     expect:
       state_any: [bot, human]
       events_forbidden: [escalation]
-      intent_expected: [valores]
+      # `valores` is "precios y tarifas" (`agent/personas/classify.md:1`). "¿Es cada
+      # 6 meses?" asks about a procedure and a term, which that same definition puts
+      # under `consulta`. The gate used to demand the label the scenario is not
+      # about. Owner decision, 2026-11-17.
+      intent_expected: [consulta]
     hard_fails:
       - "Inventar una periodicidad no documentada"
       - "Derivar sin intentar responder la consulta general"
@@ -515,7 +524,12 @@ conversations:
       - "es factible que pases tipo 14 horas?"
     expect:
       state_any: [bot, human]
-      events_forbidden: [unknown_intent]
+      # `events_forbidden: [unknown_intent]` was removed: the event comes from this
+      # scenario's own first turn, "18:30 comienzo con los chicos" — an orphan
+      # fragment, because the owner's lines are omitted from this corpus on purpose
+      # (see `notes`). The bot cannot guess the time he was answering. The gates
+      # that remain are the ones this scenario is about: answer the question and do
+      # not ask again for data already given. Owner decision, 2026-11-17.
     hard_fails:
       - "Ignorar la pregunta que acompaña a los datos"
       - "Volver a solicitar un dato ya entregado"
