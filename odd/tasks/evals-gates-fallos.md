@@ -77,11 +77,11 @@ Cada spec cita el texto del cliente y la salida observada **verbatim**, del info
 |---|---|---|---|
 | T1 | `complejo-dos-temas` deja de exigir `human` + `persona`, con la razón escrita en el corpus | S8, S10 | PR 0 ✓ |
 | T2 | El instrumento sabe mandar un turno de media: `msg_type` por turno en el corpus, el harness y el evaluador | S4 | PR 0 ✓ |
-| T3 | Tres expectativas que el corpus contradecía: `consulta` en periodicidad, sin `unknown_intent` de fragmento, sin derivación forzada | S3, S5, S7 | PR 0 |
-| T4 | La mantención declarada se reconoce y la respuesta la nombra; no se repite la pregunta sin nombrarla | S1, S2 | PR A |
-| T5 | Una propuesta de horario no termina en `manage_no_visits`: si no hay visitas, deriva con causa | S3 | PR A |
+| T3 | Tres expectativas que el corpus contradecía: `consulta` en periodicidad, sin `unknown_intent` de fragmento, sin derivación forzada | S3, S5, S7 | PR 0 ✓ |
+| T4 | La mantención declarada se reconoce y la respuesta la nombra una vez; un fallo posterior la retira | S1, S2 | PR A ✓ |
+| T5 | Un reagendamiento sin visita no termina en `manage_no_visits`: deriva con causa; cancelar conserva su respuesta | S3 | PR A ✓ |
 | T6 | La pregunta de periodicidad se clasifica como valores | S7 | **dropped** — la expectativa estaba mal, no el bot |
-| T7 | Re-medir los cuatro que quedan con gates en el árbol limpio, y anotar sello y resultado | todas | cierre |
+| T7 | Re-medir los cuatro que quedan con gates en el árbol limpio, y anotar sello y resultado | todas | ✓ `gates-dos` |
 | T8 | Verificación independiente del corte | todas | cierre |
 
 ## Entrega
@@ -100,8 +100,12 @@ Cada PR se mide con los escenarios que toca, más un barrido de gates del corpus
 
 | Task | Commit |
 |---|---|
-| T1 | `test(evals): stop demanding a handoff on a price question` |
-| T2 | `test(evals): let a scenario send a media turn` |
+| T1, T3 | `8819affdd` · `e080baa15` — las expectativas corregidas |
+| T2 | `d17974f4f` — el turno de media |
+| T4 | `e5dbe1100` — la mantención se nombra una vez |
+| T5 | `f0acbdac7` — reagendar sin visita deriva |
+| T1–T3 medidos | `conv-eval-gates-uno` (sello `d17974f4f`, árbol limpio): 3/7 |
+| T4–T5 medidos | `conv-eval-gates-dos` (sello `89b6cadf7`, árbol limpio): **4/4, cero gates fallidos** |
 
 ## Log
 
@@ -170,3 +174,21 @@ Decisiones del owner, las tres por la opción de corregir la expectativa:
 Con el corpus corregido, de los cuatro quedan **dos defectos reales** (T4 y T5) y un escenario que
 pasa por construcción (`real-precio-mantencion-ciclo`). La lista de «seis escenarios que fallan gates»
 era, en realidad, dos defectos del bot y cinco problemas del instrumento.
+
+**L8 (medición de cierre, 2026-11-17).** Corrida `gates-dos` sobre `89b6cadf7`, árbol limpio, los cuatro
+escenarios que quedaban: **4/4, cero gates fallidos** (`odd/evals/conv-eval-gates-dos.md`). Los
+transcripts confirman que el pase es real y no una expectativa vacía:
+
+- `real-mantencion-caldera` — primera respuesta: «Entiendo, quieres hacer mantención de calefacción.
+  ¿En qué comuna te encuentras?». La segunda pregunta vuelve a pedir la comuna sin repetir la ack, que
+  es lo que S2 pide después del ajuste.
+- `real-dato-mas-pregunta` — el turno 2 ya no recibe el callejón: «No encontré un horario que nos sirva
+  en la agenda, así que no te voy a dejar esperando: un asesor de Lumat te contacta para coordinar la
+  visita directamente.», estado final `human`, y el turno 3 en silencio porque un humano es dueño.
+- `real-precio-mantencion-ciclo` y `complejo-no-quiere-email` pasan por la corrección de expectativa de
+  PR 0, no por un cambio del bot. Se dice explícito para no vender de más.
+
+**Lo que falta y no es de estas specs:** el titular de 42 escenarios con juez sigue sin existir. Con el
+instrumento corregido y G8 honesto, esa corrida cambia de número respecto del 25/41 histórico, y es una
+decisión del owner, no un paso automático de esta feature.
+
