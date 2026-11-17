@@ -89,6 +89,16 @@ dos tajadas de commits, cada una con su PR:
 La verificación independiente de T7 cubre las dos tajadas juntas: el riesgo está en la interacción entre
 ellas (capture deriva justo en el turno en que el ack ya escribió el caso), no en cada una por separado.
 
+## Evidencia
+
+| Task | Commit |
+|---|---|
+| T1, T2 | `2af644769` feat(chat): stop answering a turn the human owns |
+| T3 | `32e6ad9c2` fix(evals): stop counting a handed-off turn as a silent one |
+| T3 (deadlock del ack) | `80ee4c33d` fix(webhook): commit the emergency ack before the graph runs |
+| T4, T5 | `7e26ed640` fix(chat): read the case emergency flag before resuming capture |
+| T6 | informe `odd/evals/conv-eval-brain-boundary*.md` |
+
 ## Log
 
 **L1 (hallazgo de la medición, 2026-11-16).** El baseline antes/después mostró `real-fuga-gas-bodega`
@@ -141,3 +151,28 @@ Con el ejemplo explícito: turno 1 deriva, turno 2 dice «Fuga de gas en las ca�
 hornos», y el protocolo se envía igual (solo instrucciones, ninguna pregunta), aunque el bot escriba
 en un chat que un humano está atendiendo. La alternativa descartada era la derivación silenciando
 todo, que deja al cliente sin instrucciones si nadie mira el panel.
+
+**L6 (T6, medición con el instrumento honesto, 2026-11-17).** Corrida `brain-boundary`
+(`odd/evals/conv-eval-brain-boundary.md`, árbol limpio, sello `7e26ed64007a`):
+
+| Escenario | Antes (sello `4ae76ca1` / `7aace24d`) | Ahora | Gates |
+|---|---|---|---|
+| `real-fuga-gas-bodega` | 0.00 → 0.00 | **3.17** | G1, G3, G8 ✓ |
+| `real-caldera-urgencia` | 0.00 → 0.00 | **2.33** | G1, G8 ✓ |
+
+2/2 pasan, cero gates fallidos, ningún hard fail del juez. La conversación de la fuga de gas queda
+exactamente como la decisión de L5: turno 1 deriva, turno 2 entrega el protocolo completo aunque el
+humano ya es dueño, turno 3 en silencio.
+
+Dos advertencias sobre la lectura, para no vender de más:
+
+1. La caldera (2.33) no la arregla el borde: su hard fail era el turno 2, y el turno 2 lo responde
+   `respond`. Lo que cambió en esa corrida es que la conversación es nueva (el `--run-tag` deriva otro
+   teléfono, así que no arrastra el caso previo que la corrida anterior citaba) y que el silencio del
+   borde ya no cuenta como falta. Su turno 2 sigue bordeando el hard fail: ahora dice «revisa que la
+   llave de gas esté abierta», que es manipulación de gas sin verificar seguridad. Sigue siendo un
+   defecto abierto y **no** es de esta feature.
+2. La medición cubre los dos escenarios, no el corpus: el 25/41 del baseline no se re-mide acá.
+   Con G8 honesto y el borde en el cerebro, cualquier escenario con turnos posteriores a una
+   derivación cambia de número; re-medir por tramos es la siguiente decisión del owner, no un paso
+   automático de esta feature.
