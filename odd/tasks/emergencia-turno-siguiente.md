@@ -249,3 +249,9 @@ Además se commiteó `tests/integration/test_emergency_burst_boundary.py`, que f
 no cubría: en la ráfaga real el mensaje fuerte **no** es el último (el borde decide por mensaje, el
 cerebro clasifica la ráfaga colapsada, y sólo coinciden porque la ráfaga se fusiona), más las dos
 silencios que el borde debe conservar: hit débil y media-only.
+
+**L11 (decisión del owner y fix, 2026-11-17).** Preguntado si una nota de voz con una fuga, en una
+conversación derivada, debe recibir el protocolo, el owner eligió arreglarlo. A1 dejó de ser
+advertencia: el borde del canal lee el mismo campo que el cerebro —el `transcript` de un AUDIO, no la
+columna `text`— mediante `_emergency_text`, y `test_audio_reporting_a_strong_emergency_is_delivered`
+fija el caso. Sin eso, el borde descartaba exactamente el mensaje que el cerebro habría detectado.

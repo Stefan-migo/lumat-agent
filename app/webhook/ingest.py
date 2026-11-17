@@ -627,6 +627,20 @@ def _prepare_media(session, message: Message) -> bool:
     return True
 
 
+def _emergency_text(message: Message) -> str:
+    """The words the brain will classify for this message.
+
+    `ConversationState.from_db` reads the `transcript` of an AUDIO message, not its text
+    column (`app/chat/state.py:305-308`), so the ownership boundary has to read the same
+    field. It read `text` alone and therefore dropped exactly the message the brain would
+    have caught: a voice note reporting a gas leak in a handed-off conversation produced
+    no safety protocol at all.
+    """
+    if message.msg_type is MessageType.AUDIO and message.transcript:
+        return message.transcript
+    return message.text or ""
+
+
 def process_turn(session, messages: list[Message]) -> None:
     """Process one conversational turn: the customer's burst, then the reply.
 
@@ -665,11 +679,12 @@ def process_turn(session, messages: list[Message]) -> None:
         # messages remain silent and are consumed as before.
         pattern = None
         for message in participants:
-            if not message.text:
+            text = _emergency_text(message)
+            if not text:
                 continue
             if pattern is None:
                 pattern = compile_keywords(get_emergency_keywords(session))
-            if classify_emergency(message.text, pattern) == "strong":
+            if classify_emergency(text, pattern) == "strong":
                 break
         else:
             # HH-5: persisted, never retried by the bot. Only the messages whose
