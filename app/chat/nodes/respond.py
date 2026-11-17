@@ -39,6 +39,7 @@ from app.services.realtime import record_activity
 from app.services.settings import (
     MESSAGE_DEFAULTS,
     TARIFA_LABELS,
+    get_emergency_protocol,
     get_hours_timezone,
     get_message,
     get_persona_texts,
@@ -488,30 +489,41 @@ _GAS_OPERATIONS = re.compile(
     r"\b(?:abre|abra|abran|abrir|cierra|cierre|cierren|cerrar|"
     r"revisa|revise|revisen|revisar|verifica|verifique|verifiquen|verificar|"
     r"comprueba|compruebe|comprueben|comprobar|chequea|chequee|chequeen|"
-    r"chequear|prueba|pruebe|prueben|probar|testea|testee|testeen|testear)\b"
+    r"chequear|prueba|pruebe|prueben|probar|testea|testee|testeen|testear|"
+    r"enciende|encienda|enciendan|encender|prende|prenda|prendan|prender|"
+    r"gira|gire|giren|girar|corta|corte|corten|cortar)\b"
 )
 _GAS_COMPONENT = re.compile(
-    r"\b(?:llave|valvula|suministro|linea)\b.{0,40}\bgas\b|"
-    r"\bgas\b.{0,40}\b(?:llave|valvula|suministro|linea)\b"
+    r"\b(?:llave|valvula|suministro|linea|paso|medidor|presion|fuga|fosforo)\b"
+    r".{0,50}\bgas\b|\bgas\b.{0,50}\b(?:llave|valvula|suministro|linea|"
+    r"paso|medidor|presion|fuga|fosforo)\b|"
+    r"\b(?:abre|abra|abran|abrir|cierra|cierre|cierren|cerrar)\s+(?:el\s+)?gas\b"
 )
 _NEGATED_OPERATION = re.compile(
     r"\b(?:no|nunca|jamas)\s+(?:(?:debes|tienes que|deberias|puedes)\s+){0,2}$"
 )
+_NEGATED_CONJUNCTION = re.compile(
+    r"\b(?:no|nunca|jamas)\b(?:(?!\b(?:pero|sino)\b).)*\bni\s+$"
+)
 _GAS_APPLIANCES = re.compile(
-    r"\b(?:cocinas?|calefonts?|calderas?|estufas?|calefactores?|quemadores?)\b"
+    r"\b(?:cocinas?|calefon(?:t)?(?:es|s)?|calderas?|estufas?|calefactores?|quemadores?)\b"
 )
 _GAS_APPLIANCE_DIRECTIVE = re.compile(
     r"(?:^|[:,;]\s*|\b(?:por favor|primero|entonces)\s+)"
-    r"(?:fijate|fijense|prueba|pruebe|prueben|enciende|encienda|enciendan|"
-    r"prende|prenda|prendan)\b|"
+    r"(?:fijate|fijense|prueba|pruebe|prueben|revisa|revise|revisen|"
+    r"enciende|encienda|enciendan|prende|prenda|prendan)\b|"
     r"\b(?:debes|tienes que|puedes|podrias|procura|intenta)\s+"
-    r"(?:encender|prender|probar|hacer funcionar)\b"
+    r"(?:encender|prender|probar|revisar|verificar|hacer funcionar)\b"
+)
+_DESCRIPTIVE_GAS_TEXT = re.compile(
+    r"\b(?:incluye|considera|es parte de|forma parte de|consiste en)\b|"
+    r"^(?:el tecnico|la tecnica|el asesor|la asesora|lumat|la empresa)\b"
 )
 _APPLIANCE_REPAIR_CLAIM = re.compile(
     r"\b(?:reparamos|reparan|repara|arreglamos|arreglan|arregla|"
     r"(?:podemos|puede|pueden|hacemos|hacen|realizamos|realizan)\s+"
     r"(?:reparar|arreglar|reparaciones?\s+de))\b.{0,48}\b"
-    r"(?:lavadoras?(?:\s+secadoras?)?|refrigeradores?)\b"
+    r"(?:lavadora(?:s)?(?:\s+secadora(?:s)?)?|refrigerador(?:es)?)\b"
 )
 _NEGATED_REPAIR = re.compile(r"\bno\s+(?:(?:se|las|los|podemos|puede|pueden|hacemos|hacen)\s+)*$")
 
@@ -526,32 +538,70 @@ def _affirms_excluded_appliance_repair(text: str) -> bool:
     return False
 
 
+def _operation_is_negated(prefix: str) -> bool:
+    return bool(_NEGATED_OPERATION.search(prefix) or _NEGATED_CONJUNCTION.search(prefix))
+
+
 def _gas_appliance_ignition_instruction(text: str) -> bool:
     """Detect a direct command to test or ignite a gas appliance."""
     normalized = _normalise_topic_text(text)
     for sentence in re.split(r"[.!?;\n]+", normalized):
         if not _GAS_APPLIANCES.search(sentence):
             continue
+        if re.search(r"\bsolo si puedes hacerlo de forma segura\b", sentence):
+            continue
         for directive in _GAS_APPLIANCE_DIRECTIVE.finditer(sentence):
-            if not _NEGATED_OPERATION.search(sentence[: directive.start()]):
+            if not _operation_is_negated(sentence[: directive.start()]):
                 return True
     return False
 
 
 def _gas_manipulation_instruction(text: str) -> bool:
-    """Detect a gas-hardware operation or an appliance ignition/test instruction."""
+    """Detect direct gas-hardware operations, excluding advice and descriptions."""
     normalized = _normalise_topic_text(text)
     for sentence in re.split(r"[.!?;\n]+", normalized):
         if not _GAS_COMPONENT.search(sentence):
             continue
+        if re.search(r"\bsolo si puedes hacerlo de forma segura\b", sentence):
+            continue
         for operation in _GAS_OPERATIONS.finditer(sentence):
             prefix = sentence[: operation.start()]
-            if _NEGATED_OPERATION.search(prefix):
+            if _operation_is_negated(prefix):
+                continue
+            # Infinitives in descriptive text are not imperatives.
+            if _DESCRIPTIVE_GAS_TEXT.search(prefix):
+                continue
+            if operation.group() in {
+                "abrir", "cerrar", "revisar", "verificar", "comprobar", "chequear",
+                "probar", "testear", "encender", "prender", "girar", "cortar",
+            } and re.search(r"\b(?:es|son)\s+parte de\b", sentence[operation.end():]):
                 continue
             if re.search(r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix):
                 continue
             return True
     return _gas_appliance_ignition_instruction(text)
+
+
+def _replace_gas_instruction_sentences(text: str, replacement: str) -> tuple[str, bool]:
+    """Replace unsafe sentences while retaining unrelated safety prose."""
+    parts = re.split(r"(?<=[.!?])([ \t\n]+)", text)
+    changed = False
+    for index in range(0, len(parts), 2):
+        if _gas_manipulation_instruction(parts[index]):
+            parts[index] = replacement
+            changed = True
+    return "".join(parts), changed
+
+
+def _is_configured_safety_text(session, text: str, reply_texts: dict[str, str]) -> bool:
+    protocol = get_emergency_protocol(session)
+    configured = set(protocol["safety_instructions"])
+    configured.update(protocol["contacts"])
+    configured.add(protocol["notify_message"])
+    configured.update(
+        (reply_texts["gas_instruction_guard"], reply_texts["excluded_appliance_scope"])
+    )
+    return text.strip() in {item.strip() for item in configured}
 
 
 def _declines(text: str) -> bool:
@@ -723,27 +773,29 @@ def respond(state: ConversationState) -> dict:
         ),
     )
     model_answer = answer
-    if _affirms_excluded_appliance_repair(model_answer):
-        with session_scope() as session:
-            answer = get_reply_texts(session)["excluded_appliance_scope"]
+    with session_scope() as session:
+        reply_texts = get_reply_texts(session)
+        if not _is_configured_safety_text(session, model_answer, reply_texts):
+            answer, gas_guarded = _replace_gas_instruction_sentences(
+                model_answer, reply_texts["gas_instruction_guard"]
+            )
+            if gas_guarded and session.get(Conversation, state.conversation_id) is not None:
+                session.add(
+                    ConversationEvent(
+                        conversation_id=state.conversation_id,
+                        event="gas_instruction_guard",
+                        cause="respond:gas_instruction_guard",
+                        actor="bot",
+                    )
+                )
+        if _affirms_excluded_appliance_repair(model_answer):
+            answer = reply_texts["excluded_appliance_scope"]
             if session.get(Conversation, state.conversation_id) is not None:
                 session.add(
                     ConversationEvent(
                         conversation_id=state.conversation_id,
                         event="appliance_scope_guard",
                         cause="respond:appliance_scope_guard",
-                        actor="bot",
-                    )
-                )
-    if _gas_manipulation_instruction(model_answer):
-        with session_scope() as session:
-            answer = get_reply_texts(session)["gas_instruction_guard"]
-            if session.get(Conversation, state.conversation_id) is not None:
-                session.add(
-                    ConversationEvent(
-                        conversation_id=state.conversation_id,
-                        event="gas_instruction_guard",
-                        cause="respond:gas_instruction_guard",
                         actor="bot",
                     )
                 )

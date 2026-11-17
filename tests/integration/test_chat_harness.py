@@ -219,6 +219,8 @@ def _run_stubbed_model_answer(
         "Hola, sí, reparamos lavadoras…",
         "Sí, reparamos lavadoras-secadoras.",
         "Claro, reparamos refrigeradores.",
+        "Sí, reparamos refrigerador.",
+        "Reparamos su refrigerador.",
     ],
 )
 def test_excluded_appliance_repair_claim_is_replaced_and_recorded(monkeypatch, unsafe):
@@ -315,11 +317,57 @@ def test_emergency_no_lighting_advice_is_not_replaced(monkeypatch):
 
 
 def test_emergency_conditional_gas_advice_is_not_replaced(monkeypatch):
-    advice = "Corta el suministro de gas solo si puedes hacerlo de forma segura."
+    advice = "Cierra el suministro de gas solo si puedes hacerlo de forma segura."
     _, replies = _run_stubbed_model_answer(
-        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", advice
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
     )
     assert replies == [advice]
+
+
+def test_negated_gas_safety_advice_with_conjunction_is_not_replaced(monkeypatch):
+    advice = "Ante olor a gas, no abra la llave ni pruebe artefactos."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+    assert replies == [advice]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "La mantención incluye revisar la llave de gas.",
+        "Revisar la llave de gas es parte de la mantención.",
+        "El lavado de red considera revisar la llave de gas.",
+        "El técnico revisa la llave de gas durante la mantención.",
+    ],
+)
+def test_descriptive_gas_text_is_not_replaced(monkeypatch, answer):
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué incluye la mantención?", answer
+    )
+    assert replies == [answer]
+
+
+def test_configured_emergency_text_is_never_guarded(monkeypatch):
+    from app.chat.nodes import respond as respond_node
+
+    advice = "Corta el suministro de gas solo si puedes hacerlo de forma segura."
+    monkeypatch.setattr(respond_node, "_gas_manipulation_instruction", lambda _text: True)
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+    assert replies == [advice]
+
+
+def test_gas_guard_replaces_only_the_offending_sentence(monkeypatch):
+    answer = "Ante olor a gas, ventila el lugar y llama a Bomberos 132. Abre el medidor de gas."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", answer
+    )
+    assert replies == [
+        "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
+        + REPLY_TEXT_DEFAULTS["gas_instruction_guard"]
+    ]
 
 
 def test_general_gas_safety_advice_is_not_replaced(monkeypatch):
@@ -373,6 +421,58 @@ def test_named_covered_place_keeps_the_existing_confirmation(monkeypatch):
     )
 
     assert replies == ["Atendemos normalmente en Las Condes y Ñuñoa."]
+
+
+def test_weekday_question_uses_schedule_not_coverage(monkeypatch):
+    from app.services.settings import set_setting
+
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            "hours.schedule",
+            [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+        )
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿trabajan en domingo?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == ["Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."]
+    assert "cobertura" not in replies[0].casefold()
+
+
+def test_calefon_instruction_is_replaced_at_the_harness_seam(monkeypatch):
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿qué hago con la estufa?",
+        "Enciende el calefón para ver si hay gas.",
+    )
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+
+
+def test_out_of_area_reply_without_comuna_slot_reaches_the_customer(monkeypatch):
+    from app.services.settings import COVERAGE_COMMUNES_KEY, REPLY_TEXTS_KEY, set_setting
+
+    with SessionLocal() as session:
+        set_setting(session, COVERAGE_COMMUNES_KEY, ["Las Condes", "Ñuñoa"])
+        texts = dict(REPLY_TEXT_DEFAULTS)
+        texts["coverage_out_of_area"] = "Un asesor coordinará tu visita."
+        set_setting(session, REPLY_TEXTS_KEY, texts)
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿ustedes trabajan en Maipú?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == ["Un asesor coordinará tu visita."]
 
 
 def test_emergency_turn_escalates_without_any_llm_call(mock_openai_chat, no_emergency_notification):

@@ -91,7 +91,7 @@ const capturedEntries = (data: Record<string, unknown>) => Object.entries(data).
 // Activity rows are persisted with a technical vocabulary (`classified` + `intent:<intent>`,
 // `kb_retrieved` + `chunks:<n>`, `escalation` + `handoff:<reason>` — see app/services/realtime.py).
 // Translate them into operator-facing Spanish so the chip is not raw machine text.
-const ACTIVITY_LABELS: Record<string, string> = { classified: "Intención detectada", kb_retrieved: "Se consultó la base de conocimiento", escalation: "Derivado a atención humana" };
+const ACTIVITY_LABELS: Record<string, string> = { classified: "Intención detectada", kb_retrieved: "Se consultó la base de conocimiento", escalation: "Derivado a atención humana", gas_instruction_guard: "Se corrigió una instrucción de seguridad", appliance_scope_guard: "Se aclaró el alcance de los servicios" };
 const INTENT_LABELS: Record<string, string> = { calefont: "calefón", caldera: "caldera", calefaccion: "calefacción", solicitar_visita: "solicitar una visita", valores: "valores", postventa: "postventa", consulta: "consulta", unknown: "sin determinar" };
 function activityText(activity: { event: string; cause?: string | null }) {
   const base = ACTIVITY_LABELS[activity.event] ?? activity.event;
