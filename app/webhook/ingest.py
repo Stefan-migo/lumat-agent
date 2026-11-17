@@ -667,6 +667,14 @@ def process_turn(session, messages: list[Message]) -> None:
             # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
             # case BEFORE the graph runs — deterministic, audited, no-op otherwise.
             acknowledge_emergency_if_ack(session, message.conversation_id, message.text)
+    # Persist-then-process (WH-4): the ack above writes the case row, and every graph
+    # node opens its own session. Leaving that write uncommitted deadlocks the first
+    # turn in which the brain touches the same case — and it does: `capture` derives on
+    # a case marked as an emergency (`app/chat/nodes/capture.py`, S1 of
+    # `odd/tasks/emergencia-turno-siguiente.md`) and the handoff node updates that case.
+    # Measured as a hard hang in `tests/integration/test_emergency_notify.py`
+    # (`test_ack_hooked_in_ingest_process_message`).
+    session.commit()
     # Meta onboarding text entered as customer content produced unknown_intent in production.
     runnable = [
         message
