@@ -32,6 +32,9 @@ class _Session:
     def get(self, model, *_args):
         return self._customer if getattr(model, "__name__", "") == "Customer" else None
 
+    def scalar(self, *_args):
+        return None
+
 
 def _harness(monkeypatch, customer):
     session = _Session(customer)

@@ -12,6 +12,12 @@ class _Session:
     def get(self, *_args):
         return None
 
+    def scalar(self, *_args):
+        # No case row: the conversation carries no emergency flag, so the guard in
+        # `capture` (S1, odd/tasks/emergencia-turno-siguiente.md) stays inert and these
+        # tests keep exercising the questionnaire.
+        return None
+
 
 @pytest.fixture
 def harness(monkeypatch):

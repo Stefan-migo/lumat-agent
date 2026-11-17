@@ -13,6 +13,9 @@ class _Session:
     def get(self, *_args):
         return None
 
+    def scalar(self, *_args):
+        return None
+
 
 @pytest.fixture
 def capture_harness(monkeypatch):
