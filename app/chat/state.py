@@ -241,6 +241,10 @@ class ConversationState:
     cost_mode: str = "normal"
     escalate: bool = False
     escalate_reason: str | None = None
+    # S7 (`odd/tasks/emergencia-turno-siguiente.md`): set by the ownership gate when
+    # a human or a closure owns the conversation. The turn produces no reply and does
+    # not advance the counter; the emergency strong hit never reaches that gate.
+    channel_muted: bool = False
     unknown_count: int = 0
     next_step: str = "receive"
     # CI-2: set by orchestrate when a mid-capture deviation was dispatched to a

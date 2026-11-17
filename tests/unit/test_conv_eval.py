@@ -537,6 +537,66 @@ def test_g8_every_inbound_turn_needs_a_reply():
     assert "2" in failed.detail
 
 
+def test_g8_accepts_the_silence_of_a_turn_the_human_owns():
+    """S9: after a handoff the brain answers nothing, and that is not a miss."""
+    obs = observation(
+        turns=[
+            {"text": "a", "replies": ["Un asesor te contacta"], "intent": None},
+            {"text": "b", "replies": [], "state_before": "human"},
+            {"text": "c", "replies": [], "state_before": "human"},
+        ],
+        replies=["Un asesor te contacta"],
+    )
+    passed = gates_of(scenario(), obs)["G8"]
+    assert passed.ok is True
+    # The report still states where it went silent, and why it was correct.
+    assert "2, 3" in passed.detail
+
+
+def test_g8_fails_closed_without_a_proven_state():
+    """An unproven silence never passes: a turn with no `state_before` reads as `bot`."""
+    obs = observation(
+        turns=[
+            {"text": "a", "replies": ["ok"], "state_before": "bot"},
+            {"text": "b", "replies": []},
+        ],
+        replies=["ok"],
+    )
+    failed = gates_of(scenario(), obs)["G8"]
+    assert failed.ok is False
+    assert "2" in failed.detail
+
+
+def test_g8_fails_silent_strong_emergency_even_when_human_owns_turn():
+    obs = observation(
+        turns=[
+            {
+                "text": "Fuga de gas",
+                "replies": [],
+                "state_before": "human",
+                "strong_emergency": True,
+            }
+        ],
+        replies=[],
+    )
+
+    failed = gates_of(scenario(), obs)["G8"]
+
+    assert failed.ok is False
+    assert "1" in failed.detail
+
+
+def test_g8_accepts_silent_human_turn_without_strong_emergency_marker():
+    obs = observation(
+        turns=[{"text": "sigo esperando", "replies": [], "state_before": "human"}],
+        replies=[],
+    )
+
+    passed = gates_of(scenario(), obs)["G8"]
+
+    assert passed.ok is True
+
+
 def test_g9_kb_answered_refuses_a_kb_miss():
     scn = scenario(expect={"kb_answered": True})
     miss = observation(events=[{"event": "escalation", "cause": "handoff:kb_miss"}])

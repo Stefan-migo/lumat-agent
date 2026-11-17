@@ -216,6 +216,9 @@ def test_capture_question_round_trip_keeps_extractor_field(monkeypatch):
         def get(self, *_args):
             return None
 
+        def scalar(self, *_args):
+            return None
+
     @contextmanager
     def session_scope():
         yield Session()

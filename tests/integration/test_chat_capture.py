@@ -860,13 +860,24 @@ def test_cm5_summary_stored_on_conversation_and_case(mock_openai_chat):
         assert conv.summary is not None and "resumen" in conv.summary.lower()
         assert case is not None
         assert case.summary == conv.summary
-        # LLM cost recorded on the inbound message (T3.6 rate basis)
+        # LLM cost recorded on the inbound message of the turn that produced the
+        # summary (T3.6 rate basis). The capture flow stops asking after "manana"
+        # (the email field was asked twice), so that turn is the one that derives
+        # and generates the summary; the next message lands in a conversation the
+        # human already owns and the brain answers nothing (S7,
+        # `odd/tasks/emergencia-turno-siguiente.md`).
         msg = session.scalars(
+            select(Message).where(
+                Message.conversation_id == conv_id, Message.wamid == "wamid.sum7"
+            )
+        ).one()
+        assert msg.cost_llm is not None and float(msg.cost_llm) > 0
+        owned = session.scalars(
             select(Message).where(
                 Message.conversation_id == conv_id, Message.wamid == "wamid.sum8"
             )
         ).one()
-        assert msg.cost_llm is not None and float(msg.cost_llm) > 0
+        assert owned.cost_llm is None  # no LLM on a turn the bot does not answer
 
 
 # ---------------------------------------------------------------------------

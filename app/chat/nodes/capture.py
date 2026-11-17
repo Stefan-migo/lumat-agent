@@ -42,6 +42,7 @@ from app.chat.service_catalogue import (
 from app.db import session_scope
 from app.models import Conversation, Customer
 from app.services.address_validation import validate_address
+from app.services.cases import is_emergency_case
 from app.services.customers import (
     promote_captured_equipment,
     record_consent,
@@ -581,6 +582,11 @@ def _validate_address_candidate(captured: dict, state: ConversationState) -> dic
 def capture(state: ConversationState) -> dict:
     """Merge this turn's extraction and ask the next missing fields (CI-3b)."""
     captured = dict(state.captured)
+    with session_scope() as session:
+        if is_emergency_case(session, state.conversation_id):
+            # The emergency node already delivered the safety protocol. On a later
+            # capture turn, reuse the normal handoff route; never resume the form.
+            return _derive(captured, "emergency")
     if state.intent in {"calefont", "caldera", "calefaccion"}:
         # V4 §E1 T07: a new fault replaces the equipment context instead of
         # leaving the earlier appliance frozen in the record.

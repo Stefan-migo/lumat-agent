@@ -22,11 +22,20 @@ Batch 4 adds the deterministic gates before any LLM:
         conservative -> flow continues, respond answers briefly
     handoff_gate -> handoff (deterministic trigger; no LLM) | receive
 
-Ordering: emergency (safety) > cost (budget) > handoff triggers > LLM.
-`emergency_gate` runs before `cost_gate` so a strong emergency hit during a
-budget block still delivers the safety protocol (the emergency path never
-calls the LLM anyway); `cost_gate` runs before `handoff_gate` so a blocked
-conversation labels the escalation with the cost reason.
+Ownership (S7, `odd/tasks/emergencia-turno-siguiente.md`): `emergency_gate`
+routes a strong hit to `emergency` and everything else to `ownership_gate`,
+which ends the turn silently when a human or a closure owns the conversation.
+The rule used to live only in the webhook, so the brain answered turns the
+channel discards; the safety protocol still runs, because the gate sits
+downstream of the emergency branch on purpose (S8).
+
+Ordering: emergency (safety) > ownership (human boundary) > cost (budget) >
+handoff triggers > LLM. `emergency_gate` runs before `ownership_gate` so a
+strong hit still delivers the safety protocol when a human owns the conversation;
+`ownership_gate` mutes every other message there. The emergency path also runs
+before `cost_gate`, so a strong hit during a budget block still delivers safety
+(the emergency path never calls the LLM anyway); `cost_gate` runs before
+`handoff_gate` so a blocked conversation labels the escalation with the cost reason.
 
 Batch 4 (T4.4) adds the handoff node, which owns every escalation except the
 emergency strong hit: that one stops at `emergency` (`emergency -> END`) and
@@ -66,6 +75,7 @@ from app.chat.nodes.handoff import handoff
 from app.chat.nodes.handoff_gate import handoff_gate
 from app.chat.nodes.manage import manage
 from app.chat.nodes.orchestrate import orchestrate
+from app.chat.nodes.ownership_gate import ownership_gate
 from app.chat.nodes.receive import is_greeting_only, is_social_only, receive
 from app.chat.nodes.respond import respond
 from app.chat.nodes.summary import summary
@@ -158,9 +168,25 @@ def _flow_start(state: ConversationState) -> str:
 
 
 def _after_emergency_gate(state: ConversationState) -> str:
-    """Strong -> emergency protocol; weak -> handoff (EM-5); miss -> cost_gate."""
+    """Strong -> emergency protocol (S8); otherwise the ownership gate decides.
+
+    The safety protocol is never blocked by ownership: the gate that mutes a
+    human-owned conversation sits downstream, on purpose.
+    """
     if state.emergency_hit == "strong":
         return "emergency"
+    return "ownership_gate"
+
+
+def _after_ownership_gate(state: ConversationState) -> str:
+    """Owned by a human or closed -> no answer (S7); else the normal flow.
+
+    A weak hit keeps its `handoff` route here instead of branching straight from
+    the emergency gate, so a weak hit can no longer re-escalate a conversation a
+    human already owns.
+    """
+    if state.channel_muted:
+        return END
     if state.emergency_hit == "weak":
         return "handoff"
     return "cost_gate"
@@ -273,6 +299,7 @@ def build_graph():
     research_triage = build_research_triage_subgraph()
     builder = StateGraph(ConversationState)
     builder.add_node("emergency_gate", emergency_gate)
+    builder.add_node("ownership_gate", ownership_gate)
     builder.add_node("cost_gate", cost_gate)
     builder.add_node("handoff_gate", handoff_gate)
     builder.add_node("closure_gate", closure_gate)
@@ -292,7 +319,12 @@ def build_graph():
     builder.add_conditional_edges(
         "emergency_gate",
         _after_emergency_gate,
-        {"emergency": "emergency", "handoff": "handoff", "cost_gate": "cost_gate"},
+        {"emergency": "emergency", "ownership_gate": "ownership_gate"},
+    )
+    builder.add_conditional_edges(
+        "ownership_gate",
+        _after_ownership_gate,
+        {END: END, "handoff": "handoff", "cost_gate": "cost_gate"},
     )
     builder.add_conditional_edges(
         "cost_gate",
@@ -382,6 +414,11 @@ def run_conversation(session: Session, message: Message) -> list[str]:
             observe_spending(session, customer, state.window[-1]["text"])
             session.flush()
     result = build_graph().invoke(state)
+    if result.get("channel_muted"):
+        # S7: a human or a closure owns this conversation, so this turn is not the
+        # bot's to answer. Nothing is persisted and the counter does not move:
+        # `state.turn` means "turns the bot answered", which this one never was.
+        return []
     replies = result.get("replies") or []
     greeting = result.get("first_turn_greeting") or ""
     if greeting:

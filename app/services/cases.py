@@ -85,6 +85,26 @@ def _latest_case_origin(session: Session, customer_id: int) -> int | None:
     return previous.id if previous is not None else None
 
 
+def is_emergency_case(session: Session, conversation_id: int) -> bool:
+    """Return whether this conversation's latest case is marked as emergency.
+
+    `case.emergency` is written by the emergency node and, before this reader, nothing
+    read it (S5). The flag is what keeps `capture` from resuming the questionnaire when
+    the conversation comes back to the bot with the emergency still open — the panel can
+    hand it back while the case stays escalated.
+
+    The latest case is the conversation's current one (`get_or_create_case` returns the
+    same row every escalation), so one read answers for the whole thread.
+    """
+    emergency = session.scalar(
+        select(Case.emergency)
+        .where(Case.conversation_id == conversation_id, case_is_open_expr())
+        .order_by(Case.id.desc())
+        .limit(1)
+    )
+    return bool(emergency)
+
+
 def get_or_create_case(session: Session, conversation_id: int, customer_id: int) -> Case:
     """Return the conversation's latest case, creating a bare one if needed."""
     case = session.scalar(

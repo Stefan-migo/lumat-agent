@@ -781,9 +781,11 @@ def test_hh5_human_state_persists_without_bot_reply(mock_openai_chat):
 def test_hh5_human_state_graph_direct_still_persists_events(mock_openai_chat):
     """HH-5: a direct graph run on a human conversation never re-escalates.
 
-    The no-bot-loop guard lives at the ingest boundary (process_message);
-    run_conversation itself is state-agnostic (D2) and classifies the turn,
-    but a human conversation never re-enters the escalation flow.
+    Two layers enforce it: the ingest boundary (`process_message`) never runs the
+    graph, and the brain mutes the turn in `ownership_gate` (S7,
+    `odd/tasks/emergencia-turno-siguiente.md`). The observable acceptance is the
+    same in both: no new escalation and no state change. The emergency strong hit
+    is the one exception, pinned in `test_brain_ownership_boundary.py`.
     """
     conv_id = _start_conversation()
     _turn(conv_id, "quiero hablar con una persona", "wamid.h53")
