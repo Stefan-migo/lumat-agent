@@ -43,9 +43,9 @@ G4   events_forbidden  an event in `events_forbidden` was recorded
 G5   causes_forbidden  an event cause matches one in `causes_forbidden`
 G6   must_include_any  no bot reply contains any of the anchors
 G7   must_not_include  a bot reply contains one of the forbidden anchors
-G8   reply_present     an inbound customer turn got no reply at all while the bot
-                       still owned the conversation (a turn the human owns is
-                       silent on purpose)
+G8   reply_present     an inbound customer turn got no reply while the bot
+                       owned the conversation, or the message was a strong
+                       emergency (which must cross human ownership)
 G9   kb_answered       the answer lives in the KB, yet the bot took the kb_miss path
 G10  causes_required   no escalation carried any of the causes in `causes_required`
 ===  ================  =======================================================
@@ -545,7 +545,10 @@ def evaluate_gates(
     for position, turn in enumerate(observation.get("turns") or (), start=1):
         if turn.get("replies"):
             continue
-        if str(turn.get("state_before") or "bot") == "bot":
+        if (
+            str(turn.get("state_before") or "bot") == "bot"
+            or turn.get("strong_emergency") is True
+        ):
             silent.append(position)
         else:
             owned.append(position)
@@ -1209,7 +1212,13 @@ def run_scenario(
     """Drive one scenario through the real brain and collect its observation."""
     import conv_eval_judge
     from app.db import session_scope
-    from chat_harness import conversation_state, ensure_conversation, inspect, run_turn
+    from chat_harness import (
+        conversation_state,
+        ensure_conversation,
+        inspect,
+        run_turn,
+        strong_emergency_hit,
+    )
 
     phone = derive_phone(scenario.id, run_tag)
     with session_scope() as session:
@@ -1241,6 +1250,7 @@ def run_scenario(
             # owns is answered by nobody on purpose (S7), so G8 must know whose turn
             # it was before judging the silence.
             state_before = conversation_state(session, conversation_id)
+            strong_emergency = strong_emergency_hit(session, text)
             replies = run_turn(session, conversation_id, text)
         # `origin` is what makes the transcript reviewable: a simulated turn is
         # the evaluator talking, and reading it is how the evaluator is judged.
@@ -1251,6 +1261,7 @@ def run_scenario(
                 "intent": None,
                 "origin": origin,
                 "state_before": state_before,
+                "strong_emergency": strong_emergency,
             }
         )
 

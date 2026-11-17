@@ -29,11 +29,13 @@ The rule used to live only in the webhook, so the brain answered turns the
 channel discards; the safety protocol still runs, because the gate sits
 downstream of the emergency branch on purpose (S8).
 
-Ordering: emergency (safety) > cost (budget) > handoff triggers > LLM.
-`emergency_gate` runs before `cost_gate` so a strong emergency hit during a
-budget block still delivers the safety protocol (the emergency path never
-calls the LLM anyway); `cost_gate` runs before `handoff_gate` so a blocked
-conversation labels the escalation with the cost reason.
+Ordering: emergency (safety) > ownership (human boundary) > cost (budget) >
+handoff triggers > LLM. `emergency_gate` runs before `ownership_gate` so a
+strong hit still delivers the safety protocol when a human owns the conversation;
+`ownership_gate` mutes every other message there. The emergency path also runs
+before `cost_gate`, so a strong hit during a budget block still delivers safety
+(the emergency path never calls the LLM anyway); `cost_gate` runs before
+`handoff_gate` so a blocked conversation labels the escalation with the cost reason.
 
 Batch 4 (T4.4) adds the handoff node, which owns every escalation except the
 emergency strong hit: that one stops at `emergency` (`emergency -> END`) and

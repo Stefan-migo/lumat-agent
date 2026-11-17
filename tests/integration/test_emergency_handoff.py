@@ -31,7 +31,7 @@ from app.models import (
     MessageStatus,
     MessageType,
 )
-from app.services.cases import is_emergency_case
+from app.services.cases import is_emergency_case, set_case_status
 from app.services.customers import get_or_create_customer
 from app.services.settings import REPLY_TEXT_DEFAULTS
 from _testdb import admin_database_url
@@ -170,3 +170,24 @@ def test_is_emergency_case_reads_the_conversation_case():
         case.emergency = False
         session.commit()
         assert is_emergency_case(session, conv_id) is False
+
+        case.emergency = True
+        set_case_status(case, "closed")
+        session.commit()
+        assert is_emergency_case(session, conv_id) is False
+
+
+def test_emergency_handoff_then_return_to_bot_does_not_resume_questionnaire(
+    mock_openai_chat, no_emergency_notification
+):
+    conv_id, _ = _conversation()
+    protocol = _turn(conv_id, "Fuga de gas en las cañerías que van hacia los hornos", "wamid.em4")
+    assert "INSTRUCCIONES DE SEGURIDAD" in protocol[0]
+
+    _return_to_bot(conv_id)
+    replies = _turn(conv_id, "quiero agendar una visita", "wamid.em5")
+
+    assert replies == ["Un asesor revisará tu caso y te contactará a la brevedad."]
+    assert not any("?" in reply for reply in replies)
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state == ConvState.HUMAN

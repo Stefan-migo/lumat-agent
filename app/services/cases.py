@@ -98,7 +98,7 @@ def is_emergency_case(session: Session, conversation_id: int) -> bool:
     """
     emergency = session.scalar(
         select(Case.emergency)
-        .where(Case.conversation_id == conversation_id)
+        .where(Case.conversation_id == conversation_id, case_is_open_expr())
         .order_by(Case.id.desc())
         .limit(1)
     )

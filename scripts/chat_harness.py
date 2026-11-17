@@ -64,8 +64,16 @@ from app.models import (  # noqa: E402
     MessageType,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services.emergency import classify_emergency, compile_keywords  # noqa: E402
+from app.services.settings import get_emergency_keywords  # noqa: E402
 
-__all__ = ["conversation_state", "ensure_conversation", "inspect", "run_turn"]
+__all__ = [
+    "conversation_state",
+    "ensure_conversation",
+    "inspect",
+    "run_turn",
+    "strong_emergency_hit",
+]
 
 DEFAULT_PHONE = "+56900000001"
 _EXIT_WORDS = {"salir", "exit", "quit"}
@@ -101,6 +109,12 @@ def conversation_state(session: Session, conversation_id: int) -> str:
     if conversation is None:
         raise ValueError(f"unknown conversation {conversation_id}")
     return conversation.state.value
+
+
+def strong_emergency_hit(session: Session, text: str) -> bool:
+    """Use the production emergency classifier for one turn's G8 marker."""
+    pattern = compile_keywords(get_emergency_keywords(session))
+    return classify_emergency(text, pattern) == "strong"
 
 
 def run_turn(session: Session, conversation_id: int, text: str) -> list[str]:

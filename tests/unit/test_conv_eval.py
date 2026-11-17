@@ -567,6 +567,36 @@ def test_g8_fails_closed_without_a_proven_state():
     assert "2" in failed.detail
 
 
+def test_g8_fails_silent_strong_emergency_even_when_human_owns_turn():
+    obs = observation(
+        turns=[
+            {
+                "text": "Fuga de gas",
+                "replies": [],
+                "state_before": "human",
+                "strong_emergency": True,
+            }
+        ],
+        replies=[],
+    )
+
+    failed = gates_of(scenario(), obs)["G8"]
+
+    assert failed.ok is False
+    assert "1" in failed.detail
+
+
+def test_g8_accepts_silent_human_turn_without_strong_emergency_marker():
+    obs = observation(
+        turns=[{"text": "sigo esperando", "replies": [], "state_before": "human"}],
+        replies=[],
+    )
+
+    passed = gates_of(scenario(), obs)["G8"]
+
+    assert passed.ok is True
+
+
 def test_g9_kb_answered_refuses_a_kb_miss():
     scn = scenario(expect={"kb_answered": True})
     miss = observation(events=[{"event": "escalation", "cause": "handoff:kb_miss"}])
