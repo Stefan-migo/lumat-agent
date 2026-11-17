@@ -65,7 +65,7 @@ from app.models import (  # noqa: E402
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
 
-__all__ = ["ensure_conversation", "inspect", "run_turn"]
+__all__ = ["conversation_state", "ensure_conversation", "inspect", "run_turn"]
 
 DEFAULT_PHONE = "+56900000001"
 _EXIT_WORDS = {"salir", "exit", "quit"}
@@ -86,6 +86,21 @@ def ensure_conversation(session: Session, phone: str) -> int:
     customer = get_or_create_customer(session, phone)
     conversation = get_or_create_conversation(session, customer, phone)
     return conversation.id
+
+
+def conversation_state(session: Session, conversation_id: int) -> str:
+    """Return the conversation state as it is right now (`bot`/`human`/`closed`).
+
+    Read BEFORE a turn, this is what tells the evaluator whether the bot owned the
+    conversation when the customer wrote. After a handoff the brain answers
+    nothing on purpose (`ownership_gate`, S7 of
+    `odd/tasks/emergencia-turno-siguiente.md`), so a turn without a reply is only a
+    missing reply when the state was still `bot`.
+    """
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise ValueError(f"unknown conversation {conversation_id}")
+    return conversation.state.value
 
 
 def run_turn(session: Session, conversation_id: int, text: str) -> list[str]:

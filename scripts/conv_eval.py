@@ -43,7 +43,9 @@ G4   events_forbidden  an event in `events_forbidden` was recorded
 G5   causes_forbidden  an event cause matches one in `causes_forbidden`
 G6   must_include_any  no bot reply contains any of the anchors
 G7   must_not_include  a bot reply contains one of the forbidden anchors
-G8   reply_present     an inbound customer turn got no reply at all
+G8   reply_present     an inbound customer turn got no reply at all while the bot
+                       still owned the conversation (a turn the human owns is
+                       silent on purpose)
 G9   kb_answered       the answer lives in the KB, yet the bot took the kb_miss path
 G10  causes_required   no escalation carried any of the causes in `causes_required`
 ===  ================  =======================================================
@@ -532,12 +534,25 @@ def evaluate_gates(
             "G7", not offenders, f"apareció lo prohibido: {', '.join(offenders)}"
         )
 
-    silent = [
-        position
-        for position, turn in enumerate(observation.get("turns") or (), start=1)
-        if not (turn.get("replies") or ())
-    ]
-    results["G8"] = _gate("G8", not silent, f"turnos sin respuesta: {silent}")
+    # S9: a turn without a reply is a failure only when the bot still owned the
+    # conversation when the customer wrote. Once a human or a closure owns it, the
+    # brain answers nothing on purpose (`ownership_gate` in `app/chat/graph.py`), so
+    # silence is the correct outcome, not a missing reply. `state_before` is read from
+    # the database before each turn; a report without it fails closed, because an
+    # unproven silence must never be read as a pass.
+    silent: list[int] = []
+    owned: list[int] = []
+    for position, turn in enumerate(observation.get("turns") or (), start=1):
+        if turn.get("replies"):
+            continue
+        if str(turn.get("state_before") or "bot") == "bot":
+            silent.append(position)
+        else:
+            owned.append(position)
+    detail = f"turnos sin respuesta: {silent}"
+    if owned:
+        detail += f"; turnos del humano (silencio correcto): {owned}"
+    results["G8"] = _gate("G8", not silent, detail)
 
     if expect.get("kb_answered"):
         misses = [cause for cause in _causes(observation) if _normalise(cause).endswith("kb_miss")]
@@ -1194,7 +1209,7 @@ def run_scenario(
     """Drive one scenario through the real brain and collect its observation."""
     import conv_eval_judge
     from app.db import session_scope
-    from chat_harness import ensure_conversation, inspect, run_turn
+    from chat_harness import conversation_state, ensure_conversation, inspect, run_turn
 
     phone = derive_phone(scenario.id, run_tag)
     with session_scope() as session:
@@ -1222,11 +1237,21 @@ def run_scenario(
             text = simulated["message"]
 
         with session_scope() as session:
+            # Read before the turn: a turn that lands in a conversation a human already
+            # owns is answered by nobody on purpose (S7), so G8 must know whose turn
+            # it was before judging the silence.
+            state_before = conversation_state(session, conversation_id)
             replies = run_turn(session, conversation_id, text)
         # `origin` is what makes the transcript reviewable: a simulated turn is
         # the evaluator talking, and reading it is how the evaluator is judged.
         turns.append(
-            {"text": text, "replies": list(replies), "intent": None, "origin": origin}
+            {
+                "text": text,
+                "replies": list(replies),
+                "intent": None,
+                "origin": origin,
+                "state_before": state_before,
+            }
         )
 
     with session_scope() as session:
