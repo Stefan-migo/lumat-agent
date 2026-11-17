@@ -211,3 +211,13 @@ en producción el ack del cliente («ok») no se registra nunca; el test existen
 (`test_ack_hooked_in_ingest_process_message`) lo cubre sólo en estado `bot`. No lo arreglo acá: es
 fuera de S1-S10 y el arreglo cambia comportamiento que esta feature no pidió. Queda como decisión del
 owner, con el docstring de `process_turn` corregido para no afirmar lo que no pasa.
+
+**L9 (re-medición con el sello de HEAD, 2026-11-17).** Después de T8/T9 la corrida quedó sellada en
+`3dbf8bbb5`, árbol limpio (`odd/evals/conv-eval-brain-boundary-2.md`): 2/2 pasan, cero gates
+fallidos, ningún hard fail. `real-fuga-gas-bodega` **3.00** y `real-caldera-urgencia` **2.83** (antes,
+con el sello viejo: 3.17 y 2.33, misma forma de conversación). La diferencia es ruido del juez con una
+sola llamada por escenario (L14 del corpus), no una mejora: entre las dos corridas cambió el sello, no
+el cerebro. Las cifras citables son estas; las de L6 quedan como historia.
+
+El transcript de la fuga sigue exactamente lo que pide L5: turno 1 deriva, turno 2 entrega el
+protocolo completo, turno 3 en silencio, estado final `human`.
