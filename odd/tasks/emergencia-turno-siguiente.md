@@ -42,6 +42,20 @@ Traducido: la versión vieja acertaba por casualidad, no por diseño. Eso es lo 
   muestre y las puertas del instrumento lo lean.
 - **S3 — Una sola vez.** El aviso no se repite en cada turno del cliente: derivada la conversación,
   el bot deja de responder.
+- **S7 — El borde humano vive en el cerebro (decisión L4).** Una conversación en estado `human` o
+  `closed` no se responde: el turno del cliente no produce ninguna respuesta, no avanza el contador
+  de turnos y no persiste mensaje saliente. La regla se cumple en `run_conversation`/grafo, no solo
+  en el webhook, porque el webhook es un llamador más: `scripts/chat_harness.py` y
+  `scripts/conv_eval.py` invocan el cerebro directo, y hasta hoy medían turnos que producción nunca
+  ejecuta.
+- **S8 — La emergencia fuerte gana al borde (decisión L5).** Si el cliente reporta una emergencia
+  fuerte en una conversación ya derivada, el protocolo de seguridad se envía igual: instrucciones,
+  contactos y aviso de técnico notificado, sin preguntas de captura. Es la única excepción al borde
+  de S7, y se implementa por posición del grafo: `emergency_gate` corre primero y sigue yendo al
+  nodo `emergency`; el borde se evalúa después, en el camino no emergente.
+- **S9 — El instrumento no inventa turnos silenciosos.** Una tanda con un turno sin respuesta
+  reprueba el gate G8 solo si la conversación estaba en estado `bot` al empezar ese turno. El estado
+  por turno se lee de la base antes de correr el turno, no se declara en el corpus.
 - **S4 — El camino de detección no se toca.** `emergency_gate` corre antes que todo y las
   instrucciones de seguridad (cortar suministro, ventilar, no encender, Bomberos 132, técnico
   notificado) quedan byte-idénticas. Este cambio empieza **después** de ese turno.
@@ -54,10 +68,26 @@ Traducido: la versión vieja acertaba por casualidad, no por diseño. Eso es lo 
 
 | ID | Qué | Specs | Commit |
 |---|---|---|---|
-| T1 | Resolver si el caso de la conversación está en emergencia, legible desde `capture` | S1, S5 | `feat(chat): read the case emergency flag in capture` |
-| T2 | Con emergencia abierta: responder el aviso y derivar, sin preguntas de captura | S1, S2, S3 | `fix(chat): hand off instead of re-entering the questionnaire` |
-| T3 | Test de regresión con el repro del corpus (turno 3 de la fuga de gas y de la urgencia de caldera) | S1, S4 | junto a T2 |
-| T4 | Verificación independiente del corte | todas | — |
+| T1 | Borde humano en el cerebro: gate de propiedad tras `emergency_gate`, sin respuestas ni turno contado | S7, S8 | `feat(chat): stop answering a turn the human owns` |
+| T2 | Test del borde con la conversación derivada (silencio) y de la emergencia fuerte que lo atraviesa | S7, S8, S4 | junto a T1 |
+| T3 | Instrumento honesto: estado por turno en el harness y G8 que lo lee | S9 | `fix(evals): a turn after a handoff is not a silent turn` |
+| T4 | Lectura real de `case.emergency` en `capture`, sin escape para dobles de test | S1, S5 | `fix(chat): read the case emergency flag before resuming capture` |
+| T5 | Test de regresión del repro, por el seam del cerebro (`run_conversation`), no llamando los nodos a mano | S1, S4 | junto a T4 |
+| T6 | Re-medir los dos escenarios con el instrumento honesto y escribir el informe | todas | `docs(evals): re-measure the emergency scenarios with an honest harness` |
+| T7 | Verificación independiente del corte | todas | — |
+
+## Entrega
+
+La feature pasa el presupuesto de revisión de una sola PR (~400 líneas escritas), así que se entrega en
+dos tajadas de commits, cada una con su PR:
+
+| Tajada | Commits | Qué revisa el humano |
+|---|---|---|
+| 1 · el borde | `feat(chat): stop answering a turn the human owns`, `fix(evals): stop counting a handed-off turn as a silent one`, `fix(webhook): commit the emergency ack before the graph runs`, este documento | El cambio de contrato del cerebro (`run_conversation`), su efecto en el instrumento y el arreglo del deadlock del ack. Es la tajada con riesgo: la consumen el webhook, el harness y dos scripts. |
+| 2 · el flag | `fix(chat): read the case emergency flag before resuming capture` | El segundo cinturón: `case.emergency` con lector real, y los dobles de test que ahora declaran «no hay caso». |
+
+La verificación independiente de T7 cubre las dos tajadas juntas: el riesgo está en la interacción entre
+ellas (capture deriva justo en el turno en que el ack ya escribió el caso), no en cada una por separado.
 
 ## Log
 
@@ -79,3 +109,35 @@ siguiente a una emergencia, eligió:
 
 Se descartaron explícitamente: «comuna y disponibilidad, nunca el equipo» y «quedarse en el marco de
 emergencia».
+
+**L3 (corrección del diagnóstico, 2026-11-16).** Al preparar el trabajo se verificó que el `0.00` de
+los dos escenarios no comparte causa:
+
+- `scripts/chat_harness.py:120` llama `run_conversation` directo, sin pasar por el borde de
+  `app/webhook/ingest.py:660` que sí existe en producción (`human`/`closed` no se responden). En
+  `real-fuga-gas-bodega` el **turno 1 ya termina con el texto de handoff**, y el eval igual ejecuta
+  los turnos 2 y 3. Lo medido en esos turnos no ocurre en producción.
+- `real-caldera-urgencia` no pasa por el nodo `emergency` (no hay fuga de gas), así que
+  `case.emergency` es `False`: su hard fail es del **turno 2** («Fíjate si la cocina enciende
+  normal»), otro defecto, fuera de estas specs.
+- El defecto real de producción es peor y quedó sin spec aquí: en una conversación derivada en un
+  turno anterior, el mensaje con la fuga de gas se descarta en silencio y el cliente nunca recibe el
+  protocolo de seguridad.
+
+**L4 (decisión del owner, 2026-11-16).** Preguntado dónde vive la regla «derivada la conversación, el
+bot no vuelve a preguntar», eligió:
+
+> «Poner la regla en el cerebro (mi recomendación)»
+
+Es decir: el borde deja de ser exclusivo del webhook y pasa a `run_conversation`/grafo, con el corte
+del flag de emergencia como segunda red para cuando un operador devuelve la conversación al bot.
+
+**L5 (decisión del owner, 2026-11-16).** Preguntado qué hace el bot si llega una emergencia nueva en
+una conversación ya derivada, eligió:
+
+> «La emergencia gana siempre»
+
+Con el ejemplo explícito: turno 1 deriva, turno 2 dice «Fuga de gas en las cañerías qué van hacia los
+hornos», y el protocolo se envía igual (solo instrucciones, ninguna pregunta), aunque el bot escriba
+en un chat que un humano está atendiendo. La alternativa descartada era la derivación silenciando
+todo, que deja al cliente sin instrucciones si nadie mira el panel.
