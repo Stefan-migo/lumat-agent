@@ -12,9 +12,6 @@
 .conversation-thread__header h1 { margin: 0; font-size: var(--text-xl); }
 .conversation-thread__back { flex: 0 0 auto; }
 .conversation-thread__hero-avatar { flex: 0 0 auto; width: calc(var(--space-8) * 1.5); height: calc(var(--space-8) * 1.5); font-size: var(--text-lg); }
-.conversation-thread__phone { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--corp-fg-muted); font-size: var(--text-sm); }
-.conversation-thread__online { width: var(--space-2); height: var(--space-2); border-radius: 50%; background: var(--success); }
-.conversation-thread__id { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .conversation-thread__header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2); margin-left: auto; }
 
 /* The conversation owns the whole content area. The shell gives the content cell a minmax(0, 1fr)
@@ -131,4 +128,41 @@
      the menu stays the last control in the row (panel-polish S2). */
   .conversation-thread__take, .conversation-thread__info, .conversation-thread__menu--desktop { display: none; }
   .conversation-thread__menu--mobile { display: flex; }
+}
+
+/* The chat owns the available height: messages scroll independently of the reply controls. */
+.conversation-thread-page .conversation-workspace { display: grid; grid-template-rows: minmax(0, 1fr); }
+.conversation-thread-page .ai-agent-grammar__thread-area { grid-row: 2; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); }
+.conversation-thread-page .ai-agent-grammar__bubbles { gap: var(--space-2); }
+.conversation-thread-page .ai-agent-grammar__bubble { border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm); background: var(--surface); overflow-wrap: anywhere; }
+.conversation-thread-page .ai-agent-grammar__bubble--outbound { background: var(--primary-100); border-color: var(--border); color: var(--corp-text); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg); }
+.conversation-thread-page .ai-agent-grammar__bubble--sticker { background: transparent; }
+.conversation-thread-page .ai-agent-grammar__handoff { justify-self: center; margin: 0; padding: var(--space-1) var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface); }
+.conversation-thread__heading { display: grid; flex: 1 1 0; min-width: 0; justify-items: start; gap: var(--space-1); }
+.conversation-thread__heading h1 { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-thread__header-meta { color: var(--corp-fg-muted); font-size: var(--text-xs); }
+.conversation-thread-page .ai-agent-grammar__composer-field .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.conversation-thread-page .ai-agent-grammar__composer-field textarea { min-height: 44px; max-height: 8rem; border-radius: var(--radius-lg); }
+.conversation-thread-page .ai-agent-grammar__composer-row .btn { min-width: 44px; min-height: 44px; }
+
+@media (max-width: 39.99rem) {
+  .conversation-thread-page .conversation-thread__header { flex-wrap: nowrap; gap: var(--space-2); margin: 0; padding: var(--space-2); background: var(--surface); border-bottom: 1px solid var(--border); }
+  .conversation-thread__header h1 { font-size: var(--text-md); }
+  .conversation-thread__header-meta { display: none; }
+  .conversation-thread__hero-avatar { width: var(--space-8); height: var(--space-8); font-size: var(--text-sm); }
+  .conversation-thread__header-actions { gap: 0; }
+  .conversation-thread__back, .conversation-thread__client { min-width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  .conversation-thread__client span { display: none; }
+  .conversation-thread-page .ai-agent-grammar__composer-zone { padding: var(--space-2) var(--space-3) max(var(--space-2), env(safe-area-inset-bottom)); max-height: min(16rem, calc(var(--inbox-visible-height, 100dvh) * .55)); overflow-y: auto; }
+  .conversation-thread__media-tools .btn { min-width: 44px; min-height: 44px; }
+  .conversation-thread__media-tools .btn:has(> span) { padding: 0; justify-content: center; }
+  .conversation-thread__media-tools .btn > span { display: none; }
+}
+@media (max-width: 39.99rem) {
+  .conversation-thread-page .ai-agent-grammar__composer-row { gap: var(--space-1); }
+  .conversation-thread__media-tools { gap: 0; }
+  .conversation-thread__media-tools .btn:has(> span) { border-color: transparent; background: transparent; }
+  .conversation-thread__recording-help { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ai-agent-grammar__composer-row:has([role="timer"]) { flex-wrap: wrap; }
+  .ai-agent-grammar__composer-row:has([role="timer"]) .conversation-thread__media-tools { flex: 1 0 100%; }
 }
