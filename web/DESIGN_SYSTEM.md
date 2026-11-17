@@ -441,10 +441,13 @@ unfinished surface, not a minimal one.
 
 ### Conversaciones and human inbox
 
+- At desktop widths, retain the queue beside the selected thread with independent scrolling, an explicit selection state, and the existing deep links. Below desktop widths, the queue and thread are separate screens; the thread has its own back action, including on direct entry.
 - List rows show customer, explicit conversation state, assignee, summary, freshness, and created date.
+- On narrow screens, each conversation card has a visible `Abrir conversación` button with a touch target at least 44px tall. Keep opening the thread separate from queue actions such as taking or closing the conversation.
 - A human-assigned row may receive a warning-tinted leading treatment, never a color-only highlight.
 - The automatic H1 thread stays clearly read-only.
 - The human inbox thread shows message direction, active owner, conversation state, and the 24-hour reply-window status near the composer.
+- A compact thread header prioritizes identity and state. Messages occupy the scrollable middle pane, following new messages only while the reader is at the bottom. The reply controls stay in their own row; attachment and recording controls retain accessible names in compact layouts.
 - Composer availability is explicit: enabled only for a human-owned conversation inside the reply window.
 - Disabled composers explain the exact reason. Do not use “Bot pausado” when the state means the bot is active; copy must reflect the actual state transition.
 - State actions use direct labels: `Tomar conversación`, `Cerrar conversación`, `Devolver al agente`, and `Enviar respuesta`.
