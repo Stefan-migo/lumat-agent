@@ -896,6 +896,12 @@ conversations:
       - "<video omitido>"
       - "Aumentamos… pasamos de E25 a E26 😂"
       - "Corto la llave de agua de la caldera?"
+    # S4 (`odd/tasks/evals-gates-fallos.md`): the third turn is a video, not a
+    # text message. `<video omitido>` is the transcript label; what the brain
+    # receives is the shape the channel sends — a video with no caption — so it
+    # is acknowledged as evidence instead of being classified as unreadable text.
+    media_turns:
+      3: video
     expect:
       state_any: [bot, human]
       events_forbidden: [unknown_intent]
