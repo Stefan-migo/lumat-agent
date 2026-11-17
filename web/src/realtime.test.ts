@@ -50,6 +50,28 @@ describe("realtime reducer", () => {
 });
 
 describe("RealtimeClient", () => {
+  it("closes once when the socket fires the error again while closing", () => {
+    // undici fires another `error` while a close is in flight. Closing from inside the
+    // handler re-entered it and recursed until the stack overflowed; measured as an
+    // unrelated suite failing after teardown and as the required `panel` check failing
+    // at random.
+    class ReenteringSocket extends Socket {
+      close = vi.fn(() => {
+        this.readyState = 3;
+        this.onerror?.();
+        this.onclose?.();
+      });
+    }
+    const socket = new ReenteringSocket();
+    const client = new RealtimeClient({ factory: () => socket });
+    client.connect();
+
+    expect(() => socket.onerror?.()).not.toThrow();
+    expect(socket.close).toHaveBeenCalledTimes(1);
+
+    client.disconnect();
+  });
+
   it("immediately publishes the current connected status to new subscribers", () => {
     const client = new RealtimeClient({ factory: () => new Socket() });
     client.connect();
