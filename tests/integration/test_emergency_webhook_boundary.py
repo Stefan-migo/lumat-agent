@@ -56,14 +56,22 @@ def _human_conversation() -> int:
         return conversation.id
 
 
-def _process(conv_id: int, text: str, wamid: str) -> list[str]:
+def _process(
+    conv_id: int,
+    text: str | None,
+    wamid: str,
+    *,
+    msg_type: MessageType = MessageType.TEXT,
+    transcript: str | None = None,
+) -> list[str]:
     with SessionLocal() as session:
         message = Message(
             wamid=wamid,
             conversation_id=conv_id,
             direction=MessageDirection.INBOUND,
-            msg_type=MessageType.TEXT,
+            msg_type=msg_type,
             text=text,
+            transcript=transcript,
             status=MessageStatus.RECEIVED,
         )
         session.add(message)
@@ -115,3 +123,32 @@ def test_ordinary_message_in_human_conversation_stays_silent(monkeypatch, mock_o
         assert session.scalar(select(Case.id).where(Case.conversation_id == conv_id)) is None
         assert session.get(Conversation, conv_id).state == ConversationState.HUMAN
     assert not mock_openai_chat
+
+def test_audio_reporting_a_strong_emergency_is_delivered(
+    monkeypatch, mock_openai_chat, no_emergency_notification
+):
+    """A voice note is the same words as a text message, and the brain reads it that way.
+
+    `ConversationState.from_db` classifies the transcript of an AUDIO message, not its
+    text column, so a boundary that reads only `text` drops exactly the message the
+    brain would have caught. Measured: without this, a voice note saying there is a gas
+    leak in a handed-off conversation produced nothing at all.
+    """
+    monkeypatch.setattr(ingest, "deliver_outbound", lambda *args: None)
+    conv_id = _human_conversation()
+
+    replies = _process(
+        conv_id,
+        None,
+        "wamid.webhook-audio-emergency",
+        msg_type=MessageType.AUDIO,
+        transcript="hay olor a gas en la cocina, se siente fuerte",
+    )
+
+    assert len(replies) == 3
+    assert "INSTRUCCIONES DE SEGURIDAD" in replies[0]
+    assert not any("¿Qué equipo es?" in reply for reply in replies)
+    assert not mock_openai_chat
+    with SessionLocal() as session:
+        case = session.scalars(select(Case).where(Case.conversation_id == conv_id)).one()
+    assert case.emergency is True
