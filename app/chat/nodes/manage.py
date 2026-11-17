@@ -70,9 +70,15 @@ def _start_offer(
     text = state.window[-1].get("text") or "" if state.window else ""
     appointments = session.scalars(_appointment_query(state.customer_id, now)).all()
     if not appointments:
+        if mode == "reschedule":
+            # A reschedule question needs a schedule lookup; hand off rather than
+            # answering only that no visit is available to move.
+            return _handoff(session, state, "booking_unavailable")
         _persist_offer(session, state, None)
-        action = "reagendar" if mode == "reschedule" else "cancelar"
-        return {"next_step": "end", "replies": [render_reply(texts, "manage_no_visits", accion=action)]}
+        return {
+            "next_step": "end",
+            "replies": [render_reply(texts, "manage_no_visits", accion="cancelar")],
+        }
 
     shown = appointments[:3]
     if len(appointments) == 1:

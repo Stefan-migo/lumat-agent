@@ -260,6 +260,41 @@ def test_capture_pivot_to_fault_drops_preventive_ack(mock_openai_chat, monkeypat
     assert all(maintenance_ack not in reply for reply in pivot), pivot
 
 
+def test_reschedule_without_upcoming_visit_hands_off(mock_openai_chat, monkeypatch):
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "reagendar_visita",
+            "intents": ["reagendar_visita"],
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {},
+        },
+    )
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(session, conversation_id, "hola")
+        session.commit()
+        replies = run_turn(session, conversation_id, "es factible que pases tipo 14 horas?")
+        session.commit()
+        result = inspect(session, conversation_id)
+
+    assert all("No tienes visitas próximas" not in reply for reply in replies), replies
+    assert any(
+        event["cause"] == "intent:reagendar_visita" for event in result["events"]
+    ), result["events"]
+    assert result["state"] == "human", result
+    assert any(
+        event["cause"] == "handoff:booking_unavailable" for event in result["events"]
+    ), result["events"]
+
+
 # ---------------------------------------------------------------------------
 # inspect — the observables the REPL prints
 # ---------------------------------------------------------------------------
