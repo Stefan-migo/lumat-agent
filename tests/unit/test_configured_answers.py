@@ -26,7 +26,7 @@ def _state(text: str, *, intent: str = "consulta") -> ConversationState:
     )
 
 
-SESSION = SimpleNamespace()
+SESSION = SimpleNamespace(scalar=lambda _statement: None)
 
 
 def _coverage(monkeypatch, communes):
@@ -84,6 +84,22 @@ def test_a_question_naming_a_covered_commune_is_answered(question, monkeypatch):
     _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
 
     assert configured_answers.coverage_reply(SESSION, _state(question)) is not None
+
+
+def test_place_mentioned_in_customer_kb_keeps_the_kb_answer_path(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: 1)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {
+            "coverage_out_of_area": "No tenemos cobertura habitual en {{comuna}}."
+        },
+    )
+
+    assert configured_answers.coverage_reply(
+        SESSION, _state("¿atienden en La Florida?")
+    ) is None
 
 
 @pytest.mark.parametrize(

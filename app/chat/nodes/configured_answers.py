@@ -16,7 +16,10 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from sqlalchemy import select
+
 from app.chat.state import ConversationState
+from app.models import KbChunk, KbDocument, KbVisibility
 from app.services.prompts import render_text
 from app.services.settings import (
     get_coverage_communes,
@@ -137,6 +140,24 @@ def _asked_place(text: str) -> str | None:
     return place
 
 
+def _customer_kb_mentions_place(session, place: str) -> bool:
+    """Check active, global customer KB chunks without paying for embeddings."""
+    escaped_place = place.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    statement = (
+        select(KbChunk.id)
+        .join(KbDocument, KbChunk.document_id == KbDocument.id)
+        .where(
+            KbDocument.active.is_(True),
+            KbDocument.visibility == KbVisibility.CUSTOMER,
+            KbDocument.project_id.is_(None),
+            KbChunk.version == KbDocument.active_version,
+            KbChunk.content.ilike(f"%{escaped_place}%", escape="\\"),
+        )
+        .limit(1)
+    )
+    return session.scalar(statement) is not None
+
+
 def _day_label(days: list[int]) -> str:
     """The configured days as Spanish text: "de lunes a sábado", "lunes y jueves".
 
@@ -199,6 +220,8 @@ def coverage_reply(session, state: ConversationState) -> str | None:
         place_folded = _fold(place)
         if any(_mentions(place_folded, commune) for commune in communes):
             return f"Atendemos normalmente en {_join_es(communes)}."
+        if _customer_kb_mentions_place(session, place):
+            return None
         return render_text(
             get_reply_texts(session)["coverage_out_of_area"], comuna=place
         )
