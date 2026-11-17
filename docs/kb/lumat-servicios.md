@@ -34,4 +34,4 @@
 
 ## Otros servicios
 
-**Otros servicios que cotizamos.** Reparación de calderas y calefont, instalaciones y reemplazos, gasfitería y filtraciones de agua, redes de gas, aire acondicionado, calefactores eléctricos, ductos y trabajos eléctricos. Estos trabajos se cotizan según lo que necesites: un asesor revisa tu caso y te contacta con el presupuesto.
+**Otros servicios que cotizamos.** Reparación de calderas y calefont, instalaciones y reemplazos, gasfitería y filtraciones de agua, redes de gas, aire acondicionado, calefactores eléctricos, ductos y trabajos eléctricos. Estos trabajos se cotizan según lo que necesites: un asesor revisa tu caso y te contacta con el presupuesto. No reparamos lavadoras, lavadoras-secadoras ni refrigeradores. Tampoco reparamos artefactos que no estén en esta lista.
