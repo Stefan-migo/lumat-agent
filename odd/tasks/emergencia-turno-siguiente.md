@@ -50,12 +50,17 @@ Traducido: la versión vieja acertaba por casualidad, no por diseño. Eso es lo 
   ejecuta.
 - **S8 — La emergencia fuerte gana al borde (decisión L5).** Si el cliente reporta una emergencia
   fuerte en una conversación ya derivada, el protocolo de seguridad se envía igual: instrucciones,
-  contactos y aviso de técnico notificado, sin preguntas de captura. Es la única excepción al borde
-  de S7, y se implementa por posición del grafo: `emergency_gate` corre primero y sigue yendo al
-  nodo `emergency`; el borde se evalúa después, en el camino no emergente.
+  contactos y aviso de técnico notificado, sin preguntas de captura. Vale en **el cerebro y en el
+  webhook**: `emergency_gate` corre primero y sigue yendo al nodo `emergency`, y el borde del canal
+  (`process_turn`) no descarta un mensaje cuya clasificación determinística sea fuerte. Todo lo demás
+  sigue mudo.
 - **S9 — El instrumento no inventa turnos silenciosos.** Una tanda con un turno sin respuesta
-  reprueba el gate G8 solo si la conversación estaba en estado `bot` al empezar ese turno. El estado
-  por turno se lee de la base antes de correr el turno, no se declara en el corpus.
+  reprueba el gate G8 si la conversación estaba en estado `bot` al empezar ese turno **o si el
+  mensaje de ese turno era una emergencia fuerte**. El estado y la marca se leen de la base antes de
+  correr el turno, no se declaran en el corpus.
+- **S10 — El flag no silencia para siempre.** `case.emergency` se lee en el caso **abierto**: cerrado
+  el caso, `capture` vuelve a su cuestionario normal. `CLOSING_CASE_STATUSES` ya define qué es
+  cerrado.
 - **S4 — El camino de detección no se toca.** `emergency_gate` corre antes que todo y las
   instrucciones de seguridad (cortar suministro, ventilar, no encender, Bomberos 132, técnico
   notificado) quedan byte-idénticas. Este cambio empieza **después** de ese turno.
@@ -75,6 +80,8 @@ Traducido: la versión vieja acertaba por casualidad, no por diseño. Eso es lo 
 | T5 | Test de regresión del repro, por el seam del cerebro (`run_conversation`), no llamando los nodos a mano | S1, S4 | junto a T4 |
 | T6 | Re-medir los dos escenarios con el instrumento honesto y escribir el informe | todas | `docs(evals): re-measure the emergency scenarios with an honest harness` |
 | T7 | Verificación independiente del corte | todas | — |
+| T8 | S8 en el webhook: una emergencia fuerte no se descarta en una conversación derivada | S8, S4 | `fix(webhook): deliver the safety protocol inside a human conversation` |
+| T9 | G8 reprueba el turno silencioso que era emergencia fuerte, y el flag deja de silenciar un caso cerrado | S9, S10 | junto a T8 |
 
 ## Entrega
 
@@ -176,3 +183,31 @@ Dos advertencias sobre la lectura, para no vender de más:
    Con G8 honesto y el borde en el cerebro, cualquier escenario con turnos posteriores a una
    derivación cambia de número; re-medir por tramos es la siguiente decisión del owner, no un paso
    automático de esta feature.
+
+**L7 (T7, verificación independiente, 2026-11-17).** El verificador leyó el corte en una copia aparte
+y probó el seam de producción. Veredicto: **DO NOT SHIP** antes de T8, con S1, S2, S3, S4, S5, S7, S9
+cumplidos y tres huecos:
+
+- **F1, blocker (S8).** `process_turn` retorna antes de `run_conversation` cuando la conversación está
+  en `human`/`closed`, así que el override de emergencia del cerebro no tenía llamador en producción.
+  Sonda: cero salientes, sin caso y sin notificación, mensaje marcado `PROCESSED`. Es el defecto real
+  que L3 ya había anotado, y mi L6 lo dio por cubierto cuando sólo lo estaba en el cerebro. La tabla
+  de L6 medía el cerebro; el canal quedaba afuera, y eso convertía un arreglo a medias en un informe
+  que parecía completo. Se cierra en T8.
+- **F2 (S9).** Con G8 mirando sólo `state_before`, cualquier turno silencioso de una conversación
+  derivada pasaba: el gate no podía repruedar el caso exacto que F1 provocaba. Se cierra en T9 con la
+  marca de emergencia por turno.
+- **F3 (S10).** `case.emergency` no tenía camino de limpieza: un caso cerrado seguía silenciando la
+  captura para siempre. El lector ahora exige caso abierto.
+
+Notas del verificador que no se tocan acá: el protocolo se re-entrega en cada mensaje fuerte repetido
+(consistente con L5; la notificación al técnico sí está deduplicada) y el `commit()` de `process_turn`
+no pierde trabajo ni rompe el protocolo de estados.
+
+**L8 (hallazgo al corregir F1, no corregido acá).** El ack de emergencia (EM-4,
+`acknowledge_emergency_if_ack`) está detrás del mismo retorno temprano que acabo de tocar, pero más
+abajo: en una conversación `human` nunca corre. Como toda emergencia pone la conversación en `human`,
+en producción el ack del cliente («ok») no se registra nunca; el test existente
+(`test_ack_hooked_in_ingest_process_message`) lo cubre sólo en estado `bot`. No lo arreglo acá: es
+fuera de S1-S10 y el arreglo cambia comportamiento que esta feature no pidió. Queda como decisión del
+owner, con el docstring de `process_turn` corregido para no afirmar lo que no pasa.
