@@ -237,16 +237,26 @@ conversations:
       - "hola, cuanto cuesta el lavado de red?"
       - "y eso cuanto de garantia tiene?"
     expect:
-      state_any: [human]
-      causes_required: [persona]
+      # Both turns are answerable from the KB: a price and a warranty term. The
+      # scenario used to demand `human` plus the `persona` cause, which is the
+      # opposite of what the corpus asks elsewhere — `real-precio-mantencion-ciclo`
+      # lists "Derivar sin intentar responder la consulta general" as a hard fail.
+      # Deriving on a price question is the defect, not the goal, so the gate here
+      # is the content: the warranty term has to be the documented one, without
+      # losing the referent. Owner decision, 2026-11-17.
+      state_any: [bot, human]
       kb_answered: true
       must_include_any: ["garantia", "garantía", "6 meses", "seis meses"]
     hard_fails:
       - "Perder el referente del turno anterior y no saber qué servicio tiene garantía"
       - "Inventar un plazo de garantía distinto del documentado"
+      - "Derivar sin intentar responder alguna de las dos consultas"
     notes: >
       Retención de contexto sobre el mismo referente. La KB sólo da 6 meses al
-      lavado de red; 1 año es para mantención de calefont y caldera.
+      lavado de red; 1 año es para mantención de calefont y caldera. Este escenario
+      medía una derivación que el resto del corpus trata como defecto; desde
+      2026-11-17 mide lo mismo que su hermano `real-precio-mantencion-ciclo`:
+      contestar bien la consulta, sin perder el referente.
 
   - id: complejo-no-quiere-email
     tier: complejo
