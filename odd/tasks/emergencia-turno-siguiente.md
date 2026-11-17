@@ -90,11 +90,12 @@ dos tajadas de commits, cada una con su PR:
 
 | Tajada | Commits | Qué revisa el humano |
 |---|---|---|
-| 1 · el borde | `feat(chat): stop answering a turn the human owns`, `fix(evals): stop counting a handed-off turn as a silent one`, `fix(webhook): commit the emergency ack before the graph runs`, este documento | El cambio de contrato del cerebro (`run_conversation`), su efecto en el instrumento y el arreglo del deadlock del ack. Es la tajada con riesgo: la consumen el webhook, el harness y dos scripts. |
-| 2 · el flag | `fix(chat): read the case emergency flag before resuming capture` | El segundo cinturón: `case.emergency` con lector real, y los dobles de test que ahora declaran «no hay caso». |
+| 1 · el borde | `feat(chat): stop answering a turn the human owns`, `fix(evals): stop counting a handed-off turn as a silent one`, `fix(webhook): commit the emergency ack before the graph runs`, `fix(webhook): deliver the safety protocol inside a human conversation`, los tres commits de `docs` | El cambio de contrato del cerebro (`run_conversation`), su efecto en el instrumento y en el borde del canal, y el arreglo del deadlock del ack. Es la tajada con riesgo: la consumen el webhook, el harness y dos scripts. |
+| 2 · el flag | `fix(chat): read the case emergency flag before resuming capture` | El segundo cinturón: `case.emergency` con lector real, el filtro de caso abierto, y los dobles de test que ahora declaran «no hay caso». |
 
-La verificación independiente de T7 cubre las dos tajadas juntas: el riesgo está en la interacción entre
-ellas (capture deriva justo en el turno en que el ack ya escribió el caso), no en cada una por separado.
+La tajada 2 depende de la 1 (necesita el lector y el commit del ack), así que se apila sobre ella y no
+al revés. La verificación independiente de T7 y su re-verificación cubren la interacción entre las dos
+—capture deriva justo en el turno en que el ack ya escribió el caso—, no cada una por separado.
 
 ## Evidencia
 
@@ -104,7 +105,9 @@ ellas (capture deriva justo en el turno en que el ack ya escribió el caso), no 
 | T3 | `32e6ad9c2` fix(evals): stop counting a handed-off turn as a silent one |
 | T3 (deadlock del ack) | `80ee4c33d` fix(webhook): commit the emergency ack before the graph runs |
 | T4, T5 | `7e26ed640` fix(chat): read the case emergency flag before resuming capture |
-| T6 | informe `odd/evals/conv-eval-brain-boundary*.md` |
+| T6 | `523ff01ff` docs(evals): re-measure the emergency scenarios… + `de017fc20` re-stamp on the fixed tree |
+| T8, T9 | `c1c0f09ac` fix(webhook): deliver the safety protocol inside a human conversation |
+| T7, T7-bis | `3dbf8bbb5` docs(odd): record the independent verification and close its gaps |
 
 ## Log
 
