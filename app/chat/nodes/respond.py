@@ -612,21 +612,6 @@ def _gas_manipulation_instruction(text: str) -> bool:
     return _gas_appliance_ignition_instruction(text)
 
 
-def _replace_gas_instruction_sentences(text: str, replacement: str) -> tuple[str, bool]:
-    """Replace unsafe sentences while retaining unrelated safety prose."""
-    parts = re.split(r"([.!?;]+[ \t\n]*)", text)
-    changed = False
-    for index in range(0, len(parts), 2):
-        if _gas_manipulation_instruction(parts[index]):
-            boundary = parts[index + 1] if index + 1 < len(parts) else ""
-            semicolon = boundary[:1] if boundary.startswith(";") else ""
-            parts[index] = replacement + semicolon
-            if boundary:
-                parts[index + 1] = boundary[1:] if semicolon else re.sub(r"^[.!?]+", "", boundary)
-            changed = True
-    return "".join(parts), changed
-
-
 def _is_configured_safety_text(session, text: str, reply_texts: dict[str, str]) -> bool:
     protocol = get_emergency_protocol(session)
     configured = set(protocol["safety_instructions"])
@@ -810,9 +795,9 @@ def respond(state: ConversationState) -> dict:
     with session_scope() as session:
         reply_texts = get_reply_texts(session)
         if not _is_configured_safety_text(session, model_answer, reply_texts):
-            answer, gas_guarded = _replace_gas_instruction_sentences(
-                model_answer, reply_texts["gas_instruction_guard"]
-            )
+            gas_guarded = _gas_manipulation_instruction(model_answer)
+            if gas_guarded:
+                answer = reply_texts["gas_instruction_guard"]
             if gas_guarded and session.get(Conversation, state.conversation_id) is not None:
                 session.add(
                     ConversationEvent(

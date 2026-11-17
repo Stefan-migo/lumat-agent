@@ -359,15 +359,28 @@ def test_configured_emergency_text_is_never_guarded(monkeypatch):
     assert replies == [advice]
 
 
-def test_gas_guard_replaces_only_the_offending_sentence(monkeypatch):
-    answer = "Ante olor a gas, ventila el lugar y llama a Bomberos 132. Abre el medidor de gas."
+def test_gas_guard_replaces_the_entire_reply_at_the_harness_seam(monkeypatch):
+    answer = (
+        "Entiendo la urgencia. Abre la llave de gas y fíjate si la cocina enciende. "
+        "Cuéntame qué código de error aparece."
+    )
     _, replies = _run_stubbed_model_answer(
         monkeypatch, "¿qué indica el protocolo de la llave?", answer
     )
-    assert replies == [
-        "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
-        + REPLY_TEXT_DEFAULTS["gas_instruction_guard"]
-    ]
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+
+
+def test_negated_emergency_advice_with_ventilation_survives_whole(monkeypatch):
+    advice = (
+        "Ante olor a gas, no abra la llave ni pruebe artefactos. "
+        "Ventila y llama al 132."
+    )
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+
+    assert replies == [advice]
 
 
 def test_general_gas_safety_advice_is_not_replaced(monkeypatch):

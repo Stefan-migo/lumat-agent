@@ -60,6 +60,7 @@ def test_singular_excluded_appliance_repair_claims_are_guarded(answer):
         "Cierra el suministro de gas solo si puedes hacerlo de forma segura.",
         "Ante olor a gas, abre puertas y ventanas para ventilar.",
         "Ante olor a gas, no abra la llave ni pruebe artefactos.",
+        "Ante olor a gas, no abra la llave ni pruebe artefactos. Ventila y llama al 132.",
         "La mantención incluye revisar la llave de gas.",
         "Revisar la llave de gas es parte de la mantención.",
         "El lavado de red considera revisar la llave de gas.",
@@ -76,34 +77,3 @@ def test_safety_and_descriptive_gas_text_is_not_an_instruction(answer):
     assert not _gas_manipulation_instruction(answer), (
         f"safe or descriptive gas text was classified as an instruction: {answer!r}"
     )
-
-
-@pytest.mark.parametrize(
-    ("answer", "expected"),
-    [
-        (
-            "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
-            "Abre el medidor de gas.",
-            "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
-            "No manipules la llave ni la línea de gas.",
-        ),
-        (
-            "Ventila el lugar; abre la llave de gas; llama a Bomberos 132.",
-            "Ventila el lugar; No manipules la llave ni la línea de gas.; "
-            "llama a Bomberos 132.",
-        ),
-    ],
-)
-def test_guard_replaces_only_the_offending_sentence_and_preserves_safety_prose(
-    answer, expected
-):
-    assert respond_guards_replace_for_test(answer) == expected
-
-
-def respond_guards_replace_for_test(answer):
-    """Exercise the public sentence-replacement helper without a DB or model."""
-    from app.chat.nodes.respond import _replace_gas_instruction_sentences
-
-    return _replace_gas_instruction_sentences(
-        answer, "No manipules la llave ni la línea de gas."
-    )[0]
