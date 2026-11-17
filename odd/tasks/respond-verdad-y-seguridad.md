@@ -35,12 +35,17 @@ acá se le dice a un cliente real. Verificación independiente obligatoria.
   si puedes hacerlo de forma segura» (`app/services/settings.py:326`)— **no** disparan el guard: no
   salen de `respond` y no son instrucciones de diagnóstico. Un test con esos textos como control
   negativo lo fija; sin él, el guard se come la respuesta correcta en una emergencia.
-- **S4 — La cobertura se responde siempre igual.** Una pregunta que nombra una comuna —esté o no en
-  `DEFAULT_COVERAGE_COMMUNES` (`app/services/settings.py:377-385`)— se contesta de forma determinística
-  con la política real: dentro de la lista, se confirma; fuera, se dice que igual se puede coordinar con
-  un asesor. Hoy `coverage_reply` sólo responde si la comuna está cubierta o si el cliente dice
-  «comuna/cobertura» (`app/chat/nodes/configured_answers.py:156-174`), así que Maipú cae al modelo y la
-  respuesta cambia entre corridas. Con esto, el escenario deja de depender de la suerte.
+- **S4 — La cobertura se responde siempre igual.** Una pregunta de cobertura —«¿trabajan en Maipú?»,
+  «¿atienden en X?», «¿llegan a X?»— se contesta de forma determinística comparando **el lugar que el
+  cliente nombró** contra la lista configurada (`DEFAULT_COVERAGE_COMMUNES`,
+  `app/services/settings.py:377-385`): si está, se confirma; si no está, se dice que no es cobertura
+  habitual y que igual un asesor coordina la visita, que es exactamente lo que promete la KB
+  (`docs/kb/lumat-cobertura-horarios.md:5`). **No hace falta un padrón de comunas**: el callejero sólo
+  trae seis (`app/data/callejero/maestro.json.gz`), así que el bot no debe validar que el lugar exista —
+  debe responder la política con lo que el cliente dijo. Hoy `coverage_reply` sólo dispara si la comuna
+  está en la lista o si el mensaje dice «comuna/cobertura»
+  (`app/chat/nodes/configured_answers.py:156-174`), así que Maipú cae al modelo y la respuesta cambia
+  entre corridas. Con esto, el escenario deja de depender de la suerte.
 - **S5 — Fuera de alcance.** No se toca el camino de detección de emergencias, ni la clasificación, ni el
   catálogo de servicios: no se agregan servicios nuevos. El protocolo de seguridad queda byte-idéntico.
 
@@ -73,3 +78,10 @@ tres defectos juntos.
 **L2 (decisión del owner, 2026-11-17).** Preguntado cómo hacer exigible la regla de gas —que ya está
 escrita y el modelo violó— eligió **guard determinístico más regla en el prompt**: la respuesta que
 instruye manipular gas se reemplaza por un mensaje seguro y la intervención queda registrada.
+
+**L3 (corrección de S4 antes de implementar, 2026-11-17).** La primera versión de S4 pedía reconocer la
+comuna contra una lista del proyecto. El callejero tiene seis comunas y no incluye Maipú
+(`app/data/callejero/maestro.json.gz`), y `coverage.communes` sólo guarda las cubiertas. Inventar un
+padrón habría sido agregar una fuente de verdad que nadie mantiene. S4 pasa a: comparar el lugar que el
+cliente nombró contra la lista de cobertura y, si no está, responder la política real —que es lo que la
+KB ya promete— sin validar la existencia del lugar.
