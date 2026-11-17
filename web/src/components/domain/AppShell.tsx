@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { getChatThread, listActiveRuns } from '../../api';
 import type { ActiveRun, PanelNotification } from '../../types';
@@ -60,6 +60,14 @@ export type View = PanelView;
 function routeForRole(route: PanelRoute, role: User['role']): PanelRoute {
   const allowed = canOpen(role, route.view) && (role === 'admin' || !isAdminOnlyView(route.view));
   return allowed ? route : { view: defaultViewForRole(role) };
+}
+
+const WIDE_INBOX_QUERY = '(min-width: 64rem)';
+const wideInboxMatches = () => window.matchMedia?.(WIDE_INBOX_QUERY).matches ?? false;
+function subscribeWideInbox(update: () => void) {
+  const query = window.matchMedia?.(WIDE_INBOX_QUERY);
+  query?.addEventListener('change', update);
+  return () => query?.removeEventListener('change', update);
 }
 
 export interface AppShellProps {
@@ -186,13 +194,59 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const kbDocId = route.kbDocId ?? null;
   const appointmentId = route.appointmentId ?? null;
 
+  const wideInbox = useSyncExternalStore(subscribeWideInbox, wideInboxMatches);
+  const inboxRef = useRef<HTMLDivElement>(null);
+  const lastQueueTab = useRef<NonNullable<PanelRoute['conversationTab']>>('all');
+  const queueTab = route.conversationTab ?? (conversationId === null ? 'all' : lastQueueTab.current);
+  useEffect(() => {
+    if (view === 'conversations' && conversationId === null) lastQueueTab.current = queueTab;
+  }, [view, conversationId, queueTab]);
+  useEffect(() => {
+    const inbox = inboxRef.current;
+    const viewport = window.visualViewport;
+    if (!inbox || !viewport || conversationId === null) return;
+    const resize = () => {
+      if (viewport.scale === 1) inbox.style.setProperty('--inbox-visible-height', `${viewport.height}px`);
+      else inbox.style.removeProperty('--inbox-visible-height');
+    };
+    resize();
+    viewport.addEventListener('resize', resize);
+    return () => { viewport.removeEventListener('resize', resize); inbox.style.removeProperty('--inbox-visible-height'); };
+  }, [view, conversationId]);
+  const openConversation = (id: number) => {
+    if (id === conversationId) return;
+    const next: PanelRoute = { view: 'conversations', conversationId: id };
+    window.history.pushState({ fromConversationQueue: conversationId === null }, '', pathForRoute(next));
+    setRoute(next);
+  };
+  const backToQueue = () => {
+    if (window.history.state?.fromConversationQueue === true) { window.history.back(); return; }
+    const next: PanelRoute = { view: 'conversations', conversationTab: queueTab };
+    window.history.replaceState({}, '', pathForRoute(next));
+    setRoute(next);
+  };
+  const refreshConversations = () => setConversationRefresh((value) => value + 1);
+
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} onOpenRoute={navigateToRoute} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'chatbot-metrics' ? <ChatbotMetrics onOpenConversation={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
       : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} role={user.role} /> : user.role === 'tecnico' ? <TechnicianAgenda /> : <AgendaPage />
       : view === 'automation-rules' ? <AutomationRecipesPage />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
-        : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
+        : view === 'conversations' ? <div ref={inboxRef} className={`conversations-inbox${conversationId === null ? '' : ' conversations-inbox--thread'}`}>
+            {wideInbox || conversationId === null ? <section className="conversations-inbox__queue" aria-label="Cola de conversaciones">
+              <ConversationsList compact={wideInbox} currentUserId={user.id} initialQueueTab={queueTab}
+                selectedConversationId={conversationId} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })}
+                refreshKey={conversationRefresh} onOpenThread={openConversation} />
+            </section> : null}
+            {conversationId !== null ? <div className="conversations-inbox__thread">
+              <ConversationThread key={conversationId} interactive conversationId={conversationId} refreshKey={conversationRefresh}
+                onMutate={refreshConversations} onBack={wideInbox ? undefined : backToQueue} />
+            </div> : wideInbox ? <div className="conversations-inbox__placeholder">
+              <h2>Selecciona una conversación</h2>
+              <p>Abre un chat de la lista para revisar sus mensajes y continuar la atención.</p>
+            </div> : null}
+          </div>
      : view === 'notifications' ? <NotificationCenter notifications={notificationData.notifications} state={notificationData.state} unreadOnly={notificationData.unreadOnly} onUnreadOnlyChange={notificationData.setUnreadOnly} onMarkRead={notificationData.markRead} pendingReadIds={notificationData.pendingReadIds} readErrors={notificationData.readErrors} onOpenNotification={openNotification} />
      : view === 'push' ? <PushSettings />
                 : view === 'chat' ? <AgentChat role={user.role} userId={user.id} userName={user.name?.trim() || user.username} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />

@@ -589,6 +589,36 @@ describe('AppShell (T6.4)', () => {
   });
 });
 
+it('keeps the desktop conversation queue visible, selected and navigable alongside the thread', async () => {
+  vi.stubGlobal('matchMedia', vi.fn((media: string) => ({ media, matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  window.history.replaceState({}, '', '/panel/app/conversations/19');
+  const conversation = (id: number, name: string) => ({
+    id, state: 'human', customer_id: id, customer: { id, name }, summary: 'Consulta de prueba',
+    reply_window_open: true,
+  });
+  const first = conversation(19, 'Ana');
+  const second = conversation(20, 'Camila');
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const path = new URL(String(input), window.location.origin).pathname;
+    const detail = path.endsWith('/19') ? first : path.endsWith('/20') ? second : null;
+    return new Response(JSON.stringify(detail ? {
+      conversation: detail, messages: [{ id: detail.id, direction: 'inbound', msg_type: 'text', text: 'Hola' }],
+    } : path === '/panel/api/conversations' ? {
+      items: [first, second], counts: { all: 2, human: 2 }, total: 2,
+    } : {}));
+  });
+  try {
+    render(<AppShell user={admin} />);
+    expect(await screen.findByRole('heading', { name: 'Ana', level: 1 })).toBeInTheDocument();
+    const queue = screen.getByRole('region', { name: 'Cola de conversaciones' });
+    expect(within(queue).getByRole('button', { name: 'Abrir conversación de Ana' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.setup().click(within(queue).getByRole('button', { name: 'Abrir conversación de Camila' }));
+    expect(await screen.findByRole('heading', { name: 'Camila', level: 1 })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/panel/app/conversations/20');
+    expect(within(queue).getByRole('button', { name: 'Abrir conversación de Camila' })).toHaveAttribute('aria-current', 'page');
+  } finally { vi.unstubAllGlobals(); }
+});
+
 describe('AppShell — notification destinations and shared state', () => {
   it('opens a visit notification and marks it read from the popover', async () => {
     window.history.replaceState({}, '', '/panel/app/');

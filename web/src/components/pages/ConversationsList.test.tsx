@@ -58,6 +58,24 @@ describe('production conversations list', () => {
     expect(within(mobile).queryByTestId('conversation-row-4')).not.toBeInTheDocument();
   });
 
+  it('opens a mobile conversation with a dedicated keyboard-accessible action', async () => {
+    const onOpenThread = vi.fn();
+    const user = userEvent.setup();
+    render(<ConversationsList data={queue([row(4, 'human', 7)])} onOpenThread={onOpenThread} />);
+
+    const card = within(screen.getByTestId('conversation-card-4'));
+    const open = card.getByRole('button', { name: 'Abrir conversación de Cliente 4' });
+    expect(open).toHaveTextContent('Abrir conversación');
+    expect(card.queryByRole('button', { name: 'Cliente 4' })).not.toBeInTheDocument();
+    await user.click(card.getByRole('button', { name: 'Acciones para Cliente 4' }));
+    expect(onOpenThread).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    open.focus();
+    await user.keyboard('{Enter}');
+    expect(onOpenThread).toHaveBeenCalledExactlyOnceWith(4);
+    expect(open).toHaveAttribute('aria-current', 'page');
+  });
+
   it('labels filters and exposes a page-level conversation region', () => {
     render(<ConversationsList data={queue([])} />);
 

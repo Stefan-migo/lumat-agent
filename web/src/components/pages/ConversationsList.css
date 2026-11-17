@@ -33,7 +33,9 @@
 .conversations-list__mobile-identity .table__resource-meta { overflow-wrap: anywhere; }
 .conversations-list__mobile-meta { display: grid; gap: var(--space-2); }
 .conversations-list__mobile-facts { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
-.conversations-list__mobile-card .table__actions { justify-content: flex-end; }
+.conversations-list__mobile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.conversations-list__open { flex: 1 1 auto; min-height: 44px; justify-content: center; }
+.conversations-list__mobile-actions .table__actions:empty { display: none; }
 .conversations-list__card .table-footer__count { display: inline; }
 .conversations-list__card .table-footer__pagination { display: flex; }
 
@@ -44,4 +46,43 @@
 
 @media (max-width: 39.99rem) {
   .conversations-list__filter { justify-self: start; }
+}
+
+.conversations-inbox { min-width: 0; }
+.conversations-inbox__thread { min-width: 0; min-height: 0; }
+.conversations-inbox__queue .table-card { min-width: 0; }
+.conversations-inbox__queue .conversations-page,
+.conversations-inbox__queue .page-frame__content { gap: var(--space-3); }
+.conversations-inbox__queue .conversations-list__mobile-card { gap: var(--space-2); }
+.conversations-inbox__queue .conversations-list__mobile-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+.conversations-inbox__queue .conversations-list__mobile-facts { align-items: center; }
+.conversations-inbox__queue .conversations-list__activity { flex-direction: row; flex-wrap: wrap; align-items: baseline; }
+.conversations-inbox__queue .conversations-list__mobile-card:has(.conversations-list__open[aria-current]) { border-color: var(--primary-700); background: var(--primary-100); }
+
+@media (min-width: 64rem) {
+  .panel-shell:has(.conversations-inbox) .panel-shell__content-area { height: 100dvh; min-height: 0; }
+  .panel-shell:has(.conversations-inbox) .panel-shell__content { max-width: none; padding: 0; overflow: hidden; }
+  .conversations-inbox { display: grid; grid-template-columns: minmax(17rem, 24rem) minmax(0, 1fr); height: 100%; min-height: 0; }
+  .conversations-inbox__queue { min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4); border-inline-end: 1px solid var(--border); }
+  .conversations-inbox__queue .table-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .conversations-inbox__queue .conversations-list__filter { justify-self: start; }
+  .conversations-inbox__queue .tabs [role="tablist"] { overflow-x: auto; }
+  .conversations-inbox__queue .tabs__tab { flex: 0 0 auto; white-space: nowrap; }
+  .conversations-list__compact { display: grid; gap: var(--space-2); }
+  .conversations-inbox__thread { padding: var(--space-4); }
+  .conversations-inbox__placeholder { display: grid; align-content: center; justify-items: center; padding: var(--space-5); text-align: center; color: var(--corp-fg-muted); }
+  .conversations-inbox__placeholder h2 { margin: 0; color: var(--corp-text); }
+}
+
+@media (max-width: 63.99rem) {
+  /* The narrow thread has its own back action and keeps the composer above the visual viewport edge. */
+  .panel-shell:has(.conversations-inbox--thread) { min-height: 0; }
+  .panel-shell:has(.conversations-inbox--thread) .panel-shell__mobile-bar,
+  .panel-shell:has(.conversations-inbox--thread) .panel-shell__header-row,
+  .panel-shell:has(.conversations-inbox--thread) .panel-shell__footer-nav { display: none; }
+  .panel-shell:has(.conversations-inbox--thread) .panel-shell__content-area { display: block; min-height: 0; }
+  .panel-shell:has(.conversations-inbox--thread) .panel-shell__content { padding: 0; overflow: hidden; }
+  .conversations-inbox--thread { height: var(--inbox-visible-height, 100dvh); }
+  .conversations-inbox__thread { height: 100%; }
+  .conversations-inbox__thread .page-frame__content { gap: 0; }
 }
