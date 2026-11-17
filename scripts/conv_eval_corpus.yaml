@@ -148,7 +148,13 @@ conversations:
       Agendar la mantención del calefont para el día que el cliente pidió.
     turns:
       - "hola, necesito una mantencion de calefont, vivo en ñuñoa, puedo el jueves en la mañana"
-      - "me llamo paula, paula@mail.com, calle siempre viva 123, ñuñoa"
+      # The address must exist in the offline street master: `capture` validates it
+      # against `app/services/callejero.py`, and a fictional street ("calle siempre
+      # viva 123", the Simpsons' address) is correctly refused as `no_encontrada`.
+      # That turned this agenda scenario into an address-validation scenario: the bot
+      # re-asked for the street twice and never reached the booking offer, which read
+      # as a product regression in the before/after comparison.
+      - "me llamo paula, paula@mail.com, avenida irarrazaval 40, ñuñoa"
       # Bare "si" on purpose: the consent parser accepts "si"/"no" but not
       # "si, autorizo", so a richer phrase never reaches the offer this scenario
       # measures. That narrowness is a separate defect, not this scenario's target.
