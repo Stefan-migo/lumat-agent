@@ -102,6 +102,76 @@ def test_place_mentioned_in_customer_kb_keeps_the_kb_answer_path(monkeypatch):
     ) is None
 
 
+def test_kb_place_deferral_requires_coverage_language_in_the_same_chunk(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    captured = {}
+
+    def scalar(statement):
+        captured["sql"] = str(statement.compile(compile_kwargs={"literal_binds": True}))
+        return 1
+
+    monkeypatch.setattr(SESSION, "scalar", scalar)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No hay cobertura para {{comuna}}."},
+    )
+
+    reply = configured_answers.coverage_reply(SESSION, _state("¿atienden en La Florida?"))
+
+    assert all(
+        term in captured["sql"] for term in ("%cobertura%", "%cubr%", "%atend%")
+    )
+    assert reply is None
+
+
+def test_out_of_area_text_without_comuna_slot_still_answers(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: None)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "Un asesor coordinará tu visita."},
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state("¿atienden en Maipú?")) == (
+        "Un asesor coordinará tu visita."
+    )
+
+
+@pytest.mark.parametrize(
+    ("question", "schedule_answer"),
+    [
+        ("¿trabajan en domingo?", True),
+        ("¿ustedes trabajan en sábado?", True),
+        ("¿atienden en horario de oficina?", True),
+        ("¿llegan a revisar el calefont?", False),
+        ("¿van a cobrar por la visita?", False),
+    ],
+)
+def test_non_place_complements_do_not_become_coverage_answers(
+    question, schedule_answer, monkeypatch
+):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_hours_schedule",
+        lambda _session: [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+    )
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No coverage for {{comuna}}."},
+    )
+
+    reply = configured_answers.configuration_reply(SESSION, _state(question))
+
+    if schedule_answer:
+        assert reply == "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+    else:
+        assert reply is None
+
+
 @pytest.mark.parametrize(
     ("question", "place"),
     [

@@ -50,7 +50,25 @@ _ASKED_PLACE_RE = re.compile(
     re.IGNORECASE,
 )
 _NON_PLACE_COMPLEMENTS = frozenset(
-    {"la tarde", "la manana", "la noche", "el dia", "la semana", "fin de semana"}
+    {
+        "la tarde", "la manana", "la noche", "el dia", "la semana", "fin de semana",
+        "horario de oficina",
+    }
+)
+_NON_PLACE_WORDS = frozenset(
+    {
+        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo",
+        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+        "septiembre", "octubre", "noviembre", "diciembre", "manana", "tarde", "noche",
+        "dia", "dias", "semana", "semanas", "horario", "horarios", "hora", "horas",
+        "oficina", "mediodia", "medianoche", "am", "pm",
+    }
+)
+_PLACE_VERB_COMPLEMENT = re.compile(
+    r"\b[a-z]+(?:ar|er|ir|ando|iendo|ado|ido)\b|"
+    r"\b(?:cobro|cobras|cobra|cobran|reviso|revisas|revisa|revisan|"
+    r"repare|reparan|reparamos|llego|llegas|llega|llegan|trabajo|trabajas|"
+    r"trabaja|trabajan|atiendo|atiendes|atiende|atienden|voy|vas|va|van)\b"
 )
 
 _HOURS_TERMS = frozenset(
@@ -135,7 +153,16 @@ def _asked_place(text: str) -> str | None:
     place = " ".join((match.group("direct") or match.group("residence")).split()).strip(
         " \t\r\n¿¡"
     )
-    if not place or _fold(place) in _NON_PLACE_COMPLEMENTS:
+    if not place:
+        return None
+    folded_place = _fold(place)
+    place_words = _words(place)
+    if (
+        folded_place in _NON_PLACE_COMPLEMENTS
+        or place_words & _NON_PLACE_WORDS
+        or re.search(r"\b\d{1,2}(?::\d{2})?\b", folded_place)
+        or _PLACE_VERB_COMPLEMENT.search(folded_place)
+    ):
         return None
     return place
 
@@ -143,6 +170,11 @@ def _asked_place(text: str) -> str | None:
 def _customer_kb_mentions_place(session, place: str) -> bool:
     """Check active, global customer KB chunks without paying for embeddings."""
     escaped_place = place.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    coverage_language = (
+        KbChunk.content.ilike("%cobertura%")
+        | KbChunk.content.ilike("%cubr%")
+        | KbChunk.content.ilike("%atend%")
+    )
     statement = (
         select(KbChunk.id)
         .join(KbDocument, KbChunk.document_id == KbDocument.id)
@@ -152,6 +184,7 @@ def _customer_kb_mentions_place(session, place: str) -> bool:
             KbDocument.project_id.is_(None),
             KbChunk.version == KbDocument.active_version,
             KbChunk.content.ilike(f"%{escaped_place}%", escape="\\"),
+            coverage_language,
         )
         .limit(1)
     )
@@ -222,8 +255,11 @@ def coverage_reply(session, state: ConversationState) -> str | None:
             return f"Atendemos normalmente en {_join_es(communes)}."
         if _customer_kb_mentions_place(session, place):
             return None
-        return render_text(
-            get_reply_texts(session)["coverage_out_of_area"], comuna=place
+        reply_text = get_reply_texts(session)["coverage_out_of_area"]
+        return (
+            render_text(reply_text, comuna=place)
+            if "{{comuna}}" in reply_text
+            else reply_text
         )
     names_covered = any(_mentions(folded, commune) for commune in communes)
     if not (words & _COVERAGE_TERMS) and not (names_covered and words & _PLACE_TERMS):
@@ -311,10 +347,10 @@ def configuration_reply(session, state: ConversationState) -> str | None:
 
     Precedence is explicit and pinned by test: the first answer that recognises
     the turn owns it, so the same text can never be claimed by two of them.
-    Duration comes first because naming a service is the specific case; coverage
-    and hours are the general ones.
+    Duration is most specific, followed by configured schedule, then coverage;
+    this prevents a weekday or hour from being mistaken for a place.
     """
-    for answer in (duration_reply, coverage_reply, hours_reply):
+    for answer in (duration_reply, hours_reply, coverage_reply):
         reply = answer(session, state)
         if reply is not None:
             return reply
