@@ -494,11 +494,52 @@ _GAS_COMPONENT = re.compile(
     r"\b(?:llave|valvula|suministro|linea)\b.{0,40}\bgas\b|"
     r"\bgas\b.{0,40}\b(?:llave|valvula|suministro|linea)\b"
 )
-_NEGATED_OPERATION = re.compile(r"\b(?:no|nunca|jamas)\s+(?:(?:debes|tienes que|deberias|puedes)\s+){0,2}$")
+_NEGATED_OPERATION = re.compile(
+    r"\b(?:no|nunca|jamas)\s+(?:(?:debes|tienes que|deberias|puedes)\s+){0,2}$"
+)
+_GAS_APPLIANCES = re.compile(
+    r"\b(?:cocinas?|calefonts?|calderas?|estufas?|calefactores?|quemadores?)\b"
+)
+_GAS_APPLIANCE_DIRECTIVE = re.compile(
+    r"(?:^|[:,;]\s*|\b(?:por favor|primero|entonces)\s+)"
+    r"(?:fijate|fijense|prueba|pruebe|prueben|enciende|encienda|enciendan|"
+    r"prende|prenda|prendan)\b|"
+    r"\b(?:debes|tienes que|puedes|podrias|procura|intenta)\s+"
+    r"(?:encender|prender|probar|hacer funcionar)\b"
+)
+_APPLIANCE_REPAIR_CLAIM = re.compile(
+    r"\b(?:reparamos|reparan|repara|arreglamos|arreglan|arregla|"
+    r"(?:podemos|puede|pueden|hacemos|hacen|realizamos|realizan)\s+"
+    r"(?:reparar|arreglar|reparaciones?\s+de))\b.{0,48}\b"
+    r"(?:lavadoras?(?:\s+secadoras?)?|refrigeradores?)\b"
+)
+_NEGATED_REPAIR = re.compile(r"\bno\s+(?:(?:se|las|los|podemos|puede|pueden|hacemos|hacen)\s+)*$")
+
+
+def _affirms_excluded_appliance_repair(text: str) -> bool:
+    """Detect an affirmative repair claim for an appliance excluded by the KB."""
+    normalized = re.sub(r"[^a-z0-9]+", " ", _normalise_topic_text(text)).strip()
+    for sentence in re.split(r"[.!?;\n]+", normalized):
+        for claim in _APPLIANCE_REPAIR_CLAIM.finditer(sentence):
+            if not _NEGATED_REPAIR.search(sentence[: claim.start()]):
+                return True
+    return False
+
+
+def _gas_appliance_ignition_instruction(text: str) -> bool:
+    """Detect a direct command to test or ignite a gas appliance."""
+    normalized = _normalise_topic_text(text)
+    for sentence in re.split(r"[.!?;\n]+", normalized):
+        if not _GAS_APPLIANCES.search(sentence):
+            continue
+        for directive in _GAS_APPLIANCE_DIRECTIVE.finditer(sentence):
+            if not _NEGATED_OPERATION.search(sentence[: directive.start()]):
+                return True
+    return False
 
 
 def _gas_manipulation_instruction(text: str) -> bool:
-    """Detect an affirmative open/close/check/test instruction about gas hardware."""
+    """Detect a gas-hardware operation or an appliance ignition/test instruction."""
     normalized = _normalise_topic_text(text)
     for sentence in re.split(r"[.!?;\n]+", normalized):
         if not _GAS_COMPONENT.search(sentence):
@@ -510,7 +551,7 @@ def _gas_manipulation_instruction(text: str) -> bool:
             if re.search(r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix):
                 continue
             return True
-    return False
+    return _gas_appliance_ignition_instruction(text)
 
 
 def _declines(text: str) -> bool:
@@ -681,7 +722,20 @@ def respond(state: ConversationState) -> dict:
             else "El cliente no tiene ninguna visita agendada."
         ),
     )
-    if _gas_manipulation_instruction(answer):
+    model_answer = answer
+    if _affirms_excluded_appliance_repair(model_answer):
+        with session_scope() as session:
+            answer = get_reply_texts(session)["excluded_appliance_scope"]
+            if session.get(Conversation, state.conversation_id) is not None:
+                session.add(
+                    ConversationEvent(
+                        conversation_id=state.conversation_id,
+                        event="appliance_scope_guard",
+                        cause="respond:appliance_scope_guard",
+                        actor="bot",
+                    )
+                )
+    if _gas_manipulation_instruction(model_answer):
         with session_scope() as session:
             answer = get_reply_texts(session)["gas_instruction_guard"]
             if session.get(Conversation, state.conversation_id) is not None:

@@ -216,6 +216,43 @@ def _run_stubbed_model_answer(
 @pytest.mark.parametrize(
     "unsafe",
     [
+        "Hola, sí, reparamos lavadoras…",
+        "Sí, reparamos lavadoras-secadoras.",
+        "Claro, reparamos refrigeradores.",
+    ],
+)
+def test_excluded_appliance_repair_claim_is_replaced_and_recorded(monkeypatch, unsafe):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿reparan electrodomésticos?", unsafe
+    )
+
+    assert all(unsafe not in reply for reply in replies), (
+        f"excluded-appliance repair claim escaped the scope guard: {replies}"
+    )
+    assert replies == [REPLY_TEXT_DEFAULTS["excluded_appliance_scope"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "appliance_scope_guard",
+            )
+        )
+    assert event is not None
+    assert event.cause == "respond:appliance_scope_guard"
+    assert event.actor == "bot"
+
+
+def test_explicit_exclusion_of_appliance_repair_is_not_rewritten(monkeypatch):
+    answer = "No reparamos lavadoras."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿reparan electrodomésticos?", answer
+    )
+    assert replies == [answer]
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
         "Revisa que la llave de gas esté abierta.",
         "Abre la válvula de gas.",
         "Cierra el suministro de gas.",
@@ -239,6 +276,42 @@ def test_gas_hardware_instruction_from_model_is_replaced_and_recorded(monkeypatc
     assert event is not None
     assert event.cause == "respond:gas_instruction_guard"
     assert event.actor == "bot"
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "Sin desarmar ni tocar válvulas: fíjate si la cocina enciende normal "
+        "(para descartar que falte gas)",
+        "Prueba con la cocina.",
+        "Enciende el calefont para ver si hay gas.",
+    ],
+)
+def test_gas_appliance_ignition_or_test_instruction_is_replaced(monkeypatch, unsafe):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo un problema con el gas.", unsafe
+    )
+
+    assert unsafe not in replies, f"unsafe appliance gas test escaped the response guard: {replies}"
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "gas_instruction_guard",
+            )
+        )
+    assert event is not None
+    assert event.cause == "respond:gas_instruction_guard"
+    assert event.actor == "bot"
+
+
+def test_emergency_no_lighting_advice_is_not_replaced(monkeypatch):
+    advice = "No enciendas artefactos ni luces."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo un problema con el gas.", advice
+    )
+    assert replies == [advice]
 
 
 def test_emergency_conditional_gas_advice_is_not_replaced(monkeypatch):

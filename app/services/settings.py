@@ -194,6 +194,11 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "No manipules la llave ni la línea de gas. Un técnico de Lumat debe "
         "verificarlo; un asesor puede coordinar la visita."
     ),
+    "excluded_appliance_scope": (
+        "No reparamos lavadoras, lavadoras-secadoras ni refrigeradores. Sí atendemos "
+        "calderas, calefont y otros servicios del catálogo; si necesitas, coordinamos "
+        "una visita técnica."
+    ),
     "coverage_out_of_area": (
         "No tenemos cobertura habitual en {{comuna}}, pero igual podemos ayudarte: "
         "un asesor coordina la visita según disponibilidad."
@@ -250,6 +255,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_campo_sin_respuesta": frozenset(),
     "handoff_booking_unavailable": frozenset(),
     "gas_instruction_guard": frozenset(),
+    "excluded_appliance_scope": frozenset(),
     "coverage_out_of_area": frozenset({"comuna"}),
     "capture_evidence": frozenset(),
     "capture_preventive_ack": frozenset({"equipo"}),
