@@ -52,7 +52,8 @@ Traducido: la versión vieja acertaba por casualidad, no por diseño. Eso es lo 
   fuerte en una conversación ya derivada, el protocolo de seguridad se envía igual: instrucciones,
   contactos y aviso de técnico notificado, sin preguntas de captura. Vale en **el cerebro y en el
   webhook**: `emergency_gate` corre primero y sigue yendo al nodo `emergency`, y el borde del canal
-  (`process_turn`) no descarta un mensaje cuya clasificación determinística sea fuerte. Todo lo demás
+  (`process_turn`) no descarta un mensaje cuya clasificación determinística sea fuerte. Cubre también
+  la conversación `closed`, que en ese caso vuelve a `human` (L5: la seguridad primero). Todo lo demás
   sigue mudo.
 - **S9 — El instrumento no inventa turnos silenciosos.** Una tanda con un turno sin respuesta
   reprueba el gate G8 si la conversación estaba en estado `bot` al empezar ese turno **o si el
@@ -209,7 +210,9 @@ no pierde trabajo ni rompe el protocolo de estados.
 
 **L8 (hallazgo al corregir F1, no corregido acá).** El ack de emergencia (EM-4,
 `acknowledge_emergency_if_ack`) está detrás del mismo retorno temprano que acabo de tocar, pero más
-abajo: en una conversación `human` nunca corre. Como toda emergencia pone la conversación en `human`,
+abajo: en una conversación `human` no corre, salvo que la ráfaga incluya un mensaje fuerte, que
+atraviesa el retorno temprano y sí llega al ack (verificado en L10/A3). Como toda emergencia pone la
+conversación en `human`,
 en producción el ack del cliente («ok») no se registra nunca; el test existente
 (`test_ack_hooked_in_ingest_process_message`) lo cubre sólo en estado `bot`. No lo arreglo acá: es
 fuera de S1-S10 y el arreglo cambia comportamiento que esta feature no pidió. Queda como decisión del
@@ -224,3 +227,25 @@ el cerebro. Las cifras citables son estas; las de L6 quedan como historia.
 
 El transcript de la fuga sigue exactamente lo que pide L5: turno 1 deriva, turno 2 entrega el
 protocolo completo, turno 3 en silencio, estado final `human`.
+
+**L10 (re-verificación, 2026-11-17).** Sobre `c1c0f09ac` el verificador volvió a sondear el seam de
+producción con la ráfaga real (`ingest._run_burst`, filas en `processing`): **SHIP**. F1, F2, F3 y F7
+cerrados con evidencia observada; F5 cubierto por el test que cruza `run_conversation`. Cuatro
+advertencias, ninguna reproducida como comportamiento inseguro visible, todas anotadas acá:
+
+- **A1 — el borde no lee el transcript de audio.** `app/webhook/ingest.py:668` clasifica `message.text`
+  y el cerebro clasifica el `transcript` del audio (`app/chat/state.py:305-308`). Sonda: conversación
+  `human` + AUDIO con transcript «Fuga de gas…» → cero respuestas, sin caso. S6 pone el camino de audio
+  fuera de alcance, así que no se toca: **queda como decisión del owner**, porque es la misma familia
+  de defecto que F1 y una nota de voz con una fuga hoy no recibe el protocolo.
+- **A2 — un saliente pendiente se entrega antes del protocolo.** `deliver_outbound` ahora corre en una
+  conversación `human` cuando la emergencia atraviesa el borde, así que un mensaje con envío fallido
+  (wamid nulo) sale justo antes de las instrucciones. Contenido ya aprobado; sólo el orden.
+- **A3 — L8 era impreciso y se corrigió arriba:** una ráfaga con un mensaje fuerte sí llega al ack.
+- **A4 — `closed` + emergencia fuerte reabre a `human`.** Consistente con el cerebro y más seguro, pero
+  S8 decía sólo «ya derivada»; ahora lo nombra.
+
+Además se commiteó `tests/integration/test_emergency_burst_boundary.py`, que fija el caso que la suite
+no cubría: en la ráfaga real el mensaje fuerte **no** es el último (el borde decide por mensaje, el
+cerebro clasifica la ráfaga colapsada, y sólo coinciden porque la ráfaga se fusiona), más las dos
+silencios que el borde debe conservar: hit débil y media-only.
