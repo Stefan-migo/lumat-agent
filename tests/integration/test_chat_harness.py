@@ -359,13 +359,23 @@ def test_configured_emergency_text_is_never_guarded(monkeypatch):
     assert replies == [advice]
 
 
-def test_gas_guard_replaces_the_entire_reply_at_the_harness_seam(monkeypatch):
+def test_gas_guard_replaces_measured_caldera_reply_at_the_harness_seam(monkeypatch):
     answer = (
-        "Entiendo la urgencia. Abre la llave de gas y fíjate si la cocina enciende. "
-        "Cuéntame qué código de error aparece."
+        "La caldera no parte. Revisa que la llave de paso de agua esté abierta "
+        "y que el gas esté habilitado. Cuéntame qué código de error aparece."
     )
     _, replies = _run_stubbed_model_answer(
         monkeypatch, "¿qué indica el protocolo de la llave?", answer
+    )
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+
+
+def test_gas_guard_takes_precedence_when_appliance_guard_also_fires(monkeypatch):
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿reparan lavadoras?",
+        "Sí, reparamos lavadoras. Abre la llave de gas.",
     )
 
     assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]

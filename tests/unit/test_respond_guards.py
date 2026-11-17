@@ -33,11 +33,25 @@ from app.chat.nodes.respond import (
         "Prueba encender el calefactor.",
         "Prueba encender el quemador.",
         "abre la llave azul",
+        "confirma que la llave de gas esté abierta",
+        "fijate si el gas esta habilitado",
     ],
 )
 def test_customer_gas_manipulation_forms_are_guarded(answer):
     assert _gas_manipulation_instruction(answer), (
         f"unsafe gas instruction escaped the detector: {answer!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Revisa que la llave de paso de agua esté abierta y que el gas esté habilitado.",
+    ],
+)
+def test_mixed_water_and_gas_instructions_are_guarded(answer):
+    assert _gas_manipulation_instruction(answer), (
+        f"mixed water-and-gas instruction escaped the detector: {answer!r}"
     )
 
 
@@ -51,6 +65,45 @@ def test_customer_gas_manipulation_forms_are_guarded(answer):
 def test_singular_excluded_appliance_repair_claims_are_guarded(answer):
     assert _affirms_excluded_appliance_repair(answer), (
         f"singular excluded-appliance repair claim escaped the detector: {answer!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Revisa el modelo de la caldera y me dices.",
+        "Revisa la garantía de la caldera.",
+        "Revisa cuándo fue la última mantención de la caldera.",
+        "Mira el código de error en el visor del calefont.",
+        "Verifica si la estufa es a gas o eléctrica.",
+        "Mira la etiqueta de la cocina para el modelo.",
+        "Fíjate el número de serie de la caldera.",
+    ],
+)
+def test_appliance_administration_and_diagnostics_are_not_gas_instructions(answer):
+    assert not _gas_manipulation_instruction(answer), (
+        f"non-ignition appliance check was classified as an instruction: {answer!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Revisa tu boleta de gas y me cuentas.",
+        "Mira la boleta del gas para el número de cliente.",
+        "Verifica la dirección en la boleta de gas.",
+    ],
+)
+def test_gas_word_with_administrative_checks_is_not_an_instruction(answer):
+    assert not _gas_manipulation_instruction(answer), (
+        f"administrative gas reference was classified as an instruction: {answer!r}"
+    )
+
+
+def test_blue_valve_signal_is_not_suppressed_by_water_context():
+    answer = "Cierra la llave azul y abre el agua."
+    assert _gas_manipulation_instruction(answer), (
+        f"blue gas valve instruction escaped the detector: {answer!r}"
     )
 
 
