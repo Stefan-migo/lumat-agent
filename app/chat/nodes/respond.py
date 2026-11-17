@@ -43,6 +43,7 @@ from app.services.settings import (
     get_message,
     get_persona_texts,
     get_message_templates,
+    get_reply_texts,
     get_tarifa_precios,
     get_tone_directive,
     tarifa_vigente,
@@ -483,6 +484,33 @@ def _answer_from_kb(
 
 
 _REFUSAL_OPENERS = frozenset({"no", "nop", "nada", "ninguno", "ninguna"})
+_GAS_OPERATIONS = re.compile(
+    r"\b(?:abre|abra|abran|abrir|cierra|cierre|cierren|cerrar|"
+    r"revisa|revise|revisen|revisar|verifica|verifique|verifiquen|verificar|"
+    r"comprueba|compruebe|comprueben|comprobar|chequea|chequee|chequeen|"
+    r"chequear|prueba|pruebe|prueben|probar|testea|testee|testeen|testear)\b"
+)
+_GAS_COMPONENT = re.compile(
+    r"\b(?:llave|valvula|suministro|linea)\b.{0,40}\bgas\b|"
+    r"\bgas\b.{0,40}\b(?:llave|valvula|suministro|linea)\b"
+)
+_NEGATED_OPERATION = re.compile(r"\b(?:no|nunca|jamas)\s+(?:(?:debes|tienes que|deberias|puedes)\s+){0,2}$")
+
+
+def _gas_manipulation_instruction(text: str) -> bool:
+    """Detect an affirmative open/close/check/test instruction about gas hardware."""
+    normalized = _normalise_topic_text(text)
+    for sentence in re.split(r"[.!?;\n]+", normalized):
+        if not _GAS_COMPONENT.search(sentence):
+            continue
+        for operation in _GAS_OPERATIONS.finditer(sentence):
+            prefix = sentence[: operation.start()]
+            if _NEGATED_OPERATION.search(prefix):
+                continue
+            if re.search(r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix):
+                continue
+            return True
+    return False
 
 
 def _declines(text: str) -> bool:
@@ -653,4 +681,16 @@ def respond(state: ConversationState) -> dict:
             else "El cliente no tiene ninguna visita agendada."
         ),
     )
+    if _gas_manipulation_instruction(answer):
+        with session_scope() as session:
+            answer = get_reply_texts(session)["gas_instruction_guard"]
+            if session.get(Conversation, state.conversation_id) is not None:
+                session.add(
+                    ConversationEvent(
+                        conversation_id=state.conversation_id,
+                        event="gas_instruction_guard",
+                        cause="respond:gas_instruction_guard",
+                        actor="bot",
+                    )
+                )
     return {"replies": [answer]}

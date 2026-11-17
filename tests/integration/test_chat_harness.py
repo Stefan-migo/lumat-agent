@@ -30,6 +30,7 @@ from app.chat.nodes.receive import EVIDENCE_ACK  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
     Conversation,
+    ConversationEvent,
     ConversationState,
     Customer,
     Message,
@@ -163,6 +164,142 @@ def test_first_turn_greeting_only_does_not_classify(mock_openai_chat):
         # (`app/panel/api/routes/conversations.py:238-239`), so a turn that
         # leaves it unset produces a conversation nobody can see in the UI.
         assert conversation.last_message_at is not None
+
+
+def _run_stubbed_model_answer(
+    monkeypatch, text: str, answer: str, *, expect_model_call: bool = True
+) -> tuple[int, list[str]]:
+    """Drive a canned model completion through the production conversation graph."""
+    from types import SimpleNamespace
+
+    from app.chat.nodes import classify_intent, respond as respond_node
+
+    model_calls = []
+
+    def complete(**_kwargs):
+        model_calls.append(True)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=answer))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+        )
+
+    monkeypatch.setattr(
+        respond_node,
+        "openai_client",
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=complete))
+        ),
+    )
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda *_args, **_kwargs: {
+            "intent": "consulta", "intents": ["consulta"], "service": None,
+            "priority": "baja", "status": None, "injection": False,
+            "fields": {},
+        },
+    )
+    monkeypatch.setattr(
+        respond_node, "retrieve_chunks", lambda *_args, **_kwargs: [{"content": "respuesta KB"}]
+    )
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(session, conversation_id, "hola")
+        session.commit()
+        replies = run_turn(session, conversation_id, text)
+        session.commit()
+    assert bool(model_calls) is expect_model_call
+    return conversation_id, replies
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "Revisa que la llave de gas esté abierta.",
+        "Abre la válvula de gas.",
+        "Cierra el suministro de gas.",
+        "Prueba la línea de gas.",
+    ],
+)
+def test_gas_hardware_instruction_from_model_is_replaced_and_recorded(monkeypatch, unsafe):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", unsafe
+    )
+
+    assert unsafe not in replies, f"unsafe model answer escaped the response guard: {replies}"
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "gas_instruction_guard",
+            )
+        )
+    assert event is not None
+    assert event.cause == "respond:gas_instruction_guard"
+    assert event.actor == "bot"
+
+
+def test_emergency_conditional_gas_advice_is_not_replaced(monkeypatch):
+    advice = "Corta el suministro de gas solo si puedes hacerlo de forma segura."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", advice
+    )
+    assert replies == [advice]
+
+
+def test_general_gas_safety_advice_is_not_replaced(monkeypatch):
+    advice = "Si sientes olor a gas, ventila y no enciendas artefactos ni luces."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", advice
+    )
+    assert replies == [advice]
+
+
+def test_descriptive_gas_line_answer_is_not_replaced(monkeypatch):
+    answer = "La línea de gas se revisa durante la mantención del equipo."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", answer
+    )
+    assert replies == [answer]
+
+
+def test_named_out_of_area_place_gets_the_configured_policy(monkeypatch):
+    from app.services.settings import COVERAGE_COMMUNES_KEY, set_setting
+
+    with SessionLocal() as session:
+        set_setting(session, COVERAGE_COMMUNES_KEY, ["Las Condes", "Ñuñoa"])
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿ustedes trabajan en Maipú?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == [
+        "No tenemos cobertura habitual en Maipú, pero igual podemos ayudarte: "
+        "un asesor coordina la visita según disponibilidad."
+    ]
+
+
+def test_named_covered_place_keeps_the_existing_confirmation(monkeypatch):
+    from app.services.settings import COVERAGE_COMMUNES_KEY, set_setting
+
+    with SessionLocal() as session:
+        set_setting(session, COVERAGE_COMMUNES_KEY, ["Las Condes", "Ñuñoa"])
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿trabajan en Ñuñoa?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == ["Atendemos normalmente en Las Condes y Ñuñoa."]
 
 
 def test_emergency_turn_escalates_without_any_llm_call(mock_openai_chat, no_emergency_notification):

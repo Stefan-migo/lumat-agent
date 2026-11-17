@@ -17,8 +17,10 @@ import re
 import unicodedata
 
 from app.chat.state import ConversationState
+from app.services.prompts import render_text
 from app.services.settings import (
     get_coverage_communes,
+    get_reply_texts,
     get_hours_schedule,
     get_service_durations,
 )
@@ -39,6 +41,15 @@ _PRICE_TERMS = frozenset({"precio", "precios", "vale", "cuesta", "sale", "tarifa
 # Terms that ask WHEN: the reply names the configured days and range. `atienden`
 # is deliberately absent, because the place reading of it ("atienden en
 # Providencia?") belongs to the out-of-coverage policy that stays in the KB.
+_ASKED_PLACE_RE = re.compile(
+    r"\b(?:atienden|atiende|trabajan|trabaja|llegan|llega|van|visitan|visita)\s+(?:en|a)\s+(?P<direct>[^?!,.;\n]+)|"
+    r"\b(?:vivo|vives|viven|estoy|estas|estamos)\s+en\s+(?P<residence>[^?!,.;\n]+)",
+    re.IGNORECASE,
+)
+_NON_PLACE_COMPLEMENTS = frozenset(
+    {"la tarde", "la manana", "la noche", "el dia", "la semana", "fin de semana"}
+)
+
 _HOURS_TERMS = frozenset(
     {
         "horario",
@@ -113,6 +124,19 @@ def _asks_price(text: str) -> bool:
     return bool(_words(text) & _PRICE_TERMS)
 
 
+def _asked_place(text: str) -> str | None:
+    """The customer's place complement in a direct service-area question."""
+    match = _ASKED_PLACE_RE.search(text)
+    if match is None:
+        return None
+    place = " ".join((match.group("direct") or match.group("residence")).split()).strip(
+        " \t\r\n¿¡"
+    )
+    if not place or _fold(place) in _NON_PLACE_COMPLEMENTS:
+        return None
+    return place
+
+
 def _day_label(days: list[int]) -> str:
     """The configured days as Spanish text: "de lunes a sábado", "lunes y jueves".
 
@@ -153,11 +177,12 @@ def _window_label(entry) -> str:
 
 
 def coverage_reply(session, state: ConversationState) -> str | None:
-    """The covered communes, from `coverage.communes` (S4).
+    """Answer a named place from `coverage.communes`, or the configured policy (S4).
 
-    Returns ``None`` when the turn does not ask about coverage, when it names a
-    commune the configuration does not cover (the existing derivation path keeps
-    the policy), or when no commune is configured: no list is ever invented.
+    Direct place questions are answered without validating the place against a
+    master list. Configured places receive the normal confirmation; other named
+    places receive the advisor-coordination policy. A general coverage question
+    lists only configured places, and an empty configuration answers nothing.
     """
     text = _current_text(state)
     if not text or _asks_price(text):
@@ -169,6 +194,14 @@ def coverage_reply(session, state: ConversationState) -> str | None:
         return None
     folded = _fold(text)
     words = _words(text)
+    place = _asked_place(text)
+    if place and words & _PLACE_TERMS:
+        place_folded = _fold(place)
+        if any(_mentions(place_folded, commune) for commune in communes):
+            return f"Atendemos normalmente en {_join_es(communes)}."
+        return render_text(
+            get_reply_texts(session)["coverage_out_of_area"], comuna=place
+        )
     names_covered = any(_mentions(folded, commune) for commune in communes)
     if not (words & _COVERAGE_TERMS) and not (names_covered and words & _PLACE_TERMS):
         return None

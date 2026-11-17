@@ -87,24 +87,31 @@ def test_a_question_naming_a_covered_commune_is_answered(question, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "question",
+    ("question", "place"),
     [
-        "atienden en Providencia?",
-        "vivo en Maipu, trabajan alla?",
-        "llegan a Rancagua?",
+        ("atienden en Providencia?", "Providencia"),
+        ("vivo en Maipu, trabajan alla?", "Maipu"),
+        ("llegan a Rancagua?", "Rancagua"),
     ],
 )
-def test_a_commune_outside_the_list_keeps_the_existing_derivation_path(
-    question, monkeypatch
-):
-    """S4 keeps the out-of-coverage derivation: no list is invented here.
-
-    The KB keeps the policy for a commune outside coverage, so this answer steps
-    aside instead of claiming coverage the configuration does not have.
-    """
+def test_a_named_out_of_area_place_gets_the_advisor_policy(question, place, monkeypatch):
+    """The named place gets policy, without checking it against a commune master."""
     _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {
+            "coverage_out_of_area": (
+                "No tenemos cobertura habitual en {{comuna}}, pero igual podemos "
+                "ayudarte: un asesor coordina la visita según disponibilidad."
+            )
+        },
+    )
 
-    assert configured_answers.coverage_reply(SESSION, _state(question)) is None
+    assert configured_answers.coverage_reply(SESSION, _state(question)) == (
+        "No tenemos cobertura habitual en "
+        f"{place}, pero igual podemos ayudarte: un asesor coordina la visita según disponibilidad."
+    )
 
 
 def test_a_question_without_a_coverage_term_is_left_alone(monkeypatch):
