@@ -455,6 +455,25 @@ def test_calefon_instruction_is_replaced_at_the_harness_seam(monkeypatch):
     assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
 
 
+def test_gas_instruction_after_advisory_prose_is_replaced_at_the_harness_seam(monkeypatch):
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿qué incluye una revisión?",
+        "Ante olor a gas: ventila, corta el gas y llama al 132.",
+    )
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+
+
+def test_water_leak_reply_survives_the_gas_guard_at_the_harness_seam(monkeypatch):
+    answer = "Revisa si hay fuga de agua en el lavadero."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una fuga de agua en el lavadero.", answer
+    )
+
+    assert replies == [answer]
+
+
 def test_out_of_area_reply_without_comuna_slot_reaches_the_customer(monkeypatch):
     from app.services.settings import COVERAGE_COMMUNES_KEY, REPLY_TEXTS_KEY, set_setting
 

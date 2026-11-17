@@ -177,7 +177,7 @@ def test_non_place_complements_do_not_become_coverage_answers(
     [
         ("atienden en Providencia?", "Providencia"),
         ("vivo en Maipu, trabajan alla?", "Maipu"),
-        ("llegan a Rancagua?", "Rancagua"),
+        ("llegan a Lo Prado?", "Lo Prado"),
     ],
 )
 def test_a_named_out_of_area_place_gets_the_advisor_policy(question, place, monkeypatch):
@@ -218,6 +218,83 @@ def test_an_empty_configuration_answers_nothing(monkeypatch):
     assert (
         configured_answers.coverage_reply(SESSION, _state("que comunas cubren?"))
         is None
+    )
+
+
+def test_rm_commune_data_is_complete_for_configured_and_named_communes():
+    communes = configured_answers._load_rm_communes()
+    folded = {configured_answers._fold(commune) for commune in communes}
+
+    assert len(communes) == 52
+    assert {configured_answers._fold(name) for name in DEFAULT_COVERAGE_COMMUNES} <= folded
+    assert {"maipu", "lo prado", "padre hurtado"} <= folded
+
+
+@pytest.mark.parametrize(
+    ("question", "place"),
+    [
+        ("¿trabajan en Lo Prado?", "Lo Prado"),
+        ("¿atienden en Padre Hurtado?", "Padre Hurtado"),
+    ],
+)
+def test_named_unconfigured_rm_commune_gets_advisor_policy(question, place, monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: None)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No tenemos cobertura habitual en {{comuna}}."},
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state(question)) == (
+        f"No tenemos cobertura habitual en {place}."
+    )
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "¿trabajan en mi casa?",
+        "¿trabajan en la Región Metropolitana?",
+        "¿atienden en festivos?",
+        "¿atienden en feriados?",
+        "¿trabajan en regiones?",
+        "¿llegan al centro?",
+        "¿trabajan en la playa?",
+        "¿trabajan en el sur?",
+        "¿trabajan en el campo?",
+        "¿atienden en edificios?",
+        "¿atienden en departamentos?",
+        "¿trabajan en vacaciones?",
+        "¿llegan al extranjero?",
+        "¿atienden en altura?",
+        "¿trabajan en el verano?",
+        "¿atienden en San Fernando?",
+        "¿atienden en Viña del Mar?",
+        "¿llegan a Frutillar?",
+    ],
+)
+def test_unlisted_places_and_non_places_are_left_to_the_model(question, monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: None)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No coverage for {{comuna}}."},
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state(question)) is None
+
+
+def test_covered_commune_with_weekday_qualifier_keeps_coverage_precedence(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    _schedule(monkeypatch, WEEK)
+
+    assert configured_answers.configuration_reply(
+        SESSION, _state("¿atienden en Ñuñoa el sábado?")
+    ) == (
+        "Atendemos normalmente en Las Condes, Ñuñoa, Lo Barnechea, La Reina, "
+        "Peñalolén, Colina y Huechuraba."
     )
 
 

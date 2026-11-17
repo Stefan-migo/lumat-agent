@@ -21,6 +21,18 @@ from app.chat.nodes.respond import (
         "Abre el gas.",
         "gira la llave de gas",
         "revisa el paso de gas",
+        "Corta el gas.",
+        "corta el gas y ventila",
+        "Corta el gas antes de que llegue el técnico.",
+        "Ante olor a gas: ventila, corta el gas y llama al 132.",
+        "Si hueles gas, corta el suministro.",
+        "Verifica si el calefont enciende.",
+        "Mira si la cocina enciende.",
+        "Haz la prueba con la cocina.",
+        "Prueba con un fósforo si hay fuga.",
+        "Prueba encender el calefactor.",
+        "Prueba encender el quemador.",
+        "abre la llave azul",
     ],
 )
 def test_customer_gas_manipulation_forms_are_guarded(answer):
@@ -51,6 +63,13 @@ def test_singular_excluded_appliance_repair_claims_are_guarded(answer):
         "La mantención incluye revisar la llave de gas.",
         "Revisar la llave de gas es parte de la mantención.",
         "El lavado de red considera revisar la llave de gas.",
+        "Si puedes hacerlo de forma segura, cierra la llave de gas.",
+        "abre la llave de paso del agua",
+        "Revisa si hay fuga de agua en el lavadero.",
+        "Revisa la presión del agua.",
+        "Revisa el medidor de agua.",
+        "Revisa la filtración de agua del desagüe.",
+        "Corta el agua antes de que siga saliendo.",
     ],
 )
 def test_safety_and_descriptive_gas_text_is_not_an_instruction(answer):
@@ -59,16 +78,26 @@ def test_safety_and_descriptive_gas_text_is_not_an_instruction(answer):
     )
 
 
-def test_guard_replaces_only_the_offending_sentence_and_preserves_safety_prose():
-    answer = (
-        "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
-        "Abre el medidor de gas."
-    )
-
-    guarded = respond_guards_replace_for_test(answer)
-
-    assert guarded.startswith("Ante olor a gas, ventila el lugar y llama a Bomberos 132.")
-    assert "Abre el medidor de gas." not in guarded
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        (
+            "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
+            "Abre el medidor de gas.",
+            "Ante olor a gas, ventila el lugar y llama a Bomberos 132. "
+            "No manipules la llave ni la línea de gas.",
+        ),
+        (
+            "Ventila el lugar; abre la llave de gas; llama a Bomberos 132.",
+            "Ventila el lugar; No manipules la llave ni la línea de gas.; "
+            "llama a Bomberos 132.",
+        ),
+    ],
+)
+def test_guard_replaces_only_the_offending_sentence_and_preserves_safety_prose(
+    answer, expected
+):
+    assert respond_guards_replace_for_test(answer) == expected
 
 
 def respond_guards_replace_for_test(answer):

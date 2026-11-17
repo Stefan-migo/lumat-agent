@@ -488,17 +488,26 @@ _REFUSAL_OPENERS = frozenset({"no", "nop", "nada", "ninguno", "ninguna"})
 _GAS_OPERATIONS = re.compile(
     r"\b(?:abre|abra|abran|abrir|cierra|cierre|cierren|cerrar|"
     r"revisa|revise|revisen|revisar|verifica|verifique|verifiquen|verificar|"
-    r"comprueba|compruebe|comprueben|comprobar|chequea|chequee|chequeen|"
-    r"chequear|prueba|pruebe|prueben|probar|testea|testee|testeen|testear|"
-    r"enciende|encienda|enciendan|encender|prende|prenda|prendan|prender|"
-    r"gira|gire|giren|girar|corta|corte|corten|cortar)\b"
+    r"mira|mire|miren|mirar|comprueba|compruebe|comprueben|comprobar|"
+    r"chequea|chequee|chequeen|chequear|prueba|pruebe|prueben|probar|"
+    r"testea|testee|testeen|testear|enciende|encienda|enciendan|encender|"
+    r"prende|prenda|prendan|prender|gira|gire|giren|girar|"
+    r"corta|corte|corten|cortar|haz|haga|hagan)\b"
 )
+_GAS_WORD = re.compile(r"\bgas\b")
+_WATER_CONTEXT = re.compile(r"\b(?:agua|desague|filtracion|hidraulico|hidraulica)\b")
+_BLUE_GAS_VALVE = re.compile(r"\b(?:llave|valvula)\s+azul\b")
+_FLAME_LEAK_TEST = re.compile(r"\bfosforo\b.{0,60}\bfuga\b|\bfuga\b.{0,60}\bfosforo\b")
 _GAS_COMPONENT = re.compile(
-    r"\b(?:llave|valvula|suministro|linea|paso|medidor|presion|fuga|fosforo)\b"
-    r".{0,50}\bgas\b|\bgas\b.{0,50}\b(?:llave|valvula|suministro|linea|"
-    r"paso|medidor|presion|fuga|fosforo)\b|"
-    r"\b(?:abre|abra|abran|abrir|cierra|cierre|cierren|cerrar)\s+(?:el\s+)?gas\b"
+    r"\b(?:llave|valvula|suministro|linea|paso|medidor|presion|fuga|fosforo)\b|\bgas\b"
 )
+_WATER_VALVE_TARGET = re.compile(
+    r"\b(?:llave|valvula)\b.{0,45}\b(?:agua|hidraulica|hidraulico)\b"
+)
+_CONDITIONAL_SAFETY = re.compile(
+    r"\bsi\s+puedes\s+hacerlo\s+de\s+forma\s+segura\b"
+)
+_VENTILATION_OPEN = re.compile(r"^\s*(?:las?\s+)?(?:puertas?|ventanas?)\b")
 _NEGATED_OPERATION = re.compile(
     r"\b(?:no|nunca|jamas)\s+(?:(?:debes|tienes que|deberias|puedes)\s+){0,2}$"
 )
@@ -506,13 +515,16 @@ _NEGATED_CONJUNCTION = re.compile(
     r"\b(?:no|nunca|jamas)\b(?:(?!\b(?:pero|sino)\b).)*\bni\s+$"
 )
 _GAS_APPLIANCES = re.compile(
-    r"\b(?:cocinas?|calefon(?:t)?(?:es|s)?|calderas?|estufas?|calefactores?|quemadores?)\b"
+    r"\b(?:cocinas?|calefon(?:t)?(?:es|s)?|calderas?|estufas?|"
+    r"calefactor(?:es)?|quemador(?:es)?)\b"
 )
 _GAS_APPLIANCE_DIRECTIVE = re.compile(
     r"(?:^|[:,;]\s*|\b(?:por favor|primero|entonces)\s+)"
     r"(?:fijate|fijense|prueba|pruebe|prueben|revisa|revise|revisen|"
-    r"enciende|encienda|enciendan|prende|prenda|prendan)\b|"
-    r"\b(?:debes|tienes que|puedes|podrias|procura|intenta)\s+"
+    r"verifica|verifique|verifiquen|mira|mire|miren|"
+    r"enciende|encienda|enciendan|prende|prenda|prendan|"
+    r"haz\s+(?:la\s+)?prueba)\b|"
+    r"\b(?:debes|tienes que|puedes|podrias|procura|intenta|prueba)\s+"
     r"(?:encender|prender|probar|revisar|verificar|hacer funcionar)\b"
 )
 _DESCRIPTIVE_GAS_TEXT = re.compile(
@@ -548,7 +560,7 @@ def _gas_appliance_ignition_instruction(text: str) -> bool:
     for sentence in re.split(r"[.!?;\n]+", normalized):
         if not _GAS_APPLIANCES.search(sentence):
             continue
-        if re.search(r"\bsolo si puedes hacerlo de forma segura\b", sentence):
+        if _CONDITIONAL_SAFETY.search(sentence):
             continue
         for directive in _GAS_APPLIANCE_DIRECTIVE.finditer(sentence):
             if not _operation_is_negated(sentence[: directive.start()]):
@@ -557,24 +569,42 @@ def _gas_appliance_ignition_instruction(text: str) -> bool:
 
 
 def _gas_manipulation_instruction(text: str) -> bool:
-    """Detect direct gas-hardware operations, excluding advice and descriptions."""
+    """Detect gas-hardware operations while excluding water-only advice."""
     normalized = _normalise_topic_text(text)
     for sentence in re.split(r"[.!?;\n]+", normalized):
-        if not _GAS_COMPONENT.search(sentence):
+        has_gas_word = bool(_GAS_WORD.search(sentence))
+        has_gas_appliance = bool(_GAS_APPLIANCES.search(sentence))
+        if _WATER_CONTEXT.search(sentence) and not (has_gas_word or has_gas_appliance):
             continue
-        if re.search(r"\bsolo si puedes hacerlo de forma segura\b", sentence):
+        gas_context = (
+            has_gas_word
+            or has_gas_appliance
+            or bool(_BLUE_GAS_VALVE.search(sentence))
+            or bool(_FLAME_LEAK_TEST.search(sentence))
+        )
+        if not gas_context or not _GAS_COMPONENT.search(sentence):
+            continue
+        if _CONDITIONAL_SAFETY.search(sentence):
             continue
         for operation in _GAS_OPERATIONS.finditer(sentence):
             prefix = sentence[: operation.start()]
             if _operation_is_negated(prefix):
                 continue
-            # Infinitives in descriptive text are not imperatives.
+            target = sentence[operation.start() : operation.start() + 70]
+            if _WATER_VALVE_TARGET.search(target):
+                continue
+            if (
+                operation.group() in {"abre", "abra", "abran", "abrir"}
+                and _VENTILATION_OPEN.search(sentence[operation.end() :])
+                and re.search(r"\bventil", sentence)
+            ):
+                continue
             if _DESCRIPTIVE_GAS_TEXT.search(prefix):
                 continue
             if operation.group() in {
                 "abrir", "cerrar", "revisar", "verificar", "comprobar", "chequear",
                 "probar", "testear", "encender", "prender", "girar", "cortar",
-            } and re.search(r"\b(?:es|son)\s+parte de\b", sentence[operation.end():]):
+            } and re.search(r"\b(?:es|son)\s+parte de\b", sentence[operation.end() :]):
                 continue
             if re.search(r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix):
                 continue
@@ -584,11 +614,15 @@ def _gas_manipulation_instruction(text: str) -> bool:
 
 def _replace_gas_instruction_sentences(text: str, replacement: str) -> tuple[str, bool]:
     """Replace unsafe sentences while retaining unrelated safety prose."""
-    parts = re.split(r"(?<=[.!?])([ \t\n]+)", text)
+    parts = re.split(r"([.!?;]+[ \t\n]*)", text)
     changed = False
     for index in range(0, len(parts), 2):
         if _gas_manipulation_instruction(parts[index]):
-            parts[index] = replacement
+            boundary = parts[index + 1] if index + 1 < len(parts) else ""
+            semicolon = boundary[:1] if boundary.startswith(";") else ""
+            parts[index] = replacement + semicolon
+            if boundary:
+                parts[index + 1] = boundary[1:] if semicolon else re.sub(r"^[.!?]+", "", boundary)
             changed = True
     return "".join(parts), changed
 

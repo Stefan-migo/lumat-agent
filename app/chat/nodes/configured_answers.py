@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -49,26 +51,11 @@ _ASKED_PLACE_RE = re.compile(
     r"\b(?:vivo|vives|viven|estoy|estas|estamos)\s+en\s+(?P<residence>[^?!,.;\n]+)",
     re.IGNORECASE,
 )
-_NON_PLACE_COMPLEMENTS = frozenset(
-    {
-        "la tarde", "la manana", "la noche", "el dia", "la semana", "fin de semana",
-        "horario de oficina",
-    }
-)
-_NON_PLACE_WORDS = frozenset(
-    {
-        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo",
-        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-        "septiembre", "octubre", "noviembre", "diciembre", "manana", "tarde", "noche",
-        "dia", "dias", "semana", "semanas", "horario", "horarios", "hora", "horas",
-        "oficina", "mediodia", "medianoche", "am", "pm",
-    }
-)
-_PLACE_VERB_COMPLEMENT = re.compile(
-    r"\b[a-z]+(?:ar|er|ir|ando|iendo|ado|ido)\b|"
-    r"\b(?:cobro|cobras|cobra|cobran|reviso|revisas|revisa|revisan|"
-    r"repare|reparan|reparamos|llego|llegas|llega|llegan|trabajo|trabajas|"
-    r"trabaja|trabajan|atiendo|atiendes|atiende|atienden|voy|vas|va|van)\b"
+_RM_COMMUNE_FILE = Path(__file__).resolve().parents[2] / "data" / "rm_communes.txt"
+_SCHEDULE_TAIL = re.compile(
+    r"(?:(?:el|este|los|cada|en|durante)\s+)?"
+    r"(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|festivos?|feriados?)s?"
+    r"(?:\s+(?:por la|en la)\s+(?:manana|tarde|noche))?"
 )
 
 _HOURS_TERMS = frozenset(
@@ -145,26 +132,34 @@ def _asks_price(text: str) -> bool:
     return bool(_words(text) & _PRICE_TERMS)
 
 
-def _asked_place(text: str) -> str | None:
-    """The customer's place complement in a direct service-area question."""
+@lru_cache(maxsize=1)
+def _load_rm_communes() -> tuple[str, ...]:
+    """Load the curated Región Metropolitana commune names from package data."""
+    return tuple(
+        line.strip()
+        for line in _RM_COMMUNE_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+
+
+def _asked_place(text: str, known_places: list[str]) -> str | None:
+    """Return the customer's spelling of a known commune in the place complement."""
     match = _ASKED_PLACE_RE.search(text)
     if match is None:
         return None
-    place = " ".join((match.group("direct") or match.group("residence")).split()).strip(
-        " \t\r\n¿¡"
+    place = re.sub(
+        r"[,.;!?¿¡]+", " ", match.group("direct") or match.group("residence")
     )
-    if not place:
-        return None
-    folded_place = _fold(place)
-    place_words = _words(place)
-    if (
-        folded_place in _NON_PLACE_COMPLEMENTS
-        or place_words & _NON_PLACE_WORDS
-        or re.search(r"\b\d{1,2}(?::\d{2})?\b", folded_place)
-        or _PLACE_VERB_COMPLEMENT.search(folded_place)
-    ):
-        return None
-    return place
+    original_words = place.split()
+    for commune in sorted(known_places, key=lambda name: len(_fold(name)), reverse=True):
+        commune_word_count = len(_fold(commune).split())
+        place_name = " ".join(original_words[:commune_word_count])
+        if _fold(place_name) != _fold(commune):
+            continue
+        tail = " ".join(original_words[commune_word_count:])
+        if not tail or _SCHEDULE_TAIL.fullmatch(_fold(tail)):
+            return place_name
+    return None
 
 
 def _customer_kb_mentions_place(session, place: str) -> bool:
@@ -233,10 +228,10 @@ def _window_label(entry) -> str:
 def coverage_reply(session, state: ConversationState) -> str | None:
     """Answer a named place from `coverage.communes`, or the configured policy (S4).
 
-    Direct place questions are answered without validating the place against a
-    master list. Configured places receive the normal confirmation; other named
-    places receive the advisor-coordination policy. A general coverage question
-    lists only configured places, and an empty configuration answers nothing.
+    Direct place questions are answered only when the complement matches a
+    configured commune or a curated Región Metropolitana commune. Configured
+    places receive the normal confirmation; other known RM communes receive the
+    advisor-coordination policy. Unknown places remain with normal KB retrieval.
     """
     text = _current_text(state)
     if not text or _asks_price(text):
@@ -248,7 +243,8 @@ def coverage_reply(session, state: ConversationState) -> str | None:
         return None
     folded = _fold(text)
     words = _words(text)
-    place = _asked_place(text)
+    known_places = communes + list(_load_rm_communes())
+    place = _asked_place(text, known_places)
     if place and words & _PLACE_TERMS:
         place_folded = _fold(place)
         if any(_mentions(place_folded, commune) for commune in communes):
@@ -347,10 +343,10 @@ def configuration_reply(session, state: ConversationState) -> str | None:
 
     Precedence is explicit and pinned by test: the first answer that recognises
     the turn owns it, so the same text can never be claimed by two of them.
-    Duration is most specific, followed by configured schedule, then coverage;
-    this prevents a weekday or hour from being mistaken for a place.
+    Duration is most specific, followed by coverage, then schedule. The place
+    branch is restricted to known communes, so weekdays reach the hours answer.
     """
-    for answer in (duration_reply, hours_reply, coverage_reply):
+    for answer in (duration_reply, coverage_reply, hours_reply):
         reply = answer(session, state)
         if reply is not None:
             return reply
