@@ -66,8 +66,9 @@ Tres estados, para que no se mezclen: en catálogo con precio publicado → se i
 | T4 | S2 | `case_ficha` + regla de prompt | `544783bba` |
 | T5 | S1, S2 | aserciones de eval por turno en el corpus | `f84e6f6f2` |
 | T6 | S1, S2 | medición de los dos escenarios | `98489e6f5` (sello) |
-| T7 | S3 | regla de prompt + hard fail de negación de catálogo | `<pendiente>` |
-| T8 | todas | re-medición, `bash scripts/test.sh full` y entrega | `<pendiente>` |
+| T7 | S3 | regla de prompt + hard fail de negación de catálogo | `248f160cd` |
+| T8 | todas | re-medición y `bash scripts/test.sh full` | `<pendiente>` |
+| T9 | todas | tabla de commits, veredicto por S# y entrega | `<pendiente>` |
 
 Ruta: inline en el padre. Cada unidad es un módulo (`respond.py`, `case_ficha.py`) y el diagnóstico ya está cargado; delegar duplicaría la lectura.
 
@@ -140,3 +141,18 @@ En este caso en particular. podria decir si lo trabajamos pero se calcula el val
 Se abre S3 y la tarea T7. La medición de T6 queda como línea base de S1+S2 y **no** cubre S3: el prompt cambió después, así que T8 vuelve a medir.
 
 **L15 — por qué S3 entra en este corte y no en el siguiente.** S1 y S3 son las dos mitades de la misma regla: el catálogo es cerrado, y dentro de él no tener precio publicado no significa que no lo hagamos. Arreglar sólo S1 produjo justamente el vaivén que midió L13: el bot pasó de sobre-declarar a sub-declarar. Escribir las dos mitades en el mismo bloque de la persona es más probable que se sostenga que arreglarlas en cortes separados, y comparten autoridad (la lista de la KB) y escenario de medición.
+
+**L16 — medición tras S3.** Corrida `verdad-alcance-s3`, 2 repeticiones, KB `34670f5b3d75` (sembrada de nuevo, idempotente). **2/2 pasan, ningún gate falla, sin regresiones** contra la corrida anterior.
+
+| Escenario | Antes de S1 | Tras S1+S2 | Tras S3 |
+|---|---|---|---|
+| `real-vocabulario-impreciso` | 0.00 (hard fail) | 2.83 | **3.00** |
+| `real-consulta-otros-equipos` | 0.00 (hard fail) | 2.00 | **2.58** |
+
+Delta por dimensión contra S1+S2: grounding **+1.25**, policy **+1.00**, tone +0.50, closure +0.25, escalation 0, conversational **−0.75**. La caída de conversational es longitud: explicar la lógica de la visita alarga la respuesta. El juez premia concisión, así que ese número mide largo, no corrección.
+
+La conducta pedida en L14 aparece literal en la corrida:
+
+> Sí, la climatización está dentro de lo que trabajamos, incluido el aire acondicionado. El valor depende del equipo y de lo que necesites, así que se evalúa en una visita técnica de $30.000 y, según lo que se encuentre, el trabajo se presupuesta aparte.
+
+Queda una blandura medida, no un defecto: para la bomba de calor el bot dice «no aparece en los servicios que tenemos listados, así que no puedo confirmarte que la trabajemos» en vez del «tampoco reparamos» de la KB. Es más suave de lo que la KB autoriza, pero no afirma nada falso y no costó puntaje.
