@@ -201,6 +201,58 @@ def test_mid_capture_visit_management_is_not_a_field_answer(intent):
     assert _dispatch(intent, mid_capture=True) == {"next_step": "manage"}
 
 
+# --- S1/S2 (agenda-respeta-horario): the question beats a visit change -------
+
+
+def test_mid_capture_schedule_question_beats_a_visit_change():
+    """S1: measured `real-dato-mas-pregunta` and `real-reagenda-familiar`.
+
+    The classifier labels both turns `reagendar_visita`:
+    "Yo creo qje no alcanza, y mañana?" and
+    "Es factible que vengas un dia pero a las.9 am".  The old dispatch sent them
+    to `manage`, which has no visit to move, so it handed off with
+    `booking_unavailable` and left the conversation owned by a human: the next
+    customer turns got no reply at all.
+    """
+    assert _dispatch("reagendar_visita", mid_capture=True, question=True) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_mid_capture_explicit_change_request_still_manages():
+    """S2: production #23, turn 289 — "Quiero reagendar la visita es posible?".
+
+    S12 closed that defect and it must survive S1: asking to move the visit is a
+    request, not a question, even though its surface is interrogative.
+    """
+    assert (
+        _dispatch("reagendar_visita", mid_capture=True, question=True, change_request=True)
+        == {"next_step": "manage"}
+    )
+
+
+def test_orchestrate_answers_a_schedule_question_while_capturing():
+    """S1 end to end from the text: no "?" free pass for visit management."""
+    state = _capture_state(
+        "Es factible que vengas un dia pero a las.9 am", intent="reagendar_visita"
+    )
+
+    assert orchestrate(state) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_orchestrate_still_manages_an_explicit_reschedule_while_capturing():
+    """S2 end to end: the measured #23 sentence keeps routing to manage."""
+    state = _capture_state("Quiero reagendar la visita es posible?", intent="reagendar_visita")
+
+    assert orchestrate(state) == {"next_step": "manage"}
+
+
 def test_mid_capture_persona_still_escalates():
     result = _dispatch("persona", mid_capture=True)
     assert result["next_step"] == "handoff"
