@@ -213,7 +213,7 @@ export const getThreadResources = (id: number) => apiFetch<ThreadResources>(`/pa
 export const updateThreadResources = (id: number, resources: ThreadResourcesSelection) => apiFetch<ThreadResources>(`/panel/api/chat/threads/${id}/resources`, { method: 'PUT', body: JSON.stringify(resources) });
 export const resetThreadResources = (id: number) => apiFetch<ThreadResources>(`/panel/api/chat/threads/${id}/resources`, { method: 'DELETE' });
 export const stopChatThread = (threadId: number, runId?: string) => postJson<StopThreadRunResponse>(`/panel/api/chat/threads/${threadId}/stop`, runId === undefined ? undefined : { run_id: runId });
-export const approveChatPlan = (id: number, run_id: string, token: string, reject = false) => postJson<{ status: string; message: InternalChatMessage }>(`/panel/api/chat/threads/${id}/approval`, { run_id, token, reject });
+export const approveChatPlan = (id: number, run_id: string, token: string, reject = false, decision?: Record<string, unknown>) => postJson<{ status: string; message: InternalChatMessage }>(`/panel/api/chat/threads/${id}/approval`, { run_id, token, reject, ...(!reject && decision !== undefined ? { decision } : {}) });
 export async function streamChatEvents(id: number, runId: string, onEvent: (event: AssistantEvent) => void): Promise<void> {
   const response = await fetch(`/panel/api/chat/threads/${id}/stream?run_id=${encodeURIComponent(runId)}`, { credentials: 'include' });
   if (!response.ok || !response.body) throw new ApiError(response.status, 'No pudimos conectar con el stream del asistente');

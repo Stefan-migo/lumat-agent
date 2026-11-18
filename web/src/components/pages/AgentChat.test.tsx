@@ -1376,6 +1376,103 @@ describe("AgentChat", () => {
     expect(screen.queryByText(/\{"date":"tomorrow"/)).not.toBeInTheDocument();
   });
 
+  it("approves a create decision only after selecting the offered distinct-project option", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
+        thread: {
+          ...makeThread(),
+          active_run_id: "run-create-decision",
+          current_plan: { tool: "project.create", status: "pending" },
+          assistant_state: { approval: { token: "secret", status: "pending", project_decision: { operation: "create", options: ["create_distinct"] } } },
+        },
+        messages: [{ id: 1, author: "agent", content: "Crear proyecto", status: "processed", assistant_metadata: { run_id: "run-create-decision" } }],
+      });
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/approval")) return jsonResponse({ status: "consumed", message: { id: 2, author: "agent", content: "Aprobado", status: "processed" } });
+      if (url.includes("/stream?")) return sseResponse([]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<AgentChat threadId={4} />);
+    expect(await screen.findByRole("group", { name: "Decisión requerida" })).toBeInTheDocument();
+    expect(screen.getByText("Se creará un proyecto nuevo y distinto. Si ya existe uno con el mismo propósito, el asistente te lo va a mostrar antes de crearlo.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Aprobar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/approval",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-create-decision", token: "secret", reject: false, decision: { create_distinct: true } }) }),
+    ));
+  });
+
+  it("requires an explicit choice at the second project gate and submits its candidate", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
+        thread: {
+          ...makeThread(),
+          active_run_id: "run-second-gate",
+          current_plan: { tool: "project.create", status: "pending" },
+          assistant_state: { approval: { token: "secret", status: "pending", project_decision: {
+            operation: "create",
+            options: ["selected_slug", "create_anyway"],
+            candidates: [{ slug: "caldera", name: "Caldera", similarity: 0.93 }],
+          } } },
+        },
+        messages: [{ id: 1, author: "agent", content: "Resolver conflicto", status: "processed", assistant_metadata: { run_id: "run-second-gate" } }],
+      });
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/approval")) return jsonResponse({ status: "consumed", message: { id: 2, author: "agent", content: "Aprobado", status: "processed" } });
+      if (url.includes("/stream?")) return sseResponse([]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<AgentChat threadId={4} />);
+    const approve = await screen.findByRole("button", { name: "Aprobar" });
+    expect(await screen.findByRole("group", { name: "Decisión requerida" })).toBeInTheDocument();
+    expect(approve).toBeDisabled();
+    expect(screen.getByText("Elegí una opción para poder aprobar.")).toHaveAttribute("role", "status");
+    expect(screen.getByRole("radio", { name: "Crear igualmente un proyecto con el mismo propósito" })).not.toBeChecked();
+    const candidate = screen.getByRole("radio", { name: "Reusar «Caldera» (caldera) · 0.93" });
+    expect(candidate).not.toBeChecked();
+    fireEvent.click(candidate);
+    expect(approve).toBeEnabled();
+    fireEvent.click(approve);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/approval",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-second-gate", token: "secret", reject: false, decision: { selected_slug: "caldera" } }) }),
+    ));
+  });
+
+  it("approves a pending plan without a project decision when no envelope is present", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/chat/threads/4" && !init?.method) return jsonResponse({
+        thread: {
+          ...makeThread(),
+          active_run_id: "run-no-decision",
+          current_plan: { tool: "agenda", status: "pending" },
+          assistant_state: { approval: { token: "secret", status: "pending" } },
+        },
+        messages: [{ id: 1, author: "agent", content: "Confirmar agenda", status: "processed", assistant_metadata: { run_id: "run-no-decision" } }],
+      });
+      if (url.endsWith("/tool-policy")) return jsonResponse(policy());
+      if (url.endsWith("/approval")) return jsonResponse({ status: "consumed", message: { id: 2, author: "agent", content: "Aprobado", status: "processed" } });
+      if (url.includes("/stream?")) return sseResponse([]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Aprobar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/4/approval",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-no-decision", token: "secret", reject: false }) }),
+    ));
+    expect(screen.queryByRole("group", { name: "Decisión requerida" })).not.toBeInTheDocument();
+  });
+
   it("submits the approval verb for a persisted pending plan", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
