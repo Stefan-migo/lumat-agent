@@ -27,6 +27,7 @@ from chat_harness import ensure_conversation, inspect, run_turn  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
 from app.chat.nodes.receive import EVIDENCE_ACK  # noqa: E402
+from app.services.realtime import ACTIVITY_EVENTS  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
     Conversation,
@@ -223,25 +224,24 @@ def _run_stubbed_model_answer(
         "Reparamos su refrigerador.",
     ],
 )
-def test_excluded_appliance_repair_claim_is_replaced_and_recorded(monkeypatch, unsafe):
+def test_excluded_appliance_repair_claim_is_observed_without_rewriting(monkeypatch, unsafe):
     conversation_id, replies = _run_stubbed_model_answer(
         monkeypatch, "¿reparan electrodomésticos?", unsafe
     )
 
-    assert all(unsafe not in reply for reply in replies), (
-        f"excluded-appliance repair claim escaped the scope guard: {replies}"
-    )
-    assert replies == [REPLY_TEXT_DEFAULTS["excluded_appliance_scope"]]
+    assert replies == [unsafe]
     with SessionLocal() as session:
         event = session.scalar(
             select(ConversationEvent).where(
                 ConversationEvent.conversation_id == conversation_id,
-                ConversationEvent.event == "appliance_scope_guard",
+                ConversationEvent.event == "response_guard_observation",
             )
         )
     assert event is not None
-    assert event.cause == "respond:appliance_scope_guard"
+    assert unsafe in event.cause
+    assert len(event.cause) <= 120
     assert event.actor == "bot"
+    assert event.event not in ACTIVITY_EVENTS
 
 
 def test_explicit_exclusion_of_appliance_repair_is_not_rewritten(monkeypatch):
@@ -285,7 +285,6 @@ def test_gas_hardware_instruction_from_model_is_replaced_and_recorded(monkeypatc
     [
         "Sin desarmar ni tocar válvulas: fíjate si la cocina enciende normal "
         "(para descartar que falte gas)",
-        "Prueba con la cocina.",
         "Enciende el calefont para ver si hay gas.",
     ],
 )
@@ -359,26 +358,100 @@ def test_configured_emergency_text_is_never_guarded(monkeypatch):
     assert replies == [advice]
 
 
-def test_gas_guard_replaces_measured_caldera_reply_at_the_harness_seam(monkeypatch):
+def test_measured_mixed_caldera_reply_is_observed_not_replaced(monkeypatch):
     answer = (
         "La caldera no parte. Revisa que la llave de paso de agua esté abierta "
         "y que el gas esté habilitado. Cuéntame qué código de error aparece."
     )
-    _, replies = _run_stubbed_model_answer(
+    conversation_id, replies = _run_stubbed_model_answer(
         monkeypatch, "¿qué indica el protocolo de la llave?", answer
     )
 
-    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    assert replies == [answer]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert "Revisa que la llave de paso de agua" in event.cause
+    assert len(event.cause) <= 120
+    assert event.event not in ACTIVITY_EVENTS
 
 
-def test_gas_guard_takes_precedence_when_appliance_guard_also_fires(monkeypatch):
-    _, replies = _run_stubbed_model_answer(
+def test_heating_pressure_reply_with_passing_gas_reference_survives(monkeypatch):
+    answer = (
+        "Revisa la presión del sistema de calefacción después del trabajo previo con gas "
+        "y confirma la lectura del manómetro, la temperatura de cada radiador, el "
+        "comportamiento del equipo desde la última mantención y la fecha del último "
+        "servicio. La evaluación está disponible."
+    )
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "Tengo un problema de presión en la calefacción tras una visita anterior.",
+        answer,
+    )
+
+    assert replies == [answer]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert "Revisa la presión del sistema" in event.cause
+    assert len(event.cause) == 120
+    assert event.event not in ACTIVITY_EVENTS
+
+
+def test_gas_guard_takes_precedence_while_appliance_claim_is_observed(monkeypatch):
+    conversation_id, replies = _run_stubbed_model_answer(
         monkeypatch,
         "¿reparan lavadoras?",
         "Sí, reparamos lavadoras. Abre la llave de gas.",
     )
 
     assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert "Sí, reparamos lavadoras." in event.cause
+    assert event.event not in ACTIVITY_EVENTS
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Cierra la llave azul y abre el agua.",
+        "Prueba con un fósforo si hay fuga.",
+        "Prueba con la cocina.",
+    ],
+)
+def test_non_narrow_gas_suspects_are_observed_not_replaced(monkeypatch, answer):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué hago con la caldera?", answer
+    )
+
+    assert replies == [answer]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert answer in event.cause
+    assert event.event not in ACTIVITY_EVENTS
 
 
 def test_negated_emergency_advice_with_ventilation_survives_whole(monkeypatch):
@@ -478,14 +551,22 @@ def test_calefon_instruction_is_replaced_at_the_harness_seam(monkeypatch):
     assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
 
 
-def test_gas_instruction_after_advisory_prose_is_replaced_at_the_harness_seam(monkeypatch):
-    _, replies = _run_stubbed_model_answer(
-        monkeypatch,
-        "¿qué incluye una revisión?",
-        "Ante olor a gas: ventila, corta el gas y llama al 132.",
+def test_emergency_advice_with_embedded_cut_is_observed_not_replaced(monkeypatch):
+    advice = "Ante olor a gas: ventila, corta el gas y llama al 132."
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué incluye una revisión?", advice
     )
 
-    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    assert replies == [advice]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert advice in event.cause
 
 
 def test_water_leak_reply_survives_the_gas_guard_at_the_harness_seam(monkeypatch):

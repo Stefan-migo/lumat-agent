@@ -499,29 +499,20 @@ _GAS_WORD = re.compile(r"\bgas\b")
 _WATER_CONTEXT = re.compile(r"\b(?:agua|desague|filtracion|hidraulico|hidraulica)\b")
 _BLUE_GAS_VALVE = re.compile(r"\b(?:llave|valvula)\s+azul\b")
 _FLAME_LEAK_TEST = re.compile(r"\bfosforo\b.{0,60}\bfuga\b|\bfuga\b.{0,60}\bfosforo\b")
+_NARROW_GAS_HARDWARE_OPERATIONS = re.compile(
+    r"\b(?:abre|abra|cierra|cierre|revisa|revise|verifica|verifique|"
+    r"confirma|confirme|prueba|pruebe|gira|gire|corta|corte|haz)\b"
+)
+_GAS_HARDWARE_OBJECT = re.compile(r"\b(?:llave|valvula|suministro|linea|medidor|paso)\b")
+_GAS_CUTOFF = re.compile(r"^\s*(?:corta|corte)\s+el\s+gas\s*$")
+_APPLIANCE_GAS_DIRECTIVE = re.compile(
+    r"\b(?:enciende|encienda|prende|prenda|prueba|pruebe|fijate)\b"
+)
+_APPLIANCE_GAS_CONTEXT = re.compile(r"\bgas\b|\bpara\s+ver\s+si\s+hay\b")
+_GUARD_OBSERVATION_EVENT = "response_guard_observation"
+_GUARD_OBSERVATION_CAUSE_LIMIT = 120
 _GAS_COMPONENT = re.compile(
     r"\b(?:llave|valvula|suministro|linea|paso|medidor|presion|fuga|fosforo)\b|\bgas\b"
-)
-_GAS_HARDWARE_COMPONENT = re.compile(
-    r"\b(?:llave|valvula|suministro|linea|paso|medidor|presion|fuga|fosforo)\b"
-)
-_GENERIC_GAS_CHECK_OPERATIONS = frozenset(
-    {
-        "revisa", "revise", "revisen", "revisar",
-        "mira", "mire", "miren", "mirar",
-        "verifica", "verifique", "verifiquen", "verificar",
-        "haz", "haga", "hagan",
-    }
-)
-_APPLIANCE_CHECK_VERB = re.compile(
-    r"\b(?:revisa|revise|revisen|mira|mire|miren|"
-    r"verifica|verifique|verifiquen|fijate|fijense)\b"
-)
-_APPLIANCE_IGNITION_OR_LEAK = re.compile(
-    r"\b(?:enciend|prend|funcion|llama|sale gas|fuga)"
-)
-_WATER_VALVE_TARGET = re.compile(
-    r"\b(?:llave|valvula)\b.{0,45}\b(?:agua|hidraulica|hidraulico)\b"
 )
 _CONDITIONAL_SAFETY = re.compile(
     r"\bsi\s+puedes\s+hacerlo\s+de\s+forma\s+segura\b"
@@ -574,71 +565,111 @@ def _operation_is_negated(prefix: str) -> bool:
 
 
 def _gas_appliance_ignition_instruction(text: str) -> bool:
-    """Detect a direct command to test or ignite a gas appliance."""
+    """Detect only explicit gas-context directives to ignite or test an appliance."""
     normalized = _normalise_topic_text(text)
-    for sentence in re.split(r"[.!?;\n]+", normalized):
+    for sentence in re.split(r"[.!?;:\n]+", normalized):
+        if _WATER_CONTEXT.search(sentence):
+            continue
         if not _GAS_APPLIANCES.search(sentence):
+            continue
+        if not _APPLIANCE_GAS_CONTEXT.search(sentence):
             continue
         if _CONDITIONAL_SAFETY.search(sentence):
             continue
-        for directive in _GAS_APPLIANCE_DIRECTIVE.finditer(sentence):
-            if (
-                _APPLIANCE_CHECK_VERB.search(directive.group())
-                and not _APPLIANCE_IGNITION_OR_LEAK.search(sentence)
-            ):
+        for directive in _APPLIANCE_GAS_DIRECTIVE.finditer(sentence):
+            if _operation_is_negated(sentence[: directive.start()]):
                 continue
-            if not _operation_is_negated(sentence[: directive.start()]):
-                return True
+            return True
     return False
 
 
 def _gas_manipulation_instruction(text: str) -> bool:
-    """Detect gas-hardware operations while excluding water-only advice."""
+    """Detect only explicit gas-hardware imperatives in a non-water clause."""
     normalized = _normalise_topic_text(text)
-    for sentence in re.split(r"[.!?;\n]+", normalized):
-        has_gas_word = bool(_GAS_WORD.search(sentence))
-        has_gas_appliance = bool(_GAS_APPLIANCES.search(sentence))
-        gas_context = (
-            has_gas_word
-            or has_gas_appliance
-            or bool(_BLUE_GAS_VALVE.search(sentence))
-            or bool(_FLAME_LEAK_TEST.search(sentence))
-        )
-        if _WATER_CONTEXT.search(sentence) and not gas_context:
+    for clause in re.split(r"[.!?;:\n]+", normalized):
+        if not clause or _WATER_CONTEXT.search(clause):
             continue
-        if not gas_context or not _GAS_COMPONENT.search(sentence):
+        if not _GAS_WORD.search(clause) or _CONDITIONAL_SAFETY.search(clause):
             continue
-        if _CONDITIONAL_SAFETY.search(sentence):
-            continue
-        for operation in _GAS_OPERATIONS.finditer(sentence):
-            prefix = sentence[: operation.start()]
+        for operation in _NARROW_GAS_HARDWARE_OPERATIONS.finditer(clause):
+            prefix = clause[: operation.start()]
             if _operation_is_negated(prefix):
                 continue
-            target = sentence[operation.start() : operation.start() + 70]
-            if _WATER_VALVE_TARGET.search(target) and not _GAS_WORD.search(target):
-                continue
-            if (
-                operation.group() in _GENERIC_GAS_CHECK_OPERATIONS
-                and not _GAS_HARDWARE_COMPONENT.search(sentence)
+            if _DESCRIPTIVE_GAS_TEXT.search(prefix) or re.search(
+                r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix
             ):
                 continue
-            if (
-                operation.group() in {"abre", "abra", "abran", "abrir"}
-                and _VENTILATION_OPEN.search(sentence[operation.end() :])
-                and re.search(r"\bventil", sentence)
+            tail = clause[operation.end() :]
+            if _GAS_HARDWARE_OBJECT.search(tail) or _GAS_CUTOFF.search(
+                clause[operation.start() :]
             ):
-                continue
-            if _DESCRIPTIVE_GAS_TEXT.search(prefix):
-                continue
-            if operation.group() in {
-                "abrir", "cerrar", "revisar", "verificar", "comprobar", "chequear",
-                "probar", "testear", "encender", "prender", "girar", "cortar",
-            } and re.search(r"\b(?:es|son)\s+parte de\b", sentence[operation.end() :]):
-                continue
-            if re.search(r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix):
-                continue
-            return True
+                return True
     return _gas_appliance_ignition_instruction(text)
+
+
+def _response_guard_observation_sentences(text: str) -> list[str]:
+    """Find broad gas-related candidates that the narrow guard deliberately leaves alone."""
+    observations: list[str] = []
+    for raw_sentence in re.split(r"(?<=[.!?;])\s+|\n+", (text or "").strip()):
+        sentence = raw_sentence.strip()
+        if not sentence:
+            continue
+        normalized = _normalise_topic_text(sentence)
+        has_gas = bool(_GAS_WORD.search(normalized))
+        has_water = bool(_WATER_CONTEXT.search(normalized))
+        broad_candidate = _affirms_excluded_appliance_repair(sentence)
+        broad_candidate = broad_candidate or (
+            has_gas and has_water and bool(_GAS_OPERATIONS.search(normalized))
+        )
+        broad_candidate = broad_candidate or (
+            not has_gas
+            and bool(_BLUE_GAS_VALVE.search(normalized))
+            and bool(_GAS_OPERATIONS.search(normalized))
+        )
+        broad_candidate = broad_candidate or (
+            not has_gas
+            and bool(_FLAME_LEAK_TEST.search(normalized))
+            and bool(_GAS_OPERATIONS.search(normalized))
+        )
+        broad_candidate = broad_candidate or (
+            bool(_GAS_APPLIANCES.search(normalized))
+            and bool(_GAS_APPLIANCE_DIRECTIVE.search(normalized))
+            and not bool(_APPLIANCE_GAS_CONTEXT.search(normalized))
+        )
+        if has_gas and _GAS_COMPONENT.search(normalized):
+            for operation in _GAS_OPERATIONS.finditer(normalized):
+                prefix = normalized[: operation.start()]
+                if _operation_is_negated(prefix) or _CONDITIONAL_SAFETY.search(normalized):
+                    continue
+                if _DESCRIPTIVE_GAS_TEXT.search(prefix) or re.search(
+                    r"\bse\s+$|\b(?:tecnico|asesor|lumat|empresa)\s+$", prefix
+                ):
+                    continue
+                if (
+                    operation.group() in {"abre", "abra", "abran", "abrir"}
+                    and _VENTILATION_OPEN.search(normalized[operation.end() :])
+                    and re.search(r"\bventil", normalized)
+                ):
+                    continue
+                broad_candidate = True
+                break
+        if broad_candidate and not _gas_manipulation_instruction(sentence):
+            observations.append(sentence)
+    return observations
+
+
+def _record_response_guard_observations(session, conversation_id: int, text: str) -> None:
+    """Persist bounded diagnostic breadcrumbs outside ACTIVITY_EVENTS to avoid panel-chip noise."""
+    for sentence in _response_guard_observation_sentences(text):
+        cause = f"respond:guard_observation:{sentence}"[:_GUARD_OBSERVATION_CAUSE_LIMIT]
+        session.add(
+            ConversationEvent(
+                conversation_id=conversation_id,
+                event=_GUARD_OBSERVATION_EVENT,
+                cause=cause,
+                actor="bot",
+            )
+        )
 
 
 def _is_configured_safety_text(session, text: str, reply_texts: dict[str, str]) -> bool:
@@ -823,22 +854,18 @@ def respond(state: ConversationState) -> dict:
     model_answer = answer
     with session_scope() as session:
         reply_texts = get_reply_texts(session)
-        if _affirms_excluded_appliance_repair(model_answer):
-            answer = reply_texts["excluded_appliance_scope"]
-            if session.get(Conversation, state.conversation_id) is not None:
-                session.add(
-                    ConversationEvent(
-                        conversation_id=state.conversation_id,
-                        event="appliance_scope_guard",
-                        cause="respond:appliance_scope_guard",
-                        actor="bot",
-                    )
-                )
+        conversation_id = getattr(state, "conversation_id", None)
+        if conversation_id is not None and session.get(Conversation, conversation_id) is not None:
+            _record_response_guard_observations(session, conversation_id, model_answer)
         if not _is_configured_safety_text(session, model_answer, reply_texts):
             gas_guarded = _gas_manipulation_instruction(model_answer)
             if gas_guarded:
                 answer = reply_texts["gas_instruction_guard"]
-            if gas_guarded and session.get(Conversation, state.conversation_id) is not None:
+            if (
+                gas_guarded
+                and conversation_id is not None
+                and session.get(Conversation, conversation_id) is not None
+            ):
                 session.add(
                     ConversationEvent(
                         conversation_id=state.conversation_id,
