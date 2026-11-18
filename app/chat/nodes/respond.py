@@ -903,7 +903,10 @@ def respond(state: ConversationState) -> dict:
     with session_scope() as session:
         ficha = (
             build_case_ficha(
-                session, state.customer_id, timezone_name=get_hours_timezone(session)
+                session,
+                state.customer_id,
+                timezone_name=get_hours_timezone(session),
+                conversation_id=state.conversation_id,
             )
             # A synthetic state (raw-node tests, a turn with no customer row yet)
             # has no case to state, and the reply must never be blocked by that.
