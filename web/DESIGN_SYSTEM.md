@@ -648,6 +648,9 @@ WCAG 2.2 Level AA is the minimum.
 - Color is never the only state channel.
 - Pointer targets meet at least 24×24px or a valid exception; prefer 44×44px for frequent and risky actions.
 - Text resizes to 200%; narrow reflow preserves content and actions.
+- On phones, form controls never render below **16px** font-size. iOS zooms the whole page on focus
+  when they do, and the page then stays zoomed and off-centre; a test cannot catch it, because no
+  suite reads CSS. Fix the control's size, never `maximum-scale` — pinch-zoom must stay available.
 - Status, progress, errors, and completion are announced appropriately.
 - Reduced motion, high contrast/forced colors, long content, and localization expansion are included in verification.
 - Important tables remain semantically navigable and expose their context.
