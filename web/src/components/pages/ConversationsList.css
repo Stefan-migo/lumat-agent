@@ -1,15 +1,31 @@
-.conversations-list__card { display: grid; gap: var(--space-3); }
+.conversations-list__queue { display: grid; min-width: 0; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.conversations-list__queue .tabs { display: grid; min-width: 0; gap: var(--space-2); }
+/* Keep the queue scrollable without exposing either the page or tab scrollbar. */
+html:has(.conversations-inbox__queue),
+.conversations-inbox__queue,
+.conversations-list__queue .tabs [role="tablist"] { scrollbar-width: none; }
+html:has(.conversations-inbox__queue)::-webkit-scrollbar,
+.conversations-inbox__queue::-webkit-scrollbar,
+.conversations-list__queue .tabs [role="tablist"]::-webkit-scrollbar { display: none; }
+.conversations-list__queue .tabs [role="tablist"] { overflow-x: auto; overflow-y: hidden; padding-inline: var(--space-1); }
+.conversations-list__queue .tabs__tab { flex: 0 0 auto; padding-inline: var(--space-2); white-space: nowrap; }
+.conversations-list__queue .conversations-list__card { display: grid; gap: var(--space-2); padding: var(--space-1) 0 0; border: 0; background: transparent; }
 
 /* Offline banner lives in primitives.css (`.conversations-offline`) — shared by the list and the thread. */
 
 /* Responsable filter: bordered control with leading icon, muted prefix, bold value, chevron. */
-.conversations-list__filter { display: inline-flex; align-items: center; justify-self: end; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
+.conversations-list__filter { display: inline-flex; align-items: center; justify-self: end; gap: var(--space-2); min-height: var(--touch-target); padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
 .conversations-list__filter > svg { flex: 0 0 auto; color: var(--corp-fg-muted); }
 .conversations-list__filter > svg:last-child { margin-left: auto; }
 .conversations-list__filter-label { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .conversations-list__filter-value { font-weight: var(--weight-semibold); }
 .conversations-list__filter-menu { min-width: 12rem; }
 .conversations-list__filter-check { display: inline-flex; margin-left: auto; color: var(--corp-primary); }
+.conversations-list__applied-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.conversations-list__filter-chip { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--touch-target); padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface-subtle); color: var(--corp-text); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.conversations-list__filter-chip { max-width: 100%; }
+.conversations-list__filter-chip > span { min-width: 0; overflow-wrap: anywhere; }
+.conversations-list__filter-chip:hover { border-color: var(--primary-700); }
 
 .conversations-list__summary { max-width: 22rem; overflow: hidden; color: var(--corp-fg-muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .conversations-list__status { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
@@ -25,17 +41,20 @@
 .conversations-list__actions { justify-content: flex-end; align-items: center; }
 .conversations-list__actions .btn { white-space: nowrap; }
 
-/* Mobile card: identity head, summary, badges + facts, actions. */
-.conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-items: start; }
-.conversations-list__mobile-head { display: flex; align-items: flex-start; gap: var(--space-3); min-width: 0; }
-.conversations-list__mobile-identity { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
-.conversations-list__mobile-identity .table__resource-name { justify-self: start; }
-.conversations-list__mobile-identity .table__resource-meta { overflow-wrap: anywhere; }
-.conversations-list__mobile-meta { display: grid; gap: var(--space-2); }
-.conversations-list__mobile-facts { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
-.conversations-list__mobile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.conversations-list__open { flex: 1 1 auto; min-height: 44px; justify-content: center; }
-.conversations-list__mobile-actions .table__actions:empty { display: none; }
+/* Compact queue rows: thread navigation and management actions are sibling controls. */
+.conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1); padding: var(--space-1); }
+.conversations-list__open { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; min-height: 44px; width: 100%; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--corp-text); font: inherit; text-align: start; cursor: pointer; }
+.conversations-list__open:hover { background: var(--surface-subtle); }
+.conversations-list__open > svg { color: var(--corp-fg-muted); }
+.conversations-list__row-copy, .conversations-list__row-details { display: grid; gap: var(--space-1); min-width: 0; }
+.conversations-list__row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-semibold); }
+.conversations-list__mobile-meta, .conversations-list__mobile-meta .conversations-list__status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.conversations-list__mobile-meta .conversations-list__activity { flex-flow: row wrap; align-items: baseline; color: var(--corp-fg-muted); font-size: var(--text-xs); }
+.conversations-list__mobile-card:has(.conversations-list__open[aria-current]) { border-color: var(--primary-700); background: var(--primary-100); }
+.conversations-list__mobile-card > .conversations-list__actions:empty { display: none; }
+.conversations-list__mobile-card > .conversations-list__actions .menu__trigger { min-width: 44px; min-height: 44px; }
+.conversations-list__mobile-card:has(.conversations-list__actions > .btn) > * { grid-column: 1 / -1; }
+
 .conversations-list__card .table-footer__count { display: inline; }
 .conversations-list__card .table-footer__pagination { display: flex; }
 
@@ -45,7 +64,9 @@
 }
 
 @media (max-width: 39.99rem) {
-  .conversations-list__filter { justify-self: start; }
+  .conversations-list__queue { padding: var(--space-2); }
+  .conversations-list__queue .conversations-list__card { overflow: visible; }
+  .conversations-list__filter { justify-self: stretch; }
 }
 
 .conversations-inbox { min-width: 0; }
@@ -53,12 +74,6 @@
 .conversations-inbox__queue .table-card { min-width: 0; }
 .conversations-inbox__queue .conversations-page,
 .conversations-inbox__queue .page-frame__content { gap: var(--space-3); }
-.conversations-inbox__queue .conversations-list__mobile-card { gap: var(--space-2); }
-.conversations-inbox__queue .conversations-list__mobile-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; }
-.conversations-inbox__queue .conversations-list__mobile-facts { align-items: center; }
-.conversations-inbox__queue .conversations-list__activity { flex-direction: row; flex-wrap: wrap; align-items: baseline; }
-.conversations-inbox__queue .conversations-list__mobile-card:has(.conversations-list__open[aria-current]) { border-color: var(--primary-700); background: var(--primary-100); }
-
 @media (min-width: 64rem) {
   .panel-shell:has(.conversations-inbox) .panel-shell__content-area { height: 100dvh; min-height: 0; }
   .panel-shell:has(.conversations-inbox) .panel-shell__content { max-width: none; padding: 0; overflow: hidden; }
@@ -66,8 +81,8 @@
   .conversations-inbox__queue { min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-4); border-inline-end: 1px solid var(--border); }
   .conversations-inbox__queue .table-toolbar { grid-template-columns: minmax(0, 1fr); }
   .conversations-inbox__queue .conversations-list__filter { justify-self: start; }
-  .conversations-inbox__queue .tabs [role="tablist"] { overflow-x: auto; }
   .conversations-inbox__queue .tabs__tab { flex: 0 0 auto; white-space: nowrap; }
+  .conversations-list__queue .conversations-list__card { overflow: visible; }
   .conversations-list__compact { display: grid; gap: var(--space-2); }
   .conversations-inbox__thread { padding: var(--space-4); }
   .conversations-inbox__placeholder { display: grid; align-content: center; justify-items: center; padding: var(--space-5); text-align: center; color: var(--corp-fg-muted); }

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronDown, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, UserRound, UserRoundPlus, WifiOff, X } from "lucide-react";
 import { ApiError, acknowledgeCase, changeConversationState, listActiveConversations, listConversations, takeConversation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse } from "../../types";
@@ -22,8 +22,10 @@ import { coalesceSnapshotRefresh, realtimeClient, type ConnectionStatus } from "
 import "./ConversationsList.css";
 
 export type ConversationsListState = AsyncDataState | "fatal-error";
-export interface ConversationsListProps { data?: ConversationsResponse | null; state?: ConversationsListState; onRetry?: () => void; onOpenThread?: (id: number) => void; onQueueTabChange?: (tab: QueueTab) => void; customerName?: (id: number) => string; refreshKey?: number; currentUserId?: number; initialQueueTab?: QueueTab; compact?: boolean; selectedConversationId?: number | null; }
-type QueueTab = "all" | "human" | "emergency" | "case" | "closed";
+export type QueueTab = "all" | "human" | "emergency" | "case" | "closed";
+export type QueueAssignee = "all" | "mine";
+export interface ConversationsQueueContext { tab: QueueTab; query: string; assignee: QueueAssignee; page: number; }
+export interface ConversationsListProps { data?: ConversationsResponse | null; state?: ConversationsListState; onRetry?: () => void; onOpenThread?: (id: number) => void; onQueueTabChange?: (tab: QueueTab) => void; onQueueContextChange?: (context: ConversationsQueueContext) => void; customerName?: (id: number) => string; refreshKey?: number; currentUserId?: number; initialQueueTab?: QueueTab; queueTab?: QueueTab; initialQueueContext?: ConversationsQueueContext; compact?: boolean; selectedConversationId?: number | null; }
 
 const priority = (conversation: Conversation) => conversation.emergency && !conversation.acknowledged_at ? 0 : conversation.state === "human" ? 1 : conversation.state === "closed" ? 3 : 2;
 const tabFilters = (tab: QueueTab) => ({
@@ -40,7 +42,8 @@ const priorityBadge = (conversation: Conversation) => {
   if (conversation.case_priority === "baja") return <Badge tone="neutral">Prioridad baja</Badge>;
   return null;
 };
-const conversationBadges = (conversation: Conversation) => <div className="conversations-list__status"><StatusBadge status={conversation.state as Status} />{priorityBadge(conversation)}{conversation.emergency ? <StatusBadge status="escalated" label="Emergencia" /> : null}</div>;
+const conversationBadges = (conversation: Conversation) => <span className="conversations-list__status"><StatusBadge status={conversation.state as Status} />{priorityBadge(conversation)}{conversation.emergency ? <StatusBadge status="escalated" label="Emergencia" /> : null}</span>;
+const queueTabLabels: Record<Exclude<QueueTab, "all">, string> = { human: "Atención humana", emergency: "Emergencias", case: "Con caso", closed: "Cerradas" };
 
 function stateMessage(state: ConversationsListState, error: unknown) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando conversaciones" />;
@@ -49,12 +52,19 @@ function stateMessage(state: ConversationsListState, error: unknown) {
   return state === "fatal-error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las conversaciones" /> : null;
 }
 
-export function ConversationsList({ data: controlledData, state: controlledState, onRetry, onOpenThread, onQueueTabChange, customerName, refreshKey = 0, currentUserId, initialQueueTab = "all", compact = false, selectedConversationId }: ConversationsListProps = {}) {
-  const [tab, setTab] = useState<QueueTab>(initialQueueTab);
-  useEffect(() => setTab(initialQueueTab), [initialQueueTab]);
-  const [query, setQuery] = useState("");
-  const [assignment, setAssignment] = useState<"all" | "mine">("all");
-  const [offset, setOffset] = useState(0);
+export function ConversationsList({ data: controlledData, state: controlledState, onRetry, onOpenThread, onQueueTabChange, onQueueContextChange, customerName, refreshKey = 0, currentUserId, initialQueueTab = "all", queueTab, initialQueueContext, compact = false, selectedConversationId }: ConversationsListProps = {}) {
+  const cardId = useId();
+  const [localTab, setTab] = useState<QueueTab>(() => initialQueueContext?.tab ?? initialQueueTab);
+  const tab = queueTab ?? localTab;
+  const [query, setQuery] = useState(() => initialQueueContext?.query ?? "");
+  const [assignment, setAssignment] = useState<QueueAssignee>(() => initialQueueContext?.assignee ?? "all");
+  const [offset, setOffset] = useState(() => initialQueueContext?.tab === tab ? (Math.max(1, initialQueueContext.page) - 1) * 10 : 0);
+  const [offsetTab, setOffsetTab] = useState(tab);
+  if (offsetTab !== tab) {
+    setOffsetTab(tab);
+    setOffset(0);
+  }
+  const [searchResetKey, setSearchResetKey] = useState(0);
   const [requestRevision, setRequestRevision] = useState(0);
   const [localSelectedId, setSelectedId] = useState<number>();
   const selectedId = selectedConversationId === undefined ? localSelectedId : selectedConversationId;
@@ -117,63 +127,74 @@ export function ConversationsList({ data: controlledData, state: controlledState
     { id: "case", label: <>Con caso <span>{counts.case}</span></> },
     { id: "closed", label: <>Cerradas <span>{counts.closed}</span></> },
   ];
-   const total = data?.total ?? rows.length;
-    const limit = data?.limit ?? 10;
-    const page = Math.floor(offset / limit) + 1;
-    const pageCount = Math.max(1, Math.ceil(total / limit));
-    const rangeStart = total === 0 ? 0 : offset + 1;
-    const rangeEnd = Math.min(offset + visibleRows.length, total);
-   return <PageFrame className="conversations-page" title="Conversaciones" titleAdornment={<Badge>{total}</Badge>} subtitle="Revisa y gestiona la atención de tus clientes." meta={data ? undefined : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
+  const total = data?.total ?? rows.length;
+  const limit = data?.limit ?? 10;
+  const page = Math.floor(offset / limit) + 1;
+  const pageCount = Math.max(1, Math.ceil(total / limit));
+  const rangeStart = total === 0 ? 0 : offset + 1;
+  const rangeEnd = Math.min(offset + visibleRows.length, total);
+  const clearSearch = () => { setQuery(""); setOffset(0); setSearchResetKey((key) => key + 1); };
+  const clearAssignee = () => { setAssignment("all"); setOffset(0); };
+  const changeTab = (nextTab: QueueTab) => { setTab(nextTab); setOffset(0); onQueueTabChange?.(nextTab); };
+  const clearFilters = () => { clearAssignee(); if (tab !== "all") changeTab("all"); };
+  const activeFilters = [
+    ...(tab === "all" ? [] : [{ label: queueTabLabels[tab], remove: () => changeTab("all") }]),
+    ...(query ? [{ label: `Búsqueda: ${query}`, text: "Búsqueda", remove: clearSearch }] : []),
+    ...(assignment === "mine" ? [{ label: "Asignadas a mí", remove: clearAssignee }] : []),
+  ];
+  useEffect(() => { onQueueContextChange?.({ tab, query, assignee: assignment, page }); }, [assignment, onQueueContextChange, page, query, tab]);
+  const emptyState = activeFilters.length
+    ? <EmptyState title="No encontramos conversaciones con estos filtros" description={query ? "Prueba otra búsqueda o elimina el texto ingresado." : "Quita los filtros para volver a la bandeja completa."} action={<Button variant="secondary" onClick={query ? clearSearch : clearFilters}>{query ? "Limpiar búsqueda" : "Quitar filtros"}</Button>} />
+    : <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." />;
+  return <PageFrame className="conversations-page" title="Conversaciones" titleAdornment={<Badge>{total}</Badge>} subtitle="Revisa y gestiona la atención de tus clientes." meta={data ? undefined : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
       {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>Los datos guardados siguen disponibles.</span></p> : null}
-      <Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => { const nextTab = value as QueueTab; setTab(nextTab); setOffset(0); onQueueTabChange?.(nextTab); }} ariaLabel="Cola de conversaciones">{() => <div className="table-card conversations-list__card">
-        <div className="table-toolbar"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <DropdownMenu.Root>
+      <section className="conversations-list__queue" aria-label="Filtros de conversaciones"><Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => changeTab(value as QueueTab)} ariaLabel="Cola de conversaciones">{() => <div className="table-card conversations-list__card">
+        <div className="table-toolbar"><SearchInput key={searchResetKey} defaultValue={query} aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button type="button" className="conversations-list__filter" aria-label={`Filtrar por responsable: ${assignment === "all" ? "Todos" : "Asignadas a mí"}`}><Icon icon={UserRound} size="sm" aria-hidden="true" /><span className="conversations-list__filter-label">Responsable:</span><span className="conversations-list__filter-value">{assignment === "all" ? "Todos" : "Asignadas a mí"}</span><ChevronDown aria-hidden="true" /></button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content className="menu__content conversations-list__filter-menu" align="start" sideOffset={4} collisionPadding={8}>
-              <DropdownMenu.RadioGroup value={assignment} onValueChange={(value) => { setAssignment(value as "all" | "mine"); setOffset(0); setRequestRevision((revision) => revision + 1); }}>
+              <DropdownMenu.RadioGroup value={assignment} onValueChange={(value) => { setAssignment(value as QueueAssignee); setOffset(0); setRequestRevision((revision) => revision + 1); }}>
                 <DropdownMenu.RadioItem className="menu__item" value="all">Todos<DropdownMenu.ItemIndicator className="conversations-list__filter-check"><Check aria-hidden="true" /></DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>
                 <DropdownMenu.RadioItem className="menu__item" value="mine">Asignadas a mí<DropdownMenu.ItemIndicator className="conversations-list__filter-check"><Check aria-hidden="true" /></DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>
               </DropdownMenu.RadioGroup>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</div>
-        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <>{!compact ? <div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div> : null}<ul className={`table-cards ${compact ? "conversations-list__compact" : "table-cards--mobile"}`} aria-label="Lista de conversaciones">
+        {activeFilters.length ? <div className="conversations-list__applied-filters" role="group" aria-label="Filtros aplicados">{activeFilters.map((filter) => <button key={filter.label} type="button" className="conversations-list__filter-chip" aria-label={`Quitar filtro ${filter.label}`} onClick={filter.remove}><span>{"text" in filter ? filter.text : filter.label}</span><Icon icon={X} size="sm" aria-hidden="true" /></button>)}</div> : null}
+        {state === "ready" && visibleRows.length === 0 ? emptyState : state === "ready" ? <>{!compact ? <div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div> : null}<ul className={`table-cards ${compact ? "conversations-list__compact" : "table-cards--mobile"}`} aria-label="Lista de conversaciones">
           {visibleRows.map((c) => {
             const name = nameFor(c);
+            const descriptionId = `${cardId}-${c.id}`;
             return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}>
-              <div className="conversations-list__mobile-head">
+              <button
+                type="button"
+                className="conversations-list__open"
+                aria-label={`Abrir conversación de ${name}`}
+                aria-describedby={descriptionId}
+                aria-current={selectedId === c.id ? "page" : undefined}
+                onClick={() => openThread(c)}
+              >
                 <Avatar name={name} className="table__resource-avatar" />
-                <div className="conversations-list__mobile-identity">
-                  <span className="table__resource-name">{name}</span>
-                  <span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span>
-                </div>
-              </div>
-              <span className="conversations-list__summary">{c.summary ? plainSummary(c.summary) : "Sin resumen disponible"}</span>
-              <div className="conversations-list__mobile-meta">
-                {conversationBadges(c)}
-                <div className="conversations-list__mobile-facts">
-                  <span className="conversations-list__case">{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>
-                  {activityCell(c.last_message_at)}
-                </div>
-              </div>
-              <div className="conversations-list__mobile-actions">
-                <button
-                  type="button"
-                  className="btn btn--secondary conversations-list__open"
-                  aria-label={`Abrir conversación de ${name}`}
-                  aria-current={selectedId === c.id ? "page" : undefined}
-                  onClick={() => openThread(c)}
-                >
-                  Abrir conversación
-                </button>
-                {rowActions(c)}
-              </div>
+                <span className="conversations-list__row-copy">
+                  <span className="conversations-list__row-name">{name}</span>
+                  <span id={descriptionId} className="conversations-list__row-details">
+                    <span className="conversations-list__summary">{c.summary ? plainSummary(c.summary) : "Sin resumen disponible"}</span>
+                    <span className="conversations-list__mobile-meta">
+                      {conversationBadges(c)}
+                      {c.case_id != null ? <span className="conversations-list__case">Caso #{c.case_id}</span> : null}
+                      {activityCell(c.last_message_at)}
+                    </span>
+                  </span>
+                </span>
+                <Icon icon={ChevronRight} size="sm" />
+              </button>
+              {rowActions(c)}
             </li>;
           })}
-        </ul></>}
-         <footer className="table-footer"><span className="table-footer__count">Mostrando {rangeStart}–{rangeEnd} de {total} conversaciones</span><Pagination page={page} pageCount={pageCount} onPageChange={(nextPage) => setOffset((nextPage - 1) * limit)} ariaLabel="Paginación de conversaciones" /></footer>
-      </div>}</Tabs>
+        </ul></> : null}
+        {state === "ready" ? <footer className="table-footer"><span className="table-footer__count">Mostrando {rangeStart}–{rangeEnd} de {total} conversaciones</span>{pageCount > 1 ? <Pagination page={page} pageCount={pageCount} onPageChange={(nextPage) => setOffset((nextPage - 1) * limit)} ariaLabel="Paginación de conversaciones" /> : null}</footer> : null}
+      </div>}</Tabs></section>
    </PageFrame>;
 }

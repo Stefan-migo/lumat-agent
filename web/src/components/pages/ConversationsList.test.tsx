@@ -58,15 +58,19 @@ describe('production conversations list', () => {
     expect(within(mobile).queryByTestId('conversation-row-4')).not.toBeInTheDocument();
   });
 
-  it('opens a mobile conversation with a dedicated keyboard-accessible action', async () => {
+  it('opens a conversation from the compact row or keyboard without opening it from the action menu', async () => {
     const onOpenThread = vi.fn();
     const user = userEvent.setup();
     render(<ConversationsList data={queue([row(4, 'human', 7)])} onOpenThread={onOpenThread} />);
 
     const card = within(screen.getByTestId('conversation-card-4'));
     const open = card.getByRole('button', { name: 'Abrir conversación de Cliente 4' });
-    expect(open).toHaveTextContent('Abrir conversación');
-    expect(card.queryByRole('button', { name: 'Cliente 4' })).not.toBeInTheDocument();
+    expect(open).toHaveAccessibleDescription(/Needs visit.*Atención humana/);
+    const summary = within(open).getByText('Needs visit');
+    await user.click(summary);
+    expect(onOpenThread).toHaveBeenCalledExactlyOnceWith(4);
+    expect(open).toHaveAttribute('aria-current', 'page');
+    onOpenThread.mockClear();
     await user.click(card.getByRole('button', { name: 'Acciones para Cliente 4' }));
     expect(onOpenThread).not.toHaveBeenCalled();
     await user.keyboard('{Escape}');
@@ -104,14 +108,57 @@ describe('production conversations list', () => {
     expect(rows).toHaveLength(5);
   });
 
-  it('requests search and page changes and renders empty state as a DOM row', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(queue([])), { status: 200 }));
+  it('renders filtered-empty recovery and hides pagination for one page', async () => {
     const user = userEvent.setup();
-    render(<ConversationsList />);
+    render(<ConversationsList data={queue([])} />);
     await user.type(screen.getByRole('searchbox'), 'heater');
-    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&exclude_closed=true&limit=10&offset=0', expect.anything()));
-    expect(screen.getByText(/no hay conversaciones/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /siguiente/i })).toBeInTheDocument();
+    expect(await screen.findByText(/no encontramos conversaciones con estos filtros/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /limpiar búsqueda/i })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: /paginación de conversaciones/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps applied conversation filters understandable and removes one without clearing the others', async () => {
+    const user = userEvent.setup();
+    render(<ConversationsList data={queue([])} currentUserId={7} />);
+
+    await user.click(screen.getByRole('tab', { name: /atención humana/i }));
+    await user.click(screen.getByRole('button', { name: /filtrar por responsable/i }));
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Asignadas a mí' }));
+    expect(await screen.findByRole('button', { name: 'Quitar filtro Atención humana' })).toBeInTheDocument();
+    expect(screen.queryByText('Atención humana · Asignadas a mí')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quitar filtros' })).toBeInTheDocument();
+    expect(screen.getByText(/no encontramos conversaciones con estos filtros/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro Asignadas a mí' }));
+    expect(screen.getByRole('group', { name: 'Filtros aplicados' })).toHaveTextContent('Atención humana');
+    expect(screen.queryByText('Atención humana · Asignadas a mí')).not.toBeInTheDocument();
+  });
+
+  it('offers scoped filtered-empty recovery without replacing load errors', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ConversationsList data={queue([])} currentUserId={7} initialQueueContext={{ tab: 'human', query: 'heater', assignee: 'mine', page: 1 }} />);
+
+    expect(screen.getByText(/no encontramos conversaciones con estos filtros/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /limpiar búsqueda/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /limpiar búsqueda/i }));
+    expect(screen.getByRole('group', { name: 'Filtros aplicados' })).toHaveTextContent('Atención humana');
+    expect(screen.getByRole('group', { name: 'Filtros aplicados' })).toHaveTextContent('Asignadas a mí');
+
+    rerender(<ConversationsList state="error" />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/cargar las conversaciones/i);
+    expect(screen.queryByText(/no encontramos conversaciones con estos filtros/i)).not.toBeInTheDocument();
+  });
+
+  it('initializes and reports queue return context without selection state', async () => {
+    const onQueueContextChange = vi.fn();
+    const user = userEvent.setup();
+    render(<ConversationsList data={{ ...queue(Array.from({ length: 10 }, (_, index) => row(index + 1, 'bot', null))), total: 20 }} initialQueueContext={{ tab: 'human', query: 'heater', assignee: 'mine', page: 2 }} onQueueContextChange={onQueueContextChange} currentUserId={7} />);
+
+    expect(screen.getByRole('tab', { name: /atención humana/i })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('searchbox')).toHaveValue('heater');
+    expect(screen.getByText('Mostrando 11–20 de 20 conversaciones')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /página anterior/i }));
+    expect(onQueueContextChange).toHaveBeenLastCalledWith({ tab: 'human', query: 'heater', assignee: 'mine', page: 1 });
   });
 
   it('refreshes after Tomar and Reconocer actions', async () => {
@@ -140,14 +187,14 @@ describe('production conversations list', () => {
   });
 
   it('maps each tab to server filters and displays the server page range', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ...queue(Array.from({ length: 10 }, (_, index) => row(index + 1, 'bot', null))), total: 34 }), { status: 200 }));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ ...queue(Array.from({ length: 10 }, (_, index) => row(index + 1, 'bot', null))), total: 34 }), { status: 200 }));
     const user = userEvent.setup();
     render(<ConversationsList />);
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?exclude_closed=true&limit=10&offset=0', expect.anything()));
-    expect(screen.getByText(/Mostrando 1–10 de 34 conversaciones/)).toBeInTheDocument();
+    expect(await screen.findByText(/Mostrando 1–10 de 34 conversaciones/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /página siguiente/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?exclude_closed=true&limit=10&offset=10', expect.anything()));
-    await user.click(screen.getByRole('button', { name: /página anterior/i }));
+    await user.click(await screen.findByRole('button', { name: /página anterior/i }));
     for (const [name, query] of [
       [/atención humana/i, 'state=human&limit=10&offset=0'],
       [/emergencias/i, 'exclude_closed=true&emergency=true&limit=10&offset=0'],
