@@ -67,8 +67,10 @@ Tres estados, para que no se mezclen: en catálogo con precio publicado → se i
 | T5 | S1, S2 | aserciones de eval por turno en el corpus | `f84e6f6f2` |
 | T6 | S1, S2 | medición de los dos escenarios | `98489e6f5` (sello) |
 | T7 | S3 | regla de prompt + hard fail de negación de catálogo | `248f160cd` |
-| T8 | todas | re-medición y `bash scripts/test.sh full` | `<pendiente>` |
-| T9 | todas | tabla de commits, veredicto por S# y entrega | `<pendiente>` |
+| T8 | S1, S3 | corrección del guard: negación y lista acotada a lo medido | `531f3eb01` |
+| T9 | todas | `bash scripts/test.sh full` | sin commit (gate) |
+| T10 | todas | re-medición con el árbol final | sello `531f3eb0` |
+| T11 | todas | tabla de commits, veredicto por S# y entrega | este commit |
 
 Ruta: inline en el padre. Cada unidad es un módulo (`respond.py`, `case_ficha.py`) y el diagnóstico ya está cargado; delegar duplicaría la lectura.
 
@@ -167,3 +169,22 @@ El corte repitió el mismo error que ese commit documenta. Arreglo: la lista de 
 Consecuencia registrada y no escondida: un reclamo de alcance sobre un artefacto fuera de catálogo **no medido** (hornos, lavaplatos, lavadoras) no se reescribe; su instrumento son la persona y el juez, igual que antes de este corte. Es la doctrina vigente, no una omisión.
 
 Nota de proceso: esto es la clase de escape que AGENTS.md ya tenía documentada — `quick` verde, `focused` verde, el evaluador verde, y la regresión apareció sólo en `full`.
+
+**L18 — medición final y veredicto.** Corrida `verdad-alcance-final`, sello `531f3eb0170a0bd33095ef56b0236cfac6a3587e`, **árbol sucio: no**, corpus `8adb94421f45`, KB `34670f5b3d75`, juez `deepseek-v4.1-flash`, 2 repeticiones. **2/2 pasan, ningún gate falla, sin regresiones.**
+
+| Escenario | Antes de S1 | Tras S1+S2 | Tras S3 | **Final (código entregado)** |
+|---|---|---|---|---|
+| `real-vocabulario-impreciso` | 0.00 (hard fail) | 2.83 | 3.00 | **3.67** |
+| `real-consulta-otros-equipos` | 0.00 (hard fail) | 2.00 | 2.58 | **2.58** |
+
+Delta por dimensión contra la corrida con S3: conversational **+1.25**, escalation +0.50, policy +0.25, closure +0.25, tone 0, grounding −0.25. La suba de `conversational` es la que había bajado: acotar el rewrite a lo medido devolvió respuestas más naturales.
+
+`bash scripts/test.sh full`: **exit 0** sobre `531f3eb01` (11m 02s). La corrida previa sobre el mismo árbol de tests había fallado con 4 errores, que es lo que produjo L17.
+
+**Veredicto por spec:**
+
+- **S1 — alcance sólo desde la lista cerrada.** ✅ El juez ya no marca `hard fail` en ninguno de los dos escenarios, G11 no dispara, y el guard reescribe sólo las dos familias medidas y nunca un rechazo. Límite declarado en L17: fuera de esas dos familias el instrumento es la persona y el juez, no el rewrite.
+- **S2 — ningún hecho del historial que la ficha no sostenga.** ✅ Causa raíz corregida en `case_ficha.build_case_ficha`; el «caso abierto» desapareció de los tres turnos de la corrida y se conserva el historial de otras conversaciones (test cubre las dos mitades).
+- **S3 — un servicio del catálogo no se niega por no tener tarifa publicada.** ✅ Conducta pedida presente en la corrida: «Sí, la climatización está dentro de nuestros servicios… la visita técnica tiene un valor de $30.000… el presupuesto se calcula aparte».
+
+**Observación final, para decisión del owner y no como tarea:** el patrón de S3 ahora también moldea las respuestas sobre artefactos fuera de catálogo. Para el quemador de cocina la corrida final dice «no aparece como trabajo con valor fijado en nuestro catálogo… lo que sí podemos hacer es coordinar una visita técnica ($30.000), donde el técnico revisa el quemador y, según lo que encuentre, el arreglo se presupuesta aparte». No es un `hard fail` y el juez lo puntuó 3.67, pero ofrece una visita pagada por un trabajo que puede no estar en el catálogo. El spec S1 se cumple (no afirma que lo hace); la conveniencia comercial es otra pregunta.
