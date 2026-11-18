@@ -27,9 +27,11 @@ from chat_harness import ensure_conversation, inspect, run_turn  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
 from app.chat.nodes.receive import EVIDENCE_ACK  # noqa: E402
+from app.services.realtime import ACTIVITY_EVENTS  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
     Conversation,
+    ConversationEvent,
     ConversationState,
     Customer,
     Message,
@@ -163,6 +165,429 @@ def test_first_turn_greeting_only_does_not_classify(mock_openai_chat):
         # (`app/panel/api/routes/conversations.py:238-239`), so a turn that
         # leaves it unset produces a conversation nobody can see in the UI.
         assert conversation.last_message_at is not None
+
+
+def _run_stubbed_model_answer(
+    monkeypatch, text: str, answer: str, *, expect_model_call: bool = True
+) -> tuple[int, list[str]]:
+    """Drive a canned model completion through the production conversation graph."""
+    from types import SimpleNamespace
+
+    from app.chat.nodes import classify_intent, respond as respond_node
+
+    model_calls = []
+
+    def complete(**_kwargs):
+        model_calls.append(True)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=answer))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+        )
+
+    monkeypatch.setattr(
+        respond_node,
+        "openai_client",
+        lambda: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=complete))
+        ),
+    )
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda *_args, **_kwargs: {
+            "intent": "consulta", "intents": ["consulta"], "service": None,
+            "priority": "baja", "status": None, "injection": False,
+            "fields": {},
+        },
+    )
+    monkeypatch.setattr(
+        respond_node, "retrieve_chunks", lambda *_args, **_kwargs: [{"content": "respuesta KB"}]
+    )
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(session, conversation_id, "hola")
+        session.commit()
+        replies = run_turn(session, conversation_id, text)
+        session.commit()
+    assert bool(model_calls) is expect_model_call
+    return conversation_id, replies
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "Hola, sí, reparamos lavadoras…",
+        "Sí, reparamos lavadoras-secadoras.",
+        "Claro, reparamos refrigeradores.",
+        "Sí, reparamos refrigerador.",
+        "Reparamos su refrigerador.",
+    ],
+)
+def test_excluded_appliance_repair_claim_is_observed_without_rewriting(monkeypatch, unsafe):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿reparan electrodomésticos?", unsafe
+    )
+
+    assert replies == [unsafe]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert unsafe in event.cause
+    assert len(event.cause) <= 120
+    assert event.actor == "bot"
+    assert event.event not in ACTIVITY_EVENTS
+
+
+def test_explicit_exclusion_of_appliance_repair_is_not_rewritten(monkeypatch):
+    answer = "No reparamos lavadoras."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿reparan electrodomésticos?", answer
+    )
+    assert replies == [answer]
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "Revisa que la llave de gas esté abierta.",
+        "Abre la válvula de gas.",
+        "Cierra el suministro de gas.",
+        "Prueba la línea de gas.",
+    ],
+)
+def test_gas_hardware_instruction_from_model_is_replaced_and_recorded(monkeypatch, unsafe):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", unsafe
+    )
+
+    assert unsafe not in replies, f"unsafe model answer escaped the response guard: {replies}"
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "gas_instruction_guard",
+            )
+        )
+    assert event is not None
+    assert event.cause == "respond:gas_instruction_guard"
+    assert event.actor == "bot"
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "Sin desarmar ni tocar válvulas: fíjate si la cocina enciende normal "
+        "(para descartar que falte gas)",
+        "Enciende el calefont para ver si hay gas.",
+    ],
+)
+def test_gas_appliance_ignition_or_test_instruction_is_replaced(monkeypatch, unsafe):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo un problema con el gas.", unsafe
+    )
+
+    assert unsafe not in replies, f"unsafe appliance gas test escaped the response guard: {replies}"
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "gas_instruction_guard",
+            )
+        )
+    assert event is not None
+    assert event.cause == "respond:gas_instruction_guard"
+    assert event.actor == "bot"
+
+
+def test_emergency_no_lighting_advice_is_not_replaced(monkeypatch):
+    advice = "No enciendas artefactos ni luces."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo un problema con el gas.", advice
+    )
+    assert replies == [advice]
+
+
+def test_emergency_conditional_gas_advice_is_not_replaced(monkeypatch):
+    advice = "Cierra el suministro de gas solo si puedes hacerlo de forma segura."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+    assert replies == [advice]
+
+
+def test_negated_gas_safety_advice_with_conjunction_is_not_replaced(monkeypatch):
+    advice = "Ante olor a gas, no abra la llave ni pruebe artefactos."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+    assert replies == [advice]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "La mantención incluye revisar la llave de gas.",
+        "Revisar la llave de gas es parte de la mantención.",
+        "El lavado de red considera revisar la llave de gas.",
+        "El técnico revisa la llave de gas durante la mantención.",
+    ],
+)
+def test_descriptive_gas_text_is_not_replaced(monkeypatch, answer):
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué incluye la mantención?", answer
+    )
+    assert replies == [answer]
+
+
+def test_configured_emergency_text_is_never_guarded(monkeypatch):
+    from app.chat.nodes import respond as respond_node
+
+    advice = "Corta el suministro de gas solo si puedes hacerlo de forma segura."
+    monkeypatch.setattr(respond_node, "_gas_manipulation_instruction", lambda _text: True)
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+    assert replies == [advice]
+
+
+def test_measured_mixed_caldera_reply_is_observed_not_replaced(monkeypatch):
+    answer = (
+        "La caldera no parte. Revisa que la llave de paso de agua esté abierta "
+        "y que el gas esté habilitado. Cuéntame qué código de error aparece."
+    )
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", answer
+    )
+
+    assert replies == [answer]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert "Revisa que la llave de paso de agua" in event.cause
+    assert len(event.cause) <= 120
+    assert event.event not in ACTIVITY_EVENTS
+
+
+def test_heating_pressure_reply_with_passing_gas_reference_survives(monkeypatch):
+    answer = (
+        "Revisa la presión del sistema de calefacción después del trabajo previo con gas "
+        "y confirma la lectura del manómetro, la temperatura de cada radiador, el "
+        "comportamiento del equipo desde la última mantención y la fecha del último "
+        "servicio. La evaluación está disponible."
+    )
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "Tengo un problema de presión en la calefacción tras una visita anterior.",
+        answer,
+    )
+
+    assert replies == [answer]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert "Revisa la presión del sistema" in event.cause
+    assert event.cause.endswith("…")
+    assert len(event.cause) <= 120
+    assert event.event not in ACTIVITY_EVENTS
+
+
+def test_gas_guard_takes_precedence_while_appliance_claim_is_observed(monkeypatch):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿reparan lavadoras?",
+        "Sí, reparamos lavadoras. Abre la llave de gas.",
+    )
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert "Sí, reparamos lavadoras." in event.cause
+    assert event.event not in ACTIVITY_EVENTS
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Cierra la llave azul y abre el agua.",
+        "Prueba con un fósforo si hay fuga.",
+        "Prueba con la cocina.",
+    ],
+)
+def test_non_narrow_gas_suspects_are_observed_not_replaced(monkeypatch, answer):
+    conversation_id, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué hago con la caldera?", answer
+    )
+
+    assert replies == [answer]
+    with SessionLocal() as session:
+        event = session.scalar(
+            select(ConversationEvent).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "response_guard_observation",
+            )
+        )
+    assert event is not None
+    assert answer in event.cause
+    assert event.event not in ACTIVITY_EVENTS
+
+
+def test_negated_emergency_advice_with_ventilation_survives_whole(monkeypatch):
+    advice = (
+        "Ante olor a gas, no abra la llave ni pruebe artefactos. "
+        "Ventila y llama al 132."
+    )
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué indica el protocolo de la llave?", advice
+    )
+
+    assert replies == [advice]
+
+
+def test_general_gas_safety_advice_is_not_replaced(monkeypatch):
+    advice = "Si sientes olor a gas, ventila y no enciendas artefactos ni luces."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", advice
+    )
+    assert replies == [advice]
+
+
+def test_descriptive_gas_line_answer_is_not_replaced(monkeypatch):
+    answer = "La línea de gas se revisa durante la mantención del equipo."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una caldera y quiero saber qué hacer.", answer
+    )
+    assert replies == [answer]
+
+
+def test_named_out_of_area_place_gets_the_configured_policy(monkeypatch):
+    from app.services.settings import COVERAGE_COMMUNES_KEY, set_setting
+
+    with SessionLocal() as session:
+        set_setting(session, COVERAGE_COMMUNES_KEY, ["Las Condes", "Ñuñoa"])
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿ustedes trabajan en Maipú?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == [
+        "No tenemos cobertura habitual en Maipú, pero igual podemos ayudarte: "
+        "un asesor coordina la visita según disponibilidad."
+    ]
+
+
+def test_named_covered_place_keeps_the_existing_confirmation(monkeypatch):
+    from app.services.settings import COVERAGE_COMMUNES_KEY, set_setting
+
+    with SessionLocal() as session:
+        set_setting(session, COVERAGE_COMMUNES_KEY, ["Las Condes", "Ñuñoa"])
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿trabajan en Ñuñoa?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == ["Atendemos normalmente en Las Condes y Ñuñoa."]
+
+
+def test_weekday_question_uses_schedule_not_coverage(monkeypatch):
+    from app.services.settings import set_setting
+
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            "hours.schedule",
+            [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+        )
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿trabajan en domingo?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == ["Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."]
+    assert "cobertura" not in replies[0].casefold()
+
+
+def test_calefon_instruction_is_replaced_at_the_harness_seam(monkeypatch):
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿qué hago con la estufa?",
+        "Enciende el calefón para ver si hay gas.",
+    )
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+
+
+def test_emergency_advice_with_bare_gas_cut_is_guarded(monkeypatch):
+    advice = "Ante olor a gas: ventila, corta el gas y llama al 132."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "¿qué incluye una revisión?", advice
+    )
+
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
+
+
+def test_water_leak_reply_survives_the_gas_guard_at_the_harness_seam(monkeypatch):
+    answer = "Revisa si hay fuga de agua en el lavadero."
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch, "Tengo una fuga de agua en el lavadero.", answer
+    )
+
+    assert replies == [answer]
+
+
+def test_out_of_area_reply_without_comuna_slot_reaches_the_customer(monkeypatch):
+    from app.services.settings import COVERAGE_COMMUNES_KEY, REPLY_TEXTS_KEY, set_setting
+
+    with SessionLocal() as session:
+        set_setting(session, COVERAGE_COMMUNES_KEY, ["Las Condes", "Ñuñoa"])
+        texts = dict(REPLY_TEXT_DEFAULTS)
+        texts["coverage_out_of_area"] = "Un asesor coordinará tu visita."
+        set_setting(session, REPLY_TEXTS_KEY, texts)
+        session.commit()
+
+    _, replies = _run_stubbed_model_answer(
+        monkeypatch,
+        "¿ustedes trabajan en Maipú?",
+        "respuesta variable del modelo",
+        expect_model_call=False,
+    )
+
+    assert replies == ["Un asesor coordinará tu visita."]
 
 
 def test_emergency_turn_escalates_without_any_llm_call(mock_openai_chat, no_emergency_notification):

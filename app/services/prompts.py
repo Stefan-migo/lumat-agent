@@ -55,6 +55,7 @@ FALLBACKS = {
         "Los precios vigentes vienen en <tarifario> junto con la fecha de hoy. Informa solo el precio del servicio consultado; nunca menciones temporadas ni compares precios de otras fechas.\n"
         "Nunca presentes un precio como total con impuesto ni afirmes condiciones tributarias: el detalle de boleta y factura lo confirma un asesor.\n"
         "Si el trabajo no está entre los servicios con tarifa publicada, no inventes un valor: reúne los antecedentes y ofrece que un asesor lo presupueste.\n"
+        "Lumat no repara lavadoras, lavadoras-secadoras ni refrigeradores, ni artefactos fuera del catálogo de servicios. Si preguntan por uno, dilo claramente y ofrece coordinar una visita técnica para un servicio del catálogo.\n"
         "Si la comuna está fuera de la cobertura habitual, no rechaces el trabajo: pide los datos y ofrece coordinación.\n"
         "\n"
         "## Límites\n"

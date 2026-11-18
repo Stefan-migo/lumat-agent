@@ -168,4 +168,8 @@ def test_max_persona_contract(repo_root):
     assert "Sin emojis" in text
     assert "Ante olor a gas" in text and "Bomberos al 132" in text
     assert "No afirmes que derivaste el caso a una persona" in text
+    assert (
+        "Lumat no repara lavadoras, lavadoras-secadoras ni refrigeradores" in text
+        and "ofrece coordinar una visita técnica" in text
+    )
     assert not any(ord(char) > 0x2100 for char in text), "emoji or pictograph in persona"

@@ -15,10 +15,17 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
+from pathlib import Path
+
+from sqlalchemy import select
 
 from app.chat.state import ConversationState
+from app.models import KbChunk, KbDocument, KbVisibility
+from app.services.prompts import render_text
 from app.services.settings import (
     get_coverage_communes,
+    get_reply_texts,
     get_hours_schedule,
     get_service_durations,
 )
@@ -39,6 +46,18 @@ _PRICE_TERMS = frozenset({"precio", "precios", "vale", "cuesta", "sale", "tarifa
 # Terms that ask WHEN: the reply names the configured days and range. `atienden`
 # is deliberately absent, because the place reading of it ("atienden en
 # Providencia?") belongs to the out-of-coverage policy that stays in the KB.
+_ASKED_PLACE_RE = re.compile(
+    r"\b(?:atienden|atiende|trabajan|trabaja|llegan|llega|van|visitan|visita)\s+(?:en|a)\s+(?P<direct>[^?!,.;\n]+)|"
+    r"\b(?:vivo|vives|viven|estoy|estas|estamos)\s+en\s+(?P<residence>[^?!,.;\n]+)",
+    re.IGNORECASE,
+)
+_RM_COMMUNE_FILE = Path(__file__).resolve().parents[2] / "data" / "rm_communes.txt"
+_SCHEDULE_TAIL = re.compile(
+    r"(?:(?:el|este|los|cada|en|durante)\s+)?"
+    r"(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|festivos?|feriados?)s?"
+    r"(?:\s+(?:por la|en la)\s+(?:manana|tarde|noche))?"
+)
+
 _HOURS_TERMS = frozenset(
     {
         "horario",
@@ -113,6 +132,60 @@ def _asks_price(text: str) -> bool:
     return bool(_words(text) & _PRICE_TERMS)
 
 
+@lru_cache(maxsize=1)
+def _load_rm_communes() -> tuple[str, ...]:
+    """Load the curated Región Metropolitana commune names from package data."""
+    return tuple(
+        line.strip()
+        for line in _RM_COMMUNE_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+
+
+def _asked_place(text: str, known_places: list[str]) -> str | None:
+    """Return the customer's spelling of a known commune in the place complement."""
+    match = _ASKED_PLACE_RE.search(text)
+    if match is None:
+        return None
+    place = re.sub(
+        r"[,.;!?¿¡]+", " ", match.group("direct") or match.group("residence")
+    )
+    original_words = place.split()
+    for commune in sorted(known_places, key=lambda name: len(_fold(name)), reverse=True):
+        commune_word_count = len(_fold(commune).split())
+        place_name = " ".join(original_words[:commune_word_count])
+        if _fold(place_name) != _fold(commune):
+            continue
+        tail = " ".join(original_words[commune_word_count:])
+        if not tail or _SCHEDULE_TAIL.fullmatch(_fold(tail)):
+            return place_name
+    return None
+
+
+def _customer_kb_mentions_place(session, place: str) -> bool:
+    """Check active, global customer KB chunks without paying for embeddings."""
+    escaped_place = place.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    coverage_language = (
+        KbChunk.content.ilike("%cobertura%")
+        | KbChunk.content.ilike("%cubr%")
+        | KbChunk.content.ilike("%atend%")
+    )
+    statement = (
+        select(KbChunk.id)
+        .join(KbDocument, KbChunk.document_id == KbDocument.id)
+        .where(
+            KbDocument.active.is_(True),
+            KbDocument.visibility == KbVisibility.CUSTOMER,
+            KbDocument.project_id.is_(None),
+            KbChunk.version == KbDocument.active_version,
+            KbChunk.content.ilike(f"%{escaped_place}%", escape="\\"),
+            coverage_language,
+        )
+        .limit(1)
+    )
+    return session.scalar(statement) is not None
+
+
 def _day_label(days: list[int]) -> str:
     """The configured days as Spanish text: "de lunes a sábado", "lunes y jueves".
 
@@ -153,11 +226,12 @@ def _window_label(entry) -> str:
 
 
 def coverage_reply(session, state: ConversationState) -> str | None:
-    """The covered communes, from `coverage.communes` (S4).
+    """Answer a named place from `coverage.communes`, or the configured policy (S4).
 
-    Returns ``None`` when the turn does not ask about coverage, when it names a
-    commune the configuration does not cover (the existing derivation path keeps
-    the policy), or when no commune is configured: no list is ever invented.
+    Direct place questions are answered only when the complement matches a
+    configured commune or a curated Región Metropolitana commune. Configured
+    places receive the normal confirmation; other known RM communes receive the
+    advisor-coordination policy. Unknown places remain with normal KB retrieval.
     """
     text = _current_text(state)
     if not text or _asks_price(text):
@@ -169,6 +243,20 @@ def coverage_reply(session, state: ConversationState) -> str | None:
         return None
     folded = _fold(text)
     words = _words(text)
+    known_places = communes + list(_load_rm_communes())
+    place = _asked_place(text, known_places)
+    if place and words & _PLACE_TERMS:
+        place_folded = _fold(place)
+        if any(_mentions(place_folded, commune) for commune in communes):
+            return f"Atendemos normalmente en {_join_es(communes)}."
+        if _customer_kb_mentions_place(session, place):
+            return None
+        reply_text = get_reply_texts(session)["coverage_out_of_area"]
+        return (
+            render_text(reply_text, comuna=place)
+            if "{{comuna}}" in reply_text
+            else reply_text
+        )
     names_covered = any(_mentions(folded, commune) for commune in communes)
     if not (words & _COVERAGE_TERMS) and not (names_covered and words & _PLACE_TERMS):
         return None
@@ -255,8 +343,8 @@ def configuration_reply(session, state: ConversationState) -> str | None:
 
     Precedence is explicit and pinned by test: the first answer that recognises
     the turn owns it, so the same text can never be claimed by two of them.
-    Duration comes first because naming a service is the specific case; coverage
-    and hours are the general ones.
+    Duration is most specific, followed by coverage, then schedule. The place
+    branch is restricted to known communes, so weekdays reach the hours answer.
     """
     for answer in (duration_reply, coverage_reply, hours_reply):
         reply = answer(session, state)

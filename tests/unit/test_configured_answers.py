@@ -26,7 +26,7 @@ def _state(text: str, *, intent: str = "consulta") -> ConversationState:
     )
 
 
-SESSION = SimpleNamespace()
+SESSION = SimpleNamespace(scalar=lambda _statement: None)
 
 
 def _coverage(monkeypatch, communes):
@@ -86,25 +86,118 @@ def test_a_question_naming_a_covered_commune_is_answered(question, monkeypatch):
     assert configured_answers.coverage_reply(SESSION, _state(question)) is not None
 
 
+def test_place_mentioned_in_customer_kb_keeps_the_kb_answer_path(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: 1)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {
+            "coverage_out_of_area": "No tenemos cobertura habitual en {{comuna}}."
+        },
+    )
+
+    assert configured_answers.coverage_reply(
+        SESSION, _state("¿atienden en La Florida?")
+    ) is None
+
+
+def test_kb_place_deferral_requires_coverage_language_in_the_same_chunk(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    captured = {}
+
+    def scalar(statement):
+        captured["sql"] = str(statement.compile(compile_kwargs={"literal_binds": True}))
+        return 1
+
+    monkeypatch.setattr(SESSION, "scalar", scalar)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No hay cobertura para {{comuna}}."},
+    )
+
+    reply = configured_answers.coverage_reply(SESSION, _state("¿atienden en La Florida?"))
+
+    assert all(
+        term in captured["sql"] for term in ("%cobertura%", "%cubr%", "%atend%")
+    )
+    assert reply is None
+
+
+def test_out_of_area_text_without_comuna_slot_still_answers(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: None)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "Un asesor coordinará tu visita."},
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state("¿atienden en Maipú?")) == (
+        "Un asesor coordinará tu visita."
+    )
+
+
 @pytest.mark.parametrize(
-    "question",
+    ("question", "schedule_answer"),
     [
-        "atienden en Providencia?",
-        "vivo en Maipu, trabajan alla?",
-        "llegan a Rancagua?",
+        ("¿trabajan en domingo?", True),
+        ("¿ustedes trabajan en sábado?", True),
+        ("¿atienden en horario de oficina?", True),
+        ("¿llegan a revisar el calefont?", False),
+        ("¿van a cobrar por la visita?", False),
     ],
 )
-def test_a_commune_outside_the_list_keeps_the_existing_derivation_path(
-    question, monkeypatch
+def test_non_place_complements_do_not_become_coverage_answers(
+    question, schedule_answer, monkeypatch
 ):
-    """S4 keeps the out-of-coverage derivation: no list is invented here.
-
-    The KB keeps the policy for a commune outside coverage, so this answer steps
-    aside instead of claiming coverage the configuration does not have.
-    """
     _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_hours_schedule",
+        lambda _session: [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+    )
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No coverage for {{comuna}}."},
+    )
 
-    assert configured_answers.coverage_reply(SESSION, _state(question)) is None
+    reply = configured_answers.configuration_reply(SESSION, _state(question))
+
+    if schedule_answer:
+        assert reply == "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+    else:
+        assert reply is None
+
+
+@pytest.mark.parametrize(
+    ("question", "place"),
+    [
+        ("atienden en Providencia?", "Providencia"),
+        ("vivo en Maipu, trabajan alla?", "Maipu"),
+        ("llegan a Lo Prado?", "Lo Prado"),
+    ],
+)
+def test_a_named_out_of_area_place_gets_the_advisor_policy(question, place, monkeypatch):
+    """The named place gets policy, without checking it against a commune master."""
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {
+            "coverage_out_of_area": (
+                "No tenemos cobertura habitual en {{comuna}}, pero igual podemos "
+                "ayudarte: un asesor coordina la visita según disponibilidad."
+            )
+        },
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state(question)) == (
+        "No tenemos cobertura habitual en "
+        f"{place}, pero igual podemos ayudarte: un asesor coordina la visita según disponibilidad."
+    )
 
 
 def test_a_question_without_a_coverage_term_is_left_alone(monkeypatch):
@@ -125,6 +218,83 @@ def test_an_empty_configuration_answers_nothing(monkeypatch):
     assert (
         configured_answers.coverage_reply(SESSION, _state("que comunas cubren?"))
         is None
+    )
+
+
+def test_rm_commune_data_is_complete_for_configured_and_named_communes():
+    communes = configured_answers._load_rm_communes()
+    folded = {configured_answers._fold(commune) for commune in communes}
+
+    assert len(communes) == 52
+    assert {configured_answers._fold(name) for name in DEFAULT_COVERAGE_COMMUNES} <= folded
+    assert {"maipu", "lo prado", "padre hurtado"} <= folded
+
+
+@pytest.mark.parametrize(
+    ("question", "place"),
+    [
+        ("¿trabajan en Lo Prado?", "Lo Prado"),
+        ("¿atienden en Padre Hurtado?", "Padre Hurtado"),
+    ],
+)
+def test_named_unconfigured_rm_commune_gets_advisor_policy(question, place, monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: None)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No tenemos cobertura habitual en {{comuna}}."},
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state(question)) == (
+        f"No tenemos cobertura habitual en {place}."
+    )
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "¿trabajan en mi casa?",
+        "¿trabajan en la Región Metropolitana?",
+        "¿atienden en festivos?",
+        "¿atienden en feriados?",
+        "¿trabajan en regiones?",
+        "¿llegan al centro?",
+        "¿trabajan en la playa?",
+        "¿trabajan en el sur?",
+        "¿trabajan en el campo?",
+        "¿atienden en edificios?",
+        "¿atienden en departamentos?",
+        "¿trabajan en vacaciones?",
+        "¿llegan al extranjero?",
+        "¿atienden en altura?",
+        "¿trabajan en el verano?",
+        "¿atienden en San Fernando?",
+        "¿atienden en Viña del Mar?",
+        "¿llegan a Frutillar?",
+    ],
+)
+def test_unlisted_places_and_non_places_are_left_to_the_model(question, monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    monkeypatch.setattr(SESSION, "scalar", lambda _statement: None)
+    monkeypatch.setattr(
+        configured_answers,
+        "get_reply_texts",
+        lambda _session: {"coverage_out_of_area": "No coverage for {{comuna}}."},
+    )
+
+    assert configured_answers.coverage_reply(SESSION, _state(question)) is None
+
+
+def test_covered_commune_with_weekday_qualifier_keeps_coverage_precedence(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+    _schedule(monkeypatch, WEEK)
+
+    assert configured_answers.configuration_reply(
+        SESSION, _state("¿atienden en Ñuñoa el sábado?")
+    ) == (
+        "Atendemos normalmente en Las Condes, Ñuñoa, Lo Barnechea, La Reina, "
+        "Peñalolén, Colina y Huechuraba."
     )
 
 

@@ -49,6 +49,9 @@ EXPECTED_KEYS = {
     "handoff_unknown_intent_thrice",
     "handoff_campo_sin_respuesta",
     "handoff_booking_unavailable",
+    "gas_instruction_guard",
+    "excluded_appliance_scope",
+    "coverage_out_of_area",
     "capture_evidence",
     "capture_preventive_ack",
     "capture_confirm_contact",
@@ -89,6 +92,19 @@ def test_the_defaults_keep_the_current_wording():
     )
     assert REPLY_TEXT_DEFAULTS["handoff"] == (
         "Un asesor revisará tu caso y te contactará a la brevedad."
+    )
+    assert REPLY_TEXT_DEFAULTS["gas_instruction_guard"] == (
+        "No manipules la llave ni la línea de gas. Un técnico de Lumat debe "
+        "verificarlo; un asesor puede coordinar la visita."
+    )
+    assert REPLY_TEXT_DEFAULTS["excluded_appliance_scope"] == (
+        "No reparamos lavadoras, lavadoras-secadoras ni refrigeradores. Sí atendemos "
+        "calderas, calefont y otros servicios del catálogo; si necesitas, coordinamos "
+        "una visita técnica."
+    )
+    assert REPLY_TEXT_DEFAULTS["coverage_out_of_area"] == (
+        "No tenemos cobertura habitual en {{comuna}}, pero igual podemos ayudarte: "
+        "un asesor coordina la visita según disponibilidad."
     )
 
 
