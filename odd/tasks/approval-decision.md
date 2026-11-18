@@ -111,3 +111,17 @@ hand (`tests/unit/test_assistant_tools.py:947-957`); no test exercises the real 
   deliberate-duplicate radio starts unselected.
 - Gates observed: `npx vitest run src/components/pages/AgentChat.test.tsx` → 85 passed;
   `npm run build` (`tsc -b`) green; `npm test` → 121 files / 1439 tests passed.
+
+### L7 — closure
+
+- Full backend suite at feature closure: `bash scripts/test.sh full` → exit 0, no failures.
+- Native review `review-b57bcbd3261f90c4` over the committed range `0762e8c9f..962550b4b`, four lenses
+  (risk, resilience, readability, reliability): **approved**, authority acknowledged and burned.
+  Two non-blocking advisories, recorded as follow-ups rather than corrections:
+  - `R3-001` (reliability, `app/services/projects.py:155-160`): the deliberate-duplicate path
+    (`create_anyway`) can reach the unique slug constraint and surface as an execution error instead of
+    a decision the owner can answer.
+  - `R4-001` (resilience, `app/services/projects.py:162-165`): the semantic pre-check embeds the purpose
+    again even when an exact duplicate already matched, an external call that can fail mid-create.
+- Delivery is the owner's: the branch is local and unpushed. `uv.lock` carries a pre-existing release
+  version drift (`2026.11.9` vs `2026.11.10`) and was deliberately left untouched.
