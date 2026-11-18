@@ -76,6 +76,7 @@ Usage
 from __future__ import annotations
 
 import hashlib
+import re
 import statistics
 import sys
 import unicodedata
@@ -138,6 +139,7 @@ GATE_NAMES = {
     "G8": "reply_present",
     "G9": "kb_answered",
     "G10": "causes_required",
+    "G11": "must_not_affirm",
 }
 
 _SCENARIO_KEYS = {
@@ -168,6 +170,7 @@ _EXPECT_KEYS = {
     "causes_required",
     "must_include_any",
     "must_not_include",
+    "must_not_affirm",
     "kb_answered",
 }
 # `escalation` carries its reason as `handoff:<reason>` and `kb_miss` is one of
@@ -433,6 +436,25 @@ def _normalise(text: str) -> str:
     return "".join(character for character in decomposed if not unicodedata.combining(character))
 
 
+# G11: `must_not_include` matches a substring anywhere, so it cannot tell a claim
+# from its refusal — "no trabajamos con quemadores de cocina" contains
+# "trabajamos con quemadores de cocina". Both defects of
+# `odd/tasks/verdad-alcance.md` have exactly that shape: the invented claim and
+# the correct refusal share the phrase, so anchoring the phrase would punish the
+# right answer. This gate reads the negation in front of the anchor instead.
+_NEGATION_BEFORE = re.compile(r"\b(?:no|nunca|tampoco|ni|jamas)\b(?:\s+[\w-]+){0,3}\s*$")
+
+
+def _affirms_anchor(reply: str, anchor: str) -> bool:
+    """True when `anchor` appears at least once with no negation in front of it."""
+    start = reply.find(anchor)
+    while start != -1:
+        if not _NEGATION_BEFORE.search(reply[:start]):
+            return True
+        start = reply.find(anchor, start + 1)
+    return False
+
+
 @dataclass(frozen=True)
 class GateResult:
     gate: str
@@ -574,6 +596,19 @@ def evaluate_gates(
         ]
         results["G7"] = _gate(
             "G7", not offenders, f"apareció lo prohibido: {', '.join(offenders)}"
+        )
+
+    if "must_not_affirm" in expect:
+        # Only an affirmative use is a failure: a refusal names the same words.
+        offenders = [
+            anchor
+            for anchor in expect["must_not_affirm"]
+            if any(
+                _affirms_anchor(reply, _normalise(anchor)) for reply in normalised_replies
+            )
+        ]
+        results["G11"] = _gate(
+            "G11", not offenders, f"afirmó lo prohibido: {', '.join(offenders)}"
         )
 
     # S9: a turn without a reply is a failure only when the bot still owned the

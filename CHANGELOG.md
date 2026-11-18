@@ -18,6 +18,16 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 - Crear un proyecto con el mismo propósito que uno existente ya no crea un duplicado en silencio: el primer
   gate es consentimiento, y el segundo muestra el proyecto en conflicto para elegir entre reusarlo o crear un
   duplicado a propósito.
+- El bot afirmaba servicios que Lumat no hace —«trabajamos con quemadores de cocina a gas», «mantención de
+  bomba de calor de piscina»— y ofrecía la visita sin respaldo en la base de conocimiento. El catálogo de
+  servicios es una lista cerrada y la respuesta se revisa antes de salir: un reclamo de alcance sobre un
+  artefacto fuera de esa lista se reemplaza por un texto editable desde el panel, y la persona declara el
+  límite. Se corrige también el error simétrico: un servicio del catálogo sin tarifa publicada —aire
+  acondicionado— ya no se niega; se informa que lo evaluamos en la visita técnica y que el trabajo se
+  presupuesta según el diagnóstico.
+- El cliente podía recibir un «caso abierto» inventado por el equipo que acababa de mencionar. La ficha del
+  caso presentaba el caso de la conversación en curso como si fuera historial previo; ahora ese caso queda
+  fuera de la ficha, y el bot solo afirma historial que la ficha registra para ese equipo.
 
 _(sin otros cambios después de este release)_
 

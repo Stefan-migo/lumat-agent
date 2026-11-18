@@ -35,7 +35,7 @@ import unicodedata
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Appointment, AppointmentStatus, Case, Customer, CustomerEquipment
@@ -309,11 +309,19 @@ def build_case_ficha(
     *,
     now: datetime | None = None,
     timezone_name: str = DEFAULT_TIMEZONE,
+    conversation_id: int | None = None,
 ) -> str:
     """Render the bounded, deterministic ficha of one customer's case history.
 
     Empty string when there is nothing stored: a first contact injects no block,
     rather than a header with no content.
+
+    `conversation_id` is the conversation being served. Its own case is not
+    customer history: `classify_intent` creates it moments before this render, so
+    including it let the model answer "tienes un caso abierto de hoy justamente
+    por ese equipo" about whatever appliance the customer had just named (S2 of
+    `odd/tasks/verdad-alcance.md`). Such cases are left out of both the pending
+    block and the work history; a case with no conversation stays visible.
     """
     customer = session.get(Customer, customer_id)
     if customer is None:
@@ -327,11 +335,13 @@ def build_case_ficha(
         .order_by(CustomerEquipment.created_at.desc(), CustomerEquipment.id.desc())
         .limit(MAX_EQUIPMENT_LINES)
     ).all()
+    works_query = select(Case).where(Case.customer_id == customer_id)
+    if conversation_id is not None:
+        works_query = works_query.where(
+            or_(Case.conversation_id.is_(None), Case.conversation_id != conversation_id)
+        )
     works = session.scalars(
-        select(Case)
-        .where(Case.customer_id == customer_id)
-        .order_by(Case.created_at.desc(), Case.id.desc())
-        .limit(MAX_WORK_LINES)
+        works_query.order_by(Case.created_at.desc(), Case.id.desc()).limit(MAX_WORK_LINES)
     ).all()
     appointment = session.scalar(
         select(Appointment)

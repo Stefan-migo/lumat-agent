@@ -21,7 +21,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from app.db import SessionLocal
-from app.models import Case, Customer, CustomerEquipment, CustomerState
+from app.models import Case, Conversation, Customer, CustomerEquipment, CustomerState
 from app.services.case_ficha import FICHA_MAX_CHARS, build_case_ficha
 
 
@@ -239,6 +239,49 @@ def test_ficha_states_the_warranty_window_of_a_published_service():
         assert "04/02/2027" in ficha  # red wash of 04/08/2026 + 6 months
         # The unlisted service has no published warranty: no window is invented.
         assert ficha.count("garantía vigente") == 2
+
+
+def test_ficha_does_not_present_the_current_conversation_case_as_history():
+    """S2: the in-progress case is not customer history; prior cases remain visible."""
+    with SessionLocal() as session:
+        customer = _ficha_customer(session)
+        earlier_conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        current_conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add_all([earlier_conversation, current_conversation])
+        session.flush()
+
+        earlier_case = _work(
+            session,
+            customer,
+            service="Mantención caldera previa",
+            days_ago=41,
+            status="abierto",
+        )
+        earlier_case.conversation_id = earlier_conversation.id
+        current_case = _work(
+            session,
+            customer,
+            service="Equipo mencionado hoy",
+            days_ago=0,
+            status="abierto",
+        )
+        current_case.conversation_id = current_conversation.id
+        session.flush()
+
+        ficha = build_case_ficha(
+            session,
+            customer.id,
+            now=NOW,
+            timezone_name="America/Santiago",
+            conversation_id=current_conversation.id,
+        )
+
+        assert "Equipo mencionado hoy" not in ficha
+        assert "Mantención caldera previa" in ficha
+        assert "Pendiente de nuestra parte:" in ficha
+        assert "abierto desde el 02/10/2026" in ficha
+        assert "Trabajos previos:" in ficha
+        assert "02/10/2026 · Mantención caldera previa · abierto" in ficha
 
 
 def test_ficha_lists_what_is_still_pending():

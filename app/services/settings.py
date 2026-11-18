@@ -199,6 +199,14 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "calderas, calefont y otros servicios del catálogo; si necesitas, coordinamos "
         "una visita técnica."
     ),
+    # S1 (odd/tasks/verdad-alcance.md): the KB's service list is closed. The guard
+    # replaces a reply that offered something outside it, so the text names the
+    # limit without asserting what the customer's appliance is.
+    "out_of_catalogue_scope": (
+        "Ese trabajo no está entre los servicios que hacemos, así que no quiero "
+        "afirmarte algo que no cubrimos. Si te sirve, te ofrezco un servicio del "
+        "catálogo, o un asesor revisa tu caso."
+    ),
     "coverage_out_of_area": (
         "No tenemos cobertura habitual en {{comuna}}, pero igual podemos ayudarte: "
         "un asesor coordina la visita según disponibilidad."
@@ -260,6 +268,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_booking_unavailable": frozenset(),
     "gas_instruction_guard": frozenset(),
     "excluded_appliance_scope": frozenset(),
+    "out_of_catalogue_scope": frozenset(),
     "coverage_out_of_area": frozenset({"comuna"}),
     "capture_evidence": frozenset(),
     "capture_preventive_ack": frozenset({"equipo"}),
