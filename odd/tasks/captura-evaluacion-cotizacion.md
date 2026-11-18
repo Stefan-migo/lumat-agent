@@ -46,6 +46,17 @@ Riesgo: **medio**. Se toca el texto que el cliente lee en medio de la captura y 
 | T4 | Control negativo de S2: ni la pregunta de precio ni el presupuesto ausente disparan la ack | S2 | junto a T1 |
 | T5 | Re-medir el escenario y comprobar que no mueve otros | S5 | `docs(evals): …` |
 
+## Evidencia
+
+| Qué | Evidencia |
+|---|---|
+| T1–T4 | `00d870b41` — `fix(chat): acknowledge a request for an evaluation and a quote` |
+| RED | `bash scripts/test.sh focused tests/integration/test_chat_harness.py` falla en las tres pruebas nuevas; `scripts/test.sh unit` falla en el catálogo de `reply.texts` |
+| Mutación de los controles negativos | quitar el filtro de preguntas o el guard de presupuesto ausente hace fallar su prueba: no son vacuas |
+| Antes del arreglo, con el defecto ya dentro | `captura-eval` (4/4 con gates, pero el turno 2 sólo pedía el equipo y la frase quedó marcada sin enviarse) |
+| Después del arreglo, árbol sucio | `captura-eval-2` (1/1, la frase sale en el turno 5) |
+| Después del arreglo, árbol limpio | `captura-eval-limpio`, sello `00d870b41`, **4/4, cero gates fallidos**, la ack en el turno 5 |
+
 ## Log
 
 **L1 (pedido del owner, 2026-11-18, handoff).** Verbatim:
@@ -81,6 +92,12 @@ frase. El arreglo separa la decisión en `_pick_ack`, que marca sólo el texto q
 `tests/unit/test_capture_quote_ack.py` la fija sin base ni modelo. La re-medición (`captura-eval-2`)
 muestra la frase en el turno 5: «Entiendo, quieres una nueva evaluación con cotización. ¿En qué comuna
 te encuentras?».
+
+**L7 (medición de cierre, 2026-11-18).** `captura-eval-limpio` sobre `00d870b41`, árbol limpio: los
+cuatro escenarios que tocan evaluación o cotización pasan, cero gates fallidos. La frase se lee, no
+sólo se marca: «Entiendo, quieres una nueva evaluación con cotización. ¿En qué comuna te encuentras?».
+El escenario semilla también pasaba antes del arreglo, pero por el «revisar» del turno 1 y no por
+nombrar el pedido: el pase viejo era varianza de ruteo, el de ahora es la conducta que la spec pide.
 
 **L5 (defecto del instrumento encontrado al medir, 2026-11-18).** `scripts/conv_eval.py --reset` revienta
 con `psycopg.errors.FeatureNotSupported: cannot truncate a table referenced in a foreign key constraint`:
