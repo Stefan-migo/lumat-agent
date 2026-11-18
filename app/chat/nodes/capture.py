@@ -54,6 +54,7 @@ from app.services.settings import (
     get_capture_ack,
     get_capture_questions,
     get_capture_preventive_keywords,
+    get_capture_quote_keywords,
     get_conduct,
     get_coverage_communes,
     get_reply_texts,
@@ -402,6 +403,23 @@ def _is_preventive_request(session, text: str, overrides: list[str]) -> bool:
     )
 
 
+def _is_quote_request(text: str, overrides: list[str]) -> bool:
+    """True when the customer declares they want an evaluation or a quote.
+
+    A refusal is not a request ("no necesito cotización"), and questions never
+    reach here: the caller drops them, because "¿cuánto cuesta la evaluación?"
+    is a price question answered by `respond` (S2).
+    """
+    normalized = _normalize(text)
+    if re.search(r"\bno\s+(?:quiero|necesito|busco|solicito)\b", normalized):
+        return False
+    # "No tengo presupuesto ahora" declares the absence of one, so acknowledging
+    # a quote request would tell the customer the opposite of what they said.
+    if re.search(r"\b(?:no|sin)\s+(?:tengo|tener|tenemos|hay)\s+(?:presupuesto|plata|lucas)", normalized):
+        return False
+    return any(_normalize(keyword) in normalized for keyword in overrides)
+
+
 def _phrase_reply(session, texts: dict[str, str], key: str, captured: dict, *, pending) -> str:
     """Render one capture reply and optionally rephrase it (S5).
 
@@ -594,19 +612,20 @@ def capture(state: ConversationState) -> dict:
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         return _ask_next(captured, state)
+    # A QUESTION is not a request: "¿cuánto cuesta la revisión anual?" is a price
+    # question, not a maintenance order, and reading the keyword out of it
+    # silently marked `failure` as skipped (S14/S16 integration tests). Both
+    # declarations below read only the non-question inbound text.
+    declared = " ".join(
+        item.get("text") or ""
+        for item in state.window
+        if item.get("direction", "inbound") == "inbound"
+        and not _looks_like_question(item.get("text") or "")
+    )
+    normalized_window = _normalize(declared)
     # S4: evaluate the preventive intent once against the entire inbound window,
     # before any path can ask or re-ask the failure field.
     if "failure" not in captured:
-        # A QUESTION is not a request: "¿cuánto cuesta la revisión anual?" is a
-        # price question, not a maintenance order, and reading the keyword out of
-        # it silently marked `failure` as skipped (S14/S16 integration tests).
-        inbound = " ".join(
-            item.get("text") or ""
-            for item in state.window
-            if item.get("direction", "inbound") == "inbound"
-            and not _looks_like_question(item.get("text") or "")
-        )
-        normalized_window = _normalize(inbound)
         with session_scope() as session:
             preventive_keywords = get_capture_preventive_keywords(session)
             is_preventive = _is_preventive_request(
@@ -618,6 +637,15 @@ def capture(state: ConversationState) -> dict:
             if "failure" not in skipped:
                 skipped.append("failure")
             captured["_skipped"] = skipped
+    # Residual 8 of #833: evaluated OUTSIDE the `failure` guard above, because a
+    # customer who declares "una nueva evaluación y cotización" and then reports
+    # the symptom still wants the evaluation — dropping it there would be wrong
+    # (S4).
+    with session_scope() as session:
+        quote_keywords = get_capture_quote_keywords(session)
+        is_quote = _is_quote_request(normalized_window, quote_keywords)
+    if is_quote:
+        captured["_quote_request"] = True
     # Extraction is merged on EVERY turn, including the first one, which is where
     # the customer states the problem ("tengo un calefont que no calienta" fills
     # `failure` and the next question is the equipment). Validators decide what is
@@ -887,8 +915,41 @@ def _render_capture_question(
             preventive_ack = ""
         else:
             captured["_preventive_acked"] = preventive_ack.strip()
-    ack = preventive_ack or ack
+    # Residual 8 of #833: the evaluation/quote request is named once too, in the
+    # turn the preventive acknowledgement leaves free — it keeps the turn it
+    # already had, and this one waits instead of overwriting it. The marker is
+    # written only when the text actually reaches the customer: marking it while
+    # the preventive ack holds the turn swallowed the sentence (measured on
+    # conversation 299 of the `captura-eval` run).
+    quote_ack = ""
+    if captured.get("_quote_request"):
+        candidate = render_reply(get_reply_texts(session), "capture_quote_ack")
+        if candidate.strip() != (captured.get("_quote_acked") or "").strip():
+            quote_ack = candidate
+    ack = _pick_ack(captured, ack, preventive_ack, quote_ack)
     return f"{ack}{ask}"
+
+
+def _pick_ack(captured: dict, base_ack: str, preventive_ack: str, quote_ack: str) -> str:
+    """Which acknowledgement speaks, and what the customer actually receives.
+
+    `base_ack` is the turn's own acknowledgement — the equipment acknowledgement or
+    the configured `capture_ack` — and it is the fallback: passing only the two
+    optional ones dropped every "Entiendo…" from the capture replies, which the
+    full suite caught and the narrowed runs did not.
+
+    The preventive ack keeps the turn it already had and the evaluation/quote one
+    waits for the next. The marker is written only for the text that is returned:
+    the first version marked it while the preventive ack held the turn and the
+    sentence never left the process (measured on conversation 299 of the
+    `captura-eval` run), so the customer was never told what they had asked for.
+    """
+    if preventive_ack:
+        return preventive_ack
+    if not quote_ack:
+        return base_ack
+    captured["_quote_acked"] = quote_ack.strip()
+    return quote_ack
 
 
 # S3: the three fields a returning customer should not have to retype. `name` is

@@ -207,6 +207,10 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     "capture_preventive_ack": (
         "Entiendo, quieres hacer mantención de {{equipo}}. "
     ),
+    # Residual 8 of #833: declaring "quiero una nueva evaluación y cotización" used
+    # to reach only the next capture question. The request is named once, in the
+    # customer's own words, instead of being swallowed by the questionnaire.
+    "capture_quote_ack": "Entiendo, quieres una nueva evaluación con cotización. ",
     # S3 (chatbot-realismo-conversacional): one confirmation instead of four questions
     # when the customer record already holds the contact data.
     "capture_confirm_contact": (
@@ -259,6 +263,9 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "coverage_out_of_area": frozenset({"comuna"}),
     "capture_evidence": frozenset(),
     "capture_preventive_ack": frozenset({"equipo"}),
+    # No slots: the acknowledgement names the request, not a case fact, so the
+    # owner cannot introduce a placeholder no call site fills.
+    "capture_quote_ack": frozenset(),
     "capture_confirm_contact": frozenset({"comuna", "direccion", "email"}),
     "capture_consent": frozenset(),
     "capture_consent_refused": frozenset(),
@@ -490,6 +497,12 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "capture.preventive_keywords": [
         "mantencion", "mantención", "mantenimiento", "revision", "revisión",
         "limpieza", "preventiva",
+    ],
+    # Residual 8 of #833. "revisión" is deliberately absent: it already belongs to
+    # the preventive list above, and a second match would only fight over the ack.
+    "capture.quote_keywords": [
+        "evaluacion", "evaluación", "evaluar", "cotizacion", "cotización", "cotizar",
+        "presupuesto",
     ],
     **{f"messages.{key}": value for key, value in MESSAGE_DEFAULTS.items()},
     MESSAGE_TEMPLATES_KEY: [],
@@ -1027,6 +1040,18 @@ def get_capture_preventive_keywords(session: Session) -> list[str]:
     if isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value):
         return value
     return list(SETTINGS_DEFAULTS["capture.preventive_keywords"])
+
+
+def get_capture_quote_keywords(session: Session) -> list[str]:
+    """Return configured evaluation/quote keywords, falling back when malformed."""
+    value = get_setting(
+        session,
+        "capture.quote_keywords",
+        default=SETTINGS_DEFAULTS["capture.quote_keywords"],
+    )
+    if isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value):
+        return value
+    return list(SETTINGS_DEFAULTS["capture.quote_keywords"])
 
 
 def get_capture_ack(session: Session) -> str:

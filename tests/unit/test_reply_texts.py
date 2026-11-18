@@ -54,6 +54,7 @@ EXPECTED_KEYS = {
     "coverage_out_of_area",
     "capture_evidence",
     "capture_preventive_ack",
+    "capture_quote_ack",
     "capture_confirm_contact",
     "capture_consent",
     "capture_consent_refused",

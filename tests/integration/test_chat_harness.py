@@ -685,6 +685,139 @@ def test_capture_pivot_to_fault_drops_preventive_ack(mock_openai_chat, monkeypat
     assert all(maintenance_ack not in reply for reply in pivot), pivot
 
 
+def test_capture_acknowledges_the_evaluation_and_quote_request_once(
+    mock_openai_chat, monkeypatch
+):
+    """S1/S4: the declared evaluation is named once, and a later fault keeps it."""
+    from app.chat.nodes import classify_intent
+
+    def classify(text, message_id, conversation=""):
+        fields = {}
+        if "Mantencion" in text:
+            fields["equipment"] = "caldera"
+        return {
+            "intent": "caldera",
+            "intents": ["caldera"],
+            "service": "mantención de calefacción",
+            "fields": fields,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    # The copy is settings-driven; assert against the default instead of a
+    # second copy of the sentence, so a wording change does not fail here.
+    quote_ack = REPLY_TEXT_DEFAULTS["capture_quote_ack"].strip()
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(
+            session,
+            conversation_id,
+            "Mantencion\nEsta funcionando bien la calefacción.\nQuiero mantencion",
+        )
+        session.commit()
+        declaration = run_turn(
+            session,
+            conversation_id,
+            "Esto fue el año pasado al final de la temporada, el sistema nunca se "
+            "estabilizó completamente y me dijo que probablemente habria que hacer de "
+            "nuevo el procedimiento. Por eso me gustaría tener una nueva evaluación y "
+            "cotización",
+        )
+        session.commit()
+        fault = run_turn(
+            session, conversation_id, "El problema es que no se como rellenar tampoco"
+        )
+        session.commit()
+        follow_up = run_turn(session, conversation_id, "una semana")
+        session.commit()
+
+    # It has to REACH the customer, not merely be marked as said: the first
+    # version set the marker while the preventive ack held the turn and the
+    # sentence never left the process (conversation 299, run `captura-eval`).
+    said = [reply for reply in declaration + fault + follow_up if quote_ack in reply]
+    assert said, declaration + fault + follow_up
+    assert len(said) == 1, said
+
+
+def test_capture_does_not_acknowledge_a_price_question(mock_openai_chat, monkeypatch):
+    """S2: asking what the evaluation costs is a price question, not a request.
+
+    The turn itself is answered by `respond` (a KB miss bounces the flow back into
+    capture), so the assertion runs over the question's replies *and* the next
+    capture ask: that is the first place a wrongly-set flag would surface.
+    """
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "caldera",
+            "intents": ["caldera"],
+            "service": "mantención de calefacción",
+            "fields": {"equipment": "caldera"} if "Mantencion" in text else {},
+        },
+    )
+    quote_ack = REPLY_TEXT_DEFAULTS["capture_quote_ack"].strip()
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(
+            session,
+            conversation_id,
+            "Mantencion\nEsta funcionando bien la calefacción.\nQuiero mantencion",
+        )
+        session.commit()
+        asked = run_turn(
+            session, conversation_id, "¿Cuánto cuesta la evaluación y la cotización?"
+        )
+        session.commit()
+        resumed = run_turn(session, conversation_id, "no sé")
+        session.commit()
+
+    assert asked, asked
+    assert resumed, resumed
+    assert all(quote_ack not in reply for reply in asked + resumed), asked + resumed
+
+
+def test_capture_does_not_acknowledge_a_refused_budget(mock_openai_chat, monkeypatch):
+    """S2: "no tengo presupuesto" names the absence of a quote, not a request."""
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "caldera",
+            "intents": ["caldera"],
+            "service": "mantención de calefacción",
+            "fields": {"equipment": "caldera"} if "Mantencion" in text else {},
+        },
+    )
+    quote_ack = REPLY_TEXT_DEFAULTS["capture_quote_ack"].strip()
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(
+            session,
+            conversation_id,
+            "Mantencion\nEsta funcionando bien la calefacción.\nQuiero mantencion",
+        )
+        session.commit()
+        asked = run_turn(
+            session,
+            conversation_id,
+            "La verdad no tengo presupuesto ahora, pero necesito que la revisen",
+        )
+        session.commit()
+        resumed = run_turn(session, conversation_id, "no sé")
+        session.commit()
+
+    assert asked, asked
+    assert resumed, resumed
+    assert all(quote_ack not in reply for reply in asked + resumed), asked + resumed
+
+
 def test_reschedule_without_upcoming_visit_hands_off(mock_openai_chat, monkeypatch):
     from app.chat.nodes import classify_intent
 
