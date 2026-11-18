@@ -6,6 +6,10 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+_(sin cambios después de este release)_
+
+## [2026.11.10] - 2026-11-18
+
 ### Corregido
 
 - Una ráfaga de mensajes del cliente es un solo turno. Antes, "Hola" y luego "¿Cómo estás?" antes de la
@@ -24,9 +28,46 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ### Agregado
 
+- Línea base de calidad conversacional medida y versionada: 42 escenarios con juez sobre el cerebro del chat.
+  Cierra en **35 de 42**, sin gates fallidos y con la dimensión `conversational` como la más floja, y el informe
+  viaja con sus transcripts. El corpus dejó de mentir antes de medir: un turno de media ya no entra como texto,
+  y varias expectativas que contradecían al resto del corpus se corrigieron con su razón escrita.
+- Las listas de Clientes y Conversaciones del panel funcionan en teléfono: la tarjeta de cliente abre la ficha
+  por nombre y teléfono sin arrastrar el checkbox de selección, un filtro que deja cero resultados ofrece la
+  recuperación que corresponde, la selección dice "Seleccionar esta página" y opera exactamente lo que muestra,
+  y al volver de una ficha o de un hilo se recuperan búsqueda, filtros, pestaña y página (nunca la selección).
+- El asistente publica el techo de páginas y repara una sola vez un plan rechazado.
+- Las notificaciones llegan a la persona correcta, a algún canal, y se actualizan solas.
+
 - Respuesta propia para las preguntas sociales sin contenido: "¿Cómo estás?" deja de recibir la línea de
   cortesía y se contesta con un mensaje fijo editable desde la configuración (`messages.social`), fusionado con
   el saludo cuando es el primer contacto.
+- El camino de respuesta ya no le dice al cliente que manipule gas. Una regla en el prompt existía y el
+  modelo la violó igual, así que ahora hay además un guard determinístico que reemplaza esa instrucción por un
+  mensaje seguro y registra el evento en el hilo, para que el panel lo muestre y las métricas no lo escondan.
+  La base de conocimiento de servicios, a su vez, enumera qué **no** se repara (lavadoras, lavadoras-secadoras,
+  refrigeradores y cualquier artefacto fuera de la lista), que es la única fuente de la que el bot puede sacar
+  su alcance.
+- La captura nombra lo que el cliente pidió. Ante "quiero mantención" el bot contestaba sólo con su siguiente
+  pregunta y el motivo declarado no aparecía nunca; ante "me gustaría tener una nueva evaluación y cotización"
+  hacía lo mismo. Ahora la primera respuesta posterior nombra el servicio pedido, una sola vez, y un fallo
+  reportado después retira la mención de mantención porque el cliente ya cambió de pedido.
+- Un reagendamiento sin visitas próximas ya no termina en "No tienes visitas próximas para reagendar": deriva a
+  una persona con causa `booking_unavailable`. Cancelar conserva su respuesta, porque ahí esa frase **es** la
+  respuesta.
+- Una pregunta de cobertura se contesta siempre igual: se compara el lugar que el cliente nombró contra la
+  lista configurada y, si no está, se dice que no es cobertura habitual y que igual un asesor coordina la
+  visita. Antes caía al modelo y la respuesta cambiaba entre corridas.
+- Una nota de voz que reporta una fuga recibe el protocolo de seguridad, y después de una emergencia el bot
+  deriva con causa y deja de escribir, también en el canal.
+- La dirección se valida contra el callejero oficial de forma offline, incluida una corrección posterior a la
+  oferta de contacto, en el flujo que de verdad corre.
+- El handler de errores del websocket del panel ya no se cierra a sí mismo en un desborde de pila.
+
+### Cambiado
+
+- `pyproject.toml [project] version` pasa a `2026.11.10`, el tag anotado `v2026.11.10` y el changelog quedan
+  con el mismo número, que es el que leen la imagen, `/health` y el propio panel.
 
 
 ## [2026.11.7] - 2026-11-06
