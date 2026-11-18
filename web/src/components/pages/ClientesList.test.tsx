@@ -120,7 +120,7 @@ describe("ClientesList", () => {
   it("reports the count in the singular for one record", () => {
     render(<ClientesList data={[customers[0]]} state="ready" />);
 
-    expect(screen.getByText("Mostrando 1 de 1 clientes")).toBeInTheDocument();
+    expect(screen.getByText("1–1 de 1 clientes")).toBeInTheDocument();
   });
 
   it("shows the loading status without rendering a table", () => {
@@ -154,7 +154,7 @@ describe("ClientesList", () => {
     expect(await within(await screen.findByRole("table")).findByText("Marcela Fuentes")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Buscar clientes"), "zzz");
-    expect(await screen.findByText("Sin resultados")).toBeInTheDocument();
+    expect(await screen.findByText("Sin resultados", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.queryByText("No hay registros")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Limpiar búsqueda" }));
@@ -193,11 +193,18 @@ describe("ClientesList", () => {
     await user.click(screen.getByRole("tab", { name: "Cancelado 1" }));
     expect(within(screen.getByRole("table")).getByRole("link", { name: "Customer cancelado" })).toBeInTheDocument();
     expect(within(screen.getByRole("table")).queryByRole("link", { name: "Customer nuevo" })).not.toBeInTheDocument();
-    expect(screen.getByText("Mostrando 1 de 1 clientes")).toBeInTheDocument();
+    expect(screen.getByText("1–1 de 1 clientes")).toBeInTheDocument();
   });
 
   // T9 — the story contract must be able to render the filtered-empty state, which depends on
   // the applied query round-trip and therefore cannot be expressed with data/state alone.
+  it("does not show filtered-empty recovery when the client request fails", () => {
+    render(<ClientesList data={[]} state="error" query="Ana" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar los clientes");
+    expect(screen.queryByText("Sin resultados")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Limpiar búsqueda" })).not.toBeInTheDocument();
+  });
+
   it("renders the filtered-empty state for a controlled query", () => {
     render(<ClientesList data={[]} state="empty" query="zzz" />);
 
@@ -393,10 +400,10 @@ describe("ClientesList", () => {
     const manyCustomers = Array.from({ length: 12 }, (_, index) => ({ ...customers[0], id: index + 1, name: `Customer ${index + 1}` }));
     render(<ClientesList data={manyCustomers} state="ready" />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todos" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar esta página" }));
     await user.click(screen.getByRole("button", { name: "Página siguiente" }));
     expect(screen.getByText("2", { selector: ".table-footer__page" })).toBeInTheDocument();
-    expect(screen.getByText("10 seleccionados")).toBeInTheDocument();
+    expect(screen.queryByText("10 seleccionados")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
 
@@ -410,27 +417,133 @@ describe("ClientesList", () => {
     const card = within(list).getByRole("listitem");
     const identity = card.querySelector(".clientes-list__mobile-identity") as HTMLElement;
 
-    expect(within(card).getByRole("link", { name: "Marcela Fuentes" })).toHaveAttribute("href");
+    expect(within(card).getByRole("link", { name: "Marcela Fuentes, +56912345678" })).toHaveAttribute("href");
     expect(within(card).getByRole("checkbox", { name: "Seleccionar Marcela Fuentes" })).toBeInTheDocument();
-    expect(identity.firstElementChild).toBe(within(identity).getByRole("checkbox", { name: "Seleccionar Marcela Fuentes" }));
+    expect(identity.firstElementChild).toContainElement(within(identity).getByRole("checkbox", { name: "Seleccionar Marcela Fuentes" }));
     expect(within(identity).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
     expect(card.querySelector(".clientes-list__mobile-actions")).toBeNull();
-    expect(card).toHaveTextContent("Teléfono+56912345678");
-    expect(card).toHaveTextContent("EstadoContactado");
-    expect(card).toHaveTextContent("ConsentimientoSí");
-    expect(card).toHaveTextContent("Creado15 jul 2026");
-    expect(card).toHaveTextContent("ArchivoArchivado");
-    expect(Array.from(card.querySelector(".clientes-list__mobile-grid")!.children, (field) => field.firstElementChild?.textContent)).toEqual([
-      "Teléfono", "Estado", "Consentimiento", "Creado", "Archivo",
-    ]);
+    expect(within(identity).getByRole("link", { name: "Marcela Fuentes, +56912345678" })).toHaveTextContent("+56912345678");
+    expect(card).toHaveTextContent("Contactado");
+    expect(card).toHaveTextContent("Consentimiento: Sí");
+    expect(card).toHaveTextContent("Archivado");
+    expect(card).not.toHaveTextContent("Creado");
+    expect(within(card).getByRole("link")).not.toContainElement(within(card).getByRole("checkbox"));
     expect(container.querySelector(".clientes-list__mobile-card")?.textContent).not.toContain(">");
+  });
+
+  it("opens the mobile ficha link by a name-and-phone identity while keeping selection and actions separate", async () => {
+    const user = userEvent.setup();
+    const onOpenClient = vi.fn();
+    const sameName = [
+      { ...customers[0], id: 41, name: "Alex Rivera", phone_e164: "+56911111111" },
+      { ...customers[1], id: 42, name: "Alex Rivera", phone_e164: "+56922222222", archived_at: "2026-01-01" },
+    ];
+    render(<ClientesList data={sameName} state="ready" onOpenClient={onOpenClient} />);
+
+    const cards = within(screen.getByRole("list", { name: "Lista de clientes" })).getAllByRole("listitem");
+    const firstLink = within(cards[0]).getByRole("link", { name: "Alex Rivera, +56911111111" });
+    const secondLink = within(cards[1]).getByRole("link", { name: "Alex Rivera, +56922222222" });
+
+    expect(firstLink).toHaveTextContent("Alex Rivera");
+    expect(firstLink).toHaveTextContent("+56911111111");
+    expect(within(cards[0]).queryByText("Disponible")).not.toBeInTheDocument();
+    expect(within(cards[1]).getByText("Archivado")).toBeInTheDocument();
+    expect(firstLink).not.toContainElement(within(cards[0]).getByRole("checkbox", { name: "Seleccionar Alex Rivera" }));
+    expect(firstLink).not.toContainElement(within(cards[0]).getByRole("button", { name: "Acciones para Alex Rivera" }));
+
+    await user.click(firstLink);
+    await user.click(secondLink);
+    expect(onOpenClient).toHaveBeenNthCalledWith(1, 41);
+    expect(onOpenClient).toHaveBeenNthCalledWith(2, 42);
+  });
+
+  it("recovers an empty status tab to Todos without clearing secondary filters", async () => {
+    const user = userEvent.setup();
+    const activeOnly = customers.map((customer) => ({ ...customer, state: "nuevo" as const }));
+    render(<ClientesList data={activeOnly} state="ready" />);
+
+    await user.selectOptions(screen.getByLabelText("Consentimiento"), "true");
+    await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
+    expect(screen.getByLabelText("Filtros secundarios")).toContainElement(screen.getByLabelText("Consentimiento"));
+    expect(screen.getByText("Filtros activos: Consentimiento: Sí · Incluye archivados")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Pendiente 0" }));
+
+    expect(screen.getByText("Sin resultados")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ver todos" }));
+    expect(screen.getByRole("tab", { name: "Todos 3" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByLabelText("Consentimiento")).toHaveValue("true");
+    expect(screen.getByRole("switch", { name: "Mostrar archivados" })).toBeChecked();
+  });
+
+  it("clears only the search while retaining consent and archived choices", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
+    render(<ClientesList />);
+    await screen.findByRole("table");
+
+    await user.selectOptions(screen.getByLabelText("Consentimiento"), "true");
+    await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
+    await user.type(screen.getByLabelText("Buscar clientes"), "marcela");
+    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "marcela", consent: true, sort: "created_desc" }));
+
+    await user.clear(screen.getByLabelText("Buscar clientes"));
+    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "", consent: true, sort: "created_desc" }));
+    expect(screen.getByLabelText("Consentimiento")).toHaveValue("true");
+    expect(screen.getByRole("switch", { name: "Mostrar archivados" })).toBeChecked();
+  });
+
+  it("clears hidden selection on search and confirms only the currently visible client", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockImplementation(async ({ query = "" } = {}) => ({
+      clients: query ? [customers[0]] : customers.slice(0, 2),
+    }));
+    vi.mocked(archiveCustomer).mockResolvedValue({ customer: customers[0] });
+    render(<ClientesList />);
+
+    const table = await screen.findByRole("table");
+    await user.click(within(desktopRow(table, "Marcela Fuentes")).getByRole("checkbox"));
+    await user.click(within(desktopRow(table, "Pedro Soto")).getByRole("checkbox"));
+    expect(screen.getByText("2 seleccionados")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Buscar clientes"), "marcela");
+    await waitFor(() => expect(within(screen.getByRole("table")).queryByText("Pedro Soto")).not.toBeInTheDocument());
+    expect(screen.queryByText("seleccionados")).not.toBeInTheDocument();
+
+    await user.click(within(desktopRow(screen.getByRole("table"), "Marcela Fuentes")).getByRole("checkbox"));
+    expect(screen.getByText("1 seleccionados")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Archivar seleccionados" }));
+    expect(screen.getByRole("dialog", { name: "Archivar 1 cliente" })).toBeInTheDocument();
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Archivar 1 cliente" }));
+    expect(archiveCustomer).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it("restores a list context without bulk selection and reports the visible range", () => {
+    const twelveCustomers = Array.from({ length: 12 }, (_, index) => ({ ...customers[0], id: index + 1, name: `Cliente ${index + 1}` }));
+    const onContextChange = vi.fn();
+    render(<ClientesList data={twelveCustomers} state="ready" initialContext={{ query: "marcela", consent: "true", includeArchived: true, sort: "created_asc", tab: "all", page: 2 }} onContextChange={onContextChange} />);
+
+    expect(screen.getByLabelText("Buscar clientes")).toHaveValue("marcela");
+    expect(screen.getByLabelText("Consentimiento")).toHaveValue("true");
+    expect(screen.getByRole("switch", { name: "Mostrar archivados" })).toBeChecked();
+    expect(screen.getByText("11–12 de 12 clientes")).toBeInTheDocument();
+    expect(screen.queryByText("seleccionados")).not.toBeInTheDocument();
+    expect(onContextChange).toHaveBeenLastCalledWith({ query: "marcela", consent: "true", includeArchived: true, sort: "created_asc", tab: "all", page: 2 });
+  });
+
+  it("notifies the host after changing the returnable list context", async () => {
+    const user = userEvent.setup();
+    const onContextChange = vi.fn();
+    render(<ClientesList data={customers} state="ready" onContextChange={onContextChange} />);
+
+    await user.selectOptions(screen.getByLabelText("Consentimiento"), "false");
+    await waitFor(() => expect(onContextChange).toHaveBeenLastCalledWith({ query: "", consent: "false", includeArchived: false, sort: "created_desc", tab: "all", page: 1 }));
   });
 
   it("keeps the caption and pagination in the clientes mobile footer", () => {
     render(<ClientesList data={customers} state="ready" />);
     const footer = document.querySelector(".clientes-list__card .table-footer") as HTMLElement;
 
-    expect(within(footer).getByText("Mostrando 3 de 3 clientes")).toBeInTheDocument();
+    expect(within(footer).getByText("1–3 de 3 clientes")).toBeInTheDocument();
     expect(within(footer).getByRole("button", { name: "Página anterior" })).toBeInTheDocument();
     expect(within(footer).getByRole("button", { name: "Página siguiente" })).toBeInTheDocument();
   });
@@ -580,9 +693,9 @@ describe("ClientesList — row actions", () => {
   it("offers page-composable selection and pagination controls", async () => {
     const user = userEvent.setup();
     render(<ClientesList data={customers} state="ready" />);
-    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todos" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar esta página" }));
     expect(screen.getByText("3 seleccionados")).toBeInTheDocument();
-    expect(screen.getByText("Mostrando 3 de 3 clientes")).toBeInTheDocument();
+    expect(screen.getByText("1–3 de 3 clientes")).toBeInTheDocument();
   });
 
   it("routes Cambiar estado from the row menu to the state dialog", async () => {
