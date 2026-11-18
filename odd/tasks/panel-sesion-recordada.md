@@ -1,0 +1,82 @@
+# Panel session that survives the PWA
+
+The panel session is a signed cookie with `max_age=12h` (`app/main.py:99-105`). It slides while the
+operator works and expires after twelve idle hours, which is exactly the reported "al día siguiente me
+pide loguearme otra vez". A PWA that is closed most of the day lives outside that window by design.
+
+The fix is a per-device remember token the operator can revoke, not a longer cookie: a lost phone must
+be cut off without deactivating the account.
+
+## Specs
+
+- **S1** The session must hold across the PWA being closed for "un rato o un día": reopening the app
+  must not ask for credentials while that device's access is still authorized.
+- **S2** Access must be revocable per device. Owner's choice, verbatim: "Token 'recordarme' por
+  dispositivo (revocable)".
+- **S3** Revoking a device cuts its access immediately, even if its cookie is still valid.
+- **S4** Presenting a token that was already rotated (the signature of a copied cookie) revokes every
+  session of that user and records the event in the audit log.
+- **S5** Silent re-authentication must not bypass account state: a deactivated or locked user still
+  loses access, because the user row is re-read on every request.
+- **S6** The remember cookie is `HttpOnly` and `SameSite=Lax`, and it never authorizes a cross-site
+  write.
+- **S7** Push delivery must not depend on the panel session. Verified in this session:
+  `push_subscriptions` (`user_id`, `p256dh`, `auth`, `active`) is read by `app/services/push.py`, which
+  never looks at the session cookie. The reported fear ("no me llegue una notificación por no estar
+  logueado") is therefore not the mechanism; what a remember token restores is the app's ability to
+  re-register a subscription that the OS dropped.
+
+## Design
+
+- **Migration `069_panel_sessions.sql`**: `panel_sessions(id, user_id FK users ON DELETE CASCADE,
+  token_hash text unique, user_agent, created_at, last_used_at, expires_at, revoked_at,
+  replaced_by_hash)` plus a partial index on `(user_id)` where `revoked_at IS NULL`.
+- **Token**: 32 random bytes, URL-safe; only `sha256(token)` is stored. Absolute 90-day life; rotation
+  is what makes it slide.
+- **Restore path**: only when the signed session has no `user_id` — the exact branch that would
+  redirect to login. The deps resolve the remember cookie, rotate it, write the session keys, and the
+  response persists both cookies. Never on a request that already has a session.
+- **Reuse**: hashing the presented token finds a row with `revoked_at` set → every session of that user
+  is revoked, the cookies are cleared, and `auth.session_reuse` is audited.
+- **Endpoints**: `POST /panel/api/logout` revokes the current device; `GET /panel/api/sessions`;
+  `POST /panel/api/sessions/{id}/revoke`; `POST /panel/api/sessions/revoke-all`.
+- **Not doing**: `maximum-scale`, `Secure` on the cookie (the API sits behind the TLS-terminating
+  nginx and the existing session cookie is `https_only=False` — parity, documented), device nicknames,
+  and any push change.
+
+## Tasks
+
+| ID | Spec | Route | Commit |
+| --- | --- | --- | --- |
+| T1 | S1, S2, S4 | backend · migration 069, `PanelSession` model, `panel_sessions` service | 1 |
+| T2 | S1, S3, S5, S6 | backend · silent restore in the panel deps and the realtime handshake | 1 |
+| T3 | S2, S3 | backend · login/logout cookies and the device endpoints | 1 |
+| T4 | S1-S6 | tests · unit, DB and API red-first | 1 |
+| T5 | S2 | panel · devices section, web tests, DESIGN_SYSTEM entry | 2 |
+
+## Log
+
+### L1 — user request (verbatim)
+
+Ok, necesito que revises otras cosas que son un poco más generales, pero las voy a necesitar arreglar.
+Una de ellas es que Lumat debe sostener la sesión. O sea, sobre todo cuando está trabajando en PWA en
+versión móvil, la sesión se sale cuando pasa un rato o un día sin entrar a la aplicación. Ya no estoy
+logueado, me pide loguearme nuevamente. Y esto es peligroso o puede llegar a suceder que no me llegue
+una notificación por estar, por no estar logueado
+
+### L2 — diagnosis in this session
+
+- `app/main.py:99-105`: `SessionMiddleware(..., max_age=12 * 60 * 60, same_site="lax", https_only=False)`.
+  Starlette re-signs the cookie on every response, so the window slides with activity and expires after
+  twelve idle hours.
+- `app/panel/deps.py:50-70` and `app/panel/api/deps.py:32-40`: both resolve `request.session["user_id"]`
+  and nothing else, so once the cookie is gone there is no silent path back.
+- `app/panel/api/routes/auth.py:119-122` writes the session keys; `:154` clears them on logout. No
+  persistent credential exists today.
+- Push: `app/models.py:994-1005` and `app/services/push.py:14-42` deliver from stored subscriptions and
+  deactivate one only when the endpoint answers 404/410. No session dependency.
+
+### L3 — owner decision
+
+"Token \"recordarme\" por dispositivo (revocable)" over a 30-day cookie, because a lost phone must be
+revocable without deactivating the account.

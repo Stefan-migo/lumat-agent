@@ -13,28 +13,29 @@ the DB on every request, so a deactivated account loses access immediately
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Response
+from starlette.datastructures import MutableHeaders
 from starlette.requests import HTTPConnection
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.panel.deps import get_db
+from app.panel.deps import get_db, restore_panel_user
 
 
-def _unauthorized() -> HTTPException:
-    return HTTPException(status_code=401, detail="unauthorized")
+def _unauthorized(response: Response | None = None) -> HTTPException:
+    headers = MutableHeaders(raw=response.raw_headers if response is not None else [])
+    return HTTPException(status_code=401, detail="unauthorized", headers=headers)
 
 
 def get_current_user_json(
-    request: HTTPConnection, session: Session = Depends(get_db)
+    request: HTTPConnection,
+    response: Response,
+    session: Session = Depends(get_db),
 ) -> User:
-    """Resolve the signed-session user; JSON 401 when absent (PDW-AUTH-1)."""
-    user_id = request.session.get("user_id")
-    if user_id is None:
-        raise _unauthorized()
-    user = session.get(User, user_id)
-    if user is None or not user.active:
-        raise _unauthorized()
+    """Resolve signed auth or restore it; unauthenticated callers get JSON 401."""
+    user = restore_panel_user(request, session, response)
+    if user is None:
+        raise _unauthorized(response)
     return user
 
 
