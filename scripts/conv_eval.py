@@ -1155,9 +1155,13 @@ def miss_offer_text() -> str:
 # Conversation state only: the KB, the tariff, the message catalog, the users and
 # the technicians are configuration and must survive a reset, or the next run
 # would measure an empty knowledge base.
+#
+# Every table with a foreign key into this list has to be in this list: `TRUNCATE`
+# refuses to run otherwise, and that refusal is the point — it caught `commitments`
+# (`commitments -> messages`) on 2026-11-18, when `--reset` broke on any database.
 _RESET_TABLES = (
     "appointment_calendar_sync, appointment_history, appointments, assistant_artifacts, "
-    "assistant_attachments, notification_attempts, notification_operations, "
+    "assistant_attachments, commitments, notification_attempts, notification_operations, "
     "panel_notifications, technician_availability, audit_log, conversation_events, "
     "automation_executions, customer_equipment, domain_events, memories, memory_relations, "
     "memory_observations, cases, internal_chat_messages, internal_chat_threads, messages, "
