@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationThread } from './ConversationThread';
 import type { Conversation, Message } from '../../types';
@@ -11,6 +11,20 @@ const conversations = [migratedConversation(101, 'bot'), migratedConversation(10
 const messages: Message[] = [{ id: 1, conversation_id: 101, direction: 'inbound', msg_type: 'text', text: 'Hello', media_url: null, created_at: '2026-08-20T08:15:00-04:00' }, { id: 2, conversation_id: 101, direction: 'outbound', msg_type: 'text', text: 'Reply', media_url: null, created_at: '2026-08-20T08:16:00-04:00' }];
 
 const thread = { conversation: { id: 9, customer_id: 4, wa_phone: '+5694', state: 'human', responsible_id: 7, version: 2, summary: 'Help', latest_inbound_at: '2026-08-27T10:00:00Z', reply_window_open: true, delivery_summary: { failed: 0, pending: 0, sending: 0, sent: 0, unknown: 0 }, last_message_at: '2026-08-27T10:00:00Z', created_at: '2026-08-27T09:00:00Z', closed_at: null }, messages: [{ id: 1, conversation_id: 9, direction: 'inbound' as const, msg_type: 'text', text: 'Hola', media_url: null, delivery_status: null, delivery_error: null, delivery_attempts: 0, last_attempt_at: null, delivered_at: null, created_at: '2026-08-27T09:00:00Z' }], messages_total: 1 };
+
+it('follows new messages without interrupting someone reading older messages', () => {
+  const { rerender } = render(<ConversationThread data={thread} />);
+  const history = screen.getByRole('region', { name: 'Mensajes de la conversación' });
+  Object.defineProperties(history, { scrollHeight: { value: 600 }, clientHeight: { value: 200 } });
+  const newer = { ...thread.messages[0]!, id: 2, text: 'Segundo mensaje' };
+  rerender(<ConversationThread data={{ ...thread, messages: [...thread.messages, newer] }} />);
+  expect(history.scrollTop).toBe(600);
+
+  history.scrollTop = 100;
+  fireEvent.scroll(history);
+  rerender(<ConversationThread data={{ ...thread, messages: [...thread.messages, newer, { ...newer, id: 3 }] }} />);
+  expect(history.scrollTop).toBe(100);
+});
 
 it('loads a bounded preview and fetches the full thread when expanded', async () => {
   const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ...thread, messages_total: 12 }), { status: 200 }));

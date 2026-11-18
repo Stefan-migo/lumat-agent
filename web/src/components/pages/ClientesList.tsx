@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleMinus, ChevronDown, Download, FileText, Home, Mail, MapPin, Phone, Plus, UserRound, UserRoundPlus } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleMinus, ChevronDown, ChevronRight, Download, FileText, Home, Mail, MapPin, Phone, Plus, UserRound, UserRoundPlus } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -24,6 +24,15 @@ import { ChangeCustomerStateDialog } from "../shared/ChangeCustomerStateDialog";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
+export interface ClientesListContext {
+  query: string;
+  consent: "" | "true" | "false";
+  includeArchived: boolean;
+  sort: "created_desc" | "created_asc";
+  tab: "all" | CustomerState;
+  page: number;
+}
+
 export interface ClientesListProps {
   data?: Customer[] | null;
   state?: ClientesListState;
@@ -32,6 +41,10 @@ export interface ClientesListProps {
   /** Controlled applied search term. Needed to render the filtered-empty state, which depends
    *  on the query round-trip and cannot be expressed with `data`/`state` alone. */
   query?: string;
+  /** Restores the list view after leaving a ficha. Selection is intentionally excluded. */
+  initialContext?: ClientesListContext;
+  /** Reports only reconstructable list-view state; never bulk-selection IDs. */
+  onContextChange?: (context: ClientesListContext) => void;
 }
 
 const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = new Set(), toggle: (id: number) => void = () => {}, sort: "created_desc" | "created_asc" = "created_desc", toggleSort: () => void = () => {}): Column<Customer>[] => [
@@ -84,9 +97,14 @@ function stateMessage(state: ClientesListState, retry: () => void) {
   return null;
 }
 
-export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient, query: controlledQuery }: ClientesListProps) {
+function customerIdentityLabel(customer: Customer) {
+  const name = customer.name ?? customer.phone_e164 ?? "Cliente";
+  return customer.name && customer.phone_e164 ? `${name}, ${customer.phone_e164}` : name;
+}
+
+export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient, query: controlledQuery, initialContext, onContextChange }: ClientesListProps) {
   const toast = useToast();
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => controlledQuery ?? initialContext?.query ?? "");
   const query = controlledQuery ?? searchTerm;
   // The query drives the fetch through the hook's own refresh key, so an emptied search
   // refetches the unfiltered list instead of keeping the previous filtered result.
@@ -94,11 +112,11 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // Remounting the debounced input is the only way to clear it: the primitive owns its own
   // text, so resetting our query state alone would leave the stale term on screen.
   const [searchResetKey, setSearchResetKey] = useState(0);
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [consent, setConsent] = useState<"" | "true" | "false">("");
-  const [sort, setSort] = useState<"created_desc" | "created_asc">("created_desc");
-  const [tab, setTab] = useState<"all" | CustomerState>("all");
-  const [page, setPage] = useState(1);
+  const [includeArchived, setIncludeArchived] = useState(() => initialContext?.includeArchived ?? false);
+  const [consent, setConsent] = useState<"" | "true" | "false">(() => initialContext?.consent ?? "");
+  const [sort, setSort] = useState<"created_desc" | "created_asc">(() => initialContext?.sort ?? "created_desc");
+  const [tab, setTab] = useState<"all" | CustomerState>(() => initialContext?.tab ?? "all");
+  const [page, setPage] = useState(() => initialContext?.page ?? 1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkAction, setBulkAction] = useState<{ action: "archive" | "restore"; ids: number[] } | null>(null);
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
@@ -125,18 +143,32 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const counts = Object.fromEntries(CUSTOMER_STATES.map((customerState) => [customerState, allRows.filter((row) => row.state === customerState).length])) as Record<CustomerState, number>;
   const filteredRows = tab === "all" ? allRows : allRows.filter((row) => row.state === tab);
   const pageSize = 10;
-  const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const selectedRows = allRows.filter((row) => selected.has(row.id));
+  const currentPage = Math.min(page, pageCount);
+  const rows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const selectedRows = rows.filter((row) => selected.has(row.id));
   const selectedActive = selectedRows.filter((row) => !row.archived_at);
   const selectedArchived = selectedRows.filter((row) => Boolean(row.archived_at));
   const toggleSelected = (id: number) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const retry = onRetry ?? fetched.retry;
-  const filtered = query.trim().length > 0;
+  const filtered = query.trim().length > 0 || tab !== "all" || consent !== "" || includeArchived;
+  const hasFilteredRows = filteredRows.length > 0;
+  const rangeStart = hasFilteredRows ? (currentPage - 1) * pageSize + 1 : 0;
+  const rangeEnd = Math.min(currentPage * pageSize, filteredRows.length);
+  useEffect(() => {
+    onContextChange?.({ query, consent, includeArchived, sort, tab, page });
+  }, [consent, includeArchived, onContextChange, page, query, sort, tab]);
   const clearSearch = () => {
     setSearchTerm("");
+    setPage(1);
+    setSelected(new Set());
     setQueryVersion((current) => current + 1);
     setSearchResetKey((current) => current + 1);
+  };
+  const returnToAll = () => {
+    setTab("all");
+    setPage(1);
+    setSelected(new Set());
   };
   const refresh = () => setQueryVersion((current) => current + 1);
   const openArchive = async (customer: Customer) => {
@@ -240,6 +272,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
 
   return (
     <PageFrame
+      className="clientes-page"
       title="Clientes"
       titleAdornment={<Badge>{allRows.length}</Badge>}
       subtitle="Gestiona tus clientes y su historial de atención."
@@ -251,14 +284,17 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{allRows.length}</Badge></> }, ...CUSTOMER_STATES.map((customerState) => ({ id: customerState, label: <>{customerStateLabel(customerState)} <Badge>{counts[customerState]}</Badge></> }))]}>
         {() => <div className="table-card clientes-list__card">
         <div className="table-toolbar clientes-list__toolbar">
-          <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
-          <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
-          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
+          <SearchInput key={searchResetKey} defaultValue={query} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setSelected(new Set()); setQueryVersion((current) => current + 1); }} />
+          <div className="clientes-list__filter-group" aria-label="Filtros secundarios">
+            <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
+            <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Archivados</span></label>
+          </div>
         </div>
-        {state === "loading" ? null : data && data.length > 0 ? (
+        {filtered ? <p className="clientes-list__active-filters" role="status">Filtros activos: {[tab !== "all" ? customerStateLabel(tab) : null, consent === "true" ? "Consentimiento: Sí" : consent === "false" ? "Consentimiento: No" : null, includeArchived ? "Incluye archivados" : null, query.trim() ? `Búsqueda: ${query}` : null].filter(Boolean).join(" · ")}</p> : null}
+        {state === "loading" || state === "error" || state === "fatal-error" || state === "denied" ? null : data && data.length > 0 && hasFilteredRows ? (
           <div className="data-region">
-              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <div className="clientes-list__selection-actions"><span>{selected.size} seleccionados</span>{selectedActive.length ? <Button variant="danger" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "archive", ids: selectedActive.map((row) => row.id) }); }}><Archive />Archivar seleccionados</Button> : null}{selectedArchived.length ? <Button variant="secondary" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "restore", ids: selectedArchived.map((row) => row.id) }); }}><ArchiveRestore />Restaurar seleccionados</Button> : null}</div> : null}</div>
-               <div className="table-card__desktop"><DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar esta página" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar esta página</label>{selectedRows.length ? <div className="clientes-list__selection-actions"><span>{selectedRows.length} seleccionados</span>{selectedActive.length ? <Button variant="danger" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "archive", ids: selectedActive.map((row) => row.id) }); }}><Archive />Archivar seleccionados</Button> : null}{selectedArchived.length ? <Button variant="secondary" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "restore", ids: selectedArchived.map((row) => row.id) }); }}><ArchiveRestore />Restaurar seleccionados</Button> : null}</div> : null}</div>
+               <div className="table-card__desktop"><DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); setSelected(new Set()); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
               // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and
@@ -301,24 +337,38 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                         { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
                       ];
                   return <li className="table-card__item clientes-list__mobile-card" key={customer.id}>
-                    <div className="clientes-list__mobile-identity"><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
+                    <div className="clientes-list__mobile-identity">
+                      <label className="clientes-list__mobile-select">
+                        <input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} />
+                      </label>
+                      <a className="clientes-list__name clientes-list__mobile-link" aria-label={customerIdentityLabel(customer)} href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>
+                        <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
+                        <span className="clientes-list__mobile-name">
+                          <strong>{customer.name ?? customer.phone_e164 ?? "—"}</strong>
+                          {customer.name && customer.phone_e164 ? <span>{customer.phone_e164}</span> : null}
+                        </span>
+                        <ChevronRight aria-hidden="true" />
+                      </a>
+                      <Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} />
+                    </div>
                     <div className="clientes-list__mobile-grid">
-                      <div><span>Teléfono</span>{customer.phone_e164 ?? "—"}</div>
-                      <div><span>Estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
-                      <div><span>Consentimiento</span><span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span></div>
-                      <div><span>Creado</span>{customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—"}</div>
-                      <div><span>Archivo</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : <Badge tone="success">Disponible</Badge>}</div>
+                      <div><span className="visually-hidden">Estado: </span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
+                      <div className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span><span>Consentimiento: {customer.consent_status ? "Sí" : "No"}</span></div>
+                      {customer.archived_at ? <Badge tone="warning">Archivado</Badge> : null}
                     </div>
                   </li>;
                 })}
               </ul>
-              <footer className="table-footer"><span className="table-footer__count">Mostrando {rows.length} de {filteredRows.length} clientes</span><Pagination page={page} pageCount={pageCount} onPageChange={setPage} /></footer>
+              <footer className="table-footer"><span className="table-footer__count">{rangeStart}–{rangeEnd} de {filteredRows.length} clientes</span><Pagination page={currentPage} pageCount={pageCount} onPageChange={(nextPage) => { setPage(nextPage); setSelected(new Set()); }} /></footer>
           </div>
         ) : filtered ? (
-          <div>
-            <EmptyState title="Sin resultados" description="Ajusta tu búsqueda o límpiala para ver todo el listado." />
-            <Button variant="secondary" onClick={clearSearch}>Limpiar búsqueda</Button>
-          </div>
+          <EmptyState title="Sin resultados" description="No hay clientes que coincidan con los filtros aplicados." action={
+            <div className="clientes-list__empty-actions">
+              {tab !== "all" ? <Button variant="secondary" onClick={returnToAll}>Ver todos</Button> : null}
+              {query.trim() ? <Button variant="secondary" onClick={clearSearch}>Limpiar búsqueda</Button> : null}
+              {tab === "all" && !query.trim() ? <Button variant="secondary" onClick={() => { setConsent(""); setIncludeArchived(false); setPage(1); setSelected(new Set()); refresh(); }}>Quitar filtros</Button> : null}
+            </div>
+          } />
         ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
           <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
         ) : null}

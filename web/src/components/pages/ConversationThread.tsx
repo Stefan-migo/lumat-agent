@@ -1,3 +1,4 @@
+import { useStickToBottom } from "../domain/useStickToBottom";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bot, CheckCheck, CircleCheck, Clock, Copy, Info, Lock, Paperclip, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff, Mic, Square, X } from "lucide-react";
 import { ApiError, acknowledgeCase, changeConversationState, getConversation, listActiveConversations, listConversations, retryMessage, sendMedia, sendMessage } from "../../api";
@@ -166,6 +167,9 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const conversation = data?.conversation;
   const messages = data?.messages ?? [];
+  const { scrollRef, onScroll } = useStickToBottom<HTMLElement>(
+    conversation?.id ?? conversationId, messages.length, messages.at(-1)?.id, liveActivity.length,
+  );
   const refresh = fetched.retry;
   const toggleMessages = () => { setMessagesExpanded((value) => !value); refresh(); };
   useEffect(() => {
@@ -266,27 +270,28 @@ export function ConversationThread({ conversationId, data: controlledData, state
   // open from the previous customer.
   useEffect(() => { setDetailOpen(false); }, [conversationId]);
   return <PageFrame className="conversations-page conversation-thread-page" title="" state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : state === "stale" ? <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="Mostramos la información disponible." /> : null}>
-      {conversation ? <header className="conversation-thread__header">
+      <header className="conversation-thread__header">
         {onBack ? <Button variant="tertiary" className="conversation-thread__back" aria-label="Volver a conversaciones" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button> : null}
-        <Avatar className="conversation-thread__hero-avatar" name={displayName ?? "Conversación"} />
-        <h1>{displayName}</h1>
-        {phone ? <span className="conversation-thread__phone"><span className="conversation-thread__online" aria-hidden="true" />{phone}</span> : null}
-        <span className="conversation-thread__id">· #{conversation.id}</span>
-        <span role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></span>
-        <div className="conversation-thread__header-actions">
+        {conversation ? <Avatar className="conversation-thread__hero-avatar" name={displayName ?? "Conversación"} /> : null}
+        <div className="conversation-thread__heading">
+          <h1>{displayName ?? "Conversación"}</h1>
+          {conversation ? <span className="conversation-thread__header-meta">{phone ? `${phone} · ` : ""}#{conversation.id}</span> : null}
+          {conversation ? <span role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></span> : null}
+        </div>
+        {conversation ? <div className="conversation-thread__header-actions">
           {interactive ? takeAction : null}
           <Button className="conversation-thread__info" variant="secondary" aria-label="Detalles del cliente" aria-pressed={detailOpen} onClick={() => setDetailOpen((open) => !open)}><Icon icon={Info} size="sm" /></Button>
-          <Button className="conversation-thread__client" variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Cliente</Button>
+          <Button className="conversation-thread__client" variant="secondary" aria-label="Cliente" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" /><span>Cliente</span></Button>
           {interactive ? desktopMenu : null}
           {interactive ? mobileMenu : null}
-        </div>
-      </header> : null}
+        </div> : null}
+      </header>
         {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>El histórico guardado sigue disponible.</span></p> : null}
        {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="conversation-workspace">
          <main className="ai-agent-grammar__main" aria-label="Conversación">
          <div className="conversation-thread__thread">
            <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}>
-         <section className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
+         <section ref={scrollRef} onScroll={onScroll} tabIndex={0} className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
            <div className="ai-agent-grammar__bubbles">{messages.map((message, index) => {
              const day = message.created_at?.slice(0, 10) ?? null;
              const previousDay = index > 0 ? messages[index - 1]?.created_at?.slice(0, 10) ?? null : null;
@@ -305,12 +310,14 @@ export function ConversationThread({ conversationId, data: controlledData, state
            {messages.filter((m) => m.delivery_status === "failed").map((m) => <Button key={m.id} variant="secondary" disabled={busy} onClick={() => void mutate(() => retryMessage(m.conversation_id, m.id))}>Reintentar entrega #{m.id}</Button>)}
            {conversation?.state === "human" ? <form className={`ai-agent-grammar__composer${windowOpen ? "" : " ai-agent-grammar__composer--locked"}`} aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}>
              {!windowOpen ? <p className="conversation-thread__window-note" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /> Fuera de la ventana de 24 horas · el envío no está disponible.</p> : null}
-             <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field">{!windowOpen ? <Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /> : null}<Textarea label="Respuesta" rows={windowOpen ? undefined : 1} placeholder={windowOpen ? undefined : "Respuesta no disponible"} value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /></div><Button type="submit" aria-label="Enviar respuesta" disabled={!windowOpen || busy || !text.trim()}><SendHorizonal aria-hidden="true" /></Button></div>
+             <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field">{!windowOpen ? <Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /> : null}<Textarea label="Respuesta" rows={windowOpen ? undefined : 1} placeholder={windowOpen ? "Escribe un mensaje" : "Respuesta no disponible"} value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /></div>
              <div className="conversation-thread__media-tools">
                <input ref={inputRef} className="conversation-thread__file-input" type="file" aria-label="Adjuntar archivo" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" disabled={!windowOpen || busy} onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setCaption(""); event.currentTarget.value = ""; }} />
-               <Button variant="secondary" aria-label="Adjuntar archivo" disabled={!windowOpen || busy} onClick={() => inputRef.current?.click()}><Paperclip aria-hidden="true" />Adjuntar</Button>
-               {recording ? <><span role="timer" aria-label="Tiempo de grabación">{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</span><Button variant="secondary" aria-label="Cancelar grabación" disabled={busy} onClick={() => stopRecording(true)}>Cancelar</Button><Button aria-label="Detener y enviar audio" disabled={busy} onClick={() => stopRecording(false)}><Square aria-hidden="true" />Detener y enviar</Button></> : <Button variant="secondary" aria-label="Grabar audio" disabled={!windowOpen || busy || !supportedRecordingMime} title={!supportedRecordingMime ? "La grabación de audio no está disponible en este navegador." : undefined} onClick={() => void startRecording()}><Mic aria-hidden="true" />Grabar audio</Button>}
+               <Button variant="secondary" aria-label="Adjuntar archivo" disabled={!windowOpen || busy} onClick={() => inputRef.current?.click()}><Paperclip aria-hidden="true" /><span>Adjuntar</span></Button>
+               {recording ? <><span role="timer" aria-label="Tiempo de grabación">{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</span><Button variant="secondary" aria-label="Cancelar grabación" disabled={busy} onClick={() => stopRecording(true)}>Cancelar</Button><Button aria-label="Detener y enviar audio" disabled={busy} onClick={() => stopRecording(false)}><Square aria-hidden="true" />Detener y enviar</Button></> : <Button variant="secondary" aria-label="Grabar audio" disabled={!windowOpen || busy || !supportedRecordingMime} title={!supportedRecordingMime ? "La grabación de audio no está disponible en este navegador." : undefined} onClick={() => void startRecording()}><Mic aria-hidden="true" /><span>Grabar audio</span></Button>}
                {!supportedRecordingMime ? <span className="conversation-thread__recording-help">La grabación de audio no está disponible en este navegador.</span> : null}
+             </div>
+               <Button type="submit" aria-label="Enviar respuesta" disabled={!windowOpen || busy || !text.trim()}><SendHorizonal aria-hidden="true" /></Button>
              </div>
              {selectedFile ? <div className="conversation-thread__selected-file"><span>{selectedFile.name} · {(selectedFile.size / 1024).toFixed(1)} KB</span><Textarea label="Texto del archivo (opcional)" rows={2} value={caption} disabled={busy} onChange={(event) => setCaption(event.target.value)} /><Button disabled={!windowOpen || busy} onClick={() => sendSelectedFile(selectedFile, caption)}>Enviar archivo</Button></div> : null}
                         </form> : <div className="ai-agent-grammar__composer ai-agent-grammar__composer--locked">
