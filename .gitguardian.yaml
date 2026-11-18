@@ -14,6 +14,10 @@ secret:
     - 'tests/integration/test_smtp*.py'
     - 'tests/integration/test_verifier_wue_transport.py'
     - 'tests/functional/test_api_settings_email.py'
+    # The panel login fixtures: the file spells `password` for `oper-pass` and
+    # `s3cret-admin`, both throwaway values for a test user that exists only in a
+    # derived database. Added 2026-11-18 when the remember-session tests reused it.
+    - 'tests/functional/test_auth.py'
     - 'tests/functional/test_verifier_wue_api.py'
     - 'tests/integration/test_emergency_notify.py'
     - 'tests/integration/test_cost_guardrails.py'

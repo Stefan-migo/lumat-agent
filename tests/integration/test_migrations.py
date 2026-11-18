@@ -77,6 +77,7 @@ EXPECTED_TABLES = {
     "project_folders",  # 055_project_folders.sql (folders that group project files)
     "assistant_artifacts",  # 044_assistant_artifacts.sql (assistant-produced files)
     "panel_secrets",  # 053_panel_secrets.sql (encrypted panel-managed credentials)
+    "panel_sessions",  # 069_panel_sessions.sql (revocable per-device remember credentials)
     "schema_migrations",
 }
 
@@ -821,6 +822,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("066_commitments",),
         ("067_message_transcript",),
         ("068_customer_address_validation",),
+        ("069_panel_sessions",),
     ]
 
 

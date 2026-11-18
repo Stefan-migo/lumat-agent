@@ -95,10 +95,31 @@ def test_json_session_role_and_tampered_cookie_are_enforced(client, make_user):
         "email": None, "name": None, "phone": None, "position": None,
     }
 
+    # A forged session cookie is not a credential. The remembered device is one, so it is removed
+    # first: otherwise the request would be restored on purpose and the assertion would prove nothing.
+    client.cookies.delete("lumat_remember", path="/")
     client.cookies.set("session", "tampered")
     resp = client.get("/panel/api/me", follow_redirects=False)
     assert resp.status_code == 401
     assert resp.json() == {"detail": "unauthorized"}
+
+
+def test_a_remembered_device_outlives_a_forged_session_cookie(client, make_user):
+    """AP-2 with the remember feature: the forged cookie is discarded, the device is not."""
+    user_id = make_user("oper-remember", "oper-pass", role="operador")
+    token = client.post(
+        "/panel/api/login",
+        json={"username": "oper-remember", "password": "oper-pass"},
+        follow_redirects=False,
+    ).cookies["lumat_remember"]
+
+    client.cookies.set("session", "tampered")
+    resp = client.get("/panel/api/me", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json()["id"] == user_id
+    # Restoring rotates: the credential the client now holds is not the one it presented.
+    assert resp.cookies["lumat_remember"] not in (None, "", token)
 
 
 def _run_seed_admin(env: dict) -> subprocess.CompletedProcess:

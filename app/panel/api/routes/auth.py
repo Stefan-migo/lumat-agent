@@ -18,13 +18,15 @@ failed-login counter survive the request (get_db rolls back on exception).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import PanelSession, User
 from app.panel.api.deps import require_user_json
-from app.panel.deps import get_db
+from app.panel.deps import REMEMBER_COOKIE, clear_panel_cookies, get_db, set_remember_cookie
+from app.services import panel_sessions
 from app.services.audit import record_audit
 from app.services.users import (
     get_user_by_username,
@@ -40,6 +42,7 @@ router = APIRouter(tags=["panel-api-auth"])
 class LoginBody(BaseModel):
     username: str
     password: str
+    remember: bool = True
 
 
 def _audit(
@@ -63,6 +66,7 @@ def _audit(
 @router.post("/login")
 def login(
     request: Request,
+    response: Response,
     body: LoginBody,
     session: Session = Depends(get_db),
 ) -> dict:
@@ -120,6 +124,9 @@ def login(
     request.session["user_id"] = user.id
     request.session["username"] = user.username
     request.session["role"] = user.role.value
+    if body.remember:
+        token = panel_sessions.issue(session, user.id, request.headers.get("user-agent"))
+        set_remember_cookie(response, token)
     return {"ok": True, "id": user.id, "role": user.role.value}
 
 
@@ -140,6 +147,7 @@ def me(current: User = Depends(require_user_json)) -> dict:
 @router.post("/logout")
 def logout(
     request: Request,
+    response: Response,
     session: Session = Depends(get_db),
     current: User = Depends(require_user_json),
 ) -> dict:
@@ -150,6 +158,67 @@ def logout(
         username=current.username,
         user_id=current.id,
     )
+    raw_token = request.cookies.get(REMEMBER_COOKIE)
+    if raw_token:
+        record = panel_sessions.resolve(session, raw_token)
+        if record is not None and record.user_id == current.id:
+            panel_sessions.revoke(session, record)
     session.commit()
     request.session.clear()
+    clear_panel_cookies(response)
+    return {"ok": True}
+
+
+@router.get("/sessions")
+def list_sessions(
+    request: Request,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_user_json),
+) -> dict:
+    """List this user's active remembered devices."""
+    current_record = getattr(request.state, "panel_session_record", None)
+    return {
+        "sessions": [
+            {
+                "id": row.id,
+                "user_agent": row.user_agent,
+                "created_at": row.created_at.isoformat(),
+                "last_used_at": row.last_used_at.isoformat(),
+                "current": current_record is not None and current_record.id == row.id,
+            }
+            for row in panel_sessions.list_active(session, current.id)
+        ]
+    }
+
+
+@router.post("/sessions/{session_id}/revoke")
+def revoke_session(
+    session_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_user_json),
+) -> dict:
+    row = session.scalar(
+        select(PanelSession).where(
+            PanelSession.id == session_id,
+            PanelSession.user_id == current.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    panel_sessions.revoke(session, row)
+    return {"ok": True}
+
+
+@router.post("/sessions/revoke-all")
+def revoke_all_sessions(
+    request: Request,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_user_json),
+) -> dict:
+    current_record = getattr(request.state, "panel_session_record", None)
+    panel_sessions.revoke_all(
+        session,
+        current.id,
+        keep_id=current_record.id if current_record is not None else None,
+    )
     return {"ok": True}

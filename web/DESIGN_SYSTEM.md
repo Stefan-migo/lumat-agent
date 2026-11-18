@@ -495,6 +495,7 @@ unfinished surface, not a minimal one.
 - Use one save action per independently persisted group.
 - Show saved, saving, validation, server-error, and stale-value states.
 - Keep advanced machine syntax (`category=mode`, keyword lists) visually separated from ordinary controls and validate it before saving.
+- In `Cuenta → Dispositivos`, the operator sees only their own devices. Revoking a device cuts off its access immediately; identify the current device in the list rather than hiding it.
 
 ### Proyectos (product-change contract)
 
