@@ -31,11 +31,11 @@ endpoint, and bind it into the approved payload inside the same atomic consumpti
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 | S1, S2, S3 | backend · approval envelope + decision validation + candidate publication | 1 |
-| T2 | S1, S2, S3 | backend · atomic decision injection in `approve_plan` + endpoint contract | 1 |
-| T3 | S4 | backend · informed second gate in `projects.create` | 1 |
-| T4 | S1, S2, S3, S4, S6 | tests · RED-first e2e through graph, approval and execute | 1 |
-| T5 | S5 | panel · types, api client, PlanCard picker, web tests, DESIGN_SYSTEM entry | 2 |
+| T1 | S1, S2, S3 | backend · approval envelope + decision validation + candidate publication | `ee51d8070` |
+| T2 | S1, S2, S3 | backend · atomic decision injection in `approve_plan` + endpoint contract | `d54f8a321` |
+| T3 | S4 | backend · informed second gate in `projects.create` | `d54f8a321` |
+| T4 | S1, S2, S3, S4, S6 | tests · unit matrix, DB e2e, HTTP contract | `ee51d8070`, `d54f8a321`, `2a5413e60` |
+| T5 | S5 | panel · types, api client, PlanCard picker, web tests, DESIGN_SYSTEM entry | this commit |
 
 ## Log
 
@@ -99,3 +99,15 @@ hand (`tests/unit/test_assistant_tools.py:947-957`); no test exercises the real 
   `scripts/test.sh db` over the touched files green (158 tests). Two real defects surfaced while
   writing the tests: `jsonb_set` needs the digest JSON-encoded, and a plan carrying the bound payload
   poisoned the digest check of the *next* approval in a parked chain.
+
+### L6 — panel evidence and review fixes
+
+- S5 shipped through `gentle-ai-worker` with six allowed surfaces; parent review before commit found and
+  corrected four things: the invented `project_hash` type (the real key is `project_sha256`), a picker
+  that could render with zero options and disable "Aprobar" forever, a static radio `name` shared across
+  cards, and an unrequested `@media` rule that restyled every plan card's button row.
+- The second-gate web test now mirrors the envelope the backend actually publishes
+  (`["selected_slug", "create_anyway"]`) instead of an impossible three-option list, and asserts the
+  deliberate-duplicate radio starts unselected.
+- Gates observed: `npx vitest run src/components/pages/AgentChat.test.tsx` → 85 passed;
+  `npm run build` (`tsc -b`) green; `npm test` → 121 files / 1439 tests passed.

@@ -119,15 +119,28 @@ def test_only_the_bound_decision_passes_execution_validation():
     assert consume_approval(approval, approval["token"]) is True
     plan = {"tool": "project.create", "arguments": CREATE_ARGUMENTS}
 
-    # Consumed but unanswered: the execution boundary must still refuse it.
+    # Consumed but unanswered: the plan still validates, and the boundary refuses it separately.
     assert validate_execution(plan, approval) is True
-    assert validate_execution({**plan, "project_payload": approval["project_payload"]}, approval) is True
 
     binding = approved_project_binding(approval, {"create_distinct": True})
     approval["project_payload"] = binding["payload"]
     approval["project_sha256"] = binding["sha256"]
 
     assert validate_execution({**plan, "project_payload": binding["payload"]}, approval) is True
+    # The bound digest is what binds the decision: a different one is a different write.
+    assert validate_execution(
+        {**plan, "project_payload": {**binding["payload"], "decision": {"create_anyway": True}}}, approval
+    ) is False
+
+
+def test_execute_refuses_a_plan_whose_digest_does_not_match(monkeypatch):
+    """S1: an approval cannot authorize arguments or a decision it was not issued for."""
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.create",
+        lambda *args, **kwargs: pytest.fail("the service must not run"),
+    )
+    approval = _bound_consumed(decision={"create_distinct": True})
+
     with pytest.raises(ToolValidationError, match="approval does not match exact tool arguments"):
         execute_tool(
             SimpleNamespace(),
