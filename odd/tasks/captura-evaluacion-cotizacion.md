@@ -57,6 +57,13 @@ Riesgo: **medio**. Se toca el texto que el cliente lee en medio de la captura y 
 | Después del arreglo, árbol sucio | `captura-eval-2` (1/1, la frase sale en el turno 5) |
 | Después del arreglo, árbol limpio | `captura-eval-limpio`, sello `00d870b41`, **4/4, cero gates fallidos**, la ack en el turno 5 |
 
+## Entrega
+
+Una PR (`fix/captura-evaluacion-cotizacion`): **corte 1, `00d870b41`**, con el código y las pruebas
+(~250 líneas revisables) más este documento; **corte 2, `5933e5ae8`**, sólo evidencia — los tres informes
+de corrida con sus transcripts, incluida la corrida sucia que expuso la ack tragada. Los transcripts no son
+superficie de revisión: se leen las specs y el log.
+
 ## Log
 
 **L1 (pedido del owner, 2026-11-18, handoff).** Verbatim:
