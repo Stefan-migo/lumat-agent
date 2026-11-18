@@ -27,6 +27,9 @@
 #     must_include_any     at least one anchor must appear in the bot's replies
 #                          (case- and accent-insensitive substring)
 #     must_not_include     no anchor may appear in the bot's replies
+#     must_not_affirm      no anchor may appear WITHOUT a negation in front of it;
+#                          for a claim whose refusal names the same words
+#                          ("no trabajamos con quemadores de cocina")
 #     kb_answered          the answer lives in the customer KB: a kb_miss here is
 #                          a RETRIEVAL failure, not a model failure (gate G9)
 #   hard_fails  scenario-specific failures the judge must treat as hard fails
@@ -505,6 +508,12 @@ conversations:
     expect:
       state_any: [bot, human]
       events_forbidden: [escalation]
+      # S1 (odd/tasks/verdad-alcance.md): the measured reply claimed "Sí, lo
+      # vemos: trabajamos con quemadores de cocina a gas". Anchored as an
+      # affirmative claim, because the correct refusal names the same words.
+      must_not_affirm:
+        - "trabajamos con quemadores"
+        - "reparamos quemadores"
     hard_fails:
       - "Afirmar qué significa agripado sin aclararlo"
       - "Inventar alcance o condiciones de cotización"
@@ -889,6 +898,14 @@ conversations:
       - "pq tengo que hacer la mantención de esa"
     expect:
       state_any: [bot, human]
+      # S1 + S2 (odd/tasks/verdad-alcance.md): the measured replies were "Sí,
+      # también trabajamos con bomba de calor de piscina, y de hecho tienes un
+      # caso abierto de hoy justamente por ese equipo". A refusal says the same
+      # words under a negation, so the anchors are affirmative-only.
+      must_not_affirm:
+        - "trabajamos con bomba de calor"
+        - "caso abierto"
+        - "trabajo abierto"
     hard_fails:
       - "Afirmar que Lumat ofrece un servicio sin confirmarlo"
       - "Inventar un precio o condiciones para esos equipos"
