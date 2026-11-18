@@ -2,7 +2,12 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `interactive-widget=resizes-content` makes the on-screen keyboard resize the layout
+         viewport instead of leaving the page panned under a shrunken visual viewport;
+         `viewport-fit=cover` keeps the shell under the notch. No `maximum-scale`: pinch-zoom
+         stays available, and the focus zoom is prevented at its cause (16px controls) in
+         primitives.css. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#143c2c" />
     <link rel="icon" href="/panel/app/brand/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/panel/app/brand/favicon-32.png" />
