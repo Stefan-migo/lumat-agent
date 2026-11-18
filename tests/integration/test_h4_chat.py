@@ -212,3 +212,89 @@ def test_model_failure_marks_message_failed_and_recoverable(client, migrated_db,
     listed = client.get(f"/panel/api/chat/threads/{thread['id']}")
     assert listed.status_code == 200
     assert any(message["content"] == "Try again" and message["status"] == "failed" for message in listed.json()["messages"])
+
+
+def test_project_approval_endpoint_refuses_an_unanswered_decision(client, migrated_db, monkeypatch):
+    """S2: the endpoint says what is missing, consumes nothing, and keeps the question answerable."""
+    from app.chat.assistant.approval import issue_approval
+
+    _user("chat-decision", "admin")
+    _login(client, "chat-decision")
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: _FakeChatClient())
+    thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]
+
+    plan = {
+        "kind": "tool",
+        "tool": "project.create",
+        "arguments": {"slug": "e2e-temporal", "name": "E2E temporal", "purpose": "gasfitería"},
+        "summary": "Crear un proyecto",
+        "requires_approval": True,
+    }
+    approval = issue_approval(plan)
+    with SessionLocal() as session:
+        row = session.get(InternalChatThread, thread["id"])
+        row.active_run_id = f"decision-{uuid4().hex[:8]}"
+        row.current_plan = plan
+        row.assistant_state = {
+            **(row.assistant_state or {}),
+            "stage": "approval_pending",
+            "execution_status": "pending",
+            "approval": approval,
+            "actor_role": "admin",
+            "live": {"run_id": row.active_run_id, "status": "approval_pending"},
+        }
+        session.commit()
+        run_id, token = row.active_run_id, approval["token"]
+
+    response = client.post(
+        f"/panel/api/chat/threads/{thread['id']}/approval", json={"run_id": run_id, "token": token}
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("project decision")
+    with SessionLocal() as session:
+        stored = session.get(InternalChatThread, thread["id"]).assistant_state["approval"]
+        assert stored["status"] == "pending"
+        assert stored["project_decision"]["options"] == ["create_distinct"]
+
+
+def test_project_approval_endpoint_rejects_a_decision_it_did_not_offer(client, migrated_db, monkeypatch):
+    """S2: `create_anyway` is only answerable once a conflict is on screen."""
+    from app.chat.assistant.approval import issue_approval
+
+    _user("chat-decision-offer", "admin")
+    _login(client, "chat-decision-offer")
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: _FakeChatClient())
+    thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]
+
+    plan = {
+        "kind": "tool",
+        "tool": "project.create",
+        "arguments": {"slug": "e2e-temporal", "name": "E2E temporal", "purpose": "gasfitería"},
+        "summary": "Crear un proyecto",
+        "requires_approval": True,
+    }
+    approval = issue_approval(plan)
+    with SessionLocal() as session:
+        row = session.get(InternalChatThread, thread["id"])
+        row.active_run_id = f"decision-{uuid4().hex[:8]}"
+        row.current_plan = plan
+        row.assistant_state = {
+            **(row.assistant_state or {}),
+            "stage": "approval_pending",
+            "execution_status": "pending",
+            "approval": approval,
+            "actor_role": "admin",
+        }
+        session.commit()
+        run_id, token = row.active_run_id, approval["token"]
+
+    response = client.post(
+        f"/panel/api/chat/threads/{thread['id']}/approval",
+        json={"run_id": run_id, "token": token, "decision": {"create_anyway": True}},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "project decision is not offered by this approval"
+    with SessionLocal() as session:
+        assert session.get(InternalChatThread, thread["id"]).assistant_state["approval"]["status"] == "pending"
