@@ -12,7 +12,12 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.chat.assistant.graph import run_assistant
-from app.chat.assistant.approval import validate_approval
+from app.chat.assistant.approval import (
+    ApprovalDecisionError,
+    approved_project_binding,
+    validate_approval,
+    validate_project_decision,
+)
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.nodes import execute
 from app.chat.assistant.tools.registry import BUSINESS_MEMORY_ROLES
@@ -877,8 +882,14 @@ def _park_chain_on_next_approval(
     return message
 
 
-def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:
-    """Atomically consume or reject the approval stored on the thread."""
+def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False, decision: dict | None = None) -> InternalChatMessage | None:
+    """Atomically consume or reject the approval stored on the thread.
+
+    A project approval that published a decision envelope is answered, not inferred: the owner's
+    choice is validated against the options and candidates the server itself published, then bound
+    into the approved payload together with the digest that proves it. The whole thing lands in the
+    same UPDATE that flips the status, so an approval can never be consumed unanswered.
+    """
     plan = thread.current_plan or {}
     state = thread.assistant_state or {}
     approval = state.get("approval") or {}
@@ -886,17 +897,35 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         return None
     if thread.active_run_id != run_id or not validate_approval(plan, approval, token):
         return None
+    binding = None
+    if not reject:
+        envelope = approval.get("project_decision")
+        if decision is not None and not isinstance(envelope, dict):
+            raise ApprovalDecisionError("this approval takes no project decision")
+        resolved = validate_project_decision(envelope, decision)
+        if resolved:
+            binding = approved_project_binding(approval, resolved)
     status = "rejected" if reject else "consumed"
+    statement = "jsonb_set(assistant_state, '{approval,status}', CAST(:status AS jsonb))"
+    params: dict = {"status": json.dumps(status), "thread_id": thread.id, "run_id": run_id}
+    if binding is not None:
+        statement = (
+            "jsonb_set(jsonb_set(" + statement
+            + ", '{approval,project_payload}', CAST(:project_payload AS jsonb))"
+            + ", '{approval,project_sha256}', CAST(:project_sha256 AS jsonb))"
+        )
+        params["project_payload"] = json.dumps(binding["payload"])
+        params["project_sha256"] = json.dumps(binding["sha256"])
     updated = session.execute(
-        text("""
+        text(f"""
             UPDATE internal_chat_threads
-            SET assistant_state = jsonb_set(assistant_state, '{approval,status}', CAST(:status AS jsonb))
+            SET assistant_state = {statement}
             WHERE id = :thread_id
               AND active_run_id = :run_id
-              AND assistant_state #>> '{approval,status}' = 'pending'
+              AND assistant_state #>> '{{approval,status}}' = 'pending'
             RETURNING id
         """),
-        {"status": json.dumps(status), "thread_id": thread.id, "run_id": run_id},
+        params,
     ).scalar_one_or_none()
     if updated is None:
         return None

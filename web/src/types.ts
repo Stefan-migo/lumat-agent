@@ -182,6 +182,9 @@ export interface NotificationsResponse { notifications: PanelNotification[]; }
 
 export type InternalChatStatus = 'processing' | 'processed' | 'failed' | 'approval_pending' | 'rejected' | 'cancelled';
 export interface AssistantPlan { tool?: string | null; arguments?: Record<string, unknown>; summary?: string; status?: string; requires_approval?: boolean; }
+export type ProjectDecisionOption = 'selected_slug' | 'create_distinct' | 'create_anyway';
+export interface ProjectDecisionCandidate { slug: string; name: string; similarity: number; }
+export interface ProjectDecisionEnvelope { operation?: 'create' | 'find'; options?: ProjectDecisionOption[]; candidates?: ProjectDecisionCandidate[]; }
 export interface AssistantApproval {
   token?: string;
   token_sha256?: string;
@@ -191,6 +194,9 @@ export interface AssistantApproval {
   expires_at?: string;
   status?: string;
   consumed_at?: string | null;
+  project_sha256?: string;
+  /** The answer a project approval needs before it can be consumed; absent when it needs none. */
+  project_decision?: ProjectDecisionEnvelope | null;
 }
 export interface AssistantEvidence { tool?: string | null; status: string; detail?: string; }
 export type AssistantEventType = 'plan' | 'approval' | 'tool' | 'evidence' | 'status' | 'response' | 'error' | 'timeout' | 'handoff';

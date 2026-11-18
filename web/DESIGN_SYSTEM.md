@@ -364,7 +364,13 @@ Breakpoints respond to content, not device names. Never hide emergency, handoff,
 
 ## Page architecture
 
-`Asistente Lumat`, `Automatizaciones`, and `Usuarios` do not yet have page-architecture sections here; their absence is not permission to improvise.
+`Automatizaciones` and `Usuarios` do not yet have page-architecture sections here; their absence is not permission to improvise.
+
+### Asistente Lumat — chat
+
+- The person who owns the pending plan approves or rejects it; the plan waits for that explicit action before execution.
+- A project write requires an explicit project decision as part of approval: the first gate is informed consent to create or reuse a project, and a detected purpose conflict is shown as a second gate for the owner to resolve.
+- Keep the project choice limited to the options and candidates returned with the pending approval. Never infer consent or choose a project on the owner's behalf.
 
 ### Page header
 

@@ -15,6 +15,7 @@ from app.models import AssistantAttachment, InternalChatMessage, InternalChatThr
 from app.config import get_settings
 from app.agent_registry import get_registry, select_assistant
 from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
+from app.chat.assistant.approval import ApprovalDecisionError
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
 from app.services.agent_chat import BUSINESS_MEMORY_ROLES, approve_plan, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
@@ -57,6 +58,10 @@ class ApprovalBody(BaseModel):
     run_id: str = Field(min_length=1)
     token: str = Field(min_length=1)
     reject: bool = False
+    # The owner's answer to a project approval: `selected_slug` (reuse the project it named) or
+    # `create_distinct` / `create_anyway`. Only the options the approval itself published are
+    # accepted, and `approve_plan` validates it against the candidates it published.
+    decision: dict | None = None
 
 
 class StopBody(BaseModel):
@@ -552,7 +557,16 @@ def approve_thread_plan(
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
-    message = approve_plan(session, result[0], current, body.run_id, body.token, reject=body.reject)
+    try:
+        message = approve_plan(
+            session, result[0], current, body.run_id, body.token, reject=body.reject, decision=body.decision
+        )
+    except ApprovalDecisionError as exc:
+        # A missing or unoffered decision is a bad answer, not an expired approval: nothing was
+        # consumed, and the panel keeps the picker available. The session's transaction must not
+        # carry the failed UPDATE into the next request.
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if message is None:
         raise HTTPException(status_code=409, detail="approval is invalid, expired, or already consumed")
     return {"status": message.status, "message": message_dict(message)}

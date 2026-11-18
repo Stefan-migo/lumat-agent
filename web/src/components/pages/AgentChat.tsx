@@ -145,7 +145,7 @@ export function PlanCard({
 }: {
   plan: AssistantPlan;
   approval?: AssistantApproval | null;
-  onApprove?: () => void;
+  onApprove?: (decision?: Record<string, unknown>) => void;
   onReject?: () => void;
   busy?: boolean;
 }) {
@@ -158,6 +158,27 @@ export function PlanCard({
     completed: "Completado",
   }[plan.status ?? ""] ?? "Propuesto";
   const skillProposal = plan.tool === "skill.propose" ? plan.arguments ?? {} : null;
+  const projectDecision = approval?.project_decision;
+  const decisionOptions = projectDecision ? [
+    ...(projectDecision.options?.includes("selected_slug") ? (projectDecision.candidates ?? []).map((candidate) => ({
+      key: `candidate:${candidate.slug}`,
+      label: `Reusar «${candidate.name}» (${candidate.slug}) · ${candidate.similarity}`,
+      decision: { selected_slug: candidate.slug },
+    })) : []),
+    ...(projectDecision.options?.includes("create_distinct") ? [{ key: "create_distinct", label: "Crear un proyecto nuevo y distinto", decision: { create_distinct: true } }] : []),
+    ...(projectDecision.options?.includes("create_anyway") ? [{ key: "create_anyway", label: "Crear igualmente un proyecto con el mismo propósito", decision: { create_anyway: true } }] : []),
+  ] : [];
+  const hasDecisionPicker = approval?.status === "pending" && decisionOptions.length > 0;
+  const [rememberedDecision, setRememberedDecision] = useState(() => decisionOptions.length === 1 ? decisionOptions[0].key : "");
+  useEffect(() => {
+    setRememberedDecision(decisionOptions.length === 1 ? decisionOptions[0].key : "");
+  }, [projectDecision]);
+  const selectedDecision = decisionOptions.find((option) => option.key === rememberedDecision);
+  const decisionHint = projectDecision?.operation === "find"
+    ? "Elegí con qué proyecto continuar."
+    : (projectDecision?.candidates?.length ?? 0) > 0
+      ? "Ya existe un proyecto con el mismo propósito. Elegí si reusar uno de esos o crear uno nuevo."
+      : "Se creará un proyecto nuevo y distinto. Si ya existe uno con el mismo propósito, el asistente te lo va a mostrar antes de crearlo.";
 
   return (
     <Card title="Plan de acción" className="assistant-chat__plan-card">
@@ -192,9 +213,32 @@ export function PlanCard({
       <Badge tone={pending ? "warning" : plan.status === "rejected" ? "danger" : "success"}>
         {label}
       </Badge>
+      {hasDecisionPicker ? (
+        <div className="assistant-chat__decision">
+          <p className="assistant-chat__decision-hint">{decisionHint}</p>
+          <fieldset disabled={busy}>
+            <legend>Decisión requerida</legend>
+            {decisionOptions.map((option) => (
+              <label className="assistant-chat__decision-option" key={option.key}>
+                <input
+                  type="radio"
+                  name={`project-decision-${approval?.token ?? "none"}`}
+                  value={option.key}
+                  checked={selectedDecision?.key === option.key}
+                  onChange={() => setRememberedDecision(option.key)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </fieldset>
+        </div>
+      ) : null}
+      {hasDecisionPicker && !selectedDecision ? (
+        <p className="assistant-chat__decision-blocked" role="status">Elegí una opción para poder aprobar.</p>
+      ) : null}
       {pending && onApprove && onReject ? (
         <div className="assistant-chat__plan-actions">
-          <Button onClick={onApprove} disabled={busy}>Aprobar</Button>
+          <Button onClick={() => onApprove(selectedDecision?.decision)} disabled={busy || (hasDecisionPicker && !selectedDecision)}>Aprobar</Button>
           <Button variant="secondary" onClick={onReject} disabled={busy}>Rechazar</Button>
         </div>
       ) : null}
@@ -864,11 +908,11 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
     void send(actions, true, true);
   };
 
-  const approve = async (reject: boolean) => {
+  const approve = async (reject: boolean, decision?: Record<string, unknown>) => {
     if (!thread || !runId || !approval?.token) return;
     setProcessing(true);
     try {
-      const result = await approveChatPlan(thread.id, runId, approval.token, reject);
+      const result = await approveChatPlan(thread.id, runId, approval.token, reject, reject ? undefined : decision);
       setApproval({ ...approval, status: result.status });
       setPlan((current) => (current ? { ...current, status: result.status } : current));
       setMessages((current) => [...current, result.message]);
@@ -1123,7 +1167,7 @@ export function AgentChat({ role, userId, userName, threadId, onThreadOpened }: 
                         plan={messagePlan}
                         approval={messageRunId === runId ? approval : undefined}
                         busy={processing}
-                        onApprove={ownsLiveApproval ? () => void approve(false) : undefined}
+                        onApprove={ownsLiveApproval ? (decision) => void approve(false, decision) : undefined}
                         onReject={ownsLiveApproval ? () => void approve(true) : undefined}
                       />
                     ) : null}

@@ -2822,6 +2822,15 @@
 .assistant-chat__plan-card { margin-top: var(--space-3); box-shadow: none; }
 .assistant-chat__plan-card dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; font-size: var(--text-sm); }
 .assistant-chat__plan-card dd { margin: 0; overflow-wrap: anywhere; }
+.assistant-chat__decision { display: grid; gap: var(--space-2); min-width: 0; }
+.assistant-chat__decision-hint { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.assistant-chat__decision fieldset { display: grid; gap: var(--space-2); min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.assistant-chat__decision legend { padding-inline: var(--space-1); color: var(--corp-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.assistant-chat__decision-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-2); min-width: 0; padding: var(--space-2); border-radius: var(--radius-sm); color: var(--corp-text); cursor: pointer; overflow-wrap: anywhere; }
+.assistant-chat__decision-option:hover { background: var(--corp-surface-hover); }
+.assistant-chat__decision-option input { margin: var(--space-1) 0 0; accent-color: var(--primary-800); }
+.assistant-chat__decision-option input:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.assistant-chat__decision-blocked { margin: 0; color: var(--warning); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .assistant-chat__plan-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .assistant-chat__activity { margin-top: var(--space-3); border-top: 1px solid var(--corp-border); padding-top: var(--space-2); }
 .assistant-chat__activity summary { cursor: pointer; color: var(--primary-700); font-size: var(--text-sm); }
