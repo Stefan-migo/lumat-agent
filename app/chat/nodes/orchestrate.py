@@ -25,10 +25,13 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
+from datetime import datetime, timezone
 
 from app.chat.nodes.capture import is_social_only
 from app.chat.nodes.respond import asks_about_schedule, quotes_required
 from app.chat.state import ConversationState
+from app.db import session_scope
+from app.models import Conversation, Customer
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,7 @@ def _dispatch(
     question: bool = False,
     quote_question: bool = False,
     change_request: bool = False,
+    has_upcoming_visit: bool = True,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
@@ -99,6 +103,18 @@ def _dispatch(
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+    if intent == "reagendar_visita" and change_request:
+        # S2/S12: an explicit request to change the visit remains management,
+        # even when no upcoming appointment is currently in the database.
+        return {"next_step": "manage"}
+    if intent == "reagendar_visita" and not has_upcoming_visit:
+        if question or quote_question:
+            return {
+                "next_step": "research",
+                "active_sub_agent": RESEARCH_TRIAGE,
+                "capture_paused": True,
+            }
+        return {"next_step": "capture"}
     if intent == "smalltalk":
         # Courtesy is understood even during capture; never research, capture,
         # or escalate it as a side effect of a pending field.
@@ -242,6 +258,31 @@ def _is_quote_question(state: ConversationState) -> bool:
     return quotes_required(text)
 
 
+def _has_upcoming_visit(state: ConversationState) -> bool:
+    """Read whether this customer has a booked future appointment.
+
+    Missing conversation/customer records fail closed to the legacy routing,
+    where visit management remains available.
+    """
+    if state.conversation_id is None or state.customer_id is None:
+        return True
+
+    from app.chat.nodes.manage import _appointment_query
+
+    with session_scope() as session:
+        conversation = session.get(Conversation, state.conversation_id)
+        customer = session.get(Customer, state.customer_id)
+        if (
+            conversation is None
+            or customer is None
+            or conversation.customer_id != customer.id
+        ):
+            return True
+        return session.scalar(
+            _appointment_query(customer.id, datetime.now(timezone.utc)).limit(1)
+        ) is not None
+
+
 def orchestrate(state: ConversationState) -> dict:
     """Dispatch the classified intent to a sub-graph (or handoff/respond).
 
@@ -261,6 +302,7 @@ def orchestrate(state: ConversationState) -> dict:
         change_request=asks_for_change(
             (state.window[-1].get("text") or "") if state.window else ""
         ),
+        has_upcoming_visit=_has_upcoming_visit(state),
     )
     if decision.get("active_sub_agent"):
         logger.info(

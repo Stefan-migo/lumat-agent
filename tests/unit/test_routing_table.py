@@ -353,6 +353,40 @@ def test_explicit_interrogative_marker_without_punctuation_answers_then_resumes(
     }
 
 
+def test_s4_reschedule_without_upcoming_visit_and_question_routes_to_research():
+    assert _dispatch(
+        "reagendar_visita", has_upcoming_visit=False, question=True
+    ) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_s4_reschedule_without_upcoming_visit_and_without_question_routes_to_capture():
+    assert _dispatch("reagendar_visita", has_upcoming_visit=False) == {
+        "next_step": "capture"
+    }
+
+
+def test_s4_reschedule_with_upcoming_visit_routes_to_manage():
+    assert _dispatch(
+        "reagendar_visita", has_upcoming_visit=True, question=True
+    ) == {"next_step": "manage"}
+
+
+def test_s4_cancel_routes_to_manage_without_upcoming_visit():
+    assert _dispatch(
+        "cancelar_visita", has_upcoming_visit=False, question=True
+    ) == {"next_step": "manage"}
+
+
+def test_s4_mid_capture_dispatch_default_preserves_s12():
+    assert _dispatch("reagendar_visita", mid_capture=True) == {
+        "next_step": "manage"
+    }
+
+
 def test_interrogative_marker_requires_word_boundary():
     assert orchestrate(_capture_state("los clientespueden revisar el equipo")) == {
         "next_step": "capture"

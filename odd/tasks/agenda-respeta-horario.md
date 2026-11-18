@@ -45,6 +45,19 @@ Dato efectivamente guardado en esa corrida (`conversations.captured_data`, conv 
 
 Regla: si el turno acaba de extraer `availability`, el texto de la respuesta contiene una referencia a esa disponibilidad. No se promete duración ni horario no confirmado (el objetivo del escenario lo prohíbe).
 
+### S4 — Sin visita agendada, un reagendamiento es un pedido de visita
+
+`manage` sólo sabe mover visitas existentes. Cuando no hay ninguna, `_start_offer(mode="reschedule")` deriva a `handoff(booking_unavailable)` y la conversación queda en `human`: eso es lo medido en `real-dato-mas-pregunta` (conv 1 de la corrida `agenda-house`, turno 2 = `reagendar_visita` con cero visitas próximas).
+
+Regla, derivada de la decisión del owner en L5:
+
+- `reagendar_visita` **con** visita próxima → `manage` (sin cambios; S12 intacta).
+- `reagendar_visita` **sin** visita próxima y con pregunta → `research` + `capture_paused` (se contesta, la captura retoma).
+- `reagendar_visita` **sin** visita próxima y sin pregunta → `capture` (pedido de visita, igual que `solicitar_visita`).
+- `cancelar_visita` → `manage` siempre: `_start_offer` ya responde «no tienes visitas» sin derivar.
+
+El horario pedido sigue el camino de S3: se reconoce en el turno, queda en `availability`, y `booking._requested_window` ya lo lee para filtrar la ventana cuando la captura termina.
+
 ## Tasks
 
 | ID | S# | Ruta | Commit |
@@ -52,7 +65,7 @@ Regla: si el turno acaba de extraer `availability`, el texto de la respuesta con
 | T1 | S1, S2 | `app/chat/nodes/orchestrate.py` + `tests/unit/test_routing_table.py`, test-first | pendiente |
 | T2 | S3 | `app/chat/nodes/capture.py` + tests del nodo, test-first | pendiente |
 | T3 | S1-S3 | medición `--only` de los 3 escenarios, 3 reps, transcript antes que puntaje | pendiente |
-| T4 | S1-S3 | `bash scripts/test.sh quick`, luego `full` antes de la PR | pendiente |
+| T4 | S1-S4 | `bash scripts/test.sh quick`, luego `full` antes de la PR | pendiente |
 
 ## Log
 
@@ -127,3 +140,15 @@ Dos «regresiones» del re-baseline, desarmadas por transcript:
 - `real-reagenda-familiar` 2.67 → 0.00 con **diálogo byte-idéntico** al de la corrida vieja: es ruido del juez sobre una respuesta determinista, no una regresión. Este corte la arregla por S1.
 - `real-reclamo-real-si-deriva` 2.25 → 0.00 con cambio real de diálogo: el bot ofrece el catálogo completo a un cliente que acaba de cortar la relación. Regresión candidata de la lista cerrada de la KB que agregó familia 1. Fuera de alcance acá; se reproduce aparte.
 - `super-enojo-reclamo` 0.00 → 2.92 **sin arreglo**: el transcript conserva el defecto textual de familia 4 («la mantención es preventiva… se evalúa y se presupuesta aparte»). Familia 4 sigue abierta.
+
+### L5 — decisión del owner: el horario pedido no se ofrece antes de terminar la captura
+
+Opción elegida, verbatim: «Terminar la captura y recién ahí ofrecer horarios». Descartadas: ofrecer slots en el turno sin datos para asignar técnico, y dejar que el bot siga contestando después del handoff.
+
+### L6 — la medición que obligó a agregar S4 (corrida `agenda-house`, 3 reps)
+
+`real-diego-precio-y-duracion` 0.00 → **2.67**: S3 funciona, la restricción se nombra.
+
+S1/S2 no se activaron, y el guard estaba en la condición equivocada: en los dos escenarios restantes el turno crítico llega **sin campo pendiente**, así que `mid_capture` es `False` y el bloque nunca se evaluó. Conv 1 (`real-dato-mas-pregunta`, turno 2 `reagendar_visita`, cero visitas) fue a `manage` → `booking_unavailable` → `human` → mudo. Conv 2 (`real-reagenda-familiar`) entró a captura normal, el ack de S3 nombró las 9 am, y después el bot se fue al cuestionario de diagnóstico y abandonó el pedido — el hard fail textual del juez.
+
+De ahí S4: sin visita, un reagendamiento no puede ir a `manage`, porque `manage` no tiene nada que mover.
