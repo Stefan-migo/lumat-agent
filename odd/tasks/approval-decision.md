@@ -84,3 +84,18 @@ hand (`tests/unit/test_assistant_tools.py:947-957`); no test exercises the real 
 - Duplicate policy: "Segundo gate informado (recomendado)" → S4.
 - Out of scope for this feature, recorded as follow-ups: `conversations.search` does not search summary
   text (`app/services/conversations.py:42-51`); `kb_hit_rate` reads 0% from n=1 (`app/services/analytics.py:42-83`).
+
+### L5 — slices and evidence
+
+- **Slice 1 (backend contract)** — commit `ee51d8070`: decision envelope published on the pending
+  approval, candidate publication at the tool boundary, `create_anyway` accepted, unit matrix in
+  `tests/unit/test_assistant_approval_decision.py`. RED proven on the base commit `0762e8c9f`:
+  `issue_approval` published `project_decision: None` and `execute_tool` answered
+  `project create approval is missing an explicit decision`.
+- **Slice 2 (backend consumption + panel)** — this commit: atomic decision binding in `approve_plan`,
+  endpoint contract (400 on an unanswered decision), the informed duplicate gate in `projects.create`,
+  `tests/integration/test_assistant_project_approval_decision.py`, and the panel picker.
+- Gates observed: `scripts/test.sh shape` → "no shape surface touched"; `scripts/test.sh quick` green;
+  `scripts/test.sh db` over the touched files green (158 tests). Two real defects surfaced while
+  writing the tests: `jsonb_set` needs the digest JSON-encoded, and a plan carrying the bound payload
+  poisoned the digest check of the *next* approval in a parked chain.

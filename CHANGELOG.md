@@ -6,7 +6,20 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
-_(sin cambios después de este release)_
+### Corregido
+
+- `project.create` desde el chat nunca llegaba a ejecutarse: el operador aprobaba el plan, la tool recibía
+  la aprobación consumida y el runtime la rechazaba con *"project create approval is missing an explicit
+  decision"*. El problema no era el clic: ninguna superficie del chat podía expresar la decisión que el
+  boundary exige. La aprobación pendiente ahora publica sus opciones y los candidatos reales que el servidor
+  encontró, el panel los presenta, y la decisión elegida queda vinculada al payload aprobado con su digest,
+  dentro de la misma transacción que consume la aprobación. `project.find` con candidatos se destraba por la
+  misma vía, y un slug que la aprobación no ofreció se rechaza sin consumirla.
+- Crear un proyecto con el mismo propósito que uno existente ya no crea un duplicado en silencio: el primer
+  gate es consentimiento, y el segundo muestra el proyecto en conflicto para elegir entre reusarlo o crear un
+  duplicado a propósito.
+
+_(sin otros cambios después de este release)_
 
 ## [2026.11.10] - 2026-11-18
 

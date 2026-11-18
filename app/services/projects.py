@@ -94,6 +94,41 @@ def _semantic_candidates(session: Session, vector: list[float], owner_id: int | 
     candidates = [ProjectCandidate(row[0].slug, row[0].name, float(row[1])) for row in rows]
     return ProjectResult(project=None, candidates=candidates, requires_approval=bool(candidates))
 
+def _create_decision(_approval: _ApprovedProjectDecision | None) -> dict[str, Any]:
+    if _approval is None or _approval.operation != "create":
+        return {}
+    return _approval.decision if isinstance(_approval.decision, dict) else {}
+
+
+def _resolve_create_conflict(
+    session: Session,
+    decision: dict[str, Any],
+    candidates: list[ProjectCandidate],
+    owner_id: int | None,
+) -> tuple[models.Project | ProjectResult | None, bool]:
+    """Answer a create conflict with the owner's decision, or raise the informed gate.
+
+    `create_distinct` is consent to proceed, never consent to duplicate: once a conflict exists the
+    only answers are reusing one of the projects *this call found* or asking for a deliberate
+    duplicate (`create_anyway`) with that conflict on screen. Returning `(None, True)` means the
+    owner already saw it and still wants a new project; anything else is the answer to return.
+    """
+    selected_slug = decision.get("selected_slug")
+    if isinstance(selected_slug, str):
+        if any(candidate.slug == selected_slug for candidate in candidates):
+            owner_filter = (
+                models.Project.owner_id.is_(None) if owner_id is None else models.Project.owner_id == owner_id
+            )
+            project = session.scalar(
+                select(models.Project).where(models.Project.slug == selected_slug, owner_filter)
+            )
+            if project is not None:
+                return project, False
+        return ProjectResult(project=None, candidates=candidates, requires_approval=True), False
+    if decision.get("create_anyway") is True:
+        return None, True
+    return ProjectResult(project=None, candidates=candidates, requires_approval=True), False
+
 
 def create(
     session: Session,
@@ -105,6 +140,7 @@ def create(
     _approval: _ApprovedProjectDecision | None = None,
 ) -> models.Project | ProjectResult:
     """Create a project only when no exact or semantic purpose candidate exists."""
+    decision = _create_decision(_approval)
     normalized_purpose = normalize(purpose)
     duplicate = session.scalar(
         select(models.Project).where(
@@ -114,35 +150,19 @@ def create(
         )
     )
     if duplicate is not None:
-        result = ProjectResult(
-            project=None,
-            candidates=[ProjectCandidate(duplicate.slug, duplicate.name, 1.0)],
-            requires_approval=True,
-        )
-        if _approval is not None and _approval.operation == "create":
-            selected_slug = _approval.decision.get("selected_slug")
-            if selected_slug == duplicate.slug:
-                return duplicate
-            if _approval.decision.get("create_distinct") is not True:
-                return result
-        elif _approval is None:
-            return result
-        else:
-            return result
+        conflict = [ProjectCandidate(duplicate.slug, duplicate.name, 1.0)]
+        resolved, create_now = _resolve_create_conflict(session, decision, conflict, owner_id)
+        if not create_now:
+            return resolved
 
     embedding, _ = kb.embed_texts([purpose])
     semantic_result = _semantic_candidates(session, embedding[0], owner_id)
     if semantic_result.requires_approval:
-        if _approval is None or _approval.operation != "create":
-            return semantic_result
-        selected_slug = _approval.decision.get("selected_slug")
-        if selected_slug:
-            if not any(candidate.slug == selected_slug for candidate in semantic_result.candidates):
-                return semantic_result
-            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug, models.Project.owner_id == owner_id))
-            return project or semantic_result
-        if _approval.decision.get("create_distinct") is not True:
-            return semantic_result
+        resolved, create_now = _resolve_create_conflict(
+            session, decision, semantic_result.candidates, owner_id
+        )
+        if not create_now:
+            return resolved
 
     project = models.Project(
         slug=normalize_slug(slug),
