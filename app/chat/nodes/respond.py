@@ -569,6 +569,60 @@ def _affirms_excluded_appliance_repair(text: str) -> bool:
     return False
 
 
+# S1 (odd/tasks/verdad-alcance.md): the service list in
+# `docs/kb/lumat-servicios.md` §"Otros servicios" is closed — "Tampoco reparamos
+# artefactos que no estén en esta lista". Retrieval cannot express absence, so the
+# model filled the gap from general knowledge: it claimed "quemadores de cocina a
+# gas" and "bomba de calor de piscina" as Lumat services, and both scored 0.00
+# with a hard fail. This net fires only on BOTH conditions — a first-person scope
+# claim and an appliance outside the catalogue — because either alone is no
+# evidence: the KB itself writes "revisión de quemadores" inside mantención de
+# calefont, and a false positive here replaces a correct answer, which is worse
+# than the defect it prevents.
+_SCOPE_CLAIM = re.compile(
+    r"\b(?:trabajamos|trabajan|trabaja|reparamos|reparan|repara|hacemos|hacen|"
+    r"realizamos|realizan|ofrecemos|ofrecen|cubrimos|cubren|"
+    r"nos dedicamos|se dedican)\b"
+)
+# The catalogue's own vocabulary plus the people Lumat works with: a claim that
+# names any of these is authorized by the KB and is never replaced.
+_IN_SCOPE_SERVICE = re.compile(
+    r"\b(?:calderas?|calefonts?|calefones?|calefaccion|gasfiteria|"
+    r"filtraciones?|redes? de gas|aire acondicionado|climatizacion|"
+    r"calefactores?|ductos?|electricidad|trabajos? electricos?|"
+    r"instalacion(?:es)?|reemplazos?|"
+    r"tecnicos?|profesionales?|personal|asesores?|especialistas?|equipos?)\b"
+)
+# A preventive or diagnostic phrase names a component without offering it as a
+# service: "mantención de calefont y revisión de quemadores".
+_SERVICE_PHRASE = re.compile(
+    r"\b(?:revision|revisar|mantencion|mantenimiento|limpieza|lavado|"
+    r"visita|evaluacion|diagnostico)\b"
+)
+# The measured family and its obvious siblings. Deliberately a list of appliance
+# families rather than permitted words: the prompt rule and the human reviewer
+# cover what a net cannot enumerate.
+_OUT_OF_CATALOGUE_APPLIANCE = re.compile(
+    r"\b(?:bombas? de calor|piscinas?|quemadores?|cocinas?|hornos?|"
+    r"microondas|lavaplatos|campanas?|secadoras?|refrigeradores?|lavadoras?)\b"
+)
+
+
+def _claims_out_of_catalogue_scope(text: str) -> bool:
+    """True when the reply offers a service the KB's closed list does not hold."""
+    normalized = _normalise_topic_text(text)
+    for clause in re.split(r"[.,;:!?\n]+", normalized):
+        if not _SCOPE_CLAIM.search(clause):
+            continue
+        if _SERVICE_PHRASE.search(clause):
+            continue
+        if _IN_SCOPE_SERVICE.search(clause):
+            continue
+        if _OUT_OF_CATALOGUE_APPLIANCE.search(clause):
+            return True
+    return False
+
+
 def _operation_is_negated(prefix: str) -> bool:
     return bool(_NEGATED_OPERATION.search(prefix) or _NEGATED_CONJUNCTION.search(prefix))
 
@@ -694,7 +748,11 @@ def _is_configured_safety_text(session, text: str, reply_texts: dict[str, str]) 
     configured.update(protocol["contacts"])
     configured.add(protocol["notify_message"])
     configured.update(
-        (reply_texts["gas_instruction_guard"], reply_texts["excluded_appliance_scope"])
+        (
+            reply_texts["gas_instruction_guard"],
+            reply_texts["excluded_appliance_scope"],
+            reply_texts["out_of_catalogue_scope"],
+        )
     )
     return text.strip() in {item.strip() for item in configured}
 
@@ -875,18 +933,32 @@ def respond(state: ConversationState) -> dict:
             _record_response_guard_observations(session, conversation_id, model_answer)
         if not _is_configured_safety_text(session, model_answer, reply_texts):
             gas_guarded = _gas_manipulation_instruction(model_answer)
+            scope_guarded = not gas_guarded and _claims_out_of_catalogue_scope(
+                model_answer
+            )
             if gas_guarded:
                 answer = reply_texts["gas_instruction_guard"]
+            if scope_guarded:
+                # S1: the closed catalogue outranks the model's general knowledge.
+                answer = reply_texts["out_of_catalogue_scope"]
             if (
-                gas_guarded
+                (gas_guarded or scope_guarded)
                 and conversation_id is not None
                 and session.get(Conversation, conversation_id) is not None
             ):
                 session.add(
                     ConversationEvent(
                         conversation_id=state.conversation_id,
-                        event="gas_instruction_guard",
-                        cause="respond:gas_instruction_guard",
+                        event=(
+                            "gas_instruction_guard"
+                            if gas_guarded
+                            else "out_of_catalogue_scope"
+                        ),
+                        cause=(
+                            "respond:gas_instruction_guard"
+                            if gas_guarded
+                            else "respond:out_of_catalogue_scope"
+                        ),
                         actor="bot",
                     )
                 )

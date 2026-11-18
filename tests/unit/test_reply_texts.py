@@ -51,6 +51,7 @@ EXPECTED_KEYS = {
     "handoff_booking_unavailable",
     "gas_instruction_guard",
     "excluded_appliance_scope",
+    "out_of_catalogue_scope",
     "coverage_out_of_area",
     "capture_evidence",
     "capture_preventive_ack",

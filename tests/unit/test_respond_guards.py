@@ -4,6 +4,7 @@ import pytest
 
 from app.chat.nodes.respond import (
     _affirms_excluded_appliance_repair,
+    _claims_out_of_catalogue_scope,
     _gas_manipulation_instruction,
 )
 
@@ -92,4 +93,50 @@ def test_everything_outside_the_narrow_gas_families_is_not_guarded(answer):
 def test_excluded_appliance_claims_remain_detectable_for_observation(answer):
     assert _affirms_excluded_appliance_repair(answer), (
         f"excluded-appliance claim was not identified for observation: {answer!r}"
+    )
+
+
+# S1 (odd/tasks/verdad-alcance.md): scope is the closed list in
+# docs/kb/lumat-servicios.md. The two measured claims below are verbatim from
+# `real-vocabulario-impreciso` and `real-consulta-otros-equipos` (both scored 0.00
+# with a hard fail); the rest are the same family, not a wider one.
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Sí, lo vemos: trabajamos con quemadores de cocina a gas, con técnicos autorizados SEC.",
+        "Sí, también trabajamos con bomba de calor de piscina.",
+        "Trabajamos con quemadores de cocina a gas.",
+        "Reparamos hornos y microondas.",
+        "Hacemos lavaplatos y campanas.",
+        "Nos dedicamos a bombas de calor de piscina.",
+    ],
+)
+def test_out_of_catalogue_scope_claims_are_guarded(answer):
+    assert _claims_out_of_catalogue_scope(answer), (
+        f"out-of-catalogue scope claim escaped the guard: {answer!r}"
+    )
+
+
+# The same guard must stay silent on everything the KB does authorize: the
+# in-catalogue appliances, the people Lumat works with, and the maintenance
+# phrasing that legitimately names a burner or a gas network. A guard that fires
+# here replaces a correct answer, which is worse than the defect it fixes.
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Sí, trabajamos con aire acondicionado.",
+        "Trabajamos con técnicos autorizados SEC.",
+        "Reparamos calderas y calefont.",
+        "Hacemos instalaciones y reemplazos de gasfitería.",
+        "Trabajamos con redes de gas y filtraciones de agua.",
+        "Hacemos mantención de calefont y revisión de quemadores.",
+        "La mantención de caldera incluye revisión del sistema de combustión.",
+        "Fíjate si la cocina enciende normal (para descartar que falte gas).",
+        "Ofrecemos una visita técnica para revisar calefactores eléctricos.",
+        "Cubrimos ductos y trabajos eléctricos.",
+    ],
+)
+def test_in_catalogue_scope_and_service_phrases_are_not_guarded(answer):
+    assert not _claims_out_of_catalogue_scope(answer), (
+        f"in-catalogue statement was still guarded: {answer!r}"
     )
