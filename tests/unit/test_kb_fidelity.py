@@ -32,6 +32,20 @@ from app.chat.state import ConversationState  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
+# Source documents pinned by the fidelity harness
+# ---------------------------------------------------------------------------
+
+
+def test_services_kb_excludes_appliances_outside_its_list():
+    services = (REPO_ROOT / "docs/kb/lumat-servicios.md").read_text(encoding="utf-8")
+
+    assert (
+        "No reparamos lavadoras, lavadoras-secadoras ni refrigeradores" in services
+        and "artefactos que no estén en esta lista" in services
+    ), "services KB must exclude washing machines, washer-dryers, refrigerators, and unlisted appliances"
+
+
+# ---------------------------------------------------------------------------
 # Number normalization — the load-bearing half of the triage core
 # ---------------------------------------------------------------------------
 

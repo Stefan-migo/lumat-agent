@@ -147,10 +147,18 @@ _SCENARIO_KEYS = {
     "goal",
     "turns",
     "max_turns",
+    "media_turns",
     "expect",
     "hard_fails",
     "notes",
 }
+# Turn indexes (1-based) mapped to the message type the channel would have sent.
+# A scenario whose customer sends a video states it here instead of writing the
+# attachment marker as a text message, which measured a comprehension failure
+# production never has (S4 of `odd/tasks/evals-gates-fallos.md`).
+MEDIA_TURN_KINDS = frozenset(
+    {"image", "video", "audio", "document", "sticker"}
+)
 _EXPECT_KEYS = {
     "state_any",
     "intent_expected",
@@ -185,6 +193,7 @@ class Scenario:
     turns: tuple[str, ...]
     max_turns: int | None
     expect: Mapping[str, Any]
+    media_turns: Mapping[int, str] = field(default_factory=dict)
     hard_fails: tuple[str, ...] = ()
     notes: str = ""
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
@@ -219,6 +228,34 @@ def _string_list(value: Any, field_name: str, where: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _media_turns(value: Any, scripted: int, where: str) -> dict[int, str]:
+    """Validate `media_turns`: 1-based turn index -> channel message type."""
+    if value is None:
+        return {}
+    _require(
+        isinstance(value, Mapping),
+        f"{where}: `media_turns` must map a turn index to a media type",
+    )
+    parsed: dict[int, str] = {}
+    for index, kind in value.items():
+        _require(
+            isinstance(index, int) and not isinstance(index, bool),
+            f"{where}: `media_turns` keys must be turn numbers, got {index!r}",
+        )
+        _require(
+            1 <= index <= scripted,
+            f"{where}: `media_turns` names turn {index}, but the script has "
+            f"{scripted} turn(s)",
+        )
+        _require(
+            isinstance(kind, str) and kind in MEDIA_TURN_KINDS,
+            f"{where}: `media_turns` value must be one of "
+            f"{sorted(MEDIA_TURN_KINDS)}, got {kind!r}",
+        )
+        parsed[index] = kind
+    return parsed
+
+
 def _build_scenario(entry: Any, index: int) -> Scenario:
     where = f"conversation #{index + 1}"
     _require(isinstance(entry, Mapping), f"{where}: must be a mapping")
@@ -241,6 +278,8 @@ def _build_scenario(entry: Any, index: int) -> Scenario:
 
     turns = _string_list(entry.get("turns"), "turns", where)
     _require(turns, f"{where}: `turns` must declare at least one customer message")
+
+    media_turns = _media_turns(entry.get("media_turns"), len(turns), where)
 
     max_turns = entry.get("max_turns")
     if max_turns is not None:
@@ -315,6 +354,7 @@ def _build_scenario(entry: Any, index: int) -> Scenario:
         turns=turns,
         max_turns=max_turns,
         expect=dict(expect),
+        media_turns=media_turns,
         hard_fails=hard_fails,
         notes=str(entry.get("notes") or ""),
         raw=dict(entry),
@@ -323,7 +363,9 @@ def _build_scenario(entry: Any, index: int) -> Scenario:
 
 def _fingerprint(version: int, scenarios: Sequence[Scenario]) -> str:
     payload = "\n".join(
-        f"{scenario.id}|{scenario.tier}|{'~'.join(scenario.turns)}|{sorted(scenario.expect)}"
+        f"{scenario.id}|{scenario.tier}|{'~'.join(scenario.turns)}|"
+        f"{'~'.join(f'{index}:{kind}' for index, kind in sorted(scenario.media_turns.items()))}|"
+        f"{sorted(scenario.expect)}"
         for scenario in scenarios
     )
     return hashlib.sha256(f"v{version}\n{payload}".encode("utf-8")).hexdigest()[:12]
@@ -1113,9 +1155,13 @@ def miss_offer_text() -> str:
 # Conversation state only: the KB, the tariff, the message catalog, the users and
 # the technicians are configuration and must survive a reset, or the next run
 # would measure an empty knowledge base.
+#
+# Every table with a foreign key into this list has to be in this list: `TRUNCATE`
+# refuses to run otherwise, and that refusal is the point — it caught `commitments`
+# (`commitments -> messages`) on 2026-11-18, when `--reset` broke on any database.
 _RESET_TABLES = (
     "appointment_calendar_sync, appointment_history, appointments, assistant_artifacts, "
-    "assistant_attachments, notification_attempts, notification_operations, "
+    "assistant_attachments, commitments, notification_attempts, notification_operations, "
     "panel_notifications, technician_availability, audit_log, conversation_events, "
     "automation_executions, customer_equipment, domain_events, memories, memory_relations, "
     "memory_observations, cases, internal_chat_messages, internal_chat_threads, messages, "
@@ -1230,6 +1276,10 @@ def run_scenario(
     for index, (origin, scripted_text) in enumerate(
         plan_turns(scenario.turns, budget, live), start=1
     ):
+        # A scripted turn may be an attachment instead of an utterance (S4). The
+        # scripted text stays the transcript's label; what the brain receives is
+        # the shape the channel sends: a media type and no text.
+        media = scenario.media_turns.get(index) if origin == "scripted" else None
         if origin == "scripted":
             text = scripted_text
         else:
@@ -1250,8 +1300,8 @@ def run_scenario(
             # owns is answered by nobody on purpose (S7), so G8 must know whose turn
             # it was before judging the silence.
             state_before = conversation_state(session, conversation_id)
-            strong_emergency = strong_emergency_hit(session, text)
-            replies = run_turn(session, conversation_id, text)
+            strong_emergency = strong_emergency_hit(session, "" if media else text)
+            replies = run_turn(session, conversation_id, text, media=media)
         # `origin` is what makes the transcript reviewable: a simulated turn is
         # the evaluator talking, and reading it is how the evaluator is judged.
         turns.append(

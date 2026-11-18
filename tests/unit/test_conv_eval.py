@@ -1568,3 +1568,51 @@ def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path,
     assert report["summary"]["scenarios"] == 1
     assert "roto" in markdown
     assert "No citable como baseline" in markdown
+
+
+def test_the_shipped_corpus_marks_the_video_turn_as_media():
+    """S4 (`odd/tasks/evals-gates-fallos.md`): a video is not a text message.
+
+    `<video omitido>` is the corpus' way of saying "the customer sent a video".
+    Sent as TEXT it becomes a literal string the brain cannot read, which is how
+    `real-claudio-caldera-valvula` ended up recording `unknown_intent` — a failure
+    production never has, because a media message without text never reaches
+    classification (`app/chat/nodes/classify_intent.py:254-256`).
+    """
+    loaded = ev.load_corpus(CORPUS_PATH)
+
+    marked = next(
+        scn for scn in loaded.scenarios if scn.id == "real-claudio-caldera-valvula"
+    )
+
+    assert dict(marked.media_turns) == {3: "video"}
+
+
+def test_a_media_turn_outside_the_script_is_refused(tmp_path):
+    text = CORPUS_PATH.read_text(encoding="utf-8")
+    patched = text.replace(
+        "    media_turns:\n      3: video\n", "    media_turns:\n      9: video\n", 1
+    )
+    assert patched != text, "the fixture changed: this test must be revisited"
+    path = tmp_path / "corpus.yaml"
+    path.write_text(patched, encoding="utf-8")
+
+    with pytest.raises(ValueError) as raised:
+        ev.load_corpus(path)
+
+    assert "media_turns" in str(raised.value)
+
+
+def test_an_unknown_media_kind_is_refused(tmp_path):
+    text = CORPUS_PATH.read_text(encoding="utf-8")
+    patched = text.replace(
+        "    media_turns:\n      3: video\n", "    media_turns:\n      3: hologram\n", 1
+    )
+    assert patched != text
+    path = tmp_path / "corpus.yaml"
+    path.write_text(patched, encoding="utf-8")
+
+    with pytest.raises(ValueError) as raised:
+        ev.load_corpus(path)
+
+    assert "media_turns" in str(raised.value)

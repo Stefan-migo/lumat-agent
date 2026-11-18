@@ -88,7 +88,16 @@ export class RealtimeClient {
     this.socket = socket;
     socket.onopen = () => { void (async () => { if (reconnecting) { await this.options.onReconnect?.(); await Promise.all([...this.recoveryListeners].map((listener) => listener())); } this.attempts = 0; this.setStatus('connected'); })().catch(() => this.setStatus('disconnected')); };
     socket.onmessage = (event) => { try { const envelope = JSON.parse(event.data) as RealtimeEnvelope; this.listeners.forEach((listener) => listener(envelope)); } catch { /* best-effort stream */ } };
-    socket.onerror = () => socket.close();
+    socket.onerror = () => {
+      // Detach before closing. Some runtimes fire another `error` while a close is in
+      // flight (undici, the Node WebSocket used by the test environment), so closing
+      // from inside the handler re-entered it and recursed until the stack overflowed.
+      // It surfaced as an unrelated suite failing after teardown (`AppShell.test.tsx`)
+      // and failed the required `panel` check at random. `onclose` is what schedules
+      // the reconnect, so nothing else is needed here.
+      socket.onerror = null;
+      socket.close();
+    };
     socket.onclose = () => { if (this.socket !== socket) return; this.socket = null; if (!this.stopped) { this.setStatus('disconnected'); this.scheduleReconnect(); } };
   }
   private scheduleReconnect() { const delay = Math.min(this.options.maxDelay, this.options.baseDelay * 2 ** this.attempts++); this.timer = setTimeout(() => this.open(true), delay); }
