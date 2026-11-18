@@ -1407,12 +1407,15 @@ def execute_tool(
             or project_payload.get("operation") != "create"
             or project_payload.get("arguments") != parsed.model_dump()
             or not isinstance(decision, dict)
-            or set(decision) not in ({"selected_slug"}, {"create_distinct"})
+            or set(decision) not in ({"selected_slug"}, {"create_distinct"}, {"create_anyway"})
             or ("selected_slug" in decision and not isinstance(decision["selected_slug"], str))
             or ("create_distinct" in decision and decision["create_distinct"] is not True)
+            or ("create_anyway" in decision and decision["create_anyway"] is not True)
         ):
             raise ToolValidationError("project create approval is missing an explicit decision")
-        if name in {"project.find", "project.create"} and not isinstance(decision, dict):
+        if name == "project.find" and set(decision or {}) != {"selected_slug"}:
+            # `find` only reads the namespace the owner selected: any other decision means the
+            # approval never answered the question it asked.
             raise ToolValidationError("project approval is missing an explicit decision")
         if name in {"project.find", "project.create"}:
             project_approval = projects._ApprovedProjectDecision(
@@ -1479,6 +1482,8 @@ def execute_tool(
             "status": "approval_pending",
             "read_only": definition.read_only,
             "result": result,
-            "approval": issue_approval(plan),
+            # The candidates the handler just found are the only ones the owner may choose from, so
+            # they travel with the approval instead of being re-derived from the client's request.
+            "approval": issue_approval(plan, candidates=result.get("candidates")),
         }
     return {"tool": name, "status": "completed", "read_only": definition.read_only, "result": result}
