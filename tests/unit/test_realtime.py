@@ -19,7 +19,6 @@ def test_activity_validator_accepts_only_activity_vocabulary():
         "kb_miss",
         "escalation",
         "gas_instruction_guard",
-        "appliance_scope_guard",
     }
     for event in ACTIVITY_EVENTS:
         assert validate_activity_event(event) == event

@@ -500,11 +500,20 @@ _WATER_CONTEXT = re.compile(r"\b(?:agua|desague|filtracion|hidraulico|hidraulica
 _BLUE_GAS_VALVE = re.compile(r"\b(?:llave|valvula)\s+azul\b")
 _FLAME_LEAK_TEST = re.compile(r"\bfosforo\b.{0,60}\bfuga\b|\bfuga\b.{0,60}\bfosforo\b")
 _NARROW_GAS_HARDWARE_OPERATIONS = re.compile(
-    r"\b(?:abre|abra|cierra|cierre|revisa|revise|verifica|verifique|"
-    r"confirma|confirme|prueba|pruebe|gira|gire|corta|corte|haz)\b"
+    r"\b(?:abre|abra|abran|cierra|cierre|cierren|revisa|revise|verifica|verifique|"
+    r"confirma|confirme|prueba|pruebe|gira|gire|corta|corte|corten|haz)\b"
+)
+_GAS_HARDWARE_VERBS = frozenset(
+    {
+        "abre", "abra", "cierra", "cierre", "revisa", "revise", "verifica",
+        "verifique", "confirma", "confirme", "prueba", "pruebe", "gira", "gire",
+        "corta", "corte", "haz",
+    }
+)
+_GAS_OBJECT_VERBS = frozenset(
+    {"abre", "abra", "abran", "cierra", "cierre", "cierren", "corta", "corte", "corten"}
 )
 _GAS_HARDWARE_OBJECT = re.compile(r"\b(?:llave|valvula|suministro|linea|medidor|paso)\b")
-_GAS_CUTOFF = re.compile(r"^\s*(?:corta|corte)\s+el\s+gas\s*$")
 _APPLIANCE_GAS_DIRECTIVE = re.compile(
     r"\b(?:enciende|encienda|prende|prenda|prueba|pruebe|fijate)\b"
 )
@@ -600,9 +609,14 @@ def _gas_manipulation_instruction(text: str) -> bool:
             ):
                 continue
             tail = clause[operation.end() :]
-            if _GAS_HARDWARE_OBJECT.search(tail) or _GAS_CUTOFF.search(
-                clause[operation.start() :]
-            ):
+            has_hardware_object = (
+                operation.group() in _GAS_HARDWARE_VERBS
+                and bool(_GAS_HARDWARE_OBJECT.search(tail))
+            )
+            has_gas_as_object = (
+                operation.group() in _GAS_OBJECT_VERBS and bool(_GAS_WORD.search(tail))
+            )
+            if has_hardware_object or has_gas_as_object:
                 return True
     return _gas_appliance_ignition_instruction(text)
 
@@ -661,7 +675,9 @@ def _response_guard_observation_sentences(text: str) -> list[str]:
 def _record_response_guard_observations(session, conversation_id: int, text: str) -> None:
     """Persist bounded diagnostic breadcrumbs outside ACTIVITY_EVENTS to avoid panel-chip noise."""
     for sentence in _response_guard_observation_sentences(text):
-        cause = f"respond:guard_observation:{sentence}"[:_GUARD_OBSERVATION_CAUSE_LIMIT]
+        cause = f"respond:guard_observation:{sentence}"
+        if len(cause) > _GUARD_OBSERVATION_CAUSE_LIMIT:
+            cause = cause[:117] + "…"
         session.add(
             ConversationEvent(
                 conversation_id=conversation_id,

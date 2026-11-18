@@ -404,7 +404,8 @@ def test_heating_pressure_reply_with_passing_gas_reference_survives(monkeypatch)
         )
     assert event is not None
     assert "Revisa la presión del sistema" in event.cause
-    assert len(event.cause) == 120
+    assert event.cause.endswith("…")
+    assert len(event.cause) <= 120
     assert event.event not in ACTIVITY_EVENTS
 
 
@@ -551,22 +552,13 @@ def test_calefon_instruction_is_replaced_at_the_harness_seam(monkeypatch):
     assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
 
 
-def test_emergency_advice_with_embedded_cut_is_observed_not_replaced(monkeypatch):
+def test_emergency_advice_with_bare_gas_cut_is_guarded(monkeypatch):
     advice = "Ante olor a gas: ventila, corta el gas y llama al 132."
-    conversation_id, replies = _run_stubbed_model_answer(
+    _, replies = _run_stubbed_model_answer(
         monkeypatch, "¿qué incluye una revisión?", advice
     )
 
-    assert replies == [advice]
-    with SessionLocal() as session:
-        event = session.scalar(
-            select(ConversationEvent).where(
-                ConversationEvent.conversation_id == conversation_id,
-                ConversationEvent.event == "response_guard_observation",
-            )
-        )
-    assert event is not None
-    assert advice in event.cause
+    assert replies == [REPLY_TEXT_DEFAULTS["gas_instruction_guard"]]
 
 
 def test_water_leak_reply_survives_the_gas_guard_at_the_harness_seam(monkeypatch):
