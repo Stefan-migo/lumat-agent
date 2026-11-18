@@ -397,7 +397,10 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 ### Clientes
 
 - Search, result count, export, and customer table are the primary list tools.
-- The customer name is the drill-down link and the row's resource cell; the phone sits muted beneath it. State, consent, and creation date are supporting columns.
+- On desktop, keep the customer name as the drill-down link and the phone in its separate column; keep creation date in the table. On mobile, the avatar, name, phone, and trailing chevron form one broad ficha-opening link so same-name clients remain distinguishable. The checkbox and row-action menu stay independent of that link.
+- Mobile cards keep state and consent in a secondary summary below the identity and leave creation date to the desktop table; show an `Archivado` badge only when the customer is archived.
+- Keep the status tabs and grouped secondary consent/archive filters. Make active filters visible and keep recovery scoped to the filter that caused an empty result. Clearing search must not silently clear the other filters.
+- `Seleccionar esta página` means the visible current page only. Count, confirmation, and archive/restore targets must agree exactly; reset bulk selection when its search, filters, or page changes and never restore it when returning from a ficha. Keep the visible result range accurate, for example `11–20 de 34`.
 - The ficha groups identity, consent, state control, notes, and history.
 - Destructive or blocking customer-state changes require clear consequences and recovery guidance.
 
@@ -443,7 +446,9 @@ unfinished surface, not a minimal one.
 
 - At desktop widths, retain the queue beside the selected thread with independent scrolling, an explicit selection state, and the existing deep links. Below desktop widths, the queue and thread are separate screens; the thread has its own back action, including on direct entry.
 - List rows show customer, explicit conversation state, assignee, summary, freshness, and created date.
-- On narrow screens, each conversation card has a visible `Abrir conversación` button with a touch target at least 44px tall. Keep opening the thread separate from queue actions such as taking or closing the conversation.
+- In the compact queue (mobile and the desktop split view), the customer, summary, and conversation metadata form one visually identifiable open action with a trailing chevron, a descriptive accessible name, and a touch target at least 44px tall. Keep opening the thread separate from queue actions such as taking or closing the conversation.
+- Group the conversation tabs, search, and assignee filter as one queue-control area. Show active filter context once, using removable chips; the query text stays in the search field. Let operators remove one filter without clearing the others; keep the Emergencias shortcut. Distinguish filtered-empty recovery from an empty inbox and from load errors.
+- Retain the queue's query, assignee, tab, and page while moving between the mobile queue and thread, without placing the phone search in the URL. Keep the result range visible and hide pagination controls when there is only one page.
 - A human-assigned row may receive a warning-tinted leading treatment, never a color-only highlight.
 - The automatic H1 thread stays clearly read-only.
 - The human inbox thread shows message direction, active owner, conversation state, and the 24-hour reply-window status near the composer.

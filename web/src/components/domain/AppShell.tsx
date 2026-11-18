@@ -8,9 +8,9 @@ import { PanelShell, isAdminOnlyView } from './PanelShell';
 import { isDetailRoute, notificationDestination, parsePanelPath, pathForRoute, type PanelRoute } from './panelRoutes';
 import { canOpen, defaultViewForRole } from './panelAccess';
 import { Dashboard } from '../pages/Dashboard';
-import { ClientesList } from '../pages/ClientesList';
+import { ClientesList, type ClientesListContext } from '../pages/ClientesList';
 import { ClientFicha } from '../pages/ClientFicha';
-import { ConversationsList } from '../pages/ConversationsList';
+import { ConversationsList, type ConversationsQueueContext } from '../pages/ConversationsList';
 import { ConversationThread } from '../pages/ConversationThread';
 import { KbList } from '../pages/KbList';
 import { KbDocumentDetail } from '../pages/KbDocumentDetail';
@@ -79,6 +79,8 @@ export interface AppShellProps {
 /** Application shell: PanelShell frame and native History API navigation. */
 export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => routeForRole(parsePanelPath(`${window.location.pathname}${window.location.search}`), user.role));
+  const [clientesListContext, setClientesListContext] = useState<ClientesListContext>();
+  const [conversationQueueContext, setConversationQueueContext] = useState<ConversationsQueueContext>();
   const { show: showToast } = useToast();
   const activeRunsRef = useRef<ActiveRun[]>([]);
   const [conversationRefresh, setConversationRefresh] = useState(0);
@@ -232,10 +234,10 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : view === 'chatbot-metrics' ? <ChatbotMetrics onOpenConversation={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
       : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} role={user.role} /> : user.role === 'tecnico' ? <TechnicianAgenda /> : <AgendaPage />
       : view === 'automation-rules' ? <AutomationRecipesPage />
-      : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
+      : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} initialTab={route.clientTab} /> : <ClientesList initialContext={clientesListContext} onContextChange={setClientesListContext} onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
         : view === 'conversations' ? <div ref={inboxRef} className={`conversations-inbox${conversationId === null ? '' : ' conversations-inbox--thread'}`}>
             {wideInbox || conversationId === null ? <section className="conversations-inbox__queue" aria-label="Cola de conversaciones">
-              <ConversationsList compact={wideInbox} currentUserId={user.id} initialQueueTab={queueTab}
+              <ConversationsList compact={wideInbox} currentUserId={user.id} queueTab={queueTab} initialQueueContext={conversationQueueContext} onQueueContextChange={setConversationQueueContext}
                 selectedConversationId={conversationId} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })}
                 refreshKey={conversationRefresh} onOpenThread={openConversation} />
             </section> : null}

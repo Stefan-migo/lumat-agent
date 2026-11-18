@@ -455,7 +455,7 @@ describe('AppShell (T6.4)', () => {
 
     expect(window.location.pathname).toBe('/panel/app/cases');
     expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByText('No hay conversaciones')).toBeInTheDocument();
+    expect(await screen.findByText('No encontramos conversaciones con estos filtros')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Casos' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -616,6 +616,61 @@ it('keeps the desktop conversation queue visible, selected and navigable alongsi
     expect(await screen.findByRole('heading', { name: 'Camila', level: 1 })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/panel/app/conversations/20');
     expect(within(queue).getByRole('button', { name: 'Abrir conversación de Camila' })).toHaveAttribute('aria-current', 'page');
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it('restores the conversation search and tab after returning from a mobile thread', async () => {
+  vi.stubGlobal('matchMedia', vi.fn((media: string) => ({ media, matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  window.history.replaceState({}, '', '/panel/app/conversations');
+  const conversation = { id: 19, state: 'human', customer_id: 19, customer: { id: 19, name: 'Ana Prueba' }, summary: 'Consulta de prueba', reply_window_open: true };
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const path = new URL(String(input), window.location.origin).pathname;
+    if (path === '/panel/api/conversations') return new Response(JSON.stringify({ items: [conversation], counts: { all: 1, human: 1 }, total: 1, offset: 0, limit: 10 }));
+    if (path === '/panel/api/conversations/19') return new Response(JSON.stringify({ conversation, messages: [], messages_total: 0 }));
+    if (path === '/panel/api/chat/active-runs') return new Response(JSON.stringify({ active_runs: [] }));
+    return new Response(JSON.stringify({ notifications: [] }));
+  });
+  try {
+    const user = userEvent.setup();
+    render(<AppShell user={admin} />);
+    const search = await screen.findByRole('searchbox', { name: 'Buscar conversaciones' });
+    await user.type(search, 'Ana');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('q=Ana'))).toBe(true));
+    await user.click(screen.getByRole('tab', { name: /atención humana/i }));
+    await user.click(await screen.findByRole('button', { name: 'Abrir conversación de Ana Prueba' }));
+    await screen.findByRole('heading', { name: 'Ana Prueba', level: 1 });
+    await user.click(screen.getByRole('button', { name: 'Volver a conversaciones' }));
+    expect(await screen.findByRole('searchbox', { name: 'Buscar conversaciones' })).toHaveValue('Ana');
+    expect(screen.getByRole('tab', { name: /atención humana/i })).toHaveAttribute('aria-selected', 'true');
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it('restores the client search and consent filter without restoring bulk selection after a ficha', async () => {
+  window.history.replaceState({}, '', '/panel/app/clients');
+  const client = { id: 7, name: 'Ana Prueba', phone_e164: '+56911111111', state: 'nuevo', consent_status: true, created_at: '2026-08-25', archived_at: null };
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const path = new URL(String(input), window.location.origin).pathname;
+    if (path === '/panel/api/clients') return new Response(JSON.stringify({ clients: [client] }));
+    if (path === '/panel/api/clients/7') return new Response(JSON.stringify({ customer: client, memo: '', notes: [], history: { conversations: [], cases: [], messages: [] } }));
+    if (path === '/panel/api/clients/7/memories') return new Response(JSON.stringify({ memories: [] }));
+    if (path === '/panel/api/chat/active-runs') return new Response(JSON.stringify({ active_runs: [] }));
+    return new Response(JSON.stringify({ notifications: [] }));
+  });
+  try {
+    const user = userEvent.setup();
+    render(<AppShell user={admin} />);
+    const search = await screen.findByRole('searchbox', { name: 'Buscar clientes' });
+    await user.type(search, 'Ana');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('q=Ana'))).toBe(true));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Consentimiento' }), 'true');
+    const rowSelection = await screen.findAllByRole('checkbox', { name: 'Seleccionar Ana Prueba' });
+    await user.click(rowSelection[0]);
+    await user.click(screen.getByRole('link', { name: /Ana Prueba.*\+56911111111/ }));
+    await screen.findByRole('heading', { name: 'Ana Prueba', level: 1 });
+    await user.click(screen.getByRole('button', { name: 'Volver' }));
+    expect(await screen.findByRole('searchbox', { name: 'Buscar clientes' })).toHaveValue('Ana');
+    expect(screen.getByRole('combobox', { name: 'Consentimiento' })).toHaveValue('true');
+    expect(screen.getAllByRole('checkbox', { name: 'Seleccionar Ana Prueba' })[0]).not.toBeChecked();
   } finally { vi.unstubAllGlobals(); }
 });
 
