@@ -17,6 +17,7 @@ from app.services.settings import SETTINGS_DEFAULTS
 KEYWORDS = SETTINGS_DEFAULTS["capture.quote_keywords"]
 QUOTE_ACK = "Entiendo, quieres una nueva evaluación con cotización. "
 PREVENTIVE_ACK = "Entiendo, quieres hacer mantención de caldera. "
+BASE_ACK = "Entiendo. "
 
 
 def test_a_declared_evaluation_is_a_quote_request():
@@ -37,16 +38,17 @@ def test_an_absent_budget_is_not_a_request():
 
 def test_the_preventive_ack_keeps_the_turn_and_the_quote_ack_stays_pending():
     captured = {"_quote_request": True}
-    assert _pick_ack(captured, PREVENTIVE_ACK, QUOTE_ACK) == PREVENTIVE_ACK
+    assert _pick_ack(captured, BASE_ACK, PREVENTIVE_ACK, QUOTE_ACK) == PREVENTIVE_ACK
     assert "_quote_acked" not in captured
 
 
 def test_the_quote_ack_marks_only_the_text_that_is_returned():
     captured = {"_quote_request": True}
-    assert _pick_ack(captured, "", QUOTE_ACK) == QUOTE_ACK
+    assert _pick_ack(captured, BASE_ACK, "", QUOTE_ACK) == QUOTE_ACK
     assert captured["_quote_acked"] == QUOTE_ACK.strip()
 
 
-def test_nothing_speaks_when_no_ack_is_pending():
+def test_the_turns_own_ack_survives_when_nothing_else_is_pending():
+    """Passing only the two optional acks dropped every "Entiendo…" from capture."""
     captured = {"_quote_request": True, "_quote_acked": QUOTE_ACK.strip()}
-    assert _pick_ack(captured, "", "") == ""
+    assert _pick_ack(captured, BASE_ACK, "", "") == BASE_ACK

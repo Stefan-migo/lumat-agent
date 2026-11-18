@@ -926,12 +926,17 @@ def _render_capture_question(
         candidate = render_reply(get_reply_texts(session), "capture_quote_ack")
         if candidate.strip() != (captured.get("_quote_acked") or "").strip():
             quote_ack = candidate
-    ack = _pick_ack(captured, preventive_ack, quote_ack)
+    ack = _pick_ack(captured, ack, preventive_ack, quote_ack)
     return f"{ack}{ask}"
 
 
-def _pick_ack(captured: dict, preventive_ack: str, quote_ack: str) -> str:
+def _pick_ack(captured: dict, base_ack: str, preventive_ack: str, quote_ack: str) -> str:
     """Which acknowledgement speaks, and what the customer actually receives.
+
+    `base_ack` is the turn's own acknowledgement — the equipment acknowledgement or
+    the configured `capture_ack` — and it is the fallback: passing only the two
+    optional ones dropped every "Entiendo…" from the capture replies, which the
+    full suite caught and the narrowed runs did not.
 
     The preventive ack keeps the turn it already had and the evaluation/quote one
     waits for the next. The marker is written only for the text that is returned:
@@ -942,7 +947,7 @@ def _pick_ack(captured: dict, preventive_ack: str, quote_ack: str) -> str:
     if preventive_ack:
         return preventive_ack
     if not quote_ack:
-        return ""
+        return base_ack
     captured["_quote_acked"] = quote_ack.strip()
     return quote_ack
 
