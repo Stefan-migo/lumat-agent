@@ -253,7 +253,7 @@ def test_reschedule_never_offers_another_customers_appointment(mock_openai_chat,
         appointment.customer_id = get_or_create_customer(session, "+56922222222").id
         session.commit()
     replies = _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.owner"))
-    assert any("no tienes visitas próximas" in reply.lower() for reply in replies)
+    assert replies == [REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]]
     with SessionLocal() as session:
         assert session.get(Appointment, appointment_id).status is AppointmentStatus.BOOKED
         assert session.get(Conversation, conv_id).captured_data.get("_manage_offer") is None
@@ -270,7 +270,7 @@ def test_reschedule_blocks_started_appointment_at_offer_time(mock_openai_chat, m
         appointment.local_start = past.replace(tzinfo=None)
         session.commit()
     replies = _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.past"))
-    assert any("no tienes visitas próximas" in reply.lower() for reply in replies)
+    assert replies == [REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]]
     with SessionLocal() as session:
         appointment = session.get(Appointment, appointment_id)
         assert appointment.status is AppointmentStatus.BOOKED
@@ -410,7 +410,7 @@ def test_other_customers_appointment_is_never_offered(mock_openai_chat, monkeypa
         session.commit()
         other_appointment_id = appointment.id
     replies = _invoke(conv_id, _add_message(conv_id, "quiero cancelar", "wamid.manage.owner"))
-    assert any("no tienes visitas próximas" in reply.lower() for reply in replies)
+    assert replies == ["No tienes visitas próximas para cancelar."]
     with SessionLocal() as session:
         assert session.get(Appointment, other_appointment_id).status is AppointmentStatus.BOOKED
         assert "_manage_offer" not in session.get(Conversation, conv_id).captured_data
@@ -428,7 +428,7 @@ def test_started_appointment_is_not_cancellable(mock_openai_chat, monkeypatch):
         appointment.local_start = past.replace(tzinfo=None)
         session.commit()
     replies = _invoke(conv_id, _add_message(conv_id, "quiero cancelar", "wamid.manage.past"))
-    assert any("no tienes visitas próximas" in reply.lower() for reply in replies)
+    assert replies == ["No tienes visitas próximas para cancelar."]
     with SessionLocal() as session:
         appointment = session.get(Appointment, appointment_id)
         assert appointment.customer_id == customer_id

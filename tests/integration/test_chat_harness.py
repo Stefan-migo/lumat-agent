@@ -36,7 +36,10 @@ from app.models import (  # noqa: E402
     MessageDirection,
     MessageType,
 )
-from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
+from app.services.settings import (  # noqa: E402
+    MESSAGE_DEFAULTS,
+    REPLY_TEXT_DEFAULTS,
+)
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
@@ -177,6 +180,119 @@ def test_emergency_turn_escalates_without_any_llm_call(mock_openai_chat, no_emer
         conversation = session.get(Conversation, conversation_id)
         assert conversation.state == ConversationState.HUMAN
         assert session.scalar(select(func.count(Case.id))) == 1
+
+
+def test_preventive_capture_names_service_once_across_capture_turns(
+    mock_openai_chat, monkeypatch
+):
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "caldera",
+            "intents": ["caldera"],
+            "service": "mantención de calefacción",
+            "fields": {"equipment": "caldera"} if "Mantencion" in text else {},
+        },
+    )
+    # The copy is settings-driven; assert against the default instead of a
+    # second copy of the sentence, so a wording change does not fail here.
+    maintenance_ack = REPLY_TEXT_DEFAULTS["capture_preventive_ack"].replace(
+        "{{equipo}}", "caldera"
+    ).strip()
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        first = run_turn(
+            session,
+            conversation_id,
+            "Mantencion\nEsta funcionando bien la calefacción.\nQuiero mantencion",
+        )
+        session.commit()
+        follow_up = run_turn(session, conversation_id, "no sé")
+        session.commit()
+        third = run_turn(session, conversation_id, "mañana")
+        session.commit()
+
+    assert any(maintenance_ack in reply for reply in first), first
+    assert follow_up, follow_up
+    assert third, third
+    assert all(maintenance_ack not in reply for reply in follow_up), follow_up
+    assert all(maintenance_ack not in reply for reply in third), third
+
+
+def test_capture_pivot_to_fault_drops_preventive_ack(mock_openai_chat, monkeypatch):
+    from app.chat.nodes import classify_intent
+
+    def classify(text, message_id, conversation=""):
+        fields = {}
+        if "Mantencion" in text:
+            fields["equipment"] = "caldera"
+        elif "no calienta" in text:
+            fields["failure"] = "no calienta"
+        return {
+            "intent": "caldera",
+            "intents": ["caldera"],
+            "service": "mantención de calefacción",
+            "fields": fields,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    # The copy is settings-driven; assert against the default instead of a
+    # second copy of the sentence, so a wording change does not fail here.
+    maintenance_ack = REPLY_TEXT_DEFAULTS["capture_preventive_ack"].replace(
+        "{{equipo}}", "caldera"
+    ).strip()
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(
+            session,
+            conversation_id,
+            "Mantencion\nEsta funcionando bien la calefacción.\nQuiero mantencion",
+        )
+        session.commit()
+        pivot = run_turn(session, conversation_id, "la caldera no calienta")
+        session.commit()
+
+    assert all(maintenance_ack not in reply for reply in pivot), pivot
+
+
+def test_reschedule_without_upcoming_visit_hands_off(mock_openai_chat, monkeypatch):
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent,
+        "_llm_classify",
+        lambda text, message_id, conversation="": {
+            "intent": "reagendar_visita",
+            "intents": ["reagendar_visita"],
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {},
+        },
+    )
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        run_turn(session, conversation_id, "hola")
+        session.commit()
+        replies = run_turn(session, conversation_id, "es factible que pases tipo 14 horas?")
+        session.commit()
+        result = inspect(session, conversation_id)
+
+    assert all("No tienes visitas próximas" not in reply for reply in replies), replies
+    assert any(
+        event["cause"] == "intent:reagendar_visita" for event in result["events"]
+    ), result["events"]
+    assert result["state"] == "human", result
+    assert any(
+        event["cause"] == "handoff:booking_unavailable" for event in result["events"]
+    ), result["events"]
 
 
 # ---------------------------------------------------------------------------

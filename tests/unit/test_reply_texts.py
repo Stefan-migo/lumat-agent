@@ -50,6 +50,7 @@ EXPECTED_KEYS = {
     "handoff_campo_sin_respuesta",
     "handoff_booking_unavailable",
     "capture_evidence",
+    "capture_preventive_ack",
     "capture_confirm_contact",
     "capture_consent",
     "capture_consent_refused",

@@ -613,6 +613,7 @@ def capture(state: ConversationState) -> dict:
                 session, normalized_window, preventive_keywords
             )
         if is_preventive:
+            captured["_preventive_request"] = True
             skipped = list(captured.get("_skipped") or [])
             if "failure" not in skipped:
                 skipped.append("failure")
@@ -625,6 +626,8 @@ def capture(state: ConversationState) -> dict:
         _merge_extracted(
             captured, state.extracted, [], state, get_coverage_communes(session)
         )
+    if "failure" in captured:
+        captured.pop("_preventive_request", None)
     pending = captured.get("_pending")
     if pending == "confirm_contact":
         return _answer_contact_confirmation(captured, state)
@@ -870,6 +873,21 @@ def _render_capture_question(
             ack = equipment_ack
     else:
         ack = _render_capture_ack(session, captured)
+    preventive_ack = ""
+    if captured.get("_preventive_request"):
+        equipment = captured.get("equipment")
+        if not isinstance(equipment, str) or not equipment.strip() or equipment == "unknown":
+            equipment = "tu equipo"
+        preventive_ack = render_reply(
+            get_reply_texts(session),
+            "capture_preventive_ack",
+            equipo=label or equipment,
+        )
+        if preventive_ack.strip() == (captured.get("_preventive_acked") or "").strip():
+            preventive_ack = ""
+        else:
+            captured["_preventive_acked"] = preventive_ack.strip()
+    ack = preventive_ack or ack
     return f"{ack}{ask}"
 
 
