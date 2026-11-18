@@ -1,0 +1,94 @@
+# Verdad de alcance
+
+Familia 1 del juez: el bot afirma alcance comercial y hechos del historial del cliente que la KB no sostiene. Dos defectos con causa compartida y gravedad distinta, por eso dos specs y un solo arreglo de base.
+
+Rama `odd/verdad-alcance`. Autoridad de alcance: `docs/kb/lumat-servicios.md` (lista cerrada). Autoridad del historial: `app/services/case_ficha.py`.
+
+## Specs
+
+### S1 — Ningún servicio fuera de la lista cerrada de la KB
+
+El veredicto del juez sobre `real-vocabulario-impreciso`:
+
+> afirma que trabajan con quemadores de cocina a gas y ofrece la visita, sin que ese servicio esté listado en la base de conocimiento
+
+El bot respondió, literal:
+
+> Sí, lo vemos: trabajamos con quemadores de cocina a gas, con técnicos autorizados SEC. La visita técnica tiene un valor de $30.000. ¿En qué comuna estás y qué días te acomodan para coordinar la visita?
+
+La KB es una lista cerrada, literal:
+
+> **Otros servicios que cotizamos.** Reparación de calderas y calefont, instalaciones y reemplazos, gasfitería y filtraciones de agua, redes de gas, aire acondicionado, calefactores eléctricos, ductos y trabajos eléctricos. Estos trabajos se cotizan según lo que necesites: un asesor revisa tu caso y te contacta con el presupuesto. No reparamos lavadoras, lavadoras-secadoras ni refrigeradores. Tampoco reparamos artefactos que no estén en esta lista.
+
+Regla: un artefacto, pieza o trabajo que no esté en esa lista no puede presentarse como algo que Lumat hace. Decirlo, y ofrecer el siguiente paso que la KB ya autoriza (un servicio del catálogo o un asesor). Ejemplos que hoy fallan y deben pasar: «quemadores de cocina a gas», «bomba de calor de piscina».
+
+### S2 — Ningún hecho del historial del cliente que la ficha no sostenga
+
+El veredicto del juez sobre `real-consulta-otros-equipos`:
+
+> afirma que Lumat realiza mantención de bomba de calor de piscina sin respaldo en la base de conocimiento e inventa un "caso abierto" del cliente por ese equipo y por aire acondicionado
+
+El bot respondió, literal, en tres turnos:
+
+> Sí, trabajamos con aire acondicionado, y en tu caso ya tenemos un trabajo abierto por ese equipo.
+
+> Sí, también trabajamos con bomba de calor de piscina, y de hecho tienes un caso abierto de hoy justamente por ese equipo.
+
+> La mantención no es una obligación: lo que tengo registrado es un caso abierto hoy por la bomba de calor de piscina, así que si no la pediste tú, lo aclaramos sin problema.
+
+Regla: el bot no afirma que el cliente tiene un caso, un trabajo o un antecedente por un equipo salvo que la ficha lo registre para ese equipo. «Aire acondicionado» sí está en la lista de S1; el defecto de este turno es el hecho inventado, no el alcance.
+
+Nota de causa, medida: la ficha de esta misma conversación se renderiza como antecedente (ver L3). La regla es sobre lo que se le dice al cliente; el arreglo de la causa va en T4.
+
+## Tasks
+
+| ID | Spec | Ruta | Commit |
+|---|---|---|---|
+| T1 | S1 | test RED: reclamo de alcance fuera de la lista cerrada | `<pendiente>` |
+| T2 | S1 | guard determinista + regla de prompt | `<pendiente>` |
+| T3 | S2 | test RED: la ficha no presenta el caso en curso como antecedente | `<pendiente>` |
+| T4 | S2 | `case_ficha` + regla de prompt | `<pendiente>` |
+| T5 | S1, S2 | aserciones de eval por turno en el corpus | `<pendiente>` |
+| T6 | S1, S2 | medición de los dos escenarios | `<pendiente>` |
+| T7 | todas | `bash scripts/test.sh full` + PR | `<pendiente>` |
+
+Ruta: inline en el padre. Cada unidad es un módulo (`respond.py`, `case_ficha.py`) y el diagnóstico ya está cargado; delegar duplicaría la lectura.
+
+## Log
+
+**L1 — pedido del owner, verbatim:**
+
+```
+│ Familia 1 — el bot inventa alcance fuera de la KB.
+│ - real-vocabulario-impreciso: «afirma que trabajan con quemadores de cocina a gas y ofrece la visita, sin que ese servicio esté
+│   listado en la base de conocimiento».
+│ - real-consulta-otros-equipos: «afirma que Lumat realiza mantención de bomba de calor de piscina sin respaldo en la KB e inventa
+│   un "caso abierto" del cliente por ese equipo y por aire acondicionado».
+```
+
+```
+Ojo con la familia 1: los dos escenarios comparten causa pero no son iguales. Prometer un servicio inexistente es una afirmación
+comercial falsa; inventar un «caso abierto» del cliente es peor, porque afirma un hecho sobre su historial. La spec debería
+separarlos aunque el arreglo sea uno.
+```
+
+```
+Está bastante bien, vamos a seguir con el orden de lo que venimos trabajando, con el awareness, el evaluador
+```
+
+**L2 — evidencia de la corrida.** `odd/evals/conv-eval-con-juez-conversaciones.md` líneas 281-292 (`real-vocabulario-impreciso`, juez 0.00, hard fail) y 634-651 (`real-consulta-otros-equipos`, juez 0.00, hard fail). Turnos del cliente literales del corpus, `scripts/conv_eval_corpus.yaml:497` y `:879`.
+
+**L3 — causa de S1.** El guard determinista `_APPLIANCE_REPAIR_CLAIM` (`app/chat/nodes/respond.py:553`) sólo reconoce lavadoras, lavadoras-secadoras y refrigeradores. La línea del prompt (`agent/personas/orchestrator.md`) nombra los mismos tres y agrega «ni artefactos fuera del catálogo de servicios», pero no existe ninguna representación de la lista positiva: ni el guard ni el prompt saben qué servicios sí están. Un reclamo sobre un artefacto fuera de catálogo no dispara nada.
+
+**L4 — causa de S2.** `classify_intent.py:223` crea o actualiza el caso de esta conversación con `status` de clasificación (`abierto` por defecto), y `respond.py:847` arma la ficha después. `case_ficha.build_case_ficha` selecciona todo caso abierto (`case_is_open`) y lo renderiza como:
+
+```
+Pendiente de nuestra parte:
+- <servicio> (abierto desde el <hoy>)
+```
+
+El modelo lee el caso de la conversación en curso como antecedente del cliente y lo adjudica al artefacto que el cliente acaba de mencionar. No es alucinación libre: es un hecho real del sistema presentado como historial.
+
+**L5 — hallazgo del evaluador.** `must_include_any` se evalúa sobre la conversación entera y no por turno, así que un turno secuestrado o una afirmación inventada pasan si otro turno cumple el token. Los dos escenarios de este corte midieron 0.00 por el juez, no por las gates. T5 corrige eso con aserciones por turno.
+
+**L6 — Graph Check.** Nodos consultados: `Servicios de Lumat KB Document` (`docs/kb/lumat-servicios.md`), `Deterministic Configured Answers (S4-S6)` y `Unrestricted Window Not Announced as Hours (S9)` (`odd/tasks/agenda-config-fuente.md`), `Lumat Agent (asistente WhatsApp)` (`docs/capacidades-agente-lumat.md`). Aristas: `Chatbot Agenda Config Fuente Handoff --references--> Servicios de Lumat KB Document`, `Deterministic Configured Answers --conceptually_related_to--> Cobertura y horarios de Lumat KB Document`. El grafo no tiene nodo de `case_ficha.py`; el camino de llamada se leyó en fuente.
