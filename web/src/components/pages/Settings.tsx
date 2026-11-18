@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArrowDown, ArrowUp, Ban, Bell, BookOpen, Bot, CalendarCheck, CalendarClock, CalendarDays, CalendarSearch, CalendarX, Camera, ChevronDown, CircleHelp, ClipboardList, ClipboardX, Clock3, Code2, Coins, Database, DoorOpen, Eye, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Headset, History, Info, KeyRound, LayoutDashboard, ListChecks, Mail, MapPinOff, Maximize2, MessageCircle, MessageCircleQuestion, MessagesSquare, Moon, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Ban, Bell, BookOpen, Bot, CalendarCheck, CalendarClock, CalendarDays, CalendarSearch, CalendarX, Camera, ChevronDown, CircleHelp, ClipboardList, ClipboardX, Clock3, Code2, Coins, Database, DoorOpen, Eye, Files, FileText, FolderOpen, FolderPlus, GitMerge, Globe, Headset, History, Info, KeyRound, LayoutDashboard, ListChecks, Mail, MapPinOff, Maximize2, MessageCircle, MessageCircleQuestion, MessagesSquare, MonitorSmartphone, Moon, Paperclip, Pencil, Plus, Receipt, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, SquarePen, Trash2, UserRound, Users, Wrench, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, apiFetch, deleteModelApiKey, deleteSmtpPassword, fetchTechnicians, getAssistantCapabilities, postJson, saveEmailSettings, saveModelApiKey, saveSmtpPassword, type ModelApiKeyStatus } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -20,6 +20,7 @@ import { MessagePreview } from "../primitives/MessagePreview";
 import { StatCard } from "../shared/StatCard";
 import { SettingsHoursEditor } from "./SettingsHoursEditor";
 import { SettingsTechnicians } from "./SettingsTechnicians";
+import { PanelSessions } from "./PanelSessions";
 import { PageFrame } from "../shared/PageFrame";
 import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
@@ -57,6 +58,7 @@ const GROUPS = [
     { id: "capabilities", label: "Capacidades", icon: Wrench }, { id: "model-api-key", label: "API key de modelos", icon: KeyRound }, { id: "email", label: "Correo", icon: Mail },
   ] },
   { id: "cost-group", label: "Costos", sections: [{ id: "costs", label: "Costos", icon: Coins }] },
+  { id: "cuenta", label: "Cuenta", sections: [{ id: "sessions", label: "Dispositivos", icon: MonitorSmartphone }] },
 ];
 const SECTIONS = GROUPS.flatMap(({ sections }) => sections);
 const SECTION_META: Record<string, { title: string; description: string }> = {
@@ -1036,6 +1038,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
 
           </div>
         </Card> : null}
+        {active === "sessions" ? <PanelSessions /> : null}
         {active === "email" ? <Card title="Correo" description="Configura el servidor SMTP que usa el sistema para enviar correos.">
           <div className="settings-email">
             <p className="settings-email__origin">{emailPasswordOrigin}</p>

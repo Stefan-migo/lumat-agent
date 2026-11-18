@@ -25,6 +25,15 @@ export interface SelfProfileUpdate { name: string | null; phone: string | null; 
 export interface SelfProfileUpdateResponse { user: Pick<SelfProfile, 'name' | 'phone'>; }
 export interface SelfPasswordChange { current_password: string; new_password: string; }
 
+export interface PanelSession {
+  id: number;
+  user_agent: string | null;
+  created_at: string;
+  last_used_at: string;
+  current: boolean;
+}
+export interface PanelSessionsResponse { sessions: PanelSession[]; }
+
 export interface AdminUser { id: number; username: string; role: Role; active: boolean; email: string | null; name: string | null; phone: string | null; position: string | null; locked_until: string | null; failed_logins: number; }
 export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' | 'position'>;
 export interface AdminUsersResponse { users: AdminUser[]; }

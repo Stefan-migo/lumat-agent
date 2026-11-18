@@ -80,3 +80,39 @@ una notificación por estar, por no estar logueado
 
 "Token \"recordarme\" por dispositivo (revocable)" over a 30-day cookie, because a lost phone must be
 revocable without deactivating the account.
+
+### L4 — slices and evidence
+
+- **Slice 1** `8f389bbc2`: migration `069`, `PanelSession`, `panel_sessions` service, unit tests.
+- **Slice 2** `93c20192e`: shared restore, login/logout cookies, device endpoints, DB and functional tests.
+- **Slice 3**: the panel section (`PanelSessions`) and the `### Configuración` amendment.
+
+Review of the delegated backend found two defects, both fixed before the slice commit:
+
+1. **A WebSocket handshake spent the token.** FastAPI solves a WebSocket route's dependencies with
+   `response=None` (`fastapi/routing.py:783-790`), so restoring there rotated the credential and had no
+   way to deliver the replacement. The browser kept a revoked token, and the next HTTP request read it
+   as a copied cookie and revoked every session of the user. A non-HTTP connection now borrows the
+   credential read-only; `test_a_websocket_handshake_never_consumes_the_remember_token` pins it.
+2. `logout` read the cookie name from a string literal instead of the shared constant.
+
+Gates observed: `scripts/test.sh quick` green; `scripts/test.sh db` over the new unit, integration and
+functional files plus `test_h4_chat.py` → 33 passed (the existing login behaviour is preserved).
+
+Note for the next session: `AGENTS.md` says both "a missing or stale graph is a blocker, build it
+FIRST" and "the refresh runs ONCE per session, when the session closes". Two delegated writers read the
+first rule, could not write under `graphify-out/` (it is outside their edit surfaces), and stopped.
+The parent owns that refresh; say so in the brief.
+
+### L5 — the full suite's verdict
+
+`bash scripts/test.sh full` failed four tests that every focused run had passed:
+
+- `tests/integration/test_migrations.py` — `schema_migrations` and `EXPECTED_TABLES` are exact
+  inventories, so `069_panel_sessions` and `panel_sessions` belong in them. The tests were right.
+- `tests/functional/test_auth.py::test_json_session_role_and_tampered_cookie_are_enforced` — it replaced
+  the signed cookie with garbage and expected 401, while the client still held a remembered device, which
+  is a credential. The forged-cookie assertion now runs with the remember cookie removed, so it still
+  proves a forged cookie is never trusted; a second test proves the device restores and rotates despite it.
+- `tests/integration/test_assistant_artifacts.py::test_artifact_pdf_saves_and_publishes_idempotently` passed
+  in isolation and again on the closure run: a flake, not a regression.

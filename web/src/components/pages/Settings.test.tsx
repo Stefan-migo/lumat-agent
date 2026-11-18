@@ -82,6 +82,7 @@ const groupForSection: Record<string, string> = {
   Agente: "Chatbot", Persona: "Chatbot", Conducta: "Chatbot", Mensajes: "Chatbot",
   "Horarios y avisos": "Operación", Cobertura: "Operación", Tarifas: "Operación",
   Capacidades: "Integraciones", "API key de modelos": "Integraciones", Correo: "Integraciones", Costos: "Costos",
+  Dispositivos: "Cuenta",
 };
 async function selectSection(user: ReturnType<typeof userEvent.setup>, label: string) {
   await user.click(within(screen.getByRole("tablist", { name: "Super-secciones de configuración" })).getByRole("tab", { name: groupForSection[label] }));
@@ -251,7 +252,7 @@ describe("Settings", () => {
   it("renders every section and selects Agente by default", () => {
     renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     expect(screen.getAllByRole("tablist").map((tablist) => within(tablist).getAllByRole("tab").map((tab) => tab.textContent))).toEqual([
-      ["Chatbot", "Operación", "Integraciones", "Costos"],
+      ["Chatbot", "Operación", "Integraciones", "Costos", "Cuenta"],
       ["Agente", "Persona", "Conducta", "Mensajes"],
     ]);
     expect(screen.getByRole("tab", { name: "Chatbot" })).toHaveAttribute("aria-selected", "true");
@@ -270,6 +271,19 @@ describe("Settings", () => {
     expect(members()).toEqual(["Capacidades", "API key de modelos", "Correo"]);
     await user.click(screen.getByRole("tab", { name: "Costos" }));
     expect(members()).toEqual(["Costos"]);
+    await user.click(screen.getByRole("tab", { name: "Cuenta" }));
+    expect(members()).toEqual(["Dispositivos"]);
+  });
+
+  it("renders the caller's devices in Cuenta → Dispositivos", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ sessions: [{ id: 1, user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Version/17.0 Mobile/15E148 Safari/604.1", created_at: "2026-01-01T00:00:00Z", last_used_at: "2026-01-02T00:00:00Z", current: true }] }), { status: 200 }));
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await user.click(screen.getByRole("tab", { name: "Cuenta" }));
+    await user.click(screen.getByRole("tab", { name: "Dispositivos" }));
+    expect(await screen.findByRole("heading", { name: "Dispositivos" })).toBeInTheDocument();
+    expect(screen.getByText("iPhone · Safari")).toBeInTheDocument();
+    expect(screen.getByText("Este dispositivo")).toBeInTheDocument();
   });
 
   it("saves a DeepSeek key and reports a valid key without balance", async () => {
