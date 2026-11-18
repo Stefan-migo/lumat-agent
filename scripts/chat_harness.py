@@ -117,8 +117,23 @@ def strong_emergency_hit(session: Session, text: str) -> bool:
     return classify_emergency(text, pattern) == "strong"
 
 
-def run_turn(session: Session, conversation_id: int, text: str) -> list[str]:
+def run_turn(
+    session: Session,
+    conversation_id: int,
+    text: str,
+    *,
+    media: str | None = None,
+) -> list[str]:
     """Persist one inbound customer message and run the conversation brain.
+
+    `media` names a message type (`video`, `image`, `audio`, `document`,
+    `sticker`) for a turn whose content is an attachment instead of an
+    utterance. The row is then persisted the way the channel persists it —
+    media type, no text — because the brain tells an attachment from a customer
+    sentence by exactly that shape (`app/chat/nodes/handoff_gate.py:155-161`).
+    Persisting the corpus placeholder `"<video omitido>"` as TEXT measured a
+    comprehension failure production never has (S4 of
+    `odd/tasks/evals-gates-fallos.md`).
 
     The persist and the run are separate committed steps on purpose: the graph
     nodes open their own sessions and write back onto the inbound row (LLM cost
@@ -127,12 +142,13 @@ def run_turn(session: Session, conversation_id: int, text: str) -> list[str]:
     is the same persist-then-process boundary as the webhook (WH-4), where
     `ingest_payload` commits before `process_message` runs.
     """
+    msg_type = MessageType(media) if media else MessageType.TEXT
     message = Message(
         wamid=f"harness.{uuid4().hex}",
         conversation_id=conversation_id,
         direction=MessageDirection.INBOUND,
-        msg_type=MessageType.TEXT,
-        text=text,
+        msg_type=msg_type,
+        text=None if media else text,
         status=MessageStatus.RECEIVED,
     )
     session.add(message)

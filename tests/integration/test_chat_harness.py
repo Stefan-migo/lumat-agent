@@ -26,7 +26,16 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from chat_harness import ensure_conversation, inspect, run_turn  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import Case, Conversation, ConversationState, Customer  # noqa: E402
+from app.chat.nodes.receive import EVIDENCE_ACK  # noqa: E402
+from app.models import (  # noqa: E402
+    Case,
+    Conversation,
+    ConversationState,
+    Customer,
+    Message,
+    MessageDirection,
+    MessageType,
+)
 from app.services.settings import MESSAGE_DEFAULTS  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -206,3 +215,33 @@ def test_inspect_reports_the_emergency_case_and_human_state(mock_openai_chat, no
     assert result["state"] == "human"
     assert result["case"] is not None
     assert result["case"]["emergency"] is True
+
+
+def test_a_media_turn_is_persisted_as_media(mock_openai_chat):
+    """S4 (`odd/tasks/evals-gates-fallos.md`): a video is not a text message.
+
+    The eval corpus writes `<video omitido>` as the placeholder for a video with
+    no caption. While every turn was persisted as TEXT, that placeholder reached
+    the classifier as unreadable text and recorded `unknown_intent`; production
+    never does that, because media without text is evidence
+    (`app/chat/nodes/handoff_gate.py:155-161`), never an utterance.
+    """
+    with SessionLocal() as session:
+        conversation_id = ensure_conversation(session, PHONE)
+        session.commit()
+        replies = run_turn(session, conversation_id, "", media="video")
+        session.commit()
+
+        inbound = session.scalars(
+            select(Message).where(Message.direction == MessageDirection.INBOUND)
+        ).all()
+        result = inspect(session, conversation_id)
+
+    assert [message.msg_type for message in inbound] == [MessageType.VIDEO]
+    assert inbound[0].text is None
+    # The first turn also carries the greeting header; the evidence ack rides
+    # along with it (`app/chat/nodes/receive.py:207-209`).
+    assert any(EVIDENCE_ACK in reply for reply in replies), replies
+    assert not [
+        event for event in result["events"] if event["event"] == "unknown_intent"
+    ], result["events"]
