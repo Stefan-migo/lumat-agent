@@ -599,13 +599,16 @@ _SERVICE_PHRASE = re.compile(
     r"\b(?:revision|revisar|mantencion|mantenimiento|limpieza|lavado|"
     r"visita|evaluacion|diagnostico)\b"
 )
-# The measured family and its obvious siblings. Deliberately a list of appliance
-# families rather than permitted words: the prompt rule and the human reviewer
-# cover what a net cannot enumerate.
-_OUT_OF_CATALOGUE_APPLIANCE = re.compile(
-    r"\b(?:bombas? de calor|piscinas?|quemadores?|cocinas?|hornos?|"
-    r"microondas|lavaplatos|campanas?|secadoras?|refrigeradores?|lavadoras?)\b"
-)
+# The measured family, and only it. `f9e29596b` fixed the same class of defect
+# the other way round — a guard that replaced answers deleted a correct one — and
+# the owner's decision there was "replace only what was measured, observe the
+# rest". Widening this list is how a guard starts deleting correct answers: with
+# lavadoras, hornos or lavaplatos in it, a legitimate answer got replaced.
+_OUT_OF_CATALOGUE_APPLIANCE = re.compile(r"\b(?:bombas? de calor|quemadores?)\b")
+# A refusal names the same words as the claim it refuses, so "No trabajamos con
+# quemadores de cocina" cannot be told apart from the claim by the words alone.
+# The first version of this guard missed that and replaced correct refusals.
+_NEGATED_CLAIM = re.compile(r"\b(?:no|nunca|tampoco|ni|jamas)\b(?:\s+[\w-]+){0,3}\s*$")
 
 
 def _claims_out_of_catalogue_scope(text: str) -> bool:
@@ -618,7 +621,11 @@ def _claims_out_of_catalogue_scope(text: str) -> bool:
             continue
         if _IN_SCOPE_SERVICE.search(clause):
             continue
-        if _OUT_OF_CATALOGUE_APPLIANCE.search(clause):
+        for claim in _SCOPE_CLAIM.finditer(clause):
+            if not _OUT_OF_CATALOGUE_APPLIANCE.search(clause[claim.end() :]):
+                continue
+            if _NEGATED_CLAIM.search(clause[: claim.start()]):
+                continue
             return True
     return False
 

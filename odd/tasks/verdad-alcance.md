@@ -156,3 +156,14 @@ La conducta pedida en L14 aparece literal en la corrida:
 > Sí, la climatización está dentro de lo que trabajamos, incluido el aire acondicionado. El valor depende del equipo y de lo que necesites, así que se evalúa en una visita técnica de $30.000 y, según lo que se encuentre, el trabajo se presupuesta aparte.
 
 Queda una blandura medida, no un defecto: para la bomba de calor el bot dice «no aparece en los servicios que tenemos listados, así que no puedo confirmarte que la trabajemos» en vez del «tampoco reparamos» de la KB. Es más suave de lo que la KB autoriza, pero no afirma nada falso y no costó puntaje.
+
+**L17 — `full` encontró una regresión que `quick` y el evaluador no vieron.** Cuatro fallas en `tests/integration/test_chat_harness.py`, todas del guard de S1:
+
+1. **Ceguera a la negación.** El predicado miraba el marco de reclamo sin leer lo que había delante, así que «No reparamos lavadoras» disparaba el reemplazo: el bot reemplazaba su propio rechazo correcto por el texto enlatado.
+2. **Lista demasiado ancha.** El rewrite cubría también lavadoras, refrigeradores, hornos, lavaplatos y campanas, y eso rompe una decisión previa del owner. `f9e29596b` («the guard only replaces what the corpus measured») nació de un incidente real —un guard borró una respuesta correcta y el escenario pasó de 41/42 a fallar— y dejó escrito: *«replace only what was measured, observe the rest»*, con el reclamo de artefacto excluido nombrado explícitamente como observar y no reescribir.
+
+El corte repitió el mismo error que ese commit documenta. Arreglo: la lista de rewrite queda en las dos familias medidas (`bombas de calor`, `quemadores`) y el predicado lee la negación delante del marco. Sin ensanchar la lista, que es cómo un guard empieza a borrar respuestas correctas.
+
+Consecuencia registrada y no escondida: un reclamo de alcance sobre un artefacto fuera de catálogo **no medido** (hornos, lavaplatos, lavadoras) no se reescribe; su instrumento son la persona y el juez, igual que antes de este corte. Es la doctrina vigente, no una omisión.
+
+Nota de proceso: esto es la clase de escape que AGENTS.md ya tenía documentada — `quick` verde, `focused` verde, el evaluador verde, y la regresión apareció sólo en `full`.
