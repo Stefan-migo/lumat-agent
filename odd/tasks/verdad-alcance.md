@@ -44,13 +44,13 @@ Nota de causa, medida: la ficha de esta misma conversación se renderiza como an
 
 | ID | Spec | Ruta | Commit |
 |---|---|---|---|
-| T1 | S1 | test RED: reclamo de alcance fuera de la lista cerrada | `<pendiente>` |
-| T2 | S1 | guard determinista + regla de prompt | `<pendiente>` |
-| T3 | S2 | test RED: la ficha no presenta el caso en curso como antecedente | `<pendiente>` |
-| T4 | S2 | `case_ficha` + regla de prompt | `<pendiente>` |
-| T5 | S1, S2 | aserciones de eval por turno en el corpus | `<pendiente>` |
-| T6 | S1, S2 | medición de los dos escenarios | `<pendiente>` |
-| T7 | todas | `bash scripts/test.sh full` + PR | `<pendiente>` |
+| T1 | S1 | test RED: reclamo de alcance fuera de la lista cerrada | `e7215aa1e` |
+| T2 | S1 | guard determinista + regla de prompt | `e7215aa1e` · `789b404dd` |
+| T3 | S2 | test RED: la ficha no presenta el caso en curso como antecedente | `544783bba` |
+| T4 | S2 | `case_ficha` + regla de prompt | `544783bba` |
+| T5 | S1, S2 | aserciones de eval por turno en el corpus | `f84e6f6f2` |
+| T6 | S1, S2 | medición de los dos escenarios | `98489e6f5` (sello) |
+| T7 | todas | `bash scripts/test.sh full` + entrega | `<pendiente>` |
 
 Ruta: inline en el padre. Cada unidad es un módulo (`respond.py`, `case_ficha.py`) y el diagnóstico ya está cargado; delegar duplicaría la lectura.
 
@@ -102,3 +102,14 @@ El modelo lee el caso de la conversación en curso como antecedente del cliente 
 **L10 — límite de slice.** 408 líneas autoradas en 6 commits: pasado el slice de ~400 de revisión. El corte es una sola familia de defectos con causa compartida y los seis commits ya son atómicos y legibles uno por uno. Entrega propuesta: una PR con los seis commits, o una cadena `S1` → `S2+T5` si el revisor prefiere dos ventanas. La decisión es del owner; acá sólo se deja el hecho medido.
 
 **L11 — verificación de la gate.** Muteo de `_affirms_anchor` a `return True`: fallan exactamente los dos tests que dependen de la negación, y ninguno más. Además, alimentando las respuestas medidas de la corrida original, G11 marca `trabajamos con quemadores` en la primera y `trabajamos con bomba de calor` + `caso abierto` en la segunda; dos rechazos correctos pasan. Sin ese chequeo la gate podía pasar por la razón equivocada.
+
+**L12 — medición (T6).** Corrida `verdad-alcance-s1s2`, sello `98489e6f5`, KB `34670f5b3d75` (4 documentos), juez `deepseek-v4.1-flash`, 2 repeticiones. Árbol limpio. Resultado: **2/2 pasan, ningún gate falla**.
+
+| Escenario | Antes | Ahora | hard fail |
+|---|---|---|---|
+| `real-vocabulario-impreciso` | 0.00 | **2.83** | no |
+| `real-consulta-otros-equipos` | 0.00 | **2.00** | no |
+
+La KB estaba vacía en la base del worktree: hubo que sembrarla con `scripts/seed_kb_docs.py --apply` antes de medir, o `kb_answered` habría fallado por la razón equivocada.
+
+**L13 — deriva nueva que la medición destapó.** El bot dejó de inventar alcance, pero ahora responde con la regla del **tarifario** en vez de la del catálogo: «el aire acondicionado no aparece entre los servicios con tarifa publicada». Dos problemas: (a) confunde «no lo hacemos» con «no tiene precio publicado», que son cosas distintas; y (b) el aire acondicionado **sí** está en la lista de la KB (`docs/kb/lumat-servicios.md`, «Otros servicios que cotizamos»), así que ahora sub-declara un servicio que Lumat ofrece. No es el defecto de S1 y no rompe ninguna aserción; queda registrado como observación medida, no como tarea de este corte. Los 2.00 de cierre y 2.00 de `conversational` vienen de ahí: el tercer turno se pone defensivo («no te estoy pidiendo que le hagas mantención…»).
