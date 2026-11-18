@@ -40,6 +40,22 @@ Regla: el bot no afirma que el cliente tiene un caso, un trabajo o un antecedent
 
 Nota de causa, medida: la ficha de esta misma conversación se renderiza como antecedente (ver L3). La regla es sobre lo que se le dice al cliente; el arreglo de la causa va en T4.
 
+### S3 — Un servicio del catálogo no se niega por no tener tarifa publicada
+
+Medido en `real-consulta-otros-equipos` después de S1: el bot respondió
+
+> En climatización sí trabajamos, pero el aire acondicionado no aparece entre los servicios con tarifa publicada, así que no quiero darte un valor inventado.
+
+«Aire acondicionado» **sí** está en la lista de la KB. Decir que no aparece «entre los servicios con tarifa publicada» confunde «no lo hacemos» con «no tiene precio publicado», que son cosas distintas (L13).
+
+Decisión del owner, verbatim:
+
+> En este caso en particular. podria decir si lo trabajamos pero se calcula el valor segun el diagnostico. y puede mencionar el valor de la visita tecnica y la logica de la visita tecnica, o sea que ahi investiga y segun lo evaluado se hace el presupuesto. o algo asi por el estilo
+
+Regla: si el trabajo está en el catálogo pero no tiene tarifa publicada, se afirma que lo hacemos y se dice que el valor se calcula según el diagnóstico. Se puede mencionar el valor de la visita técnica (está en `<tarifario>`) y su lógica: el técnico evalúa el equipo en el domicilio y, según lo que encuentre, el trabajo se presupuesta aparte. La negación por catálogo queda reservada a lo que no está en la lista (S1).
+
+Tres estados, para que no se mezclen: en catálogo con precio publicado → se informa el precio; en catálogo sin precio publicado → S3; fuera de catálogo → S1.
+
 ## Tasks
 
 | ID | Spec | Ruta | Commit |
@@ -50,7 +66,8 @@ Nota de causa, medida: la ficha de esta misma conversación se renderiza como an
 | T4 | S2 | `case_ficha` + regla de prompt | `544783bba` |
 | T5 | S1, S2 | aserciones de eval por turno en el corpus | `f84e6f6f2` |
 | T6 | S1, S2 | medición de los dos escenarios | `98489e6f5` (sello) |
-| T7 | todas | `bash scripts/test.sh full` + entrega | `<pendiente>` |
+| T7 | S3 | regla de prompt + hard fail de negación de catálogo | `<pendiente>` |
+| T8 | todas | re-medición, `bash scripts/test.sh full` y entrega | `<pendiente>` |
 
 Ruta: inline en el padre. Cada unidad es un módulo (`respond.py`, `case_ficha.py`) y el diagnóstico ya está cargado; delegar duplicaría la lectura.
 
@@ -113,3 +130,13 @@ El modelo lee el caso de la conversación en curso como antecedente del cliente 
 La KB estaba vacía en la base del worktree: hubo que sembrarla con `scripts/seed_kb_docs.py --apply` antes de medir, o `kb_answered` habría fallado por la razón equivocada.
 
 **L13 — deriva nueva que la medición destapó.** El bot dejó de inventar alcance, pero ahora responde con la regla del **tarifario** en vez de la del catálogo: «el aire acondicionado no aparece entre los servicios con tarifa publicada». Dos problemas: (a) confunde «no lo hacemos» con «no tiene precio publicado», que son cosas distintas; y (b) el aire acondicionado **sí** está en la lista de la KB (`docs/kb/lumat-servicios.md`, «Otros servicios que cotizamos»), así que ahora sub-declara un servicio que Lumat ofrece. No es el defecto de S1 y no rompe ninguna aserción; queda registrado como observación medida, no como tarea de este corte. Los 2.00 de cierre y 2.00 de `conversational` vienen de ahí: el tercer turno se pone defensivo («no te estoy pidiendo que le hagas mantención…»).
+
+**L14 — corrección del owner sobre L13, verbatim:**
+
+```
+En este caso en particular. podria decir si lo trabajamos pero se calcula el valor segun el diagnostico. y puede mencionar el valor de la visita tecnica y la logica de la visita tecnica, o sea que ahi investiga y segun lo evaluado se hace el presupuesto. o algo asi por el estilo
+```
+
+Se abre S3 y la tarea T7. La medición de T6 queda como línea base de S1+S2 y **no** cubre S3: el prompt cambió después, así que T8 vuelve a medir.
+
+**L15 — por qué S3 entra en este corte y no en el siguiente.** S1 y S3 son las dos mitades de la misma regla: el catálogo es cerrado, y dentro de él no tener precio publicado no significa que no lo hagamos. Arreglar sólo S1 produjo justamente el vaivén que midió L13: el bot pasó de sobre-declarar a sub-declarar. Escribir las dos mitades en el mismo bloque de la persona es más probable que se sostenga que arreglarlas en cortes separados, y comparten autoridad (la lista de la KB) y escenario de medición.

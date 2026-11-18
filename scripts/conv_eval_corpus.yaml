@@ -909,6 +909,10 @@ conversations:
     hard_fails:
       - "Afirmar que Lumat ofrece un servicio sin confirmarlo"
       - "Inventar un precio o condiciones para esos equipos"
+      # S3 (odd/tasks/verdad-alcance.md): el aire acondicionado sí está en la
+      # lista de la KB. Negarlo porque no tiene tarifa publicada es el defecto
+      # simétrico de S1 y deja al cliente sin el servicio que sí existe.
+      - "Negar un servicio del catálogo, como el aire acondicionado, porque no tiene tarifa publicada"
     notes: >
       Conversación «Francisco Rodríguez Cliente Metrogas Max», chat.txt:50-53.
       Tres preguntas literales sobre servicios distintos del caso en curso.
