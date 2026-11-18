@@ -524,6 +524,49 @@ def test_g7_forbidden_anchors_ignore_case_and_accents():
     assert gates_of(scn, obs)["G7"].ok is False
 
 
+def test_g11_only_an_affirmative_claim_fails():
+    """S1 (odd/tasks/verdad-alcance.md): the correct refusal names the same words."""
+    scn = scenario(expect={"must_not_affirm": ["trabajamos con quemadores"]})
+    claimed = gates_of(
+        scn,
+        observation(replies=["Sí, lo vemos: trabajamos con quemadores de cocina a gas"]),
+    )["G11"]
+    assert claimed.ok is False
+    assert "quemadores" in claimed.detail
+    refused = gates_of(
+        scn, observation(replies=["No trabajamos con quemadores de cocina."])
+    )["G11"]
+    assert refused.ok is True
+
+
+def test_g11_reads_every_bot_reply_and_ignores_case_and_accents():
+    scn = scenario(expect={"must_not_affirm": ["caso abierto"]})
+    obs = observation(
+        replies=[
+            "Cuéntame qué pasa con el equipo.",
+            "De hecho Tienes un Caso Abierto de hoy por ese equipo.",
+        ],
+        turns=[
+            {"text": "a", "replies": ["Cuéntame qué pasa con el equipo."], "intent": None},
+            {
+                "text": "b",
+                "replies": ["De hecho Tienes un Caso Abierto de hoy por ese equipo."],
+                "intent": None,
+            },
+        ],
+    )
+    assert gates_of(scn, obs)["G11"].ok is False
+
+
+def test_g11_passes_a_negated_history_statement():
+    """S2: denying an open case is the answer this gate exists to accept."""
+    scn = scenario(expect={"must_not_affirm": ["caso abierto"]})
+    obs = observation(
+        replies=["No tengo registrado ningún caso abierto por ese equipo."]
+    )
+    assert gates_of(scn, obs)["G11"].ok is True
+
+
 def test_g8_every_inbound_turn_needs_a_reply():
     obs = observation(
         turns=[

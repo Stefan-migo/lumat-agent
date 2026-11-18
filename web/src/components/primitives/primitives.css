@@ -176,6 +176,20 @@
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-sm);
 }
+/* iOS zooms the whole page when a control whose font-size is below 16px receives focus, and the
+   page then stays zoomed and off-centre until the user pinches back. The trigger is the size of the
+   control's text, not the page's: raising it to 16px on phones removes the zoom at its cause instead
+   of fighting it with `maximum-scale=1`, which would also take pinch-zoom away from everyone who
+   needs it. Desktop keeps `--text-md`/`--text-sm` untouched. */
+@media (max-width: 40rem) {
+  .field__control,
+  .field__control--sm,
+  .combobox__input,
+  .search-input,
+  select,
+  textarea,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) { font-size: 1rem; }
+}
 .field__control-wrap { position: relative; width: 100%; }
 .field__control--with-adornment { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
 .field__control--with-toggle { padding-right: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
