@@ -824,7 +824,7 @@ def _reask_pending(captured: dict, pending: list[str], state: ConversationState)
     captured["_asked"] = asked
     captured["_pending"] = pending
     with session_scope() as session:
-        ask = _render_capture_question(session, captured, pending)
+        ask = _render_capture_question(session, captured, pending, state.extracted)
         if pending == ["address"]:
             ask = _address_reask_question(
                 ask, offer_pin=asked.get("address", 0) >= MAX_ASKS_PER_FIELD
@@ -878,7 +878,7 @@ def _exhausted(captured: dict, batch: list[str]) -> bool:
 
 
 def _render_capture_question(
-    session, captured: dict, batch: list[str]
+    session, captured: dict, batch: list[str], just_extracted: dict | None = None
 ) -> str:
     """The customer-facing question for a batch of fields.
 
@@ -921,16 +921,38 @@ def _render_capture_question(
     # written only when the text actually reaches the customer: marking it while
     # the preventive ack holds the turn swallowed the sentence (measured on
     # conversation 299 of the `captura-eval` run).
+    availability_ack = ""
+    # S3 (agenda-respeta-horario): only the turn that delivered the constraint
+    # names it back. `just_extracted` is this turn's extraction, so an older
+    # availability never turns a re-ask into a tic.
+    delivered = (just_extracted or {}).get("availability")
+    if isinstance(delivered, str) and delivered.strip():
+        candidate = render_reply(
+            get_reply_texts(session),
+            "capture_availability_ack",
+            disponibilidad=captured.get("availability") or delivered.strip(),
+        )
+        if candidate.strip() != (captured.get("_availability_acked") or "").strip():
+            availability_ack = candidate
     quote_ack = ""
     if captured.get("_quote_request"):
         candidate = render_reply(get_reply_texts(session), "capture_quote_ack")
         if candidate.strip() != (captured.get("_quote_acked") or "").strip():
             quote_ack = candidate
-    ack = _pick_ack(captured, ack, preventive_ack, quote_ack)
+    ack = _pick_ack(
+        captured, ack, preventive_ack, quote_ack, availability_ack=availability_ack
+    )
     return f"{ack}{ask}"
 
 
-def _pick_ack(captured: dict, base_ack: str, preventive_ack: str, quote_ack: str) -> str:
+def _pick_ack(
+    captured: dict,
+    base_ack: str,
+    preventive_ack: str,
+    quote_ack: str,
+    *,
+    availability_ack: str = "",
+) -> str:
     """Which acknowledgement speaks, and what the customer actually receives.
 
     `base_ack` is the turn's own acknowledgement — the equipment acknowledgement or
@@ -946,6 +968,11 @@ def _pick_ack(captured: dict, base_ack: str, preventive_ack: str, quote_ack: str
     """
     if preventive_ack:
         return preventive_ack
+    if availability_ack:
+        # The customer just told us when they are reachable: naming it beats a
+        # generic "Entiendo." when only one acknowledgement fits the turn.
+        captured["_availability_acked"] = availability_ack.strip()
+        return availability_ack
     if not quote_ack:
         return base_ack
     captured["_quote_acked"] = quote_ack.strip()
@@ -1098,7 +1125,7 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             asked[field] = asked.get(field, 0) + 1
         captured["_asked"] = asked
         texts = get_reply_texts(session)
-        ask = _render_capture_question(session, captured, batch)
+        ask = _render_capture_question(session, captured, batch, state.extracted)
         _persist_captured(session, state, captured)
     updates: dict = {"captured": captured, "replies": [ask]}
     if clear_paused:

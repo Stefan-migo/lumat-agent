@@ -219,6 +219,12 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     # to reach only the next capture question. The request is named once, in the
     # customer's own words, instead of being swallowed by the questionnaire.
     "capture_quote_ack": "Entiendo, quieres una nueva evaluación con cotización. ",
+    # S3 (agenda-respeta-horario): the customer's own time constraint, named back
+    # in the turn that delivered it. Measured on `real-diego-precio-y-duracion`:
+    # "Tengo que salir a las 2, volviendo a las 4pm" was extracted and stored, then
+    # answered with "Entiendo." and a re-ask, so the constraint the visit has to
+    # respect never came back to the customer.
+    "capture_availability_ack": "Anoté que {{disponibilidad}}; lo tengo en cuenta para la visita. ",
     # S3 (chatbot-realismo-conversacional): one confirmation instead of four questions
     # when the customer record already holds the contact data.
     "capture_confirm_contact": (
@@ -275,6 +281,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     # No slots: the acknowledgement names the request, not a case fact, so the
     # owner cannot introduce a placeholder no call site fills.
     "capture_quote_ack": frozenset(),
+    "capture_availability_ack": frozenset({"disponibilidad"}),
     "capture_confirm_contact": frozenset({"comuna", "direccion", "email"}),
     "capture_consent": frozenset(),
     "capture_consent_refused": frozenset(),

@@ -1078,3 +1078,76 @@ def test_s5_the_reask_names_the_equipment_the_customer_corrected():
     result = _reask_pending(captured, ["failure"], state)
 
     assert any("caldera" in reply.lower() for reply in result["replies"])
+
+
+def test_s3_the_reask_names_the_availability_the_customer_just_gave():
+    """S3 (agenda-respeta-horario): measured on `real-diego-precio-y-duracion`.
+
+    The customer answered a diagnostic question with "Tengo que salir a las 2,
+    volviendo a las 4pm". The extractor stored it —
+    `"availability": "sale a las 2 y vuelve a las 4pm (disponible después de las
+    16:00)"` — and the reply answered "Entiendo. Cuéntame qué pasa con el
+    equipo…", so the constraint the visit has to respect was never named back.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    availability = "sale a las 2 y vuelve a las 4pm"
+    captured = {
+        "equipment": "calefont",
+        "availability": availability,
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.extracted = {"availability": availability}
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any(availability in reply for reply in result["replies"])
+
+
+def test_s3_the_availability_is_named_once_not_on_every_later_turn():
+    """S3: the acknowledgement marks a transition; it is not a per-turn tic."""
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    availability = "después de las 16:00"
+    captured = {
+        "equipment": "calefont",
+        "availability": availability,
+        "_pending": ["failure"],
+        "_asked": {"failure": 0},
+    }
+    first = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    first.captured = captured
+    first.extracted = {"availability": availability}
+    _reask_pending(captured, ["failure"], first)
+
+    # The following turn re-asks the same field and the customer says nothing new
+    # about their time: the sentence must not come back.
+    captured["_pending"] = ["failure"]
+    captured["_asked"] = {"failure": 1}
+    second = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    second.captured = captured
+    second.extracted = {}
+    result = _reask_pending(captured, ["failure"], second)
+
+    assert not any(availability in reply for reply in result["replies"])
