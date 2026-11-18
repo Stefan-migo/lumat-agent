@@ -116,3 +116,21 @@ The parent owns that refresh; say so in the brief.
   proves a forged cookie is never trusted; a second test proves the device restores and rotates despite it.
 - `tests/integration/test_assistant_artifacts.py::test_artifact_pdf_saves_and_publishes_idempotently` passed
   in isolation and again on the closure run: a flake, not a regression.
+
+### L6 — closure
+
+- `bash scripts/test.sh full` on the final tree: exit 0, no failures (the PDF artifact test that flaked in the
+  earlier run passed again).
+- Native review `review-e5c07ca7c2c293e3`, risk tier **high** (`hot_path: auth`), four lenses: **approved**,
+  authority acknowledged and burned. Five non-blocking advisories, recorded here as follow-ups rather than
+  corrections, since the native statement forbids reopening this candidate for them:
+  - `R1-001` (risk, `app/panel/deps.py:61-70`): the remember cookie is `secure=False` for parity with the
+    session cookie, but it lives ninety days instead of twelve hours. The honest fix is to derive
+    `secure` from the request (`X-Forwarded-Proto`) rather than from the middleware's posture.
+  - `R2-001` (readability, `app/panel/deps.py:62-75`): `restore_panel_user` carries both the
+    session-present reuse check and the restore path in one body.
+  - `R2-002` (readability, `app/services/panel_sessions.py:31-37`): `issue` and `rotate` build the same row.
+  - `R3-001` (reliability, `app/panel/deps.py:65-70`): a lost `Set-Cookie` on rotation makes the next request
+    present a revoked token and clear the session. Conservative by design; worth revisiting.
+  - `R4-001` (resilience, `app/panel/deps.py:70-76`): the restore path is not wrapped, so a database error
+    there becomes a 500 instead of an unauthenticated answer.
