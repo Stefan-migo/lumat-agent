@@ -67,6 +67,8 @@ El horario pedido sigue el camino de S3: se reconoce en el turno, queda en `avai
 | T3 | S1-S3 | medición `--only` de los 3 escenarios, 3 reps, transcript antes que puntaje | pendiente |
 | T4 | S1-S4 | `bash scripts/test.sh quick`, luego `full` antes de la PR | pendiente |
 
+Slice: 4 commits, 571 authored lines al cerrar S4. Pasado el corte de ~400 líneas de la PR, así que la entrega se resuelve con una de dos, y la decide el owner al abrir la PR: declarar `size:exception` (la etiqueta existe en el repo para esto), o partir en dos PRs encadenadas (S1/S2/S4 ruteo, S3 acknowledgement), que son independientes entre sí.
+
 ## Log
 
 ### L1 — pedido original del owner (handoff, verbatim)
