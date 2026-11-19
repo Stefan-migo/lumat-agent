@@ -73,6 +73,24 @@ GREETING_FILLERS = frozenset(
 _MAX_GREETING_LENGTH = 40
 
 
+def _reduced(word: str) -> str:
+    """The word as WhatsApp writes it: every run of one letter counts as one.
+
+    S1 (`odd/tasks/saludo-informal.md`): production #40 opened with "Holaa" and
+    the exact-word lists below read it as stated content, so the first-contact
+    reply was the short greeting — "Ya te ayudo con eso" for a customer who had
+    only said hello. Collapsing a repeated letter is the smallest rule that
+    reads `holaa`, `holaaa` and `buenaaas` the way the customer meant them, and
+    it applies to the vocabulary, never to the message: the greeting compared is
+    always a word the lists already hold.
+    """
+    return re.sub(r"(.)\1+", r"\1", word)
+
+
+_GREETING_WORDS_REDUCED = frozenset(_reduced(word) for word in GREETING_WORDS)
+_GREETING_FILLERS_REDUCED = frozenset(_reduced(word) for word in GREETING_FILLERS)
+
+
 def _normalized_inbound(state: ConversationState) -> str:
     """The latest inbound text, normalized for greeting matching."""
     inbound = next(
@@ -89,15 +107,19 @@ def is_greeting_only(state: ConversationState) -> bool:
 
     Every word must be a greeting word or greeting filler, and at least one must
     be a greeting word, so `"hola buenas tardes"` and `"hola como va?"` count
-    while `"hola mundo"` and `"buenas necesito una visita"` stay content.
+    while `"hola mundo"` and `"buenas necesito una visita"` stay content. Words
+    are compared reduced (`_reduced`), so `"Holaa"` and `"buenaaas"` count too.
     """
     text = _normalized_inbound(state)
     if not text or len(text) > _MAX_GREETING_LENGTH:
         return False
-    tokens = text.split()
-    if not any(token in GREETING_WORDS for token in tokens):
+    tokens = [_reduced(token) for token in text.split()]
+    if not any(token in _GREETING_WORDS_REDUCED for token in tokens):
         return False
-    return all(token in GREETING_WORDS or token in GREETING_FILLERS for token in tokens)
+    return all(
+        token in _GREETING_WORDS_REDUCED or token in _GREETING_FILLERS_REDUCED
+        for token in tokens
+    )
 
 
 # Questions about the assistant itself (S2: "¿Cómo estás?", "¿qué tal? y
@@ -117,6 +139,17 @@ _GREETING_IDIOMS = frozenset({("que", "tal"), ("como", "va")})
 # counts as a social question when the customer actually asked with a question
 # mark. `_normalized_inbound` strips punctuation, hence the raw check.
 _STATEMENT_ENDINGS = frozenset({("todo", "bien")})
+# Comparison happens on reduced words (see `_reduced`), so the vocabulary above
+# is projected once instead of reducing both sides of every comparison.
+_SOCIAL_QUESTION_ENDINGS_REDUCED = tuple(
+    tuple(_reduced(part) for part in ending) for ending in _SOCIAL_QUESTION_ENDINGS
+)
+_GREETING_IDIOMS_REDUCED = frozenset(
+    tuple(_reduced(part) for part in idiom) for idiom in _GREETING_IDIOMS
+)
+_STATEMENT_ENDINGS_REDUCED = frozenset(
+    tuple(_reduced(part) for part in ending) for ending in _STATEMENT_ENDINGS
+)
 
 
 def _asks_a_question(state: ConversationState) -> bool:
@@ -133,20 +166,27 @@ def is_social_only(state: ConversationState) -> bool:
 
     Greeting words and polite greeting fillers may precede the question, but
     unrelated content (including thanks) keeps its existing classification path.
+    Words are compared reduced (`_reduced`), so a greeting written the way
+    WhatsApp writes it — `"Holaa"`, `"holaaa"` — does not defeat the prefix.
     """
     text = _normalized_inbound(state)
     if not text or len(text) > _MAX_GREETING_LENGTH:
         return False
-    tokens = text.split()
-    for ending in _SOCIAL_QUESTION_ENDINGS:
+    tokens = [_reduced(token) for token in text.split()]
+    for ending in _SOCIAL_QUESTION_ENDINGS_REDUCED:
         if tuple(tokens[-len(ending):]) != ending:
             continue
-        if ending in _GREETING_IDIOMS and any(token in GREETING_WORDS for token in tokens):
+        if ending in _GREETING_IDIOMS_REDUCED and any(
+            token in _GREETING_WORDS_REDUCED for token in tokens
+        ):
             continue
-        if ending in _STATEMENT_ENDINGS and not _asks_a_question(state):
+        if ending in _STATEMENT_ENDINGS_REDUCED and not _asks_a_question(state):
             continue
         prefix = tokens[: -len(ending)]
-        if all(token in GREETING_WORDS or token in GREETING_FILLERS for token in prefix):
+        if all(
+            token in _GREETING_WORDS_REDUCED or token in _GREETING_FILLERS_REDUCED
+            for token in prefix
+        ):
             return True
     return False
 

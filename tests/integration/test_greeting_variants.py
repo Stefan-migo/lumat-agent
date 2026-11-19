@@ -77,7 +77,18 @@ def _unknown_events() -> list[ConversationEvent]:
 
 @pytest.mark.parametrize(
     "text",
-    ["Hola buenas tardes", "hola cómo va?", "Alo?", "holi", "buen día"],
+    [
+        "Hola buenas tardes",
+        "hola cómo va?",
+        "Alo?",
+        "holi",
+        "buen día",
+        # S1 (odd/tasks/saludo-informal.md): the measured production spelling.
+        "Holaa",
+        "holaaa",
+        "Holaa, buenas tardes",
+        "buenaaas",
+    ],
 )
 def test_greeting_variant_answers_the_greeting_without_classifying(text, mock_openai_chat):
     replies = _turn(_start_conversation(), text, f"wamid.s1.first.{abs(hash(text))}")
@@ -104,6 +115,20 @@ def test_greeting_with_content_still_reaches_classification(mock_openai_chat):
     replies = _turn(
         _start_conversation(), "hola, tengo un calefont que no calienta", "wamid.s1.content.1"
     )
+
+    assert replies != [GREETING]
+    assert mock_openai_chat
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["holaa necesito una visita", "Holaaa, tengo un calefont que no calienta"],
+)
+def test_informal_greeting_with_content_still_reaches_classification(
+    text, mock_openai_chat
+):
+    """S3: reading a repeated letter must never swallow a stated need."""
+    replies = _turn(_start_conversation(), text, f"wamid.s3.content.{abs(hash(text))}")
 
     assert replies != [GREETING]
     assert mock_openai_chat
