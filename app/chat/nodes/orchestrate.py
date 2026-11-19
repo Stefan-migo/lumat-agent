@@ -25,10 +25,13 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
+from datetime import datetime, timezone
 
 from app.chat.nodes.capture import is_social_only
 from app.chat.nodes.respond import asks_about_schedule, quotes_required
 from app.chat.state import ConversationState
+from app.db import session_scope
+from app.models import Conversation, Customer
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,8 @@ def _dispatch(
     template_id: str | None = None,
     question: bool = False,
     quote_question: bool = False,
+    change_request: bool = False,
+    has_upcoming_visit: bool = True,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
@@ -67,6 +72,9 @@ def _dispatch(
     answered and the pending field resumes, whatever intent the classifier gave.
     ``quote_question`` marks a turn that asks the price of work outside the
     published tariff (D8): it is answered, not turned into a diagnostic capture.
+    ``change_request`` marks a turn that explicitly asks to move or cancel the
+    visit (S12): it outranks ``question``, because "Quiero reagendar la visita es
+    posible?" is a request whose surface happens to be interrogative.
     """
     # T4.4: any post-classification escalation (2x unknown, injection, SS-1
     # always_escalate) converges on handoff, reason preserved (route.py:25-30).
@@ -95,26 +103,53 @@ def _dispatch(
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+    if intent == "reagendar_visita" and change_request:
+        # S2/S12: an explicit request to change the visit remains management,
+        # even when no upcoming appointment is currently in the database.
+        return {"next_step": "manage"}
+    if intent == "reagendar_visita" and not has_upcoming_visit:
+        # S4: with no visit to move, this is a visit request, and it outranks the
+        # mid-capture question path on purpose. The hour the customer names is
+        # named back by the capture acknowledgement (S3) and read by booking once
+        # the capture finishes (owner decision L5). Measured twice: whenever this
+        # branch runs the reply names the preference; whenever the same turn fell
+        # through to `research` the customer KB had nothing to say about a time
+        # preference and the reply was a kb_miss offer ("No tengo ese dato.
+        # ¿Prefieres que te tome los datos…?"). The classifier flip-flops between
+        # `solicitar_visita` and `reagendar_visita` for the same sentence across
+        # runs, so routing must not depend on which label it picked this time:
+        # `solicitar_visita` already lands in capture on its own.
+        return {"next_step": "capture"}
     if intent == "smalltalk":
         # Courtesy is understood even during capture; never research, capture,
         # or escalate it as a side effect of a pending field.
         return {"next_step": "respond"}
-    if intent in {"cancelar_visita", "reagendar_visita"}:
-        # S12 (chatbot-realismo-conversacional): asking to reschedule is a request,
-        # not an answer. Production #23 turn 289 asked "Quiero reagendar la visita
-        # es posible?" mid-capture and read "¿En qué comuna te encuentras?" back — CI-2
-        # used to fold these two intents into the pending field, and the customer's
-        # own visit was never offered. The pending field is untouched, so the capture
-        # agenda resumes with its next message.
-        return {"next_step": "manage"}
     if mid_capture:
+        if intent in {"cancelar_visita", "reagendar_visita"} and change_request:
+            # S12 (chatbot-realismo-conversacional): asking to reschedule is a
+            # request, not an answer. Production #23 turn 289 asked "Quiero
+            # reagendar la visita es posible?" mid-capture and read "¿En qué
+            # comuna te encuentras?" back — CI-2 used to fold these two intents
+            # into the pending field, and the customer's own visit was never
+            # offered. The explicit change verb is what makes it a request.
+            return {"next_step": "manage"}
         if intent in RETRIEVAL_INTENTS or question:
             # Answer the deviation from KB, then resume the pending field (CI-2).
+            # S1 (agenda-respeta-horario) put this ahead of visit management:
+            # measured `real-dato-mas-pregunta` ("Yo creo qje no alcanza, y
+            # mañana?") and `real-reagenda-familiar` ("Es factible que vengas un
+            # dia pero a las.9 am") both classify as `reagendar_visita`, so the
+            # old order sent a plain schedule question to `manage`, which had no
+            # visit to move, handed off with `booking_unavailable` and left the
+            # conversation owned by a human — the following turns got no reply.
             return {
                 "next_step": "research",
                 "active_sub_agent": RESEARCH_TRIAGE,
                 "capture_paused": True,
             }
+        if intent in {"cancelar_visita", "reagendar_visita"}:
+            # No question in the turn: S12's plain request keeps its own path.
+            return {"next_step": "manage"}
         # Remaining intents are field answers in CI-2.
         return {"next_step": "capture"}
     if intent in {"cancelar_visita", "reagendar_visita"}:
@@ -158,11 +193,38 @@ def asks_explicitly(text: str) -> bool:
     `cuando` is intentionally excluded: it also appears in statements like
     "cuando llegue". Marker matching uses word boundaries so `pueden` cannot
     match as a substring of another word.
+
+    `factible`, `podrias` and `podria` are the conditional-request shape (S1,
+    agenda-respeta-horario): "Es factible que vengas un dia pero a las.9 am" is
+    measured as `reagendar_visita` by the classifier and carries no "?", so
+    without these markers it read as a field answer and the requested hour was
+    never acknowledged. A statement that happens to use them is answered and the
+    capture agenda resumes, so the failure mode is an extra answer, not a lost
+    field.
     """
     if "?" in text or "¿" in text:
         return True
     normalized = _normalise_interrogative_text(text)
-    return re.search(r"\b(?:cuanto|pueden|se\s+puede)\b", normalized) is not None
+    return re.search(r"\b(?:cuanto|pueden|se\s+puede|factible|podrias|podria|sera)\b", normalized) is not None
+
+
+def asks_for_change(text: str) -> bool:
+    """True when the turn explicitly asks to move, cancel or void the visit (S12).
+
+    S1 lets a mid-capture question reach the answering path first. This is the
+    carve-out that keeps S12 intact: the customer's own words name the visit and
+    the action, so the turn is a request, not a question about availability.
+    """
+    normalized = _normalise_interrogative_text(text)
+    return (
+        re.search(
+            r"\b(?:reagend\w*|cancel\w*|anul\w*"
+            r"|cambiar\s+(?:la|el|mi|de)\s+(?:visita|hora|dia)"
+            r"|mover\s+(?:la|el|mi|de)\s+(?:visita|hora|dia))\b",
+            normalized,
+        )
+        is not None
+    )
 
 
 def _is_question(state: ConversationState) -> bool:
@@ -201,6 +263,31 @@ def _is_quote_question(state: ConversationState) -> bool:
     return quotes_required(text)
 
 
+def _has_upcoming_visit(state: ConversationState) -> bool:
+    """Read whether this customer has a booked future appointment.
+
+    Missing conversation/customer records fail closed to the legacy routing,
+    where visit management remains available.
+    """
+    if state.conversation_id is None or state.customer_id is None:
+        return True
+
+    from app.chat.nodes.manage import _appointment_query
+
+    with session_scope() as session:
+        conversation = session.get(Conversation, state.conversation_id)
+        customer = session.get(Customer, state.customer_id)
+        if (
+            conversation is None
+            or customer is None
+            or conversation.customer_id != customer.id
+        ):
+            return True
+        return session.scalar(
+            _appointment_query(customer.id, datetime.now(timezone.utc)).limit(1)
+        ) is not None
+
+
 def orchestrate(state: ConversationState) -> dict:
     """Dispatch the classified intent to a sub-graph (or handoff/respond).
 
@@ -217,6 +304,10 @@ def orchestrate(state: ConversationState) -> dict:
         template_id=getattr(state, "template_id", None),
         question=_is_question(state),
         quote_question=_is_quote_question(state),
+        change_request=asks_for_change(
+            (state.window[-1].get("text") or "") if state.window else ""
+        ),
+        has_upcoming_visit=_has_upcoming_visit(state),
     )
     if decision.get("active_sub_agent"):
         logger.info(

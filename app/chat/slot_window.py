@@ -99,8 +99,8 @@ _ANY_DAY = (
 
 _MORNING = re.compile(r"\b(?:a|de|en|por|durante)\s+la\s+manana\b|\bla\s+manana\b|\bmanana\s+(?:temprano|am)\b")
 _AFTERNOON = re.compile(
-    r"\b(?:a|de|en|por|durante)\s+la\s+tarde\b"
-    r"|\bla\s+tarde\b"
+    r"\b(?:a|de|en|por|durante)\s+las?\s+tardes?\b"
+    r"|\blas?\s+tardes?\b"
     # S8 (chatbot-realismo-conversacional): production #23 asked "después del
     # mediodía" / "después de las 12" four times and was offered the same three
     # morning slots every time, because only "la tarde" was read. Both phrasings

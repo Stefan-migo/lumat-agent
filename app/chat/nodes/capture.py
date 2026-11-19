@@ -26,13 +26,14 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.chat.nodes.handoff_gate import is_media_evidence
 from app.chat.phrasing import facts as phrase_facts
 from app.chat.phrasing import phrase
 from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
+from app.chat.slot_window import resolve_window, window_label
 from app.chat.service_catalogue import (
     _PREVENTIVE_CATALOGUE_WORDS,
     _matches_catalogue_phrase,
@@ -824,7 +825,10 @@ def _reask_pending(captured: dict, pending: list[str], state: ConversationState)
     captured["_asked"] = asked
     captured["_pending"] = pending
     with session_scope() as session:
-        ask = _render_capture_question(session, captured, pending)
+        ask = _render_capture_question(
+            session, captured, pending, state.extracted,
+            current_text=_current_text(state),
+        )
         if pending == ["address"]:
             ask = _address_reask_question(
                 ask, offer_pin=asked.get("address", 0) >= MAX_ASKS_PER_FIELD
@@ -877,8 +881,31 @@ def _exhausted(captured: dict, batch: list[str]) -> bool:
     return any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in batch)
 
 
+# S5 (agenda-respeta-horario): a franja named as something the customer cannot do is
+# not a preference. `resolve_window` reads mentions, so "En las tardes me complica por
+# los ñiños" resolves to the afternoon while meaning the opposite: measured on
+# `agenda-house-7`, the hold answered "Sobre tu horario: la tarde. Queda anotada" and
+# inverted a 9 am request into an afternoon one. This is the same negation-blindness
+# the project already recorded for reply guards, applied to time.
+_EXCLUDES_WINDOW = re.compile(
+    r"\b(?:me\s+complica\w*|no\s+puedo|no\s+podria|no\s+me\s+sirve|no\s+me\s+viene"
+    r"|no\s+estoy|imposible|no\s+alcanzo|no\s+tengo\s+con\s+quien)\b",
+    re.IGNORECASE,
+)
+
+
+def _excludes_the_window(text: str) -> bool:
+    """True when the turn names a time it cannot do rather than one it wants."""
+    return bool(_EXCLUDES_WINDOW.search(text or ""))
+
+
 def _render_capture_question(
-    session, captured: dict, batch: list[str]
+    session,
+    captured: dict,
+    batch: list[str],
+    just_extracted: dict | None = None,
+    *,
+    current_text: str = "",
 ) -> str:
     """The customer-facing question for a batch of fields.
 
@@ -886,6 +913,10 @@ def _render_capture_question(
     in `_reask_pending` was missing the equipment label, so a customer who
     corrected "no era calefont, es una caldera" was asked a generic question and
     no reply ever said "caldera" (T5b, gate G6 on `super-burst-contradiccion`).
+
+    Ack priority is the existing preventive acknowledgement, then S3's just-
+    delivered availability acknowledgement, S5's later hold clause, the existing
+    quote acknowledgement, and finally the base acknowledgement.
     """
     ask = _phrase_question(session, captured, batch, _field_questions(session))
     label = _EQUIPMENT_LABELS.get(captured.get("equipment_type") or "")
@@ -921,16 +952,69 @@ def _render_capture_question(
     # written only when the text actually reaches the customer: marking it while
     # the preventive ack holds the turn swallowed the sentence (measured on
     # conversation 299 of the `captura-eval` run).
+    availability_ack = ""
+    # S3 (agenda-respeta-horario): only the turn that delivered the constraint
+    # names it back. `just_extracted` is this turn's extraction, so an older
+    # availability never turns a re-ask into a tic.
+    delivered = (just_extracted or {}).get("availability")
+    if isinstance(delivered, str) and delivered.strip():
+        candidate = render_reply(
+            get_reply_texts(session),
+            "capture_availability_ack",
+            disponibilidad=captured.get("availability") or delivered.strip(),
+        )
+        if candidate.strip() != (captured.get("_availability_acked") or "").strip():
+            availability_ack = candidate
+    availability_hold_ack = ""
+    availability = captured.get("availability")
+    if (
+        isinstance(availability, str)
+        and availability.strip()
+        and availability != "unknown"
+        # S5 yields to S3 only when S3 actually speaks this turn. Keying it on the
+        # extraction instead left a hole: `agenda-house-5` measured turns that
+        # re-extracted the same value, so S3 rendered its previous sentence again
+        # and the marker suppressed it, while S5 had already stood down — the
+        # customer got a bare re-ask with the constraint on record.
+        and not availability_ack
+        and (window := resolve_window(current_text, today=date.today())) is not None
+    ):
+        # Name what the customer just said, not only what the extractor happened
+        # to store earlier: measured on agenda-house-6, "es factible que pases tipo
+        # 14 horas?" resolved to 14:00 deterministically while the stored value was
+        # still "mañana", so the hold answered about a different hour than the one
+        # the customer had just proposed.
+        # An exclusion names a time the customer cannot do, so the stored
+        # preference is what gets held; a plain mention names the hour they are
+        # proposing right now.
+        held = availability.strip() if _excludes_the_window(current_text) else window_label(window)
+        availability_hold_ack = render_reply(
+            get_reply_texts(session),
+            "capture_availability_hold",
+            disponibilidad=held,
+        )
     quote_ack = ""
     if captured.get("_quote_request"):
         candidate = render_reply(get_reply_texts(session), "capture_quote_ack")
         if candidate.strip() != (captured.get("_quote_acked") or "").strip():
             quote_ack = candidate
-    ack = _pick_ack(captured, ack, preventive_ack, quote_ack)
+    ack = _pick_ack(
+        captured, ack, preventive_ack, quote_ack,
+        availability_ack=availability_ack,
+        availability_hold_ack=availability_hold_ack,
+    )
     return f"{ack}{ask}"
 
 
-def _pick_ack(captured: dict, base_ack: str, preventive_ack: str, quote_ack: str) -> str:
+def _pick_ack(
+    captured: dict,
+    base_ack: str,
+    preventive_ack: str,
+    quote_ack: str,
+    *,
+    availability_ack: str = "",
+    availability_hold_ack: str = "",
+) -> str:
     """Which acknowledgement speaks, and what the customer actually receives.
 
     `base_ack` is the turn's own acknowledgement — the equipment acknowledgement or
@@ -939,13 +1023,20 @@ def _pick_ack(captured: dict, base_ack: str, preventive_ack: str, quote_ack: str
     full suite caught and the narrowed runs did not.
 
     The preventive ack keeps the turn it already had and the evaluation/quote one
-    waits for the next. The marker is written only for the text that is returned:
-    the first version marked it while the preventive ack held the turn and the
-    sentence never left the process (measured on conversation 299 of the
-    `captura-eval` run), so the customer was never told what they had asked for.
+    waits for the next. S3's acknowledgement wins over S5's hold clause so the
+    freshly delivered preference is not repeated; the hold clause in turn wins
+    over the generic base ack. Markers are written only for text returned to the
+    customer.
     """
     if preventive_ack:
         return preventive_ack
+    if availability_ack:
+        # The customer just told us when they are reachable: naming it beats a
+        # generic "Entiendo." when only one acknowledgement fits the turn.
+        captured["_availability_acked"] = availability_ack.strip()
+        return availability_ack
+    if availability_hold_ack:
+        return availability_hold_ack
     if not quote_ack:
         return base_ack
     captured["_quote_acked"] = quote_ack.strip()
@@ -1098,7 +1189,10 @@ def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = 
             asked[field] = asked.get(field, 0) + 1
         captured["_asked"] = asked
         texts = get_reply_texts(session)
-        ask = _render_capture_question(session, captured, batch)
+        ask = _render_capture_question(
+            session, captured, batch, state.extracted,
+            current_text=_current_text(state),
+        )
         _persist_captured(session, state, captured)
     updates: dict = {"captured": captured, "replies": [ask]}
     if clear_paused:

@@ -39,6 +39,10 @@ def test_afternoon_franja_from_the_harness_conversation():
     assert window.franja == (time(13, 0), time(18, 0))
 
 
+def test_plural_afternoon_franja_matches_singular():
+    assert _resolve("En las tardes me complica por los ñiños") == _resolve("En la tarde")
+
+
 def test_proximo_weekday_from_the_production_conversation():
     window = _resolve("el proximo miercoles en la mañana")
 

@@ -818,7 +818,23 @@ def test_capture_does_not_acknowledge_a_refused_budget(mock_openai_chat, monkeyp
     assert all(quote_ack not in reply for reply in asked + resumed), asked + resumed
 
 
-def test_reschedule_without_upcoming_visit_hands_off(mock_openai_chat, monkeypatch):
+def test_reschedule_without_upcoming_visit_answers_instead_of_handing_off(
+    mock_openai_chat, monkeypatch
+):
+    """S4 (agenda-respeta-horario) supersedes f0acbdac7 for the question case.
+
+    f0acbdac7 fixed a real defect: a customer with no upcoming appointment read
+    "No tienes visitas próximas para reagendar." twice without an answer, so the
+    path handed the conversation to a human. The premise it recorded — that
+    rescheduling "needs a schedule lookup the bot cannot perform without a
+    visit" — no longer holds: the question is answered from the KB and the
+    constraint is kept in `availability` until booking reads it, after the
+    capture finishes (owner decision, L5 of odd/tasks/agenda-respeta-horario.md).
+
+    Measured: this exact sentence is turn 3 of `real-dato-mas-pregunta`, and the
+    handoff left the conversation in `human` with the customer's turns muted.
+    The guard f0acbdac7 added is preserved: the dead-end sentence never appears.
+    """
     from app.chat.nodes import classify_intent
 
     monkeypatch.setattr(
@@ -847,9 +863,11 @@ def test_reschedule_without_upcoming_visit_hands_off(mock_openai_chat, monkeypat
     assert any(
         event["cause"] == "intent:reagendar_visita" for event in result["events"]
     ), result["events"]
-    assert result["state"] == "human", result
-    assert any(
-        event["cause"] == "handoff:booking_unavailable" for event in result["events"]
+    # The turn is answered and the conversation stays with the bot: no handoff.
+    assert replies, replies
+    assert result["state"] == "bot", result
+    assert all(
+        event["cause"] != "handoff:booking_unavailable" for event in result["events"]
     ), result["events"]
 
 

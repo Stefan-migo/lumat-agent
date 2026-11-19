@@ -1078,3 +1078,295 @@ def test_s5_the_reask_names_the_equipment_the_customer_corrected():
     result = _reask_pending(captured, ["failure"], state)
 
     assert any("caldera" in reply.lower() for reply in result["replies"])
+
+
+def test_s3_the_reask_names_the_availability_the_customer_just_gave():
+    """S3 (agenda-respeta-horario): measured on `real-diego-precio-y-duracion`.
+
+    The customer answered a diagnostic question with "Tengo que salir a las 2,
+    volviendo a las 4pm". The extractor stored it —
+    `"availability": "sale a las 2 y vuelve a las 4pm (disponible después de las
+    16:00)"` — and the reply answered "Entiendo. Cuéntame qué pasa con el
+    equipo…", so the constraint the visit has to respect was never named back.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    availability = "sale a las 2 y vuelve a las 4pm"
+    captured = {
+        "equipment": "calefont",
+        "availability": availability,
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.extracted = {"availability": availability}
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any(availability in reply for reply in result["replies"])
+
+
+def test_s5_the_reask_holds_an_existing_availability_when_customer_mentions_time():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any("queda anotada" in reply.lower() for reply in result["replies"])
+
+
+def test_s5_the_reask_does_not_hold_availability_without_a_time_mention():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "No tengo con quien dejarlos"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert all("queda anotada" not in reply.lower() for reply in result["replies"])
+
+
+def test_s5_the_hold_reply_does_not_promise_an_unstored_time():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+    reply = " ".join(result["replies"])
+
+    assert "queda anotada" in reply.lower()
+    assert "14" not in reply
+
+
+def test_s5_does_not_repeat_the_hold_clause_when_s3_just_acknowledged_availability():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    availability = "9 am"
+    captured = {
+        "equipment": "calefont",
+        "availability": availability,
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.extracted = {"availability": availability}
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert not any("queda anotada" in reply.lower() for reply in result["replies"])
+
+
+def test_s3_the_availability_is_named_once_not_on_every_later_turn():
+    """S3: the acknowledgement marks a transition; it is not a per-turn tic."""
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    availability = "después de las 16:00"
+    captured = {
+        "equipment": "calefont",
+        "availability": availability,
+        "_pending": ["failure"],
+        "_asked": {"failure": 0},
+    }
+    first = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    first.captured = captured
+    first.extracted = {"availability": availability}
+    _reask_pending(captured, ["failure"], first)
+
+    # The following turn re-asks the same field and the customer says nothing new
+    # about their time: the sentence must not come back.
+    captured["_pending"] = ["failure"]
+    captured["_asked"] = {"failure": 1}
+    second = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    second.captured = captured
+    second.extracted = {}
+    result = _reask_pending(captured, ["failure"], second)
+
+    assert not any(availability in reply for reply in result["replies"])
+
+
+def test_s5_the_hold_speaks_when_s3s_sentence_would_repeat():
+    """S5: the measured hole of `agenda-house-5`.
+
+    The turn re-extracted the same availability, so S3 rendered its previous
+    sentence again and `_availability_acked` suppressed it, while the first S5
+    version had already stood down on the extraction alone. The customer got a
+    bare re-ask with the constraint on record. S5 must key on whether S3 actually
+    spoke, not on whether the turn carried an extraction.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        # S3 already spoke on an earlier turn, with this exact sentence.
+        "_availability_acked": "Anoté que 9 am; lo tengo en cuenta para la visita.",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    # The turn carries the same preference again, so the extractor reports it.
+    state.extracted = {"availability": "9 am"}
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any("queda anotada" in reply.lower() for reply in result["replies"])
+
+
+def test_s5_the_hold_names_the_window_the_customer_just_proposed():
+    """S5: measured on `agenda-house-6`, `real-dato-mas-pregunta` turn 3.
+
+    The stored availability was still "mañana" while the customer had just asked
+    "es factible que pases tipo 14 horas?". The hold answered "Sobre tu horario:
+    mañana", naming a different hour than the one proposed, and the judge capped
+    the scenario at 0.00 for ignoring the question. The deterministic parser reads
+    14:00 from that sentence, so the hold has to use it.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "mañana",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        "_availability_acked": "Anoté que mañana; lo tengo en cuenta para la visita.",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "es factible que pases tipo 14 horas?"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    replies = " ".join(result["replies"])
+    assert "14:00" in replies
+    assert "queda anotada" in replies.lower()
+
+
+def test_s5_the_hold_does_not_turn_an_exclusion_into_a_preference():
+    """S5: measured on `agenda-house-7`, `real-reagenda-familiar` turn 3.
+
+    "En las tardes me complica por los ñiños" resolves to the afternoon franja,
+    but the customer is saying she cannot do afternoons. Naming it as her
+    preference inverted the 9 am she had asked for, and the judge read it exactly
+    that way: "el 9 am pedido se registra como 'la tarde'".
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        "_availability_acked": "Anoté que 9 am; lo tengo en cuenta para la visita.",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    replies = " ".join(result["replies"]).lower()
+    assert "la tarde" not in replies
+    assert "queda anotada" in replies

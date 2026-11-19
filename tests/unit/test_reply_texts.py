@@ -56,6 +56,8 @@ EXPECTED_KEYS = {
     "capture_evidence",
     "capture_preventive_ack",
     "capture_quote_ack",
+    "capture_availability_ack",
+    "capture_availability_hold",
     "capture_confirm_contact",
     "capture_consent",
     "capture_consent_refused",
