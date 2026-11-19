@@ -6,6 +6,10 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+_(sin otros cambios después de este release)_
+
+## [2026.11.11] - 2026-11-19
+
 ### Corregido
 
 - La sección Configuración no se podía usar en el panel móvil. El rail de secciones se ocultaba pero su
@@ -47,8 +51,6 @@ and this project uses CalVer in the `YYYY.MM.N` format.
   Contesta un texto nuevo, editable desde el panel en «Mensajes» → «Cuando el cliente no entendió», que se
   hace cargo del malentendido y ofrece contarlo de nuevo con otras palabras o pasar con una persona de Lumat.
   Un reclamo que empieza igual —«no entiendo por qué me cobraron eso»— conserva su camino de siempre.
-
-_(sin otros cambios después de este release)_
 
 ## [2026.11.10] - 2026-11-18
 
