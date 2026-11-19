@@ -16,6 +16,7 @@ from app.models import (
     Settings,
 )
 from app.services.customers import get_or_create_customer
+from app.services.settings import MESSAGE_DEFAULTS
 from _testdb import admin_database_url
 
 ADMIN_DB_URL = admin_database_url()
@@ -96,6 +97,61 @@ def test_first_contact_social_burst_fuses_greeting_and_social_reply(migrated_db,
     assert len(replies) == 1
     assert "Hola, soy Max" in replies[0]
     assert "¡Todo bien, gracias por preguntar!" in replies[0]
+
+
+def test_informal_greeting_burst_asks_instead_of_promising_help(migrated_db, monkeypatch):
+    """S2 (odd/tasks/saludo-informal.md): the production #40 burst, end to end.
+
+    Two inbound 1,7 s apart are one turn (`collapse_trailing_burst`), so the
+    customer's "Holaa" and "Cómo estás?" reach the graph as one text. The measured
+    reply was "Hola, Max Escanilla. Soy Max, de Lumat. Ya te ayudo con eso." plus
+    the smalltalk closing — a promise of help with nothing to help with.
+    """
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56934029170")
+        customer.name = "Max Escanilla"
+        conversation = get_or_create_conversation(session, customer, "+56934029170")
+        session.commit()
+        conversation_id = conversation.id
+
+    def classify(*_args, **_kwargs):
+        raise AssertionError("a greeting burst must not reach classification")
+
+    from app.chat.nodes import classify_intent
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+
+    # Both rows of the in-flight burst carry `processing`, which is what makes the
+    # window collapse them into the one utterance the customer wrote.
+    for text, wamid in (("Holaa", "wamid.burst.holaa"), ("Cómo estás?", "wamid.burst.question")):
+        with SessionLocal() as session:
+            message = Message(
+                wamid=wamid,
+                conversation_id=conversation_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text=text,
+                status=MessageStatus.PROCESSING,
+            )
+            session.add(message)
+            session.commit()
+            if wamid.endswith("question"):
+                replies = run_conversation(session, message)
+                session.commit()
+
+    expected = (
+        f'{MESSAGE_DEFAULTS["greeting_name"].replace("{{nombre}}", "Max Escanilla")}'
+        f'\n\n{MESSAGE_DEFAULTS["social"]}'
+    )
+    assert replies == [expected]
+    assert "Ya te ayudo con eso" not in replies[0]
+    assert "Con gusto" not in replies[0]
+    assert _events(conversation_id, "unknown_intent") == []
+    assert _events(conversation_id, "classified") == []
 
 
 def test_content_with_social_question_reaches_classification(migrated_db, monkeypatch):

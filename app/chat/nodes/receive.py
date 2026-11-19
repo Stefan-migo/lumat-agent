@@ -1,4 +1,5 @@
-"""Receive node — first-contact open greeting (CM-1) and greeting answers.
+"""Receive node — first-contact open greeting (CM-1), greeting answers and the
+customer's confusion about the bot.
 
 Deterministic (no LLM): on the first turn the bot opens with the Lumat greeting.
 The greeting adapts to whether the customer already stated their need: a bare
@@ -12,7 +13,9 @@ from stored state, never from scratch (CM-1 repeat).
 
 A greeting on any later turn is answered with the same configured greeting and
 never reaches classification: a saludo is not a comprehension failure (S1 of
-`odd/tasks/chatbot-backlog.md`).
+`odd/tasks/chatbot-backlog.md`). The customer saying the BOT made no sense is
+answered with the configured repair message, for the same reason: it is a repair
+request, not a comprehension failure (S4 of `odd/tasks/saludo-informal.md`).
 """
 
 from __future__ import annotations
@@ -73,6 +76,24 @@ GREETING_FILLERS = frozenset(
 _MAX_GREETING_LENGTH = 40
 
 
+def _reduced(word: str) -> str:
+    """The word as WhatsApp writes it: every run of one letter counts as one.
+
+    S1 (`odd/tasks/saludo-informal.md`): production #40 opened with "Holaa" and
+    the exact-word lists below read it as stated content, so the first-contact
+    reply was the short greeting — "Ya te ayudo con eso" for a customer who had
+    only said hello. Collapsing a repeated letter is the smallest rule that
+    reads `holaa`, `holaaa` and `buenaaas` the way the customer meant them, and
+    it applies to the vocabulary, never to the message: the greeting compared is
+    always a word the lists already hold.
+    """
+    return re.sub(r"(.)\1+", r"\1", word)
+
+
+_GREETING_WORDS_REDUCED = frozenset(_reduced(word) for word in GREETING_WORDS)
+_GREETING_FILLERS_REDUCED = frozenset(_reduced(word) for word in GREETING_FILLERS)
+
+
 def _normalized_inbound(state: ConversationState) -> str:
     """The latest inbound text, normalized for greeting matching."""
     inbound = next(
@@ -89,15 +110,19 @@ def is_greeting_only(state: ConversationState) -> bool:
 
     Every word must be a greeting word or greeting filler, and at least one must
     be a greeting word, so `"hola buenas tardes"` and `"hola como va?"` count
-    while `"hola mundo"` and `"buenas necesito una visita"` stay content.
+    while `"hola mundo"` and `"buenas necesito una visita"` stay content. Words
+    are compared reduced (`_reduced`), so `"Holaa"` and `"buenaaas"` count too.
     """
     text = _normalized_inbound(state)
     if not text or len(text) > _MAX_GREETING_LENGTH:
         return False
-    tokens = text.split()
-    if not any(token in GREETING_WORDS for token in tokens):
+    tokens = [_reduced(token) for token in text.split()]
+    if not any(token in _GREETING_WORDS_REDUCED for token in tokens):
         return False
-    return all(token in GREETING_WORDS or token in GREETING_FILLERS for token in tokens)
+    return all(
+        token in _GREETING_WORDS_REDUCED or token in _GREETING_FILLERS_REDUCED
+        for token in tokens
+    )
 
 
 # Questions about the assistant itself (S2: "¿Cómo estás?", "¿qué tal? y
@@ -117,6 +142,17 @@ _GREETING_IDIOMS = frozenset({("que", "tal"), ("como", "va")})
 # counts as a social question when the customer actually asked with a question
 # mark. `_normalized_inbound` strips punctuation, hence the raw check.
 _STATEMENT_ENDINGS = frozenset({("todo", "bien")})
+# Comparison happens on reduced words (see `_reduced`), so the vocabulary above
+# is projected once instead of reducing both sides of every comparison.
+_SOCIAL_QUESTION_ENDINGS_REDUCED = tuple(
+    tuple(_reduced(part) for part in ending) for ending in _SOCIAL_QUESTION_ENDINGS
+)
+_GREETING_IDIOMS_REDUCED = frozenset(
+    tuple(_reduced(part) for part in idiom) for idiom in _GREETING_IDIOMS
+)
+_STATEMENT_ENDINGS_REDUCED = frozenset(
+    tuple(_reduced(part) for part in ending) for ending in _STATEMENT_ENDINGS
+)
 
 
 def _asks_a_question(state: ConversationState) -> bool:
@@ -133,20 +169,27 @@ def is_social_only(state: ConversationState) -> bool:
 
     Greeting words and polite greeting fillers may precede the question, but
     unrelated content (including thanks) keeps its existing classification path.
+    Words are compared reduced (`_reduced`), so a greeting written the way
+    WhatsApp writes it — `"Holaa"`, `"holaaa"` — does not defeat the prefix.
     """
     text = _normalized_inbound(state)
     if not text or len(text) > _MAX_GREETING_LENGTH:
         return False
-    tokens = text.split()
-    for ending in _SOCIAL_QUESTION_ENDINGS:
+    tokens = [_reduced(token) for token in text.split()]
+    for ending in _SOCIAL_QUESTION_ENDINGS_REDUCED:
         if tuple(tokens[-len(ending):]) != ending:
             continue
-        if ending in _GREETING_IDIOMS and any(token in GREETING_WORDS for token in tokens):
+        if ending in _GREETING_IDIOMS_REDUCED and any(
+            token in _GREETING_WORDS_REDUCED for token in tokens
+        ):
             continue
-        if ending in _STATEMENT_ENDINGS and not _asks_a_question(state):
+        if ending in _STATEMENT_ENDINGS_REDUCED and not _asks_a_question(state):
             continue
         prefix = tokens[: -len(ending)]
-        if all(token in GREETING_WORDS or token in GREETING_FILLERS for token in prefix):
+        if all(
+            token in _GREETING_WORDS_REDUCED or token in _GREETING_FILLERS_REDUCED
+            for token in prefix
+        ):
             return True
     return False
 
@@ -162,6 +205,45 @@ def has_content(state: ConversationState) -> bool:
     return bool(_normalized_inbound(state)) and not (
         is_greeting_only(state) or is_social_only(state)
     )
+
+
+# S4 (`odd/tasks/saludo-informal.md`): the customer is telling the bot that the
+# BOT made no sense. Production #40 said "No te entendí" and got "Perdón. No
+# entendí tu mensaje." back — the complaint mirrored, and one `unknown_intent`
+# charged against the customer.
+#
+# Anchored on purpose: a complaint that opens with the same words ("no entiendo
+# por qué me cobraron eso") states a problem and keeps its own path. "No me
+# entendiste" is the same manufacturing defect with the roles swapped, so it is
+# the same rule.
+_CONFUSION_POLITE_PREFIX = r"(?:(?:perdon|disculpa|disculpe|oye|jaja|jeje|uy)\s+)*"
+_CONFUSION_PATTERN = re.compile(
+    _CONFUSION_POLITE_PREFIX
+    + r"no\s+(?:te\s+|me\s+)?"
+    r"(?:entiendo|entiendes|entendi|entendiste|comprendo|comprendes|comprendi|sigo)"
+    r"(?:\s+(?:nada|bien|mal|mucho|la verdad|tu mensaje|mi mensaje|lo que dijiste|"
+    r"lo que decis|lo que dices|eso|esto|de esto|de eso|de aqui|"
+    r"jaja|jeje|perdon|disculpa|disculpe))*"
+)
+
+
+def is_confusion_only(state: ConversationState) -> bool:
+    """True when the turn is the customer saying they did not understand the bot.
+
+    Three boundaries keep this from answering what it should not: the first turn
+    has no bot message to repair, a turn with a pending capture field is the
+    capture node's to re-ask, and a message carrying content is not a repair
+    request however it opens.
+    """
+    if state.turn <= 1:
+        return False
+    if "_pending" in (state.captured or {}):
+        return False
+    text = _normalized_inbound(state)
+    if not text or len(text) > _MAX_GREETING_LENGTH:
+        return False
+    reduced = " ".join(_reduced(token) for token in text.split())
+    return bool(_CONFUSION_PATTERN.fullmatch(reduced))
 
 
 def _greeting(session, state: ConversationState, *, short: bool) -> str:
@@ -195,7 +277,12 @@ def receive(state: ConversationState) -> dict:
     if state.turn <= 1:
         with session_scope() as session:
             updates["first_turn_greeting"] = _first_turn_header(session, state)
-    if is_social_only(state):
+    if is_confusion_only(state):
+        # S4: answer the repair request deterministically and stop. It never
+        # reaches the classifier, so it never charges `unknown_intent`.
+        with session_scope() as session:
+            updates["replies"] = [get_message(session, "confusion")]
+    elif is_social_only(state):
         # S2: answer the question deterministically; do not classify or route it.
         with session_scope() as session:
             updates["replies"] = [get_message(session, "social")]

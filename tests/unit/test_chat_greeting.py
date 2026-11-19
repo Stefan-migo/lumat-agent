@@ -1,7 +1,7 @@
 import pytest
 
 from app.chat.graph import END, _flow_start
-from app.chat.nodes.receive import has_content
+from app.chat.nodes.receive import has_content, is_social_only
 from app.chat.state import ConversationState
 
 
@@ -26,6 +26,9 @@ def _first_turn_state(text: str | None) -> ConversationState:
         "buenas tardes",
         "buenas noches",
         "hey!",
+        "Holaa",
+        "holaaa",
+        "buenaaas",
     ],
 )
 def test_greeting_only_first_turn_skips_classification(text):
@@ -58,7 +61,7 @@ def test_greeting_with_content_still_classifies(text):
 
 @pytest.mark.parametrize(
     "text",
-    ["hola", "BUENAS", "hola buenas", "buenos días", "hey!", None, ""],
+    ["hola", "BUENAS", "hola buenas", "buenos días", "hey!", None, "", "Holaa"],
 )
 def test_bare_greeting_or_empty_first_turn_has_no_content(text):
     """A bare greeting (or no text at all) must not be treated as stated content."""
@@ -136,3 +139,64 @@ def test_greeting_variant_never_swallows_content(text, turn):
 )
 def test_greeting_variants_have_no_content(text):
     assert has_content(_first_turn_state(text)) is False
+
+
+# S1 (odd/tasks/saludo-informal.md): production #40 wrote "Holaa" and the exact
+# word list read it as stated content, so the first-contact reply promised help
+# with something nobody had asked for. WhatsApp writes a greeting with one letter
+# repeated more often than without.
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Holaa",
+        "holaaa",
+        "HOLAAA",
+        "buenaaas",
+        "aloo?",
+        "Holaa, buenas tardes",
+        "holaaa como va?",
+    ],
+)
+def test_informal_greeting_spelling_is_a_greeting(text):
+    assert _flow_start(_turn_state(text, 1)) == END
+    assert _flow_start(_turn_state(text, 3)) == END
+    assert has_content(_first_turn_state(text)) is False
+
+
+# S2: the measured burst. Two inbound before the first answer are one turn
+# (`collapse_trailing_burst`), so the greeting the customer wrote informally and
+# the social question that follows it arrive as one text.
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Holaa\nCómo estás?",
+        "holaaa\nCómo estás?",
+        "Holaa, ¿cómo estás?",
+        "Holaaa, todo bien?",
+    ],
+)
+def test_informal_greeting_plus_social_question_is_not_content(text):
+    state = _first_turn_state(text)
+
+    assert _flow_start(_turn_state(text, 1)) == END
+    assert has_content(state) is False
+    assert is_social_only(state) is True
+
+
+# S3: the guard that matters more than the fix. Reducing repeated letters must
+# never turn content into a greeting: swallowing a stated need costs the customer
+# more than the redundant greeting it replaces.
+@pytest.mark.parametrize(
+    "text",
+    [
+        "holaa necesito una visita",
+        "holanda",
+        "chocolate",
+        "hola, tengo un calefont que no calienta",
+        "aaaa",
+        "hola " + "o" * 40,
+    ],
+)
+def test_reduction_never_swallows_content(text):
+    assert _flow_start(_turn_state(text, 1)) == "classify_intent"
+    assert has_content(_first_turn_state(text)) is True

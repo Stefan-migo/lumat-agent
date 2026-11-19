@@ -30,7 +30,7 @@ import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
-const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", social: "", cannot_answer: "", clarification: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
+const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", social: "", cannot_answer: "", clarification: "", confusion: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 type SettingsOptions = { tones: string[]; tarifa_labels: Partial<Record<keyof SettingsData["tarifa"], string>> };
@@ -77,6 +77,7 @@ const MESSAGE_TEMPLATES = [
   { id: "social", label: "Pregunta social", description: "Respuesta cuando el cliente pregunta cómo está el asistente", icon: MessageCircle },
   { id: "cannot_answer", label: "Cuando no puede responder", description: "Derivación a un asesor", icon: Headset },
   { id: "clarification", label: "Aclaración", description: "Mensaje no entendido", icon: CircleHelp },
+  { id: "confusion", label: "Cuando el cliente no entendió", description: "Se hace cargo del malentendido y ofrece repetir o pasar con una persona", icon: CircleHelp },
   { id: "cannot_understand_offer", label: "Oferta tras segundo fallo", description: "Ofrece coordinar una visita o hablar con una persona", icon: Headset },
   { id: "kb_miss_offer", label: "Oferta cuando falta un dato", description: "Ofrece coordinar una visita o hablar con una persona", icon: Headset },
   { id: "farewell", label: "Despedida", description: "Cierre de conversación", icon: DoorOpen },
