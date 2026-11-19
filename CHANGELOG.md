@@ -28,6 +28,18 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 - El cliente podía recibir un «caso abierto» inventado por el equipo que acababa de mencionar. La ficha del
   caso presentaba el caso de la conversación en curso como si fuera historial previo; ahora ese caso queda
   fuera de la ficha, y el bot solo afirma historial que la ficha registra para ese equipo.
+- Un saludo escrito con letras repetidas —«Holaa», «holaaa», «buenaaas»— ya no se lee como contenido. En el
+  primer contacto el bot contestaba el saludo con la variante que asume que el cliente ya contó qué necesita
+  («Hola, Max Escanilla. Soy Max, de Lumat. Ya te ayudo con eso.») y le pegaba detrás el cierre de cortesía, así
+  que la respuesta no respondía a nada. El saludo se reconoce ahora por la forma reducida de sus palabras: el
+  primer contacto contesta el saludo que pregunta y responde la pregunta social, sin llegar al clasificador y
+  sin sumar un fallo de comprensión. Un mensaje con contenido real sigue su camino —«holaa necesito una
+  visita» se clasifica como siempre—.
+- Cuando el cliente dice que no entendió al bot, el bot ya no le contesta «Perdón. No entendí tu mensaje.»
+  —el espejo de su propio reclamo— ni gasta uno de los fallos que derivan la conversación a una persona.
+  Contesta un texto nuevo, editable desde el panel en «Mensajes» → «Cuando el cliente no entendió», que se
+  hace cargo del malentendido y ofrece contarlo de nuevo con otras palabras o pasar con una persona de Lumat.
+  Un reclamo que empieza igual —«no entiendo por qué me cobraron eso»— conserva su camino de siempre.
 
 _(sin otros cambios después de este release)_
 
