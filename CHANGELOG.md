@@ -6,10 +6,6 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
-_(sin otros cambios después de este release)_
-
-## [2026.11.11] - 2026-11-19
-
 ### Corregido
 
 - La sección Configuración no se podía usar en el panel móvil. El rail de secciones se ocultaba pero su
@@ -19,6 +15,11 @@ _(sin otros cambios después de este release)_
   pantalla de 390 por sus etiquetas fuera de flujo; y en «Horarios y avisos» el campo «Fin» y las acciones de la
   fila quedaban fuera de la tarjeta. En móvil el contenido ocupa el ancho completo, el encabezado conserva una
   columna de texto legible y las dos tablas se apilan en un bloque por fila con sus etiquetas visibles.
+
+## [2026.11.11] - 2026-11-19
+
+### Corregido
+
 - `project.create` desde el chat nunca llegaba a ejecutarse: el operador aprobaba el plan, la tool recibía
   la aprobación consumida y el runtime la rechazaba con *"project create approval is missing an explicit
   decision"*. El problema no era el clic: ninguna superficie del chat podía expresar la decisión que el
