@@ -33,6 +33,18 @@
   .settings-hours-editor .card__header { align-items: flex-start; flex-wrap: wrap; }
   .settings-hours-editor .card__header-action { width: 100%; margin-left: calc(var(--space-8) + var(--space-3)); }
   .settings-hours-editor__timezone { width: 100%; }
-  .settings-hours-editor__table { min-width: 28rem; }
+  /* One block per schedule row: a four-column table at 28rem hides the end time and the row
+     actions behind a sideways scroll, so each row stacks the days over its own start/end controls. */
+  .settings-hours-editor__table-wrap { overflow: visible; border: 0; }
+  .settings-hours-editor__table { display: block; min-width: 0; }
+  .settings-hours-editor__table thead { display: none; }
+  .settings-hours-editor__table tbody { display: block; }
+  .settings-hours-editor__table tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin-bottom: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+  .settings-hours-editor__table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .settings-hours-editor__table td[colspan] { grid-column: 1 / -1; }
+  .settings-hours-editor__table td:first-child:not([colspan]) { grid-column: 1 / -1; padding-right: calc(var(--space-8) + var(--space-2)); color: var(--corp-text); font-weight: var(--weight-semibold); }
+  .settings-hours-editor__table td:nth-child(4) { position: absolute; top: var(--space-2); right: var(--space-2); }
+  .settings-hours-editor__table .field__label { position: static; width: auto; height: auto; padding: 0 0 var(--space-1); overflow: visible; clip: auto; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+  .settings-hours-editor__row-actions { justify-content: flex-end; }
   .settings-hours-editor__times { gap: var(--space-2); }
 }

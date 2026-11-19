@@ -163,6 +163,12 @@
 @media (max-width: 40rem) {
   .settings-tabs__select { display: grid; gap: var(--space-2); }
   .settings-tabs > .tabs [role="tablist"] { display: none; }
+  /* The section selector replaces the vertical rail; without collapsing the track the hidden
+     tablist still claims its 13rem column and the content renders in a sliver. */
+  .settings-tabs > .tabs > .tabs__panel > .tabs--vertical { grid-template-columns: minmax(0, 1fr); }
+  /* The capture table's field labels are absolutely positioned; as a containing block the wrap
+     keeps them inside the section instead of pushing the document wider than the viewport. */
+  .settings-conduct__table-wrap { position: relative; }
   .settings-agent__layout { grid-template-columns: minmax(0, 1fr); }
   .settings-save-bar { align-items: stretch; flex-direction: column; margin-inline: calc(-1 * var(--space-3)); padding-inline: var(--space-3); }
   .settings-save-bar__actions { justify-content: flex-end; }
@@ -238,7 +244,6 @@
   .settings-operation__lead .settings-operation__note { margin-top: var(--space-2); }
 }
 @media (max-width: 40rem) {
-  .settings-page--operation .settings-tabs > .tabs > .tabs__panel > .tabs--vertical { grid-template-columns: minmax(0, 1fr); }
   .settings-operation .card__header { flex-wrap: wrap; }
   .settings-operation .card__copy { flex: 1; min-width: 0; }
   .settings-operation .card__header-action { flex-basis: 100%; flex-wrap: wrap; justify-content: flex-end; }
@@ -379,4 +384,33 @@
   .settings-persona__segments { width: 100%; }
   .settings-persona__segments .btn { flex: 1; padding-inline: var(--space-2); }
   .settings-persona__dialog .dialog { width: 100vw; height: 100dvh; max-width: 100vw; max-height: 100dvh; border-radius: 0; }
+}
+
+/* Mobile card headers keep last: the page-level copy and action overrides above are all the
+   same specificity, so this block must follow them. A header action that cannot shrink (a badge,
+   a date, a button) used to squeeze the copy column to one word per line; the copy keeps a
+   readable measure and the action wraps onto its own line when it does not fit beside it. */
+@media (max-width: 40rem) {
+  .settings-page .card__header { align-items: flex-start; flex-wrap: wrap; }
+  .settings-page .card__copy { flex: 1 1 12rem; min-width: min(100%, 12rem); }
+  .settings-page .card__header-action { flex: 0 0 auto; }
+  .settings-page .settings-hours-editor .card__header-action { flex: 1 1 auto; width: auto; min-width: 0; margin-left: calc(var(--space-8) + var(--space-3)); }
+}
+
+/* The capture-question table is a 44rem grid whose question column a phone cannot reach: each row
+   becomes one block with the field name, its question, and the row actions in place. */
+@media (max-width: 40rem) {
+  .settings-conduct__table-wrap { overflow: visible; border: 0; }
+  .settings-conduct__table { display: block; min-width: 0; }
+  .settings-conduct__table thead { display: none; }
+  .settings-conduct__table tbody { display: block; }
+  .settings-conduct__table tr { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+  .settings-conduct__table tbody tr:last-child { margin-bottom: 0; }
+  .settings-conduct__table td, .settings-conduct__table tbody th { display: block; padding: 0; border: 0; text-align: left; }
+  .settings-conduct__table tbody tr > td:nth-child(3) { grid-column: 1 / -1; }
+  .settings-conduct__table tbody tr > td:nth-child(4) { position: absolute; top: var(--space-2); right: var(--space-2); }
+  .settings-conduct__table tbody th[scope="row"] { padding-right: calc(2 * (var(--space-8) + var(--space-1)) + var(--space-2)); }
+  .settings-conduct__table .field { min-width: 0; }
+  .settings-conduct__table .field__textarea { min-height: var(--space-8); }
+  .settings-conduct__actions { justify-content: flex-end; }
 }
