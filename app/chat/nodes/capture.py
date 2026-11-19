@@ -881,6 +881,24 @@ def _exhausted(captured: dict, batch: list[str]) -> bool:
     return any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in batch)
 
 
+# S5 (agenda-respeta-horario): a franja named as something the customer cannot do is
+# not a preference. `resolve_window` reads mentions, so "En las tardes me complica por
+# los ñiños" resolves to the afternoon while meaning the opposite: measured on
+# `agenda-house-7`, the hold answered "Sobre tu horario: la tarde. Queda anotada" and
+# inverted a 9 am request into an afternoon one. This is the same negation-blindness
+# the project already recorded for reply guards, applied to time.
+_EXCLUDES_WINDOW = re.compile(
+    r"\b(?:me\s+complica\w*|no\s+puedo|no\s+podria|no\s+me\s+sirve|no\s+me\s+viene"
+    r"|no\s+estoy|imposible|no\s+alcanzo|no\s+tengo\s+con\s+quien)\b",
+    re.IGNORECASE,
+)
+
+
+def _excludes_the_window(text: str) -> bool:
+    """True when the turn names a time it cannot do rather than one it wants."""
+    return bool(_EXCLUDES_WINDOW.search(text or ""))
+
+
 def _render_capture_question(
     session,
     captured: dict,
@@ -966,10 +984,14 @@ def _render_capture_question(
         # 14 horas?" resolved to 14:00 deterministically while the stored value was
         # still "mañana", so the hold answered about a different hour than the one
         # the customer had just proposed.
+        # An exclusion names a time the customer cannot do, so the stored
+        # preference is what gets held; a plain mention names the hour they are
+        # proposing right now.
+        held = availability.strip() if _excludes_the_window(current_text) else window_label(window)
         availability_hold_ack = render_reply(
             get_reply_texts(session),
             "capture_availability_hold",
-            disponibilidad=window_label(window),
+            disponibilidad=held,
         )
     quote_ack = ""
     if captured.get("_quote_request"):

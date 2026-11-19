@@ -1334,3 +1334,39 @@ def test_s5_the_hold_names_the_window_the_customer_just_proposed():
     replies = " ".join(result["replies"])
     assert "14:00" in replies
     assert "queda anotada" in replies.lower()
+
+
+def test_s5_the_hold_does_not_turn_an_exclusion_into_a_preference():
+    """S5: measured on `agenda-house-7`, `real-reagenda-familiar` turn 3.
+
+    "En las tardes me complica por los ñiños" resolves to the afternoon franja,
+    but the customer is saying she cannot do afternoons. Naming it as her
+    preference inverted the 9 am she had asked for, and the judge read it exactly
+    that way: "el 9 am pedido se registra como 'la tarde'".
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        "_availability_acked": "Anoté que 9 am; lo tengo en cuenta para la visita.",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    replies = " ".join(result["replies"]).lower()
+    assert "la tarde" not in replies
+    assert "queda anotada" in replies
