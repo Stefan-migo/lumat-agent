@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Settings as SettingsData } from "../../types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Settings } from "./Settings";
 import { WEEKDAY_NAMES } from "../shared/agendaTime";
 import { ToastProvider } from "../primitives/Toast";
@@ -90,6 +92,19 @@ async function selectSection(user: ReturnType<typeof userEvent.setup>, label: st
 }
 
 describe("Settings", () => {
+  it("keeps the settings mobile CSS contract aligned with the design system", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/pages/Settings.css"), "utf8");
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-tabs\s*>\s*\.tabs\s*>\s*\.tabs__panel\s*>\s*\.tabs--vertical\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-conduct__table-wrap\s*\{[^}]*position:\s*relative/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-page\s+\.card__header\s*\{[^}]*align-items:\s*flex-start/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-page\s+\.card__header\s*\{[^}]*flex-wrap:\s*wrap/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-page\s+\.card__copy\s*\{[^}]*flex:\s*1\s+1\s+12rem/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-page\s+\.card__copy\s*\{[^}]*min-width:\s*min\(100%,\s*12rem\)/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-page\s+\.card__header-action\s*\{[^}]*flex:\s*0\s+0\s+auto/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-page\s+\.settings-hours-editor\s+\.card__header-action\s*\{[^}]*flex:\s*1\s+1\s+auto/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-conduct__table\s*\{[^}]*display:\s*block/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-conduct__table\s+thead\s*\{[^}]*display:\s*none/s);
+  });
   it("operation uses the shared save bar for hours and durations with an explicit empty state", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ technicians: [] }), { status: 200 }));

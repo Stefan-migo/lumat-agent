@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -20,6 +22,15 @@ function renderEditor(hours = initialHours) {
 }
 
 describe("SettingsHoursEditor", () => {
+  it("keeps the hours table mobile CSS contract", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/pages/SettingsHoursEditor.css"), "utf8");
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-hours-editor__table-wrap\s*\{[^}]*overflow:\s*visible/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-hours-editor__table-wrap\s*\{[^}]*border:\s*0/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-hours-editor__table\s*\{[^}]*display:\s*block/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-hours-editor__table\s*\{[^}]*min-width:\s*0/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-hours-editor__table\s+thead\s*\{[^}]*display:\s*none/s);
+    expect(css).toMatch(/@media \(max-width:\s*40rem\)[\s\S]*?\.settings-hours-editor__table\s+\.field__label\s*\{[^}]*position:\s*static/s);
+  });
   it("renders the compact schedule table and timezone control in the card header", () => {
     renderEditor();
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card");

@@ -496,6 +496,9 @@ unfinished surface, not a minimal one.
 - Show saved, saving, validation, server-error, and stale-value states.
 - Keep advanced machine syntax (`category=mode`, keyword lists) visually separated from ordinary controls and validate it before saving.
 - In `Cuenta → Dispositivos`, the operator sees only their own devices. Revoking a device cuts off its access immediately; identify the current device in the list rather than hiding it.
+- On mobile the section rail is replaced by the two `Menu` selectors (group, then section) and the content is a single full-width column; never leave the hidden rail's grid track in place, because it renders every card in a sliver.
+- On mobile a card header keeps a readable copy column and lets its trailing badge, date, or control wrap onto its own line. A title broken into one word per line is a layout bug, not a dense header.
+- On mobile the capture-question table and the weekly schedule table stack into one block per row, with their field labels visible, instead of hiding the end time and row actions behind a sideways scroll. Panels that own a table keep the document within the viewport: the section itself must never scroll horizontally.
 
 ### Proyectos (product-change contract)
 
