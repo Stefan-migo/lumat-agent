@@ -114,6 +114,10 @@ class MessagesBody(BaseModel):
     social: str = settings_service.MESSAGE_DEFAULTS["social"]
     cannot_answer: str
     clarification: str
+    # S4 (saludo-informal): the customer did not understand the bot. Optional with
+    # the shipped text, like `smalltalk_decline`, so a panel client that predates
+    # the key keeps saving the map it already sends.
+    confusion: str = settings_service.MESSAGE_DEFAULTS["confusion"]
     cannot_understand_offer: str
     kb_miss_offer: str
     farewell: str

@@ -42,6 +42,8 @@ export const settings: Settings = {
     social: "¡Todo bien, gracias por preguntar! ¿En qué te puedo ayudar?",
     cannot_answer: "No puedo responder con seguridad a eso.",
     clarification: "¿Puedes elegir una opción del menú?",
+    confusion:
+      "Perdón, me expliqué mal. ¿Me cuentas con otras palabras qué necesitas, o prefieres que te atienda una persona de Lumat?",
     cannot_understand_offer:
       "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, o que te atienda una persona?",
     kb_miss_offer:

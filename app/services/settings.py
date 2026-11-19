@@ -329,6 +329,13 @@ MESSAGE_DEFAULTS: dict[str, str] = {
         "Puedo ayudarte con una consulta, coordinar una visita técnica o "
         "revisar un trabajo ya hecho."
     ),
+    # The customer did not understand the BOT (S4, saludo-informal). Not the same
+    # case as `clarification`, which is the bot not understanding the customer:
+    # this one names the bot's fault and offers the two ways out.
+    "confusion": (
+        "Perdón, me expliqué mal. ¿Me cuentas con otras palabras qué necesitas, "
+        "o prefieres que te atienda una persona de Lumat?"
+    ),
     "cannot_understand_offer": (
         "Perdón, no te entendí. ¿Prefieres que te tome tus datos para coordinar una visita, "
         "o que te atienda una persona?"
@@ -1198,6 +1205,7 @@ _FIXED_MESSAGE_LABELS: dict[str, str] = {
     "smalltalk_decline": "mensaje de cortesía tras un rechazo",
     "cannot_answer": "respuesta cuando no puede responder",
     "clarification": "aclaración",
+    "confusion": "respuesta cuando el cliente no entendió al bot",
     "cannot_understand_offer": "oferta cuando no entiende",
     "kb_miss_offer": "oferta cuando no tiene ese dato",
     "farewell": "despedida",

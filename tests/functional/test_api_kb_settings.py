@@ -951,6 +951,9 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "social",
         "cannot_answer",
         "clarification",
+        # S4 (saludo-informal): the repair message for a customer who did not
+        # understand the bot is owner-editable like the rest.
+        "confusion",
         "cannot_understand_offer",
         "kb_miss_offer",
         "farewell",
@@ -1087,6 +1090,7 @@ def test_settings_update_messages_audited(client, make_user):
         "social": "¡Todo bien, editado!",
         "cannot_answer": "No disponible",
         "clarification": "Aclara",
+        "confusion": "Perdón, me expliqué mal",
         "cannot_understand_offer": "¿Visita o persona?",
         "kb_miss_offer": "No tengo ese dato todavía",
         "farewell": "Hasta luego",

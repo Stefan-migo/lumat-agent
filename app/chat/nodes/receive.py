@@ -1,4 +1,5 @@
-"""Receive node — first-contact open greeting (CM-1) and greeting answers.
+"""Receive node — first-contact open greeting (CM-1), greeting answers and the
+customer's confusion about the bot.
 
 Deterministic (no LLM): on the first turn the bot opens with the Lumat greeting.
 The greeting adapts to whether the customer already stated their need: a bare
@@ -12,7 +13,9 @@ from stored state, never from scratch (CM-1 repeat).
 
 A greeting on any later turn is answered with the same configured greeting and
 never reaches classification: a saludo is not a comprehension failure (S1 of
-`odd/tasks/chatbot-backlog.md`).
+`odd/tasks/chatbot-backlog.md`). The customer saying the BOT made no sense is
+answered with the configured repair message, for the same reason: it is a repair
+request, not a comprehension failure (S4 of `odd/tasks/saludo-informal.md`).
 """
 
 from __future__ import annotations
@@ -204,6 +207,45 @@ def has_content(state: ConversationState) -> bool:
     )
 
 
+# S4 (`odd/tasks/saludo-informal.md`): the customer is telling the bot that the
+# BOT made no sense. Production #40 said "No te entendí" and got "Perdón. No
+# entendí tu mensaje." back — the complaint mirrored, and one `unknown_intent`
+# charged against the customer.
+#
+# Anchored on purpose: a complaint that opens with the same words ("no entiendo
+# por qué me cobraron eso") states a problem and keeps its own path. "No me
+# entendiste" is the same manufacturing defect with the roles swapped, so it is
+# the same rule.
+_CONFUSION_POLITE_PREFIX = r"(?:(?:perdon|disculpa|disculpe|oye|jaja|jeje|uy)\s+)*"
+_CONFUSION_PATTERN = re.compile(
+    _CONFUSION_POLITE_PREFIX
+    + r"no\s+(?:te\s+|me\s+)?"
+    r"(?:entiendo|entiendes|entendi|entendiste|comprendo|comprendes|comprendi|sigo)"
+    r"(?:\s+(?:nada|bien|mal|mucho|la verdad|tu mensaje|mi mensaje|lo que dijiste|"
+    r"lo que decis|lo que dices|eso|esto|de esto|de eso|de aqui|"
+    r"jaja|jeje|perdon|disculpa|disculpe))*"
+)
+
+
+def is_confusion_only(state: ConversationState) -> bool:
+    """True when the turn is the customer saying they did not understand the bot.
+
+    Three boundaries keep this from answering what it should not: the first turn
+    has no bot message to repair, a turn with a pending capture field is the
+    capture node's to re-ask, and a message carrying content is not a repair
+    request however it opens.
+    """
+    if state.turn <= 1:
+        return False
+    if "_pending" in (state.captured or {}):
+        return False
+    text = _normalized_inbound(state)
+    if not text or len(text) > _MAX_GREETING_LENGTH:
+        return False
+    reduced = " ".join(_reduced(token) for token in text.split())
+    return bool(_CONFUSION_PATTERN.fullmatch(reduced))
+
+
 def _greeting(session, state: ConversationState, *, short: bool) -> str:
     """The greeting for this customer: named when the name is known, asking otherwise.
 
@@ -235,7 +277,12 @@ def receive(state: ConversationState) -> dict:
     if state.turn <= 1:
         with session_scope() as session:
             updates["first_turn_greeting"] = _first_turn_header(session, state)
-    if is_social_only(state):
+    if is_confusion_only(state):
+        # S4: answer the repair request deterministically and stop. It never
+        # reaches the classifier, so it never charges `unknown_intent`.
+        with session_scope() as session:
+            updates["replies"] = [get_message(session, "confusion")]
+    elif is_social_only(state):
         # S2: answer the question deterministically; do not classify or route it.
         with session_scope() as session:
             updates["replies"] = [get_message(session, "social")]

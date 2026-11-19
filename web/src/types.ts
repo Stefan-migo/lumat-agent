@@ -527,6 +527,7 @@ export interface Settings {
     social: string;
     cannot_answer: string;
     clarification: string;
+    confusion: string;
     cannot_understand_offer: string;
     kb_miss_offer: string;
     farewell: string;
