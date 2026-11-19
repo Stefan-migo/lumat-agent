@@ -107,14 +107,6 @@ def _dispatch(
         # S2/S12: an explicit request to change the visit remains management,
         # even when no upcoming appointment is currently in the database.
         return {"next_step": "manage"}
-    if intent == "reagendar_visita" and not has_upcoming_visit:
-        if question or quote_question:
-            return {
-                "next_step": "research",
-                "active_sub_agent": RESEARCH_TRIAGE,
-                "capture_paused": True,
-            }
-        return {"next_step": "capture"}
     if intent == "smalltalk":
         # Courtesy is understood even during capture; never research, capture,
         # or escalate it as a side effect of a pending field.
@@ -146,6 +138,15 @@ def _dispatch(
             # No question in the turn: S12's plain request keeps its own path.
             return {"next_step": "manage"}
         # Remaining intents are field answers in CI-2.
+        return {"next_step": "capture"}
+    if intent == "reagendar_visita" and not has_upcoming_visit:
+        # S4: with no visit to move, this is a visit request. The hour the customer
+        # names is named back by the capture acknowledgement (S3) and read by
+        # booking once the capture finishes (owner decision L5). Measured on the
+        # `agenda-house-2` run: sending the preference to the answering path
+        # produced a kb_miss offer ("No tengo ese dato. ¿Prefieres que te tome los
+        # datos…?"), because the customer KB holds no answer about a time
+        # preference; the same turn through capture named it correctly.
         return {"next_step": "capture"}
     if intent in {"cancelar_visita", "reagendar_visita"}:
         return {"next_step": "manage"}

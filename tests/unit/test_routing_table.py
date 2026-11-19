@@ -353,14 +353,20 @@ def test_explicit_interrogative_marker_without_punctuation_answers_then_resumes(
     }
 
 
-def test_s4_reschedule_without_upcoming_visit_and_question_routes_to_research():
-    assert _dispatch(
-        "reagendar_visita", has_upcoming_visit=False, question=True
-    ) == {
-        "next_step": "research",
-        "active_sub_agent": "research_triage",
-        "capture_paused": True,
+def test_s4_reschedule_without_upcoming_visit_routes_to_capture_even_with_a_question():
+    """S4: no visit to move means a visit request, question or not.
+
+    `agenda-house-2` measured both rows: the same preference sent to the
+    answering path came back as a kb_miss offer ("No tengo ese dato. ¿Prefieres
+    que te tome los datos…?"), because the customer KB holds no answer about a
+    time preference, while capture named it back correctly.
+    """
+    assert _dispatch("reagendar_visita", has_upcoming_visit=False, question=True) == {
+        "next_step": "capture"
     }
+    assert _dispatch(
+        "reagendar_visita", has_upcoming_visit=False, quote_question=True
+    ) == {"next_step": "capture"}
 
 
 def test_s4_reschedule_without_upcoming_visit_and_without_question_routes_to_capture():

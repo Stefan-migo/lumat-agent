@@ -46,11 +46,9 @@ def test_s4_orchestrate_uses_database_for_upcoming_appointment():
         )
         session.commit()
 
-    assert orchestrate(question_state) == {
-        "next_step": "research",
-        "active_sub_agent": "research_triage",
-        "capture_paused": True,
-    }
+    # S4: with no visit to move the turn is a visit request, so capture starts and
+    # names the hour back (S3) instead of the answering path offering a kb_miss.
+    assert orchestrate(question_state) == {"next_step": "capture"}
 
     with SessionLocal() as session:
         customer = session.get(Customer, question_state.customer_id)
