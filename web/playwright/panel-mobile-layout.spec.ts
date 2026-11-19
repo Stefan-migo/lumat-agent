@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { settings } from "../src/stories/pages/_shared/mockData/settings";
 
 // Mobile layout regression probes for the project-detail tabs.
 // - The tab bar must keep its own height on mobile: `.tabs` is a column flexbox
@@ -30,6 +31,8 @@ async function stubBackend(page: Page) {
     if (path === "/panel/api/me") body = { id: 1, username: "admin", role: "admin" };
     else if (path === "/panel/api/notifications") body = { notifications: [] };
     else if (path === "/panel/api/projects") body = { projects: [projectDetail.project] };
+    else if (path === "/panel/api/settings") body = settings;
+    else if (path === "/panel/api/settings/model-api-key") body = settings.model_api_key;
     else if (path === "/panel/api/assistant/capabilities") body = { tools: [], personas: [], prompts: [], kb_available: true, memory_available: true };
     else if (path === "/panel/api/skills") body = { skills: [{ name: "catalogo-global", description: "Entrada global de prueba", scope: "global", body: "## Cuerpo global" }] };
     else if (path === "/panel/api/projects/test") body = projectDetail;
@@ -44,6 +47,42 @@ async function stubBackend(page: Page) {
 }
 
 const MOBILE = { width: 390, height: 844 };
+
+test.describe("Settings mobile layout", () => {
+  test("settings sections and hours controls fit the mobile viewport", async ({ page }) => {
+    await page.setViewportSize(MOBILE);
+    await stubBackend(page);
+    await page.goto("settings");
+
+    const selectMenuOption = async (buttonName: string, optionName: string) => {
+      await page.getByRole("button", { name: buttonName }).click();
+      await page.getByRole("menuitem", { name: optionName, exact: true }).click();
+    };
+
+    await selectMenuOption("Grupo de configuración", "Chatbot");
+    await selectMenuOption("Sección de configuración", "Conducta");
+    const documentWidth = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(documentWidth.scrollWidth).toBeLessThanOrEqual(documentWidth.clientWidth + 1);
+
+    for (const [group, section] of [["Operación", "Horarios y avisos"], ["Integraciones", "Capacidades"]]) {
+      await selectMenuOption("Grupo de configuración", group);
+      await selectMenuOption("Sección de configuración", section);
+      const firstCard = page.locator(".settings-tabs__content .card").first();
+      await expect(firstCard).toBeVisible();
+      expect((await firstCard.boundingBox())!.width).toBeGreaterThanOrEqual(300);
+      expect((await firstCard.locator(".card__copy").first().boundingBox())!.width).toBeGreaterThanOrEqual(180);
+    }
+
+    await selectMenuOption("Grupo de configuración", "Operación");
+    await selectMenuOption("Sección de configuración", "Horarios y avisos");
+    const endTime = page.getByLabel("Fin horario 1");
+    const endTimeBox = (await endTime.boundingBox())!;
+    expect(endTimeBox.x + endTimeBox.width).toBeLessThanOrEqual(MOBILE.width);
+  });
+});
 
 test.describe("Project detail mobile layout", () => {
   test("the embedded Contexto tab bar keeps its height and does not paint over the first card", async ({ page }) => {

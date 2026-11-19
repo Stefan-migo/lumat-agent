@@ -8,6 +8,13 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ### Corregido
 
+- La sección Configuración no se podía usar en el panel móvil. El rail de secciones se ocultaba pero su
+  columna de 13rem seguía en la grilla, así que todas las tarjetas se dibujaban en una franja de ~200px con
+  medio ancho vacío al lado; el encabezado de cada tarjeta aplastaba el título a una palabra por línea cuando
+  llevaba un badge, una fecha o un botón; la tabla de preguntas de captura estiraba el documento a 620px en una
+  pantalla de 390 por sus etiquetas fuera de flujo; y en «Horarios y avisos» el campo «Fin» y las acciones de la
+  fila quedaban fuera de la tarjeta. En móvil el contenido ocupa el ancho completo, el encabezado conserva una
+  columna de texto legible y las dos tablas se apilan en un bloque por fila con sus etiquetas visibles.
 - `project.create` desde el chat nunca llegaba a ejecutarse: el operador aprobaba el plan, la tool recibía
   la aprobación consumida y el runtime la rechazaba con *"project create approval is missing an explicit
   decision"*. El problema no era el clic: ninguna superficie del chat podía expresar la decisión que el
