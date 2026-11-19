@@ -33,7 +33,7 @@ from app.chat.phrasing import facts as phrase_facts
 from app.chat.phrasing import phrase
 from app.chat.nodes.replies import render_reply
 from app.chat.state import ConversationState
-from app.chat.slot_window import resolve_window
+from app.chat.slot_window import resolve_window, window_label
 from app.chat.service_catalogue import (
     _PREVENTIVE_CATALOGUE_WORDS,
     _matches_catalogue_phrase,
@@ -959,12 +959,17 @@ def _render_capture_question(
         # and the marker suppressed it, while S5 had already stood down — the
         # customer got a bare re-ask with the constraint on record.
         and not availability_ack
-        and resolve_window(current_text, today=date.today()) is not None
+        and (window := resolve_window(current_text, today=date.today())) is not None
     ):
+        # Name what the customer just said, not only what the extractor happened
+        # to store earlier: measured on agenda-house-6, "es factible que pases tipo
+        # 14 horas?" resolved to 14:00 deterministically while the stored value was
+        # still "mañana", so the hold answered about a different hour than the one
+        # the customer had just proposed.
         availability_hold_ack = render_reply(
             get_reply_texts(session),
             "capture_availability_hold",
-            disponibilidad=availability.strip(),
+            disponibilidad=window_label(window),
         )
     quote_ack = ""
     if captured.get("_quote_request"):

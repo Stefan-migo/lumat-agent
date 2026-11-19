@@ -228,8 +228,8 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     # S5 (agenda-respeta-horario): carry a previously stated preference through
     # later capture turns without offering a slot or confirming a visit.
     "capture_availability_hold": (
-        "La preferencia de horario «{{disponibilidad}}» queda anotada y la "
-        "confirmaremos al coordinar la visita. "
+        "Sobre tu horario: {{disponibilidad}}. Queda anotada y la confirmamos al "
+        "coordinar la visita. "
     ),
     # S3 (chatbot-realismo-conversacional): one confirmation instead of four questions
     # when the customer record already holds the contact data.

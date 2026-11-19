@@ -1297,3 +1297,40 @@ def test_s5_the_hold_speaks_when_s3s_sentence_would_repeat():
     result = _reask_pending(captured, ["failure"], state)
 
     assert any("queda anotada" in reply.lower() for reply in result["replies"])
+
+
+def test_s5_the_hold_names_the_window_the_customer_just_proposed():
+    """S5: measured on `agenda-house-6`, `real-dato-mas-pregunta` turn 3.
+
+    The stored availability was still "mañana" while the customer had just asked
+    "es factible que pases tipo 14 horas?". The hold answered "Sobre tu horario:
+    mañana", naming a different hour than the one proposed, and the judge capped
+    the scenario at 0.00 for ignoring the question. The deterministic parser reads
+    14:00 from that sentence, so the hold has to use it.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "mañana",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        "_availability_acked": "Anoté que mañana; lo tengo en cuenta para la visita.",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "es factible que pases tipo 14 horas?"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    replies = " ".join(result["replies"])
+    assert "14:00" in replies
+    assert "queda anotada" in replies.lower()
