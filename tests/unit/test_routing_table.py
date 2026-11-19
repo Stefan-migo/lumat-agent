@@ -234,9 +234,14 @@ def test_mid_capture_explicit_change_request_still_manages():
 
 
 def test_orchestrate_answers_a_schedule_question_while_capturing():
-    """S1 end to end from the text: no "?" free pass for visit management."""
+    """S1 end to end from the text: a KB question interrupting a capture answers.
+
+    The intent here is a capture one, not a reschedule: `reagendar_visita` with no
+    upcoming visit is a visit request and lands in capture on purpose (S4).
+    """
     state = _capture_state(
-        "Es factible que vengas un dia pero a las.9 am", intent="reagendar_visita"
+        "dime altiro si atienden sabado, eso es lo que necesito saber",
+        intent="calefont",
     )
 
     assert orchestrate(state) == {

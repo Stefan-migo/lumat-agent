@@ -79,3 +79,36 @@ def test_s4_orchestrate_uses_database_for_upcoming_appointment():
         session.commit()
 
     assert orchestrate(question_state) == {"next_step": "manage"}
+
+
+def test_s4_a_time_preference_inside_a_capture_stays_in_capture():
+    """S4 with a pending field: measured twice, capture is the only good answer.
+
+    `real-dato-mas-pregunta` turn 3 ("es factible que pases tipo 14 horas?") was
+    classified `reagendar_visita` on the `agenda-house-3` run and, because the
+    dispatch put S4 behind the mid-capture question path, fell through to the
+    answering path: the reply was a kb_miss offer ("No tengo ese dato. ¿Prefieres
+    que te tome los datos…?") and the judge capped the scenario at 0.00. The
+    sentence is a time preference, not a KB question.
+    """
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912345679")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(
+            customer_id=customer.id,
+            wa_phone=customer.phone_e164,
+            captured_data={"_pending": ["failure"], "_asked": {"failure": 1}},
+        )
+        session.add(conversation)
+        session.commit()
+        state = ConversationState(
+            customer_id=customer.id,
+            conversation_id=conversation.id,
+            phone=customer.phone_e164,
+            intent="reagendar_visita",
+            captured={"_pending": ["failure"], "_asked": {"failure": 1}},
+            window=[{"id": 1, "text": "es factible que pases tipo 14 horas?"}],
+        )
+
+    assert orchestrate(state) == {"next_step": "capture"}
