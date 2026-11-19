@@ -72,6 +72,31 @@ Límites:
 
 Evidencia (`agenda-house-4`, 3 reps, árbol limpio): con el ruteo ya en `bot` y sin handoff, los dos escenarios siguen en 0.00 y el hard fail del juez es literal — «repitió la pregunta de diagnóstico sin responder» y «siguió pidiendo diagnóstico del equipo sin coordinar el reagendamiento».
 
+## Veredicto por spec
+
+Corrida final `agenda-house-8` (sello `c49417d`, árbol limpio, 3 reps, corpus `8adb94421f45`): **3/3 pasan**,
+sin gates fallando y sin hard fail del juez.
+
+| S# | Veredicto | Evidencia |
+| --- | --- | --- |
+| S1 | Cumplida | `tests/unit/test_routing_table.py` (55) + la pregunta mid-captura ya no cae en `manage`; desde `agenda-house-3` ningún escenario del corte termina en `handoff` |
+| S2 | Cumplida, sin tocar S12 | `test_mid_capture_visit_management_is_not_a_field_answer` pasa sin editarlo, y `test_mid_capture_explicit_change_request_still_manages` fija la excepción |
+| S3 | Cumplida | `real-diego-precio-y-duracion` 0.00 → 2.83; el ack nombra la disponibilidad en el turno que la entrega |
+| S4 | Cumplida | `reagendar_visita` sin visita ya no deriva: los tres escenarios conservan el estado `bot` y contestan todos sus turnos |
+| S5 | Cumplida | `real-dato-mas-pregunta` 0.00 → 2.67 y `real-reagenda-familiar` 0.00 → 2.00, con la restricción sostenida y sin invertir la exclusión |
+
+Medido en la misma corrida: `real-diego-precio-y-duracion` pasó en **cinco de cinco** corridas desde S3.
+
+### Lo que este corte no arregla, y quedó escrito
+
+1. **`availability` no se actualiza cuando el cliente propone un horario nuevo.** El bot lo dice bien en la conversación; el dato que lee el técnico puede quedar con el valor anterior. Decidir quién manda —extractor del modelo o parser determinista— es una decisión de producto pendiente.
+2. **La extracción de la preferencia sigue dependiendo del modelo.** Fue la causa de la mitad de las vueltas de este corte.
+3. **La KB no tiene contenido de agenda**, así que una preferencia horaria que caiga en el camino de respuesta termina en `kb_miss`.
+
+### Sobre la varianza medida
+
+El mismo código dio 0.00 y 3.17 en corridas consecutivas para el mismo escenario (`agenda-house-3` y `-4`). Con 3 repeticiones y capeo a 0 por hard fail, el veredicto del juez mueve el puntaje varios puntos sin que el bot cambie. Por eso cada cierre de este corte se leyó sobre el **transcript**, y el puntaje quedó como señal secundaria.
+
 ## Tasks
 
 | ID | S# | Ruta | Commit |
@@ -173,3 +198,12 @@ De ahí S4: sin visita, un reagendamiento no puede ir a `manage`, porque `manage
 ### L7 — por qué hay una S5 (corrida `agenda-house-4`)
 
 El ruteo ya está: los dos escenarios terminan en `bot`, sin handoff y con la restricción nombrada en el turno que la entrega. Siguen en 0.00 porque el turno siguiente la pierde. Tres corridas consecutivas mostraron además que el clasificador oscila entre `solicitar_visita` y `reagendar_visita` para la misma frase, y que el camino de respuesta del modelo es inestable (misma frase: respuesta buena en `agenda-house-2`, `kb_miss` en `agenda-house-3`). Por eso S5 es determinista y vive en la captura: no depende del label ni del modelo.
+
+### L8 — medición final y cierre de familia 2
+
+`agenda-house-8` (3 reps, árbol limpio, sello `c49417d`): 3/3, sin hard fail. Transcripts revisados turno por turno:
+
+- `real-dato-mas-pregunta` turno 3: «Sobre tu horario: las 14:00 en adelante. Queda anotada y la confirmamos al coordinar la visita.» — nombra la hora propuesta y no promete.
+- `real-reagenda-familiar` turno 3: «Sobre tu horario: 9:00 am.» ante «En las tardes me complica» — ya no convierte una exclusión en preferencia.
+
+Ocho corridas intermedias (`agenda-house` a `-7`) quedan como registro de iteración; sólo la final se commitea como evidencia.
