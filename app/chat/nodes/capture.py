@@ -953,7 +953,12 @@ def _render_capture_question(
         isinstance(availability, str)
         and availability.strip()
         and availability != "unknown"
-        and not (isinstance(delivered, str) and delivered.strip())
+        # S5 yields to S3 only when S3 actually speaks this turn. Keying it on the
+        # extraction instead left a hole: `agenda-house-5` measured turns that
+        # re-extracted the same value, so S3 rendered its previous sentence again
+        # and the marker suppressed it, while S5 had already stood down — the
+        # customer got a bare re-ask with the constraint on record.
+        and not availability_ack
         and resolve_window(current_text, today=date.today()) is not None
     ):
         availability_hold_ack = render_reply(

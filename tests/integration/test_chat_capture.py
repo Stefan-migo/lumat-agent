@@ -1259,3 +1259,41 @@ def test_s3_the_availability_is_named_once_not_on_every_later_turn():
     result = _reask_pending(captured, ["failure"], second)
 
     assert not any(availability in reply for reply in result["replies"])
+
+
+def test_s5_the_hold_speaks_when_s3s_sentence_would_repeat():
+    """S5: the measured hole of `agenda-house-5`.
+
+    The turn re-extracted the same availability, so S3 rendered its previous
+    sentence again and `_availability_acked` suppressed it, while the first S5
+    version had already stood down on the extraction alone. The customer got a
+    bare re-ask with the constraint on record. S5 must key on whether S3 actually
+    spoke, not on whether the turn carried an extraction.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        # S3 already spoke on an earlier turn, with this exact sentence.
+        "_availability_acked": "Anoté que 9 am; lo tengo en cuenta para la visita.",
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    # The turn carries the same preference again, so the extractor reports it.
+    state.extracted = {"availability": "9 am"}
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any("queda anotada" in reply.lower() for reply in result["replies"])
