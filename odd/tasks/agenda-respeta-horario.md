@@ -58,6 +58,20 @@ Regla, derivada de la decisión del owner en L5:
 
 El horario pedido sigue el camino de S3: se reconoce en el turno, queda en `availability`, y `booking._requested_window` ya lo lee para filtrar la ventana cuando la captura termina.
 
+### S5 — La restricción horaria sobrevive a los turnos siguientes de la captura
+
+S3 nombra la disponibilidad sólo en el turno que la entrega. Cuando el cliente vuelve sobre ella — «En las tardes me complica por los ñiños», «No tengo con quien dejarlos», «es factible que pases tipo 14 horas?» — el cuestionario de diagnóstico la pisa con una re-pregunta pelada.
+
+Regla: si la conversación ya tiene `availability` en la captura y el turno del cliente vuelve a nombrar un día, franja u hora, la respuesta **sostiene** la restricción en vez de re-preguntar como si no existiera. Texto determinista, no del modelo: la misma frase se construye siempre igual, a partir de la disponibilidad guardada.
+
+Límites:
+
+- No repite el párrafo de S3 en el mismo turno (si S3 ya habló, S5 calla).
+- No promete duración, ni un horario concreto, ni una visita confirmada: dice que queda anotado y se confirma al coordinar.
+- No dispara en turnos donde el cliente no menciona tiempo.
+
+Evidencia (`agenda-house-4`, 3 reps, árbol limpio): con el ruteo ya en `bot` y sin handoff, los dos escenarios siguen en 0.00 y el hard fail del juez es literal — «repitió la pregunta de diagnóstico sin responder» y «siguió pidiendo diagnóstico del equipo sin coordinar el reagendamiento».
+
 ## Tasks
 
 | ID | S# | Ruta | Commit |
@@ -65,7 +79,8 @@ El horario pedido sigue el camino de S3: se reconoce en el turno, queda en `avai
 | T1 | S1, S2 | `app/chat/nodes/orchestrate.py` + `tests/unit/test_routing_table.py`, test-first | pendiente |
 | T2 | S3 | `app/chat/nodes/capture.py` + tests del nodo, test-first | pendiente |
 | T3 | S1-S3 | medición `--only` de los 3 escenarios, 3 reps, transcript antes que puntaje | pendiente |
-| T4 | S1-S4 | `bash scripts/test.sh quick`, luego `full` antes de la PR | pendiente |
+| T2b | S5 | `app/chat/nodes/capture.py` + `app/services/settings.py`(texto nuevo) y tests del nodo, test-first | pendiente |
+| T4 | S1-S5 | `bash scripts/test.sh quick`, luego `full` antes de la PR | pendiente |
 
 Slice: 4 commits, 571 authored lines al cerrar S4. Pasado el corte de ~400 líneas de la PR, así que la entrega se resuelve con una de dos, y la decide el owner al abrir la PR: declarar `size:exception` (la etiqueta existe en el repo para esto), o partir en dos PRs encadenadas (S1/S2/S4 ruteo, S3 acknowledgement), que son independientes entre sí.
 
@@ -154,3 +169,7 @@ Opción elegida, verbatim: «Terminar la captura y recién ahí ofrecer horarios
 S1/S2 no se activaron, y el guard estaba en la condición equivocada: en los dos escenarios restantes el turno crítico llega **sin campo pendiente**, así que `mid_capture` es `False` y el bloque nunca se evaluó. Conv 1 (`real-dato-mas-pregunta`, turno 2 `reagendar_visita`, cero visitas) fue a `manage` → `booking_unavailable` → `human` → mudo. Conv 2 (`real-reagenda-familiar`) entró a captura normal, el ack de S3 nombró las 9 am, y después el bot se fue al cuestionario de diagnóstico y abandonó el pedido — el hard fail textual del juez.
 
 De ahí S4: sin visita, un reagendamiento no puede ir a `manage`, porque `manage` no tiene nada que mover.
+
+### L7 — por qué hay una S5 (corrida `agenda-house-4`)
+
+El ruteo ya está: los dos escenarios terminan en `bot`, sin handoff y con la restricción nombrada en el turno que la entrega. Siguen en 0.00 porque el turno siguiente la pierde. Tres corridas consecutivas mostraron además que el clasificador oscila entre `solicitar_visita` y `reagendar_visita` para la misma frase, y que el camino de respuesta del modelo es inestable (misma frase: respuesta buena en `agenda-house-2`, `kb_miss` en `agenda-house-3`). Por eso S5 es determinista y vive en la captura: no depende del label ni del modelo.

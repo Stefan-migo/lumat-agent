@@ -225,6 +225,12 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     # answered with "Entiendo." and a re-ask, so the constraint the visit has to
     # respect never came back to the customer.
     "capture_availability_ack": "Anoté que {{disponibilidad}}; lo tengo en cuenta para la visita. ",
+    # S5 (agenda-respeta-horario): carry a previously stated preference through
+    # later capture turns without offering a slot or confirming a visit.
+    "capture_availability_hold": (
+        "La preferencia de horario «{{disponibilidad}}» queda anotada y la "
+        "confirmaremos al coordinar la visita. "
+    ),
     # S3 (chatbot-realismo-conversacional): one confirmation instead of four questions
     # when the customer record already holds the contact data.
     "capture_confirm_contact": (
@@ -282,6 +288,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     # owner cannot introduce a placeholder no call site fills.
     "capture_quote_ack": frozenset(),
     "capture_availability_ack": frozenset({"disponibilidad"}),
+    "capture_availability_hold": frozenset({"disponibilidad"}),
     "capture_confirm_contact": frozenset({"comuna", "direccion", "email"}),
     "capture_consent": frozenset(),
     "capture_consent_refused": frozenset(),

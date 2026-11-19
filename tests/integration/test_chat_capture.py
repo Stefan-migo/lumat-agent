@@ -1115,6 +1115,114 @@ def test_s3_the_reask_names_the_availability_the_customer_just_gave():
     assert any(availability in reply for reply in result["replies"])
 
 
+def test_s5_the_reask_holds_an_existing_availability_when_customer_mentions_time():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert any("queda anotada" in reply.lower() for reply in result["replies"])
+
+
+def test_s5_the_reask_does_not_hold_availability_without_a_time_mention():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "No tengo con quien dejarlos"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert all("queda anotada" not in reply.lower() for reply in result["replies"])
+
+
+def test_s5_the_hold_reply_does_not_promise_an_unstored_time():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "9 am",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+    reply = " ".join(result["replies"])
+
+    assert "queda anotada" in reply.lower()
+    assert "14" not in reply
+
+
+def test_s5_does_not_repeat_the_hold_clause_when_s3_just_acknowledged_availability():
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    availability = "9 am"
+    captured = {
+        "equipment": "calefont",
+        "availability": availability,
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.extracted = {"availability": availability}
+    state.window = [{"text": "En las tardes me complica por los ñiños"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    assert not any("queda anotada" in reply.lower() for reply in result["replies"])
+
+
 def test_s3_the_availability_is_named_once_not_on_every_later_turn():
     """S3: the acknowledgement marks a transition; it is not a per-turn tic."""
     from app.chat.nodes.capture import _reask_pending
