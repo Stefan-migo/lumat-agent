@@ -27,8 +27,9 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -1407,6 +1408,23 @@ ASSISTANT_WRITABLE_SETTINGS: frozenset[str] = frozenset(
         "messages.out_of_hours",
         "hours.timezone",
         "hours.schedule",
+        # The remaining behaviour levers the WhatsApp nodes read. Credentials and
+        # plumbing (`notify.*`, `meta_pricing`, session secrets) stay out on purpose:
+        # nothing here may write a secret or a Meta rule the owner cannot see rendered.
+        "scope_rules",
+        CHAT_CONDUCT_KEY,
+        CAPTURE_QUESTIONS_KEY,
+        MESSAGE_TEMPLATES_KEY,
+        REPLY_TEXTS_KEY,
+        PERSONA_TEXTS_KEY,
+        "emergency.keywords",
+        EMERGENCY_PROTOCOL_KEY,
+        COVERAGE_COMMUNES_KEY,
+        SERVICE_DURATIONS_KEY,
+        BOOKING_LEAD_MINUTES_KEY,
+        TARIFA_PRECIOS_KEY,
+        "cost.conversation_limit",
+        "cost.daily_limit",
     }
 )
 
@@ -1420,8 +1438,66 @@ _ASSISTANT_MESSAGE_KEYS: frozenset[str] = frozenset(
 ASSISTANT_MESSAGE_MAX_LENGTH = 2000
 
 
-def validate_assistant_setting(key: str, value: Any) -> None:
-    """Validate one assistant-proposed setting; raise ValueError when unsafe.
+def validate_scope_rules(value: Any) -> dict[str, str]:
+    """A category -> mode map whose modes are the two the classifier understands."""
+    if not isinstance(value, dict):
+        raise ValueError("scope_rules must be an object of category -> mode")
+    rules: dict[str, str] = {}
+    for category, mode in value.items():
+        if not isinstance(category, str) or not category.strip():
+            raise ValueError("scope_rules keys must be non-empty category names")
+        if mode not in SCOPE_MODES:
+            raise ValueError(f"scope_rules mode must be one of {SCOPE_MODES}")
+        rules[category.strip()] = mode.strip()
+    return rules
+
+
+def validate_emergency_keywords(value: Any) -> list[str]:
+    """S19: the emergency gate needs at least one non-blank trigger.
+
+    An empty (or all-blank) list compiles to a pattern that matches nothing, so
+    accepting it would switch the deterministic gate off through a setting write.
+    """
+    if not isinstance(value, list):
+        raise ValueError("emergency.keywords must be a list of text")
+    keywords = [keyword.strip() for keyword in value if isinstance(keyword, str)]
+    if not keywords or len(keywords) != len(value) or any(not keyword for keyword in keywords):
+        raise ValueError("emergency.keywords must be a non-empty list of non-empty text")
+    return keywords
+
+
+def validate_booking_lead_minutes(value: Any) -> int:
+    """Whole hours between 1 and 48, the only range the panel can express."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("booking.lead_minutes must be an integer number of minutes")
+    if value % 60 or not 60 <= value <= 48 * 60:
+        raise ValueError("booking.lead_minutes must be whole hours between 1 and 48")
+    return value
+
+
+def validate_cost_limit(value: Any) -> float:
+    """SS-3 guard: the cost gate can be adjusted, never switched off."""
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise ValueError("cost limit must be a number")
+    if not parsed.is_finite() or parsed <= 0:
+        raise ValueError("cost limit must be a finite number greater than 0")
+    return float(parsed)
+
+
+# The capture model owns the field vocabulary; `capture` imports this module, so the
+# list is resolved at call time instead of at import time.
+def _capture_field_order() -> list[str]:
+    from app.chat.nodes.capture import CAPTURE_FIELD_ORDER
+
+    return CAPTURE_FIELD_ORDER
+
+
+def validate_assistant_setting(
+    key: str, value: Any, session: Session | None = None
+) -> Any:
+    """Validate and normalize one assistant-proposed setting value.
 
     Guards the approval-gated `settings.update` tool: the key must be in the
     curated allowlist and the value must pass the same shape rules the panel's
@@ -1432,6 +1508,7 @@ def validate_assistant_setting(key: str, value: Any) -> None:
     if key == "tone.style":
         if value not in TONE_STYLES:
             raise ValueError(f"tone.style must be one of {TONE_STYLES}")
+        return value
     elif key in _ASSISTANT_MESSAGE_KEYS:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{key} must be a non-empty string")
@@ -1443,6 +1520,7 @@ def validate_assistant_setting(key: str, value: Any) -> None:
                 raise ValueError(f"{key} only supports the {{nombre}} slot")
         if len(value) > ASSISTANT_MESSAGE_MAX_LENGTH:
             raise ValueError(f"{key} must be at most {ASSISTANT_MESSAGE_MAX_LENGTH} characters")
+        return value
     elif key == "hours.timezone":
         if not isinstance(value, str) or not value.strip():
             raise ValueError("hours.timezone must be a non-empty IANA timezone")
@@ -1450,8 +1528,22 @@ def validate_assistant_setting(key: str, value: Any) -> None:
             ZoneInfo(value)
         except (TypeError, ValueError, ZoneInfoNotFoundError):
             raise ValueError("hours.timezone must be a valid IANA timezone")
+        return value
     elif key == "hours.schedule":
         validate_hours_schedule(value)
+        return value
+    elif key in _ASSISTANT_SHAPE_VALIDATORS:
+        return _ASSISTANT_SHAPE_VALIDATORS[key](value)
+    elif key == CHAT_CONDUCT_KEY:
+        return validate_conduct(
+            value,
+            _capture_field_order(),
+            previous=get_conduct(session) if session is not None else None,
+        )
+    elif key == CAPTURE_QUESTIONS_KEY:
+        fields = get_conduct(session)["orden"] if session is not None else _capture_field_order()
+        return validate_capture_questions(value, fields)
+    return value
 
 
 def validate_hours_schedule(schedule: Any) -> None:
@@ -1557,6 +1649,25 @@ def validate_emergency_protocol(value: Any) -> dict[str, Any]:
             raise ValueError(f"emergency.protocol[{field!r}] must be non-empty text")
         protocol[field] = raw.strip()
     return protocol
+
+
+# One shape rule per simple lever, shared with the panel routes so the two surfaces
+# cannot drift: what the panel refuses here is refused, and what it accepts is read
+# back through the same accessor the chat nodes use.
+_ASSISTANT_SHAPE_VALIDATORS: dict[str, Callable[[Any], Any]] = {
+    "scope_rules": validate_scope_rules,
+    "emergency.keywords": validate_emergency_keywords,
+    EMERGENCY_PROTOCOL_KEY: validate_emergency_protocol,
+    COVERAGE_COMMUNES_KEY: validate_coverage_communes,
+    SERVICE_DURATIONS_KEY: validate_service_durations,
+    BOOKING_LEAD_MINUTES_KEY: validate_booking_lead_minutes,
+    TARIFA_PRECIOS_KEY: validate_tarifa_precios,
+    MESSAGE_TEMPLATES_KEY: validate_message_templates,
+    REPLY_TEXTS_KEY: validate_reply_texts,
+    PERSONA_TEXTS_KEY: validate_persona_texts,
+    "cost.conversation_limit": validate_cost_limit,
+    "cost.daily_limit": validate_cost_limit,
+}
 
 
 def get_persona_texts(session: Session) -> dict[str, str]:

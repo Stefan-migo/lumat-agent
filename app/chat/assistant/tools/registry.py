@@ -697,11 +697,13 @@ def _update_setting(session, args: SettingsUpdateArgs):
     from app.services import settings as settings_service
 
     try:
-        settings_service.validate_assistant_setting(args.key, args.value)
+        value = settings_service.validate_assistant_setting(
+            args.key, args.value, session=session
+        )
     except ValueError as exc:
         raise ToolValidationError(str(exc)) from exc
-    settings_service.set_setting(session, args.key, args.value, actor="assistant")
-    return {"key": args.key, "value": args.value, "updated": True}
+    settings_service.set_setting(session, args.key, value, actor="assistant")
+    return {"key": args.key, "value": value, "updated": True}
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
