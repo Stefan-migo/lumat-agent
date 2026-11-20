@@ -13,6 +13,7 @@ DEFAULT_TOOLS = {
     "kb.retrieve",
     "kb.propose_document",
     "chatbot.simulate",
+    "chatbot.eval_regression",
     "memory.read",
     "memory.search",
     "memory.write",

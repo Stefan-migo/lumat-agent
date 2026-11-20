@@ -51,6 +51,16 @@ def test_chatbot_simulation_is_allowed_to_admin_and_operator():
     assert "chatbot.simulate" in ROLE_TOOL_EXPECTATIONS[UserRole.OPERADOR]
 
 
+def test_chatbot_regression_measurement_is_allowed_to_admin_and_operator():
+    assert registry.ROLE_TOOL_ALLOWLIST["chatbot.eval_regression"] == frozenset({
+        UserRole.ADMIN, UserRole.OPERADOR,
+    })
+    assert "chatbot.eval_regression" in ROLE_TOOL_EXPECTATIONS[UserRole.OPERADOR]
+    definition = registry.TOOL_REGISTRY["chatbot.eval_regression"]
+    assert definition.read_only is False
+    assert definition.tier == "default"
+
+
 def test_project_file_write_tools_are_allowed_to_admin_and_operator_only():
     for name in ("project_file.save", "project_file.update"):
         assert registry.ROLE_TOOL_ALLOWLIST[name] == frozenset({UserRole.ADMIN, UserRole.OPERADOR})
