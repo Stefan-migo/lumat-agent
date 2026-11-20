@@ -77,10 +77,26 @@ After a revert the stored value equals the target version's value.
 writes), and is documented in `agent/skills/assistant/tools.md`. A write tool that is missing any of
 these fails closed: unknown tool, denied role, or no approval means no write.
 
+## Slices
+
+Delivery strategy (owner, 2026-11-20): five chained PRs, one per tool. Each slice stays inside one
+review's budget and leaves the suite green on its own.
+
+| Slice | Task | PR subject | Commit |
+|---|---|---|---|
+| 1 | T1 | `kb.propose_document` + opening the feature | `3ae71cfb3`, `72efba470` |
+| 2 | T2 | widened settings allowlist and validators | `421c37572` (+ this record) |
+| 3 | T3 | `chatbot.simulate` | pending |
+| 4 | T4 | `chatbot.eval_regression` | pending |
+| 5 | T5 + T6 + T7 | `settings.revert`, registry/roles/skill doc, closing checks | pending |
+
+Slices 1 and 2 are already past the ~400-line review budget when counted together (`610` authored
+lines at `421c37572`), which is why they are separate PRs instead of one.
+
 ## Tasks
 
 - T1 — S1 `kb.propose_document` draft → approval → ingest. Commit: `3ae71cfb3`
-- T2 — S2 extend the writable allowlist and its validators for the fourteen keys. Commit: `<pending>`
+- T2 — S2 extend the writable allowlist and its validators for the fourteen keys. Commit: `421c37572`
 - T3 — S3 `chatbot.simulate` over an isolated conversation. Commit: `<pending>`
 - T4 — S4 `chatbot.eval_regression` with gates + judge and a baseline diff. Commit: `<pending>`
 - T5 — S5 `settings.revert` over the audited version history. Commit: `<pending>`
@@ -94,3 +110,5 @@ these fails closed: unknown tool, denied role, or no approval means no write.
 - L3 (orchestrator, evidence): approval pipeline and settings version history already exist, so S1/S2/S5 extend declarations rather than build a new boundary. `registry.py:32`, `approval.py:134/221`, `settings.py:1620`, `routes/settings.py:266`.
 - L4 (orchestrator, boundary): "configurable" means DB-backed. Code-level levers stay out and are named in Scope so no task claims them.
 - L5 (orchestrator, evidence 2026-11-20): the approval boundary digests the raw plan arguments (`app/chat/assistant/nodes.py:843`) while execution digests `model_dump()` (`registry.py:1383`), where a defaulted field is materialized. Any write tool whose args model has a default would therefore refuse its own approval. S1 answers it by making `visibility` required. Latent, pre-existing case for a follow-up: `ProjectFileSaveArgs.folder` (`registry.py:327`). Not in this feature's scope.
+- L6 (orchestrator, ruling): a worker stopped because `graphify-out/GRAPH_REPORT.md` was built from an earlier commit than `HEAD`, reading the Graph Check as "rebuild before editing". The correct reading of `AGENTS.md` is that the per-task `graphify query`/`graphify path` calls satisfy steps 1-2 and the `graphify . --update` refresh runs once per session at close, never per commit; a feature branch is therefore always "stale" by commit distance and that is not a blocker. The parent owns the session-close refresh.
+- L7 (orchestrator, evidence 2026-11-20, T2): `validate_assistant_setting` now returns the normalized value and `_update_setting` stores and echoes that value, matching the panel routes, which store each validator's return. Two unit tests pinned the old allowlist as a literal and two more listed now-writable keys as "outside"; all four were updated with the change, not around it.
