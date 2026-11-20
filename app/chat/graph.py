@@ -170,7 +170,9 @@ def _flow_start(state: ConversationState) -> str:
     sense is a repair request, not a comprehension failure, and `receive` has
     already answered it deterministically.
     """
-    if is_greeting_only(state) or is_social_only(state) or is_confusion_only(state):
+    if is_greeting_only(state):
+        return "capture" if "_pending" in (state.captured or {}) else END
+    if is_social_only(state) or is_confusion_only(state):
         # S2 (chat-rafagas): `receive` already answered the social question.
         return END
     return "classify_intent"
@@ -353,7 +355,7 @@ def build_graph():
     builder.add_conditional_edges(
         "receive",
         _flow_start,
-        {"classify_intent": "classify_intent", END: END},
+        {"classify_intent": "classify_intent", "capture": "capture", END: END},
     )
     builder.add_edge("classify_intent", "orchestrate")
     builder.add_conditional_edges(

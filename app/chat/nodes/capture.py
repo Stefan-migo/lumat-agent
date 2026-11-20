@@ -52,6 +52,7 @@ from app.services.customers import (
 from app.services.settings import (
     REPLY_TEXT_DEFAULTS,
     comuna_cubierta,
+    get_message,
     get_capture_ack,
     get_capture_questions,
     get_capture_preventive_keywords,
@@ -740,10 +741,20 @@ def capture(state: ConversationState) -> dict:
             reply = _phrase_reply(session, texts, "capture_consent_unclear", captured, pending=["consent"])
         return {"captured": captured, "replies": [reply]}
 
-    if isinstance(pending, list) and is_social_only(_current_text(state)):
-        # Answer the greeting without consuming it as a field answer and without
-        # re-listing the pending fields; the next turn resumes the batch.
+    from app.chat.nodes.receive import is_greeting_only
+
+    greeting_during_capture = isinstance(pending, list) and is_greeting_only(state)
+    if isinstance(pending, list) and is_social_only(_current_text(state)) and not greeting_during_capture:
+        # Preserve the social-only courtesy reply without re-asking or charging an attempt.
         return {"replies": [_SOCIAL_REPLY]}
+
+    if isinstance(pending, list) and (greeting_during_capture or state.intent == "smalltalk"):
+        reask = _reask_pending(captured, pending, state, advance=False)
+        if state.intent == "smalltalk":
+            with session_scope() as session:
+                social_reply = get_message(session, "smalltalk", _SOCIAL_REPLY)
+            return {**reask, "replies": [social_reply, *reask.get("replies", [])]}
+        return reask
 
     if state.capture_paused:
         # CI-2/CI-3b: a deviation was answered; resume without storing its text.
@@ -800,8 +811,24 @@ def _address_reask_question(question: str, *, offer_pin: bool) -> str:
     )
 
 
-def _reask_pending(captured: dict, pending: list[str], state: ConversationState) -> dict:
-    """Repeat the unanswered batch once, then offer its existing derivation."""
+def _should_derive_pending(captured: dict, pending: list[str], text: str) -> bool:
+    from app.chat.nodes.orchestrate import asks_for_change
+
+    asked = captured.get("_asked") or {}
+    return (
+        any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in pending)
+        and not asks_for_change(text)
+    )
+
+
+def _reask_pending(
+    captured: dict,
+    pending: list[str],
+    state: ConversationState,
+    *,
+    advance: bool = True,
+) -> dict:
+    """Repeat the unanswered batch; courtesy re-asks do not advance its budget."""
     with session_scope() as session:
         conduct = get_conduct(session)
         if _out_of_coverage(
@@ -816,13 +843,14 @@ def _reask_pending(captured: dict, pending: list[str], state: ConversationState)
             _persist_captured(session, state, captured)
             return _derive(captured, COVERAGE_DERIVATION)
     asked = dict(captured.get("_asked") or {})
-    if any(asked.get(field, 0) >= MAX_ASKS_PER_FIELD for field in pending):
+    if advance and _should_derive_pending(captured, pending, _current_text(state)):
         captured.pop("_pending", None)
         return _derive(captured, "campo_sin_respuesta")
 
-    for field in pending:
-        asked[field] = asked.get(field, 0) + 1
-    captured["_asked"] = asked
+    if advance:
+        for field in pending:
+            asked[field] = asked.get(field, 0) + 1
+        captured["_asked"] = asked
     captured["_pending"] = pending
     with session_scope() as session:
         ask = _render_capture_question(

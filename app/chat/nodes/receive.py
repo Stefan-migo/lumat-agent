@@ -282,11 +282,17 @@ def receive(state: ConversationState) -> dict:
         # reaches the classifier, so it never charges `unknown_intent`.
         with session_scope() as session:
             updates["replies"] = [get_message(session, "confusion")]
-    elif is_social_only(state):
+    elif is_social_only(state) and not (
+        "_pending" in (state.captured or {}) and is_greeting_only(state)
+    ):
         # S2: answer the question deterministically; do not classify or route it.
         with session_scope() as session:
             updates["replies"] = [get_message(session, "social")]
-    elif state.turn > 1 and is_greeting_only(state):
+    elif (
+        state.turn > 1
+        and "_pending" not in (state.captured or {})
+        and is_greeting_only(state)
+    ):
         # S1: greeting the bot again is answered, not classified. The greeting
         # never increments `unknown_intent` nor counts as an attempt.
         with session_scope() as session:

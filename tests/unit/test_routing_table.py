@@ -251,6 +251,26 @@ def test_orchestrate_answers_a_schedule_question_while_capturing():
     }
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Favor cambiar la fecha de la manutención para el próximo martes por favor",
+        "Favor cambiar el día de la mantención para el próximo martes. Por temas laborales no estaré en casa hoy pm",
+        "Favor cambiar la mantención para el próximo martes, y además tengo una consulta",
+    ],
+)
+def test_explicit_change_of_date_or_maintenance_leaves_pending_capture(text):
+    state = _capture_state(text, intent="reagendar_visita")
+
+    assert orchestrate(state) == {"next_step": "manage"}
+
+
+def test_date_or_maintenance_noun_without_change_verb_is_not_a_change_request():
+    from app.chat.nodes.orchestrate import asks_for_change
+
+    assert asks_for_change("la fecha de la mantención es el próximo martes") is False
+
+
 def test_orchestrate_still_manages_an_explicit_reschedule_while_capturing():
     """S2 end to end: the measured #23 sentence keeps routing to manage."""
     state = _capture_state("Quiero reagendar la visita es posible?", intent="reagendar_visita")
