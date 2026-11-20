@@ -12,6 +12,7 @@ DEFAULT_TOOLS = {
     "cases.list",
     "kb.retrieve",
     "kb.propose_document",
+    "chatbot.simulate",
     "memory.read",
     "memory.search",
     "memory.write",

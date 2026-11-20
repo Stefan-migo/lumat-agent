@@ -81,6 +81,7 @@ assistant:
     - customers.operational_history
     - kb.retrieve
     - kb.propose_document
+    - chatbot.simulate
     - memory.read
     - memory.search
     - memory.write

@@ -20,7 +20,7 @@ from app.chat.assistant.budgets import PROJECT_READ_FILE_PAGE_LIMIT
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import assistant_artifacts, automation_installations, cases, customers, kb, project_files, projects, recipes, relations, scheduling, tukulpan as memory
+from app.services import assistant_artifacts, automation_installations, cases, chat_simulation, customers, kb, project_files, projects, recipes, relations, scheduling, tukulpan as memory
 from app.services.settings import ASSISTANT_WRITABLE_SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ MAX_ITEMS = 20
 APPROVED_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
     "kb.propose_document",
+    "chatbot.simulate",
     "project_file.save",
     "project_file.update",
     "project.create",
@@ -108,6 +109,11 @@ class KpiArgs(BaseModel):
 class ChatbotMetricsArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     window_days: int = Field(default=7, ge=1, le=31)
+
+
+class ChatbotSimulateArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messages: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(min_length=1, max_length=6)
 
 
 class ChatbotConversationsArgs(BaseModel):
@@ -679,6 +685,10 @@ def _chatbot_metrics(session, args: ChatbotMetricsArgs):
     from app.services import analytics
 
     return analytics.chatbot_metrics(session, args.window_days)
+
+
+def _chatbot_simulate(session, args: ChatbotSimulateArgs):
+    return chat_simulation.simulate(session, args.messages)
 
 
 def _chatbot_conversations(session, args: ChatbotConversationsArgs):
@@ -1325,6 +1335,14 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
         "Add one knowledge document to the corpus the WhatsApp bot answers from, after owner approval. A customer-visible document changes customer answers on the next inbound turn; an internal one is readable by the assistant only.",
         tier="default",
     ),
+    "chatbot.simulate": ToolDefinition(
+        "chatbot.simulate",
+        ChatbotSimulateArgs,
+        False,
+        _chatbot_simulate,
+        "Run up to six customer turns through the real chatbot brain without delivering replies.",
+        tier="default",
+    ),
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory.", tier="default"),
     "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory.", tier="default"),
     "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory; global across threads by default.", tier="default"),
@@ -1381,6 +1399,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "cases.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
     "kb.propose_document": frozenset({UserRole.ADMIN}),
+    "chatbot.simulate": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "project_file.save": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
