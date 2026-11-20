@@ -20,6 +20,7 @@ DEFAULT_TOOLS = {
     "customers.operational_history",
     "cases.list",
     "kb.retrieve",
+    "kb.propose_document",
     "memory.read",
     "memory.search",
     "memory.write",

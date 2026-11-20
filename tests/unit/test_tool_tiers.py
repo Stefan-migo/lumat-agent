@@ -11,6 +11,7 @@ DEFAULT_TOOLS = {
     "appointments.upcoming",
     "cases.list",
     "kb.retrieve",
+    "kb.propose_document",
     "memory.read",
     "memory.search",
     "memory.write",

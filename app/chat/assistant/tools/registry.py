@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS = 20
 APPROVED_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
+    "kb.propose_document",
     "project_file.save",
     "project_file.update",
     "project.create",
@@ -362,6 +363,39 @@ class SkillProposeArgs(BaseModel):
         return value
 
 
+class KbProposeDocumentArgs(BaseModel):
+    """One knowledge document the assistant proposes to the customer corpus (S1).
+
+    The WhatsApp bot retrieves with `audience=customer` and `global_only=True`
+    (`app/chat/nodes/respond.py:305`), so `visibility` is required rather than
+    defaulted: the proposal has to state whether it changes customer answers.
+    A default would also break its own approval — the plan issues the digest over
+    the raw arguments (`app/chat/assistant/nodes.py:843`) while execution digests
+    `model_dump()`, where a defaulted field is materialized.
+
+    The validators below only reject unsafe values; they never rewrite one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=3, max_length=200)
+    content: str = Field(min_length=1, max_length=200_000)
+    visibility: Literal["customer", "internal"]
+
+    @field_validator("title")
+    @classmethod
+    def require_a_real_title(cls, value: str) -> str:
+        if len(" ".join(value.split())) < 3:
+            raise ValueError("document title must carry at least three characters")
+        return value
+
+    @field_validator("content")
+    @classmethod
+    def require_real_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("document content must not be blank")
+        return value
+
+
 class ArtifactSaveArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=255)
@@ -579,6 +613,58 @@ def _retrieve_kb(session, args: KbArgs, *, project_id: int | None = None, role: 
         session, args.query, top_k=args.top_k, audience=audience,
         project_id=project_id, global_only=project_id is None,
     )
+
+
+def _kb_title_key(title: str) -> str:
+    """Collapse a title to the key that decides whether it already exists."""
+    return " ".join(title.split()).casefold()
+
+
+def _propose_kb_document(session, args: KbProposeDocumentArgs):
+    """Ingest one approved knowledge document into the customer corpus (S1).
+
+    A duplicate title is refused instead of created: two documents answering the
+    same question compete for the same retrieval slot, and the assistant would
+    have no way to know which one the bot cited. The check is Python-side because
+    the key folds case and runs of whitespace, which SQL does not.
+    """
+    from sqlalchemy import func, select
+    from app.models import DocumentFormat, KbChunk, KbDocument
+
+    key = _kb_title_key(args.title)
+    existing = {
+        _kb_title_key(title): doc_id
+        for doc_id, title in session.execute(select(KbDocument.id, KbDocument.title).where(KbDocument.active.is_(True)))
+    }
+    if key in existing:
+        raise ToolValidationError(
+            f"a knowledge document with this title already exists: id {existing[key]}"
+        )
+    doc = kb.ingest_document(
+        session,
+        title=" ".join(args.title.split()),
+        fmt=DocumentFormat.MD,
+        content=b"",
+        content_text=args.content,
+        actor="assistant",
+        visibility=KbVisibility(args.visibility),
+        project_id=None,
+    )
+    session.flush()
+    chunks = session.scalar(
+        select(func.count())
+        .select_from(KbChunk)
+        .where(KbChunk.document_id == doc.id, KbChunk.version == doc.version)
+    )
+    return {
+        "document_id": doc.id,
+        "title": doc.title,
+        "version": doc.version,
+        "visibility": doc.visibility.value,
+        # Only a customer-visible global document reaches the WhatsApp bot.
+        "visible_to_whatsapp": doc.visibility is KbVisibility.CUSTOMER and doc.project_id is None,
+        "chunks": int(chunks or 0),
+    }
 
 
 def _kpis(session, args: KpiArgs):
@@ -1229,6 +1315,14 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "customers.operational_history": ToolDefinition("customers.operational_history", OperationalHistoryArgs, True, _operational_history, "Read one customer's cases (including closed) and appointments (including past).", tier="default"),
     "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases.", tier="default"),
     "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results.", tier="default"),
+    "kb.propose_document": ToolDefinition(
+        "kb.propose_document",
+        KbProposeDocumentArgs,
+        False,
+        _propose_kb_document,
+        "Add one knowledge document to the corpus the WhatsApp bot answers from, after owner approval. A customer-visible document changes customer answers on the next inbound turn; an internal one is readable by the assistant only.",
+        tier="default",
+    ),
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory.", tier="default"),
     "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory.", tier="default"),
     "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory; global across threads by default.", tier="default"),
@@ -1284,6 +1378,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "customers.operational_history": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "cases.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
+    "kb.propose_document": frozenset({UserRole.ADMIN}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "project_file.save": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),

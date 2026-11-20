@@ -38,6 +38,7 @@ ARGUMENT_FIXTURES: dict[str, dict[str, Any]] = {
     "customers.operational_history": {"customer_id": 1, "limit": 1},
     "cases.list": {"limit": 1},
     "kb.retrieve": {"query": "probe", "top_k": 1},
+    "kb.propose_document": {"title": "probe document", "content": "probe content", "visibility": "internal"},
     "memory.read": {"scope": "own", "limit": 1},
     "memory.search": {"scope": "own", "query": "probe", "limit": 1},
     "memory.write": {"titulo": "probe", "contenido": "probe", "topic_key": "agent:probe", "tipo": "discovery"},
