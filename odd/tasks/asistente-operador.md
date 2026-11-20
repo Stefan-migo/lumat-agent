@@ -1,6 +1,6 @@
 # ODD — asistente-operador
 
-- Status: in progress
+- Status: done
 - Branch: `odd/asistente-operador`
 - Worktree: `../lumat-agent-odd-asistente-operador`
 - Engram mirror: `odd/asistente-operador/tasks`
@@ -88,7 +88,7 @@ review's budget and leaves the suite green on its own.
 | 2 | T2 | widened settings allowlist and validators | `421c37572` (+ this record) |
 | 3 | T3 | `chatbot.simulate` | `a20e09105` (+ this record) |
 | 4 | T4 | `chatbot.eval_regression` | `<feat commit>` (+ this record) |
-| 5 | T5 + T6 + T7 | `settings.revert`, registry/roles/skill doc, closing checks | pending |
+| 5 | T5 + T6 + T7 | `settings.revert`, registry/roles/skill doc, closing checks | `68c94caa6` + closure record |
 
 Slices 1 and 2 are already past the ~400-line review budget when counted together (`610` authored
 lines at `421c37572`), which is why they are separate PRs instead of one.
@@ -99,9 +99,9 @@ lines at `421c37572`), which is why they are separate PRs instead of one.
 - T2 — S2 extend the writable allowlist and its validators for the fourteen keys. Commit: `421c37572`
 - T3 — S3 `chatbot.simulate` over an isolated conversation. Commit: `a20e09105`
 - T4 — S4 `chatbot.eval_regression` with gates + judge and a baseline diff. Commit: `<feat commit>`
-- T5 — S5 `settings.revert` over the audited version history. Commit: `<pending>`
-- T6 — S6 registry, role allowlist, `registry.yaml` whitelist and skill doc. Commit: `<pending>`
-- T7 — Closing checks: `bash scripts/test.sh quick`, `full` at closure, panel build only if `web/` changes. Commit: `<pending>`
+- T5 — S5 `settings.revert` over the audited version history. Commit: `68c94caa6`
+- T6 — S6 registry, role allowlist, `registry.yaml` whitelist and skill doc. Commit: `68c94caa6`
+- T7 — Closing checks: `bash scripts/test.sh quick`, `full` at closure, panel build only if `web/` changes. Commit: this closure record
 
 ## Log
 
@@ -120,3 +120,6 @@ lines at `421c37572`), which is why they are separate PRs instead of one.
 - L10 (orchestrator, evidence 2026-11-20, T4): the corpus engine stamps `last_message_at`, so a regression
   run is visible in the operator inbox. The service reports `appears_in_inbox` rather than hiding it, and
   patching the engine stays out of scope.
+- L11 (orchestrator, evidence 2026-11-20, T7): `bash scripts/test.sh shape origin/main` reports `agent/registry.yaml` as a changed shape surface, so `full` is required by the project's own rule and was run. `web/` was not touched, so the panel build does not apply. A first `full` run was piped into `tail`, which discarded pytest's exit code, so it was re-run with the exit captured explicitly instead of inferring a pass from the progress bar.
+- L12 (orchestrator, closing evidence 2026-11-20): `bash scripts/test.sh full` re-run with the exit code captured (`FULL_EXIT=0`), progress reached `[100%]`, no `FAILED` marker in the log. pytest's final count line is absent from the captured output, so the evidence recorded here is the exit code, the progress bar and the absence of failures, not an inferred count. `quick` is green, `shape origin/main` named `agent/registry.yaml` as the changed shape surface, `web/` was untouched so the panel build does not apply.
+- L13 (orchestrator, open items for the owner, not defects of this feature): (1) T4 needs a committed baseline JSON under `odd/evals/` before it can compare anything in a fresh checkout; producing one is the existing `scripts/conv_eval.py` action. (2) `ProjectFileSaveArgs.folder` keeps the defaulted-field approval mismatch from L5, unrelated to this feature and worth its own fix.
