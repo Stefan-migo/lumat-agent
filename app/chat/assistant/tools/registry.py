@@ -39,6 +39,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.merge",
     "skill.propose",
     "settings.update",
+    "settings.revert",
 })
 # `artifact.update` joins `artifact.save`: it can only rewrite an artifact the assistant itself
 # produced in the thread it already owns, so it needs no approval of its own.
@@ -143,6 +144,12 @@ class SettingsUpdateArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     key: str = Field(min_length=1, max_length=100)
     value: Any
+
+
+class SettingsRevertArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1, max_length=100)
+    version: int = Field(ge=0)
 
 
 class _MemoryReadBase(BaseModel):
@@ -725,6 +732,31 @@ def _update_setting(session, args: SettingsUpdateArgs):
         raise ToolValidationError(str(exc)) from exc
     settings_service.set_setting(session, args.key, value, actor="assistant")
     return {"key": args.key, "value": value, "updated": True}
+
+
+def _revert_setting(session, args: SettingsRevertArgs):
+    from app.services import settings as settings_service
+
+    if args.key not in ASSISTANT_WRITABLE_SETTINGS:
+        raise ToolValidationError(f"setting key is not assistant-writable: {args.key!r}")
+    try:
+        value = settings_service.setting_version_content(session, args.key, args.version)
+    except KeyError as exc:
+        raise ToolValidationError(
+            f"setting version {args.version} was not recorded for key {args.key!r}"
+        ) from exc
+
+    if value is None:
+        settings_service.delete_setting(session, args.key, actor="assistant")
+    else:
+        try:
+            value = settings_service.validate_assistant_setting(
+                args.key, value, session=session
+            )
+        except ValueError as exc:
+            raise ToolValidationError(str(exc)) from exc
+        settings_service.set_setting(session, args.key, value, actor="assistant")
+    return {"key": args.key, "version": args.version, "value": value, "reverted": True}
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
@@ -1379,6 +1411,14 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
         "Propose a live chatbot settings change for approval, then apply it. Valid keys: " + ", ".join(sorted(ASSISTANT_WRITABLE_SETTINGS)),
         tier="default",
     ),
+    "settings.revert": ToolDefinition(
+        "settings.revert",
+        SettingsRevertArgs,
+        False,
+        _revert_setting,
+        "Revert an assistant-writable chatbot setting to an audited version (0 restores the built-in default), after owner approval.",
+        tier="default",
+    ),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
     "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
     "automation.create_rule": ToolDefinition(
@@ -1439,6 +1479,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "analytics.chatbot_conversations": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "conversations.transcript": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "settings.update": frozenset({UserRole.ADMIN}),
+    "settings.revert": frozenset({UserRole.ADMIN}),
     "web.search": frozenset(UserRole),
     "web.fetch": frozenset(UserRole),
     "automation.create_rule": frozenset({UserRole.ADMIN}),

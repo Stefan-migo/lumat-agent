@@ -51,6 +51,7 @@ ARGUMENT_FIXTURES: dict[str, dict[str, Any]] = {
     "analytics.chatbot_conversations": {"window_days": 1, "signal": "any", "limit": 1},
     "conversations.transcript": {"conversation_id": 1, "limit": 1},
     "settings.update": {"key": "probe", "value": "probe"},
+    "settings.revert": {"key": "tone.style", "version": 0},
     "web.search": {"query": "probe", "limit": 1},
     "web.fetch": {"url": "https://example.com/"},
     "automation.create_rule": {"recipe_id": "probe", "parameters": {}},

@@ -93,6 +93,7 @@ assistant:
     - analytics.chatbot_conversations
     - conversations.transcript
     - settings.update
+    - settings.revert
     - web.search
     - web.fetch
     - automation.create_rule

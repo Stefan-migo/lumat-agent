@@ -24,6 +24,7 @@ DEFAULT_TOOLS = {
     "analytics.chatbot_conversations",
     "conversations.transcript",
     "settings.update",
+    "settings.revert",
     "project.list",
     "project.find",
     "list_project_files",

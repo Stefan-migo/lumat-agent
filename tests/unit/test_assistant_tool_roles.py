@@ -11,7 +11,7 @@ from app.models import UserRole
 
 ROLE_TOOL_EXPECTATIONS = {
     UserRole.ADMIN: set(registry.TOOL_REGISTRY),
-    UserRole.OPERADOR: set(registry.TOOL_REGISTRY) - {"automation.create_rule", "settings.update", "kb.propose_document"},
+    UserRole.OPERADOR: set(registry.TOOL_REGISTRY) - {"automation.create_rule", "settings.update", "settings.revert", "kb.propose_document"},
     UserRole.TECNICO: {
         "assistant.capabilities", "memory.read", "memory.search", "memory.write",
         "memory.update", "memory.delete", "project.list", "project.find",
@@ -59,6 +59,17 @@ def test_chatbot_regression_measurement_is_allowed_to_admin_and_operator():
     definition = registry.TOOL_REGISTRY["chatbot.eval_regression"]
     assert definition.read_only is False
     assert definition.tier == "default"
+
+
+def test_settings_revert_is_admin_only_approved_default_write():
+    assert registry.ROLE_TOOL_ALLOWLIST["settings.revert"] == frozenset({UserRole.ADMIN})
+    assert "settings.revert" not in ROLE_TOOL_EXPECTATIONS[UserRole.OPERADOR]
+    definition = registry.TOOL_REGISTRY["settings.revert"]
+    assert definition.read_only is False
+    assert definition.tier == "default"
+    assert "settings.revert" in registry.APPROVED_WRITE_ALLOWLIST
+    assert registry.SettingsRevertArgs.model_fields["key"].is_required()
+    assert registry.SettingsRevertArgs.model_fields["version"].is_required()
 
 
 def test_project_file_write_tools_are_allowed_to_admin_and_operator_only():
