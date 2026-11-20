@@ -6,6 +6,10 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+_(sin otros cambios después de este release)_
+
+## [2026.11.12] - 2026-11-19
+
 ### Corregido
 
 - La sección Configuración no se podía usar en el panel móvil. El rail de secciones se ocultaba pero su
