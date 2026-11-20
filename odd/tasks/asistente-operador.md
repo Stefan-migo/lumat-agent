@@ -1,0 +1,96 @@
+# ODD — asistente-operador
+
+- Status: in progress
+- Branch: `odd/asistente-operador`
+- Worktree: `../lumat-agent-odd-asistente-operador`
+- Engram mirror: `odd/asistente-operador/tasks`
+- Created: 2026-11-20
+
+## Objective
+
+Give the panel assistant write tools over the DB-backed levers the WhatsApp bot reads every turn, so
+an operator can diagnose and correct chatbot behaviour from the chat surface without a release:
+knowledge (KB), wording/policy (settings), plus verification (`simulate`, `eval_regression`) and
+reversibility (`revert`).
+
+## Problem / Why
+
+The assistant today reads almost everything that determines how the bot answers
+(`analytics.chatbot_metrics`, `analytics.chatbot_conversations`, `conversations.transcript`,
+`kb.retrieve`) and can write only 11 keys (`ASSISTANT_WRITABLE_SETTINGS`, `app/services/settings.py:1396`):
+`tone.style`, seven `messages.*`, `hours.timezone`, `hours.schedule`. Fourteen behaviour levers it can
+see, it cannot touch. The panel exposes them to humans only (`app/panel/api/routes/settings.py`), and
+the KB is entirely out of reach.
+
+The mechanism to write safely already exists and needs no invention: `APPROVED_WRITE_ALLOWLIST`
+(`app/chat/assistant/tools/registry.py:32`), plan → `approval_pending` → `POST
+/chat/threads/{id}/approval` → `validate_execution` (`app/chat/assistant/approval.py:221`). The
+settings version history is also already generic over any key (`setting_versions`, `app/services/settings.py:1620`),
+even though the panel route only names `persona` and `emergency` (`app/panel/api/routes/settings.py:266`).
+
+## Scope
+
+**In:** S1 `kb.propose_document`, S2 extended `settings.propose`, S3 `chatbot.simulate`,
+S4 `chatbot.eval_regression`, S5 `settings.revert`, plus registry/role/skill wiring and closing checks.
+
+**Out (deliberately):** panel UI changes; code-level levers (prompts under `agent/prompts/`, graph
+nodes and gates, `_INTENT_LABELS`, `agent/registry.yaml` model), credentials (`notify.smtp_*`,
+`smtp_password`, API keys), auto-ingestion triggered by `kb_miss`, any autonomous write without owner
+approval, and any delivery action (commit/push/PR/merge/deploy beyond what ODD authorizes).
+
+## Specs
+
+**S1 — KB write.** The assistant can propose a new knowledge-base document from text (title, content,
+visibility) and, after owner approval, ingest it so `kb.retrieve` returns its chunks on the next
+inbound WhatsApp turn with no release. Ingestion uses the local embedder (`embed_texts`,
+`app/services/kb.py:136`) and records cost 0. A document the assistant proposed never becomes
+retrievable before approval, and a rejected/expired proposal writes nothing.
+
+**S2 — Settings write, widened.** The assistant can propose a change to any key in a curated list of
+the remaining behaviour levers: `scope_rules`, `chat.conduct`, `capture.questions`, `messages.templates`,
+`reply.texts`, `persona.texts`, `emergency.keywords`, `emergency.protocol`, `coverage.communes`,
+`booking.service_durations`, `booking.lead_minutes`, `tarifa.precios`, `cost.conversation_limit`,
+`cost.daily_limit`. Each proposal is validated by the same shape rules the panel routes enforce, and
+every write stays behind owner approval. Credentials and keys outside the list are refused with the
+existing `setting key is not assistant-writable` error shape.
+
+**S3 — Simulation.** The assistant can run the real conversation brain
+(`app.chat.graph.run_conversation`) over a supplied list of customer turns and return, per turn, the
+reply, the recorded intent and the events, plus a boolean saying whether any reply would have been
+delivered. It sends nothing through WhatsApp and touches no outbox row; the run lives in its own
+conversation so an operator's real thread is never mutated.
+
+**S4 — Regression measurement.** The assistant can run the versioned conversation corpus
+(`scripts/conv_eval_corpus.yaml`) and return the score diff against a named baseline: per-scenario
+scores, which scenarios moved, and the gate failures. Deterministic gates always run; the rubric
+judge always runs too (owner decision, 2026-11-20), so the result reports its LLM cost. A run that
+cannot reach the judge reports that failure instead of scoring the conversation anyway.
+
+**S5 — Revert.** The assistant can revert one settings key to a previously audited version, or to the
+built-in default (version 0), reusing `setting_versions`/`setting_version_content`. A revert is a
+write like any other: validated, approved, audited, and refused for keys outside the writable list.
+After a revert the stored value equals the target version's value.
+
+**S6 — Wiring and roles.** Every new tool is declared once in `TOOL_REGISTRY` with a typed
+`args_model`, appears in `assistant.capabilities`, is listed in the assistant whitelist of
+`agent/registry.yaml`, is bounded by `ROLE_TOOL_ALLOWLIST` (admin-only for the behaviour-changing
+writes), and is documented in `agent/skills/assistant/tools.md`. A write tool that is missing any of
+these fails closed: unknown tool, denied role, or no approval means no write.
+
+## Tasks
+
+- T1 — S1 `kb.propose_document` draft → approval → ingest. Commit: `3ae71cfb3`
+- T2 — S2 extend the writable allowlist and its validators for the fourteen keys. Commit: `<pending>`
+- T3 — S3 `chatbot.simulate` over an isolated conversation. Commit: `<pending>`
+- T4 — S4 `chatbot.eval_regression` with gates + judge and a baseline diff. Commit: `<pending>`
+- T5 — S5 `settings.revert` over the audited version history. Commit: `<pending>`
+- T6 — S6 registry, role allowlist, `registry.yaml` whitelist and skill doc. Commit: `<pending>`
+- T7 — Closing checks: `bash scripts/test.sh quick`, `full` at closure, panel build only if `web/` changes. Commit: `<pending>`
+
+## Log
+
+- L1 (owner, verbatim): "ok perfecto me parece bien eso. vamos a implementar entonces todas desde p1 a p5. con eso quedariamos con un asistente con capacidades para poder modifciar el comportamiento del chatbot dentro de las posibilidades configurables??"
+- L2 (owner decisions, 2026-11-20): worktree authorized — "Sí: ../lumat-agent-odd-asistente-operador"; delivery — "5 slices encadenados (uno por tool)"; P4 depth — "Siempre gates + juez".
+- L3 (orchestrator, evidence): approval pipeline and settings version history already exist, so S1/S2/S5 extend declarations rather than build a new boundary. `registry.py:32`, `approval.py:134/221`, `settings.py:1620`, `routes/settings.py:266`.
+- L4 (orchestrator, boundary): "configurable" means DB-backed. Code-level levers stay out and are named in Scope so no task claims them.
+- L5 (orchestrator, evidence 2026-11-20): the approval boundary digests the raw plan arguments (`app/chat/assistant/nodes.py:843`) while execution digests `model_dump()` (`registry.py:1383`), where a defaulted field is materialized. Any write tool whose args model has a default would therefore refuse its own approval. S1 answers it by making `visibility` required. Latent, pre-existing case for a follow-up: `ProjectFileSaveArgs.folder` (`registry.py:327`). Not in this feature's scope.
