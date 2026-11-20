@@ -86,7 +86,7 @@ review's budget and leaves the suite green on its own.
 |---|---|---|---|
 | 1 | T1 | `kb.propose_document` + opening the feature | `3ae71cfb3`, `72efba470` |
 | 2 | T2 | widened settings allowlist and validators | `421c37572` (+ this record) |
-| 3 | T3 | `chatbot.simulate` | pending |
+| 3 | T3 | `chatbot.simulate` | `a20e09105` (+ this record) |
 | 4 | T4 | `chatbot.eval_regression` | pending |
 | 5 | T5 + T6 + T7 | `settings.revert`, registry/roles/skill doc, closing checks | pending |
 
@@ -97,7 +97,7 @@ lines at `421c37572`), which is why they are separate PRs instead of one.
 
 - T1 — S1 `kb.propose_document` draft → approval → ingest. Commit: `3ae71cfb3`
 - T2 — S2 extend the writable allowlist and its validators for the fourteen keys. Commit: `421c37572`
-- T3 — S3 `chatbot.simulate` over an isolated conversation. Commit: `<pending>`
+- T3 — S3 `chatbot.simulate` over an isolated conversation. Commit: `a20e09105`
 - T4 — S4 `chatbot.eval_regression` with gates + judge and a baseline diff. Commit: `<pending>`
 - T5 — S5 `settings.revert` over the audited version history. Commit: `<pending>`
 - T6 — S6 registry, role allowlist, `registry.yaml` whitelist and skill doc. Commit: `<pending>`
@@ -112,3 +112,4 @@ lines at `421c37572`), which is why they are separate PRs instead of one.
 - L5 (orchestrator, evidence 2026-11-20): the approval boundary digests the raw plan arguments (`app/chat/assistant/nodes.py:843`) while execution digests `model_dump()` (`registry.py:1383`), where a defaulted field is materialized. Any write tool whose args model has a default would therefore refuse its own approval. S1 answers it by making `visibility` required. Latent, pre-existing case for a follow-up: `ProjectFileSaveArgs.folder` (`registry.py:327`). Not in this feature's scope.
 - L6 (orchestrator, ruling): a worker stopped because `graphify-out/GRAPH_REPORT.md` was built from an earlier commit than `HEAD`, reading the Graph Check as "rebuild before editing". The correct reading of `AGENTS.md` is that the per-task `graphify query`/`graphify path` calls satisfy steps 1-2 and the `graphify . --update` refresh runs once per session at close, never per commit; a feature branch is therefore always "stale" by commit distance and that is not a blocker. The parent owns the session-close refresh.
 - L7 (orchestrator, evidence 2026-11-20, T2): `validate_assistant_setting` now returns the normalized value and `_update_setting` stores and echoes that value, matching the panel routes, which store each validator's return. Two unit tests pinned the old allowlist as a literal and two more listed now-writable keys as "outside"; all four were updated with the change, not around it.
+- L8 (orchestrator, evidence 2026-11-20, T3): isolation could not come from a transaction. The graph nodes open their own sessions and commit (`scripts/chat_harness.py:120`), so a rollback in the caller undoes nothing. The invisibility therefore rests on never stamping `last_message_at`, which is exactly the field the panel's active list filters on (`app/panel/api/routes/conversations.py:238-241`) and which the harness stamps deliberately for the opposite reason. One reserved synthetic customer is shared across runs and the conversation is fresh each time: a per-run customer litters the customer list, a reused conversation leaks the earlier context into the next run.
