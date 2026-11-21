@@ -36,6 +36,7 @@ const replyTextValues = {
   manage_cancel_unavailable: "No se puede cancelar.",
   manage_cancelled: "Visita cancelada.",
   handoff: "Te paso con un asesor.",
+  handoff_booking_change_ack: "Entiendo que necesitas cambiar la fecha y lamento el inconveniente. ",
   capture_evidence: "¿Puedes enviar evidencia?",
   capture_consent: "¿Autorizas el tratamiento de tus datos?",
 };
@@ -226,7 +227,7 @@ describe("Settings", () => {
         ["Pedir confirmación para cancelar", "circle-help"], ["No se puede cancelar", "ban"],
         ["Visita cancelada", "calendar-x"],
       ] },
-      { title: "Derivar a una persona", entries: [["Derivación a un asesor", "headset"]] },
+      { title: "Derivar a una persona", entries: [["Derivación a un asesor", "headset"], ["Reconocer solicitud de cambio de fecha", "file-text"]] },
       { title: "Captura", entries: [["Pedir evidencia", "camera"], ["Pedir consentimiento", "shield-check"]] },
     ];
     for (const { title, entries } of groups) {
@@ -962,9 +963,9 @@ describe("Settings", () => {
     })));
   });
 
-  // Drives 25 editors on one page: scoped queries keep it fast, and the explicit timeout covers the
-  // slowdown of the full suite running many files in parallel.
-  it("makes Conducta the single editable owner of all 25 reply texts", async () => {
+  // Drives every reply editor on one page: scoped queries keep it fast, and the explicit timeout
+  // covers the slowdown of the full suite running many files in parallel.
+  it("makes Conducta the single editable owner of every reply text", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
     renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
@@ -976,14 +977,16 @@ describe("Settings", () => {
       "Oferta de horarios", "Sin más horarios para ese día", "No se entendió el horario pedido", "Visita agendada", "No tiene visitas",
       "Confirmar la cancelación", "Elegir una visita", "Ofrecer nuevos horarios", "La visita ya pasó", "No se entendió la visita",
       "No se entendió el horario", "La visita sigue igual", "Sin horarios para reagendar", "Visita reagendada", "Pedir confirmación para cancelar",
-      "No se puede cancelar", "Visita cancelada", "Derivación a un asesor", "Pedir evidencia", "Pedir consentimiento",
+      "No se puede cancelar", "Visita cancelada", "Derivación a un asesor",
+      "Reconocer solicitud de cambio de fecha", "Pedir evidencia", "Pedir consentimiento",
     ];
+    expect(labels).toHaveLength(Object.keys(replyTextValues).length);
     const selectEntry = (label: string) => {
       if (labels.indexOf(label) >= 5 && labels.indexOf(label) <= 8) {
         if (within(situationList).getByRole("button", { name: /Agendar/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Agendar/ }));
       } else if (labels.indexOf(label) >= 9 && labels.indexOf(label) <= 21) {
         if (within(situationList).getByRole("button", { name: /Gestionar una visita/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Gestionar una visita/ }));
-      } else if (label === "Derivación a un asesor") {
+      } else if (["Derivación a un asesor", "Reconocer solicitud de cambio de fecha"].includes(label)) {
         if (within(situationList).getByRole("button", { name: /Derivar a una persona/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Derivar a una persona/ }));
       }
       else if (["Pedir evidencia", "Pedir consentimiento"].includes(label)) {
@@ -1004,7 +1007,7 @@ describe("Settings", () => {
     expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({ method: "POST", body: JSON.stringify({ texts: changed }) }));
   }, 60_000);
 
-  it("blocks the sticky save if any of the 25 reply texts is blank", async () => {
+  it("blocks the sticky save if any reply text is blank", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);

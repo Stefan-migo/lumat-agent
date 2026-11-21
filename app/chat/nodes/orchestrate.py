@@ -121,9 +121,9 @@ def _dispatch(
         # `solicitar_visita` already lands in capture on its own.
         return {"next_step": "capture"}
     if intent == "smalltalk":
-        # Courtesy is understood even during capture; never research, capture,
-        # or escalate it as a side effect of a pending field.
-        return {"next_step": "respond"}
+        # Mid-capture courtesy is answered by capture, which re-asks the pending
+        # batch; without a pending field the configured social reply stays linear.
+        return {"next_step": "capture" if mid_capture else "respond"}
     if mid_capture:
         if intent in {"cancelar_visita", "reagendar_visita"} and change_request:
             # S12 (chatbot-realismo-conversacional): asking to reschedule is a
@@ -219,8 +219,8 @@ def asks_for_change(text: str) -> bool:
     return (
         re.search(
             r"\b(?:reagend\w*|cancel\w*|anul\w*"
-            r"|cambiar\s+(?:la|el|mi|de)\s+(?:visita|hora|dia)"
-            r"|mover\s+(?:la|el|mi|de)\s+(?:visita|hora|dia))\b",
+            r"|cambiar\s+(?:la|el|mi|de)\s+(?:visita|hora|dia|fecha|mantencion|mantenimiento)"
+            r"|mover\s+(?:la|el|mi|de)\s+(?:visita|hora|dia|fecha|mantencion|mantenimiento))\b",
             normalized,
         )
         is not None

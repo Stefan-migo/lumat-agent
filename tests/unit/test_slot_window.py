@@ -23,6 +23,39 @@ def test_weekday_and_morning_franja_from_the_harness_conversation():
     assert window.franja == (time(9, 0), time(13, 0))
 
 
+def test_s6_bare_tarde_after_weekday_is_afternoon():
+    window = _resolve("viernes tarde")
+
+    assert window is not None
+    assert window.day == date(2026, 10, 30)
+    assert window.franja == (time(13, 0), time(18, 0))
+
+
+def test_s6_madrugada_after_weekday_is_a_franja():
+    window = _resolve("lunes de madrugada")
+
+    assert window is not None
+    assert window.day == date(2026, 11, 2)
+    assert window.franja == (time(0, 0), time(9, 0))
+    assert window_label(window) == "la madrugada del lunes 02/11"
+
+
+def test_s6_article_binds_manana_to_the_weekday():
+    window = _resolve("sábado en la mañana")
+
+    assert window is not None
+    assert window.day == date(2026, 10, 31)
+    assert window.franja == (time(9, 0), time(13, 0))
+
+
+def test_s6_bare_manana_after_weekday_does_not_become_a_franja():
+    window = _resolve("viernes mañana")
+
+    assert window is not None
+    assert window.day == date(2026, 10, 30)
+    assert window.franja is None
+
+
 def test_weekday_without_franja_from_the_harness_conversation():
     window = _resolve("un dia sabado")
 
