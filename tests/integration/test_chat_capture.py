@@ -1525,3 +1525,39 @@ def test_a_prose_availability_is_not_rendered_into_the_acknowledgement(
     assert "Anoté" not in answer
     assert prose not in answer
     assert "qué pasa con el equipo" in answer.lower()
+
+
+def test_a_question_that_proposes_a_time_keeps_the_preference():
+    """S4, revised: the value survives, only the acknowledgement is gated.
+
+    Measured on the closing corpus: blocking the merge for any question cost
+    `real-dato-mas-pregunta` 3.67 → 0.00, where "y mañana?" and "es factible que
+    pases tipo 14 horas?" are proposals in question form that S3 of
+    `agenda-respeta-horario` requires naming back. The promise that motivated S4
+    is fixed by the S9 wording, not by discarding the value.
+
+    This is the pure seam the sibling tests in this file use: the rule is a
+    predicate over the turn text, so it is pinned without a classifier stub that
+    would route the turn somewhere else and prove nothing.
+    """
+    from app.chat.nodes.capture import _asks_about_availability, _merge_extracted
+    from app.chat.state import ConversationState
+
+    for text in (
+        "Yo creo qje no alcanza, y mañana?",
+        "es factible que pases tipo 14 horas?",
+    ):
+        assert _asks_about_availability(text) is False
+
+    assert _asks_about_availability("Este sábado 27 ud tiene disponibilidad?") is False
+
+    # An abstract availability question that anchors no day or hour is the only
+    # shape that gets no acknowledgement.
+    assert _asks_about_availability("tienen disponibilidad?") is True
+
+    captured: dict = {}
+    state = ConversationState(customer_id=1, conversation_id=1, phone="+56912345678")
+    state.window = [{"role": "customer", "text": "Yo creo qje no alcanza, y mañana?"}]
+    _merge_extracted(captured, {"availability": "mañana"}, [], state, [])
+
+    assert captured.get("availability") == "mañana"

@@ -492,6 +492,25 @@ def _prose_availability(value: str) -> bool:
     return len(stripped.split()) > 18
 
 
+def _asks_about_availability(text: str) -> bool:
+    """True when the turn only asks *whether* there is availability.
+
+    S4 of `captura-pregunta` was written because `real-solo-sabados` read
+    "Este sábado 27 ud tiene disponibilidad?" as a promised date. The promise was
+    the defect, and S9 fixed the wording ("como preferencia … todavía no queda
+    agendada"), so the value itself is kept: blocking the merge cost 3.67 → 0.00
+    on `real-dato-mas-pregunta`, where the customer proposes a time *in question
+    form* ("y mañana?", "es factible que pases tipo 14 horas?") and S3 of
+    `agenda-respeta-horario` requires naming it back.
+
+    What remains is the acknowledgement: an abstract availability question with
+    no resolvable day or hour has nothing to acknowledge.
+    """
+    if not _looks_like_question(text):
+        return False
+    return resolve_window(text, today=date.today()) is None
+
+
 def _merge_extracted(
     captured: dict, extracted: dict | None, pending: list[str], state: ConversationState,
     communes: list[str],
@@ -515,8 +534,6 @@ def _merge_extracted(
             continue
         value = value.strip()
         if not value or captured.get(field):
-            continue
-        if field == "availability" and _looks_like_question(current_text):
             continue
         if field == "availability" and _prose_availability(value):
             continue
@@ -1035,7 +1052,7 @@ def _render_capture_question(
     if (
         isinstance(delivered, str)
         and delivered.strip()
-        and not _looks_like_question(current_text)
+        and not _asks_about_availability(current_text)
         and not _prose_availability(delivered)
     ):
         candidate = render_reply(

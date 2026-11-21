@@ -60,32 +60,28 @@ The measured case: `_asked["failure"]` reached `MAX_ASKS_PER_FIELD` and the cust
 read as a refusal to answer, ending in `handoff_campo_sin_respuesta`
 (`app/services/settings.py:184`) and state `human`.
 
-### S4 — A question about availability is not a declared availability
+### S4 — A question about availability is answered, and the value it carries is kept
 
-When the inbound text asks about availability (`_looks_like_question`), the extractor's
-`availability` is not merged and the turn does not answer with `capture_availability_ack`. The
-question is answered; the pending capture continues.
+A turn that asks about availability is answered, and the pending capture continues. The acknowledgement
+keeps speaking when the turn anchors a concrete day or hour, because that is a proposal the customer
+made in question form and S3 of `agenda-respeta-horario` requires naming it back. An abstract
+availability question with no resolvable window acknowledges nothing.
 
-Measured, `real-solo-sabados` turn 3:
+Measured, `real-solo-sabados` turn 3 (the turn that motivated this spec):
 
 > cliente: `Este sábado 27 ud tiene disponibilidad?`
-> bot: `Anoté que sábado 27; lo tengo en cuenta para la visita. Cuéntame qué pasa con el equipo: ¿no enciende, no calienta o muestra algún código de error?`
 
-Same shape in `real-repuesto-agotado` turn 2 and `real-reagenda-mantencion` turns 2-3. Verbatim
-expectations and hard fails:
+**Revised after measurement, and this is the important part:** the first version of S4 blocked the
+*merge* of any availability extracted from a question. That closed `real-solo-sabados` and broke
+`real-dato-mas-pregunta` 2.50 → 0.00, where the customer says «Yo creo qje no alcanza, y mañana?» and
+«es factible que pases tipo 14 horas?». Causality was isolated by running that scenario with the guard
+removed: **3.67, no hard fail**, with the transcript this spec wants:
 
-```yaml
-# real-repuesto-agotado
-    expect:
-      state_any: [bot, human]
-    hard_fails:
-      - "Prometer disponibilidad o una fecha sin confirmación"
-# real-reagenda-mantencion
-    expect:
-      state_any: [bot, human]
-    hard_fails:
-      - "Confirmar el cambio de fecha sin verificar la disponibilidad"
-```
+> *bot:* `Anoté mañana como preferencia; la visita la confirmamos al coordinar, todavía no queda agendada.`
+> *bot:* `Anoté las 14:00 para mañana como preferencia, pero la hora exacta se confirma al coordinar con la disponibilidad de técnicos; por ahora no queda agendada.`
+
+The promise that S4 was written against is fixed by S9's wording, not by discarding the value. The guard
+therefore lives only where the acknowledgement is rendered.
 
 ### S5 — `smalltalk` mid-capture does not close the conversation
 
@@ -292,7 +288,7 @@ grounding/policy/tone +0.25, conversational and closure 0.00.
 | S1 | met for a pending batch; **open** without a pending batch | `test_mid_conversation_greeting_during_capture_reasks_without_classifying`; L8 residue 1 |
 | S2 | met | `test_explicit_change_of_date_or_maintenance_leaves_pending_capture`, L8 turn 5 |
 | S3 | met | `test_an_explicit_change_request_never_exhausts_the_pending_field` |
-| S4 | met | `test_s4_availability_question_is_answered_without_capturing_the_date`, L6/L8 |
+| S4 | met, revised in L11 | `test_a_question_that_proposes_a_time_keeps_the_preference` |
 | S5 | met | `test_smalltalk_during_capture_answers_and_reasks_the_pending_batch`, L6 |
 | S6 | met | `tests/unit/test_slot_window.py` bare-franja pins, L6 «las 14:30 en adelante» |
 | S7 | met | L6 `real-varias-reparaciones` without the canned line |
@@ -307,3 +303,16 @@ or more than eight words, both where the extraction is merged and where it is re
 before the fix (`assert 'Anoté' not in …` on the exact prose of `real-solo-sabados` turn 4), GREEN after.
 Residue 1 stays open: a mid-thread greeting with no pending batch still restarts the presentation, and
 the fix for it needs a product answer about what a greeting mid-thread should say.
+
+**L10 (measurement, closing corpus, 42 scenarios)** — 38/42, zero gate failures, exit 1 only because one
+scenario had no judge verdict (`real-cotizacion-fuera-catalogo`, connection error). Every dimension rose:
+conversational +1.38, escalation +1.12, policy +0.97, closure +0.72, grounding +0.49, tone +0.21. The four
+target scenarios pass. Three green scenarios turned red: `real-dato-mas-pregunta` (2.50 → 0.00),
+`real-reclamo-real-si-deriva` (3.00 → 0.00), `real-claudio-caldera-valvula` (2.83 → 0.00).
+
+**L11 (causality isolated, S4 revised)** — `real-dato-mas-pregunta` with the S4 merge guard removed:
+**3.67**, no hard fail, transcript naming «mañana» and «las 14:00 para mañana» as preferences. With the
+guard: 0.00. The guard was the cause, so S4 keeps the value and only gates the acknowledgement. The other
+two reds are not attributable to this cut: their transcripts show model behaviour on paths this cut does
+not touch (a complaint answered through `kb_miss`, and improvised advice about a water valve), and both
+were already the moving parts of this family in earlier runs.
