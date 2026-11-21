@@ -36,6 +36,19 @@ class Settings(BaseSettings):
 
     # Data layer (used from T1.x onwards; required now so boot is fail-fast)
     database_url: str  # SQLAlchemy URL for PostgreSQL + pgvector
+    # Connection pool (design: 2026-11-21 pool-exhaustion incident). The defaults
+    # replace SQLAlchemy's 5 + 10 with a 30 s checkout wait, which fourteen queued
+    # assistant turns were enough to exhaust: every DB-touching panel endpoint
+    # answered 500 and the operator could not widen it without editing code. The
+    # ceiling stays far inside the database's max_connections = 100.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    # A request that cannot get a connection should fail while the operator is
+    # watching, not after the driver's half-minute.
+    db_pool_timeout: float = 10.0
+    # Recycling lets a long-lived connection eventually inherit a database-level
+    # default that changed underneath it, such as the 180 s idle-transaction guard.
+    db_pool_recycle: int = 1800
 
     # External providers (design D3)
     # Chat is multi-provider (D3 change): DeepSeek (default) or OpenRouter,

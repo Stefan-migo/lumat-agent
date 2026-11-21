@@ -305,3 +305,17 @@ def test_the_database_aborts_a_transaction_idle_beyond_the_safety_window():
         ).fetchone()
 
     assert float(seconds) == 180.0
+
+
+def test_the_engine_pool_is_built_from_the_settings():
+    """The configured limits only matter if the engine actually receives them."""
+    from app.config import get_settings
+    from app.db import engine
+
+    settings = get_settings()
+
+    assert engine.pool.size() == settings.db_pool_size
+    assert engine.pool.timeout() == settings.db_pool_timeout
+    # SQLAlchemy's public pool surface reports the current overflow, not its
+    # ceiling, so the ceiling is read from the attribute it is stored in.
+    assert engine.pool._max_overflow == settings.db_max_overflow

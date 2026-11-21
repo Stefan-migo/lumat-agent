@@ -800,6 +800,15 @@ WHERE datname = 'lumat' AND usename = 'app' AND state IN ('idle', 'idle in trans
 `pool_pre_ping` reconnects them on the next checkout. A rollback is
 `ALTER DATABASE lumat RESET idle_in_transaction_session_timeout;`.
 
+The connection pool is sized by the environment, not by code
+(`DB_POOL_SIZE=10`, `DB_MAX_OVERFLOW=20`, `DB_POOL_TIMEOUT=10`,
+`DB_POOL_RECYCLE=1800`; see `infra/.env.example`). The 2026-11-21 incident took
+the API down with SQLAlchemy's 5 + 10 and a 30 s checkout wait, and widening it
+meant editing code — which is the wrong dependency at three in the morning. Keep
+`pool_size + max_overflow` well inside the database's `max_connections` (100);
+`db_pool_recycle` is what eventually hands a long-lived connection the current
+database defaults above.
+
 ---
 
 ## 3. Runbook incident + change record

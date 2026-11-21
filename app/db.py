@@ -14,7 +14,35 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
 
-engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+def _pool_options(database_url: str, settings) -> dict:
+    """QueuePool sizing, for the dialects that actually pool that way.
+
+    The sizing is environment-driven because the 2026-11-21 exhaustion was only
+    recoverable by editing code: SQLAlchemy's 5 + 10 with a 30 s checkout wait
+    was fully consumed by a handful of queued turns.
+
+    A non-PostgreSQL URL (the KB drift CLI imports this module with sqlite on
+    purpose, because it must run without a database) is served by a pool class
+    that rejects these arguments outright, so they are only sent where they
+    apply.
+    """
+    if not database_url.startswith("postgresql"):
+        return {"pool_recycle": settings.db_pool_recycle}
+    return {
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_max_overflow,
+        "pool_timeout": settings.db_pool_timeout,
+        "pool_recycle": settings.db_pool_recycle,
+    }
+
+
+_settings = get_settings()
+
+engine = create_engine(
+    _settings.database_url,
+    pool_pre_ping=True,
+    **_pool_options(_settings.database_url, _settings),
+)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
