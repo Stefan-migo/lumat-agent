@@ -14,7 +14,11 @@ rebuilt database silently loses.
 S2 — An assistant turn never holds an open transaction while it waits on external I/O (the provider
 call or a tool's own work). At every such boundary the work already done is committed and the pooled
 connection returns to the pool, so a slow turn occupies a connection only while it is actually
-talking to Postgres.
+talking to Postgres. The exception is the turn that resumes an approved write: it consumes its
+approval and records its claim in one unit, so a commit at a boundary would let a crash look like a
+consumed approval with the write half-applied. That turn keeps its single transaction and is bounded
+by S1's guard instead; `test_resume_path_never_commits_or_publishes_mid_execution` is the contract it
+must keep.
 
 S3 — The connection pool is configurable per environment (`pool_size`, `max_overflow`,
 `pool_timeout`, `pool_recycle`) with defaults that do not let a handful of concurrent turns collapse
@@ -34,10 +38,10 @@ parks, and a cancelled turn still ends `cancelled`.
 
 | ID | Spec | Route | Commit |
 |---|---|---|---|
-| T1 | S1 | migration `070_session_safety.sql` + apply to production + `docs/ops.md` | `1bde1665f` |
-| T2 | S2 | `app/db.py`, `app/chat/assistant/graph.py`, `app/services/agent_chat.py` | (this commit) |
-| T3 | S3 | `app/config.py`, `app/db.py`, `infra/.env.example`, `docs/ops.md` | (this commit) |
-| T4 | S4 | `app/services/agent_chat.py`, `tests/integration/test_assistant_chat.py` | (this commit) |
+| T1 | S1 | migration `070_session_safety.sql` + apply to production + `docs/ops.md` | `1bde1665f` done |
+| T2 | S2 | `app/db.py`, `app/chat/assistant/graph.py`, `app/services/agent_chat.py` | `82ecd5ca7` done |
+| T3 | S3 | `app/config.py`, `app/db.py`, `infra/.env.example`, `docs/ops.md` | `37f4de3d5` done |
+| T4 | S4 | `app/services/agent_chat.py`, `tests/integration/test_assistant_chat.py` | `5fedec8f6` done |
 
 ## Log
 
@@ -77,3 +81,44 @@ wedged transaction.
 
 L6 — Owner decisions: worktree ODD `../lumat-agent-odd-pool-safety` on `odd/pool-safety` (explicit
 per-feature consent), and `idle_in_transaction_session_timeout = 180s` for production.
+
+L7 — Delivery and deliberate trade-offs. The slice is 524 authored lines across four commits, each
+one coherent work unit with its own risk line; `scripts/test.sh shape origin/main` reports
+`app/config.py` and `db/migrations/070_session_safety.sql`, so the shape rule makes `full` mandatory
+at this boundary. Three consequences worth knowing before reading the diff:
+
+1. A failing turn now keeps the work its completed steps committed (artifacts, tool writes); before,
+   the whole turn was one transaction and rolled back. That is the point of S2 — the work is durable
+   and the connection is free — and it means "a failed turn writes nothing" is no longer true for
+   step-level writes. `test_failed_run_does_not_persist_partial_response` still holds because an
+   agent message is only created on success.
+2. The failure recovery records the terminal state through `_fail_orphaned_run`, which does not write
+   the exception's `events` entry. The exception itself is in the API log via `logger.exception`, and
+   the single fail-closed primitive is worth more than the duplicated merge.
+3. `STATEMENT_TIMEOUT` and `LOCK_TIMEOUT` were deliberately left untouched at the database level: the
+   analytics tools legitimately run long reads, and a statement timeout would kill them. The idle
+   guard plus a bounded lock wait in the recovery path cover the failure mode that actually happened.
+
+L8 — S2 scoped by measurement, not by preference. The first `full` run after the four tasks failed
+three falsification probes in `tests/integration/test_assistant_write_chain_recovery_verifier_probes.py`
+and the migration inventory in `tests/integration/test_migrations.py`. The probes encode a guarantee
+this request never mentioned: "a crash inside the approved write transaction leaves the approval
+pending and execution_status pending -- never running, never consumed", and "`resume_thread` must not
+commit or call `publish_live` between the claim and the final persist". Releasing at every node
+boundary broke exactly that: a commit between the claim and the result would make a crashed write
+look like a consumed approval with the write half-applied — a double-execution risk, not a cosmetic
+regression. Resolution: `build_assistant_graph(release_transactions=...)`, false for the resume path;
+the approval turn keeps today's behavior and S1's guard covers it. The migration inventory simply
+gained `070_session_safety`.
+
+Two process notes worth keeping:
+
+- The first `full` invocation reported exit 0 while four tests failed, because it was piped into
+  `tail`: the pipeline's status is `tail`'s. Redirect to a file and echo `$?` instead.
+- `full` at this boundary was not ceremony. `quick` was green twice over code that broke the
+  approval claim, because that contract lives only in the probes the fast tiers do not run.
+
+Delivery: 4 work-unit commits plus this amendment, ~560 authored lines on `odd/pool-safety`. The two
+shape surfaces (`app/config.py`, `db/migrations/070_session_safety.sql`) are what made `full`
+mandatory. If the owner prefers smaller review units, the natural split is T1 (database guard + docs),
+T2+T4 (turn transaction and failure path), T3 (pool sizing).

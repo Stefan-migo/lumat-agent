@@ -823,6 +823,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("067_message_transcript",),
         ("068_customer_address_validation",),
         ("069_panel_sessions",),
+        ("070_session_safety",),
     ]
 
 
