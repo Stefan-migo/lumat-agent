@@ -523,7 +523,7 @@ def test_cost_mode_flip_stops_loop_before_second_planner(monkeypatch, flipped_mo
         user_id=1,
         content="Find Ana",
         run_id=f"run-cost-{flipped_mode}",
-        session=SimpleNamespace(),
+        session=SimpleNamespace(in_transaction=lambda: False),
         on_token=lambda _token: None,
     )
 
