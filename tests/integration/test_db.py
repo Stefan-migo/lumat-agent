@@ -287,3 +287,21 @@ def test_models_expose_ten_tables():
         "settings",
         "audit_log",
     } <= mapped
+
+
+def test_the_database_aborts_a_transaction_idle_beyond_the_safety_window():
+    """A wedged transaction must not hold locks forever (2026-11-21 incident).
+
+    Production carried `idle_in_transaction_session_timeout = 0`, so an assistant
+    turn that stopped talking to Postgres while its transaction was open blocked
+    every writer for sixteen minutes: the waiters exhausted the SQLAlchemy pool
+    and the whole panel answered 500. The guard therefore has to live in the
+    database default — the value a freshly opened session gets — and not in the
+    application, which is exactly what was wedged.
+    """
+    with psycopg.connect(libpq_database_url(database_url())) as conn:
+        (seconds,) = conn.execute(
+            "SELECT EXTRACT(EPOCH FROM current_setting('idle_in_transaction_session_timeout')::interval)"
+        ).fetchone()
+
+    assert float(seconds) == 180.0
