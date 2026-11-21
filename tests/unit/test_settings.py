@@ -115,6 +115,20 @@ def test_assistant_writable_settings_is_the_curated_allowlist():
         "messages.out_of_hours",
         "hours.timezone",
         "hours.schedule",
+        "scope_rules",
+        "chat.conduct",
+        "capture.questions",
+        "messages.templates",
+        "reply.texts",
+        "persona.texts",
+        "emergency.keywords",
+        "emergency.protocol",
+        "coverage.communes",
+        "booking.service_durations",
+        "booking.lead_minutes",
+        "tarifa.precios",
+        "cost.conversation_limit",
+        "cost.daily_limit",
     })
 
 
@@ -178,18 +192,16 @@ def test_hours_closure_enabled_defaults_to_false_and_reads_stored_boolean():
 
 def test_validate_assistant_setting_rejects_keys_outside_the_allowlist():
     with pytest.raises(ValueError):
-        validate_assistant_setting("cost.daily_limit", 0)
+        validate_assistant_setting("notify.smtp_host", "smtp.example")
     with pytest.raises(ValueError):
-        validate_assistant_setting("emergency.keywords", ["gas"])
+        validate_assistant_setting("smtp_password", "leak")
 
 
 @pytest.mark.parametrize(
     "key",
     [
-        "cost.conversation_limit",
         "meta_pricing",
         "notify.owner_email",
-        "messages.templates",
         "kpi.window_days",
         "tone.style ",
         "TONE.STYLE",
