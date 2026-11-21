@@ -475,11 +475,21 @@ def _prose_availability(value: str) -> bool:
     "Anoté {disponibilidad} como preferencia…". Measured in `real-solo-sabados`
     turn 4, where the extractor returned "no está en Santiago; llega el viernes
     en la tarde al departamento" and the customer read that whole clause inside
-    the template. A window is a day and at most a franja; anything longer, or
-    anything with a clause break, is the extractor restating the message.
+    the template.
+
+    The test is clause structure, not length. A legitimate constraint is a
+    sentence fragment and can be long: `real-diego-precio-y-duracion` stores
+    "sale a las 2 y vuelve a las 4pm (disponible después de las 16:00)", eleven
+    words that must be named back (S3 of `agenda-respeta-horario`). A clause break
+    (a semicolon, or two sentence terminators) is the extractor restating the
+    message, and the length cap only backstops a comma run-on.
     """
     stripped = (value or "").strip()
-    return ";" in stripped or len(stripped.split()) > 8
+    if ";" in stripped:
+        return True
+    if len(re.findall(r"[.!?](?:\s|$)", stripped)) >= 2:
+        return True
+    return len(stripped.split()) > 18
 
 
 def _merge_extracted(
@@ -681,6 +691,12 @@ def capture(state: ConversationState) -> dict:
     if "failure" in captured:
         captured.pop("_preventive_request", None)
     pending = captured.get("_pending")
+    # S8: a turn that captured something *else* is progress, so it must not charge
+    # the pending field's budget. The pending field itself is excluded: an address
+    # candidate that the validator rejects was still an attempt, and the pin offer
+    # only arrives on the second failed one (`tests/integration/test_capture_address_validation.py`).
+    pending_set = {pending} if isinstance(pending, str) else set(pending or ())
+    charge_attempt = not (merged_fields - pending_set)
     if pending == "confirm_contact":
         return _answer_contact_confirmation(captured, state)
     refused = refused_field(_current_text(state))
@@ -706,7 +722,7 @@ def capture(state: ConversationState) -> dict:
     # Validate classifier-extracted candidates now. Terse pending-field answers
     # are merged below and pass through the same gate there.
     address_result = _validate_address_candidate(
-        captured, state, advance=not bool(merged_fields)
+        captured, state, advance=charge_attempt
     )
     if address_result is not None:
         return address_result
@@ -815,7 +831,7 @@ def capture(state: ConversationState) -> dict:
                 )
             if pending[0] not in captured:
                 return _reask_pending(
-                    captured, pending, state, advance=not bool(merged_fields)
+                    captured, pending, state, advance=charge_attempt
                 )
             if pending[0] == "address":
                 address_result = _validate_address_candidate(
@@ -825,7 +841,7 @@ def capture(state: ConversationState) -> dict:
                     return address_result
         else:
             return _reask_pending(
-                captured, pending, state, advance=not bool(merged_fields)
+                captured, pending, state, advance=charge_attempt
             )
 
     captured.pop("_pending", None)
