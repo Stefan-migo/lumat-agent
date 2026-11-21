@@ -98,7 +98,7 @@ def test_greeting_variant_answers_the_greeting_without_classifying(text, mock_op
     assert _unknown_events() == []
 
 
-def test_mid_conversation_greeting_answers_and_does_not_count(mock_openai_chat):
+def test_mid_conversation_greeting_during_capture_reasks_without_classifying(mock_openai_chat):
     conversation_id = _start_conversation()
     _turn(conversation_id, "tengo un calefont que no calienta", "wamid.s1.mid.1")
     calls_before = len(mock_openai_chat)
@@ -106,9 +106,36 @@ def test_mid_conversation_greeting_answers_and_does_not_count(mock_openai_chat):
 
     replies = _turn(conversation_id, "Hola", "wamid.s1.mid.2")
 
-    assert replies == [GREETING]
+    # S1 of capture-pregunta: a greeting during pending capture re-asks the batch,
+    # rather than answering with the presentation.
+    assert any("qué pasa con el equipo" in reply.lower() for reply in replies)
+    assert all("Soy Max, el asistente virtual de Lumat" not in reply for reply in replies)
     assert len(mock_openai_chat) == calls_before
     assert len(_unknown_events()) == unknowns_before
+
+
+def test_greetings_beyond_reask_limit_do_not_derive_pending_capture(mock_openai_chat):
+    from app.chat.nodes.capture import MAX_ASKS_PER_FIELD
+
+    conversation_id = _start_conversation()
+    _turn(conversation_id, "quiero una visita", "wamid.s1.repeated.start")
+
+    for index in range(MAX_ASKS_PER_FIELD + 3):
+        replies = _turn(conversation_id, "Buen dia", f"wamid.s1.repeated.{index}")
+        assert any("?" in reply for reply in replies), replies
+        assert all("asesor" not in reply.lower() for reply in replies)
+
+
+def test_greeting_during_pending_capture_reasks_the_pending_batch(mock_openai_chat):
+    conversation_id = _start_conversation()
+    _turn(conversation_id, "quiero una visita", "wamid.s1.pending.start")
+
+    replies = _turn(conversation_id, "Buen dia", "wamid.s1.pending.greeting")
+
+    assert len(replies) == 1
+    assert "soy max" not in replies[0].lower()
+    assert any(token in replies[0].lower() for token in ("qué equipo es", "qué pasa con el equipo"))
+    assert all("¿Con quién tengo el gusto?" not in reply for reply in replies)
 
 
 def test_greeting_with_content_still_reaches_classification(mock_openai_chat):
@@ -183,13 +210,22 @@ def test_first_turn_content_without_name_uses_short_name_question(mock_openai_ch
     assert mock_openai_chat
 
 
-def test_later_bare_greeting_uses_named_variant(mock_openai_chat):
+def test_later_bare_greeting_without_capture_uses_named_variant(mock_openai_chat):
     from app.services.settings import MESSAGE_DEFAULTS
 
+    conversation_id = _start_conversation("Ana")
+    _turn(conversation_id, "hola", "wamid.s2.later.first")
+
+    replies = _turn(conversation_id, "Hola", "wamid.s2.later.greeting")
+
+    assert replies == [MESSAGE_DEFAULTS["greeting_name"].replace("{{nombre}}", "Ana")]
+
+
+def test_later_bare_greeting_during_capture_reasks_pending_field(mock_openai_chat):
     conversation_id = _start_conversation("Ana")
     _turn(conversation_id, "tengo un calefont que no calienta", "wamid.s2.later.first")
 
     replies = _turn(conversation_id, "Hola", "wamid.s2.later.greeting")
 
-    assert replies == [MESSAGE_DEFAULTS["greeting_name"].replace("{{nombre}}", "Ana")]
-    assert len(replies) == 1
+    assert any("qué pasa con el equipo" in reply.lower() for reply in replies)
+    assert all("Soy Max, el asistente virtual de Lumat" not in reply for reply in replies)

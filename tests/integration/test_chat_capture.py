@@ -991,6 +991,120 @@ def test_s15_the_coverage_rule_can_be_turned_off(mock_openai_chat):
 # ---------------------------------------------------------------------------
 
 
+def test_s9_availability_acknowledges_a_preference_not_a_booking(
+    mock_openai_chat, monkeypatch
+):
+    from app.chat.nodes import classify_intent
+
+    def classify(text, **_kwargs):
+        fields = {"availability": "lunes"} if "lunes" in text.lower() else {}
+        return {
+            "intent": "solicitar_visita",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": fields,
+            "template_id": None,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s9.availability.start")
+
+    replies = _turn(
+        conv_id,
+        "Entonces quedamos atentos hasta el lunes. Apenas llegue me avisas por favor y coordinamos para instalarla.",
+        "wamid.s9.availability.ack",
+    )
+    reply = " ".join(replies)
+
+    assert "Anoté lunes como preferencia; la visita la confirmamos al coordinar, todavía no queda agendada." in reply
+    assert "lo tengo en cuenta para la visita" not in reply
+
+
+def test_s4_availability_question_is_answered_without_capturing_the_date(
+    mock_openai_chat, monkeypatch
+):
+    from app.chat.nodes import classify_intent
+
+    with session_scope() as session:
+        settings_service.set_setting(
+            session,
+            "hours.schedule",
+            [{"days": [1, 2, 3, 4, 5, 6], "open": "09:00", "close": "18:00"}],
+            actor="test",
+        )
+        session.commit()
+
+    def classify(text, **_kwargs):
+        is_question = "disponibilidad" in text.lower()
+        return {
+            "intent": "consulta" if is_question else "solicitar_visita",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {"availability": "sábado 27"} if is_question else {},
+            "template_id": None,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s4.question.start")
+
+    replies = _turn(
+        conv_id,
+        "Este sábado 27 ud tiene disponibilidad?",
+        "wamid.s4.availability.question",
+    )
+    answer = " ".join(replies)
+
+    assert "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00." in answer
+    assert "Anoté que sábado 27" not in answer
+    assert "Cuéntame qué pasa con el equipo" in answer
+    assert MESSAGE_DEFAULTS["kb_miss_offer"] not in answer
+
+
+def test_s8_new_capture_data_does_not_charge_the_pending_field_attempt(
+    mock_openai_chat, monkeypatch
+):
+    from app.chat.nodes import classify_intent
+
+    def classify(text, **_kwargs):
+        fields = {"availability": "Martes pm"} if text == "Martes pm" else {}
+        return {
+            "intent": "solicitar_visita" if text == "quiero una visita" else "unknown",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": fields,
+            "template_id": None,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.s8.capture.start")
+
+    _turn(conv_id, "Martes pm", "wamid.s8.capture.availability")
+    first_nonanswer = _turn(
+        conv_id,
+        "No puedo responderte ahora; todavía estoy revisando la información y te explico con más detalle cuando tenga una respuesta.",
+        "wamid.s8.capture.nonanswer1",
+    )
+
+    assert any("qué pasa con el equipo" in reply.lower() for reply in first_nonanswer), first_nonanswer
+    assert "handoff:campo_sin_respuesta" not in _turn_causes(conv_id)
+
+    _turn(
+        conv_id,
+        "No puedo responderte ahora; todavía estoy revisando la información y te explico con más detalle cuando tenga una respuesta.",
+        "wamid.s8.capture.nonanswer2",
+    )
+    assert "handoff:campo_sin_respuesta" in _turn_causes(conv_id)
+
+
 def test_s16_a_question_with_a_capture_intent_is_answered_not_stored(
     mock_openai_chat, fake_embedder
 ):
@@ -1284,7 +1398,7 @@ def test_s5_the_hold_speaks_when_s3s_sentence_would_repeat():
         "_pending": ["failure"],
         "_asked": {"failure": 1},
         # S3 already spoke on an earlier turn, with this exact sentence.
-        "_availability_acked": "Anoté que 9 am; lo tengo en cuenta para la visita.",
+        "_availability_acked": "Anoté 9 am como preferencia; la visita la confirmamos al coordinar, todavía no queda agendada.",
     }
     state = ConversationState(
         customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
@@ -1321,7 +1435,7 @@ def test_s5_the_hold_names_the_window_the_customer_just_proposed():
         "availability": "mañana",
         "_pending": ["failure"],
         "_asked": {"failure": 1},
-        "_availability_acked": "Anoté que mañana; lo tengo en cuenta para la visita.",
+        "_availability_acked": "Anoté mañana como preferencia; la visita la confirmamos al coordinar, todavía no queda agendada.",
     }
     state = ConversationState(
         customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
@@ -1357,7 +1471,7 @@ def test_s5_the_hold_does_not_turn_an_exclusion_into_a_preference():
         "availability": "9 am",
         "_pending": ["failure"],
         "_asked": {"failure": 1},
-        "_availability_acked": "Anoté que 9 am; lo tengo en cuenta para la visita.",
+        "_availability_acked": "Anoté 9 am como preferencia; la visita la confirmamos al coordinar, todavía no queda agendada.",
     }
     state = ConversationState(
         customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
@@ -1370,3 +1484,80 @@ def test_s5_the_hold_does_not_turn_an_exclusion_into_a_preference():
     replies = " ".join(result["replies"]).lower()
     assert "la tarde" not in replies
     assert "queda anotada" in replies
+
+
+def test_a_prose_availability_is_not_rendered_into_the_acknowledgement(
+    mock_openai_chat, monkeypatch
+):
+    """The ack slot wants a day or a franja, never a rewritten sentence.
+
+    Measured in `real-solo-sabados` turn 4: the extractor returned
+    "no está en Santiago; llega el viernes en la tarde al departamento" and the
+    customer read "Anoté no está en Santiago; llega el viernes en la tarde al
+    departamento como preferencia; la visita la confirmamos al coordinar…".
+    """
+    from app.chat.nodes import classify_intent
+
+    prose = "no está en Santiago; llega el viernes en la tarde al departamento"
+
+    def classify(text, **_kwargs):
+        return {
+            "intent": "solicitar_visita",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {"availability": prose} if "viernes" in text.lower() else {},
+            "template_id": None,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.prose.start")
+
+    replies = _turn(
+        conv_id,
+        "No me encuentro en stgo llegamos viernes tarde al dpto",
+        "wamid.prose.availability",
+    )
+    answer = " ".join(replies)
+
+    assert "Anoté" not in answer
+    assert prose not in answer
+    assert "qué pasa con el equipo" in answer.lower()
+
+
+def test_a_question_that_proposes_a_time_keeps_the_preference():
+    """S4, revised: the value survives, only the acknowledgement is gated.
+
+    Measured on the closing corpus: blocking the merge for any question cost
+    `real-dato-mas-pregunta` 3.67 → 0.00, where "y mañana?" and "es factible que
+    pases tipo 14 horas?" are proposals in question form that S3 of
+    `agenda-respeta-horario` requires naming back. The promise that motivated S4
+    is fixed by the S9 wording, not by discarding the value.
+
+    This is the pure seam the sibling tests in this file use: the rule is a
+    predicate over the turn text, so it is pinned without a classifier stub that
+    would route the turn somewhere else and prove nothing.
+    """
+    from app.chat.nodes.capture import _asks_about_availability, _merge_extracted
+    from app.chat.state import ConversationState
+
+    for text in (
+        "Yo creo qje no alcanza, y mañana?",
+        "es factible que pases tipo 14 horas?",
+    ):
+        assert _asks_about_availability(text) is False
+
+    assert _asks_about_availability("Este sábado 27 ud tiene disponibilidad?") is False
+
+    # An abstract availability question that anchors no day or hour is the only
+    # shape that gets no acknowledgement.
+    assert _asks_about_availability("tienen disponibilidad?") is True
+
+    captured: dict = {}
+    state = ConversationState(customer_id=1, conversation_id=1, phone="+56912345678")
+    state.window = [{"role": "customer", "text": "Yo creo qje no alcanza, y mañana?"}]
+    _merge_extracted(captured, {"availability": "mañana"}, [], state, [])
+
+    assert captured.get("availability") == "mañana"

@@ -253,7 +253,12 @@ def test_reschedule_never_offers_another_customers_appointment(mock_openai_chat,
         appointment.customer_id = get_or_create_customer(session, "+56922222222").id
         session.commit()
     replies = _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.owner"))
-    assert replies == [REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]]
+    # S11 of captura-pregunta: a derivation caused by an explicit change request
+    # acknowledges it first. "reagendar" is exactly that request.
+    assert replies == [
+        REPLY_TEXT_DEFAULTS["handoff_booking_change_ack"]
+        + REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]
+    ]
     with SessionLocal() as session:
         assert session.get(Appointment, appointment_id).status is AppointmentStatus.BOOKED
         assert session.get(Conversation, conv_id).captured_data.get("_manage_offer") is None
@@ -270,7 +275,12 @@ def test_reschedule_blocks_started_appointment_at_offer_time(mock_openai_chat, m
         appointment.local_start = past.replace(tzinfo=None)
         session.commit()
     replies = _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.past"))
-    assert replies == [REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]]
+    # S11 of captura-pregunta: a derivation caused by an explicit change request
+    # acknowledges it first. "reagendar" is exactly that request.
+    assert replies == [
+        REPLY_TEXT_DEFAULTS["handoff_booking_change_ack"]
+        + REPLY_TEXT_DEFAULTS["handoff_booking_unavailable"]
+    ]
     with SessionLocal() as session:
         appointment = session.get(Appointment, appointment_id)
         assert appointment.status is AppointmentStatus.BOOKED

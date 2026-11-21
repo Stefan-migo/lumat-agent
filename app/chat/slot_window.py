@@ -31,6 +31,7 @@ from datetime import date, datetime, time, timedelta
 
 # The franjas the business actually sells. Weekdays open 09:00-18:00, so a
 # franja is a filter over that window, not a second schedule.
+MADRUGADA = (time(0, 0), time(9, 0))
 MORNING = (time(9, 0), time(13, 0))
 AFTERNOON = (time(13, 0), time(18, 0))
 
@@ -98,6 +99,7 @@ _ANY_DAY = (
 )
 
 _MORNING = re.compile(r"\b(?:a|de|en|por|durante)\s+la\s+manana\b|\bla\s+manana\b|\bmanana\s+(?:temprano|am)\b")
+_MADRUGADA = re.compile(r"\b(?:(?:de|en|por)\s+(?:la\s+)?)?madrugada\b")
 _AFTERNOON = re.compile(
     r"\b(?:a|de|en|por|durante)\s+las?\s+tardes?\b"
     r"|\blas?\s+tardes?\b"
@@ -108,6 +110,7 @@ _AFTERNOON = re.compile(
     r"|\bdespues\s+del\s+(?:medio\s*dia|mediodia)\b"
     r"|\bdespues\s+de\s+las\s+12(?:\s+del\s+(?:medio\s*dia|mediodia))?\b"
 )
+_BARE_AFTERNOON = re.compile(r"\btardes?\b")
 _TOMORROW = re.compile(r"\bmanana(?:\s+mismo)?\b")
 _HOUR = re.compile(
     r"\b(?:(?:despues\s+de\s+las?|cerca\s+de\s+las?|desde\s+las?|a\s+las?)\s*"
@@ -174,6 +177,8 @@ def _weekday_and_day(today: date, weekday: int, day: int) -> date | None:
 
 
 def franja_label(franja: tuple[time, time]) -> str:
+    if franja == MADRUGADA:
+        return "la madrugada"
     return "la mañana" if franja == MORNING else "la tarde"
 
 
@@ -221,9 +226,17 @@ def resolve_window(text: str, *, today: date) -> SlotWindow | None:
         return None
 
     franja: tuple[time, time] | None = None
-    if _AFTERNOON.search(normalized):
+    afternoon_pattern = _AFTERNOON
+    if not afternoon_pattern.search(normalized) and any(
+        re.search(rf"\b{name}\b", normalized) for name in _WEEKDAYS
+    ):
+        afternoon_pattern = _BARE_AFTERNOON
+    if afternoon_pattern.search(normalized):
         franja = AFTERNOON
-        normalized = _AFTERNOON.sub(" ", normalized)
+        normalized = afternoon_pattern.sub(" ", normalized)
+    elif _MADRUGADA.search(normalized):
+        franja = MADRUGADA
+        normalized = _MADRUGADA.sub(" ", normalized)
     elif _MORNING.search(normalized):
         franja = MORNING
         normalized = _MORNING.sub(" ", normalized)

@@ -23,6 +23,14 @@ ADMIN_DB_URL = admin_database_url()
 SMALLTALK_REPLY = "Con gusto. ¿En qué más te puedo ayudar?"
 
 
+def _reset_chat_db() -> None:
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+        )
+
+
 def _conversation() -> int:
     with SessionLocal() as session:
         customer = get_or_create_customer(session, "+56912345678")
@@ -179,11 +187,7 @@ def test_content_with_social_question_reaches_classification(migrated_db, monkey
 
 
 def test_smalltalk_answers_courtesy_and_breaks_the_unknown_streak(migrated_db, monkeypatch):
-    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
-        conn.execute(
-            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
-            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
-        )
+    _reset_chat_db()
     conversation_id = _conversation()
     with SessionLocal() as session:
         session.add(Settings(key="scope_rules", value={"smalltalk": "always_escalate"}))
@@ -219,11 +223,37 @@ def test_smalltalk_answers_courtesy_and_breaks_the_unknown_streak(migrated_db, m
     assert len(_events(conversation_id, "unknown_intent")) == 1
     assert _events(conversation_id, "classified")[-1].cause == "intent:smalltalk"
     from app.chat.nodes.orchestrate import _dispatch
-    assert _dispatch("smalltalk", mid_capture=True)["next_step"] == "respond"
+    # S5 of capture-pregunta moved mid-capture smalltalk into the capture re-ask.
+    assert _dispatch("smalltalk", mid_capture=True)["next_step"] == "capture"
     assert not any(
         event.cause == "handoff:unknown_intent_thrice"
         for event in _events(conversation_id, "escalation")
     )
+
+
+def test_smalltalk_during_capture_answers_and_reasks_the_pending_batch(migrated_db, monkeypatch):
+    _reset_chat_db()
+    conversation_id = _conversation()
+
+    def classify(text, **_kwargs):
+        return {
+            "intent": "smalltalk" if text == "Eso!" else "solicitar_visita",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {},
+            "template_id": None,
+        }
+
+    from app.chat.nodes import classify_intent
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+
+    _turn(conversation_id, "quiero una visita", "wamid.smalltalk.capture.start")
+    replies = _turn(conversation_id, "Eso!", "wamid.smalltalk.capture.social")
+
+    assert all(SMALLTALK_REPLY not in reply for reply in replies)
+    assert any("qué pasa con el equipo" in reply.lower() or "qué equipo es" in reply.lower() for reply in replies)
 
 
 def test_acknowledgements_reach_the_classifier_instead_of_the_farewell(

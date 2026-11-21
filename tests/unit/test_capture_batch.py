@@ -44,3 +44,23 @@ def test_a_field_asked_twice_is_exhausted():
 
 def test_one_exhausted_field_exhausts_the_batch():
     assert _exhausted({"_asked": {"comuna": 1, "availability": 2}}, ["comuna", "availability"]) is True
+
+
+def test_an_explicit_change_request_never_exhausts_the_pending_field():
+    from app.chat.nodes.capture import _should_derive_pending
+
+    captured = {"_asked": {"failure": MAX_ASKS_PER_FIELD}}
+
+    assert _should_derive_pending(
+        captured,
+        ["failure"],
+        "Favor cambiar la fecha de la manutención para el próximo martes",
+    ) is False
+
+
+def test_an_exhausted_field_still_derives_for_an_ordinary_turn():
+    from app.chat.nodes.capture import _should_derive_pending
+
+    assert _should_derive_pending(
+        {"_asked": {"failure": MAX_ASKS_PER_FIELD}}, ["failure"], "no sé"
+    ) is True

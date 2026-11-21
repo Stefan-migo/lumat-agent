@@ -81,6 +81,55 @@ def test_s4_orchestrate_uses_database_for_upcoming_appointment():
     assert orchestrate(question_state) == {"next_step": "manage"}
 
 
+def test_s11_booking_unavailable_acknowledges_only_an_explicit_change_request(
+    monkeypatch,
+):
+    from app.chat.nodes import handoff as handoff_node
+
+    conv_id = None
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912345678")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.commit()
+        conv_id = conversation.id
+        customer_id = customer.id
+
+    monkeypatch.setattr(handoff_node, "generate_summary", lambda *_args: "Resumen")
+    change_text = (
+        "Favor cambiar la fecha de la manutención para el próximo martes por favor, "
+        "Por temas laborales no estaré en casa hoy pm"
+    )
+    change_state = ConversationState(
+        customer_id=customer_id,
+        conversation_id=conv_id,
+        phone="+56912345678",
+        escalate_reason="booking_unavailable",
+        window=[{"text": change_text}],
+    )
+    change_reply = handoff_node.handoff(change_state)["replies"][0]
+    assert change_reply.startswith(
+        "Entiendo que necesitas cambiar la fecha y lamento el inconveniente. "
+    )
+    assert change_reply.endswith(
+        "No encontré un horario que nos sirva en la agenda, así que no te voy a "
+        "dejar esperando: un asesor de Lumat te contacta para coordinar la visita "
+        "directamente."
+    )
+
+    ordinary_state = ConversationState(
+        customer_id=customer_id,
+        conversation_id=conv_id,
+        phone="+56912345678",
+        escalate_reason="booking_unavailable",
+        window=[{"text": "¿Qué horarios hay disponibles para la visita?"}],
+    )
+    ordinary_reply = handoff_node.handoff(ordinary_state)["replies"][0]
+    assert ordinary_reply == "No encontré un horario que nos sirva en la agenda, así que no te voy a dejar esperando: un asesor de Lumat te contacta para coordinar la visita directamente."
+
+
 def test_s4_a_time_preference_inside_a_capture_stays_in_capture():
     """S4 with a pending field: measured twice, capture is the only good answer.
 
