@@ -122,3 +122,20 @@ Delivery: 4 work-unit commits plus this amendment, ~560 authored lines on `odd/p
 shape surfaces (`app/config.py`, `db/migrations/070_session_safety.sql`) are what made `full`
 mandatory. If the owner prefers smaller review units, the natural split is T1 (database guard + docs),
 T2+T4 (turn transaction and failure path), T3 (pool sizing).
+
+L9 — Closure evidence, measured. `bash scripts/test.sh full` redirected to a file (so `$?` is the
+suite's, not `tail`'s): `FULL_EXIT=0`, 4235 passing marks on the progress lines, **zero** `F`/`E`
+marks, zero `FAILED`/`ERROR` lines. `bash scripts/test.sh quick` → `QUICK_EXIT=0`. `shape
+origin/main` names `app/config.py` and `db/migrations/070_session_safety.sql`, which is what made
+`full` mandatory here.
+
+One harness observation, not fixed because it is outside this feature: pytest's terminal summary line
+(`N passed in Xs`) is absent from the full-suite log in both the failing run and the green one — the
+process ends after the warnings summary. So the exit code alone is not sufficient evidence for a
+`full` run: cross-check the progress marks for `F`/`E` as well. And a `full` piped into `tail`
+reports `tail`'s status, which is how the first run read as success while four tests were red.
+
+Production state at closure: the database guard from T1 is live (`idle_in_transaction_session_timeout
+= 3min`, verified on the connections serving requests, 4 app connections open). The deployed instance
+is still `v2026.11.13` / `3796477f`, so T2, T3 and T4 are committed and verified but **not
+deployed** — they need a release, which is the owner's decision.
