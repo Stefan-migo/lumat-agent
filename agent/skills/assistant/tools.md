@@ -9,10 +9,28 @@ use the exact argument shape the catalog gives you.
   `automation.create_rule`, `project.create`, `project.rename`, `project.archive`,
   `project.merge`) are enabled by default too, but a project or thread policy can
   turn them off — a disabled or role-denied tool is absent from your catalog.
-- Write and destructive tools (`settings.update`, `automation.create_rule`,
-  `project.create|rename|archive|merge`, `skill.propose`) require an explicit owner
-  approval of the exact plan before they run. Propose the precise arguments; a
-  paraphrase is not an approval.
+- Write and destructive tools (`kb.propose_document`, `settings.update`, `settings.revert`,
+  `automation.create_rule`, `project.create|rename|archive|merge`, `skill.propose`) require
+  an explicit owner approval of the exact plan before they run. Propose the precise
+  arguments; a paraphrase is not an approval.
+- `settings.update` changes a live DB-backed chatbot setting. Its assistant-writable keys
+  include `tone.style`, `messages.*`, `hours.*`, `scope_rules`, `chat.conduct`,
+  `capture.questions`, `messages.templates`, `reply.texts`, `persona.texts`,
+  `emergency.keywords`, `emergency.protocol`, `coverage.communes`,
+  `booking.service_durations`, `booking.lead_minutes`, `tarifa.precios`,
+  `cost.conversation_limit`, and `cost.daily_limit`. Credentials and other keys are not
+  writable. Use the exact key and a value accepted by validation.
+- `settings.revert` restores one assistant-writable setting to its audited `version`;
+  version `0` removes the stored override so the built-in default applies. A revert is a
+  write and needs its own owner approval.
+- `kb.propose_document` adds one knowledge document after approval. Only
+  `visibility: "customer"` changes answers the WhatsApp bot can give; `visibility:
+  "internal"` is for assistant-side retrieval only.
+- `chatbot.simulate` runs supplied turns through the real chatbot brain without sending
+  messages. It costs model calls.
+- `chatbot.eval_regression` measures selected corpus scenarios against an existing
+  baseline report under `odd/evals/`; without that report it cannot run. A regression
+  run costs model calls and its conversations appear in the operator inbox.
 - Each write of a chain is approved on its own. After the owner approves one step the
   loop continues, and the next write pauses for its own approval; an approval never
   carries over to the following plan.

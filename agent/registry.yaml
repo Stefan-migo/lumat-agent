@@ -80,6 +80,9 @@ assistant:
     - cases.list
     - customers.operational_history
     - kb.retrieve
+    - kb.propose_document
+    - chatbot.simulate
+    - chatbot.eval_regression
     - memory.read
     - memory.search
     - memory.write
@@ -90,6 +93,7 @@ assistant:
     - analytics.chatbot_conversations
     - conversations.transcript
     - settings.update
+    - settings.revert
     - web.search
     - web.fetch
     - automation.create_rule

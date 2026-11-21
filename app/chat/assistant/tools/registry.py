@@ -20,7 +20,7 @@ from app.chat.assistant.budgets import PROJECT_READ_FILE_PAGE_LIMIT
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import assistant_artifacts, automation_installations, cases, customers, kb, project_files, projects, recipes, relations, scheduling, tukulpan as memory
+from app.services import assistant_artifacts, automation_installations, cases, chat_simulation, chat_regression, customers, kb, project_files, projects, recipes, relations, scheduling, tukulpan as memory
 from app.services.settings import ASSISTANT_WRITABLE_SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 MAX_ITEMS = 20
 APPROVED_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
+    "kb.propose_document",
+    "chatbot.simulate",
+    "chatbot.eval_regression",
     "project_file.save",
     "project_file.update",
     "project.create",
@@ -36,6 +39,7 @@ APPROVED_WRITE_ALLOWLIST = frozenset({
     "project.merge",
     "skill.propose",
     "settings.update",
+    "settings.revert",
 })
 # `artifact.update` joins `artifact.save`: it can only rewrite an artifact the assistant itself
 # produced in the thread it already owns, so it needs no approval of its own.
@@ -109,6 +113,17 @@ class ChatbotMetricsArgs(BaseModel):
     window_days: int = Field(default=7, ge=1, le=31)
 
 
+class ChatbotSimulateArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messages: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(min_length=1, max_length=6)
+
+
+class ChatbotEvalRegressionArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scenarios: list[Annotated[str, Field(min_length=1, max_length=120)]] = Field(min_length=1, max_length=3)
+    baseline_run_tag: str = Field(min_length=1, max_length=80)
+
+
 class ChatbotConversationsArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     window_days: int = Field(default=7, ge=1, le=31)
@@ -129,6 +144,12 @@ class SettingsUpdateArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     key: str = Field(min_length=1, max_length=100)
     value: Any
+
+
+class SettingsRevertArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1, max_length=100)
+    version: int = Field(ge=0)
 
 
 class _MemoryReadBase(BaseModel):
@@ -362,6 +383,39 @@ class SkillProposeArgs(BaseModel):
         return value
 
 
+class KbProposeDocumentArgs(BaseModel):
+    """One knowledge document the assistant proposes to the customer corpus (S1).
+
+    The WhatsApp bot retrieves with `audience=customer` and `global_only=True`
+    (`app/chat/nodes/respond.py:305`), so `visibility` is required rather than
+    defaulted: the proposal has to state whether it changes customer answers.
+    A default would also break its own approval — the plan issues the digest over
+    the raw arguments (`app/chat/assistant/nodes.py:843`) while execution digests
+    `model_dump()`, where a defaulted field is materialized.
+
+    The validators below only reject unsafe values; they never rewrite one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=3, max_length=200)
+    content: str = Field(min_length=1, max_length=200_000)
+    visibility: Literal["customer", "internal"]
+
+    @field_validator("title")
+    @classmethod
+    def require_a_real_title(cls, value: str) -> str:
+        if len(" ".join(value.split())) < 3:
+            raise ValueError("document title must carry at least three characters")
+        return value
+
+    @field_validator("content")
+    @classmethod
+    def require_real_content(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("document content must not be blank")
+        return value
+
+
 class ArtifactSaveArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=255)
@@ -581,6 +635,58 @@ def _retrieve_kb(session, args: KbArgs, *, project_id: int | None = None, role: 
     )
 
 
+def _kb_title_key(title: str) -> str:
+    """Collapse a title to the key that decides whether it already exists."""
+    return " ".join(title.split()).casefold()
+
+
+def _propose_kb_document(session, args: KbProposeDocumentArgs):
+    """Ingest one approved knowledge document into the customer corpus (S1).
+
+    A duplicate title is refused instead of created: two documents answering the
+    same question compete for the same retrieval slot, and the assistant would
+    have no way to know which one the bot cited. The check is Python-side because
+    the key folds case and runs of whitespace, which SQL does not.
+    """
+    from sqlalchemy import func, select
+    from app.models import DocumentFormat, KbChunk, KbDocument
+
+    key = _kb_title_key(args.title)
+    existing = {
+        _kb_title_key(title): doc_id
+        for doc_id, title in session.execute(select(KbDocument.id, KbDocument.title).where(KbDocument.active.is_(True)))
+    }
+    if key in existing:
+        raise ToolValidationError(
+            f"a knowledge document with this title already exists: id {existing[key]}"
+        )
+    doc = kb.ingest_document(
+        session,
+        title=" ".join(args.title.split()),
+        fmt=DocumentFormat.MD,
+        content=b"",
+        content_text=args.content,
+        actor="assistant",
+        visibility=KbVisibility(args.visibility),
+        project_id=None,
+    )
+    session.flush()
+    chunks = session.scalar(
+        select(func.count())
+        .select_from(KbChunk)
+        .where(KbChunk.document_id == doc.id, KbChunk.version == doc.version)
+    )
+    return {
+        "document_id": doc.id,
+        "title": doc.title,
+        "version": doc.version,
+        "visibility": doc.visibility.value,
+        # Only a customer-visible global document reaches the WhatsApp bot.
+        "visible_to_whatsapp": doc.visibility is KbVisibility.CUSTOMER and doc.project_id is None,
+        "chunks": int(chunks or 0),
+    }
+
+
 def _kpis(session, args: KpiArgs):
     # dashboard imports panel serializers; defer it to avoid loading the panel
     # router while the assistant registry is being imported.
@@ -593,6 +699,14 @@ def _chatbot_metrics(session, args: ChatbotMetricsArgs):
     from app.services import analytics
 
     return analytics.chatbot_metrics(session, args.window_days)
+
+
+def _chatbot_simulate(session, args: ChatbotSimulateArgs):
+    return chat_simulation.simulate(session, args.messages)
+
+
+def _chatbot_eval_regression(_session, args: ChatbotEvalRegressionArgs):
+    return chat_regression.run_regression(args.scenarios, args.baseline_run_tag)
 
 
 def _chatbot_conversations(session, args: ChatbotConversationsArgs):
@@ -611,11 +725,38 @@ def _update_setting(session, args: SettingsUpdateArgs):
     from app.services import settings as settings_service
 
     try:
-        settings_service.validate_assistant_setting(args.key, args.value)
+        value = settings_service.validate_assistant_setting(
+            args.key, args.value, session=session
+        )
     except ValueError as exc:
         raise ToolValidationError(str(exc)) from exc
-    settings_service.set_setting(session, args.key, args.value, actor="assistant")
-    return {"key": args.key, "value": args.value, "updated": True}
+    settings_service.set_setting(session, args.key, value, actor="assistant")
+    return {"key": args.key, "value": value, "updated": True}
+
+
+def _revert_setting(session, args: SettingsRevertArgs):
+    from app.services import settings as settings_service
+
+    if args.key not in ASSISTANT_WRITABLE_SETTINGS:
+        raise ToolValidationError(f"setting key is not assistant-writable: {args.key!r}")
+    try:
+        value = settings_service.setting_version_content(session, args.key, args.version)
+    except KeyError as exc:
+        raise ToolValidationError(
+            f"setting version {args.version} was not recorded for key {args.key!r}"
+        ) from exc
+
+    if value is None:
+        settings_service.delete_setting(session, args.key, actor="assistant")
+    else:
+        try:
+            value = settings_service.validate_assistant_setting(
+                args.key, value, session=session
+            )
+        except ValueError as exc:
+            raise ToolValidationError(str(exc)) from exc
+        settings_service.set_setting(session, args.key, value, actor="assistant")
+    return {"key": args.key, "version": args.version, "value": value, "reverted": True}
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
@@ -1229,6 +1370,30 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "customers.operational_history": ToolDefinition("customers.operational_history", OperationalHistoryArgs, True, _operational_history, "Read one customer's cases (including closed) and appointments (including past).", tier="default"),
     "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases.", tier="default"),
     "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results.", tier="default"),
+    "kb.propose_document": ToolDefinition(
+        "kb.propose_document",
+        KbProposeDocumentArgs,
+        False,
+        _propose_kb_document,
+        "Add one knowledge document to the corpus the WhatsApp bot answers from, after owner approval. A customer-visible document changes customer answers on the next inbound turn; an internal one is readable by the assistant only.",
+        tier="default",
+    ),
+    "chatbot.simulate": ToolDefinition(
+        "chatbot.simulate",
+        ChatbotSimulateArgs,
+        False,
+        _chatbot_simulate,
+        "Run up to six customer turns through the real chatbot brain without delivering replies.",
+        tier="default",
+    ),
+    "chatbot.eval_regression": ToolDefinition(
+        "chatbot.eval_regression",
+        ChatbotEvalRegressionArgs,
+        False,
+        _chatbot_eval_regression,
+        "Run deterministic gates and the rubric judge for up to three corpus scenarios against a named baseline; measured conversations appear in the operator inbox.",
+        tier="default",
+    ),
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory.", tier="default"),
     "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory.", tier="default"),
     "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory; global across threads by default.", tier="default"),
@@ -1244,6 +1409,14 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
         False,
         _update_setting,
         "Propose a live chatbot settings change for approval, then apply it. Valid keys: " + ", ".join(sorted(ASSISTANT_WRITABLE_SETTINGS)),
+        tier="default",
+    ),
+    "settings.revert": ToolDefinition(
+        "settings.revert",
+        SettingsRevertArgs,
+        False,
+        _revert_setting,
+        "Revert an assistant-writable chatbot setting to an audited version (0 restores the built-in default), after owner approval.",
         tier="default",
     ),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
@@ -1284,6 +1457,9 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "customers.operational_history": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "cases.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
+    "kb.propose_document": frozenset({UserRole.ADMIN}),
+    "chatbot.simulate": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "chatbot.eval_regression": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "list_project_files": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "read_project_file": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "project_file.save": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
@@ -1303,6 +1479,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "analytics.chatbot_conversations": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "conversations.transcript": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "settings.update": frozenset({UserRole.ADMIN}),
+    "settings.revert": frozenset({UserRole.ADMIN}),
     "web.search": frozenset(UserRole),
     "web.fetch": frozenset(UserRole),
     "automation.create_rule": frozenset({UserRole.ADMIN}),
