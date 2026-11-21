@@ -128,7 +128,7 @@ const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
     "manage_reschedule_unavailable", "manage_rescheduled", "manage_cancel_prompt",
     "manage_cancel_unavailable", "manage_cancelled",
   ] },
-  { title: "Derivar a una persona", keys: ["handoff"] },
+  { title: "Derivar a una persona", keys: ["handoff", "handoff_booking_change_ack"] },
   { title: "Captura", keys: ["capture_evidence", "capture_consent"] },
 ];
 const REPLY_TEXT_KEYS = [...DERIVACION_CASES.map(({ key }) => key), ...REPLY_TEXT_GROUPS.flatMap(({ keys }) => keys)];
@@ -174,6 +174,7 @@ const REPLY_TEXT_LABELS: Record<string, string> = {
   manage_cancel_unavailable: "No se puede cancelar",
   manage_cancelled: "Visita cancelada",
   handoff: "Derivación a un asesor",
+  handoff_booking_change_ack: "Reconocer solicitud de cambio de fecha",
   capture_evidence: "Pedir evidencia",
   capture_consent: "Pedir consentimiento",
 };

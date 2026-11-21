@@ -252,7 +252,7 @@ def test_smalltalk_during_capture_answers_and_reasks_the_pending_batch(migrated_
     _turn(conversation_id, "quiero una visita", "wamid.smalltalk.capture.start")
     replies = _turn(conversation_id, "Eso!", "wamid.smalltalk.capture.social")
 
-    assert any(SMALLTALK_REPLY in reply for reply in replies)
+    assert all(SMALLTALK_REPLY not in reply for reply in replies)
     assert any("qué pasa con el equipo" in reply.lower() or "qué equipo es" in reply.lower() for reply in replies)
 
 

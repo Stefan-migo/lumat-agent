@@ -49,6 +49,7 @@ EXPECTED_KEYS = {
     "handoff_unknown_intent_thrice",
     "handoff_campo_sin_respuesta",
     "handoff_booking_unavailable",
+    "handoff_booking_change_ack",
     "gas_instruction_guard",
     "excluded_appliance_scope",
     "out_of_catalogue_scope",
@@ -97,6 +98,13 @@ def test_the_defaults_keep_the_current_wording():
     assert REPLY_TEXT_DEFAULTS["handoff"] == (
         "Un asesor revisará tu caso y te contactará a la brevedad."
     )
+    assert REPLY_TEXT_DEFAULTS["capture_availability_ack"] == (
+        "Anoté {{disponibilidad}} como preferencia; la visita la confirmamos al coordinar, "
+        "todavía no queda agendada. "
+    )
+    assert REPLY_TEXT_DEFAULTS["handoff_booking_change_ack"] == (
+        "Entiendo que necesitas cambiar la fecha y lamento el inconveniente. "
+    )
     assert REPLY_TEXT_DEFAULTS["gas_instruction_guard"] == (
         "No manipules la llave ni la línea de gas. Un técnico de Lumat debe "
         "verificarlo; un asesor puede coordinar la visita."
@@ -133,6 +141,7 @@ def test_only_the_coverage_derivation_takes_optional_equipment_slot():
         "handoff_unknown_intent_thrice",
         "handoff_campo_sin_respuesta",
         "handoff_booking_unavailable",
+        "handoff_booking_change_ack",
     ):
         assert REPLY_TEXT_SLOTS[key] == frozenset(), key
 

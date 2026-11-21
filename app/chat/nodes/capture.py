@@ -492,6 +492,8 @@ def _merge_extracted(
         value = value.strip()
         if not value or captured.get(field):
             continue
+        if field == "availability" and _looks_like_question(current_text):
+            continue
         # No field may echo a PROSE turn: a multi-sentence message copied into a
         # field is extraction corruption ("Soy Braulio, me dieron este numero...").
         # A terse answer legitimately equals the whole message ("tengo un calefont
@@ -537,7 +539,9 @@ def _merge_extracted(
             captured[field] = value
 
 
-def _validate_address_candidate(captured: dict, state: ConversationState) -> dict | None:
+def _validate_address_candidate(
+    captured: dict, state: ConversationState, *, advance: bool = True
+) -> dict | None:
     """Validate a newly captured address, deferring only until comuna is known."""
     candidate = captured.get("address")
     candidate_is_new = not state.captured.get("address")
@@ -584,7 +588,7 @@ def _validate_address_candidate(captured: dict, state: ConversationState) -> dic
             captured["direccion_estado"] = "sin_referencia"
             captured["direccion_fuente"] = "cliente"
         captured["_pending"] = ["address"]
-        return _reask_pending(captured, ["address"], state)
+        return _reask_pending(captured, ["address"], state, advance=advance)
     if (captured.get("_asked") or {}).get("address", 0) >= MAX_ASKS_PER_FIELD:
         # After the pin offer the customer's own description wins. It is a
         # deliberate, persisted fallback rather than a hard rejection.
@@ -596,7 +600,7 @@ def _validate_address_candidate(captured: dict, state: ConversationState) -> dic
     captured.pop("direccion_estado", None)
     captured.pop("direccion_fuente", None)
     captured["_pending"] = ["address"]
-    return _reask_pending(captured, ["address"], state)
+    return _reask_pending(captured, ["address"], state, advance=advance)
 
 
 def capture(state: ConversationState) -> dict:
@@ -652,10 +656,12 @@ def capture(state: ConversationState) -> dict:
     # the customer states the problem ("tengo un calefont que no calienta" fills
     # `failure` and the next question is the equipment). Validators decide what is
     # accepted; the merge no longer waits for an "answer turn".
+    captured_before_merge = set(captured)
     with session_scope() as session:
         _merge_extracted(
             captured, state.extracted, [], state, get_coverage_communes(session)
         )
+    merged_fields = (set(captured) - captured_before_merge) & EXTRACTABLE_FIELDS
     if "failure" in captured:
         captured.pop("_preventive_request", None)
     pending = captured.get("_pending")
@@ -683,7 +689,9 @@ def capture(state: ConversationState) -> dict:
 
     # Validate classifier-extracted candidates now. Terse pending-field answers
     # are merged below and pass through the same gate there.
-    address_result = _validate_address_candidate(captured, state)
+    address_result = _validate_address_candidate(
+        captured, state, advance=not bool(merged_fields)
+    )
     if address_result is not None:
         return address_result
 
@@ -750,7 +758,8 @@ def capture(state: ConversationState) -> dict:
 
     if isinstance(pending, list) and (greeting_during_capture or state.intent == "smalltalk"):
         reask = _reask_pending(captured, pending, state, advance=False)
-        if state.intent == "smalltalk":
+        courtesy_like = is_social_only(_current_text(state)) or is_greeting_only(state)
+        if state.intent == "smalltalk" and courtesy_like:
             with session_scope() as session:
                 social_reply = get_message(session, "smalltalk", _SOCIAL_REPLY)
             return {**reask, "replies": [social_reply, *reask.get("replies", [])]}
@@ -789,13 +798,19 @@ def capture(state: ConversationState) -> dict:
                     get_coverage_communes(session),
                 )
             if pending[0] not in captured:
-                return _reask_pending(captured, pending, state)
+                return _reask_pending(
+                    captured, pending, state, advance=not bool(merged_fields)
+                )
             if pending[0] == "address":
-                address_result = _validate_address_candidate(captured, state)
+                address_result = _validate_address_candidate(
+                    captured, state, advance=False
+                )
                 if address_result is not None:
                     return address_result
         else:
-            return _reask_pending(captured, pending, state)
+            return _reask_pending(
+                captured, pending, state, advance=not bool(merged_fields)
+            )
 
     captured.pop("_pending", None)
     return _ask_next(captured, state)
@@ -985,7 +1000,11 @@ def _render_capture_question(
     # names it back. `just_extracted` is this turn's extraction, so an older
     # availability never turns a re-ask into a tic.
     delivered = (just_extracted or {}).get("availability")
-    if isinstance(delivered, str) and delivered.strip():
+    if (
+        isinstance(delivered, str)
+        and delivered.strip()
+        and not _looks_like_question(current_text)
+    ):
         candidate = render_reply(
             get_reply_texts(session),
             "capture_availability_ack",

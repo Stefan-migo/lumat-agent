@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 from app.chat.nodes.replies import render_reply
+from app.chat.nodes.orchestrate import asks_for_change
 from app.chat.nodes.summary import compose_fallback_summary, generate_summary
 from app.chat.state import ConversationState, set_conversation_state
 from app.db import session_scope
@@ -63,7 +64,11 @@ def _escalate_reason(state: ConversationState) -> str:
 
 
 def derivation_reply(
-    texts: dict[str, str], reason: str, captured: dict | None = None
+    texts: dict[str, str],
+    reason: str,
+    captured: dict | None = None,
+    *,
+    change_request: bool = False,
 ) -> str:
     """The text the customer reads for this escalation reason (S4).
 
@@ -96,7 +101,10 @@ def derivation_reply(
         ):
             equipment = "equipo"
         values["equipo"] = equipment
-    return render_reply(texts, key, **values)
+    reply = render_reply(texts, key, **values)
+    if reason == "booking_unavailable" and change_request:
+        reply = render_reply(texts, "handoff_booking_change_ack") + reply
+    return reply
 
 
 def handoff(state: ConversationState) -> dict:
@@ -121,8 +129,14 @@ def handoff(state: ConversationState) -> dict:
             summary_text = compose_fallback_summary(state)
 
     with session_scope() as session:
+        change_request = asks_for_change(
+            (state.window[-1].get("text") or "") if state.window else ""
+        )
         handoff_reply = derivation_reply(
-            get_reply_texts(session), reason, state.captured
+            get_reply_texts(session),
+            reason,
+            state.captured,
+            change_request=change_request,
         )
         conversation = session.get(Conversation, state.conversation_id)
         case = create_handoff_case(

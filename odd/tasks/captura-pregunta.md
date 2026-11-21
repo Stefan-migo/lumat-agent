@@ -127,6 +127,36 @@ schedule thread («Martes pm», «Entre las 14:30 y 17:30») is not refusing to 
 turns brought `_asked["failure"]` to `MAX_ASKS_PER_FIELD` and ended `real-reagenda-mantencion` in
 `handoff_campo_sin_respuesta` with state `human`.
 
+### S9 (from L6) — The availability acknowledgement promises nothing
+
+`capture_availability_ack` states that the requested day or franja is a **preference** and that the
+visit is not booked yet. Measured in `real-repuesto-agotado` turn 2, where «Anoté que lunes; lo tengo en
+cuenta para la visita» read to the judge as an accepted date:
+
+> cliente: `Entonces quedamos atentos hasta el lunes. Apenas llegue me avisas por favor y coordinamos para instalarla.`
+> bot: `Anoté que lunes; lo tengo en cuenta para la visita. Cuéntame qué pasa con el equipo: …`
+
+Copy proposed by the agent, approved in review: «Anoté {{disponibilidad}} como preferencia; la visita la
+confirmamos al coordinar, todavía no queda agendada.»
+
+Out of scope, and stated so it is not mistaken for done: turn 1 of the same scenario still answers a
+question about the spare part with the diagnostic capture question. That axis is the general «capture
+ignores the question» residue and is not closed here.
+
+### S11 (from L6) — A change request is acknowledged before deriving
+
+When the derivation happens because the customer asked to change the date (an explicit change request,
+S2), the reply acknowledges the request before the agenda sentence, through a new editable key
+`handoff_booking_change_ack` (default «Entiendo que necesitas cambiar la fecha y lamento el
+inconveniente. ») prepended to `handoff_booking_unavailable`. Without a change request the reply is
+unchanged. Measured in `real-reagenda-mantencion` turn 5:
+
+> cliente: `Favor cambiar la fecha de la manutención para el próximo martes por favor, Por temas laborales no estaré en casa hoy pm`
+> bot: `No encontré un horario que nos sirva en la agenda, así que no te voy a dejar esperando: un asesor de Lumat te contacta para coordinar la visita directamente.`
+
+The new key is editable in the panel, so it comes with its label, its panel fixture and the reply-text
+catalogue test.
+
 ### S6 — A bare franja is a franja, not only a day
 
 `viernes tarde`, `sábado en la mañana`, `lunes de madrugada` resolve to day + franja. Measured,
@@ -137,6 +167,7 @@ turns brought `_asked["failure"]` to `MAX_ASKS_PER_FIELD` and ended `real-reagen
 
 Negation semantics are **out of scope**: `resolve_window` detects mentions, not preferences, and the
 exclusion vocabulary lives in `capture._excludes_the_window`. S6 only stops dropping the franja.
+
 
 ## Tasks
 
@@ -150,6 +181,8 @@ exclusion vocabulary lives in `capture._excludes_the_window`. S6 only stops drop
 | T6 | S6 | inline | bare franja in `resolve_window` |
 | T7 | S1-S6 | inline | differential check + `test.sh full` + full-corpus measure |
 | T8 | — | inline | CHANGELOG, doc verdicts, PR |
+| T9 | S9, S11 | inline | preference acknowledgement + change-request ack key, panel label |
+| T10 | — | inline | measure the 4 scenarios again and read the transcripts |
 
 ## Log
 
@@ -183,3 +216,54 @@ Transcripts (`odd/evals/conv-eval-captura-sliceA-conversaciones.md`), read turn 
 Conclusion: Slice A changed the failure mode (no canned closure, no dead end at the first change
 request) but closed none of the four scenarios. The remaining gap is the one Slice B was written for,
 plus two specs the measurement added (S7, S8, sketched above).
+
+**L6 (measurement, Slice A + B)** — `conv_eval --run-tag captura-sliceAB --judge-repetitions 3 --only`
+the same four: **2/4 pass**, delta closure +1.17, policy +1.00, grounding +0.83, escalation +0.50.
+
+- `real-solo-sabados` **0.00 → 2.50, closed**: the availability question is answered, «Anoté que sábado
+  27» is gone, and «las 14:30 en adelante» survives as a franja.
+- `real-varias-reparaciones` **closed** (1.17, no hard fail): the turn answers and re-asks instead of
+  closing with the canned line.
+- `real-repuesto-agotado` still 0.00, hard fail now about the date: turn 2's acknowledgement reads as an
+  accepted visit. → S9.
+- `real-reagenda-mantencion` still 0.00, hard fail now about the reason: S2/S3 do route the change out of
+  capture, and `manage` without an upcoming visit derives to `handoff_booking_unavailable` without
+  acknowledging the request. → S11. Note this is a **regression flagged by the tool** against the Slice A
+  run, where the judge had timed out; the behaviour improved, the verdict did not.
+
+**L7 (owner decision)** — `Propongo yo el texto y lo revisás en el diff` (option `propongo-yo`): the two
+customer-facing sentences of S9 and S11 are agent-proposed and reviewed in the diff before the PR.
+
+**L8 (measurement, S9 + S11)** — `conv_eval --run-tag captura-sliceAB9 --judge-repetitions 3 --only` the
+same four: **4/4 pass, no regressions against the previous run**, exit 0, delta escalation +0.50,
+grounding/policy/tone +0.25, conversational and closure 0.00.
+
+- `real-reagenda-mantencion` **0.00 → 3.17**: turn 5 now reads «Entiendo que necesitas cambiar la fecha y
+  lamento el inconveniente. No encontré un horario que nos sirva en la agenda…».
+- `real-repuesto-agotado` **0.00 → 1.17**, no hard fail: the date is no longer acknowledged as an accepted
+  visit.
+- `real-solo-sabados` 2.50 and `real-varias-reparaciones` 1.33 hold.
+
+**Residues measured in the same transcripts (not closed, stated on purpose):**
+
+1. `real-solo-sabados` turn 2 still answers «Buen dia» with the full presentation, because that turn had
+   **no pending capture batch** (turn 1's comuna question came from the answer path, not from `capture`).
+   S1 only covers the capture case. The scenario passes for other reasons; the restart itself is open.
+2. `real-solo-sabados` turn 4 renders a whole sentence into the acknowledgement: «Anoté no está en
+   Santiago; llega el viernes en la tarde al departamento como preferencia…». `{{disponibilidad}}` wants a
+   short phrase, not prose. Open.
+
+## Verdict per spec (measured 2026-11-20)
+
+| Spec | Verdict | Evidence |
+| --- | --- | --- |
+| S1 | met for a pending batch; **open** without a pending batch | `test_mid_conversation_greeting_during_capture_reasks_without_classifying`; L8 residue 1 |
+| S2 | met | `test_explicit_change_of_date_or_maintenance_leaves_pending_capture`, L8 turn 5 |
+| S3 | met | `test_an_explicit_change_request_never_exhausts_the_pending_field` |
+| S4 | met | `test_s4_availability_question_is_answered_without_capturing_the_date`, L6/L8 |
+| S5 | met | `test_smalltalk_during_capture_answers_and_reasks_the_pending_batch`, L6 |
+| S6 | met | `tests/unit/test_slot_window.py` bare-franja pins, L6 «las 14:30 en adelante» |
+| S7 | met | L6 `real-varias-reparaciones` without the canned line |
+| S8 | met | `test_s8_new_capture_data_does_not_charge_the_pending_field_attempt` |
+| S9 | met for the acknowledgement; question axis out of scope | L8 `real-repuesto-agotado` |
+| S11 | met | L8 `real-reagenda-mantencion` turn 5 |

@@ -190,6 +190,9 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "dejar esperando: un asesor de Lumat te contacta para coordinar la visita "
         "directamente."
     ),
+    "handoff_booking_change_ack": (
+        "Entiendo que necesitas cambiar la fecha y lamento el inconveniente. "
+    ),
     "gas_instruction_guard": (
         "No manipules la llave ni la línea de gas. Un técnico de Lumat debe "
         "verificarlo; un asesor puede coordinar la visita."
@@ -224,7 +227,10 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
     # "Tengo que salir a las 2, volviendo a las 4pm" was extracted and stored, then
     # answered with "Entiendo." and a re-ask, so the constraint the visit has to
     # respect never came back to the customer.
-    "capture_availability_ack": "Anoté que {{disponibilidad}}; lo tengo en cuenta para la visita. ",
+    "capture_availability_ack": (
+        "Anoté {{disponibilidad}} como preferencia; la visita la confirmamos al "
+        "coordinar, todavía no queda agendada. "
+    ),
     # S5 (agenda-respeta-horario): carry a previously stated preference through
     # later capture turns without offering a slot or confirming a visit.
     "capture_availability_hold": (
@@ -278,6 +284,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_unknown_intent_thrice": frozenset(),
     "handoff_campo_sin_respuesta": frozenset(),
     "handoff_booking_unavailable": frozenset(),
+    "handoff_booking_change_ack": frozenset(),
     "gas_instruction_guard": frozenset(),
     "excluded_appliance_scope": frozenset(),
     "out_of_catalogue_scope": frozenset(),

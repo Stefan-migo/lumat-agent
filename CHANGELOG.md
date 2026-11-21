@@ -6,6 +6,21 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+### Corregido
+
+- La captura ya no gasta el turno en su propio ritual. Un saludo que llega en medio de una
+  conversación con datos pendientes vuelve a preguntar lo que falta en vez de responder la
+  presentación (y sin llamar al clasificador), una cortesía contesta lo social y retoma el dato
+  pendiente en lugar de cerrar con «¿En qué más te puedo ayudar?», y un cliente que contesta sobre
+  el horario deja de ser contado como si no hubiera respondido. Un pedido explícito de cambiar la
+  fecha —«Favor cambiar la fecha de la mantención para el próximo martes»— ahora sale de la captura
+  en vez de agotar el campo pendiente y derivar con «Veo que esa pregunta no te acomoda».
+- Una pregunta sobre disponibilidad ya no se guarda como disponibilidad declarada: se contesta y la
+  captura sigue. La confirmación de un horario dice que es una **preferencia** y que la visita aún
+  no queda agendada, y una derivación por cambio de fecha reconoce el pedido antes de ofrecer un
+  asesor. `madrugada` y una franja después del día («viernes tarde») dejan de perderse al interpretar
+  el horario pedido; «mañana» suelto sigue significando *mañana*.
+
 _(sin otros cambios después de este release)_
 
 ## [2026.11.12] - 2026-11-19
