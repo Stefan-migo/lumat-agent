@@ -19,6 +19,19 @@ engine = create_engine(get_settings().database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def release_transaction(session: Session | None) -> None:
+    """Commit pending work before external I/O, so no lock and no connection wait with it.
+
+    A turn that keeps a transaction open while it waits on a provider or on a
+    tool holds its row locks and one pooled connection for the whole wait. On
+    2026-11-21 that lasted sixteen minutes: every writer queued behind it, the
+    waiters exhausted the pool (5 + 10) and the panel answered 500 everywhere.
+    """
+    if session is None or not session.in_transaction():
+        return
+    session.commit()
+
+
 class Base(DeclarativeBase):
     """Declarative base for all ORM models (mapped to the migrated schema)."""
 

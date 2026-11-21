@@ -2120,3 +2120,58 @@ def test_startup_sweep_isolation_survives_an_earlier_sweep_failing(monkeypatch):
     with SessionLocal() as session:
         assert session.get(InternalChatMessage, message_id).status == "failed"
         assert session.get(InternalChatThread, thread_id).assistant_state["stage"] == "failed"
+
+
+def test_no_provider_call_happens_while_the_turn_holds_an_open_transaction(client, monkeypatch):
+    """A turn must never wait on the provider with its connection checked out.
+
+    2026-11-21: `_run_agent_turn_session` wrote the turn's context and its
+    compaction, and then ran the whole planner/tool/responder loop on that same
+    session. The transaction opened by the pre-work therefore stayed open — and
+    idle — for the entire turn: sixteen minutes of row locks on
+    `internal_chat_threads`, `internal_chat_messages` and friends, every writer
+    queued behind it, and a dead pool behind that.
+
+    Every provider call is an I/O boundary. The work already done is committed
+    there, so a slow provider costs a turn's latency and nothing else: no lock,
+    no checked-out connection. Observed on the turn's own session, which is the
+    only session this can be asserted from without reading another request's
+    state.
+    """
+    import app.services.agent_chat as agent_chat
+
+    _user("assistant-tx-release", "admin")
+    _login(client, "assistant-tx-release")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+
+    holder: dict = {}
+    observed: list[bool] = []
+    real_run_assistant = agent_chat.run_assistant
+
+    def wrapper(**kwargs):
+        holder["session"] = kwargs["session"]
+        return real_run_assistant(**kwargs)
+
+    monkeypatch.setattr(agent_chat, "run_assistant", wrapper)
+
+    scripted = _scripted_client([
+        json.dumps({"kind": "respond", "arguments": {}, "summary": "done", "requires_approval": False}),
+    ])
+    inner_create = scripted.chat.completions.create
+
+    class Recorder:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    observed.append(holder["session"].in_transaction())
+                    return inner_create(**kwargs)
+
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: Recorder())
+
+    _run_turn(client, thread_id, "transaction release")
+
+    assert observed, "the scripted provider was never called, so nothing was observed"
+    assert observed == [False] * len(observed), (
+        f"a provider call ran with an open transaction: {observed}"
+    )

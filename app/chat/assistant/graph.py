@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
+from app.db import release_transaction
 from app.chat.assistant.memory_capture import memory_capture_node
 from app.chat.assistant.nodes import (
     assemble_context_node,
@@ -93,21 +94,33 @@ def _after_cost_gate(state: AssistantState) -> str:
     return "evidence" if state.get("cost_mode") == "blocked" else "memory_bootstrap"
 
 
+def _releasing(node):
+    """Run a node with the session's transaction closed, because a node is an I/O boundary.
+
+    Nodes call providers, tools and the embedder, and the work a previous node
+    already staged is durable regardless of how this one ends.
+    """
+    def wrapped(state):
+        release_transaction((state or {}).get("session"))
+        return node(state)
+    return wrapped
+
+
 def build_assistant_graph():
     builder = StateGraph(AssistantState)
-    builder.add_node("assemble_context", assemble_context_node)
-    builder.add_node("panel_cost_gate", panel_cost_gate)
-    builder.add_node("memory_bootstrap", memory_bootstrap)
-    builder.add_node("plan_llm", plan_llm)
-    builder.add_node("guardrails", guardrails)
-    builder.add_node("repair_plan", repair_plan)
-    builder.add_node("retrieve_kb", retrieve_kb)
-    builder.add_node("execute_tool", execute)
-    builder.add_node("tool_loop_head", tool_loop_head)
-    builder.add_node("verify_effects", verify_effects)
-    builder.add_node("respond_stream", execute)
-    builder.add_node("evidence", collect_evidence)
-    builder.add_node("memory_capture", memory_capture_node)
+    builder.add_node("assemble_context", _releasing(assemble_context_node))
+    builder.add_node("panel_cost_gate", _releasing(panel_cost_gate))
+    builder.add_node("memory_bootstrap", _releasing(memory_bootstrap))
+    builder.add_node("plan_llm", _releasing(plan_llm))
+    builder.add_node("guardrails", _releasing(guardrails))
+    builder.add_node("repair_plan", _releasing(repair_plan))
+    builder.add_node("retrieve_kb", _releasing(retrieve_kb))
+    builder.add_node("execute_tool", _releasing(execute))
+    builder.add_node("tool_loop_head", _releasing(tool_loop_head))
+    builder.add_node("verify_effects", _releasing(verify_effects))
+    builder.add_node("respond_stream", _releasing(execute))
+    builder.add_node("evidence", _releasing(collect_evidence))
+    builder.add_node("memory_capture", _releasing(memory_capture_node))
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"memory_bootstrap": "memory_bootstrap", "evidence": "evidence"})

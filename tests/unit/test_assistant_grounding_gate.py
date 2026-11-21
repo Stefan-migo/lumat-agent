@@ -11,7 +11,7 @@ from app.chat.assistant.nodes import _is_conversational_turn, guardrails
 def _respond_state(content="¿Cuáles son las tarifas?", **overrides):
     state = {
         "content": content,
-        "session": SimpleNamespace(),
+        "session": SimpleNamespace(in_transaction=lambda: False),
         "plan": {"kind": "respond", "tool": None, "requires_approval": False},
         "planner": {"valid": True},
     }

@@ -11,6 +11,7 @@ from uuid import uuid4
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.db import release_transaction
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import (
     ApprovalDecisionError,
@@ -295,6 +296,7 @@ def _generate_thread_title(
             client = llm.openai_client(provider)
         except TypeError:
             client = llm.openai_client()
+        release_transaction(session)
         completion = client.chat.completions.create(
             model=getattr(settings, "assistant_chat_model", llm.CHAT_MODEL),
             messages=[{
