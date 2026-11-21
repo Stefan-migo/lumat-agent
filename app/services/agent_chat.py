@@ -9,6 +9,7 @@ from typing import NamedTuple
 from uuid import uuid4
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.db import release_transaction
@@ -69,6 +70,13 @@ TITLE_TIMEOUT_SECONDS = 5.0
 # still be executing; failing it closed is what turns an eternal spinner into a
 # retryable failure.
 STALE_RUN_SECONDS = 600
+# Recording a failed run needs a session of its own: the one the turn used is the
+# one whose transaction the database just aborted, and writing through it again is
+# what deadlocked in production and left the message `processing` forever. The
+# local lock timeout keeps a retry from queueing behind the same blocker for the
+# pool's whole checkout window, so failing fast is possible.
+FAILED_RUN_RECOVERY_ATTEMPTS = 3
+FAILED_RUN_RECOVERY_LOCK_TIMEOUT = "2s"
 
 
 class _StopRequested(Exception):
@@ -580,12 +588,7 @@ def run_agent_turn(*, thread_id: int, run_id: str, user_id: int,
     except Exception:
         session.rollback()
         logger.exception("Unable to complete background assistant run")
-        if 'message' in locals() and message is not None and 'thread' in locals() and thread is not None:
-            message.status = "failed"
-            thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
-                "stage": "failed", "live": {"run_id": run_id, "stage": "failed", "status": "failed"},
-            })
-            session.commit()
+        _record_failed_run(thread_id, run_id)
     finally:
         session.close()
 
@@ -1038,6 +1041,36 @@ def _fail_orphaned_run(session: Session, thread: InternalChatThread, *, now: dat
     logger.warning("Reaped an orphaned assistant run for thread %s", thread.id)
     session.flush()
     return True
+
+
+def _record_failed_run(thread_id: int, run_id: str) -> bool:
+    """Record the terminal failed state in a fresh session, surviving a conflict."""
+    for attempt in range(1, FAILED_RUN_RECOVERY_ATTEMPTS + 1):
+        session = _session_factory()()
+        try:
+            session.execute(text(f"SET LOCAL lock_timeout = '{FAILED_RUN_RECOVERY_LOCK_TIMEOUT}'"))
+            thread = session.get(InternalChatThread, thread_id)
+            if thread is None:
+                logger.error("Unable to record failed assistant run %s: thread %s is missing", run_id, thread_id)
+                return False
+            _fail_orphaned_run(
+                session, thread, now=datetime.now(timezone.utc), run_id=run_id,
+            )
+            session.commit()
+            return True
+        except OperationalError:
+            try:
+                session.rollback()
+            except Exception:
+                logger.warning("Unable to rollback failed-run recovery attempt %s", attempt, exc_info=True)
+            logger.warning("Failed-run recovery attempt %s/%s failed", attempt, FAILED_RUN_RECOVERY_ATTEMPTS,
+                           exc_info=True)
+        finally:
+            session.close()
+        if attempt < FAILED_RUN_RECOVERY_ATTEMPTS:
+            time.sleep(0.2 * attempt)
+    logger.error("Failed-run recovery exhausted %s attempts for run %s", FAILED_RUN_RECOVERY_ATTEMPTS, run_id)
+    return False
 
 
 def reap_stale_run(session: Session, thread: InternalChatThread) -> bool:

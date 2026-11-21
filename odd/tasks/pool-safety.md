@@ -37,7 +37,7 @@ parks, and a cancelled turn still ends `cancelled`.
 | T1 | S1 | migration `070_session_safety.sql` + apply to production + `docs/ops.md` | `1bde1665f` |
 | T2 | S2 | `app/db.py`, `app/chat/assistant/graph.py`, `app/services/agent_chat.py` | (this commit) |
 | T3 | S3 | `app/config.py`, `app/db.py`, `infra/.env.example`, `docs/ops.md` | (this commit) |
-| T4 | S4 | `app/services/agent_chat.py` | — |
+| T4 | S4 | `app/services/agent_chat.py`, `tests/integration/test_assistant_chat.py` | (this commit) |
 
 ## Log
 
