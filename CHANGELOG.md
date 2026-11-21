@@ -6,6 +6,21 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+_(sin otros cambios después de este release)_
+
+## [2026.11.13] - 2026-11-21
+
+### Agregado
+
+- El Asistente Lumat del panel ahora puede operar el chatbot, no sólo leerlo. Propone un documento
+  para la base de conocimiento (`kb.propose_document`), escribe los settings de comportamiento que
+  antes sólo podía mirar, simula conversaciones sobre el cerebro real (`chatbot.simulate`), corre la
+  regresión conversacional contra una baseline nombrada (`chatbot.eval_regression`) y revierte
+  cualquier cambio de settings con la aprobación del operador y el historial auditado
+  (`settings.revert`). Todo pasa por el mismo camino de aprobación exacta que ya usaban las demás
+  herramientas: el operador ve el plan y los valores reales, y ninguna escritura ocurre sin su
+  decisión.
+
 ### Corregido
 
 - La captura ya no gasta el turno en su propio ritual. Un saludo que llega en medio de una
@@ -15,13 +30,11 @@ and this project uses CalVer in the `YYYY.MM.N` format.
   el horario deja de ser contado como si no hubiera respondido. Un pedido explícito de cambiar la
   fecha —«Favor cambiar la fecha de la mantención para el próximo martes»— ahora sale de la captura
   en vez de agotar el campo pendiente y derivar con «Veo que esa pregunta no te acomoda».
-- Una pregunta sobre disponibilidad ya no se guarda como disponibilidad declarada: se contesta y la
-  captura sigue. La confirmación de un horario dice que es una **preferencia** y que la visita aún
-  no queda agendada, y una derivación por cambio de fecha reconoce el pedido antes de ofrecer un
-  asesor. `madrugada` y una franja después del día («viernes tarde») dejan de perderse al interpretar
-  el horario pedido; «mañana» suelto sigue significando *mañana*.
-
-_(sin otros cambios después de este release)_
+- Una pregunta sobre disponibilidad se contesta y conserva el día u hora que propone, en lugar de
+  guardarse como una visita prometida. La confirmación de un horario dice que es una **preferencia**
+  y que la visita aún no queda agendada, y una derivación por cambio de fecha reconoce el pedido
+  antes de ofrecer un asesor. `madrugada` y una franja después del día («viernes tarde») dejan de
+  perderse al interpretar el horario pedido; «mañana» suelto sigue significando *mañana*.
 
 ## [2026.11.12] - 2026-11-19
 
