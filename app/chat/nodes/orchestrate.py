@@ -161,6 +161,17 @@ def _dispatch(
         # was unreachable for the eight measured works. Asking the price of that
         # work is a question, not a new fault to diagnose.
         return {"next_step": "respond"}
+    if question:
+        # S1: answer an interrogative capture-intent turn even before a capture
+        # batch exists. Only a real pending batch is paused; otherwise research
+        # must not resume by inventing a capture step afterward.
+        decision = {
+            "next_step": "research",
+            "active_sub_agent": RESEARCH_TRIAGE,
+        }
+        if mid_capture:
+            decision["capture_paused"] = True
+        return decision
     if intent in CAPTURE_INTENTS:
         return {"next_step": "capture"}
     if intent in RETRIEVAL_INTENTS:

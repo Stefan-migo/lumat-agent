@@ -165,17 +165,25 @@ def corpus():
     return ev.load_corpus(CORPUS_PATH)
 
 
-def test_shipped_corpus_loads_with_forty_two_scenarios(corpus):
+def test_shipped_corpus_loads_with_forty_three_scenarios(corpus):
     assert corpus.version == 1
-    assert len(corpus.scenarios) == 42
-    assert len({s.id for s in corpus.scenarios}) == 42
+    assert len(corpus.scenarios) == 43
+    assert len({s.id for s in corpus.scenarios}) == 43
+
+
+def test_availability_question_scenario_gates_a_capture_reask(corpus):
+    scn = next(s for s in corpus.scenarios if s.id == "real-disponibilidad-dias")
+    assert scn.turns[-1] == "¿Tienen hora disponible esta semana?"
+    assert scn.expect["must_include_any"]
+    assert scn.expect["must_not_include"]
+    assert any("preguntar" in hint.lower() for hint in scn.hard_fails)
 
 
 def test_shipped_corpus_covers_the_three_tiers(corpus):
     counts = {}
     for scn in corpus.scenarios:
         counts[scn.tier] = counts.get(scn.tier, 0) + 1
-    assert counts == {"simple": 12, "complejo": 16, "supercomplejo": 14}
+    assert counts == {"simple": 12, "complejo": 17, "supercomplejo": 14}
 
 
 def test_measurable_remaining_real_conversations_have_cited_scenarios(corpus):
@@ -1178,9 +1186,9 @@ def test_write_report_writes_both_files(tmp_path):
 def test_validate_only_accepts_the_shipped_corpus(capsys):
     assert ev.main(["--validate-only"]) == 0
     captured = capsys.readouterr()
-    assert "42" in captured.out
+    assert "43 escenarios" in captured.out
     assert "simple 12" in captured.out
-    assert "complejo 16" in captured.out
+    assert "complejo 17" in captured.out
     assert "supercomplejo 14" in captured.out
     assert captured.err == ""
 

@@ -38,7 +38,7 @@
 # Amounts are deliberately absent from every expectation: the tariff changes by
 # season and lives in `settings['tarifa.precios']`. The judge receives the
 # tariff in force and grounds the price there (S8.4).
-# Cut 2: 42 scenarios (12 simple, 16 complejo, 14 supercomplejo); 27 of 34
+# Cut 2: 43 scenarios (12 simple, 17 complejo, 14 supercomplejo); 27 of 34
 # source conversations have a measurable scenario. T4's live baseline remains pending.
 
 version: 1
@@ -606,6 +606,30 @@ conversations:
     notes: >
       Conversación «Sandra Paredes Cliente Metrogas Max», chat.txt:2-15. Turnos
       literales en orden; se incluye el primer mensaje donde pregunta por sábados.
+
+  - id: real-disponibilidad-dias
+    tier: complejo
+    persona: >
+      Cliente que quiere coordinar una visita y pregunta de forma directa qué días
+      tienen hora disponible esta semana.
+    goal: >
+      Recibir información sobre los días de atención y disponibilidad sin que le
+      vuelvan a preguntar por la falla del equipo.
+    turns:
+      - "Hola, buenas"
+      - "¿Tienen hora disponible esta semana?"
+    expect:
+      state_any: [bot, human]
+      events_forbidden: [escalation]
+      must_include_any: ["horario", "disponibilidad", "sábado", "sabado", "semana"]
+      must_not_include: ["qué pasa con la caldera", "no enciende", "no calienta", "código de error"]
+    hard_fails:
+      - "Volver a preguntar por la falla o el equipo en vez de contestar qué días tienen atención"
+      - "Prometer una hora específica sin consultar la agenda real"
+    notes: >
+      Regresión de la disponibilidad que el cliente pregunta en los turnos medidos de
+      las conversaciones de producción 43 y 44; el segundo caso pregunta literalmente
+      por una hora disponible esta semana.
 
   - id: real-reagenda-familiar
     tier: complejo

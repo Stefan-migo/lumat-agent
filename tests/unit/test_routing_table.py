@@ -204,6 +204,47 @@ def test_mid_capture_visit_management_is_not_a_field_answer(intent):
 # --- S1/S2 (agenda-respeta-horario): the question beats a visit change -------
 
 
+def test_capture_intent_question_routes_to_research_with_or_without_pending_batch():
+    expected_pending = {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+    expected_no_pending = {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+    }
+    assert _dispatch("solicitar_visita", mid_capture=True, question=True) == expected_pending
+    assert _dispatch("solicitar_visita", mid_capture=False, question=True) == expected_no_pending
+
+
+def test_question_routing_preserves_escalation_change_and_quote_precedence():
+    assert _dispatch("persona", question=True)["next_step"] == "handoff"
+    assert _dispatch("emergencia", question=True)["next_step"] == "handoff"
+    assert _dispatch("injection", question=True)["next_step"] == "handoff"
+    assert _dispatch(
+        "reagendar_visita", mid_capture=True, question=True, change_request=True
+    )["next_step"] == "manage"
+    assert _dispatch("caldera", question=True, quote_question=True) == {
+        "next_step": "respond"
+    }
+
+
+def test_pendingless_question_does_not_claim_capture_is_paused():
+    from app.chat.graph import _after_research_triage
+
+    state = ConversationState(
+        customer_id=1,
+        conversation_id=1,
+        phone="+56912345678",
+        captured={},
+        replies=["La atención es de lunes a sábado."],
+    )
+    assert _after_research_triage(state) == "__end__"
+    state.capture_paused = True
+    assert _after_research_triage(state) == "capture"
+
+
 def test_mid_capture_schedule_question_beats_a_visit_change():
     """S1: measured `real-dato-mas-pregunta` and `real-reagenda-familiar`.
 
@@ -310,6 +351,18 @@ def test_a_statement_with_a_capture_intent_stays_a_field_answer():
 
 
 # --- S4/T4: a schedule question without "?" is answered, then capture resumes ----
+
+
+def test_schedule_question_vocabulary_is_accent_normalised_and_word_bounded():
+    from app.chat.nodes.respond import asks_about_schedule
+
+    assert asks_about_schedule("¿Qué días tienen disponibles?") is True
+    assert asks_about_schedule("¿Tienen hora disponible esta semana?") is True
+    assert asks_about_schedule("¿Qué agenda tienen disponible?") is True
+    assert asks_about_schedule("¿atienden los sábados?") is True
+    assert asks_about_schedule("tengo la caldera mala y no sé si el jueves") is False
+    assert asks_about_schedule("La caldera está fallando, ¿hay hora disponible?") is False
+    assert asks_about_schedule("estoy en providencia") is False
 
 
 def _capture_state(text, *, pending=("name",), extracted=None, intent="solicitar_visita"):
