@@ -157,6 +157,17 @@ unchanged. Measured in `real-reagenda-mantencion` turn 5:
 The new key is editable in the panel, so it comes with its label, its panel fixture and the reply-text
 catalogue test.
 
+### S12 (from L8 residue 2) — The acknowledgement slot never renders a sentence
+
+`{{disponibilidad}}` takes a day or a franja. An extracted value that is a rewritten clause is neither
+merged nor rendered: `_prose_availability` rejects a semicolon or more than eight words, at the merge and
+at the rendering site (the ack reads this turn's extraction, so the merge guard alone was not enough).
+
+Measured in `real-solo-sabados` turn 4, in the very run that closed it:
+
+> cliente: `No me encuentro en stgo llegamos viernes tarde al dpto`
+> bot: `Anoté no está en Santiago; llega el viernes en la tarde al departamento como preferencia; la visita la confirmamos al coordinar, todavía no queda agendada. …`
+
 ### S6 — A bare franja is a franja, not only a day
 
 `viernes tarde`, `sábado en la mañana`, `lunes de madrugada` resolve to day + franja. Measured,
@@ -183,6 +194,7 @@ exclusion vocabulary lives in `capture._excludes_the_window`. S6 only stops drop
 | T8 | — | inline | CHANGELOG, doc verdicts, PR |
 | T9 | S9, S11 | inline | preference acknowledgement + change-request ack key, panel label |
 | T10 | — | inline | measure the 4 scenarios again and read the transcripts |
+| T11 | S12 | inline | prose availability rejected at merge and at render |
 
 ## Log
 
@@ -267,3 +279,11 @@ grounding/policy/tone +0.25, conversational and closure 0.00.
 | S8 | met | `test_s8_new_capture_data_does_not_charge_the_pending_field_attempt` |
 | S9 | met for the acknowledgement; question axis out of scope | L8 `real-repuesto-agotado` |
 | S11 | met | L8 `real-reagenda-mantencion` turn 5 |
+| S12 | met | `test_a_prose_availability_is_not_rendered_into_the_acknowledgement` |
+
+**L9 (agent decision, residues of L8)** — Residue 2 of L8 was a defect introduced in the same sentence
+S9 rewrote, so it was fixed in this cut instead of being filed: `_prose_availability` rejects a semicolon
+or more than eight words, both where the extraction is merged and where it is rendered. RED observed
+before the fix (`assert 'Anoté' not in …` on the exact prose of `real-solo-sabados` turn 4), GREEN after.
+Residue 1 stays open: a mid-thread greeting with no pending batch still restarts the presentation, and
+the fix for it needs a product answer about what a greeting mid-thread should say.

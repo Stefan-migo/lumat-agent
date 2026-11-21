@@ -1484,3 +1484,44 @@ def test_s5_the_hold_does_not_turn_an_exclusion_into_a_preference():
     replies = " ".join(result["replies"]).lower()
     assert "la tarde" not in replies
     assert "queda anotada" in replies
+
+
+def test_a_prose_availability_is_not_rendered_into_the_acknowledgement(
+    mock_openai_chat, monkeypatch
+):
+    """The ack slot wants a day or a franja, never a rewritten sentence.
+
+    Measured in `real-solo-sabados` turn 4: the extractor returned
+    "no está en Santiago; llega el viernes en la tarde al departamento" and the
+    customer read "Anoté no está en Santiago; llega el viernes en la tarde al
+    departamento como preferencia; la visita la confirmamos al coordinar…".
+    """
+    from app.chat.nodes import classify_intent
+
+    prose = "no está en Santiago; llega el viernes en la tarde al departamento"
+
+    def classify(text, **_kwargs):
+        return {
+            "intent": "solicitar_visita",
+            "service": None,
+            "priority": None,
+            "status": None,
+            "injection": False,
+            "fields": {"availability": prose} if "viernes" in text.lower() else {},
+            "template_id": None,
+        }
+
+    monkeypatch.setattr(classify_intent, "_llm_classify", classify)
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.prose.start")
+
+    replies = _turn(
+        conv_id,
+        "No me encuentro en stgo llegamos viernes tarde al dpto",
+        "wamid.prose.availability",
+    )
+    answer = " ".join(replies)
+
+    assert "Anoté" not in answer
+    assert prose not in answer
+    assert "qué pasa con el equipo" in answer.lower()

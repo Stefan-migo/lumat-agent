@@ -468,6 +468,20 @@ def _looks_like_prose(text: str) -> bool:
     return len(re.findall(r"[.!?](?:\s|$)", stripped)) >= 2
 
 
+def _prose_availability(value: str) -> bool:
+    """True when an extracted window is a rewritten sentence, not a day/franja.
+
+    The acknowledgement and the hold both interpolate the value into a sentence:
+    "Anoté {disponibilidad} como preferencia…". Measured in `real-solo-sabados`
+    turn 4, where the extractor returned "no está en Santiago; llega el viernes
+    en la tarde al departamento" and the customer read that whole clause inside
+    the template. A window is a day and at most a franja; anything longer, or
+    anything with a clause break, is the extractor restating the message.
+    """
+    stripped = (value or "").strip()
+    return ";" in stripped or len(stripped.split()) > 8
+
+
 def _merge_extracted(
     captured: dict, extracted: dict | None, pending: list[str], state: ConversationState,
     communes: list[str],
@@ -493,6 +507,8 @@ def _merge_extracted(
         if not value or captured.get(field):
             continue
         if field == "availability" and _looks_like_question(current_text):
+            continue
+        if field == "availability" and _prose_availability(value):
             continue
         # No field may echo a PROSE turn: a multi-sentence message copied into a
         # field is extraction corruption ("Soy Braulio, me dieron este numero...").
@@ -1004,6 +1020,7 @@ def _render_capture_question(
         isinstance(delivered, str)
         and delivered.strip()
         and not _looks_like_question(current_text)
+        and not _prose_availability(delivered)
     ):
         candidate = render_reply(
             get_reply_texts(session),
