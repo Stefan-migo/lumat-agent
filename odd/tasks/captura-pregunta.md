@@ -196,6 +196,26 @@ exclusion vocabulary lives in `capture._excludes_the_window`. S6 only stops drop
 | T10 | — | inline | measure the 4 scenarios again and read the transcripts |
 | T11 | S12 | inline | prose availability rejected at merge and at render |
 
+## Delivery
+
+Three commits on `odd/captura-pregunta`, each a reviewable slice with its tests and its measured
+evidence in the same commit:
+
+| Commit | Slice | Specs | Authored lines |
+| --- | --- | --- | --- |
+| `cf49703cd` | A — routing | S1, S2, S3, S5 | ~330 |
+| `a57dbe26f` | B — understanding, copy and panel | S4, S6, S7, S8, S9, S11 | ~400 (code + tests) |
+| `8cf8765fe` | C — the ack slot | S12 | ~40 |
+
+The branch is past the ~400-line slice when the generated `odd/evals` evidence is counted, so it ships
+as one PR with two labels: `type:bug` and `size:exception`, with the evidence corpus and the tests
+being the bulk of the diff. The `odd/evals/conv-eval-captura-*.md` reports are committed on purpose:
+the previous baseline's artifacts were lost because they were untracked.
+
+Open residue, not in this cut: a mid-thread greeting with **no** pending capture batch still restarts
+the presentation (L8 residue 1). It needs a product answer about what a greeting in the middle of a
+thread should say, so it is a cut of its own.
+
 ## Log
 
 **L1 (owner, verbatim)** — `hey chat cotninuamos desde aca: Handoff guardado en Engram como 7210 (handoff/chatbot-programa-pendientes).. Dame un overview antes de continuar`
