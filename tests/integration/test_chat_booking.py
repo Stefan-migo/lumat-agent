@@ -495,7 +495,12 @@ def test_offer_honors_the_day_the_customer_asked_for(mock_openai_chat):
 
 def test_sunday_request_widens_to_weekday_and_names_requested_moment(mock_openai_chat):
     today = _local_today()
-    sunday = today + timedelta(days=(6 - today.weekday()) % 7 or 7)
+    # The product resolves "el domingo" to the next Sunday **on or after** today
+    # (`slot_window._next_weekday`, pinned by test_today_matches_its_own_weekday).
+    # The old `or 7` meant "strictly next", so every UTC Sunday this fixture
+    # seeded a Monday at requested+8 — beyond FALLBACK_DAYS — and the test read
+    # the empty-agenda handoff instead of the widened offer.
+    sunday = today + timedelta(days=(7 - today.isoweekday()) % 7)
     monday = sunday + timedelta(days=1)
     conv_id, _, _, tech_id, _ = _seed_conversation(captured={
         "name": "Ana", "comuna": "Providencia", "address": "Calle 1",
@@ -515,9 +520,13 @@ def test_sunday_request_widens_to_weekday_and_names_requested_moment(mock_openai
     replies = _invoke(conv_id, _add_message(conv_id, "si", "wamid.window.sunday"))
 
     assert len(replies) == 1
-    assert replies[0].startswith(f"Para el domingo {sunday:%d/%m} no me quedan horarios.")
-    assert _day(sunday) not in replies[0]
-    assert _day(monday) in replies[0]
+    # Assert the two halves separately: a bare `startswith` let the "requested day
+    # is not among the options" check pass by capitalisation alone (`_day` renders
+    # capitalised, the notice says "el domingo").
+    notice, _, options = replies[0].partition("\n")
+    assert notice.startswith(f"Para el domingo {sunday:%d/%m} no me quedan horarios.")
+    assert _day(sunday) not in options
+    assert _day(monday) in options
 
 
 def test_offer_says_the_day_is_full_and_offers_the_nearest_later_day(mock_openai_chat):
