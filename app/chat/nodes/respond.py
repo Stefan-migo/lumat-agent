@@ -84,19 +84,27 @@ def _normalise_topic_text(text: str) -> str:
 # location terms (`comuna`, `vivo en`, `estoy en`) belong to capture answers, and
 # treating them as questions would divert the coverage scenarios away from
 # capture.
-_SCHEDULE_TERMS = ("sabado", "domingo", "festivo", "horario", "atienden", "cobertura")
+_SCHEDULE_QUESTION = re.compile(
+    r"\b(?:sabados?|domingos?|festivos?|horarios?|atienden|cobertura|"
+    r"disponib\w*|dias?|horas?|semanas?|agendas?)\b"
+)
+_SCHEDULE_MIXED_CONTENT = re.compile(
+    r"\b(?:caldera|calefont|calefaccion|equipo|falla|fallando|"
+    r"no\s+(?:enciende|calienta|funciona)|problema|mala|malo)\b"
+)
 
 
 def asks_about_schedule(question: str) -> bool:
-    """True when the turn names a schedule or weekend-attention term (T4).
+    """True when this turn is a schedule question rather than a mixed report.
 
-    `capture` is dispatched before any answer path, so a customer who asks
-    "dime altiro si atienden sabado" while the bot is collecting data used to be
-    read as an answer to the pending field and never got an answer. This is the
-    deterministic signal for that case, without touching the classifier prompt.
+    The schedule vocabulary is accent-normalised and word-bounded. Mixed turns
+    that also report an appliance/problem are left to the explicit-question path
+    in orchestrate instead of being classified as *pure* schedule questions.
     """
-    words = set(re.findall(r"[a-z0-9]+", _normalise_topic_text(question)))
-    return any(term in words for term in _SCHEDULE_TERMS)
+    normalized = _normalise_topic_text(question)
+    if _SCHEDULE_MIXED_CONTENT.search(normalized):
+        return False
+    return _SCHEDULE_QUESTION.search(normalized) is not None
 
 
 # L2 debt: prices live in the tariff, never in a customer KB document, so a KB
