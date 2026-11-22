@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
+from app.db import release_transaction
 from app.chat.assistant.memory_capture import memory_capture_node
 from app.chat.assistant.nodes import (
     assemble_context_node,
@@ -93,21 +94,38 @@ def _after_cost_gate(state: AssistantState) -> str:
     return "evidence" if state.get("cost_mode") == "blocked" else "memory_bootstrap"
 
 
-def build_assistant_graph():
+def _releasing(node, *, release: bool):
+    """Run a node with the session's transaction closed, because a node is an I/O boundary.
+
+    Nodes call providers, tools and the embedder, and the work a previous node
+    already staged is durable regardless of how this one ends.
+
+    `release=False` belongs to the turns that must stay one transaction: an
+    approved write consumes its approval and records its claim in the same unit,
+    and a commit in between would leave a crash looking like a consumed approval.
+    """
+    def wrapped(state):
+        if release:
+            release_transaction((state or {}).get("session"))
+        return node(state)
+    return wrapped
+
+
+def build_assistant_graph(*, release_transactions: bool = True):
     builder = StateGraph(AssistantState)
-    builder.add_node("assemble_context", assemble_context_node)
-    builder.add_node("panel_cost_gate", panel_cost_gate)
-    builder.add_node("memory_bootstrap", memory_bootstrap)
-    builder.add_node("plan_llm", plan_llm)
-    builder.add_node("guardrails", guardrails)
-    builder.add_node("repair_plan", repair_plan)
-    builder.add_node("retrieve_kb", retrieve_kb)
-    builder.add_node("execute_tool", execute)
-    builder.add_node("tool_loop_head", tool_loop_head)
-    builder.add_node("verify_effects", verify_effects)
-    builder.add_node("respond_stream", execute)
-    builder.add_node("evidence", collect_evidence)
-    builder.add_node("memory_capture", memory_capture_node)
+    builder.add_node("assemble_context", _releasing(assemble_context_node, release=release_transactions))
+    builder.add_node("panel_cost_gate", _releasing(panel_cost_gate, release=release_transactions))
+    builder.add_node("memory_bootstrap", _releasing(memory_bootstrap, release=release_transactions))
+    builder.add_node("plan_llm", _releasing(plan_llm, release=release_transactions))
+    builder.add_node("guardrails", _releasing(guardrails, release=release_transactions))
+    builder.add_node("repair_plan", _releasing(repair_plan, release=release_transactions))
+    builder.add_node("retrieve_kb", _releasing(retrieve_kb, release=release_transactions))
+    builder.add_node("execute_tool", _releasing(execute, release=release_transactions))
+    builder.add_node("tool_loop_head", _releasing(tool_loop_head, release=release_transactions))
+    builder.add_node("verify_effects", _releasing(verify_effects, release=release_transactions))
+    builder.add_node("respond_stream", _releasing(execute, release=release_transactions))
+    builder.add_node("evidence", _releasing(collect_evidence, release=release_transactions))
+    builder.add_node("memory_capture", _releasing(memory_capture_node, release=release_transactions))
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"memory_bootstrap": "memory_bootstrap", "evidence": "evidence"})
@@ -170,7 +188,13 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         # steps produced: that evidence is what the continuation step plans from.
         state["tool_results"] = list(resume_tool_results or [])
         state["tool_steps"] = resume_tool_steps or 0
-    graph = build_assistant_graph()
+    graph = build_assistant_graph(
+        # An approved write keeps one transaction: it consumes the approval and
+        # records its claim in the same unit, so a commit at a node boundary would
+        # let a crash look like a consumed approval with the write half-applied.
+        # That turn is bounded by the database's idle-transaction guard instead.
+        release_transactions=resume_plan is None,
+    )
     if on_stage is None:
         return graph.invoke(state)
     last_state = None

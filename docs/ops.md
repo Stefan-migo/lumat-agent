@@ -761,6 +761,54 @@ parallel artifact, so the status cannot drift from the spec.
 Applying this line to existing specs retroactively or only to future work is
 still an open decision and is not part of this runbook.
 
+### 2.11 Database idle-transaction guard
+
+The database aborts a transaction that sits idle for **180 s**
+(`idle_in_transaction_session_timeout`). Migration `070_session_safety.sql` sets
+it as a database-level default, so it applies to every role that connects — the
+app pool, the admin role, an operator's `psql` — and survives a rebuilt volume.
+
+It exists because of the 2026-11-21 incident (§3): an assistant turn kept a
+transaction open while waiting on external I/O, held its row locks for sixteen
+minutes, and every writer queued behind it until the SQLAlchemy pool (5 + 10)
+was gone and the whole panel answered 500. Nothing in the database could abort
+that transaction, because the value was `0`.
+
+The guard is a net, not a timeout budget: the application must not hold a
+transaction across external I/O at all. A transaction idle for three minutes is
+pathological by construction, and aborting it costs one failed turn with its
+retry action instead of a wedged service.
+
+Verify it from a **new** session (a session opened before the setting ran keeps
+the old value — that is what a pool recycle is for):
+
+```bash
+docker exec lumat-db-1 sh -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -U lumat -d lumat -X -c \
+  "SELECT current_setting('\''idle_in_transaction_session_timeout'\'')"'
+# 3min
+```
+
+To recycle pooled app connections so they inherit it, terminate only the ones
+that are not in a request, plus any read-only `idle in transaction` leftover
+whose only locks are `AccessShareLock`:
+
+```sql
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+WHERE datname = 'lumat' AND usename = 'app' AND state IN ('idle', 'idle in transaction');
+```
+
+`pool_pre_ping` reconnects them on the next checkout. A rollback is
+`ALTER DATABASE lumat RESET idle_in_transaction_session_timeout;`.
+
+The connection pool is sized by the environment, not by code
+(`DB_POOL_SIZE=10`, `DB_MAX_OVERFLOW=20`, `DB_POOL_TIMEOUT=10`,
+`DB_POOL_RECYCLE=1800`; see `infra/.env.example`). The 2026-11-21 incident took
+the API down with SQLAlchemy's 5 + 10 and a 30 s checkout wait, and widening it
+meant editing code — which is the wrong dependency at three in the morning. Keep
+`pool_size + max_overflow` well inside the database's `max_connections` (100);
+`db_pool_recycle` is what eventually hands a long-lived connection the current
+database defaults above.
+
 ---
 
 ## 3. Runbook incident + change record
@@ -775,6 +823,7 @@ still an open decision and is not part of this runbook.
 | 2026-09-23 | The monitoring alert path cannot deliver. `/opt/lumat/infra/.env` on the VPS still carries the placeholder `SMTP_HOST=change-me-smtp-host`, so on any failed check `monitor.sh` dies with `curl: (6) Could not resolve host: change-me-smtp-host`. Observed live during the `v2026.09.4` deploy, when the deploy-run monitor tried to alert on the false negative above. No real alert has ever been sent: the cron log shows zero ALERT lines since 2026-09-22. | Unresolved — it needs the owner's real SMTP host and credentials in the server environment; the repository cannot supply them and inventing one would be worse than the gap. This qualifies the 2026-09-22 incident row above: the `infra/.env` loading fix does work, but the value it loads is still a placeholder, so "alerts can actually be sent" is not yet true. | agent-assisted |
 | 2026-10-30 | The 2026-09-23 undeliverable alert path — and, behind it, every outbound email: `mail.lumat.cl` never offers `SMTP AUTH` to the VPS IP, which is what S9 of WU-E recorded. | **Resolved.** Outbound email now goes through **Resend** as the SMTP relay. Panel (`notify.smtp_*`): `smtp.resend.com`, port `587`, `starttls`, user `resend`, `from=notificaciones@lumat.cl`, API key in the encrypted `smtp_password` panel secret. `monitor.sh`: `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` in `/opt/lumat/infra/.env` (`600`), which the script loads itself, so no container was recreated. The domain was verified in Resend with `TXT resend._domainkey.lumat.cl` and the `CNAME`s `rsend`/`send`; the root SPF record was deliberately left untouched and still holds exactly one `v=spf1`. **Verified by effect, not by presence:** `notification_operations` id 13 → `status=sent`, `attempts=1`, `delivered_at 2026-10-30T14:27:13Z`, with audit `notification.operation_sent`; a direct `alert()` run of `monitor.sh` delivered to `SMTP_TO`; and a full `monitor.sh` run printed `health=OK`, `webhook_probe=OK`, `ALERT: backup_age=FAIL` and exited 1 — the documented permission false negative of §3, reached without dying in the alert path, which is the whole point. | agent-assisted |
 | 2026-09-23 | The assistant could not answer in production for the whole `v2026.09.1`–`v2026.09.4` window. The prod image never shipped `agent/`, so `app/agent_registry.py:223` resolved `/app/agent/registry.yaml` to nothing and `load_registry()` raised `registry file not found` on every turn; the panel answered with the raw error plus "No se pudo procesar el mensaje". Not a boot failure — `build_graph()` runs per message (`app/chat/graph.py:300`) — and invisible to the deploy smoke, which has no assistant-turn probe. `prompts.load()` masked the same missing tree on its own path by silently serving its literal `FALLBACKS`. | Fixed in `v2026.09.5` (`COPY agent/ agent/` in the prod `Dockerfile`, plus a regression test asserting the image ships every repo-root path the runtime resolves). **Forward-only: there is no known-good tag to roll back to on this path**, because the prod Dockerfile never contained `agent/`. Still open: the smoke needs an assistant-turn probe (§2.1), and the first real conversation after this deploy is the outstanding end-to-end confirmation. | agent-assisted |
+| 2026-11-21 | The panel answered 500 on every endpoint that touches the database. One assistant turn (thread 55, run `7b589166…`, stage `planning`) kept a transaction `idle in transaction` for sixteen minutes while it waited on external I/O, holding RowShare/RowExclusive locks on `internal_chat_threads`, `internal_chat_messages`, `assistant_artifacts`, `audit_log`, `project_files`, `projects` and `users`. `pg_blocking_pids()` showed a six-deep chain of waiters behind it; the waiters exhausted the pool (5 + 10) and every request raised `QueuePool limit of size 5 overflow 10 reached, connection timed out`. The application's own failure path then deadlocked trying to mark the operator's message as failed, so nothing self-healed; the operator could not fix it from the panel, which was the surface that was down. The database had no guard at all (`idle_in_transaction_session_timeout = 0`, `statement_timeout = 0`, `lock_timeout = 0`). | **Resolved by effect.** One `SELECT pg_terminate_backend(4016327)` on the lock holder released everything: pool back to 7 connections, the message recorded `failed` with `El agente no pudo procesar este mensaje. Reinténtalo.`, a fresh run completed in the same thread, `/health` 200 and `/panel/api/*` 401 instead of 500. The residual fixes are the `pool-safety` unit: migration `070` (the 180 s guard, §2.11, applied to production the same day), no transaction held across external I/O, a configurable pool, and a failure path that survives a deadlock. | agent-assisted |
 
 ### Change log
 
@@ -813,3 +862,4 @@ still an open decision and is not part of this runbook.
 | 2026-11-21 | Deploy of `v2026.11.13` (`3796477f`), two PRs since `v2026.11.12`: el asistente del panel puede escribir el comportamiento del bot con aprobación exacta — propone documentos de KB, escribe los settings que antes sólo leía, simula conversaciones sobre el cerebro real, corre la regresión contra una baseline nombrada y revierte un cambio con el historial auditado (#853); y el cerebro del chat lee el turno en vez de ejecutar su ritual de captura — un saludo o una cortesía con datos pendientes retoma la captura, un pedido explícito de cambio de fecha sale de la captura, una pregunta de disponibilidad conserva el día que propone y su confirmación dice preferencia y no visita agendada (#854, corpus 36/42 → 38/42). Sin migraciones: rollback code-only. | agent-assisted |
 | 2026-11-19 | Deploy of `v2026.11.12` (`98f440de`), one PR since `v2026.11.11`: la sección Configuración vuelve a ser usable en celular — tarjetas de ancho completo en lugar de una franja de 208px, encabezado legible, sin documento de 620px, y las tablas de horarios y de captura apiladas en un bloque por fila con sus etiquetas visibles (#848). Frontend-only: la imagen api se reconstruyó por el sello de versión y no corrió ninguna migración. Se cortó porque `v2026.11.11` quedó tagueado 2h54m antes de que el fix se mergeara. | agent-assisted |
 | 2026-11-19 | Runbook correction, measured on the `v2026.11.11` deploy: a remote script fed to `bash -s` **stops after the first `docker compose exec`**, because `exec` consumes the script's stdin and every following line is lost with no error. Observed twice: the `nginx -t` / migrate / seed / schema steps of the first pass vanished and the run was re-collected explicitly. Fix, proven on the server: give every `exec` its own `< /dev/null`, or run the steps one command per session. The same deploy proved a second trap: any compose command that resolves the build section (`logs`, `config`, `up`) fails with `error while interpolating services.api.build.args.GIT_SHA` unless `GIT_SHA=$(git rev-parse --short HEAD)` is exported, because `infra/docker-compose.prod.yml:30` requires it (`${GIT_SHA:?…}`). `exec` alone does not resolve it. | agent-assisted |
+| 2026-11-21 | Production DB guard applied during the 2026-11-21 incident: `idle_in_transaction_session_timeout = 180s` as a database-level default (`ALTER DATABASE` by hand, then codified as migration `070_session_safety.sql` so a rebuilt database cannot silently lose it). Pooled app connections were recycled (`pg_terminate_backend` on `idle` and on a read-only `idle in transaction` leftover) so live sessions inherit it — verified `3min` on the connections serving requests next. Documented in §2.11 and recorded in §3. | agent-assisted |
