@@ -8,6 +8,28 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.14] - 2026-11-22
+
+### Corregido
+
+- El bot contestaba una pregunta de disponibilidad con la pregunta de diagnóstico. «¿Qué días tienen
+  disponibles?» y «¿Tienen hora disponible esta semana?» volvían como «Cuéntame qué pasa con la caldera:
+  ¿no enciende, no calienta o muestra algún código de error?», en dos conversaciones reales de
+  producción. Una pregunta ahora gana siempre al paso de captura, con o sin datos pendientes, y la
+  respuesta configurada de horarios reconoce cómo se pide hora de verdad —`disponible`, `días`, `hora`,
+  `semana`, `agenda`— sin tragarse un mensaje que además reporta una falla.
+- Las conversaciones simuladas del panel dejaban filas reales: un cliente con teléfono reservado, dos
+  conversaciones, doce mensajes y **dos casos abiertos** en la cola del operador, que además contaba el
+  resumen diario. Ahora cada simulación marca lo que escribe y las superficies de operación —casos,
+  bandeja y resumen— excluyen lo simulado con un único predicado, y la herramienta viene **deshabilitada
+  por defecto**: se habilita con `chatbot.simulation_enabled` cuando el operador lo decide.
+
+### Cambiado
+
+- `071_simulation_isolation`: dos columnas aditivas, `conversations.simulated` y `cases.simulated`, con
+  valor por defecto `false`, así que ninguna fila existente cambia de significado. `070_session_safety`
+  entra en el mismo despliegue.
+
 ## [2026.11.13] - 2026-11-21
 
 ### Agregado
