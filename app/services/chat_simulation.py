@@ -1,10 +1,10 @@
 """Run the production conversation brain without making a customer-visible thread.
 
-Simulation conversations use one reserved synthetic customer and deliberately never
-stamp ``last_message_at``: the panel's active conversation query requires it to be
-non-NULL, so these rows stay out of the operator inbox. The graph nodes open their
-own sessions and commit, so transaction rollback cannot isolate a run;
-invisibility comes only from not stamping that panel field.
+Simulation conversations use one reserved synthetic customer, are flagged at
+creation, and deliberately never stamp ``last_message_at``. Operational panel and
+case reads exclude flagged rows, while the missing activity timestamp remains an
+additional guard for the active inbox. The graph nodes open their own sessions and
+commit, so transaction rollback cannot isolate a run.
 
 The synthetic *customer* is deliberately shared by every run while the conversation
 is fresh each time. A per-run customer would leave one fake row in the panel's
@@ -65,7 +65,7 @@ def simulate(session: Session, messages: list[str]) -> dict:
 
     phone = RESERVED_SIMULATION_PHONE
     customer = get_or_create_customer(session, phone)
-    conversation = Conversation(customer_id=customer.id, wa_phone=phone)
+    conversation = Conversation(customer_id=customer.id, wa_phone=phone, simulated=True)
     session.add(conversation)
     session.flush()
     session.commit()

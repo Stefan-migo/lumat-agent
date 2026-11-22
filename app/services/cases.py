@@ -26,7 +26,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.chat.state import ConversationState
-from app.models import Case, Customer, Message
+from app.models import Case, Conversation, Customer, Message
 from app.services.audit import record_audit
 from app.services.events import publish_event
 
@@ -52,6 +52,11 @@ def unarchive_case(session: Session, case: Case, actor: str = "system") -> Case:
                      entity_id=str(case.id), before={"archived_at": archived_at.isoformat()},
                      after={"archived_at": None})
     return case
+
+
+def not_simulated_expr(model):
+    """Canonical SQL predicate for rows visible to operational surfaces."""
+    return model.simulated.is_(False)
 
 
 def case_is_open_expr():
@@ -114,10 +119,12 @@ def get_or_create_case(session: Session, conversation_id: int, customer_id: int)
         .limit(1)
     )
     if case is None:
+        conversation = session.get(Conversation, conversation_id)
         case = Case(
             conversation_id=conversation_id,
             customer_id=customer_id,
             origin_case_id=_latest_case_origin(session, customer_id),
+            simulated=bool(conversation and conversation.simulated),
         )
         session.add(case)
         session.flush()
@@ -248,7 +255,7 @@ def list_open_cases(session: Session, limit: int = 100) -> list[Case]:
         session.execute(
             select(Case, Customer)
             .join(Customer, Case.customer_id == Customer.id)
-            .where(case_is_open_expr())
+            .where(case_is_open_expr(), not_simulated_expr(Case))
             .order_by(
                 Case.escalated_at.desc().nulls_last(),
                 Case.created_at.desc(),

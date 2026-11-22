@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from app.chat.assistant.approval import consume_approval, issue_approval
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool, get_tool
 from app.db import SessionLocal
-from app.models import Conversation, ConversationEvent, Customer, DomainEvent, Message, MessageDirection
+from app.models import Case, Conversation, ConversationEvent, Customer, DomainEvent, Message, MessageDirection
 from app.services.prompts import load_assistant_config
 
 TOOL = "chatbot.simulate"
@@ -21,6 +21,9 @@ def _approval(arguments: dict) -> dict:
 
 def _stub_brain_models(monkeypatch):
     from app.chat.nodes import classify_intent
+    from app.services import settings
+
+    monkeypatch.setattr(settings, "get_simulation_enabled", lambda _session: True)
 
     monkeypatch.setattr(
         classify_intent,
@@ -91,6 +94,7 @@ def test_simulation_writes_no_domain_event_or_active_conversation(monkeypatch, m
         ).all()
         assert conversation is not None
         assert conversation.last_message_at is None
+        assert conversation.simulated is True
         assert domain_events == []
         # Replies are brain observations persisted in the conversation; they are
         # not channel deliveries. No outbox event or delivery request exists.
@@ -112,6 +116,24 @@ def test_simulation_without_approval_creates_no_conversation():
                 whitelist=set(load_assistant_config().tools_whitelist),
                 role="admin",
             )
+        assert session.scalar(select(func.count(Conversation.id))) == before_conversations
+        assert session.scalar(select(func.count(Customer.id))) == before_customers
+
+
+def test_simulation_refuses_by_default_as_a_normal_tool_error_without_writes():
+    arguments = {"messages": ["Necesito revisar una caldera"]}
+    with SessionLocal() as session:
+        before_conversations = session.scalar(select(func.count(Conversation.id)))
+        before_customers = session.scalar(select(func.count(Customer.id)))
+        result = execute_tool(
+            session, TOOL, arguments, approval=_approval(arguments),
+            whitelist=set(load_assistant_config().tools_whitelist), role="admin",
+        )
+        assert result["status"] == "error"
+        assert result["error"] == (
+            "chatbot.simulate is disabled; enable setting "
+            "'chatbot.simulation_enabled' to run simulations"
+        )
         assert session.scalar(select(func.count(Conversation.id))) == before_conversations
         assert session.scalar(select(func.count(Customer.id))) == before_customers
 

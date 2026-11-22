@@ -29,7 +29,7 @@ from app.panel.api.serializers import to_active_conversation_dict, to_conversati
 from app.panel.deps import get_db
 from app.services.conversations import assign, change_state, retry_operator_message, send_operator_media, send_operator_message
 from app.webhook.ingest import _safe_filename
-from app.services.cases import case_is_open_expr
+from app.services.cases import case_is_open_expr, not_simulated_expr
 router = APIRouter(tags=["panel-api-conversations"])
 
 _INLINE_MEDIA_TYPES = {
@@ -127,7 +127,7 @@ def _ranked_case_ids():
             partition_by=Case.conversation_id,
             order_by=(priority, Case.created_at.desc(), Case.id.desc()),
         ).label("case_rank"),
-    ).subquery("ranked_cases")
+    ).where(not_simulated_expr(Case)).subquery("ranked_cases")
 
 
 def _selected_case(session: Session, conversation_id: int) -> Case | None:
@@ -169,7 +169,7 @@ def _queue_base(
     )
     # The ranked subquery is joined through the case primary key so each
     # conversation contributes at most one row, without per-row case queries.
-    filters = []
+    filters = [not_simulated_expr(Conversation)]
     if state is not None:
         filters.append(Conversation.state == state)
     if exclude_closed:
@@ -272,6 +272,7 @@ def active_conversations(
         .join(Customer, Customer.id == Conversation.customer_id)
         .where(
             Conversation.state.in_((ConversationState.BOT, ConversationState.HUMAN)),
+            not_simulated_expr(Conversation),
             Conversation.last_message_at.is_not(None),
             Conversation.last_message_at >= cutoff,
         )

@@ -3,11 +3,13 @@
 import argparse
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.chat.nodes.respond import list_unresolved_questions
+from app.models import Conversation, Message
 from app.db import session_scope
 from app.services import cases, costs
+from app.services.cases import not_simulated_expr
 
 
 def build_digest(session: Session, *, period: str, now: datetime) -> str:
@@ -16,7 +18,18 @@ def build_digest(session: Session, *, period: str, now: datetime) -> str:
         raise ValueError("period must be 'daily' or 'weekly'")
 
     open_cases = len(cases.list_open_cases(session))
-    unresolved_questions = len(list_unresolved_questions(session))
+    unresolved_questions = len(
+        session.scalars(
+            select(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Message.payload["unresolved"].astext == "true",
+                not_simulated_expr(Conversation),
+            )
+            .order_by(Message.created_at.desc())
+            .limit(100)
+        ).all()
+    )
     if period == "daily":
         spend = costs.daily_spend(session, now.date())
         period_label = "diario"

@@ -58,6 +58,7 @@ MESSAGE_TEMPLATES_KEY = "messages.templates"
 # field is missing; this key only holds the wording, so the order stays in code
 # (`chat.conduct.orden` in T10).
 CAPTURE_QUESTIONS_KEY = "capture.questions"
+SIMULATION_ENABLED_KEY = "chatbot.simulation_enabled"
 
 # S10: the conduct object — capture order, question budget per message and
 # active derivation rules. Closed options only: the five invariants of S19 are
@@ -553,6 +554,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "followup.idle_hours": 24,
     "followup.idle_template_name": "",
     # D3/S4: local, bounded audio transcription (the worker remains opt-in).
+    SIMULATION_ENABLED_KEY: False,
     "transcription.enabled": False,
     "transcription.model": "small",
     "transcription.window_days": 7,
@@ -980,6 +982,14 @@ def get_followup_idle_template_name(session: Session) -> str:
     """Owner-configured WhatsApp template name, or empty when unset/invalid."""
     name = get_setting(session, "followup.idle_template_name", default="")
     return name.strip() if isinstance(name, str) else ""
+
+
+def get_simulation_enabled(session: Session) -> bool:
+    """Whether chatbot.simulate may write simulation rows; disabled by default."""
+    enabled = get_setting(session, SIMULATION_ENABLED_KEY, default=False)
+    return enabled if isinstance(enabled, bool) else False
+
+
 def get_transcription_enabled(session: Session) -> bool:
     """Return whether local audio transcription is enabled; malformed values disable it."""
     enabled = get_setting(session, "transcription.enabled", default=False)
