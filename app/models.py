@@ -340,6 +340,7 @@ class Conversation(Base):
     # that arrives as "Hola" + "¿Cómo estás?" is still turn 1.
     turn_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     created_at: Mapped[datetime] = _ts()
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -466,6 +467,7 @@ class Case(Base):
     # with a year-long warranty) instead of existing as an unrelated row. Null
     # for a first case; the prior case is never reopened or rewritten.
     origin_case_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cases.id"))
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # 007: created_at (panel ordering + KPI windows, T5.3/T5.5).
     created_at: Mapped[datetime] = _ts()
     service: Mapped[str | None] = mapped_column(String(100))

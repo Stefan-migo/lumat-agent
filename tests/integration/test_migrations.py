@@ -824,6 +824,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("068_customer_address_validation",),
         ("069_panel_sessions",),
         ("070_session_safety",),
+        ("071_simulation_isolation",),
     ]
 
 

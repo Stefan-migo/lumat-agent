@@ -65,6 +65,34 @@ def test_daily_digest_reports_real_open_cases_questions_and_spend(session):
     assert "diario" in digest.lower()
 
 
+def test_daily_digest_excludes_simulated_cases_and_unresolved_questions(session):
+    now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)
+    customer, conversation = _seed_customer_conversation(session)
+    simulated = Conversation(
+        customer_id=customer.id, wa_phone=customer.phone_e164, simulated=True
+    )
+    session.add(simulated)
+    session.flush()
+    session.add_all([
+        Case(customer_id=customer.id, conversation_id=conversation.id, status="abierto"),
+        Case(customer_id=customer.id, conversation_id=simulated.id, status="abierto", simulated=True),
+        Message(
+            conversation_id=simulated.id,
+            direction=MessageDirection.INBOUND,
+            msg_type=MessageType.TEXT,
+            status=MessageStatus.RECEIVED,
+            payload={"unresolved": True},
+            created_at=now,
+        ),
+    ])
+    session.flush()
+
+    digest = build_digest(session, period="daily", now=now)
+
+    assert "Casos abiertos: 1" in digest
+    assert "Preguntas sin resolver: 0" in digest
+
+
 def test_weekly_digest_sums_spend_for_seven_utc_days(session):
     now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)
     customer, conversation = _seed_customer_conversation(session)

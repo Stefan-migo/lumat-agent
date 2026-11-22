@@ -702,6 +702,15 @@ def _chatbot_metrics(session, args: ChatbotMetricsArgs):
 
 
 def _chatbot_simulate(session, args: ChatbotSimulateArgs):
+    from app.services.settings import get_simulation_enabled
+
+    if not get_simulation_enabled(session):
+        # S3: refused by default, as a typed tool error the runtime already turns
+        # into a readable tool result (`app/chat/assistant/nodes.py:1199`). A bare
+        # RuntimeError would be caught as a crash instead of a refusal.
+        raise ToolExecutionError(
+            "chatbot.simulate is disabled; enable setting 'chatbot.simulation_enabled' to run simulations"
+        )
     return chat_simulation.simulate(session, args.messages)
 
 
