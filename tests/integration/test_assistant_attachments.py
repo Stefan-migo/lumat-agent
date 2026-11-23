@@ -104,6 +104,21 @@ def test_document_context_preserves_source_identity_in_prompt(tmp_path):
     assert result[0]["kind"] == "txt"
 
 
+def test_image_attachment_is_listed_for_tool_resolution_without_inlining_bytes(tmp_path):
+    image = tmp_path / "photo.png"
+    image.write_bytes(b"png")
+    attachment = type("Attachment", (), {"kind": "image", "stored_path": str(image), "filename": "photo.png", "id": 73})()
+
+    context = prepare_attachment_context([attachment], max_chars=1000)
+    parts = build_multimodal_content([attachment], "Describe this")
+
+    assert context == [{"type": "image", "filename": "photo.png", "kind": "image", "attachment_id": 73}]
+    assert "data:" not in str(context)
+    assert parts[0] == {"type": "text", "text": "Describe this"}
+    assert parts[1]["type"] == "image_url"
+    assert parts[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
 def test_images_are_openai_parts_and_oversized_images_are_rejected(tmp_path):
     image = tmp_path / "photo.png"
     image.write_bytes(b"png")
@@ -407,5 +422,8 @@ def test_multimodal_invocation_uses_openrouter_image_part_and_audits(tmp_path, m
         request = route.calls[0].request
         body = __import__("json").loads(request.content)
         assert body["model"] == "google/gemini-2.5-flash"
+        assert body["messages"][1]["content"][0]["type"] == "text"
+        assert '[attachment filename="photo.png" id="77" type="image"]' in body["messages"][1]["content"][0]["text"]
+        assert "cG5n" not in body["messages"][1]["content"][0]["text"]
         assert body["messages"][1]["content"][1]["type"] == "image_url"
     get_settings.cache_clear()

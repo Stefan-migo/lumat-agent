@@ -107,6 +107,37 @@ def test_conversation_tool_projection_measured_at_twelve_and_twenty_rows(migrate
         session.rollback()
 
 
+def test_conversation_search_matches_summary_case_insensitively_and_preserves_limit(migrated_db):
+    from app.services.conversations import list_conversations
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56999121111", name="Ana Example")
+        other_customer = Customer(phone_e164="+56999122222", name="Bob Example")
+        session.add_all([customer, other_customer])
+        session.flush()
+        older = Conversation(
+            customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT,
+            summary="La CALDERA necesita revisión", last_message_at=datetime(2026, 11, 1, tzinfo=timezone.utc),
+        )
+        newer = Conversation(
+            customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT,
+            summary="Caldera y calefacción", last_message_at=datetime(2026, 11, 2, tzinfo=timezone.utc),
+        )
+        no_match = Conversation(
+            customer_id=other_customer.id, wa_phone=other_customer.phone_e164, state=ConversationState.BOT,
+            summary="Consulta de garantía", last_message_at=datetime(2026, 11, 3, tzinfo=timezone.utc),
+        )
+        session.add_all([older, newer, no_match])
+        session.flush()
+
+        matched = list_conversations(session, query="cAlDeRa", limit=1)
+        assert [(conversation.id, name) for conversation, name in matched] == [(newer.id, "Ana Example")]
+        assert [conversation.id for conversation, _ in list_conversations(session, query="+56999121111")] == [newer.id, older.id]
+        assert [conversation.id for conversation, _ in list_conversations(session, query="Ana Example")] == [newer.id, older.id]
+        assert list_conversations(session, query="nonexistent") == []
+        session.rollback()
+
+
 def test_conversation_transcript_truncates_bodies_and_total_without_dropping_rows(migrated_db):
     from app.chat.assistant.nodes import _DETAIL_EVIDENCE_SHARE, _TOOL_EVIDENCE_LIMIT, _render_tool_evidence
     from app.services.conversations import TRANSCRIPT_JSON_LIMIT, conversation_transcript
