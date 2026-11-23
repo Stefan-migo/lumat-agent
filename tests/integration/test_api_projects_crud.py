@@ -168,3 +168,164 @@ def test_project_delete_protects_default_and_missing_or_foreign_projects(client)
     assert client.delete("/panel/api/projects/default").status_code == 400
     assert client.delete("/panel/api/projects/missing").status_code == 404
     assert client.delete("/panel/api/projects/private-delete").status_code == 404
+
+
+def test_delete_removes_every_dependent_row_and_preview_matches(client, tmp_path):
+    """S4: the preview, the response and the rows actually removed are the same census."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import func
+
+    with SessionLocal() as session:
+        owner = User(username="census-owner", password_hash=hash_password("test-pass"), role="operador")
+        session.add(owner)
+        session.flush()
+        project = _project(session, owner.id, "census")
+        folder = ProjectFolder(project_id=project.id, name="A")
+        session.add(folder)
+        session.flush()
+        document = KbDocument(project_id=project.id, title="D", format=DocumentFormat.MD, content="c")
+        session.add(document)
+        session.flush()
+        session.add(KbChunk(document_id=document.id, version=1, chunk_index=0, content="c", embedding=[0.0] * 384))
+        file_blob = tmp_path / "file"; file_blob.write_text("x")
+        artifact_blob = tmp_path / "artifact"; artifact_blob.write_text("a")
+        attachment_blob = tmp_path / "attachment"; attachment_blob.write_text("t")
+        session.add(ProjectFile(
+            project_id=project.id, owner_id=owner.id, filename="f.txt", content_type="text/plain",
+            size=1, sha256="h", stored_path=str(file_blob), folder_id=folder.id,
+            kb_document_id=document.id,
+        ))
+        thread = InternalChatThread(user_id=owner.id, proyecto=project.slug)
+        session.add(thread)
+        session.flush()
+        session.add(InternalChatMessage(thread_id=thread.id, author="user", content="m"))
+        session.add(AssistantArtifact(
+            thread_id=thread.id, root_id=1, version=1, filename="a", content_type="text/plain",
+            size=1, sha256="h", stored_path=str(artifact_blob),
+        ))
+        session.add(AssistantAttachment(
+            thread_id=thread.id, filename="t", kind="file", content_type="text/plain",
+            size=1, sha256="h", stored_path=str(attachment_blob),
+            deleted_at=datetime.now(timezone.utc),
+        ))
+        session.commit()
+        project_id, thread_id, document_id = project.id, thread.id, document.id
+    _login(client, "census-owner")
+
+    impact = client.get("/panel/api/projects/census/deletion-impact").json()["impact"]
+    assert impact == {
+        "threads": 1, "messages": 1, "files": 1, "folders": 1, "kb_documents": 1, "kb_chunks": 1,
+        "memories": 0, "artifacts": 1, "attachments": 1,
+    }
+    assert client.delete("/panel/api/projects/census").json()["deleted"] == impact
+
+    with SessionLocal() as session:
+        for statement in (
+            select(func.count()).select_from(ProjectFile).where(ProjectFile.project_id == project_id),
+            select(func.count()).select_from(ProjectFolder).where(ProjectFolder.project_id == project_id),
+            select(func.count()).select_from(KbDocument).where(KbDocument.project_id == project_id),
+            select(func.count()).select_from(KbChunk).where(KbChunk.document_id == document_id),
+            select(func.count()).select_from(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id),
+            select(func.count()).select_from(AssistantArtifact).where(AssistantArtifact.thread_id == thread_id),
+            select(func.count()).select_from(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id),
+        ):
+            assert session.scalar(statement) == 0
+
+
+def test_delete_rollback_keeps_blobs(tmp_path):
+    """S4: a rolled-back delete unlinks nothing."""
+    from app.services import projects as project_service
+
+    blob = tmp_path / "keep"; blob.write_text("x")
+    with SessionLocal() as session:
+        owner = User(username="rollback-owner", password_hash=hash_password("test-pass"), role="operador")
+        session.add(owner)
+        session.flush()
+        project = _project(session, owner.id, "rollback-me")
+        session.add(ProjectFile(
+            project_id=project.id, owner_id=owner.id, filename="k", content_type="text/plain",
+            size=1, sha256="h", stored_path=str(blob),
+        ))
+        session.commit()
+        project_service.delete_project(session, project, owner_id=owner.id, actor="rollback-owner")
+        session.rollback()
+
+    assert blob.exists()
+
+
+def test_move_files_merges_same_name_folders_and_rescopes_kb(client):
+    """S3: merge by name, keep the hierarchy, re-scope the KB document, audit the move."""
+    with SessionLocal() as session:
+        owner = User(username="move-owner", password_hash=hash_password("test-pass"), role="operador")
+        session.add(owner)
+        session.flush()
+        source = _project(session, owner.id, "move-src")
+        target = _project(session, owner.id, "move-tgt")
+        reports = ProjectFolder(project_id=source.id, name="Reports")
+        session.add(reports)
+        session.flush()
+        child = ProjectFolder(project_id=source.id, parent_id=reports.id, name="Q1")
+        session.add(child)
+        session.add(ProjectFolder(project_id=target.id, name="Reports"))
+        session.flush()
+        document = KbDocument(project_id=source.id, title="D", format=DocumentFormat.MD, content="c")
+        session.add(document)
+        session.flush()
+        session.add_all([
+            ProjectFile(
+                project_id=source.id, owner_id=owner.id, filename="in.txt", content_type="text/plain",
+                size=1, sha256="m1", stored_path="/nonexistent/a", folder_id=child.id,
+                kb_document_id=document.id,
+            ),
+            ProjectFile(
+                project_id=source.id, owner_id=owner.id, filename="top.txt", content_type="text/plain",
+                size=1, sha256="m2", stored_path="/nonexistent/b",
+            ),
+        ])
+        session.commit()
+        target_id, document_id = target.id, document.id
+    _login(client, "move-owner")
+
+    assert client.post("/panel/api/projects/move-src/move-files", json={"target_slug": "move-tgt"}).json() == {
+        "ok": True, "files": 2, "folders": 2,
+    }
+    with SessionLocal() as session:
+        folders = session.scalars(select(ProjectFolder).where(ProjectFolder.project_id == target_id)).all()
+        files = session.scalars(select(ProjectFile).where(ProjectFile.project_id == target_id)).all()
+        assert sorted(folder.name for folder in folders) == ["Q1", "Reports"]
+        assert session.get(KbDocument, document_id).project_id == target_id
+        nested = next(file for file in files if file.filename == "in.txt")
+        assert session.get(ProjectFolder, nested.folder_id).name == "Q1"
+        assert session.scalar(select(ProjectAudit).where(
+            ProjectAudit.project_id == target_id, ProjectAudit.action == "project.move_files"
+        )) is not None
+
+
+def test_move_and_lifecycle_rejections(client):
+    """S3/S6/S7: negative rules, and no route reaches another owner's project."""
+    from sqlalchemy import func
+
+    with SessionLocal() as session:
+        owner = User(username="reject-owner", password_hash=hash_password("test-pass"), role="operador")
+        other = User(username="reject-other", password_hash=hash_password("test-pass"), role="operador")
+        session.add_all([owner, other])
+        session.flush()
+        _project(session, owner.id, "default")
+        _project(session, owner.id, "reject-src")
+        _project(session, owner.id, "reject-archived", status="archived")
+        _project(session, owner.id, "reject-taken")
+        _project(session, other.id, "reject-foreign")
+        session.commit()
+    _login(client, "reject-owner")
+
+    assert client.post("/panel/api/projects/reject-src/move-files", json={"target_slug": "reject-src"}).status_code == 400
+    assert client.post("/panel/api/projects/reject-src/move-files", json={"target_slug": "reject-archived"}).status_code == 400
+    assert client.post("/panel/api/projects/reject-foreign/reactivate").status_code == 404
+    assert client.post("/panel/api/projects/default/archive").status_code == 400
+    assert client.patch("/panel/api/projects/reject-src", json={"name": "reject-taken"}).status_code == 400
+    with SessionLocal() as session:
+        assert session.scalar(select(Project.name).where(Project.slug == "reject-src")) == "Reject-Src"
+        assert session.scalar(select(func.count()).select_from(ProjectAlias).where(
+            ProjectAlias.alias == "reject-taken"
+        )) == 0

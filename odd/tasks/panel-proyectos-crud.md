@@ -117,3 +117,17 @@ commits: backend (`9aa876340`, camino de borrado + mover/reactivar/renombrar) y 
 (`e429e83c4`). El riesgo del corte está concentrado en `delete_project` y `deletion_impact`; el resto
 es superficie de panel. La suite `full` corre en el cierre del corte.
 
+**L5 — verificación independiente y tests añadidos (2026-11-23):** un `gentle-ai-verify` separado
+sondeó el borrado contra una base aislada: completitud (13 dependientes en 0, sin huérfanos), owner
+scope con dos proyectos del mismo slug, paridad byte a byte entre `deletion-impact` y lo borrado, orden
+chunks→documentos, blobs solo tras commit y merge de carpetas homónimas. Veredicto: las seis reglas
+pasan, los tests estaban incompletos. Se agregaron cuatro tests de esa lista (`ca8c51000`) y se actualizó
+`tests/functional/test_api_projects.py`, que todavía esperaba 405 en `PATCH`/`DELETE` de un proyecto.
+
+**Advisories aceptadas, no bloqueantes:** memorias con `owner_id NULL` bajo el mismo slug sobreviven y
+no se cuentan (solo alcanzables por datos legados: `MEM-2` restringe la escritura a `default`); las
+filas derivadas `memory_observations`/`memory_relations` se borran pero no se enumeran en el preview;
+un `unlink` fallido después del commit reporta 500 sobre un borrado ya confirmado (semántica
+preexistente de `remove_files_after_commit`); `move_files` no dedupe nombres de archivo homónimos en la
+raíz del destino.
+
