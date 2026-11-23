@@ -505,6 +505,30 @@ _GAS_OPERATIONS = re.compile(
 )
 _GAS_WORD = re.compile(r"\bgas\b")
 _WATER_CONTEXT = re.compile(r"\b(?:agua|desague|filtracion|hidraulico|hidraulica)\b")
+# S1 (odd/tasks/caldera-valvula.md): the water valve *of the appliance* is not the
+# `llave general` that a leak calls for. `_WATER_CONTEXT` above exists to keep
+# those general answers intact by skipping them, so this family needs a detector
+# of its own instead of a wider gas guard.
+_WATER_VALVE = re.compile(
+    r"\b(?:llave|valvula)\b[^.;:!?]{0,40}\bagua\b|\bagua\b[^.;:!?]{0,40}\b(?:llave|valvula)\b"
+)
+_WATER_VALVE_APPLIANCES = re.compile(
+    r"\b(?:calderas?|calefon(?:t)?(?:es|s)?|calefaccion|calefactor(?:es)?)\b"
+)
+# Physical manipulation only. Inspecting or reading a valve is not this family:
+# the corpus measured the instruction to cut the water of the boiler, and a guard
+# that also rewrites a technician's inspection deletes a correct answer
+# (`f9e29596b`).
+_WATER_VALVE_OPERATIONS = re.compile(
+    r"\b(?:abre|abra|abras|abrir|cierra|cierre|cierres|cerrar|"
+    r"corta|corte|cortes|cortar|gira|gire|gires|girar|"
+    r"purga|purgue|purgar|intervenir|interviene|intervengas|"
+    r"manipula|manipule|manipular)\b"
+)
+_WATER_VALVE_NEGATIVE_FRAME = re.compile(r"\b(?:no|nunca|jamas)\b[^.,;:!?]{0,40}$")
+_WATER_VALVE_PERSON = re.compile(
+    r"\b(?:tecnico|tecnica|asesor|asesora|instalador|gasfiter|empresa|lumat)\b"
+)
 _BLUE_GAS_VALVE = re.compile(r"\b(?:llave|valvula)\s+azul\b")
 _FLAME_LEAK_TEST = re.compile(r"\bfosforo\b.{0,60}\bfuga\b|\bfuga\b.{0,60}\bfosforo\b")
 _NARROW_GAS_HARDWARE_OPERATIONS = re.compile(
@@ -690,6 +714,50 @@ def _gas_manipulation_instruction(text: str) -> bool:
     return _gas_appliance_ignition_instruction(text)
 
 
+def _valve_governing_operation(clause: str, valve_at: int):
+    """The last manipulation verb before the valve: the one that governs it.
+
+    A correct answer carries unrelated verbs, and the first one in the clause is
+    not the instruction. `purgar los radiadores no exige cerrar la llave de agua`
+    fires on `purgar` if the detector takes the first match; taking the verb
+    closest to its object reads the negation that actually applies.
+    """
+    governing = None
+    for operation in _WATER_VALVE_OPERATIONS.finditer(clause, 0, valve_at):
+        governing = operation
+    return governing
+
+
+def _appliance_water_valve_instruction(text: str) -> bool:
+    """Detect an instruction to manipulate the water valve of a gas appliance.
+
+    Narrower than it looks, on purpose. The clause must name the appliance, the
+    valve and the water; the operation must be the verb that governs that valve,
+    it must not be negated, and the subject must not be a technician. A general
+    supply valve, a leak at home, an inspection and a negative statement are all
+    left alone.
+    """
+    normalized = _normalise_topic_text(text)
+    for clause in re.split(r"[.,;:!?\n]+", normalized):
+        if not clause:
+            continue
+        valve = _WATER_VALVE.search(clause)
+        if valve is None:
+            continue
+        if not _WATER_VALVE_APPLIANCES.search(clause):
+            continue
+        operation = _valve_governing_operation(clause, valve.start())
+        if operation is None:
+            continue
+        person = _WATER_VALVE_PERSON.search(clause)
+        if person is not None and person.start() < operation.start():
+            continue
+        if _WATER_VALVE_NEGATIVE_FRAME.search(clause[: operation.start()]):
+            continue
+        return True
+    return False
+
+
 def _response_guard_observation_sentences(text: str) -> list[str]:
     """Find broad gas-related candidates that the narrow guard deliberately leaves alone."""
     observations: list[str] = []
@@ -765,6 +833,7 @@ def _is_configured_safety_text(session, text: str, reply_texts: dict[str, str]) 
     configured.update(
         (
             reply_texts["gas_instruction_guard"],
+            reply_texts["appliance_valve_guard"],
             reply_texts["excluded_appliance_scope"],
             reply_texts["out_of_catalogue_scope"],
         )
@@ -951,33 +1020,36 @@ def respond(state: ConversationState) -> dict:
             _record_response_guard_observations(session, conversation_id, model_answer)
         if not _is_configured_safety_text(session, model_answer, reply_texts):
             gas_guarded = _gas_manipulation_instruction(model_answer)
-            scope_guarded = not gas_guarded and _claims_out_of_catalogue_scope(
+            valve_guarded = not gas_guarded and _appliance_water_valve_instruction(
                 model_answer
             )
+            scope_guarded = (
+                not gas_guarded
+                and not valve_guarded
+                and _claims_out_of_catalogue_scope(model_answer)
+            )
+            guard = None
             if gas_guarded:
-                answer = reply_texts["gas_instruction_guard"]
-            if scope_guarded:
+                guard = "gas_instruction_guard"
+            elif valve_guarded:
+                # S1: a physical intervention on a gas appliance is the
+                # technician's, never the customer's.
+                guard = "appliance_valve_guard"
+            elif scope_guarded:
                 # S1: the closed catalogue outranks the model's general knowledge.
-                answer = reply_texts["out_of_catalogue_scope"]
-            if (
-                (gas_guarded or scope_guarded)
-                and conversation_id is not None
-                and session.get(Conversation, conversation_id) is not None
-            ):
-                session.add(
-                    ConversationEvent(
-                        conversation_id=state.conversation_id,
-                        event=(
-                            "gas_instruction_guard"
-                            if gas_guarded
-                            else "out_of_catalogue_scope"
-                        ),
-                        cause=(
-                            "respond:gas_instruction_guard"
-                            if gas_guarded
-                            else "respond:out_of_catalogue_scope"
-                        ),
-                        actor="bot",
+                guard = "out_of_catalogue_scope"
+            if guard is not None:
+                answer = reply_texts[guard]
+                if (
+                    conversation_id is not None
+                    and session.get(Conversation, conversation_id) is not None
+                ):
+                    session.add(
+                        ConversationEvent(
+                            conversation_id=state.conversation_id,
+                            event=guard,
+                            cause=f"respond:{guard}",
+                            actor="bot",
+                        )
                     )
-                )
     return {"replies": [answer]}
