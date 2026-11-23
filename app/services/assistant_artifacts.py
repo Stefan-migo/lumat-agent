@@ -76,11 +76,18 @@ def owned_thread(session: Session, thread_id: int | None, owner_id: int | None) 
     )
 
 
-def _validated_bytes(content: str | bytes) -> bytes:
-    """Coerce and bound every artifact write; text remains UTF-8 encoded."""
+def _validated_bytes(content: str | bytes, *, filename: str, content_type: str | None = None) -> bytes:
+    """Coerce and bound artifact writes, rejecting text for declared binary formats."""
+    mime_type = content_type or mimetypes.guess_type(filename)[0] or "text/plain"
+    textual_application_types = {"application/json", "application/xml", "application/javascript", "application/rtf"}
+    is_textual = mime_type.startswith("text/") or mime_type in textual_application_types
+    if isinstance(content, str) and not is_textual:
+        raise ValueError(f"artifact content does not match declared binary type {mime_type}")
     data = content.encode("utf-8") if isinstance(content, str) else content
     if not data:
         raise ValueError("artifact content is empty")
+    if Path(filename).suffix.lower() == ".pdf" and not data.startswith(b"%PDF-"):
+        raise ValueError("PDF artifact content must start with %PDF-")
     if len(data) > get_settings().assistant_artifact_max_bytes:
         raise ValueError("artifact size exceeds the configured limit")
     return data
@@ -98,7 +105,7 @@ def _write_blob(destination: Path, data: bytes) -> None:
 
 def store_artifact(session: Session, thread: InternalChatThread, filename: str, content: str, actor: str) -> AssistantArtifact:
     name = safe_artifact_filename(filename)
-    data = _validated_bytes(content)
+    data = _validated_bytes(content, filename=name)
     destination = artifact_path(thread.id)
     # The row is its own root, and `root_id` is NOT NULL, so the identity is taken from the same
     # sequence before the insert instead of patching `root_id` afterwards.
@@ -143,14 +150,14 @@ def append_revision(
     `changed=False`. The root row is locked before the next version is computed, so concurrent edits
     of the same artifact serialize instead of racing for one version number (S11).
     """
-    data = _validated_bytes(content)
-    digest = hashlib.sha256(data).hexdigest()
     session.scalar(
         select(AssistantArtifact.id).where(AssistantArtifact.id == artifact.root_id).with_for_update()
     )
     latest = latest_for_root(session, thread.id, artifact.root_id)
     if latest is None:
         raise ValueError("artifact not found")
+    data = _validated_bytes(content, filename=latest.filename, content_type=latest.content_type)
+    digest = hashlib.sha256(data).hexdigest()
     if latest.sha256 == digest:
         return latest, False
     destination = artifact_path(thread.id)
@@ -180,7 +187,7 @@ def save_or_append(
 ) -> tuple[AssistantArtifact, bool]:
     """Create one named deliverable or append its next content revision."""
     name = safe_artifact_filename(filename)
-    data = _validated_bytes(content)
+    data = _validated_bytes(content, filename=name)
     digest = hashlib.sha256(data).hexdigest()
     # Artifact writes for one thread serialize here. Two concurrent first saves of the same filename
     # would otherwise both read no current row and each open its own root, which is the duplicate this

@@ -1,3 +1,4 @@
+import hashlib
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -138,6 +139,57 @@ def test_editing_an_artifact_appends_a_revision_and_keeps_every_blob(monkeypatch
         assert audit.after["root_id"] == first.root_id
         session.rollback()
     get_settings.cache_clear()
+
+
+def test_pdf_artifacts_reject_text_content_without_writing_or_republishing(monkeypatch, tmp_path):
+    from app.chat.assistant.approval import consume_approval, issue_approval
+    from app.chat.assistant.tools.registry import ToolValidationError, execute_tool, get_tool
+
+    with SessionLocal() as session:
+        owner, thread, artifact = _artifact_fixture(session, monkeypatch, tmp_path, "artifact-pdf-mismatch-owner")
+        artifact.filename = "report.pdf"
+        artifact.content_type = "application/pdf"
+        original = b"%PDF-1.7\nvalid original"
+        Path(artifact.stored_path).write_bytes(original)
+        artifact.size = len(original)
+        artifact.sha256 = hashlib.sha256(original).hexdigest()
+        session.flush()
+        before_rows = list(session.scalars(select(AssistantArtifact).where(
+            AssistantArtifact.root_id == artifact.root_id
+        )))
+        before_blobs = sorted(path.name for path in Path(artifact.stored_path).parent.iterdir())
+
+        arguments = {"artifact_id": artifact.id, "content": "not a PDF"}
+        normalized = get_tool("artifact.update").args_model.model_validate(arguments).model_dump()
+        approval = issue_approval({"tool": "artifact.update", "arguments": normalized})
+        assert consume_approval(approval, approval["token"])
+        with pytest.raises(ToolValidationError) as rejected:
+            execute_tool(session, "artifact.update", arguments, approval=approval,
+                         owner_id=owner.id, trusted_thread_id=thread.id, role="admin",
+                         whitelist={"artifact.update"})
+
+        assert "pdf" in str(rejected.value).lower()
+        assert list(session.scalars(select(AssistantArtifact).where(
+            AssistantArtifact.root_id == artifact.root_id
+        ))) == before_rows
+        assert Path(artifact.stored_path).read_bytes() == original
+        assert sorted(path.name for path in Path(artifact.stored_path).parent.iterdir()) == before_blobs
+        assert session.execute(select(AuditLog).where(
+            AuditLog.action == "assistant_artifact.updated"
+        )).first() is None
+        save_arguments = {"filename": "new-report.pdf", "content": "not a PDF"}
+        normalized_save = get_tool("artifact.save").args_model.model_validate(save_arguments).model_dump()
+        save_approval = issue_approval({"tool": "artifact.save", "arguments": normalized_save})
+        assert consume_approval(save_approval, save_approval["token"])
+        with pytest.raises(ToolValidationError) as rejected_save:
+            execute_tool(session, "artifact.save", save_arguments, approval=save_approval,
+                         owner_id=owner.id, trusted_thread_id=thread.id, role="admin",
+                         whitelist={"artifact.save"})
+        assert "pdf" in str(rejected_save.value).lower()
+        assert list(session.scalars(select(AssistantArtifact).where(
+            AssistantArtifact.thread_id == thread.id
+        ))) == before_rows
+        session.rollback()
 
 
 def test_repeating_the_same_content_appends_no_revision(monkeypatch, tmp_path):
