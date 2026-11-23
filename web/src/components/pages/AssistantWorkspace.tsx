@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, Folder, History, Info, Lock, Menu as MenuIcon, MessageSquarePlus, MessageSquareText, Paperclip, PanelLeft, PanelRight, Pencil, Plus, Share2, SlidersHorizontal, Trash2, Users, Wrench, X } from "lucide-react";
-import { ApiError, createProject, deleteChatThread, downloadAssistantArtifact, downloadAssistantConversation, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, renameChatThread, threadAttachmentContentUrl, assistantArtifactContentUrl } from "../../api";
+import { ApiError, createProject, deleteProject, deleteChatThread, downloadAssistantArtifact, downloadAssistantConversation, getAssistantCapabilities, listActiveRuns, listChatThreads, listProjects, moveProjectFiles, renameChatThread, threadAttachmentContentUrl, assistantArtifactContentUrl } from "../../api";
 import type { ActiveRun, AssistantArtifact, AssistantAttachment, AssistantCapabilities, InternalChatThreadSummary, Project, Role } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -24,13 +24,15 @@ import { pathForRoute } from "../domain/panelRoutes";
 import { mergeWorkspaceTabs, readWorkspaceTabState, workspaceTabIdentity, writeWorkspaceTabs } from "../domain/assistantTabs";
 import type { WorkspaceTab } from "../domain/assistantTabs";
 import { assistantFileIcon } from "./assistantFileIcon";
-import { ProjectsPage } from "./ProjectsPage";
+import { ProjectDeletionConfirmation, ProjectsPage } from "./ProjectsPage";
 import { ProjectResourcesPanel } from "./ProjectResourcesPanel";
 import { UserMemories } from "../domain/UserMemories";
 import { groupThreadsByDate } from "./threadDateGroups";
 import "./AssistantWorkspace.css";
 
 export type { WorkspaceTab } from "../domain/assistantTabs";
+
+const EMPTY_PROJECTS: Project[] = [];
 
 function routeWorkspaceTabs(): WorkspaceTab[] {
   const params = new URLSearchParams(window.location.search);
@@ -95,6 +97,10 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const [renameTarget, setRenameTarget] = useState<{ id: number; title: string | null } | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string | null } | null>(null);
+  const [projectAction, setProjectAction] = useState<{ kind: "move" | "delete"; project: Project } | null>(null);
+  const [projectActionTarget, setProjectActionTarget] = useState("");
+  const [projectActionError, setProjectActionError] = useState<string | null>(null);
+  const [projectActionBusy, setProjectActionBusy] = useState(false);
   const [threadActionError, setThreadActionError] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -166,7 +172,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   };
   const loadProjects = useCallback(() => listProjects(), []);
   const projectsData = useAsyncData(loadProjects, projectsVisible || navigationOpen || projectSheetOpen || projectPickerOpen || Boolean(panelProjectSlug) || Boolean(activeContextSlug));
-  const projects = projectsData.data?.projects ?? [];
+  const projects = projectsData.data?.projects ?? EMPTY_PROJECTS;
+  const activeProjects = useMemo(() => projects.filter((project) => project.status === "active"), [projects]);
   const activeProject = projects.find((project) => project.slug === panelProjectSlug);
   const selectedProject = projects.find((project) => project.slug === (expandedProjectSlug ?? routeProjectSlug ?? activeProjectSlug)) ?? projects[0];
   // The mobile header must show the THREAD's project — the same source the picker
@@ -178,9 +185,8 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
   const toggleContextSection = (id: string) => setContextSections((current) => ({ ...current, [id]: !(current[id] ?? false) }));
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    return query ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : projects;
-  }, [projects, search]);
-
+    return query ? activeProjects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : activeProjects;
+  }, [activeProjects, search]);
   useEffect(() => {
     let current = true;
     const refresh = async () => {
@@ -448,7 +454,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
       <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto" variant="sheet">
         <div className="assistant-workspace__project-picker">
           <button type="button" aria-pressed={activeProjectSlug === "default"} onClick={() => { setProjectPickerOpen(false); onSelectProject?.("default"); }}>General{activeProjectSlug === "default" ? <span aria-label="Seleccionado">✓</span> : null}</button>
-          {projects.filter((project) => project.slug !== "default").map((project) => <button type="button" key={project.slug} aria-pressed={activeProjectSlug === project.slug} onClick={() => { setProjectPickerOpen(false); onSelectProject?.(project.slug); }}>{project.name}{activeProjectSlug === project.slug ? <span aria-label="Seleccionado">✓</span> : null}</button>)}
+          {activeProjects.filter((project) => project.slug !== "default").map((project) => <button type="button" key={project.slug} aria-pressed={activeProjectSlug === project.slug} onClick={() => { setProjectPickerOpen(false); onSelectProject?.(project.slug); }}>{project.name}{activeProjectSlug === project.slug ? <span aria-label="Seleccionado">✓</span> : null}</button>)}
           <Button variant="secondary" onClick={() => { setProjectPickerOpen(false); setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} size="sm" />Crear proyecto</Button>
         </div>
       </Dialog>
@@ -531,6 +537,7 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
                       <span>{project.name}</span>
                     </button>
                     <button type="button" className="assistant-workspace__project-chat" aria-label={`Iniciar chat en ${project.name}`} title={`Iniciar chat en ${project.name}`} onClick={() => navigateToProject(project, "threads")}><Icon icon={MessageSquarePlus} size="sm" /></button>
+                    <Menu label={`Acciones de ${project.name}`} trigger="icon" items={[{ value: "move", label: "Mover contexto y archivos", icon: Folder }, ...(project.slug === "default" ? [] : [{ value: "delete", label: "Eliminar proyecto", icon: Trash2, tone: "danger" as const }])]} onSelect={(value) => { setProjectActionError(null); setProjectActionTarget(""); setProjectAction({ kind: value as "move" | "delete", project }); }} />
                   </div>
                   {expanded ? (
                     <div className="assistant-workspace__project-details">
@@ -571,6 +578,13 @@ export function AssistantWorkspace({ children, onCreateThread, onCreateDefaultTh
         </section>
       </aside>
 
+      <Dialog open={projectAction !== null} onClose={() => { setProjectAction(null); setProjectActionTarget(""); setProjectActionError(null); }} title={projectAction?.kind === "move" ? "Mover contexto y archivos" : "Eliminar proyecto"} variant="sheet">
+        {projectAction ? projectAction.kind === "delete" ? <ProjectDeletionConfirmation project={projectAction.project} busy={projectActionBusy} error={projectActionError} onConfirm={() => void (async () => { setProjectActionBusy(true); setProjectActionError(null); try { await deleteProject(projectAction.project.slug); setProjectAction(null); await projectsData.retry(); } catch (error: unknown) { setProjectActionError(error instanceof ApiError ? error.detail : "No pudimos completar la acción."); } finally { setProjectActionBusy(false); } })()} /> : <div className="assistant-workspace__thread-dialog">
+          <p>Elige un proyecto activo para recibir los archivos y carpetas de {projectAction.project.name}. Los hilos no se moverán.</p><label htmlFor="project-move-target">Proyecto destino</label><select id="project-move-target" value={projectActionTarget} onChange={(event) => setProjectActionTarget(event.target.value)}><option value="">Selecciona un proyecto</option>{activeProjects.filter((candidate) => candidate.slug !== projectAction.project.slug).map((candidate) => <option key={candidate.slug} value={candidate.slug}>{candidate.name}</option>)}</select>
+          {projectActionError ? <p role="alert">{projectActionError}</p> : null}
+          <Button variant="primary" disabled={projectActionBusy || !projectActionTarget} onClick={() => void (async () => { setProjectActionBusy(true); setProjectActionError(null); try { await moveProjectFiles(projectAction.project.slug, projectActionTarget); setProjectAction(null); setProjectActionTarget(""); await projectsData.retry(); } catch (error: unknown) { setProjectActionError(error instanceof ApiError ? error.detail : "No pudimos completar la acción."); } finally { setProjectActionBusy(false); } })()}>{projectActionBusy ? "Procesando…" : "Mover archivos"}</Button>
+        </div> : null}
+      </Dialog>
       <Dialog open={createProjectOpen} onClose={() => { setCreateProjectOpen(false); resetProjectForm(); }} title="Crear proyecto" variant="sheet">
         <div className="assistant-workspace__thread-dialog">
           <Input label="Nombre" value={projectName} onChange={(event) => updateProjectName(event.target.value)} autoComplete="off" />
@@ -782,7 +796,7 @@ function ContextProjectPicker({ projects, activeSlug, activeName, project, mode 
   const general: ContextProjectOption = { slug: "default", name: "General / Sin proyecto" };
   const currentSlug = activeSlug ?? "default";
   const currentName = currentSlug === "default" ? general.name : activeName ?? currentSlug;
-  const options = [general, ...projects.filter((item) => item.slug !== "default").map((item) => ({ slug: item.slug, name: item.name }))]
+  const options = [general, ...projects.filter((item) => item.slug !== "default" && item.status === "active").map((item) => ({ slug: item.slug, name: item.name }))]
     .filter((option) => option.name.toLocaleLowerCase("es-CL").includes(query.toLocaleLowerCase("es-CL")));
   const trigger = <><Icon icon={Folder} size="sm" /><span className="assistant-workspace__context-project-name">{currentName}</span><Icon icon={ChevronDown} size="sm" /></>;
   const projectMeta = project ? <div className="assistant-workspace__context-project-purpose"><Badge tone={projectStatusTone(project.status)} className="badge--sm">{projectStatusLabel(project.status)}</Badge><p>{project.purpose}</p></div> : null;
