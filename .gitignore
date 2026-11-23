@@ -56,6 +56,9 @@ refs/current/
 # Conversation-eval runs: the transcripts and the Markdown report are the permanent
 # record, the 40-70 KB JSON is only the input for the diff against the previous run.
 odd/evals/*.json
+# The reference baseline `chatbot.eval_regression` compares against is runtime input
+# for the deployed api image, so exactly this one file is tracked.
+!odd/evals/conv-eval-baseline.json
 
 # Local Engram export (4700+ generated Markdown files). Engram is the source of
 # truth; the dump is a browsing aid, so it never enters the repository — and as an

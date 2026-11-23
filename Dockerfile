@@ -46,6 +46,8 @@ COPY db/ db/
 # prose nobody verified against the configuration.
 COPY scripts/ scripts/
 COPY docs/kb/ docs/kb/
+# Regression baselines are runtime inputs to chatbot.eval_regression.
+COPY odd/evals/ odd/evals/
 # Pre-create the writable mount points with appuser ownership so a fresh named
 # volume at either path inherits writable perms: /app/media (SH-2 — WhatsApp
 # media) and /home/appuser/.cache (odd/prod-embedder-cache — the local embedding

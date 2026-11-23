@@ -118,6 +118,24 @@ def test_missing_or_unreadable_baseline_is_refused(monkeypatch, tmp_path, baseli
     assert "baseline" in result["error"].lower()
 
 
+def test_missing_baseline_error_lists_available_tags(monkeypatch, tmp_path):
+    import app.services.chat_regression as regression
+
+    eval_dir = tmp_path / "odd" / "evals"
+    eval_dir.mkdir(parents=True)
+    for tag in ("alpha", "beta-2"):
+        (eval_dir / f"conv-eval-{tag}.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(regression, "__file__", str(tmp_path / "app" / "services" / "chat_regression.py"))
+
+    result = _run(monkeypatch, {**ARGUMENTS, "baseline_run_tag": "missing-tag"},
+                  approval=_approval({**ARGUMENTS, "baseline_run_tag": "missing-tag"}))
+
+    assert result["status"] == "error"
+    assert "missing-tag" in result["error"]
+    assert "alpha" in result["error"]
+    assert "beta-2" in result["error"]
+
+
 def test_missing_judge_key_reports_failure_without_gates_only_score(monkeypatch, tmp_path):
     import scripts.conv_eval as ev
     import scripts.conv_eval_judge as judge
@@ -158,3 +176,25 @@ def test_call_without_approval_is_refused_before_running(monkeypatch):
                 role="admin",
             )
     assert calls == []
+
+
+def test_shipped_reference_baseline_is_discoverable_in_the_real_eval_directory():
+    """S5: the tracked `conv-eval-baseline.json` is what the tool resolves by tag `baseline`."""
+    import scripts.conv_eval as ev
+    from pathlib import Path
+
+    eval_dir = Path(__file__).resolve().parents[2] / "odd" / "evals"
+    baseline_path, _ = ev.report_paths(eval_dir, "baseline")
+    report = json.loads(baseline_path.read_text(encoding="utf-8"))
+
+    assert baseline_path.name == "conv-eval-baseline.json"
+    assert isinstance(report["runs"], list) and report["runs"], "the shipped baseline must carry scored runs"
+    assert all(isinstance(row.get("scenario"), str) for row in report["runs"])
+    # One scenario stayed unjudged in the source run; the tool refuses only the scenarios it is
+    # asked to measure without a score, so the baseline keeps the row and the rest score.
+    assert sum(1 for row in report["runs"] if row.get("score") is not None) >= 40
+
+    result = _run(None, {**ARGUMENTS, "baseline_run_tag": "no-such-tag"},
+                  approval=_approval({**ARGUMENTS, "baseline_run_tag": "no-such-tag"}))
+    assert result["status"] == "error"
+    assert "baseline" in result["error"]
