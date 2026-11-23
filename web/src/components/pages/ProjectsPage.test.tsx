@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ProjectsPage } from "./ProjectsPage";
 import { ToastProvider } from "../primitives/Toast";
 import { parsePanelPath, pathForView } from "../domain/panelRoutes";
@@ -11,16 +12,53 @@ describe("projects panel", () => {
     expect(pathForView("projects")).toBe("/panel/app/projects");
   });
 
-  it("renders project records as a read-only table and opens the detail route", () => {
+  it("loads deletion impact, warns with counts, and requires the exact project name", async () => {
+    let resolveImpact!: (response: Response) => void;
+    const pendingImpact = new Promise<Response>((resolve) => { resolveImpact = resolve; });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockReturnValue(pendingImpact);
+    const project = { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active" as const, created_at: null, updated_at: null };
+    render(<ProjectsPage data={{ projects: [project] }} state="ready" />);
+    await userEvent.click(screen.getByRole("button", { name: "Acciones de Operations" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Eliminar" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando información de eliminación");
+    resolveImpact(new Response(JSON.stringify({ impact: { threads: 1, messages: 2, files: 3, folders: 1, kb_documents: 2, kb_chunks: 4, memories: 1, artifacts: 1, attachments: 2 } }), { status: 200 }));
+    expect(await screen.findByText(/Hilos: 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Mensajes: 2/)).toBeInTheDocument();
+    expect(screen.getByText(/Chunks de KB: 4/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("No se puede deshacer");
+    const deleteButton = screen.getByRole("button", { name: "Eliminar proyecto" });
+    expect(deleteButton).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Escribe Operations"), "Operations ");
+    expect(deleteButton).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText("Escribe Operations"));
+    await userEvent.type(screen.getByLabelText("Escribe Operations"), "Operations");
+    expect(deleteButton).toBeEnabled();
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/projects/ops/deletion-impact", expect.objectContaining({ credentials: "include" }));
+  });
+
+  it("shows a deletion-impact error and keeps deletion disabled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "Unavailable" }), { status: 503 }));
+    render(<ProjectsPage data={{ projects: [{ id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null }] }} state="ready" />);
+    await userEvent.click(screen.getByRole("button", { name: "Acciones de Operations" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Eliminar" }));
+    expect(await screen.findByText("No pudimos cargar la información de eliminación.", { selector: "div[role=alert]" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Eliminar proyecto" })).toBeDisabled();
+  });
+
+  it("filters archived projects by status and exposes row actions", async () => {
     const onOpenProject = vi.fn();
     render(<ProjectsPage data={{ projects: [{ id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "archived", created_at: null, updated_at: null }] }} state="ready" onOpenProject={onOpenProject} />);
+    expect(screen.queryByRole("button", { name: "Operations" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "archived" } });
     expect(screen.getByRole("columnheader", { name: "Proyecto" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Operations" }));
     expect(onOpenProject).toHaveBeenCalledWith("ops");
-    expect(screen.queryByRole("button", { name: /renombrar|archivar|fusionar/i })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de Operations" }));
+    expect(await screen.findByRole("menuitem", { name: "Reactivar" })).toBeInTheDocument();
   });
 
   const fillProjectForm = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo proyecto" }));
     fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "ops" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Operations" } });
     fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Run operations" } });

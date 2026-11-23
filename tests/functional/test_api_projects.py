@@ -43,9 +43,11 @@ def test_projects_detail_missing_and_mutation_routes(client, make_user):
     assert client.get("/panel/api/projects/does-not-exist").status_code == 404
     response = client.post("/panel/api/projects", json={})
     assert response.status_code == 422
-    for method, kwargs in ((client.patch, {"json": {}}), (client.delete, {})):
-        response = method("/panel/api/projects/browse-contract", **kwargs)
-        assert response.status_code == 405
+    # The registry owns rename and delete now, so both routes exist: an empty body is a shape
+    # error and an unknown slug is a miss, and neither reaches another owner's project.
+    assert client.patch("/panel/api/projects/does-not-exist", json={}).status_code == 422
+    assert client.patch("/panel/api/projects/does-not-exist", json={"name": "Renamed"}).status_code == 404
+    assert client.delete("/panel/api/projects/does-not-exist").status_code == 404
 
 
 def test_projects_browse_allows_tecnico(client, make_user):

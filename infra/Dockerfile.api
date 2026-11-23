@@ -1,5 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
+# Keep regression baselines available in the API container as well as the production image.
+COPY odd/evals/ /app/odd/evals/
+
 # This development container renders PDFs, normalizes audio and transcribes it;
 # the upstream uv image carries no pango, no ffmpeg and no OpenMP runtime.
 #   ffmpeg/ffprobe — outbound audio normalization and the voice-note duration probe

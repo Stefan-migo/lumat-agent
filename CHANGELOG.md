@@ -8,6 +8,48 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.15] - 2026-11-23
+
+### Corregido
+
+- El asistente dejaba una copia `.bak` visible en **Archivos del proyecto** cada vez que reescribía un
+  documento, y como el respaldo se publicaba por hilo, dos hilos actualizando el mismo archivo dejaban
+  dos filas duplicadas en `/outputs`. El respaldo sigue existiendo como artefacto recuperable del hilo,
+  pero ya no se publica como archivo del proyecto.
+- Un `artifact.update` con texto podía reemplazar un PDF válido por markdown servido como
+  `application/pdf`: el archivo se descargaba corrupto y el visor del panel no lo abría. Ahora un
+  artefacto declarado binario rechaza contenido de texto, y un `.pdf` exige la firma `%PDF-`. El rechazo
+  no deja fila, ni blob, ni revisión.
+- `view_image` fallaba siempre con `thread image not found`. El asistente lo atribuía al entorno, pero
+  era del harness: las imágenes se adjuntaban y se veían en el chat sin que su `id` llegara nunca al
+  turno. Ahora los adjuntos aparecen en el contexto con `id`, nombre y tipo, sin duplicar bytes.
+- `conversations.search` no encontraba texto que sí estaba en la conversación: sólo miraba nombre de
+  cliente y teléfono, nunca el resumen.
+- `chatbot.eval_regression` no podía correr en producción con ningún tag: resolvía los baselines desde
+  `odd/evals/`, que está versionado en `.gitignore` y nunca entraba a la imagen. El repositorio ahora
+  versiona **un** baseline de referencia —tag `baseline`, derivado del run medido del 2026-11-20, 42
+  escenarios puntuados y sin transcripciones— y ambas imágenes del api lo copian. Un tag inexistente
+  enumera los disponibles en vez de leerse como falla de entorno.
+
+### Agregado
+
+- Gestión de proyectos en el panel: **eliminar** un proyecto con vista previa de lo que se destruye
+  —hilos, mensajes, archivos, carpetas, documentos y chunks de KB, memorias, artefactos y adjuntos—,
+  **mover** archivos y carpetas a otro proyecto fusionando carpetas del mismo nombre y reasignando el
+  documento de KB, y **archivar/reactivar**. El borrado es definitivo, exige escribir el nombre exacto
+  del proyecto y protege `default`.
+- `Administrar proyectos` (`/panel/app/projects`) reconstruida: la creación pasa a un diálogo, la tabla
+  suma filtro `Activos / Archivados / Todos`, búsqueda y un menú por fila con abrir, renombrar,
+  archivar/reactivar, mover y eliminar. Cada proyecto del worktree gana el mismo menú junto al botón de
+  chat, y los proyectos archivados dejan de listarse como activos.
+
+### Cambiado
+
+- `PATCH` y `DELETE` sobre `/panel/api/projects/{slug}` existen ahora; antes devolvían `405`. El resto
+  de los endpoints nuevos son aditivos.
+- Sin migraciones de esquema: el schema queda en `071_simulation_isolation`. El rollback es sólo de
+  código.
+
 ## [2026.11.14] - 2026-11-22
 
 ### Corregido
