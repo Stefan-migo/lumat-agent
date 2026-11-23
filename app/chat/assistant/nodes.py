@@ -1269,7 +1269,7 @@ def execute(state: AssistantState) -> AssistantState:
     content = state["content"].strip()
     if documents:
         content += "\n\n<attachments>\n" + "\n".join(
-            f'[attachment filename="{d["filename"]}" id="{d["attachment_id"]}" type="{d["kind"]}"]\n{d["text"]}\n[/attachment]'
+            f'[attachment filename="{d["filename"]}" id="{d["attachment_id"]}" type="{d["kind"]}"]\n{d.get("text", "")}\n[/attachment]'
             for d in documents
         ) + "\n</attachments>"
     session = state.get("session")
@@ -1283,7 +1283,7 @@ def execute(state: AssistantState) -> AssistantState:
         from app.services.prompts import load_assistant_config
 
         config = load_assistant_config(role=state.get("actor_role"))
-        prompt = _responder_prompt(state, config)
+        prompt = _responder_prompt({**state, "content": content}, config)
         try:
             client = _assistant_client()
             model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL)
