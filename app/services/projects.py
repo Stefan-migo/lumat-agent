@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app import models
@@ -279,6 +279,137 @@ def archive(session: Session, project: models.Project | str, *, owner_id: int | 
     _audit(session, row.id, "archive", actor, old, {**old, "status": "archived"})
     session.flush()
     return row
+
+
+def reactivate(session: Session, project: models.Project | str, *, owner_id: int | None = None, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, project, owner_id=owner_id)
+    row = locked[_project_id(project)]
+    old = {"slug": row.slug, "name": row.name, "status": _status_value(row.status)}
+    row.status = models.ProjectStatus.ACTIVE
+    _audit(session, row.id, "project.reactivate", actor, old, {**old, "status": "active"})
+    session.flush()
+    return row
+
+
+def move_files(session: Session, source: models.Project | str, target: models.Project | str, *, owner_id: int | None = None, actor: str = "agent") -> dict:
+    """Move project files and merge same-named folders while preserving the tree."""
+    selected_owner = _resolve_owner_id((source, target), owner_id)
+    locked = _lock_projects(session, source, target, owner_id=selected_owner)
+    source_row, target_row = locked[_project_id(source)], locked[_project_id(target)]
+    if source_row.id == target_row.id:
+        raise ValueError("cannot move files to the same project")
+    if source_row.owner_id != target_row.owner_id or source_row.owner_id != selected_owner:
+        raise ValueError("cannot move files across owners")
+    if _status_value(target_row.status) != "active":
+        raise ValueError("target project must be active")
+
+    folders = session.scalars(select(models.ProjectFolder).where(models.ProjectFolder.project_id == source_row.id).order_by(models.ProjectFolder.id)).all()
+    target_folders = session.scalars(select(models.ProjectFolder).where(models.ProjectFolder.project_id == target_row.id)).all()
+    folder_map: dict[int, int] = {}
+    merged_folder_ids: list[int] = []
+    by_parent_name = {(folder.parent_id, folder.name): folder for folder in target_folders}
+    pending = folders.copy()
+    while pending:
+        remaining = []
+        progressed = False
+        for folder in pending:
+            if folder.parent_id is not None and folder.parent_id not in folder_map:
+                remaining.append(folder)
+                continue
+            parent_id = folder_map.get(folder.parent_id) if folder.parent_id is not None else None
+            existing = by_parent_name.get((parent_id, folder.name))
+            if existing is None:
+                folder.project_id = target_row.id
+                folder.parent_id = parent_id
+                by_parent_name[(parent_id, folder.name)] = folder
+                folder_map[folder.id] = folder.id
+            else:
+                folder_map[folder.id] = existing.id
+                merged_folder_ids.append(folder.id)
+            progressed = True
+        if not progressed and remaining:
+            raise ValueError("project folder hierarchy is invalid")
+        pending = remaining
+
+    files = session.scalars(select(models.ProjectFile).where(models.ProjectFile.project_id == source_row.id)).all()
+    for file in files:
+        file.project_id = target_row.id
+        if file.folder_id is not None:
+            file.folder_id = folder_map[file.folder_id]
+        if file.kb_document_id is not None:
+            document = session.get(models.KbDocument, file.kb_document_id)
+            if document is not None:
+                document.project_id = target_row.id
+    for folder_id in merged_folder_ids:
+        folder = session.get(models.ProjectFolder, folder_id)
+        if folder is not None:
+            session.delete(folder)
+    _audit(session, target_row.id, "project.move_files", actor,
+           {"source": source_row.slug, "target": target_row.slug},
+           {"source": source_row.slug, "target": target_row.slug, "files": len(files), "folders": len(folders)})
+    session.flush()
+    return {"files": len(files), "folders": len(folders)}
+
+
+def deletion_impact(session: Session, project: models.Project, *, owner_id: int) -> tuple[dict[str, int], list[int], list[int], list[str], list[str]]:
+    """Return owner-scoped deletion counts and the rows/blob paths needed by deletion."""
+    thread_ids = session.scalars(select(models.InternalChatThread.id).where(
+        models.InternalChatThread.proyecto == project.slug, models.InternalChatThread.user_id == owner_id
+    )).all()
+    thread_filter = models.InternalChatMessage.thread_id.in_(thread_ids) if thread_ids else False
+    artifact_paths = session.scalars(select(models.AssistantArtifact.stored_path).where(models.AssistantArtifact.thread_id.in_(thread_ids))).all() if thread_ids else []
+    attachment_paths = session.scalars(select(models.AssistantAttachment.stored_path).where(models.AssistantAttachment.thread_id.in_(thread_ids))).all() if thread_ids else []
+    file_paths = session.scalars(select(models.ProjectFile.stored_path).where(models.ProjectFile.project_id == project.id)).all()
+    document_ids = session.scalars(select(models.KbDocument.id).where(models.KbDocument.project_id == project.id)).all()
+    memory_filter = (models.Memory.proyecto == project.slug) & (models.Memory.owner_id == owner_id)
+    counts = {
+        "threads": len(thread_ids),
+        "messages": session.scalar(select(func.count()).select_from(models.InternalChatMessage).where(thread_filter)) or 0,
+        "files": len(file_paths),
+        "folders": session.scalar(select(func.count()).select_from(models.ProjectFolder).where(models.ProjectFolder.project_id == project.id)) or 0,
+        "kb_documents": len(document_ids),
+        "kb_chunks": session.scalar(select(func.count()).select_from(models.KbChunk).where(models.KbChunk.document_id.in_(document_ids))) if document_ids else 0,
+        "memories": session.scalar(select(func.count()).select_from(models.Memory).where(memory_filter)) or 0,
+        "artifacts": session.scalar(select(func.count()).select_from(models.AssistantArtifact).where(models.AssistantArtifact.thread_id.in_(thread_ids))) if thread_ids else 0,
+        "attachments": session.scalar(select(func.count()).select_from(models.AssistantAttachment).where(models.AssistantAttachment.thread_id.in_(thread_ids))) if thread_ids else 0,
+    }
+    return counts, thread_ids, document_ids, file_paths, [*artifact_paths, *attachment_paths]
+
+
+def delete_project(session: Session, project: models.Project | str, *, owner_id: int, actor: str) -> dict:
+    """Stage a complete owner-scoped project deletion; caller commits once."""
+    locked = _lock_projects(session, project, owner_id=owner_id)
+    row = locked[_project_id(project)]
+    if row.slug == "default":
+        raise ValueError("default project cannot be deleted")
+    from app.services.assistant_artifacts import remove_files_after_commit
+
+    counts, thread_ids, document_ids, file_paths, thread_blob_paths = deletion_impact(session, row, owner_id=owner_id)
+    memory_ids = session.scalars(select(models.Memory.id).where(
+        models.Memory.proyecto == row.slug, models.Memory.owner_id == owner_id
+    )).all()
+    from app.services.audit import record_audit
+    record_audit(session, actor=actor, action="project.delete", entity="project", entity_id=str(row.id),
+                 before={"slug": row.slug, "name": row.name}, after={"deleted": counts})
+    if memory_ids:
+        session.execute(delete(models.MemoryObservation).where(models.MemoryObservation.memory_id.in_(memory_ids)))
+        session.execute(delete(models.MemoryRelation).where(
+            (models.MemoryRelation.id_a.in_(memory_ids)) | (models.MemoryRelation.id_b.in_(memory_ids))
+        ))
+    if thread_ids:
+        session.execute(delete(models.InternalChatThread).where(
+            models.InternalChatThread.id.in_(thread_ids), models.InternalChatThread.user_id == owner_id
+        ))
+    session.execute(delete(models.Memory).where(models.Memory.proyecto == row.slug, models.Memory.owner_id == owner_id))
+    if document_ids:
+        session.execute(delete(models.KbChunk).where(models.KbChunk.document_id.in_(document_ids)))
+    session.execute(delete(models.KbDocument).where(models.KbDocument.project_id == row.id))
+    session.execute(delete(models.ProjectAlias).where(models.ProjectAlias.project_id == row.id))
+    session.execute(delete(models.ProjectAudit).where(models.ProjectAudit.project_id == row.id))
+    session.delete(row)
+    session.flush()
+    remove_files_after_commit(session, [*file_paths, *thread_blob_paths])
+    return counts
 
 
 def _memory_equivalent(left: models.Memory, right: models.Memory) -> bool:

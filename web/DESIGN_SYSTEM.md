@@ -503,11 +503,15 @@ unfinished surface, not a minimal one.
 ### Proyectos (product-change contract)
 
 - Treat Proyectos as a registry of projects and their SDB assistant artifacts; the owning product change defines its available actions.
-- In the list, use the project name as the drill-down control; show purpose and status as supporting columns.
+- The administration page has a primary `Nuevo proyecto` action that opens a `Dialog` containing the slug, name, and purpose fields; creation is not an inline page form.
+- The registry is a semantic table with `Proyecto`, `Propósito`, `Estado`, and a final actions column. The project name opens the detail view; row actions use the shared `Menu` primitive and include `Abrir`, `Renombrar`, `Archivar` or `Reactivar`, `Mover contexto y archivos`, and `Eliminar` (except deletion for `default`).
+- Place the `Activos / Archivados / Todos` filter (default `Activos`) and name search above the table. Distinguish no projects from no matches after filtering.
+- Rename preserves the slug; archive removes the project from the assistant worktree, and reactivation restores it.
+- Moving transfers only files and folders, preserving folder hierarchy and linked KB documents; threads remain in the source project. Deletion is irreversible: name the affected project, enumerate the data and counts that will be removed, require the exact project name to enable confirmation, and explain that recovery is unavailable.
 - In the detail view, show project name, purpose, status, and the explicit `Volver a proyectos` control.
 - Group artifacts by SDB entity. Use one read-only table per entity, headed by the entity name, with `Título`, `Contenido`, `Tipo`, and `Estado` columns.
 - Never show raw machine identifiers. The former `Identificador técnico` column exposed `topic_key` values and must not return; raw implementation labels belong only in an explicitly advanced technical view.
-- Provide empty states for no projects and for an entity with no artifacts, plus loading and error states.
+- Provide loading, permission, error, empty, and filtered-empty states.
 
 ### Sesiones de planificación
 
