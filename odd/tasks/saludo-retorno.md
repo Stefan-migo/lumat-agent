@@ -157,3 +157,20 @@ Le vuelve a preguntar el nombre a alguien que ya se presentó. El mecanismo son 
   seis contratos actualizados, los dos textos configurables y el panel son un solo cuerpo de trabajo, y
   separarlos deja commits que no se pueden juzgar solos. Push, PR y merge quedan para el owner
   (`odd/saludo-retorno`).
+
+- **L13 — merge con `origin/main` y re-gates.** `origin/main` pasó de `ff58e4813` a `7a565d86a`
+  (release `v2026.11.15`, PRs #864/#865) y después a `41ee00834` (registro del deploy, que además
+  arrastró el informe de baseline de esta sesión). Los dos merges entraron sin conflictos, incluido
+  `web/src/types.ts`, que las dos ramas tocan.
+
+  Re-gates después del merge: `full` **0**, `npm ci` **0**, `npm run build` **0**, `npm test` **0**.
+  La primera pasada del panel dio `1` en un solo test,
+  `AssistantWorkspace.test.tsx > does not restore a thread after its tab is closed` — archivo de #864,
+  ajeno a este corte. Se verificó antes de atribuirlo: **aislado pasa 49/49**, la **segunda pasada
+  completa pasa 1451/1451**, y el mismo test pasa en la suite completa del worktree `caldera-valvula`
+  con el mismo `origin/main` mergeado. Es flake de orden de la suite, no del corte, y queda declarado
+  con las tres observaciones en vez de con una.
+
+- **L14 — frontera del corte tras los merges.** Los merges de `origin/main` son documentación y no
+  agregan código del corte; la frontera de L12 sigue siendo la del cambio de conducta (401 inserciones
+  y 33 borrados en 15 archivos). Push, PR y merge siguen siendo del owner.
