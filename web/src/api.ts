@@ -371,6 +371,12 @@ export const updateMe = (body: SelfProfileUpdate) => patchJson<SelfProfileUpdate
 export const changePassword = (body: SelfPasswordChange) => postJson<{ ok: true }>('/panel/api/me/password', body);
 export const listProjects = () => apiFetch<ProjectsResponse>('/panel/api/projects');
 export const createProject = (body: ProjectCreateRequest) => postJson<ProjectCreateResponse>('/panel/api/projects', body);
+export const renameProject = (slug: string, name: string) => patchJson<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}`, { name });
+export const archiveProject = (slug: string) => postJson<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/archive`);
+export const reactivateProject = (slug: string) => postJson<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/reactivate`);
+export const getProjectDeletionImpact = (slug: string) => apiFetch<import('./types').ProjectDeletionImpactResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/deletion-impact`);
+export const deleteProject = (slug: string) => apiFetch<import('./types').ProjectDeleteResponse>(`/panel/api/projects/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+export const moveProjectFiles = (slug: string, target_slug: string) => postJson<import('./types').ProjectMoveFilesResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/move-files`, { target_slug });
 export const getProject = (slug: string) => apiFetch<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}`);
 export const listProjectAgents = (slug: string) => apiFetch<ProjectAgentsResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/agents`);
 export const updateProjectConfig = (slug: string, body: ProjectConfigUpdate) => patchJson<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}/config`, body);

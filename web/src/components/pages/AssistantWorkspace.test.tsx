@@ -32,6 +32,51 @@ describe("AssistantWorkspace", () => {
     localStorage.clear();
   });
 
+  it("keeps archived projects out of the worktree and offers the project action menu", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "active-one", name: "Active One", purpose: "Active", status: "active" },
+        { id: 2, slug: "archived-one", name: "Archived One", purpose: "Archived", status: "archived" },
+      ] }), { status: 200 });
+      if (url.includes("/chat/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+      if (url.includes("/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} role="admin"><p>Thread</p></AssistantWorkspace>);
+    expect(await screen.findByRole("button", { name: "Iniciar chat en Active One" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Iniciar chat en Archived One" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Acciones de Active One" }));
+    expect(await screen.findByRole("menuitem", { name: "Mover contexto y archivos" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Eliminar proyecto" })).toBeInTheDocument();
+  });
+
+  it("requires deletion impact to load in the worktree project action dialog", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    let resolveImpact!: (response: Response) => void;
+    const impact = new Promise<Response>((resolve) => { resolveImpact = resolve; });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/panel/api/projects") return new Response(JSON.stringify({ projects: [{ id: 1, slug: "active-one", name: "Active One", purpose: "Active", status: "active" }] }), { status: 200 });
+      if (url.endsWith("/deletion-impact")) return impact;
+      if (url.includes("/chat/active-runs")) return new Response(JSON.stringify({ active_runs: [] }), { status: 200 });
+      if (url.includes("/chat/threads?")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    render(<AssistantWorkspace onCreateThread={vi.fn()} role="admin"><p>Thread</p></AssistantWorkspace>);
+    await userEvent.click(await screen.findByRole("button", { name: "Acciones de Active One" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Eliminar proyecto" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando información de eliminación");
+    expect(screen.getByRole("button", { name: "Eliminar proyecto" })).toBeDisabled();
+    resolveImpact(new Response(JSON.stringify({ impact: { threads: 1, messages: 2, files: 3, folders: 1, kb_documents: 2, kb_chunks: 4, memories: 1, artifacts: 1, attachments: 2 } }), { status: 200 }));
+    expect(await screen.findByText(/Chunks de KB: 4/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("No se puede deshacer");
+    expect(screen.getByRole("button", { name: "Eliminar proyecto" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Escribe Active One"), "Active One");
+    expect(screen.getByRole("button", { name: "Eliminar proyecto" })).toBeEnabled();
+  });
+
   it("shows draggable project files, read-only KB documents, and read-only skills in project resources", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     window.history.replaceState({}, "", "/panel/app/chat?proyecto=ops&thread_id=77");
@@ -522,7 +567,7 @@ describe("AssistantWorkspace", () => {
       if (url.includes("/agents")) return new Response(JSON.stringify({ agents: [], latest_run: null }), { status: 200 });
       if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
         { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
-        { id: 2, slug: "archivo", name: "Archivo", purpose: "Registro", status: "archived", created_at: null, updated_at: null },
+        { id: 2, slug: "archivo", name: "Archivo", purpose: "Registro", status: "active", created_at: null, updated_at: null },
       ] }), { status: 200 });
       if (url.includes("/threads?")) return new Response(JSON.stringify({ threads: [{ id: 42, title: "Nuevo hilo", created_at: null, updated_at: null }] }), { status: 200 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
@@ -1075,9 +1120,9 @@ describe("AssistantWorkspace", () => {
     render(<AgentChat role="admin" onThreadOpened={() => undefined} />);
 
     expect(await screen.findByText("Registro")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Expandir Archivo" }));
+    expect(screen.queryByRole("button", { name: "Expandir Archivo" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cambiar proyecto: Archivo" })).toBeInTheDocument();
     expect(screen.getByText("Registro")).toBeVisible();
-    expect(screen.queryByText("Gestión")).not.toBeInTheDocument();
   });
 
   it("renames an open tab even when its thread is absent from loaded lists", async () => {

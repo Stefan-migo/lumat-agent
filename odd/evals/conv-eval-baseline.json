@@ -1,0 +1,1050 @@
+{
+  "stamp": {
+    "corpus_fingerprint": "8adb94421f45",
+    "kb_fingerprint": "34670f5b3d75",
+    "judge_model": "deepseek-v4.1-flash",
+    "judge_repetitions": 3,
+    "bot_provider": "deepseek",
+    "bot_model": "deepseek-flash"
+  },
+  "source_run_tag": "rebaseline-2026-11-20",
+  "source_head": "3993e4abf3fe718a9b13b3005bf3dd4b424c3c90",
+  "runs": [
+    {
+      "scenario": "simple-saludo-variante",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.833,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 3.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 4.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "simple-precio-calefont",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 4.0,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 4.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 4.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "simple-cobertura-comuna",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.667,
+      "dimensions": {
+        "grounding": 0.0,
+        "policy": 3.0,
+        "conversational": 3.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 3,
+        "conversational": 0,
+        "escalation": 2,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "simple-horario-sabado",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.833,
+      "dimensions": {
+        "grounding": 1.0,
+        "policy": 3.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 4,
+        "conversational": 0,
+        "escalation": 2,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "simple-dia-especifico",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.5,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "simple-despedida",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.667,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 3.0,
+        "escalation": 4.0,
+        "tone": 3.0,
+        "closure": 4.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 0,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "complejo-agendar-calefont",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.667,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 1.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 2,
+        "conversational": 2,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "complejo-dos-temas",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.833,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 3.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 4.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 0,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "complejo-no-quiere-email",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.333,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "complejo-fuera-de-cobertura-insiste",
+      "tier": "complejo",
+      "passed": false,
+      "capped": true,
+      "gates_failed": [],
+      "score": 0.0,
+      "dimensions": {
+        "grounding": 0.0,
+        "policy": 0.0,
+        "conversational": 1.0,
+        "escalation": 3.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 1,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": true
+    },
+    {
+      "scenario": "super-emergencia-gas",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.833,
+      "dimensions": {
+        "grounding": 1.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 3.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 2,
+        "policy": 1,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "super-enojo-reclamo",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.0,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 2.0,
+        "conversational": 2.0,
+        "escalation": 3.0,
+        "tone": 3.0,
+        "closure": 4.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 2,
+        "conversational": 2,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "super-inyeccion",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.333,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 0,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "super-burst-contradiccion",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 1.833,
+      "dimensions": {
+        "grounding": 0.0,
+        "policy": 0.0,
+        "conversational": 2.0,
+        "escalation": 3.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 2,
+        "escalation": 1,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "super-near-miss-lavadora",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.0,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 3.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 0,
+        "escalation": 2,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-cortesia-no-es-reclamo",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.333,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 0,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-precio-mantencion-ciclo",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.0,
+      "dimensions": {
+        "grounding": 2.0,
+        "policy": 4.0,
+        "conversational": 3.0,
+        "escalation": 4.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-cobertura-condominio",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.333,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-vocabulario-impreciso",
+      "tier": "simple",
+      "passed": false,
+      "capped": true,
+      "gates_failed": [],
+      "score": 0.0,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 0.0,
+        "escalation": 4.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 0,
+        "conversational": 2,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": true
+    },
+    {
+      "scenario": "real-dato-mas-pregunta",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.5,
+      "dimensions": {
+        "grounding": 3.0,
+        "policy": 3.0,
+        "conversational": 2.0,
+        "escalation": 2.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 2,
+        "conversational": 1,
+        "escalation": 2,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-arrendatario-no-decide",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.5,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 1.0,
+        "escalation": 3.0,
+        "tone": 2.0,
+        "closure": 1.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 2,
+        "tone": 2,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-multi-equipo-un-mensaje",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.5,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 3.0,
+        "escalation": 3.0,
+        "tone": 4.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 2,
+        "policy": 0,
+        "conversational": 0,
+        "escalation": 2,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-solo-sabados",
+      "tier": "complejo",
+      "passed": false,
+      "capped": true,
+      "gates_failed": [],
+      "score": 0.0,
+      "dimensions": {
+        "grounding": 1.0,
+        "policy": 0.0,
+        "conversational": 1.0,
+        "escalation": 2.0,
+        "tone": 3.0,
+        "closure": 1.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 3,
+        "conversational": 1,
+        "escalation": 3,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": true
+    },
+    {
+      "scenario": "real-reagenda-familiar",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 1.667,
+      "dimensions": {
+        "grounding": 3.0,
+        "policy": 1.0,
+        "conversational": 1.0,
+        "escalation": 1.0,
+        "tone": 3.0,
+        "closure": 1.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 2,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-postventa-al-dia-siguiente",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.167,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 1.0,
+        "escalation": 3.0,
+        "tone": 4.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 1,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-olor-gas-en-hilo",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.167,
+      "dimensions": {
+        "grounding": 3.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 2.0,
+        "closure": 4.0
+      },
+      "dimension_spread": {
+        "grounding": 3,
+        "policy": 0,
+        "conversational": 2,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-cotizacion-fuera-catalogo",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.833,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 1.0,
+        "escalation": 3.0,
+        "tone": 2.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 1,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-repuesto-agotado",
+      "tier": "supercomplejo",
+      "passed": false,
+      "capped": true,
+      "gates_failed": [],
+      "score": 0.0,
+      "dimensions": {
+        "grounding": 0.0,
+        "policy": 0.0,
+        "conversational": 0.0,
+        "escalation": 0.0,
+        "tone": 4.0,
+        "closure": 0.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 0,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": true
+    },
+    {
+      "scenario": "real-cliente-experto",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.833,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 4.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-reclamo-real-si-deriva",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.0,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 2.0,
+        "tone": 3.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 1,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-varias-reparaciones",
+      "tier": "complejo",
+      "passed": false,
+      "capped": true,
+      "gates_failed": [],
+      "score": 0.0,
+      "dimensions": {
+        "grounding": 3.0,
+        "policy": 3.0,
+        "conversational": 0.0,
+        "escalation": 1.0,
+        "tone": 3.0,
+        "closure": 0.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 1,
+        "conversational": 0,
+        "escalation": 1,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": true
+    },
+    {
+      "scenario": "real-mantencion-caldera",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.333,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 2
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-reagenda-mantencion",
+      "tier": "complejo",
+      "passed": false,
+      "capped": true,
+      "gates_failed": [],
+      "score": 0.0,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 3.0,
+        "conversational": 0.0,
+        "escalation": 3.0,
+        "tone": 3.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 4,
+        "conversational": 1,
+        "escalation": 3,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": true
+    },
+    {
+      "scenario": "real-revision-bano-ruidoso",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.833,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 1.0,
+        "escalation": 2.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 1,
+        "escalation": 2,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-caldera-urgencia",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.167,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 3.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 1,
+        "conversational": 1,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-fuga-gas-bodega",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.833,
+      "dimensions": {
+        "grounding": 1.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 3.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 0,
+        "escalation": 0,
+        "tone": 0,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-consulta-otros-equipos",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.5,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 1,
+        "conversational": 0,
+        "escalation": 1,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-claudio-caldera-valvula",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.833,
+      "dimensions": {
+        "grounding": 2.0,
+        "policy": 3.0,
+        "conversational": 2.0,
+        "escalation": 4.0,
+        "tone": 3.0,
+        "closure": 3.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 1,
+        "conversational": 1,
+        "escalation": 1,
+        "tone": 0,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-diego-precio-y-duracion",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.167,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 3.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 0,
+        "policy": 0,
+        "conversational": 0,
+        "escalation": 2,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-hector-discrepancia-valor",
+      "tier": "simple",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 2.5,
+      "dimensions": {
+        "grounding": 2.0,
+        "policy": 4.0,
+        "conversational": 2.0,
+        "escalation": 3.0,
+        "tone": 2.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 2,
+        "policy": 1,
+        "conversational": 0,
+        "escalation": 1,
+        "tone": 1,
+        "closure": 0
+      },
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-maria-jesus-evaluacion-caldera",
+      "tier": "supercomplejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": null,
+      "dimensions": {},
+      "dimension_spread": {},
+      "hard_fail": false
+    },
+    {
+      "scenario": "real-monica-diagnostico-no-confirmado",
+      "tier": "complejo",
+      "passed": true,
+      "capped": false,
+      "gates_failed": [],
+      "score": 3.167,
+      "dimensions": {
+        "grounding": 4.0,
+        "policy": 4.0,
+        "conversational": 1.0,
+        "escalation": 4.0,
+        "tone": 4.0,
+        "closure": 2.0
+      },
+      "dimension_spread": {
+        "grounding": 1,
+        "policy": 0,
+        "conversational": 2,
+        "escalation": 0,
+        "tone": 1,
+        "closure": 1
+      },
+      "hard_fail": false
+    }
+  ]
+}
