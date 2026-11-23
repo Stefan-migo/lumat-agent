@@ -199,6 +199,14 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "No manipules la llave ni la línea de gas. Un técnico de Lumat debe "
         "verificarlo; un asesor puede coordinar la visita."
     ),
+    # S1 (odd/tasks/caldera-valvula.md): the water valve *of the appliance* is not
+    # the general supply, so the guard says what not to do, keeps the one water
+    # action that is safe for a leak, and hands the intervention to a technician.
+    "appliance_valve_guard": (
+        "No manipules la llave de agua del equipo: si está en falla, esa "
+        "intervención la hace un técnico de Lumat. Si hay una fuga de agua, corta "
+        "el agua en la llave general de la casa. Un asesor puede coordinar la visita."
+    ),
     "excluded_appliance_scope": (
         "No reparamos lavadoras, lavadoras-secadoras ni refrigeradores. Sí atendemos "
         "calderas, calefont y otros servicios del catálogo; si necesitas, coordinamos "
@@ -288,6 +296,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_booking_unavailable": frozenset(),
     "handoff_booking_change_ack": frozenset(),
     "gas_instruction_guard": frozenset(),
+    "appliance_valve_guard": frozenset(),
     "excluded_appliance_scope": frozenset(),
     "out_of_catalogue_scope": frozenset(),
     "coverage_out_of_area": frozenset({"comuna"}),
