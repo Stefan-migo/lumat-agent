@@ -44,7 +44,9 @@ def list_conversations(session: Session, query: str | None = None, limit: int = 
     statement = select(Conversation, Customer.name).join(Customer, Customer.id == Conversation.customer_id)
     if query:
         statement = statement.where(
-            Customer.name.ilike(f"%{query}%") | Conversation.wa_phone.contains(query)
+            Customer.name.ilike(f"%{query}%")
+            | Conversation.wa_phone.contains(query)
+            | Conversation.summary.ilike(f"%{query}%")
         )
     return list(session.execute(
         statement.order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc()).limit(limit)
