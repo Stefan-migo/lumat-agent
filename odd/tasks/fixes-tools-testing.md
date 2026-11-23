@@ -103,3 +103,10 @@ se autoriza limpiar en producción los 3 archivos corruptos/duplicados del proye
 archivos. `odd/evals/conv-eval-baseline.json` es un dato versionado de 1.050 líneas que no pide lectura
 línea a línea: 42 filas de escenario puntuadas, sin `evidence` ni `observations`, derivadas del run
 medido del 2026-11-20.
+**L5 — flake preexistente corregido (2026-11-23):** la suite `full` de la rama hermana falló en
+`test_artifact_pdf_saves_and_publishes_idempotently` con `changed: False` esperado y `True` obtenido.
+Repetido tres veces en este worktree: una falla y dos passes. Causa: WeasyPrint estampa fecha de
+creación y document id en cada render, así que dos llamadas idénticas pueden diferir en bytes. El test
+ahora fija el renderer en bytes estables (el contrato bajo prueba es el de la tool) y el `%PDF-` real
+sigue cubierto por `tests/unit/test_assistant_pdf_reports.py`. Commit `5541fcc89`.
+

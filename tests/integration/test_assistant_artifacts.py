@@ -632,6 +632,14 @@ def test_delete_artifact_keeps_blobs_when_the_transaction_rolls_back(monkeypatch
 
 def test_artifact_pdf_saves_and_publishes_idempotently(monkeypatch, tmp_path):
     from app.chat.assistant.tools.registry import execute_tool
+    from app.services import reports
+
+    # WeasyPrint stamps a creation date and a document id into every render, so the same spec can
+    # produce byte-different PDFs across two calls and this test failed on a second boundary. The
+    # contract under test is the tool's, not the renderer's: identical content is not a new
+    # revision. The real renderer's %PDF- output is pinned by tests/unit/test_assistant_pdf_reports.py.
+    stable_pdf = b"%PDF-1.7\nstable render\n%%EOF\n"
+    monkeypatch.setattr(reports, "render_report_pdf", lambda _spec: stable_pdf)
 
     with SessionLocal() as session:
         monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
