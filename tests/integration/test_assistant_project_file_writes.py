@@ -138,7 +138,7 @@ def test_update_replaces_same_row_and_identical_content_is_noop():
         session.rollback()
 
 
-def test_update_backs_up_previous_content_as_thread_artifact_and_publishes_it():
+def test_update_keeps_previous_content_as_thread_artifact_without_publishing_it():
     with SessionLocal() as session:
         owner, project, thread = _setup(session, "update-backup")
         row = store_project_file(session, project, owner, "notes.md", "text/markdown", b"previous text")
@@ -149,17 +149,10 @@ def test_update_backs_up_previous_content_as_thread_artifact_and_publishes_it():
         assert backup.thread_id == thread.id
         assert backup.filename == "notes.bak.md"
         assert Path(backup.stored_path).read_bytes() == b"previous text"
-        published = session.scalar(select(ProjectFile).where(
+        assert session.scalar(select(ProjectFile).where(
             ProjectFile.project_id == project.id,
-            ProjectFile.source_artifact_root_id == backup.root_id,
-        ))
-        outputs = session.scalar(select(ProjectFolder).where(
-            ProjectFolder.project_id == project.id, ProjectFolder.name == "outputs",
-            ProjectFolder.parent_id.is_(None),
-        ))
-        assert outputs is not None
-        assert published.folder_id == outputs.id
-        assert Path(published.stored_path).read_bytes() == b"previous text"
+            ProjectFile.filename.like("%.bak.%"),
+        )) is None
         assert Path(row.stored_path).read_bytes() == b"new text"
         session.rollback()
 
