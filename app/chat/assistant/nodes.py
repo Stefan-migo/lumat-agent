@@ -393,6 +393,30 @@ PLANNER_REPAIR_DIRECTIVE = (
 )
 
 
+def _attachment_inventory(state: AssistantState) -> str:
+    """List this turn's thread attachments so a tool call can name one by id.
+
+    `view_image(source="thread", id=...)` resolves against `assistant_attachments`, but the prompt is
+    the only place an id can come from: without this block the planner could only guess one, and every
+    attempt failed with `thread image not found` no matter how the image was uploaded.
+    """
+    lines = []
+    for attachment in state.get("attachments") or []:
+        if isinstance(attachment, dict):
+            attachment_id = attachment.get("id")
+            filename = attachment.get("filename")
+            kind = attachment.get("kind")
+        else:
+            attachment_id = getattr(attachment, "id", None)
+            filename = getattr(attachment, "filename", None)
+            kind = getattr(attachment, "kind", None)
+        if not attachment_id or not filename:
+            continue
+        kind = kind or "attachment"
+        lines.append(f'[attachment id="{attachment_id}" filename="{filename}" kind="{kind}"]')
+    return "\n".join(lines)
+
+
 def _planner_messages(state: AssistantState) -> list[dict]:
     """Build the effective system/user planner prompt, shared by planning and repair."""
     from app.services.prompts import load_assistant_config
@@ -412,6 +436,9 @@ def _planner_messages(state: AssistantState) -> list[dict]:
         "context": _planner_context_text(state),
     }.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
+    inventory = _attachment_inventory(state)
+    if inventory:
+        user_prompt += "\n\n<attachments>\n" + inventory + "\n</attachments>"
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
     tool_images = _tool_image_parts(state)

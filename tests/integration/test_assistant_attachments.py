@@ -427,3 +427,44 @@ def test_multimodal_invocation_uses_openrouter_image_part_and_audits(tmp_path, m
         assert "cG5n" not in body["messages"][1]["content"][0]["text"]
         assert body["messages"][1]["content"][1]["type"] == "image_url"
     get_settings.cache_clear()
+
+
+def test_planner_inventory_id_resolves_through_view_image(monkeypatch, tmp_path):
+    """S3 bridge: the id the planner reads is the id `view_image` resolves, end to end."""
+    import re
+
+    from app.chat.assistant.nodes import _attachment_inventory
+    from app.chat.assistant.tools.registry import execute_tool
+    from app.db import SessionLocal
+    from app.models import AssistantAttachment, InternalChatThread, User
+    from app.services.users import hash_password
+
+    image = tmp_path / "foto.png"
+    image.write_bytes(b"png")
+    with SessionLocal() as session:
+        owner = User(username="inventory-owner", password_hash=hash_password("test-pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id, proyecto="default")
+        session.add(thread)
+        session.flush()
+        row = AssistantAttachment(
+            thread_id=thread.id, filename="foto.png", kind="image", content_type="image/png",
+            size=3, sha256="h", stored_path=str(image),
+        )
+        session.add(row)
+        session.flush()
+        attachment_id, thread_id, owner_id = row.id, thread.id, owner.id
+        inventory = _attachment_inventory({"attachments": [row]})
+        session.commit()
+
+    assert inventory == f'[attachment id="{attachment_id}" filename="foto.png" kind="image"]'
+    # The planner can only cite what the inventory shows; that exact id must resolve.
+    cited_id = int(re.search(r'id="(\d+)"', inventory).group(1))
+    with SessionLocal() as session:
+        result = execute_tool(
+            session, "view_image", {"source": "thread", "id": cited_id}, role="admin",
+            whitelist={"view_image"}, trusted_thread_id=thread_id, owner_id=owner_id,
+        )
+    assert result["status"] == "completed"
+    assert result["result"]["image"]["filename"] == "foto.png"
