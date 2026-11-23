@@ -51,6 +51,7 @@ EXPECTED_KEYS = {
     "handoff_booking_unavailable",
     "handoff_booking_change_ack",
     "gas_instruction_guard",
+    "appliance_valve_guard",
     "excluded_appliance_scope",
     "out_of_catalogue_scope",
     "coverage_out_of_area",
@@ -108,6 +109,13 @@ def test_the_defaults_keep_the_current_wording():
     assert REPLY_TEXT_DEFAULTS["gas_instruction_guard"] == (
         "No manipules la llave ni la línea de gas. Un técnico de Lumat debe "
         "verificarlo; un asesor puede coordinar la visita."
+    )
+    # S1 (odd/tasks/caldera-valvula.md): this is the sentence the customer reads
+    # instead of a valve instruction, so a refactor must not reword it silently.
+    assert REPLY_TEXT_DEFAULTS["appliance_valve_guard"] == (
+        "No manipules la llave de agua del equipo: si está en falla, esa "
+        "intervención la hace un técnico de Lumat. Si hay una fuga de agua, corta "
+        "el agua en la llave general de la casa. Un asesor puede coordinar la visita."
     )
     assert REPLY_TEXT_DEFAULTS["excluded_appliance_scope"] == (
         "No reparamos lavadoras, lavadoras-secadoras ni refrigeradores. Sí atendemos "
