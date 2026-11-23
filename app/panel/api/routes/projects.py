@@ -17,6 +17,16 @@ from app.services.project_config import ProjectConfigUpdate, set_project_config
 router = APIRouter(tags=["panel-api-projects"])
 
 
+class ProjectRenameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ProjectMoveFilesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_slug: str = Field(min_length=1, max_length=100)
+
+
 class ProjectCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     slug: str = Field(min_length=1, max_length=100)
@@ -39,6 +49,19 @@ def project_detail(
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     return {"project": to_project_dict(project, include_config=True)}
+
+
+@router.get("/projects/{slug}/deletion-impact")
+def project_deletion_impact(
+    slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json),
+) -> dict:
+    if slug == "default":
+        raise HTTPException(status_code=400, detail="default project cannot be deleted")
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    counts, *_ = project_service.deletion_impact(session, project, owner_id=current.id)
+    return {"impact": counts}
 
 
 @router.get("/projects/{slug}/agents")
@@ -93,6 +116,88 @@ def project_config_update(
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
     session.commit()
     return {"project": to_project_dict(project, include_config=True)}
+
+
+@router.patch("/projects/{slug}")
+def project_rename(
+    slug: str, payload: ProjectRenameRequest, session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        project = project_service.rename(session, project, payload.name, owner_id=current.id, actor=current.username)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="project alias already exists") from exc
+    return {"project": to_project_dict(project)}
+
+
+@router.post("/projects/{slug}/archive")
+def project_archive(
+    slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json),
+) -> dict:
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        project = project_service.archive(session, project, owner_id=current.id, actor=current.username)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"project": to_project_dict(project)}
+
+
+@router.post("/projects/{slug}/reactivate")
+def project_reactivate(
+    slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json),
+) -> dict:
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_service.reactivate(session, project, owner_id=current.id, actor=current.username)
+    session.commit()
+    return {"project": to_project_dict(project)}
+
+
+@router.post("/projects/{slug}/move-files")
+def project_move_files(
+    slug: str, payload: ProjectMoveFilesRequest, session: Session = Depends(get_db),
+    current: User = Depends(require_agent_surface_json),
+) -> dict:
+    source = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    target = session.scalar(select(Project).where(Project.slug == payload.target_slug, Project.owner_id == current.id))
+    if source is None or target is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        counts = project_service.move_files(session, source, target, owner_id=current.id, actor=current.username)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, **counts}
+
+
+@router.delete("/projects/{slug}")
+def project_delete(
+    slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json),
+) -> dict:
+    project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        counts = project_service.delete_project(session, project, owner_id=current.id, actor=current.username)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "deleted": counts}
 
 
 @router.post("/projects", status_code=201)
