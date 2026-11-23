@@ -205,3 +205,13 @@ La respuesta reportada en el handoff `7210` es una instrucción:
   restantes son código más tests, dentro del guideline. Son una sola conducta con sus tests y su
   documentación, y separar cualquiera de las tres deja un commit que no se puede juzgar solo.
   Push, PR y merge no son decisiones del agente: quedan para el owner (`odd/caldera-valvula`).
+
+- **L11 — merge con `origin/main` y re-gates.** Otra sesión movió `origin/main` de `ff58e4813` a
+  `7a565d86a` (release `v2026.11.15`, PRs #864 y #865) mientras este corte estaba cerrado. El merge
+  entró sin conflictos (`bca55d631`): el rango no toca `app/chat/nodes/*` ni `app/services/settings.py`,
+  así que la conducta de este guard no se cruza con lo que entró, y el panel sólo se encontró con
+  cambios en `ProjectsPage`/`AssistantWorkspace`, ajenos a `ConversationThread.tsx`.
+
+  Re-gates completos después del merge: `full` **0**, `npm ci` **0**, `npm run build` **0**, `npm test`
+  **0**. En esta pasada el flake de `artifact.pdf` de L7 no apareció, y de hecho ya no existe: #864 lo
+  fijó a bytes estables.
