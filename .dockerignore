@@ -13,6 +13,9 @@ media/
 node_modules/
 tests/
 docs/
+odd/**
+!odd/evals/
+!odd/evals/*.json
 # One docs subtree is runtime input, not build noise: `docs/kb` is the source the
 # deployed release check re-seeds from (ops.md §2.5).
 !docs/kb/

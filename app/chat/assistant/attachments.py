@@ -64,6 +64,10 @@ def prepare_attachment_context(attachments, max_chars: int | None = None) -> lis
         if attachment.kind == "image":
             if Path(attachment.stored_path).stat().st_size > get_settings().assistant_attachment_max_image_bytes:
                 raise ValueError("image exceeds the vision size limit")
+            context.append({
+                "type": "image", "filename": attachment.filename, "kind": attachment.kind,
+                "attachment_id": getattr(attachment, "id", None),
+            })
             continue
         content = Path(attachment.stored_path).read_bytes()
         text = extract_document_text(content, attachment.kind)[:remaining]

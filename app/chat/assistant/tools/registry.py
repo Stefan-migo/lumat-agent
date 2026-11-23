@@ -1226,9 +1226,6 @@ def _update_project_file(session, args: ProjectFileUpdateArgs, *, owner_id: int 
             )
         except ValueError as exc:
             raise ToolValidationError(str(exc)) from exc
-        published_backup = assistant_artifacts.publish_artifact(session, thread, backup_row, actor="assistant")
-        if published_backup is None:
-            raise ToolValidationError("project file backup could not be published")
         Path(row.stored_path).write_bytes(content)
         row.size = len(content)
         row.sha256 = sha256

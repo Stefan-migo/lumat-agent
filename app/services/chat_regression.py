@@ -36,10 +36,19 @@ def run_regression(scenarios: list[str], baseline_run_tag: str) -> dict:
 
     eval_dir = Path(__file__).resolve().parents[2] / "odd" / "evals"
     baseline_path, _ = ev.report_paths(eval_dir, baseline_run_tag)
+    available_tags = sorted(
+        path.name[len("conv-eval-"):-len(".json")]
+        for path in eval_dir.glob("conv-eval-*.json")
+        if path.is_file()
+    )
     try:
         baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"baseline report '{baseline_run_tag}' is missing or unreadable: {exc}") from exc
+        available = ", ".join(available_tags) if available_tags else "none"
+        raise ValueError(
+            f"baseline report '{baseline_run_tag}' is missing or unreadable: {exc}; "
+            f"available baseline tags: {available}"
+        ) from exc
     if not isinstance(baseline, dict) or not isinstance(baseline.get("runs"), list):
         raise ValueError(f"baseline report '{baseline_run_tag}' is unreadable: expected a report with runs")
     baseline_rows = {
