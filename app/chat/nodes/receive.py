@@ -11,11 +11,13 @@ message. Media-only turns receive an acknowledgement that the file was saved as
 evidence. Other turns leave the answer to downstream nodes, so the flow resumes
 from stored state, never from scratch (CM-1 repeat).
 
-A greeting on any later turn is answered with the same configured greeting and
+A greeting on any later turn is answered without restarting the presentation and
 never reaches classification: a saludo is not a comprehension failure (S1 of
-`odd/tasks/chatbot-backlog.md`). The customer saying the BOT made no sense is
-answered with the configured repair message, for the same reason: it is a repair
-request, not a comprehension failure (S4 of `odd/tasks/saludo-informal.md`).
+`odd/tasks/chatbot-backlog.md`), and in a thread that already has a topic it is
+not a first contact either (S1 of `odd/tasks/saludo-retorno.md`). The customer
+saying the BOT made no sense is answered with the configured repair message, for
+the same reason: it is a repair request, not a comprehension failure (S4 of
+`odd/tasks/saludo-informal.md`).
 """
 
 from __future__ import annotations
@@ -265,6 +267,32 @@ def _first_turn_header(session, state: ConversationState) -> str:
     return _greeting(session, state, short=has_content(state))
 
 
+def _resume_topic(state: ConversationState) -> str:
+    """The open topic to name when a greeting arrives mid-thread (S2).
+
+    Only what the state can prove: the booked service outranks the captured
+    equipment, because it is what the conversation already promised. A thread
+    that holds neither returns an empty topic, and the caller says nothing about
+    it — naming the wrong topic is worse than naming none.
+    """
+    booking = state.booking or {}
+    service = booking.get("service") or ""
+    if isinstance(service, str) and service.strip():
+        return service.strip()
+    equipment = (state.captured or {}).get("equipment") or ""
+    if isinstance(equipment, str):
+        return equipment.strip()
+    return ""
+
+
+def _resume_greeting(session, state: ConversationState) -> str:
+    """The greeting for a thread that is already open: no presentation, no name."""
+    topic = _resume_topic(state)
+    if not topic:
+        return get_message(session, "greeting_resume")
+    return get_message(session, "greeting_resume_topic").replace("{{tema}}", topic)
+
+
 def receive(state: ConversationState) -> dict:
     """Handle the incoming message at the start of the graph run.
 
@@ -293,10 +321,11 @@ def receive(state: ConversationState) -> dict:
         and "_pending" not in (state.captured or {})
         and is_greeting_only(state)
     ):
-        # S1: greeting the bot again is answered, not classified. The greeting
-        # never increments `unknown_intent` nor counts as an attempt.
+        # S1: greeting the bot again is answered, not classified, and it does not
+        # restart the presentation: the thread already has a topic, and asking
+        # the name again is the amnesia `real-solo-sabados` measured.
         with session_scope() as session:
-            updates["replies"] = [_greeting(session, state, short=False)]
+            updates["replies"] = [_resume_greeting(session, state)]
     message = state.window[-1] if state.window else None
     if is_media_evidence(message):
         updates["replies"] = [EVIDENCE_ACK]

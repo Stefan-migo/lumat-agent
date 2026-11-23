@@ -332,6 +332,12 @@ MESSAGE_DEFAULTS: dict[str, str] = {
     "greeting_short": "Hola, soy Max, de Lumat. ¿Con quién tengo el gusto? Ya te ayudo con eso.",
     "greeting_name": "Hola, {{nombre}}. Soy Max, el asistente virtual de Lumat. ¿En qué te puedo ayudar?",
     "greeting_short_name": "Hola, {{nombre}}. Soy Max, de Lumat. Ya te ayudo con eso.",
+    # S1 (odd/tasks/saludo-retorno.md): a bare greeting in a thread that already
+    # has a topic is not a first contact. These two never reintroduce the bot nor
+    # ask the name again; the second names the open topic when the state proves
+    # one, and the first is used when it does not.
+    "greeting_resume": "Hola de nuevo. Seguimos donde quedamos: cuéntame en qué te ayudo.",
+    "greeting_resume_topic": "Hola de nuevo. Seguimos con {{tema}}: cuéntame en qué te ayudo.",
     "smalltalk": "Con gusto. ¿En qué más te puedo ayudar?",
     # No closing question: on first contact the greeting already asks, and asking
     # twice in one message is what the fused first-contact reply used to do.
@@ -1227,6 +1233,8 @@ _FIXED_MESSAGE_LABELS: dict[str, str] = {
     "greeting_short": "saludo breve",
     "greeting_name": "saludo con nombre",
     "greeting_short_name": "saludo breve con nombre",
+    "greeting_resume": "saludo de retorno",
+    "greeting_resume_topic": "saludo de retorno con tema",
     "smalltalk": "mensaje de cortesía",
     "social": "respuesta a una pregunta social",
     "smalltalk_decline": "mensaje de cortesía tras un rechazo",
@@ -1240,11 +1248,22 @@ _FIXED_MESSAGE_LABELS: dict[str, str] = {
 }
 
 
+# The fixed messages that render a slot, and the exact marker each one admits.
+# A key outside this map is delivered verbatim, so a stray brace would reach the
+# customer as literal text.
+_FIXED_MESSAGE_MARKERS: dict[str, str] = {
+    "greeting_name": "nombre",
+    "greeting_short_name": "nombre",
+    "greeting_resume_topic": "tema",
+}
+
+
 def validate_fixed_messages(value: Any) -> dict[str, str]:
     """Reject mustache slots the fixed-message renderer cannot fill.
 
-    Only the two name greetings render `{{nombre}}`; all other fixed messages
-    are delivered verbatim and therefore reject both opening and closing braces.
+    Only the messages listed in `_FIXED_MESSAGE_MARKERS` render a slot, and each
+    admits exactly its own marker; every other fixed message is delivered
+    verbatim and therefore rejects both opening and closing braces.
     """
     if not isinstance(value, dict):
         raise ValueError("messages must be an object")
@@ -1253,14 +1272,16 @@ def validate_fixed_messages(value: Any) -> dict[str, str]:
         text = value.get(key)
         if not isinstance(text, str):
             raise ValueError(f"{label} debe ser texto")
-        if key in {"greeting_name", "greeting_short_name"}:
-            remainder = text.replace("{{nombre}}", "")
-            if "{{" in remainder or "}}" in remainder:
-                raise ValueError(
-                    f"El {label} solo admite el marcador exacto {{{{nombre}}}}."
-                )
-        elif "{{" in text or "}}" in text:
-            raise ValueError(f"El {label} no admite llaves de plantilla.")
+        marker = _FIXED_MESSAGE_MARKERS.get(key)
+        if marker is None:
+            if "{{" in text or "}}" in text:
+                raise ValueError(f"El {label} no admite llaves de plantilla.")
+            continue
+        remainder = text.replace("{{" + marker + "}}", "")
+        if "{{" in remainder or "}}" in remainder:
+            raise ValueError(
+                f"El {label} solo admite el marcador exacto {{{{{marker}}}}}."
+            )
 
     return {key: value[key] for key in _FIXED_MESSAGE_LABELS}
 

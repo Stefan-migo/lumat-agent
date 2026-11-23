@@ -109,6 +109,13 @@ class MessagesBody(BaseModel):
     greeting_short: str
     greeting_name: str
     greeting_short_name: str
+    # S1 (saludo-retorno): a greeting in an open thread resumes instead of
+    # restarting the presentation. Optional with the shipped text, like the other
+    # later keys, so a panel client that predates them keeps saving its map.
+    greeting_resume: str = settings_service.MESSAGE_DEFAULTS["greeting_resume"]
+    greeting_resume_topic: str = settings_service.MESSAGE_DEFAULTS[
+        "greeting_resume_topic"
+    ]
     smalltalk: str
     # Keep older panel clients saving their existing fixed-message map.
     social: str = settings_service.MESSAGE_DEFAULTS["social"]

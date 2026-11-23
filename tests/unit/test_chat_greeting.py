@@ -1,8 +1,9 @@
 import pytest
 
 from app.chat.graph import END, _flow_start
-from app.chat.nodes.receive import has_content, is_social_only
+from app.chat.nodes.receive import _resume_topic, has_content, is_social_only
 from app.chat.state import ConversationState
+from app.services.settings import MESSAGE_DEFAULTS
 
 
 def _first_turn_state(text: str | None) -> ConversationState:
@@ -90,6 +91,52 @@ def _turn_state(text: str, turn: int) -> ConversationState:
         turn=turn,
         window=[{"direction": "inbound", "text": text}],
     )
+
+
+def _thread_state(text: str, *, booking=None, captured=None) -> ConversationState:
+    return ConversationState(
+        customer_id=1,
+        conversation_id=1,
+        phone="+56912345678",
+        turn=3,
+        window=[{"direction": "inbound", "text": text}],
+        captured=captured or {},
+        booking=booking,
+    )
+
+
+# S1 (odd/tasks/saludo-retorno.md): a bare greeting mid-thread is not a first
+# contact. Measured in `real-solo-sabados` turn 2 — a customer who had already
+# given the building, the topic and her Saturday question said only `Buen dia`
+# and the bot asked her name again.
+def test_the_resume_greeting_never_reintroduces_the_bot():
+    for key in ("greeting_resume", "greeting_resume_topic"):
+        text = MESSAGE_DEFAULTS[key]
+        assert "soy Max" not in text, key
+        assert "Con quién tengo el gusto" not in text, key
+
+
+# S2: name a topic only when the state proves one. A booked service outranks the
+# captured equipment because it is what the conversation already promised, and a
+# thread that holds neither gets no topic at all.
+@pytest.mark.parametrize(
+    "booking, captured, expected",
+    [
+        (
+            {"service": "mantención de caldera"},
+            {"equipment": "caldera"},
+            "mantención de caldera",
+        ),
+        (None, {"equipment": "calefont"}, "calefont"),
+        ({"service": "  "}, {"equipment": "calefont"}, "calefont"),
+        (None, {}, ""),
+        (None, None, ""),
+        (None, {"comuna": "Ñuñoa"}, ""),
+    ],
+)
+def test_the_resume_topic_names_only_what_the_state_holds(booking, captured, expected):
+    state = _thread_state("Buen día", booking=booking, captured=captured)
+    assert _resume_topic(state) == expected
 
 
 @pytest.mark.parametrize(
