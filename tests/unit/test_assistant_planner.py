@@ -978,3 +978,32 @@ def test_assistant_delegation_module_is_gone():
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("app.chat.assistant.delegation")
+
+
+def test_planner_prompt_lists_thread_attachments_with_resolvable_ids(monkeypatch):
+    """A tool call needs the attachment id, and only the prompt can carry it."""
+    captured = {}
+
+    def fake_create(**kwargs):
+        captured["messages"] = kwargs["messages"]
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content='{"kind":"tool","tool":"view_image","arguments":{"source":"thread","id":7},'
+                    '"summary":"Mirar el adjunto.","requires_approval":false}',
+        ))])
+
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda **_kwargs: SimpleNamespace(prompts={"plan": "{{user_input}}\n{{context}}"}, tools_whitelist=[], skills=(), persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda **_kwargs: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create))),
+    )
+    attachment = SimpleNamespace(id=7, filename="_.jpeg", kind="image", size=53303, content_type="image/jpeg")
+
+    plan_llm({"content": "puedes ver esta imagen?", "context": {"items": []}, "attachments": [attachment]})
+
+    prompt = captured["messages"][1]["content"]
+    assert 'id="7"' in prompt
+    assert "_.jpeg" in prompt
+    assert 'kind="image"' in prompt
