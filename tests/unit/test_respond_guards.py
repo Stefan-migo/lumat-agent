@@ -4,6 +4,7 @@ import pytest
 
 from app.chat.nodes.respond import (
     _affirms_excluded_appliance_repair,
+    _appliance_water_valve_instruction,
     _claims_out_of_catalogue_scope,
     _gas_manipulation_instruction,
 )
@@ -81,6 +82,107 @@ def test_everything_outside_the_narrow_gas_families_is_not_guarded(answer):
     assert not _gas_manipulation_instruction(answer), (
         f"non-narrow sentence was still classified as a gas instruction: {answer!r}"
     )
+
+
+# S1 (odd/tasks/caldera-valvula.md): a question about the water valve of a gas
+# appliance cannot be answered with an instruction to manipulate it. The first
+# case is verbatim from `real-claudio-caldera-valvula` at `ff58e4813` (corpus
+# `2c5469ddae42`): the customer had just reported that his own intervention took
+# the fault code from E25 to E26, and the bot answered "sí conviene cerrar".
+#
+# The family is deliberately narrow: the *appliance's* valve, not the "llave
+# general de agua" that a water leak does call for (`_WATER_CONTEXT` exists
+# precisely to keep those answers intact).
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Si vas a intervenir la red o el equipo, sí conviene cerrar la llave de agua "
+        "de la caldera antes, para evitar derrames o que entre aire a la red.",
+        "Cierra la llave de agua de la caldera.",
+        "Corta la llave de agua del calefont antes de revisar.",
+        "Abre la llave de agua de la caldera para purgar.",
+        "Conviene cerrar la llave de agua de la caldera antes de intervenir el equipo.",
+    ],
+)
+def test_an_instruction_on_the_appliance_water_valve_is_guarded(answer):
+    assert _appliance_water_valve_instruction(answer), (
+        f"appliance water-valve instruction escaped the detector: {answer!r}"
+    )
+
+
+# S2: the water answers the corpus does want must survive. A leak in the flat is
+# not an intervention on a gas appliance, so closing the general supply stays a
+# correct answer and a guard that rewrites it deletes the right reply
+# (`f9e29596b`).
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "abre la llave de paso del agua",
+        "Corta el agua antes de que siga saliendo.",
+        "Revisa si hay fuga de agua en el lavadero.",
+        "Revisa la presión del agua.",
+        "Revisa que la llave de paso de agua esté abierta y que el gas esté habilitado.",
+        "Cierra la llave general de agua de la casa.",
+        "Ante olor a gas, no abra la llave ni pruebe artefactos.",
+        "No cierres la llave de agua de la caldera: un técnico debe hacerlo.",
+        "Un técnico de Lumat revisa la llave de agua de la caldera.",
+        "La mantención de la caldera incluye revisar la llave de agua.",
+    ],
+)
+def test_the_safe_water_answers_and_the_refusals_are_not_guarded(answer):
+    assert not _appliance_water_valve_instruction(answer), (
+        f"a correct water answer was still guarded: {answer!r}"
+    )
+
+
+# S2, second round (independent verification of this cut): the first detector
+# fired on `purgar` in a negative sentence and did not recognise `no hace falta`
+# or `no necesitas`. The rule that fixes it is the one stated here: the verb that
+# governs the valve is the closest one before it, and a negation in front of that
+# verb means the answer is telling the customer NOT to do it.
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Purgar los radiadores no exige cerrar la llave de agua de la caldera.",
+        "No hace falta cerrar la llave de agua de la caldera para purgar un radiador.",
+        "Para revisar la presión no necesitas abrir la llave de agua de la caldera.",
+        "Nunca dejes la llave de agua de la caldera a medio abrir.",
+        "Cierra la llave general de agua de la casa, no la de la caldera.",
+        "Si la caldera gotea, corta el agua en la llave general de la casa y avísanos.",
+        "La caldera no tiene una llave de agua propia; el agua entra por la red del edificio.",
+        "Un técnico revisa la llave de agua del calefón; tú no la manipules.",
+        "El técnico cierra la llave de agua de la caldera antes de purgar el circuito.",
+    ],
+)
+def test_correct_answers_that_negate_or_delegate_the_valve_are_not_guarded(answer):
+    assert not _appliance_water_valve_instruction(answer), (
+        f"a correct answer was still guarded: {answer!r}"
+    )
+
+
+# S1: the instruction is guarded however it is phrased, not only as the imperative
+# measured in L6 — the model also writes infinitives and subjunctives.
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Te recomiendo cerrar la llave de agua de la caldera.",
+        "Conviene que cierres la llave de agua del calefón.",
+        "Hay que cerrar la llave de agua de la caldera.",
+        "Cierra la llave de agua de la caldera para revisar la presión.",
+    ],
+)
+def test_non_imperative_appliance_water_valve_instructions_are_guarded(answer):
+    assert _appliance_water_valve_instruction(answer), (
+        f"appliance water-valve instruction escaped the detector: {answer!r}"
+    )
+
+
+# The catalogue-scope guard keeps its own answer when it is the only defect: the
+# new family must not take over a sentence it does not own.
+def test_a_scope_claim_of_its_own_still_reaches_the_scope_guard():
+    text = "También trabajamos quemadores de cocina a gas."
+    assert _claims_out_of_catalogue_scope(text)
+    assert not _appliance_water_valve_instruction(text)
 
 
 @pytest.mark.parametrize(

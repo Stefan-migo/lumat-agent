@@ -20,6 +20,7 @@ ACTIVITY_EVENTS = {
     "kb_miss",
     "escalation",
     "gas_instruction_guard",
+    "appliance_valve_guard",
 }
 _STAGED_EVENTS_KEY = "realtime_events"
 
