@@ -52,11 +52,11 @@ Le vuelve a preguntar el nombre a alguien que ya se presentó. El mecanismo son 
 
 | ID | Spec | Ruta | Commit |
 | --- | --- | --- | --- |
-| T1 | S1-S5 | este documento | `por commitear` |
-| T2 | S1, S2, S3, S4, S5 | test primero en `tests/unit/test_chat_greeting.py` y `tests/unit/test_reply_texts.py`, ver RED | `por commitear` |
-| T3 | S1, S2, S4 | `app/chat/nodes/receive.py` + `app/services/settings.py`, ver GREEN | `por commitear` |
-| T4 | S1 | medir `real-solo-sabados` y `simple-saludo-variante` con `--only`, sin juez, y leer el turno | `por commitear` (L8) |
-| T5 | — | gates `quick`, `full` y el panel si toca `web/` | `por commitear` (L9) |
+| T1 | S1-S5 | este documento | `f626de610` |
+| T2 | S1, S2, S3, S4, S5 | test primero en `tests/unit/test_chat_greeting.py` y `tests/unit/test_reply_texts.py`, ver RED | `f626de610` |
+| T3 | S1, S2, S4 | `app/chat/nodes/receive.py` + `app/services/settings.py`, ver GREEN | `f626de610` |
+| T4 | S1 | medir `real-solo-sabados` y `simple-saludo-variante` con `--only`, sin juez, y leer el turno | `f626de610` (L8) |
+| T5 | — | gates `quick`, `full` y el panel si toca `web/` | `f626de610` (L9) |
 
 ## Log
 
@@ -151,3 +151,9 @@ Le vuelve a preguntar el nombre a alguien que ya se presentó. El mecanismo son 
   con quién habla, y entrelazar nombre y tema exigiría cuatro claves (con/sin nombre × con/sin tema)
   en vez de dos. Si el owner quiere el nombre, es agregar una clave más y un marcador, no rediseñar el
   flujo.
+
+- **L12 — frontera del corte.** Un commit, 15 archivos, 401 inserciones y 33 borrados; el harness lo
+  marca levemente sobre el guideline de ~400 líneas autoradas. No se parte: el cambio de conducta, sus
+  seis contratos actualizados, los dos textos configurables y el panel son un solo cuerpo de trabajo, y
+  separarlos deja commits que no se pueden juzgar solos. Push, PR y merge quedan para el owner
+  (`odd/saludo-retorno`).
