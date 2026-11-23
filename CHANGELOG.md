@@ -8,6 +8,26 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.16] - 2026-11-23
+
+### Corregido
+
+- `view_image` **seguía** fallando con `thread image not found` después de `v2026.11.15`. El arreglo
+  anterior puso los ids de las imágenes en el bloque de adjuntos del **responder**, pero quien decide
+  llamar la herramienta es el **planner**, y el planner nunca recibió nada de los adjuntos:
+  `assemble_context` descartaba cada fila en silencio porque busca un atributo de texto que los
+  adjuntos no tienen. El prompt del plan ahora lleva un inventario de los adjuntos del turno con `id`,
+  nombre y tipo, que es contra lo que la herramienta resuelve.
+- Una pregunta sobre la **llave de agua** de un calefont dejaba de responderse con una instrucción para
+  que el cliente manipulara el artefacto. El escenario `real-claudio-caldera-valvula` marcaba 0.00 en
+  las últimas tres corridas del corpus.
+- Un saludo en medio del hilo **reiniciaba la presentación** del bot cuando no había captura pendiente,
+  el residuo que `captura-pregunta` (#854) había dejado declarado. El texto de retorno es configurable.
+
+### Cambiado
+
+- Sin migraciones: el schema queda en `071_simulation_isolation`. El rollback es sólo de código.
+
 ## [2026.11.15] - 2026-11-23
 
 ### Corregido
