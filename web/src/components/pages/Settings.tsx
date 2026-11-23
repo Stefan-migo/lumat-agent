@@ -30,7 +30,7 @@ import "./Settings.css";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
-const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", smalltalk: "", social: "", cannot_answer: "", clarification: "", confusion: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
+const EMPTY_MESSAGES = { greeting: "", greeting_short: "", greeting_name: "", greeting_short_name: "", greeting_resume: "", greeting_resume_topic: "", smalltalk: "", social: "", cannot_answer: "", clarification: "", confusion: "", cannot_understand_offer: "", kb_miss_offer: "", farewell: "", out_of_hours: "" };
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 type SettingsOptions = { tones: string[]; tarifa_labels: Partial<Record<keyof SettingsData["tarifa"], string>> };
@@ -73,6 +73,8 @@ const MESSAGE_TEMPLATES = [
   { id: "greeting_name", label: "Saludo con nombre", description: "Inicio de conversación cuando el nombre ya está cargado", icon: MessageCircle },
   { id: "greeting_short", label: "Saludo corto cuando falta el nombre", description: "Cuando el cliente ya contó qué necesita; pregunta su nombre", icon: MessageCircle },
   { id: "greeting_short_name", label: "Saludo corto con nombre", description: "Cuando el cliente ya contó qué necesita y su nombre está cargado", icon: MessageCircle },
+  { id: "greeting_resume", label: "Saludo cuando vuelve a saludar", description: "En medio de una conversación abierta; retoma en vez de presentarse de nuevo", icon: MessageCircle },
+  { id: "greeting_resume_topic", label: "Saludo de retorno con el tema", description: "Igual que el anterior, nombrando el tema ya capturado con {{tema}}", icon: MessageCircle },
   { id: "smalltalk", label: "Cortesía", description: "Respuesta a agradecimientos y conversación social", icon: MessageCircle },
   { id: "social", label: "Pregunta social", description: "Respuesta cuando el cliente pregunta cómo está el asistente", icon: MessageCircle },
   { id: "cannot_answer", label: "Cuando no puede responder", description: "Derivación a un asesor", icon: Headset },

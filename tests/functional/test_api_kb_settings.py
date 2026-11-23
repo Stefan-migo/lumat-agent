@@ -946,6 +946,10 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "greeting_short",
         "greeting_name",
         "greeting_short_name",
+        # S1 (saludo-retorno): a greeting mid-thread resumes instead of
+        # restarting the presentation, and it is owner-editable like the rest.
+        "greeting_resume",
+        "greeting_resume_topic",
         "smalltalk",
         "smalltalk_decline",
         "social",
@@ -1084,6 +1088,10 @@ def test_settings_update_messages_audited(client, make_user):
         "greeting_short": "Hola editado breve",
         "greeting_name": "Hola Ana editado",
         "greeting_short_name": "Hola Ana editado breve",
+        # S1 (saludo-retorno): the resume greetings are owner-editable too, and
+        # the topic one keeps its exact marker.
+        "greeting_resume": "Hola de nuevo, editado",
+        "greeting_resume_topic": "Hola de nuevo, seguimos con {{tema}}",
         "smalltalk": "Con gusto, editado.",
         "smalltalk_decline": "¿Te puedo ayudar en algo más?",
         # chat-rafagas S2: the social question is owner-editable like the rest.
@@ -1690,7 +1698,7 @@ def test_settings_messages_reject_unfillable_slots_with_human_label(
         assert session.scalar(select(AuditLog).where(AuditLog.action == "settings.change")) is None
 
 
-def test_settings_messages_accept_only_nombre_in_the_two_named_greetings(client, make_user):
+def test_settings_fixed_messages_accept_only_their_own_marker(client, make_user):
     make_user("adm", "adm-pass", role="admin")
     _login(client)
     value = {
@@ -1698,6 +1706,8 @@ def test_settings_messages_accept_only_nombre_in_the_two_named_greetings(client,
         "greeting_short": "Hola breve",
         "greeting_name": "Hola {{nombre}}",
         "greeting_short_name": "Hola {{nombre}}",
+        "greeting_resume": "Hola de nuevo",
+        "greeting_resume_topic": "Hola de nuevo, seguimos con {{tema}}",
         "smalltalk": "Con gusto",
         "smalltalk_decline": "¿Te puedo ayudar en algo más?",
         "cannot_answer": "No disponible",
@@ -1713,15 +1723,26 @@ def test_settings_messages_accept_only_nombre_in_the_two_named_greetings(client,
     with SessionLocal() as session:
         assert session.get(Settings, "messages.greeting_name").value == "Hola {{nombre}}"
         assert session.get(Settings, "messages.greeting_short_name").value == "Hola {{nombre}}"
+        assert session.get(Settings, "messages.greeting_resume_topic").value == (
+            "Hola de nuevo, seguimos con {{tema}}"
+        )
 
-    for key in ("greeting_name", "greeting_short_name"):
-        invalid = {**value, key: "Hola {{comuna}}"}
+    # S4: each key admits exactly its own marker. A name greeting with `{{tema}}`
+    # and a resume greeting with `{{nombre}}` are both rejected, because neither
+    # call site fills the other's slot and the braces would reach the customer.
+    for key, marker in (
+        ("greeting_name", "nombre"),
+        ("greeting_short_name", "nombre"),
+        ("greeting_resume_topic", "tema"),
+    ):
+        wrong = "{{comuna}}"
+        invalid = {**value, key: f"Hola {wrong}"}
         rejected = client.post("/panel/api/settings/messages", json=invalid)
         assert rejected.status_code == 400
         assert "saludo" in rejected.json()["detail"].lower()
-        assert "{{nombre}}" in rejected.json()["detail"]
+        assert "{{" + marker + "}}" in rejected.json()["detail"]
         with SessionLocal() as session:
-            assert session.get(Settings, f"messages.{key}").value == "Hola {{nombre}}"
+            assert session.get(Settings, f"messages.{key}").value == value[key]
 
 
 def test_settings_get_exposes_booking_lead_hours_rounding_up_partial_hours(client, make_user):

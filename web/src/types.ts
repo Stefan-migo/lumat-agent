@@ -523,6 +523,8 @@ export interface Settings {
     greeting_short: string;
     greeting_name: string;
     greeting_short_name: string;
+    greeting_resume: string;
+    greeting_resume_topic: string;
     smalltalk: string;
     social: string;
     cannot_answer: string;

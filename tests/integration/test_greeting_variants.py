@@ -210,7 +210,14 @@ def test_first_turn_content_without_name_uses_short_name_question(mock_openai_ch
     assert mock_openai_chat
 
 
-def test_later_bare_greeting_without_capture_uses_named_variant(mock_openai_chat):
+# S1 (odd/tasks/saludo-retorno.md): a bare greeting in an open thread does not
+# restart the presentation. Measured in `real-solo-sabados` turn 2, where the bot
+# asked "¿Con quién tengo el gusto?" of a customer who had already given it. The
+# name is deliberately not used here: the thread is open, the bot already knows
+# who it is talking to, and the approved sentence resumes instead of presenting.
+def test_later_bare_greeting_without_capture_resumes_instead_of_presenting(
+    mock_openai_chat,
+):
     from app.services.settings import MESSAGE_DEFAULTS
 
     conversation_id = _start_conversation("Ana")
@@ -218,7 +225,9 @@ def test_later_bare_greeting_without_capture_uses_named_variant(mock_openai_chat
 
     replies = _turn(conversation_id, "Hola", "wamid.s2.later.greeting")
 
-    assert replies == [MESSAGE_DEFAULTS["greeting_name"].replace("{{nombre}}", "Ana")]
+    assert replies == [MESSAGE_DEFAULTS["greeting_resume"]]
+    assert all("Soy Max" not in reply for reply in replies)
+    assert all("Con quién tengo el gusto" not in reply for reply in replies)
 
 
 def test_later_bare_greeting_during_capture_reasks_pending_field(mock_openai_chat):
