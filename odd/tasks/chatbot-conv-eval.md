@@ -822,3 +822,44 @@ el instrumento.
 
 Ningún número histórico se movió: el sello gana un campo y un run viejo sin él renderiza
 `desconocido`. El corte vive en `odd/conv-eval-sesion`, worktree `../lumat-agent-odd-conv-eval-sesion`.
+
+### L24 — paridad, escenario y re-baseline completo (2026-11-24)
+
+> "Paridad + probar el escenario + re-baseline completo" (decisión del owner, 2026-11-24).
+
+**Dos commits, `odd/conv-eval-sesion`, worktree `../lumat-agent-odd-conv-eval-sesion`:**
+
+- `a82420da7` — el arnés relaja **su propia sesión** con `PGOPTIONS='-c idle_in_transaction_session_timeout=15min'`, leído por libpq al abrir la conexión; el guard `070_session_safety` de 180 s queda intacto. Se descartó `scripts/test.sh`: exportaría el entorno relajado a toda la suite y `tests/integration/test_db.py:292` lee `current_setting` y exige 180.0 exactos; ese test es la alarma del guard. También se descartó `ALTER DATABASE`, ya revertido en L20. El sello lleva la ventana efectiva y su `source` (`client` o `database`).
+- `ce4e44e98` — el arnés siembra idempotentemente la ventana de horas con la que corre producción, y sella su fingerprint y la ventana. `coverage.communes`, `booking.*` y el catálogo de mensajes siguen leyendo sus defaults de código.
+
+Son **542 líneas autoradas** en dos commits; la review nativa toma cada commit por separado.
+
+**La prueba del gate:** corrida aislada `--only real-disponibilidad-dias --no-judge`: `G1 ✓, G4 ✓, G6 ✓, G7 ✓, G8 ✓`. El bot dio la respuesta determinista configurada, no una conjetura del modelo:
+
+```text
+bot — Las visitas se agendan según la disponibilidad de los técnicos.
+```
+
+**Baseline citable `rebaseline-2026-11-24a`**, sellado en `ce4e44e98`: árbol limpio, corpus `2c5469ddae42`, KB `34670f5b3d75` (4 documentos), bot `deepseek / deepseek-flash`, juez `deepseek-v4.1-flash` ×3, 43/43 escenarios medidos, **36 pasan**, **ningún gate fallido**, exit 1 (filas del bot, todo medido), sesión `900s · source client`, fingerprint de configuración del arnés `09b067948eee`. El baseline citable anterior era **35/43** con un gate fallido (G6 ×1).
+
+**Contra `rebaseline-2026-11-23b`** — mismo corpus, misma KB, mismo bot, mismo juez:
+
+- El único cambio de gate: `real-disponibilidad-dias` G6 `false → true`.
+- Cuatro escenarios pasaron de fallar a pasar: `complejo-agendar-calefont`, `real-dato-mas-pregunta`, `real-disponibilidad-dias`, `real-caldera-urgencia`.
+- Tres pasaron de aprobar a fallar: `real-vocabulario-impreciso`, `real-revision-bano-ruidoso`, `real-diego-precio-y-duracion`. Los tres tienen puntaje del juez y ningún gate fallido. En un instrumento donde el juez se mueve ±3 puntos, las medias por dimensión se movieron menos que cualquiera de esos casos: grounding −0.163, policy −0.163, conversational +0.14, escalation +0.047, tone +0.07, closure −0.047. Leerlos como regresiones del bot es la moneda al aire que L11/L18 ya advirtieron; **no se movió ningún gate**.
+- `real-disponibilidad-dias` pasa el gate, pero el juez todavía le da **1.67 con ±4**. La respuesta determinista queda corta porque la ventana de producción es 24/7 («sin restricción», expresado como todos los días de 00:00 a 23:59): dice que la disponibilidad la define el técnico, en vez de nombrar días. Es una pregunta de producto, no del instrumento; queda en la deuda pendiente de disponibilidad, no en este corte.
+
+**La decisión que sigue siendo del owner:** la ventana sembrada es **la de producción**, `[{"days": [1,2,3,4,5,6,7], "open": "00:00", "close": "23:59"}]` (leída de la tabla `settings` de producción el 2026-11-24), no `lunes a sábado, 09:00–18:00`, que `odd/tasks/agenda-config-fuente.md` S3 pedía para el arnés. Las dos pasan G6. La restrictiva ejercitaría el filtro de ofertas y le dice más al cliente: es una línea de fixture y otro re-baseline, y queda abierta.
+
+**Brecha nombrada; todavía no hay paridad.** `coverage.communes`, `booking.service_durations`, `booking.lead_minutes` y el catálogo de mensajes siguen con defaults de código: el arnés mide una configuración que producción no tiene. Ejemplo medido: producción tiene `messages.greeting = "Hola, soy Max, asistente de Lumat. ¿Con quién tengo el gusto? ¿En qué puedo ayudarte?"`; el arnés produce `"Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar."`. Sembrar todo el catálogo es otro corte y exige su propio re-baseline.
+
+**Dos trampas del instrumento, medidas otra vez:**
+
+1. `compare_runs(current, previous)` invierte `regressions`, `fixes` y cada `from`/`to` de `gate_flips` si recibe `(old, new)`. Leído al revés, este corte parecía tener cuatro regresiones y un gate roto: el orden de argumentos es lo único que separa una mejora de una regresión.
+2. El propio `## Contra la corrida anterior` dice `No comparable: el corpus cambió`: compara con el `odd/evals/*.json` más reciente por mtime (una corrida vieja con otro corpus), no con el baseline elegido. Además, `odd/evals/*.json` está ignorado por git, así que un worktree nuevo no tiene ningún `.json` previo. La comparación relevante se hizo a mano contra `rebaseline-2026-11-23b`.
+
+También se confirmó que cualquier corrida de `pytest` sobre la base de test compartida vacía `kb_documents`: sembrar antes de cada corrida, como en L21.
+
+Referencias para seguir la cadena: `odd/tasks/agenda-config-fuente.md` S3; `tests/integration/test_db.py:292`; `app/chat/nodes/configured_answers.py` (`hours_reply`, `_covers_every_hour`); `app/services/settings.py:972` (`get_hours_schedule`).
+
+Lo que **no** cubre este corte: no completa la paridad de configuración —comunas, duraciones, anticipación ni catálogo—, no decide la ventana restrictiva que quería S3, y no resuelve la respuesta escueta de disponibilidad. Tampoco convierte los cambios judge-only sin gate en regresiones del bot ni arregla las limitaciones de comparación automática del reporte.
