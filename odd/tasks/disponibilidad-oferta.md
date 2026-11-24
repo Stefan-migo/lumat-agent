@@ -127,3 +127,38 @@ siguiente, así que la ruta escala en vez de inventar. Es un defecto de `slot_wi
 
 Consecuencia asumida: **el re-baseline de 43 no se paga todavía**. Medir 43 escenarios con un 0.00 que es
 artefacto de redacción fija ese número como si fuera del bot.
+
+### L4 — cinco corridas, y la que arregló el escenario fue la KB (2026-11-24)
+
+| Corrida | Texto | Pasan | `real-disponibilidad-dias` |
+| --- | --- | --- | --- |
+| 1 `oferta-escenarios` | horarios + 3 medias horas del mismo día | 4/6 | 0.00 |
+| 2 `oferta-escenarios-2` | un slot por día, día pedido respetado | 4/6 | 0.00 |
+| 3 `oferta-escenarios-3` | «Tengo estas horas libres…» | 4/6 | 0.00 **y G6 ✗** |
+| 4 `oferta-escenarios-4` | «Tengo disponibilidad el martes 24…» | 3/6 | 0.00 |
+| 5 `oferta-escenarios-5` | + KB alineada | 3/6 | **2.83 ✓** |
+
+Tres cosas que sólo se ven leyendo las cinco juntas:
+
+1. **La corrida 3 rompió un gate, no sólo el puntaje.** `Tengo estas horas libres` no contiene ninguna de las anclas del G6
+   (`horario`, `disponibilidad`, `sábado`, `semana`). Un cambio de redacción puede apagar un gate determinista que ya
+   pasaba: el texto es contrato, no cosmética.
+2. **El juez estaba aplicando la KB, no una preferencia de estilo.** Con «días» nombrados seguía el hard fail
+   («contradiciendo la KB que indica que los días se confirman al coordinar»). Alineada la línea de
+   `docs/kb/lumat-cobertura-horarios.md` (decisión del owner), el escenario pasó a 2.83 y `real-reagenda-mantencion`
+   saltó de 0.00 a 3.00 sin que nadie tocara la reagenda. Costo asumido: la KB cambió de `34670f5b3d75` a
+   **`99a2bbabbeb1`**, así que todo informe anterior deja de ser comparable y el re-baseline es obligatorio.
+   `scripts/kb_doc_drift.py` sigue en 0 hallazgos: la frase nueva habla de política, no repite días ni horas.
+
+Lo que las corridas 4 y 5 dejaron al descubierto **fuera de este corte**, con evidencia en el transcript y sin
+arreglar acá:
+
+- **El acuse del capture afirma una fecha.** `simple-horario-sabado`: «Sobre tu horario: el sábado 28/11. Queda
+  anotada y la confirmamos al coordinar la visita.» El juez lo lee como promesa y da hard fail. Es la misma clase de
+  defecto que este corte arregló en el preview, en otro nodo (`capture`).
+- **Claves de campo crudas al cliente:** `¿name?` (corrida 5) y `¿equipment?` (corrida 4). Al cliente le llega el
+  nombre interno del campo en vez de la pregunta.
+- **`slot_window` no entiende `am`/`pm` ni «próximo martes»:** «a las 9 am» y «el próximo martes» resuelven al
+  martes de hoy. Es lo que mantiene en 0.00 a `real-reagenda-familiar` y aporta a `real-reagenda-mantencion`.
+- **`complejo-agendar-calefont`**: el juez exige responder cobertura y precio antes de pedir los datos; el flujo
+  pide todo primero y termina escalando.
