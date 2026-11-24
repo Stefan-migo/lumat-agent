@@ -1645,6 +1645,7 @@ def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path,
     monkeypatch.setattr(ev, "_bot_settings", lambda: ("deepseek", "deepseek-flash"))
     # The session window is read from the server; this test runs without a database.
     monkeypatch.setattr(ev, "session_idle_timeout_measurement", lambda: (900.0, "client"))
+    monkeypatch.setattr(ev, "seed_harness_settings", lambda: dict(ev.HARNESS_SETTINGS))
     monkeypatch.setattr(ev, "git_state", lambda **_kwargs: ("e354f563", False))
     monkeypatch.setattr(ev, "miss_offer_text", lambda: "te derivo")
 
@@ -1715,3 +1716,55 @@ def test_an_unknown_media_kind_is_refused(tmp_path):
         ev.load_corpus(path)
 
     assert "media_turns" in str(raised.value)
+
+
+def test_the_harness_window_is_a_valid_no_restriction_schedule():
+    """L22: with `[]` the deterministic availability answer cannot exist.
+
+    The fixture therefore has to be a schedule the validator accepts **and** the
+    "no restriction" shape, so the bot says availability decides instead of
+    announcing business hours it does not have.
+    """
+    from app.chat.nodes.configured_answers import _covers_every_hour
+    from app.services.settings import validate_hours_schedule
+
+    schedule = ev.HARNESS_SETTINGS["hours.schedule"]
+
+    validate_hours_schedule(schedule)
+    assert _covers_every_hour(schedule[0])
+
+
+def test_the_stamp_names_the_configuration_the_run_measured():
+    """A run with a window and a run without one answer the same question
+    differently; the seal is where that difference survives."""
+    stamp = ev.RunStamp(
+        run_tag="t",
+        started_at="2026-11-24T00:00:00+00:00",
+        head="abc1234",
+        dirty=False,
+        corpus_fingerprint="c0rp",
+        kb_fingerprint="kb00",
+        kb_documents=4,
+        judge_model=None,
+        judge_repetitions=0,
+        live=False,
+        harness_settings=ev.HARNESS_SETTINGS,
+        harness_settings_fingerprint="09b067948eee",
+    ).as_dict()
+
+    assert stamp["harness_settings"]["hours.schedule"]
+    assert stamp["harness_settings_fingerprint"] == "09b067948eee"
+
+    report = report_for([score_row("a", "simple", True, score=None)])
+    report["stamp"] = stamp
+    markdown = ev.render_markdown(report)
+
+    assert "09b067948eee" in markdown
+    assert "días 1–7 00:00–23:59" in markdown
+
+
+def test_a_report_written_before_the_configuration_was_stamped_grows_no_line():
+    """Old reports are not rewritten, and a line they never had would be a lie."""
+    assert "Config del arnés" not in ev.render_markdown(
+        report_for([score_row("a", "simple", True, score=None)])
+    )

@@ -1038,6 +1038,11 @@ class RunStamp:
     # one.
     session_idle_timeout: float | None = None
     session_idle_timeout_source: str = ""
+    # The configuration the run measured. A window that is configured and one that
+    # is `[]` answer the same question differently, so the report has to say which
+    # one it was — and `[]` was the state that made a G6 unfixable.
+    harness_settings: dict[str, Any] = field(default_factory=dict)
+    harness_settings_fingerprint: str = ""
 
     def as_dict(self) -> dict:
         return {
@@ -1055,6 +1060,8 @@ class RunStamp:
             "bot_model": self.bot_model,
             "session_idle_timeout": self.session_idle_timeout,
             "session_idle_timeout_source": self.session_idle_timeout_source,
+            "harness_settings": self.harness_settings,
+            "harness_settings_fingerprint": self.harness_settings_fingerprint,
         }
 
 
@@ -1272,6 +1279,101 @@ def session_idle_timeout_seconds() -> float | None:
 def _window(value: Any) -> str:
     """A seconds value as the seal reads it, with an honest word for absence."""
     return "desconocido" if value is None else f"{float(value):.0f}s"
+
+
+# ---------------------------------------------------------------------------
+# Harness configuration — the window production runs with, not a feature off
+# ---------------------------------------------------------------------------
+
+HARNESS_SETTINGS: dict[str, Any] = {
+    # Read from production on 2026-11-24 (`select key, value from settings`).
+    # Every day 00:00–23:59 is how production expresses "no restriction": the
+    # technicians' agenda is what bounds the calendar, so the answer says
+    # availability decides instead of announcing business hours that do not exist.
+    "hours.schedule": [{"days": [1, 2, 3, 4, 5, 6, 7], "open": "00:00", "close": "23:59"}],
+    "hours.timezone": "America/Santiago",
+    "hours.closure_enabled": False,
+}
+"""The configuration the harness guarantees, because `[]` is not a configuration.
+
+Measured 2026-11-23 (L22): the evaluation database held **zero settings rows**, so
+`hours.schedule` read its `[]` default, the deterministic availability answer could
+not exist, and `real-disponibilidad-dias` failed G6 with a message no version of the
+bot can fix. A feature turned off and a feature that is broken look identical from
+the gate's side, and that is not something a score can distinguish.
+
+Only the hours window is seeded on purpose: it is the one configuration the corpus
+probes deterministically, and every other key would move the historical numbers for
+reasons this cut did not measure. `coverage.communes`, `booking.*` and the message
+catalog keep reading their code defaults — a named gap, not parity.
+"""
+
+
+def harness_settings_fingerprint(settings: Mapping[str, Any] | None = None) -> str:
+    """A short, stable digest of the configuration a run measured."""
+    import json
+
+    payload = HARNESS_SETTINGS if settings is None else settings
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+    return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def seed_harness_settings() -> dict[str, Any]:
+    """Make the evaluation database hold `HARNESS_SETTINGS`; report what it holds.
+
+    Idempotent: a value that already matches is not rewritten, so a repeated run
+    adds no audit rows and the same tag measures the same configuration. A value
+    that differs is overwritten — a shared database must not decide what a run
+    measured, and a stale manual edit would otherwise make two runs incomparable.
+    """
+    from app.db import session_scope
+    from app.services.settings import get_setting, set_setting
+
+    effective: dict[str, Any] = {}
+    with session_scope() as session:
+        for key, value in HARNESS_SETTINGS.items():
+            if get_setting(session, key) != value:
+                set_setting(session, key, value, actor="conv-eval")
+        # `SessionLocal` runs autoflush=False, so a row this loop just added is
+        # invisible to `get_setting` until it is flushed — and the seal would then
+        # claim the default the seed exists to replace.
+        session.flush()
+        for key in HARNESS_SETTINGS:
+            effective[key] = get_setting(session, key)
+    return effective
+
+
+def _days_label(days: Sequence[int]) -> str:
+    """`días 1–7` for a consecutive run, the explicit list otherwise."""
+    ordered = list(days)
+    if not ordered:
+        return "días ?"
+    if ordered == list(range(ordered[0], ordered[-1] + 1)):
+        return f"días {ordered[0]}–{ordered[-1]}"
+    return "días " + ", ".join(str(day) for day in ordered)
+
+
+def settings_seal_line(stamp: Mapping[str, Any]) -> str | None:
+    """The seal line that names the configuration, or None for a report without it.
+
+    A run with no window and a run whose window is configured produce different
+    answers for the same question, and until this line existed the two reports were
+    indentical. Absent for reports written before this field existed: an old report
+    is not rewritten and does not grow a line it never had.
+    """
+    configured = stamp.get("harness_settings")
+    if not configured:
+        return None
+    windows = [
+        f"{_days_label(entry.get('days') or [])} {entry.get('open')}–{entry.get('close')}"
+        for entry in configured.get("hours.schedule") or []
+        if isinstance(entry, dict)
+    ]
+    return (
+        f"- Config del arnés: `{stamp.get('harness_settings_fingerprint') or '?'}` · "
+        f"`hours.schedule` {' y '.join(windows) if windows else 'sin ventana'} · "
+        f"`{configured.get('hours.timezone') or '?'}`"
+    )
 
 
 # Conversation state only: the KB, the tariff, the message catalog, the users and
@@ -1543,6 +1645,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             f" · {stamp.get('judge_repetitions', 1)} llamada(s) por escenario (mediana)"
         )
     lines.append(judge_line + f" · inicio: {stamp.get('started_at', '?')}")
+    settings_line = settings_seal_line(stamp)
+    if settings_line:
+        lines.append(settings_line)
     run_failures = report.get("run_failures") or {}
     blockers = citability_blockers(stamp, len(run_failures))
     if blockers:
@@ -1887,6 +1992,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         cleared = reset_business_state()
         print(f"reset: {len(cleared)} tablas de conversación vaciadas", flush=True)
 
+    # After the reset, before anything reads a setting: `settings` survives the
+    # reset on purpose, and the window has to be in place before the first turn.
+    harness_config = seed_harness_settings()
+
     try:
         kb_state = preflight()
     except PreflightError as error:
@@ -1927,6 +2036,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         bot_model=_bot_settings()[1],
         session_idle_timeout=session_window,
         session_idle_timeout_source=session_window_source,
+        harness_settings=harness_config,
+        harness_settings_fingerprint=harness_settings_fingerprint(harness_config),
     ).as_dict()
 
     miss_text = miss_offer_text()
