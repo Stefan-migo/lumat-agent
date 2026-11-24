@@ -16,8 +16,8 @@ S3. «ok vamos con 1 y 2. juntos.»
 
 ## Tasks
 
-- T1 → S2 · arnés: el sello de la corrida declara `chat.conduct`/`redaccion` · commit 1
-- T2 → S1 · `capture`: el acuse nombra día, franja u hora, nunca una fecha · commit 2
+- T1 → S2 · arnés: el sello de la corrida declara `chat.conduct`/`redaccion` · `1369380e2` ✅
+- T2 → S1 · `capture`: el acuse nombra día, franja u hora, nunca una fecha · `e0ece6c92` ✅
 - T3 → S3 · verificación (`focused` + `quick`) y cierre del corte · último commit
 
 ## Log
@@ -55,3 +55,41 @@ L5 — restricción de no regresión: los acuses existentes son contrato medido.
 fija cinco veces «queda anotada» y una vez «14:00» en el hold; el G6 de `simple-horario-sabado` acepta
 `sabado`, `sábado`, `asesor`, `coordina`. El cambio de T2 tiene que conservar día y hora y sacar sólo la
 fecha.
+
+L6 — RED y GREEN observados (worktree `../lumat-agent-odd-acuse-horario-config`, base `e6bd0d6c1`):
+
+- T1 RED: `test_render_markdown_declares_the_capture_redaction_the_run_measured`,
+  `test_conduct_fingerprint_moves_only_when_the_conduct_moves` y
+  `test_the_capture_conduct_is_read_from_the_database_the_run_uses` fallan con `AttributeError: module
+  'conv_eval' has no attribute 'measured_conduct'` / `'conduct_fingerprint'`. GREEN con las tres suites
+  del evaluador: **162 passed** (`test_conv_eval.py`, `test_conv_eval_settings.py`,
+  `test_conv_eval_agenda.py`).
+- T2 RED: `TypeError: window_label() got an unexpected keyword argument 'with_date'`. GREEN con
+  `test_slot_window.py`, `test_chat_capture.py`, `test_capture_phrasing.py` y
+  `test_agenda_respeta_horario.py`: **121 passed**.
+- El hold medido ahora dice «Sobre tu horario: el sábado. Queda anotada y la confirmamos al coordinar la
+  visita.» — conserva el día que el cliente nombró, pierde la fecha.
+
+L7 — verificación en el worktree (`odd/acuse-horario-config`, base `e6bd0d6c1`):
+
+- `bash scripts/test.sh quick` → **EXIT 0**, 100 % de la barra.
+- `bash scripts/test.sh full` (primera corrida) → **rojo por el stall preexistente**, no por el corte:
+  `pytest-timeout` a 120 s dentro de `tests/functional/test_seed_dev.py:42` (`subprocess.run` del seed).
+  Es la familia documentada en `odd/tasks/suite-truncate-stall.md` y ya registrada con la misma línea en
+  `odd/tasks/artifact-outputs.md:256`, `odd/tasks/chatbot-defectos.md:769` y
+  `odd/handoffs/chatbot-fase-3-ficha-de-caso.md:83`. Prueba de que no es del diff: aislado pasa
+  (`uv run pytest tests/functional/test_seed_dev.py -q` → 1 passed), el diff no toca `db/`, `scripts/`
+  ni `app/panel/`, y no quedaron `seed_dev.py` huérfanos (0 procesos) ni conexiones colgadas (1 en
+  `pg_stat_activity`) antes del re-run.
+- `bash scripts/test.sh full --deselect tests/functional/test_seed_dev.py::test_dev_seed_populates_dashboard_and_composer`
+  (el deselect que el repo documenta para tener señal) → **EXIT 0**, 10 m 54 s, 100 % de la barra, sin
+  fallos. La corrida completa autoritativa sigue siendo la de CI en el PR, que trae su propio Postgres.
+
+L8 — lo que este corte deja abierto, a propósito:
+
+- **Pendiente 3 (`¿name?`, `¿equipment?`)**: es defecto de producción (`redaccion: llm` medido), y su
+  arreglo es en `phrasing.rewrite`/`phrasing.validate`, no acá.
+- **Continuidad del arnés**: `chat.conduct` queda *declarado* y no sembrado. Una base de evaluación sin
+  fila mide `plantilla`; el informe ahora lo dice, pero la decisión de sembrarlo sigue abierta.
+- **Medición**: el efecto del acuse nuevo sobre el juez (`simple-horario-sabado`) sólo se ve con una
+  corrida nueva del corpus, que queda para cuando se decida re-baselinear.
