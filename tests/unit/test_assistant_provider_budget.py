@@ -136,3 +136,113 @@ def test_openai_client_passes_an_explicit_retry_limit(monkeypatch):
     llm.openai_client()
 
     assert captured["max_retries"] == llm.LLM_MAX_RETRIES
+
+
+def test_failed_orphan_records_bounded_reason_audit_and_preserves_operator_copy(monkeypatch):
+    from datetime import datetime, timezone
+    from app.services import agent_chat
+
+    class Session:
+        def __init__(self):
+            self.message = SimpleNamespace(status="processing", error=None, completed_at=None)
+
+        def scalar(self, _query):
+            return self.message
+
+        def begin_nested(self):
+            from contextlib import nullcontext
+
+            return nullcontext()
+
+        def flush(self):
+            pass
+
+    session = Session()
+    thread = SimpleNamespace(
+        id=17, active_run_id="run-1",
+        assistant_state={"live": {"run_id": "run-1", "status": "running"}},
+    )
+    audit = []
+    monkeypatch.setattr(agent_chat, "record_audit", lambda *args, **kwargs: audit.append(kwargs))
+    reason = agent_chat._failed_run_reason(RuntimeError("database unavailable"), "private operator message")
+
+    assert agent_chat._fail_orphaned_run(
+        session, thread, now=datetime.now(timezone.utc), run_id="run-1", reason=reason
+    )
+
+    assert thread.assistant_state["live"]["reason"] == "RuntimeError: database unavailable"
+    assert len(audit) == 1
+    assert audit[0]["action"] == "internal_chat.run_failed"
+    assert audit[0]["entity"] == "internal_chat_thread"
+    assert audit[0]["after"] == {
+        "run_id": "run-1", "reason": "RuntimeError: database unavailable", "stage": "failed"
+    }
+    assert session.message.error == "El agente no pudo procesar este mensaje. Reinténtalo."
+
+
+def test_failed_orphan_survives_a_rejected_audit_write(monkeypatch):
+    """The failure path must still terminalise the run when the audit row is refused."""
+    from contextlib import nullcontext
+    from datetime import datetime, timezone
+    from sqlalchemy.exc import OperationalError
+
+    from app.services import agent_chat
+
+    class Session:
+        def __init__(self):
+            self.message = SimpleNamespace(status="processing", error=None, completed_at=None)
+
+        def scalar(self, _query):
+            return self.message
+
+        def begin_nested(self):
+            return nullcontext()
+
+        def flush(self):
+            pass
+
+    session = Session()
+    thread = SimpleNamespace(
+        id=19, active_run_id="run-3",
+        assistant_state={"live": {"run_id": "run-3", "status": "running"}},
+    )
+    monkeypatch.setattr(
+        agent_chat, "record_audit",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OperationalError("INSERT INTO audit_log ...", {}, Exception("audit unavailable"))
+        ),
+    )
+
+    assert agent_chat._fail_orphaned_run(
+        session, thread, now=datetime.now(timezone.utc), run_id="run-3", reason="RuntimeError: boom"
+    )
+
+    assert session.message.status == "failed"
+    assert session.message.error == "El agente no pudo procesar este mensaje. Reinténtalo."
+    assert thread.assistant_state["live"]["reason"] == "RuntimeError: boom"
+    assert thread.assistant_state["live"]["status"] == "failed"
+
+
+def test_failed_run_reason_redacts_operator_content_and_structured_payloads():
+    from app.services.agent_chat import _failed_run_reason
+
+    reason = _failed_run_reason(RuntimeError('failed for "private operator message"'), "private operator message")
+    payload_reason = _failed_run_reason(RuntimeError('{"token":"secret"}'))
+
+    assert "private operator message" not in reason
+    assert "secret" not in payload_reason
+    assert reason.startswith("RuntimeError:")
+    assert payload_reason.startswith("RuntimeError:")
+
+
+def test_releasing_logs_slow_node_name_and_elapsed_milliseconds(monkeypatch, caplog):
+    import logging
+    from app.chat.assistant import graph
+
+    monkeypatch.setattr(graph, "SLOW_ASSISTANT_NODE_SECONDS", 0)
+    wrapped = graph._releasing(lambda _state: {"status": "ok"}, release=False)
+    with caplog.at_level(logging.WARNING, logger="app.chat.assistant.graph"):
+        assert wrapped({}) == {"status": "ok"}
+
+    assert "Slow assistant node <lambda> took" in caplog.text
+    assert "ms" in caplog.text
