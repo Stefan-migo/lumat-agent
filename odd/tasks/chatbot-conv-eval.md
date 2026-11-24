@@ -672,3 +672,111 @@ Consecuencia asumida: `citable-1/2/3` quedan con el formato con el que se escrib
 que pidió el owner. Re-renderizar sus JSON hoy daría `—` en la columna de dimensiones —el `summary` que
 guardaron no tiene `spread_max`— mientras la tabla por escenario sí funciona; los reportes no se
 reescriben.
+
+### L19 — el sello delata que se midió otro bot: `Settings` no lee `infra/.env` (2026-11-23)
+
+Corrida `rebaseline-2026-11-23`, 1h35 de reloj, 41 de 43 escenarios medidos, **31/41**. Leído como
+número, es una caída de siete escenarios contra el baseline del 20/11 y el bot no había cambiado.
+El sello del reporte lo decía en la línea que uno no mira:
+
+```
+- Bot: deepseek / deepseek-chat
+```
+
+El baseline del 20/11 dice `deepseek / deepseek-flash`. `app/config.py` declara
+`SettingsConfigDict(env_file=None, …)`: el proceso **nunca** lee `infra/.env`, sólo el entorno, y el
+default del código es `chat_model = "deepseek-chat"` (`app/config.py:63`). Exportar `DATABASE_URL` y
+`DEEPSEEK_API_KEY` no alcanza; hay que exportar también el modelo:
+
+```
+export CHAT_PROVIDER="$(sed -n 's/^CHAT_PROVIDER=//p' infra/.env | tail -1)"
+export CHAT_MODEL="$(sed -n 's/^CHAT_MODEL=//p' infra/.env | tail -1)"
+```
+
+**Regla:** antes de dar por buena una corrida, leer `Bot:` en el sello y compararlo con el baseline
+contra el que se va a comparar. Una corrida con el modelo equivocado no es un resultado: es una pérdida
+de hora y media, y el sello es lo único que la delató sin abrir un transcript.
+
+### L20 — la migración `070` mata al arnés, y el arreglo no es tocar la base (2026-11-23)
+
+`070_session_safety` nació de un incidente real: un turno del asistente quedó `idle in transaction`
+dieciséis minutos, se comió el pool y el panel respondió 500 en todo. Deja
+`idle_in_transaction_session_timeout = 180s` como **default de la base**, y con razón: el guard tiene
+que vivir donde el proceso colgado no lo pueda esquivar.
+
+El arnés, en cambio, deja la transacción abierta **a propósito** mientras llama al modelo: un turno de
+conversación es una transacción que abarca la llamada al LLM. Cuando un escenario pasa de tres minutos,
+Postgres le corta la conexión y el escenario queda sin medir:
+
+```
+! real-revision-bano-ruidoso: escenario no medido
+  (psycopg.errors.IdleInTransactionSessionTimeout) terminating connection due to idle-in-transaction timeout
+! real-caldera-urgencia: escenario no medido (unknown conversation 1)
+```
+
+El segundo es cascada del primero, no un defecto propio: el corte dejó la conexión en un estado que el
+escenario siguiente ya no pudo leer.
+
+**El arreglo equivocado, y por qué no.** Mi primer intento fue
+`ALTER DATABASE lumat SET idle_in_transaction_session_timeout='15min'`. Rompe
+`test_the_database_aborts_a_transaction_idle_beyond_the_safety_window`
+(`tests/integration/test_db.py:292`), que lee `current_setting(...)` y exige **180.0** exactos,
+justamente para que nadie mueva el contrato de la base desde el arnés. Revertido a `180s`.
+
+**El arreglo correcto** es que el proceso del arnés relaje su **propia sesión**, sin tocar el default:
+
+```
+PGOPTIONS='-c idle_in_transaction_session_timeout=15min' uv run python scripts/conv_eval.py …
+```
+
+Queda pendiente aplicarlo en `scripts/test.sh` o en `conv_eval.py`; mientras tanto, una corrida con
+`--reset` sobre la base derivada necesita el relajado por sesión o pierde los escenarios largos.
+
+### L21 — toda corrida con `--reset` necesita la semilla de la KB delante (2026-11-23)
+
+`--reset` vacía el estado de conversación, y la lista real son **25 tablas**, no las diecisiete que
+sugiere el comentario del código: `kb_documents` está entre ellas. Con la KB vacía el arranque aborta
+a los dos segundos:
+
+```
+preflight: la KB de cliente no coincide con docs/kb
+  (faltan: lumat-cobertura-horarios, lumat-garantias-pagos, lumat-identidad, lumat-servicios)
+```
+
+El orden correcto, siempre:
+
+```
+uv run python scripts/seed_kb_docs.py --apply
+uv run python scripts/conv_eval.py --run-tag <tag> --judge-repetitions 3 --reset
+```
+
+La KB sembrada deja `4 documentos · 22 chunks · fingerprint 34670f5b3d75`, que es el fingerprint que
+tiene que aparecer en el sello. Si no coincide, la corrida no es comparable con ninguna anterior.
+
+### L22 — el G6 de `real-disponibilidad-dias` mide el arnés, no el bot (2026-11-23)
+
+Primer baseline citable de los 43: **35/43**, cero escenarios sin medir, un gate fallido. Ese gate es
+`G6` (`must_include_any`) en `real-disponibilidad-dias`, el escenario que agregó #858:
+
+```
+2. cliente — ¿Tienen hora disponible esta semana?
+   bot     — No tengo ese dato. ¿Prefieres que te tome los datos para coordinar una visita,
+             o que te atienda una persona?
+gates: G6 ✗ (ninguna respuesta contiene: horario, disponibilidad, sábado, sabado, semana)
+```
+
+No es el producto. La base de evaluación tiene **cero filas de settings**, así que `hours.schedule` lee
+su default: `[]` (`app/services/settings.py:549`). Sin horario configurado la respuesta determinista de
+disponibilidad no puede existir; el turno cae al modelo, el modelo va a `kb_miss`, y ninguna respuesta
+nombra la semana ni los sábados. **Ese escenario no puede pasar con ninguna versión del bot** mientras
+el arnés no tenga la configuración de producción.
+
+Es el mismo problema que el follow-up de paridad, pero con otra categoría de evidencia: dejó de ser una
+intuición sobre el instrumento y pasó a ser un gate determinista fallando. Sembrar `hours.schedule`
+desde `conv_eval` mueve todos los números históricos, así que pide corte propio **con su re-baseline
+inmediato**.
+
+Para leer este informe: de los diez escenarios por debajo de 2.00, `real-claudio-caldera-valvula` sacó
+**2.33** en un árbol donde el defecto —el bot afirmando que conviene cerrar la llave de agua de la
+caldera— está entero y sin arreglar. Un juez que mueve más de dos puntos sobre un defecto intacto es la
+razón por la que ningún total de este archivo se lee como regresión.
