@@ -77,6 +77,7 @@ STALE_RUN_SECONDS = 600
 # pool's whole checkout window, so failing fast is possible.
 FAILED_RUN_RECOVERY_ATTEMPTS = 3
 FAILED_RUN_RECOVERY_LOCK_TIMEOUT = "2s"
+FAILED_RUN_REASON_LIMIT = 240
 
 
 class _StopRequested(Exception):
@@ -536,10 +537,12 @@ def _run_agent_turn_session(
         message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
         message.completed_at = datetime.now(timezone.utc)
         message.assistant_metadata = {**(message.assistant_metadata or {}), "run_id": run_id}
+        failure_reason = _failed_run_reason(exc, message.content)
         thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
             "stage": "failed",
             "execution_status": "failed",
-            "live": {"run_id": run_id, "stage": "failed", "status": "failed"},
+            "live": {"run_id": run_id, "stage": "failed", "status": "failed",
+                     "reason": failure_reason, "updated_at": _now_iso()},
             "recoverable": True,
             "events": [{
                 "type": "error",
@@ -551,6 +554,7 @@ def _run_agent_turn_session(
             }],
         })
         thread.active_run_id = run_id
+        _record_run_failed_audit(session, thread.id, run_id, failure_reason)
         logger.exception("Assistant run failed", exc_info=exc)
     record_audit(session, actor=user.username, action="internal_chat.message_sent",
                  entity="internal_chat_message", entity_id=str(message.id),
@@ -595,10 +599,14 @@ def run_agent_turn(*, thread_id: int, run_id: str, user_id: int,
         publish_live(_session_factory(), thread_id, run_id,
                      status=(thread.assistant_state or {}).get("live", {}).get("status"),
                      preview=(thread.assistant_state or {}).get("live", {}).get("preview"))
-    except Exception:
+    except Exception as exc:
         session.rollback()
         logger.exception("Unable to complete background assistant run")
-        _record_failed_run(thread_id, run_id)
+        failed_message = locals().get("message")
+        _record_failed_run(
+            thread_id, run_id, error=exc,
+            operator_content=getattr(failed_message, "content", None),
+        )
     finally:
         session.close()
 
@@ -1022,7 +1030,44 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     return message
 
 
-def _fail_orphaned_run(session: Session, thread: InternalChatThread, *, now: datetime, run_id: str | None = None) -> bool:
+def _failed_run_reason(error: Exception | None, operator_content: str | None = None) -> str:
+    """Keep a bounded diagnostic while excluding operator text and structured payloads."""
+    if error is None:
+        return "OrphanedRun: no exception available"
+    message = str(error).strip()
+    if operator_content:
+        variants = {operator_content, repr(operator_content), json.dumps(operator_content)}
+        variants.add(operator_content.encode("unicode_escape").decode("ascii", "ignore"))
+        for variant in sorted(variants, key=len, reverse=True):
+            if variant and variant in message:
+                message = message.replace(variant, "[operator content redacted]")
+    if "{" in message or "}" in message or "[" in message or "]" in message:
+        message = "[details redacted]"
+    message = " ".join(message.split())[:FAILED_RUN_REASON_LIMIT]
+    return f"{type(error).__name__}: {message}"[:FAILED_RUN_REASON_LIMIT]
+
+
+def _record_run_failed_audit(session: Session, thread_id: int, run_id: str | None, reason: str) -> None:
+    """Record why a run failed without letting the bookkeeping break the failure path.
+
+    A savepoint keeps a rejected row from poisoning the transaction that still has to
+    terminalise the operator's message (pool-safety S4).
+    """
+    try:
+        with session.begin_nested():
+            record_audit(
+                session, actor="assistant", action="internal_chat.run_failed",
+                entity="internal_chat_thread", entity_id=str(thread_id),
+                after={"run_id": run_id, "reason": reason, "stage": "failed"},
+            )
+    except Exception:
+        logger.warning("Unable to record the failure reason for run %s", run_id, exc_info=True)
+
+
+def _fail_orphaned_run(
+    session: Session, thread: InternalChatThread, *, now: datetime, run_id: str | None = None,
+    reason: str | None = None,
+) -> bool:
     """Fail a run nothing can still be working on, which re-enables the Retry action.
 
     Callers own the evidence that the run is orphaned; this only writes the
@@ -1040,20 +1085,28 @@ def _fail_orphaned_run(session: Session, thread: InternalChatThread, *, now: dat
         message.status = "failed"
         message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
         message.completed_at = now
+    failure_reason = reason or _failed_run_reason(None)
     thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
         "stage": "failed",
         "execution_status": "failed",
         "recoverable": True,
         "live": {
-            "run_id": run_id, "stage": "failed", "status": "failed", "updated_at": now.isoformat(),
+            "run_id": run_id, "stage": "failed", "status": "failed", "reason": failure_reason,
+            "updated_at": now.isoformat(),
         },
     })
+    # The reason is bookkeeping on top of a failure path that must survive a database that is
+    # already refusing writes (pool-safety S4). A savepoint keeps a rejected audit row from
+    # poisoning the transaction that still has to record the operator-facing failure.
+    _record_run_failed_audit(session, thread.id, run_id, failure_reason)
     logger.warning("Reaped an orphaned assistant run for thread %s", thread.id)
     session.flush()
     return True
 
 
-def _record_failed_run(thread_id: int, run_id: str) -> bool:
+def _record_failed_run(
+    thread_id: int, run_id: str, *, error: Exception | None = None, operator_content: str | None = None,
+) -> bool:
     """Record the terminal failed state in a fresh session, surviving a conflict."""
     for attempt in range(1, FAILED_RUN_RECOVERY_ATTEMPTS + 1):
         session = _session_factory()()
@@ -1065,6 +1118,7 @@ def _record_failed_run(thread_id: int, run_id: str) -> bool:
                 return False
             _fail_orphaned_run(
                 session, thread, now=datetime.now(timezone.utc), run_id=run_id,
+                reason=_failed_run_reason(error, operator_content),
             )
             session.commit()
             return True

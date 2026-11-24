@@ -1059,6 +1059,39 @@ def test_failed_run_recovers_when_audit_write_raises_operational_error(client, m
         assert thread.assistant_state["recoverable"] is True
 
 
+def test_a_failed_turn_records_its_reason_and_one_audit_row(client, monkeypatch):
+    """S3: the ordinary failed turn stores live.reason and exactly one run_failed row."""
+    import app.services.agent_chat as agent_chat
+    from sqlalchemy import text
+
+    _user("assistant-failure-reason", "admin")
+    _login(client, "assistant-failure-reason")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    monkeypatch.setattr(
+        agent_chat, "run_assistant",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("provider timed out after 120s")),
+    )
+    run_id = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hola"}
+    ).json()["message"]["assistant_metadata"]["run_id"]
+
+    failed = _wait_for_run(client, thread_id, run_id)
+    message = next(item for item in failed["messages"] if item["author"] == "admin")
+    assert message["status"] == "failed"
+    assert message["error"] == "El agente no pudo procesar este mensaje. Reinténtalo."
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        reason = thread.assistant_state["live"]["reason"]
+        assert reason.startswith("RuntimeError:"), reason
+        assert len(reason) <= 240
+        assert "provider timed out" in reason
+        rows = session.execute(text(
+            "SELECT count(*) FROM audit_log WHERE action = 'internal_chat.run_failed' "
+            "AND entity_id = :entity AND after->>'run_id' = :run"
+        ), {"entity": str(thread_id), "run": run_id}).scalar()
+        assert rows == 1
+
+
 def test_empty_agent_response_is_localized(client, monkeypatch):
     _user("assistant-empty-response", "admin")
     _login(client, "assistant-empty-response")
