@@ -116,6 +116,29 @@ def clean_db(migrated_db) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _session_options_do_not_leak_between_tests():
+    """A test that asks libpq for its own session option must not hand it down.
+
+    `scripts/conv_eval.py` sets `PGOPTIONS` in its own process on purpose, and any
+    test that calls its entry point in-process leaves that option behind for the
+    next test. Measured: run after the harness's main-loop test, the guard test at
+    `tests/integration/test_db.py` read `900.0` instead of `180.0` — the suite was
+    reporting a bug in the guard that only existed inside the test process.
+
+    The value is restored to whatever the suite started with, never deleted
+    outright: a `PGOPTIONS` a human exported before running the suite is the truth
+    the guard test should see, and silently dropping it would pass the assertion
+    while the connection really runs with the relaxed window.
+    """
+    before = os.environ.get("PGOPTIONS")
+    yield
+    if before is None:
+        os.environ.pop("PGOPTIONS", None)
+    else:
+        os.environ["PGOPTIONS"] = before
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """The in-memory webhook rate limiter is module state; reset per test."""
     from app.webhook import ingest

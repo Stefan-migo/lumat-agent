@@ -780,3 +780,86 @@ Para leer este informe: de los diez escenarios por debajo de 2.00, `real-claudio
 **2.33** en un árbol donde el defecto —el bot afirmando que conviene cerrar la llave de agua de la
 caldera— está entero y sin arreglar. Un juez que mueve más de dos puntos sobre un defecto intacto es la
 razón por la que ningún total de este archivo se lee como regresión.
+
+### L23 — la ventana del arnés se relaja en el arnés, y el guard de la base no se toca (2026-11-24)
+
+> "ok arranca por el 2 PGOPTIONS."
+
+L20 dejó el arreglo nombrado y sin aplicar. Aplicado en `scripts/conv_eval.py` — **no** en
+`scripts/test.sh` y **no** con `ALTER DATABASE`, y los dos descartes importan tanto como el arreglo:
+
+- **`scripts/test.sh` habría roto el test que protege el guard.** Ese script exporta el entorno de
+  *toda* la suite, y `tests/integration/test_db.py:292` lee `current_setting` desde su propia conexión
+  y exige `180.0` exactos. Relajar ahí no arregla el instrumento: apaga la alarma que dice si el guard
+  sigue donde el incidente del 2026-11-21 lo puso.
+- **`ALTER DATABASE` ya se probó en L20** y falló por lo mismo, con el agravante de que movía el
+  default para todos los procesos, no solo para el arnés.
+
+`PGOPTIONS` lo lee libpq **al abrir la conexión** y aplica a esa sesión y a ninguna otra: el arnés pide
+su ventana, la base sigue diciéndole que no a todos los demás. Tres piezas:
+
+1. `relax_session_idle_timeout()` — pone `PGOPTIONS` antes de la primera conexión (`main()` lo llama
+   antes de `import seed_kb_docs`, que es donde nace el engine de `app.db`). Es idempotente y respeta
+   un `PGOPTIONS` que ya traiga la opción: dos `-c` para el mismo setting no apilan, el último gana, y
+   eso pisaría en silencio lo que un humano escribió antes de la corrida.
+2. `session_idle_timeout_measurement()` — lee del **servidor** la ventana y su `source`. `client` = el
+   arnés pidió la suya; `database` = no la pidió, y ese es exactamente el run donde un escenario de más
+   de tres minutos muere sin medirse. Se lee del servidor y no del entorno porque lo que importa es con
+   qué valor corre la conexión — la lección de L19, aplicada al instrumento en vez de al bot.
+3. **El sello lo dice**: `- Sesión: idle_in_transaction_session_timeout 900s · source client`. Sin esa
+   línea, una corrida que perdió escenarios por el default de la base se lee igual que una donde el bot
+   contestó mal, y la diferencia entre las dos es una re-corrida de hora y media.
+
+Verificación observada: `tests/unit/test_conv_eval.py` 145/145, `test_conv_eval_session.py` 2/2 (el
+arnés lee `900.0 · client` y `pg_db_role_setting` sigue diciendo
+`idle_in_transaction_session_timeout=180s`), `test_db.py` + `test_conv_eval_reset.py` 15/15,
+`scripts/test.sh quick` exit 0 y `shape` exit 0.
+
+Lo que **no** cubre: `chatbot.eval_regression` corre escenarios desde el proceso de la app, con el
+guard de `070` intacto a propósito. Ahí la ventana sigue en 180 s, y si alguna vez se corre un
+escenario largo desde ese tool va a morir igual. No se relaja el proceso de producción para arreglar
+el instrumento.
+
+Ningún número histórico se movió: el sello gana un campo y un run viejo sin él renderiza
+`desconocido`. El corte vive en `odd/conv-eval-sesion`, worktree `../lumat-agent-odd-conv-eval-sesion`.
+
+### L24 — paridad, escenario y re-baseline completo (2026-11-24)
+
+> "Paridad + probar el escenario + re-baseline completo" (decisión del owner, 2026-11-24).
+
+**Dos commits, `odd/conv-eval-sesion`, worktree `../lumat-agent-odd-conv-eval-sesion`:**
+
+- `a82420da7` — el arnés relaja **su propia sesión** con `PGOPTIONS='-c idle_in_transaction_session_timeout=15min'`, leído por libpq al abrir la conexión; el guard `070_session_safety` de 180 s queda intacto. Se descartó `scripts/test.sh`: exportaría el entorno relajado a toda la suite y `tests/integration/test_db.py:292` lee `current_setting` y exige 180.0 exactos; ese test es la alarma del guard. También se descartó `ALTER DATABASE`, ya revertido en L20. El sello lleva la ventana efectiva y su `source` (`client` o `database`).
+- `ce4e44e98` — el arnés siembra idempotentemente la ventana de horas con la que corre producción, y sella su fingerprint y la ventana. `coverage.communes`, `booking.*` y el catálogo de mensajes siguen leyendo sus defaults de código.
+
+Son **542 líneas autoradas** en dos commits; la review nativa toma cada commit por separado.
+
+**La prueba del gate:** corrida aislada `--only real-disponibilidad-dias --no-judge`: `G1 ✓, G4 ✓, G6 ✓, G7 ✓, G8 ✓`. El bot dio la respuesta determinista configurada, no una conjetura del modelo:
+
+```text
+bot — Las visitas se agendan según la disponibilidad de los técnicos.
+```
+
+**Baseline citable `rebaseline-2026-11-24a`**, sellado en `ce4e44e98`: árbol limpio, corpus `2c5469ddae42`, KB `34670f5b3d75` (4 documentos), bot `deepseek / deepseek-flash`, juez `deepseek-v4.1-flash` ×3, 43/43 escenarios medidos, **36 pasan**, **ningún gate fallido**, exit 1 (filas del bot, todo medido), sesión `900s · source client`, fingerprint de configuración del arnés `09b067948eee`. El baseline citable anterior era **35/43** con un gate fallido (G6 ×1).
+
+**Contra `rebaseline-2026-11-23b`** — mismo corpus, misma KB, mismo bot, mismo juez:
+
+- El único cambio de gate: `real-disponibilidad-dias` G6 `false → true`.
+- Cuatro escenarios pasaron de fallar a pasar: `complejo-agendar-calefont`, `real-dato-mas-pregunta`, `real-disponibilidad-dias`, `real-caldera-urgencia`.
+- Tres pasaron de aprobar a fallar: `real-vocabulario-impreciso`, `real-revision-bano-ruidoso`, `real-diego-precio-y-duracion`. Los tres tienen puntaje del juez y ningún gate fallido. En un instrumento donde el juez se mueve ±3 puntos, las medias por dimensión se movieron menos que cualquiera de esos casos: grounding −0.163, policy −0.163, conversational +0.14, escalation +0.047, tone +0.07, closure −0.047. Leerlos como regresiones del bot es la moneda al aire que L11/L18 ya advirtieron; **no se movió ningún gate**.
+- `real-disponibilidad-dias` pasa el gate, pero el juez todavía le da **1.67 con ±4**. La respuesta determinista queda corta porque la ventana de producción es 24/7 («sin restricción», expresado como todos los días de 00:00 a 23:59): dice que la disponibilidad la define el técnico, en vez de nombrar días. Es una pregunta de producto, no del instrumento; queda en la deuda pendiente de disponibilidad, no en este corte.
+
+**La decisión que sigue siendo del owner:** la ventana sembrada es **la de producción**, `[{"days": [1,2,3,4,5,6,7], "open": "00:00", "close": "23:59"}]` (leída de la tabla `settings` de producción el 2026-11-24), no `lunes a sábado, 09:00–18:00`, que `odd/tasks/agenda-config-fuente.md` S3 pedía para el arnés. Las dos pasan G6. La restrictiva ejercitaría el filtro de ofertas y le dice más al cliente: es una línea de fixture y otro re-baseline, y queda abierta.
+
+**Brecha nombrada; todavía no hay paridad.** `coverage.communes`, `booking.service_durations`, `booking.lead_minutes` y el catálogo de mensajes siguen con defaults de código: el arnés mide una configuración que producción no tiene. Ejemplo medido: producción tiene `messages.greeting = "Hola, soy Max, asistente de Lumat. ¿Con quién tengo el gusto? ¿En qué puedo ayudarte?"`; el arnés produce `"Hola, soy Max, el asistente virtual de Lumat. ¿Con quién tengo el gusto? Cuéntame en qué te puedo ayudar."`. Sembrar todo el catálogo es otro corte y exige su propio re-baseline.
+
+**Dos trampas del instrumento, medidas otra vez:**
+
+1. `compare_runs(current, previous)` invierte `regressions`, `fixes` y cada `from`/`to` de `gate_flips` si recibe `(old, new)`. Leído al revés, este corte parecía tener cuatro regresiones y un gate roto: el orden de argumentos es lo único que separa una mejora de una regresión.
+2. El propio `## Contra la corrida anterior` dice `No comparable: el corpus cambió`: compara con el `odd/evals/*.json` más reciente por mtime (una corrida vieja con otro corpus), no con el baseline elegido. Además, `odd/evals/*.json` está ignorado por git, así que un worktree nuevo no tiene ningún `.json` previo. La comparación relevante se hizo a mano contra `rebaseline-2026-11-23b`.
+
+También se confirmó que cualquier corrida de `pytest` sobre la base de test compartida vacía `kb_documents`: sembrar antes de cada corrida, como en L21.
+
+Referencias para seguir la cadena: `odd/tasks/agenda-config-fuente.md` S3; `tests/integration/test_db.py:292`; `app/chat/nodes/configured_answers.py` (`hours_reply`, `_covers_every_hour`); `app/services/settings.py:972` (`get_hours_schedule`).
+
+Lo que **no** cubre este corte: no completa la paridad de configuración —comunas, duraciones, anticipación ni catálogo—, no decide la ventana restrictiva que quería S3, y no resuelve la respuesta escueta de disponibilidad. Tampoco convierte los cambios judge-only sin gate en regresiones del bot ni arregla las limitaciones de comparación automática del reporte.

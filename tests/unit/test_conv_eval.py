@@ -1193,6 +1193,23 @@ def test_validate_only_accepts_the_shipped_corpus(capsys):
     assert captured.err == ""
 
 
+def test_a_path_that_opens_no_connection_writes_no_session_option(capsys):
+    """`--validate-only` touches neither the database nor the process environment.
+
+    Asking for the relaxed window is a process-wide side effect, so it belongs after
+    every early exit that never connects. Measured the hard way: the option leaked
+    into the next test in the same pytest process and the guard test at
+    `tests/integration/test_db.py` read `900.0` instead of `180.0`.
+    """
+    import os
+
+    before = os.environ.get("PGOPTIONS")
+
+    assert ev.main(["--validate-only"]) == 0
+
+    assert os.environ.get("PGOPTIONS") == before
+
+
 def test_validate_only_refuses_a_broken_corpus(tmp_path, capsys):
     path = write_corpus(tmp_path, MINIMAL.replace("tier: simple", "tier: facil"))
     assert ev.main(["--validate-only", "--corpus", str(path)]) == 2
@@ -1578,6 +1595,52 @@ def test_the_report_names_the_bot_and_claims_no_judge_calls_without_a_judge():
     assert "`deepseek-flash`" in markdown
     assert "llamada(s) por escenario" not in markdown
 
+
+def test_relaxing_the_harness_session_is_idempotent_and_keeps_other_options(monkeypatch):
+    """The harness appends its own option and never eats one the caller set.
+
+    Two calls must not stack two `-c` flags for the same setting: Postgres takes
+    the last one, so a duplicated string would silently win over the value a
+    human typed before the run.
+    """
+    monkeypatch.setenv("PGOPTIONS", "-c statement_timeout=30s")
+
+    first = ev.relax_session_idle_timeout()
+    second = ev.relax_session_idle_timeout()
+
+    assert first == second
+    assert first.count("idle_in_transaction_session_timeout") == 1
+    assert "statement_timeout=30s" in first
+
+
+def test_the_stamp_names_the_session_window_that_measured_the_run():
+    """A killed scenario and a measured one look the same in every average, so
+    the seal carries the window the harness got and where it came from."""
+    stamp = ev.RunStamp(
+        run_tag="t",
+        started_at="2026-11-24T00:00:00+00:00",
+        head="abc1234",
+        dirty=False,
+        corpus_fingerprint="c0rp",
+        kb_fingerprint="kb00",
+        kb_documents=4,
+        judge_model=None,
+        judge_repetitions=0,
+        live=False,
+        session_idle_timeout=900.0,
+        session_idle_timeout_source="client",
+    ).as_dict()
+
+    assert stamp["session_idle_timeout"] == 900.0
+    assert stamp["session_idle_timeout_source"] == "client"
+
+    report = report_for([score_row("a", "simple", True, score=None)])
+    report["stamp"] = stamp
+    markdown = ev.render_markdown(report)
+
+    assert "900s" in markdown
+    assert "`client`" in markdown
+
 def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path, monkeypatch):
     """The asymmetry L15 named: a missing verdict was recorded and the run
     continued, a failed scenario killed all fourteen. Now the run keeps the
@@ -1597,6 +1660,9 @@ def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path,
         ev, "preflight", lambda: {"consistent": True, "documents": 4, "fingerprint": "kb00"}
     )
     monkeypatch.setattr(ev, "_bot_settings", lambda: ("deepseek", "deepseek-flash"))
+    # The session window is read from the server; this test runs without a database.
+    monkeypatch.setattr(ev, "session_idle_timeout_measurement", lambda: (900.0, "client"))
+    monkeypatch.setattr(ev, "seed_harness_settings", lambda: dict(ev.HARNESS_SETTINGS))
     monkeypatch.setattr(ev, "git_state", lambda **_kwargs: ("e354f563", False))
     monkeypatch.setattr(ev, "miss_offer_text", lambda: "te derivo")
 
@@ -1667,3 +1733,55 @@ def test_an_unknown_media_kind_is_refused(tmp_path):
         ev.load_corpus(path)
 
     assert "media_turns" in str(raised.value)
+
+
+def test_the_harness_window_is_a_valid_no_restriction_schedule():
+    """L22: with `[]` the deterministic availability answer cannot exist.
+
+    The fixture therefore has to be a schedule the validator accepts **and** the
+    "no restriction" shape, so the bot says availability decides instead of
+    announcing business hours it does not have.
+    """
+    from app.chat.nodes.configured_answers import _covers_every_hour
+    from app.services.settings import validate_hours_schedule
+
+    schedule = ev.HARNESS_SETTINGS["hours.schedule"]
+
+    validate_hours_schedule(schedule)
+    assert _covers_every_hour(schedule[0])
+
+
+def test_the_stamp_names_the_configuration_the_run_measured():
+    """A run with a window and a run without one answer the same question
+    differently; the seal is where that difference survives."""
+    stamp = ev.RunStamp(
+        run_tag="t",
+        started_at="2026-11-24T00:00:00+00:00",
+        head="abc1234",
+        dirty=False,
+        corpus_fingerprint="c0rp",
+        kb_fingerprint="kb00",
+        kb_documents=4,
+        judge_model=None,
+        judge_repetitions=0,
+        live=False,
+        harness_settings=ev.HARNESS_SETTINGS,
+        harness_settings_fingerprint="09b067948eee",
+    ).as_dict()
+
+    assert stamp["harness_settings"]["hours.schedule"]
+    assert stamp["harness_settings_fingerprint"] == "09b067948eee"
+
+    report = report_for([score_row("a", "simple", True, score=None)])
+    report["stamp"] = stamp
+    markdown = ev.render_markdown(report)
+
+    assert "09b067948eee" in markdown
+    assert "días 1–7 00:00–23:59" in markdown
+
+
+def test_a_report_written_before_the_configuration_was_stamped_grows_no_line():
+    """Old reports are not rewritten, and a line they never had would be a lie."""
+    assert "Config del arnés" not in ev.render_markdown(
+        report_for([score_row("a", "simple", True, score=None)])
+    )
