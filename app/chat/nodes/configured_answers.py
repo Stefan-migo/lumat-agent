@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from functools import lru_cache
 from pathlib import Path
+from typing import Sequence
 
 from sqlalchemy import select
 
@@ -32,8 +33,10 @@ from app.services.settings import (
     get_coverage_communes,
     get_reply_texts,
     get_hours_schedule,
+    get_hours_timezone,
     get_service_durations,
 )
+from app.chat.slot_window import resolve_window
 
 # Terms that ask WHERE the visits happen, as opposed to a question that merely
 # names a commune. Deliberately narrow: `cubre`/`cubren` are verbs other questions
@@ -62,6 +65,11 @@ _SCHEDULE_TAIL = re.compile(
     r"(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|festivos?|feriados?)s?"
     r"(?:\s+(?:por la|en la)\s+(?:manana|tarde|noche))?"
 )
+
+# The preview asks the agenda for a wide slice and keeps one slot per day: the
+# service returns the earliest slots, which for a free agenda are consecutive
+# hours of the same afternoon.
+_PREVIEW_UNIVERSE = 30
 
 _AVAILABILITY_TERMS = frozenset(
     {
@@ -362,27 +370,63 @@ def availability_reply(session, state: ConversationState) -> str | None:
 
     The preview horizon is seven days from now, not the calendar week, so its
     wording deliberately does not claim "esta semana".
+
+    Two rules, both measured on the corpus before they were code: a general question
+    is answered with **different days**, because three consecutive half-hours of one
+    day is the booking menu and scored 0 when the customer asked which days exist;
+    and a question that names a day is answered with that day, because naming the
+    requested day is what the customer asked for.
     """
     text = _current_text(state)
     if not text or _asks_price(text) or not (_words(text) & _AVAILABILITY_TERMS):
         return None
+    now = datetime.now(timezone.utc)
+    window = resolve_window(text, today=_local_today(session, now))
     slots = open_slots_for_assignment(
         session,
-        now=datetime.now(timezone.utc),
+        now=now,
         days=7,
         duration_minutes=DEFAULT_DURATION_MINUTES,
-        limit=3,
+        limit=3 if window is not None else _PREVIEW_UNIVERSE,
         lead_minutes=get_booking_lead_minutes(session),
+        window=window,
     )
     if not slots:
         return None
+    chosen = slots[:3] if window is not None else _one_slot_per_day(slots)
     labels = [
         f"{_WEEKDAY_NAMES[slot_day.isoweekday() - 1]} {slot_day.day} a las {slot_time:%H:%M}"
-        for _, slot_day, slot_time in slots
+        for _, slot_day, slot_time in chosen
     ]
     return render_reply(
         get_reply_texts(session), "availability_preview", opciones=_join_es(labels)
     )
+
+
+def _local_today(session, now: datetime) -> date:
+    """Today where the business lives, which is where `resolve_window` reads days."""
+    from zoneinfo import ZoneInfo
+
+    return now.astimezone(ZoneInfo(get_hours_timezone(session))).date()
+
+
+def _one_slot_per_day(slots: Sequence[tuple[int, date, time]]) -> list[tuple[int, date, time]]:
+    """The first slot of each distinct day, up to three days.
+
+    `open_slots_for_assignment` returns the earliest slots, which for a free agenda
+    are consecutive hours of the same afternoon. Which days have room is the
+    question this answer serves.
+    """
+    chosen: list[tuple[int, date, time]] = []
+    seen: set[date] = set()
+    for slot in slots:
+        if slot[1] in seen:
+            continue
+        seen.add(slot[1])
+        chosen.append(slot)
+        if len(chosen) == 3:
+            break
+    return chosen
 
 
 def configuration_reply(session, state: ConversationState) -> str | None:

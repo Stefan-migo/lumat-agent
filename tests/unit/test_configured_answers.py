@@ -398,6 +398,9 @@ def test_an_hours_question_is_reached_when_no_commune_is_named(monkeypatch):
 def test_availability_question_renders_real_slots_without_persisting_an_offer(monkeypatch):
     monkeypatch.setattr(configured_answers, "get_coverage_communes", lambda _session: [])
     monkeypatch.setattr(configured_answers, "get_booking_lead_minutes", lambda _session: 120)
+    monkeypatch.setattr(
+        configured_answers, "get_hours_timezone", lambda _session: "America/Santiago"
+    )
     calls = []
 
     def available_slots(session, **kwargs):
@@ -420,7 +423,9 @@ def test_availability_question_renders_real_slots_without_persisting_an_offer(mo
     assert state.captured["_booking_offer"] == {"keep": "untouched"}
     assert calls[0]["days"] == 7
     assert calls[0]["duration_minutes"] == configured_answers.DEFAULT_DURATION_MINUTES
-    assert calls[0]["limit"] == 3
+    # No day was named, so the answer keeps one slot per day out of a wide slice.
+    assert calls[0]["limit"] == configured_answers._PREVIEW_UNIVERSE
+    assert calls[0]["window"] is None
     assert calls[0]["lead_minutes"] == 120
     assert calls[0]["now"].tzinfo is not None and calls[0]["now"].utcoffset().total_seconds() == 0
 
@@ -428,6 +433,9 @@ def test_availability_question_renders_real_slots_without_persisting_an_offer(mo
 def test_availability_question_uses_three_slot_spanish_list(monkeypatch):
     monkeypatch.setattr(configured_answers, "get_coverage_communes", lambda _session: [])
     monkeypatch.setattr(configured_answers, "get_booking_lead_minutes", lambda _session: 0)
+    monkeypatch.setattr(
+        configured_answers, "get_hours_timezone", lambda _session: "America/Santiago"
+    )
     monkeypatch.setattr(
         configured_answers,
         "open_slots_for_assignment",
@@ -468,6 +476,9 @@ def test_availability_question_without_slots_falls_back_to_policy_sentence(monke
     _coverage(monkeypatch, [])
     _schedule(monkeypatch, [{"days": [1, 2, 3, 4, 5, 6, 7], "open": "00:00", "close": "23:59"}])
     monkeypatch.setattr(configured_answers, "get_booking_lead_minutes", lambda _session: 120)
+    monkeypatch.setattr(
+        configured_answers, "get_hours_timezone", lambda _session: "America/Santiago"
+    )
     monkeypatch.setattr(configured_answers, "open_slots_for_assignment", lambda *_args, **_kwargs: [])
 
     assert configured_answers.configuration_reply(
