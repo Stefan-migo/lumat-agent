@@ -55,6 +55,20 @@ _ARTIFACT_INVENTORY_LIMIT = 10
 MAX_ASSISTANT_TOOL_STEPS = 8
 
 
+def _release_before_provider_call(state: AssistantState) -> None:
+    """Commit the turn's staged work before the model provider is waited on.
+
+    A node that reads or writes and then calls the provider holds a pooled connection
+    `idle in transaction`, and the database's idle guard terminates it at 180 s. The
+    release is skipped on the approved-write resume, which keeps one transaction on
+    purpose (pool-safety S2).
+    """
+    session = state.get("session")
+    if state.get("resume") or not callable(getattr(session, "in_transaction", None)):
+        return
+    release_transaction(session)
+
+
 def _tool_step_limit() -> int:
     """Steps allowed in one turn, from settings so it can be tuned without a release."""
     try:
@@ -529,9 +543,7 @@ def repair_plan(state: AssistantState) -> AssistantState:
 def _planner_call(messages: list[dict], state: AssistantState, call_key: str) -> tuple[str, object, dict[str, str] | None]:
     """Run one paid planner call and read its text, keeping today's bounded diagnoses."""
     try:
-        session = state.get("session")
-        if not state.get("resume") and callable(getattr(session, "in_transaction", None)):
-            release_transaction(session)
+        _release_before_provider_call(state)
         completion = _assistant_client().chat.completions.create(
             model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
             messages=messages,
@@ -1267,13 +1279,17 @@ def verify_effects(state: AssistantState) -> AssistantState:
         whitelist = {tool for tool in _effective_tools(state) if get_tool(tool).read_only}
         if not definition.read_only or name not in whitelist:
             raise ToolValidationError("verification is read-only")
-        return execute_tool(
-            state.get("session"), name, arguments, whitelist=whitelist,
-            role=state.get("actor_role"), trusted_thread_id=state.get("thread_id"),
-            owner_id=state.get("user_id"), proyecto=_project_slug(state),
-            project_id=(state.get("effective") or {}).get("project_id"),
-        )
+        try:
+            return execute_tool(
+                state.get("session"), name, arguments, whitelist=whitelist,
+                role=state.get("actor_role"), trusted_thread_id=state.get("thread_id"),
+                owner_id=state.get("user_id"), proyecto=_project_slug(state),
+                project_id=(state.get("effective") or {}).get("project_id"),
+            )
+        finally:
+            _release_before_provider_call(state)
 
+    _release_before_provider_call(state)
     criterion = (state.get("plan") or {}).get("success_criterion") or (state.get("planner_output") or {}).get("success_criterion")
     result = run_verification(
         criterion=criterion, steps=steps, evidence=state.get("evidence") or [], tool_executor=tool_executor,
@@ -1489,8 +1505,7 @@ def execute(state: AssistantState) -> AssistantState:
                 user_content: object = [*base, *tool_images]
             else:
                 user_content = prompt
-            if not state.get("resume") and callable(getattr(session, "in_transaction", None)):
-                release_transaction(session)
+            _release_before_provider_call(state)
             completion = client.chat.completions.create(
                 model=model,
                 messages=[

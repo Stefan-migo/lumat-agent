@@ -537,10 +537,12 @@ def _run_agent_turn_session(
         message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
         message.completed_at = datetime.now(timezone.utc)
         message.assistant_metadata = {**(message.assistant_metadata or {}), "run_id": run_id}
+        failure_reason = _failed_run_reason(exc, message.content)
         thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
             "stage": "failed",
             "execution_status": "failed",
-            "live": {"run_id": run_id, "stage": "failed", "status": "failed"},
+            "live": {"run_id": run_id, "stage": "failed", "status": "failed",
+                     "reason": failure_reason, "updated_at": _now_iso()},
             "recoverable": True,
             "events": [{
                 "type": "error",
@@ -552,6 +554,7 @@ def _run_agent_turn_session(
             }],
         })
         thread.active_run_id = run_id
+        _record_run_failed_audit(session, thread.id, run_id, failure_reason)
         logger.exception("Assistant run failed", exc_info=exc)
     record_audit(session, actor=user.username, action="internal_chat.message_sent",
                  entity="internal_chat_message", entity_id=str(message.id),
@@ -1032,12 +1035,33 @@ def _failed_run_reason(error: Exception | None, operator_content: str | None = N
     if error is None:
         return "OrphanedRun: no exception available"
     message = str(error).strip()
-    if operator_content and operator_content in message:
-        message = message.replace(operator_content, "[operator content redacted]")
+    if operator_content:
+        variants = {operator_content, repr(operator_content), json.dumps(operator_content)}
+        variants.add(operator_content.encode("unicode_escape").decode("ascii", "ignore"))
+        for variant in sorted(variants, key=len, reverse=True):
+            if variant and variant in message:
+                message = message.replace(variant, "[operator content redacted]")
     if "{" in message or "}" in message or "[" in message or "]" in message:
         message = "[details redacted]"
     message = " ".join(message.split())[:FAILED_RUN_REASON_LIMIT]
     return f"{type(error).__name__}: {message}"[:FAILED_RUN_REASON_LIMIT]
+
+
+def _record_run_failed_audit(session: Session, thread_id: int, run_id: str | None, reason: str) -> None:
+    """Record why a run failed without letting the bookkeeping break the failure path.
+
+    A savepoint keeps a rejected row from poisoning the transaction that still has to
+    terminalise the operator's message (pool-safety S4).
+    """
+    try:
+        with session.begin_nested():
+            record_audit(
+                session, actor="assistant", action="internal_chat.run_failed",
+                entity="internal_chat_thread", entity_id=str(thread_id),
+                after={"run_id": run_id, "reason": reason, "stage": "failed"},
+            )
+    except Exception:
+        logger.warning("Unable to record the failure reason for run %s", run_id, exc_info=True)
 
 
 def _fail_orphaned_run(
@@ -1074,15 +1098,7 @@ def _fail_orphaned_run(
     # The reason is bookkeeping on top of a failure path that must survive a database that is
     # already refusing writes (pool-safety S4). A savepoint keeps a rejected audit row from
     # poisoning the transaction that still has to record the operator-facing failure.
-    try:
-        with session.begin_nested():
-            record_audit(
-                session, actor="assistant", action="internal_chat.run_failed",
-                entity="internal_chat_thread", entity_id=str(thread.id),
-                after={"run_id": run_id, "reason": failure_reason, "stage": "failed"},
-            )
-    except Exception:
-        logger.warning("Unable to record the failure reason for run %s", run_id, exc_info=True)
+    _record_run_failed_audit(session, thread.id, run_id, failure_reason)
     logger.warning("Reaped an orphaned assistant run for thread %s", thread.id)
     session.flush()
     return True

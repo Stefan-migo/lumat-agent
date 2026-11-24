@@ -116,8 +116,11 @@ def test_llm_retry_budget_is_strictly_below_database_idle_transaction_guard():
     assert match, "migration must declare idle_in_transaction_session_timeout in seconds"
     guard_seconds = int(match.group(1))
 
+    import openai
+
     total_seconds = (1 + llm.LLM_MAX_RETRIES) * llm.LLM_TIMEOUT_SECONDS
     assert total_seconds < guard_seconds
+    assert llm.LLM_MAX_RETRIES != openai.DEFAULT_MAX_RETRIES, "the SDK default must not be in play"
     assert total_seconds <= guard_seconds * 0.8, "client budget needs meaningful margin below the DB guard"
 
 
@@ -221,6 +224,69 @@ def test_failed_orphan_survives_a_rejected_audit_write(monkeypatch):
     assert session.message.error == "El agente no pudo procesar este mensaje. Reinténtalo."
     assert thread.assistant_state["live"]["reason"] == "RuntimeError: boom"
     assert thread.assistant_state["live"]["status"] == "failed"
+
+
+def test_resume_turn_never_releases_before_the_provider_call(monkeypatch):
+    """S1 exception: the approved-write resume keeps its single transaction."""
+    _planner_config(monkeypatch)
+    session = SpySession()
+
+    def create(**_kwargs):
+        assert session.active, "resume must keep the turn's transaction open"
+        session.events.append("provider")
+        return _completion('{"kind":"respond","summary":"ok"}')
+
+    monkeypatch.setattr(nodes, "_assistant_client", lambda: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    ))
+    nodes.plan_llm({"content": "hello", "context": {"items": []}, "session": session,
+                    "request_message_id": None, "resume": True})
+
+    assert session.events == ["provider"]
+
+
+def test_verification_releases_transaction_before_each_verifier_call(monkeypatch):
+    """S1: the verifier is a provider caller too, and it runs inside verify_effects."""
+    session = SpySession()
+
+    def create(**_kwargs):
+        assert not session.active, "verifier call began with an open transaction"
+        session.events.append(f"provider-{len([e for e in session.events if e.startswith('provider')]) + 1}")
+        if len([e for e in session.events if e.startswith("provider")]) == 1:
+            session.active = True  # the read-only tool reads the database
+            tool_call = SimpleNamespace(
+                id="call-1", function=SimpleNamespace(name="list_project_files", arguments="{}")
+            )
+            return SimpleNamespace(choices=[SimpleNamespace(
+                message=SimpleNamespace(content=None, tool_calls=[tool_call])
+            )])
+        return SimpleNamespace(choices=[SimpleNamespace(
+            message=SimpleNamespace(content='{"status":"confirmed","reason":"ok"}', tool_calls=[])
+        )])
+
+    monkeypatch.setattr(nodes, "_assistant_client", lambda: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    ))
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: {"result": []})
+    nodes.verify_effects({
+        "session": session, "thread_id": 1, "run_id": "r1",
+        "tool_results": [{"tool": "memory.update", "result": {}}],
+        "verify_requested": True,
+        "plan": {"success_criterion": "the record exists"},
+        "evidence": [],
+    })
+
+    assert session.events == ["commit", "provider-1", "commit", "provider-2"]
+
+
+def test_failed_run_reason_redacts_repr_escaped_operator_content():
+    from app.services.agent_chat import _failed_run_reason
+
+    operator = "failed on line1\npayroll ACME"
+    reason = _failed_run_reason(RuntimeError(repr(operator)), operator)
+
+    assert "ACME" not in reason
+    assert reason.startswith("RuntimeError:")
 
 
 def test_failed_run_reason_redacts_operator_content_and_structured_payloads():
