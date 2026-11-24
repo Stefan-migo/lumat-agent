@@ -23,7 +23,8 @@ def test_context_keeps_history_in_created_order_without_memory_projection():
     assert result["meta"]["entity_id"] == "thread:7"
 
 
-def test_context_truncates_attachments_after_history():
+def test_context_truncates_history_after_attachments():
+    """S7: the file the operator just attached outranks the thread history."""
     messages = [SimpleNamespace(id=1, author="admin", content="history")]
     attachments = [
         {"id": 10, "filename": "one.txt", "content": "attachment one"},
@@ -32,7 +33,10 @@ def test_context_truncates_attachments_after_history():
 
     result = assemble_context(None, 7, messages=messages, attachments=attachments, budget=5)
 
-    assert [item["content"] for item in result["items"]] == ["history", "attachment o"]
+    first = result["items"][0]
+    assert first["source"] == "attachment"
+    assert first["content"].startswith('[adjunto id="10" filename="one.txt"')
+    assert "attachment o" in first["content"]
     assert result["meta"]["attachment_ids"] == [10]
     assert result["meta"]["truncated"] is True
 

@@ -224,9 +224,10 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
         retained_ids.append(message.id)
         used += cost
 
-    items.extend(reversed(retained_messages))
-    message_ids.extend(reversed(retained_ids))
-
+    # Attachments come before the history. A file the operator just attached is the most specific thing
+    # in the turn, and a long thread used to consume the whole injection budget first, dropping the
+    # attachment silently: the planner then planned as if nothing had been attached.
+    attachment_items: list[dict] = []
     for attachment in attachments:
         content = str(attachment.get("content", "") if isinstance(attachment, dict) else getattr(attachment, "content", ""))
         remaining = max(0, (budget - used) * 4)
@@ -234,14 +235,23 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
             truncated = True
             continue
         encoded = content.encode("utf-8")
-        if len(encoded) > remaining:
+        attachment_truncated = len(encoded) > remaining
+        if attachment_truncated:
             content = encoded[:remaining].decode("utf-8", errors="ignore")
             truncated = True
         if content:
             attachment_id = attachment.get("id") if isinstance(attachment, dict) else getattr(attachment, "id", None)
-            items.append({"source": "attachment", "content": content, "id": attachment_id})
+            filename = attachment.get("filename") if isinstance(attachment, dict) else getattr(attachment, "filename", None)
+            # The planner reads this line, so it must say what it is looking at, not only that a file
+            # exists: a document it believed complete was planned on as if it were.
+            header = f'[adjunto id="{attachment_id}" filename="{filename or "adjunto"}" caracteres={len(content)}'
+            header += " truncado]" if attachment_truncated else "]"
+            attachment_items.append({"source": "attachment", "content": f"{header}\n{content}", "id": attachment_id})
             attachment_ids.append(attachment_id)
             used += estimate_tokens(content)
+    items.extend(attachment_items)
+    items.extend(reversed(retained_messages))
+    message_ids.extend(reversed(retained_ids))
 
     return {
         "items": items,

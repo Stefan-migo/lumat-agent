@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     project_file_max_bytes: int = 20 * 1024 * 1024
     project_file_allowed_types: list[str] = ["pdf", "csv", "txt", "md", "docx", "xlsx", "image"]
     assistant_context_injection_budget: int = 4_000
+    # Upper bound on tool steps in one assistant turn, including a read chain and the write it exists
+    # for. It is a setting, not a constant, because the right number depends on the tool catalog.
+    assistant_tool_step_limit: int = 8
     assistant_session_window_tokens: int = 8_000
     assistant_compaction_threshold_tokens: int = 4_000
     assistant_compaction_retention_tokens: int = 2_000

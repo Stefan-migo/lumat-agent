@@ -302,7 +302,9 @@ def test_replan_keeps_newest_tool_evidence_within_budget(monkeypatch):
             "content": "Find Ana",
             "context": {"items": [], "meta": {}},
             "tool_results": [
-                {"result": [{"evidence": "customers.search", "payload": "x" * 10_000}]},
+                # Oversized on purpose: the property is that the newest result survives the brake and
+                # the older one is named as omitted, whatever the ceiling happens to be.
+                {"result": [{"evidence": "customers.search", "payload": "x" * (_TOOL_EVIDENCE_LIMIT + 2_000)}]},
                 {"result": [{"evidence": "memory.search", "marker": marker}]},
             ],
         }
