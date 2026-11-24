@@ -780,3 +780,45 @@ Para leer este informe: de los diez escenarios por debajo de 2.00, `real-claudio
 **2.33** en un árbol donde el defecto —el bot afirmando que conviene cerrar la llave de agua de la
 caldera— está entero y sin arreglar. Un juez que mueve más de dos puntos sobre un defecto intacto es la
 razón por la que ningún total de este archivo se lee como regresión.
+
+### L23 — la ventana del arnés se relaja en el arnés, y el guard de la base no se toca (2026-11-24)
+
+> "ok arranca por el 2 PGOPTIONS."
+
+L20 dejó el arreglo nombrado y sin aplicar. Aplicado en `scripts/conv_eval.py` — **no** en
+`scripts/test.sh` y **no** con `ALTER DATABASE`, y los dos descartes importan tanto como el arreglo:
+
+- **`scripts/test.sh` habría roto el test que protege el guard.** Ese script exporta el entorno de
+  *toda* la suite, y `tests/integration/test_db.py:292` lee `current_setting` desde su propia conexión
+  y exige `180.0` exactos. Relajar ahí no arregla el instrumento: apaga la alarma que dice si el guard
+  sigue donde el incidente del 2026-11-21 lo puso.
+- **`ALTER DATABASE` ya se probó en L20** y falló por lo mismo, con el agravante de que movía el
+  default para todos los procesos, no solo para el arnés.
+
+`PGOPTIONS` lo lee libpq **al abrir la conexión** y aplica a esa sesión y a ninguna otra: el arnés pide
+su ventana, la base sigue diciéndole que no a todos los demás. Tres piezas:
+
+1. `relax_session_idle_timeout()` — pone `PGOPTIONS` antes de la primera conexión (`main()` lo llama
+   antes de `import seed_kb_docs`, que es donde nace el engine de `app.db`). Es idempotente y respeta
+   un `PGOPTIONS` que ya traiga la opción: dos `-c` para el mismo setting no apilan, el último gana, y
+   eso pisaría en silencio lo que un humano escribió antes de la corrida.
+2. `session_idle_timeout_measurement()` — lee del **servidor** la ventana y su `source`. `client` = el
+   arnés pidió la suya; `database` = no la pidió, y ese es exactamente el run donde un escenario de más
+   de tres minutos muere sin medirse. Se lee del servidor y no del entorno porque lo que importa es con
+   qué valor corre la conexión — la lección de L19, aplicada al instrumento en vez de al bot.
+3. **El sello lo dice**: `- Sesión: idle_in_transaction_session_timeout 900s · source client`. Sin esa
+   línea, una corrida que perdió escenarios por el default de la base se lee igual que una donde el bot
+   contestó mal, y la diferencia entre las dos es una re-corrida de hora y media.
+
+Verificación observada: `tests/unit/test_conv_eval.py` 145/145, `test_conv_eval_session.py` 2/2 (el
+arnés lee `900.0 · client` y `pg_db_role_setting` sigue diciendo
+`idle_in_transaction_session_timeout=180s`), `test_db.py` + `test_conv_eval_reset.py` 15/15,
+`scripts/test.sh quick` exit 0 y `shape` exit 0.
+
+Lo que **no** cubre: `chatbot.eval_regression` corre escenarios desde el proceso de la app, con el
+guard de `070` intacto a propósito. Ahí la ventana sigue en 180 s, y si alguna vez se corre un
+escenario largo desde ese tool va a morir igual. No se relaja el proceso de producción para arreglar
+el instrumento.
+
+Ningún número histórico se movió: el sello gana un campo y un run viejo sin él renderiza
+`desconocido`. El corte vive en `odd/conv-eval-sesion`, worktree `../lumat-agent-odd-conv-eval-sesion`.

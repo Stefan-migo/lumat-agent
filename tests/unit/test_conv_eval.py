@@ -1578,6 +1578,52 @@ def test_the_report_names_the_bot_and_claims_no_judge_calls_without_a_judge():
     assert "`deepseek-flash`" in markdown
     assert "llamada(s) por escenario" not in markdown
 
+
+def test_relaxing_the_harness_session_is_idempotent_and_keeps_other_options(monkeypatch):
+    """The harness appends its own option and never eats one the caller set.
+
+    Two calls must not stack two `-c` flags for the same setting: Postgres takes
+    the last one, so a duplicated string would silently win over the value a
+    human typed before the run.
+    """
+    monkeypatch.setenv("PGOPTIONS", "-c statement_timeout=30s")
+
+    first = ev.relax_session_idle_timeout()
+    second = ev.relax_session_idle_timeout()
+
+    assert first == second
+    assert first.count("idle_in_transaction_session_timeout") == 1
+    assert "statement_timeout=30s" in first
+
+
+def test_the_stamp_names_the_session_window_that_measured_the_run():
+    """A killed scenario and a measured one look the same in every average, so
+    the seal carries the window the harness got and where it came from."""
+    stamp = ev.RunStamp(
+        run_tag="t",
+        started_at="2026-11-24T00:00:00+00:00",
+        head="abc1234",
+        dirty=False,
+        corpus_fingerprint="c0rp",
+        kb_fingerprint="kb00",
+        kb_documents=4,
+        judge_model=None,
+        judge_repetitions=0,
+        live=False,
+        session_idle_timeout=900.0,
+        session_idle_timeout_source="client",
+    ).as_dict()
+
+    assert stamp["session_idle_timeout"] == 900.0
+    assert stamp["session_idle_timeout_source"] == "client"
+
+    report = report_for([score_row("a", "simple", True, score=None)])
+    report["stamp"] = stamp
+    markdown = ev.render_markdown(report)
+
+    assert "900s" in markdown
+    assert "`client`" in markdown
+
 def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path, monkeypatch):
     """The asymmetry L15 named: a missing verdict was recorded and the run
     continued, a failed scenario killed all fourteen. Now the run keeps the
@@ -1597,6 +1643,8 @@ def test_a_failed_scenario_is_recorded_and_the_other_one_still_reports(tmp_path,
         ev, "preflight", lambda: {"consistent": True, "documents": 4, "fingerprint": "kb00"}
     )
     monkeypatch.setattr(ev, "_bot_settings", lambda: ("deepseek", "deepseek-flash"))
+    # The session window is read from the server; this test runs without a database.
+    monkeypatch.setattr(ev, "session_idle_timeout_measurement", lambda: (900.0, "client"))
     monkeypatch.setattr(ev, "git_state", lambda **_kwargs: ("e354f563", False))
     monkeypatch.setattr(ev, "miss_offer_text", lambda: "te derivo")
 

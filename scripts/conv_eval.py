@@ -1032,6 +1032,12 @@ class RunStamp:
     live: bool
     bot_provider: str = ""
     bot_model: str = ""
+    # What the sessions actually ran with and where that value came from: a
+    # scenario killed by the 180 s database default is unmeasured, and `client`
+    # versus `database` is the only thing that tells that run apart from a healthy
+    # one.
+    session_idle_timeout: float | None = None
+    session_idle_timeout_source: str = ""
 
     def as_dict(self) -> dict:
         return {
@@ -1047,6 +1053,8 @@ class RunStamp:
             "live": self.live,
             "bot_provider": self.bot_provider,
             "bot_model": self.bot_model,
+            "session_idle_timeout": self.session_idle_timeout,
+            "session_idle_timeout_source": self.session_idle_timeout_source,
         }
 
 
@@ -1185,6 +1193,85 @@ def miss_offer_text() -> str:
 
     with session_scope() as session:
         return get_message(session, "kb_miss_offer")
+
+
+# ---------------------------------------------------------------------------
+# Session window — the instrument's own transaction, not the database's guard
+# ---------------------------------------------------------------------------
+
+SESSION_IDLE_TIMEOUT = "15min"
+"""How long a harness transaction may stay idle between two statements.
+
+A conversation turn is a transaction that spans the model call **on purpose**, so
+any scenario slower than the `070_session_safety` default (180 s) has its
+connection killed in the middle of the conversation. Fifteen minutes is the
+headroom L20 measured as enough for the longest scenario in the corpus.
+"""
+
+_SESSION_IDLE_OPTION = "-c idle_in_transaction_session_timeout"
+
+
+def relax_session_idle_timeout(environ: dict[str, str] | None = None) -> str:
+    """Give the sessions **this process** opens a longer idle-in-transaction window.
+
+    Migration `070` puts the guard in the database default on purpose: the wedged
+    turn of 2026-11-21 held locks for sixteen minutes while the application could
+    not intervene, so the guard has to live where a stuck process cannot bypass
+    it. The harness is the one caller whose transaction is *meant* to sit idle in
+    transaction — it is waiting on the model — which is why relaxing the default is
+    wrong twice: it weakens the guard for every other caller and it broke the test
+    that pins the default at 180 s (`tests/integration/test_db.py:292`).
+
+    libpq reads `PGOPTIONS` when it opens a connection and applies it to that
+    session alone. So the harness asks for its own window, and the database keeps
+    saying no to everyone else.
+
+    An option already present is respected: a caller who typed `PGOPTIONS` before
+    the run knows something this function does not, and a second `-c` for the same
+    setting would silently win over it.
+    """
+    import os
+
+    target = os.environ if environ is None else environ
+    current = target.get("PGOPTIONS", "").strip()
+    if "idle_in_transaction_session_timeout" in current:
+        return current
+    merged = f"{current} {_SESSION_IDLE_OPTION}={SESSION_IDLE_TIMEOUT}".strip()
+    target["PGOPTIONS"] = merged
+    return merged
+
+
+def session_idle_timeout_measurement() -> tuple[float | None, str | None]:
+    """`(seconds this process's sessions run with, where that value came from)`.
+
+    Read from the server, not from the environment: what matters is the value the
+    connection actually runs with. `source` is the half that cannot be faked —
+    `client` means the harness asked for its own window and `database` means it did
+    not, which is the run where a scenario longer than 180 s dies unmeasured.
+    """
+    from sqlalchemy import text
+
+    from app.db import engine
+
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(
+                "SELECT EXTRACT(EPOCH FROM "
+                "current_setting('idle_in_transaction_session_timeout')::interval), source "
+                "FROM pg_settings WHERE name = 'idle_in_transaction_session_timeout'"
+            )
+        ).one()
+    return float(row[0]), row[1]
+
+
+def session_idle_timeout_seconds() -> float | None:
+    """The idle-in-transaction window this process's connections got, in seconds."""
+    return session_idle_timeout_measurement()[0]
+
+
+def _window(value: Any) -> str:
+    """A seconds value as the seal reads it, with an honest word for absence."""
+    return "desconocido" if value is None else f"{float(value):.0f}s"
 
 
 # Conversation state only: the KB, the tariff, the message catalog, the users and
@@ -1442,6 +1529,13 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         # models identically, and a baseline that cannot name its subject is not
         # reproducible.
         f"- Bot: `{stamp.get('bot_provider') or '?'}` / `{stamp.get('bot_model') or '?'}`",
+        # The instrument's own window and where it came from. Without this line a
+        # run that lost scenarios to the database default reads exactly like a run
+        # where the bot answered badly.
+        f"- Sesión: `idle_in_transaction_session_timeout` "
+        f"{_window(stamp.get('session_idle_timeout'))} · source "
+        f"`{stamp.get('session_idle_timeout_source') or '?'}` "
+        f"(`client` = el arnés relajó su propia sesión)",
     ]
     judge_line = f"- Juez: `{stamp.get('judge_model') or 'sin juez (solo gates)'}`"
     if stamp.get("judge_model"):
@@ -1754,6 +1848,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = _parse_args(argv)
 
+    # Before the first connection: libpq reads PGOPTIONS when it opens one, so the
+    # window has to be asked for before anything touches the database.
+    relax_session_idle_timeout()
+
     try:
         corpus = load_corpus(args.corpus)
     except ValueError as error:
@@ -1811,6 +1909,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         judge_model = args.judge_model or conv_eval_judge.JUDGE_MODEL
 
+    session_window, session_window_source = session_idle_timeout_measurement()
+
     head, dirty = git_state(report_dir=args.out_dir)
     stamp = RunStamp(
         run_tag=args.run_tag,
@@ -1825,6 +1925,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         live=args.live,
         bot_provider=_bot_settings()[0],
         bot_model=_bot_settings()[1],
+        session_idle_timeout=session_window,
+        session_idle_timeout_source=session_window_source,
     ).as_dict()
 
     miss_text = miss_offer_text()
