@@ -106,3 +106,33 @@ def test_responder_releases_transaction_before_streaming_provider_call(monkeypat
     })
 
     assert session.events == ["commit", "provider"]
+
+
+def test_llm_retry_budget_is_strictly_below_database_idle_transaction_guard():
+    from pathlib import Path
+
+    migration = Path("db/migrations/070_session_safety.sql").read_text(encoding="utf-8")
+    match = re.search(r"'([0-9]+)s'", migration)
+    assert match, "migration must declare idle_in_transaction_session_timeout in seconds"
+    guard_seconds = int(match.group(1))
+
+    total_seconds = (1 + llm.LLM_MAX_RETRIES) * llm.LLM_TIMEOUT_SECONDS
+    assert total_seconds < guard_seconds
+    assert total_seconds <= guard_seconds * 0.8, "client budget needs meaningful margin below the DB guard"
+
+
+def test_openai_client_passes_an_explicit_retry_limit(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(llm, "get_settings", lambda: SimpleNamespace(
+        chat_provider="deepseek", openrouter_api_key=None
+    ))
+    monkeypatch.setattr(llm, "resolve_model_api_key", lambda: "test-key")
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(llm, "OpenAI", FakeOpenAI)
+    llm.openai_client()
+
+    assert captured["max_retries"] == llm.LLM_MAX_RETRIES

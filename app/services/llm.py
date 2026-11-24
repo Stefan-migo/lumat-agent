@@ -16,7 +16,10 @@ from openai import OpenAI
 from app.config import get_settings
 from app.services.model_secrets import resolve_model_api_key
 
+# Keep the complete retry budget comfortably below the 180s database idle-transaction guard
+# established by db/migrations/070_session_safety.sql. This applies to WhatsApp and panel callers.
 LLM_TIMEOUT_SECONDS = 60.0
+LLM_MAX_RETRIES = 1
 
 # chat_completions-compatible base URLs per provider (deepseek default).
 # DeepSeek serves /chat/completions directly at api.deepseek.com; OpenRouter
@@ -52,4 +55,5 @@ def openai_client(provider: str | None = None) -> OpenAI:
         api_key=key,
         base_url=PROVIDER_BASE_URLS[provider],
         http_client=httpx.Client(timeout=LLM_TIMEOUT_SECONDS),
+        max_retries=LLM_MAX_RETRIES,
     )
