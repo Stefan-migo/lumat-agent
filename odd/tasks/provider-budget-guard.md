@@ -146,3 +146,31 @@ evidencia. Veredicto inicial: **S1 PASS, S2 PASS, S4 PASS, S3 FAIL**, más dos a
 - **Gates tras la corrección**: `tests/integration/test_assistant_chat.py` **82 passed**; foco (planner,
   tool-loop, guardrails, write-chain y probes de recovery) **161 passed**; familia `llm`/`whatsapp`/`chat`/
   `verification` **235 passed**; `bash scripts/test.sh full` **exit 0, 0 FAILED/ERROR, progreso 100%**.
+
+**L6 — veredicto final de la re-verificación independiente (2026-11-24).**
+El mismo verifier re-corrió sus propias sondas sobre `28140eb9f` y dio **S1 PASS · S2 PASS · S3 PASS ·
+S4 PASS**. El blocker de S3 quedó resuelto por el código que ejecutó, no por el test nuevo: con
+`run_assistant` lanzando `RuntimeError("provider timed out after 120s")` sobre la base real, obtuvo
+`live.reason = "RuntimeError: provider timed out after 120s"`, **1** fila `internal_chat.run_failed`, la
+copia al operador byte-idéntica y `_record_failed_run: 0 call(s)` — o sea, la razón sale del `except` del
+turno, que era justamente el camino que reportó roto. Sondas del delta: `verify_effects` con una tool
+despachada da `COMMIT → PROVIDER-1(False) → write:tool → COMMIT → PROVIDER-2(False)`, y con `resume=True`
+`PROVIDER(in_tx=True)` sin un solo commit. `run_verification` tiene un único llamador (`nodes.py:1294`), así
+que la enumeración enmendada de S1 queda completa para el grafo.
+
+**Advisory aceptada (no se corrige, por decisión):** si la escritura de `internal_chat.run_failed` se
+rechaza **una vez** dentro del SAVEPOINT del propio turno, esa fila se pierde; la razón en
+`assistant_state.live.reason`, la terminalización y la copia al operador se mantienen. Es exactamente lo que
+S3 promete ("la razón queda registrada"; la fila es el registro contable) y la alternativa —dejar que el
+fallo del SAVEPOINT suba para reintentar por `_record_failed_run`— reabriría el riesgo de romper la
+terminalización, que es lo que `pool-safety` S4 prohíbe. Un doble rechazo simétrico no duplica filas.
+
+**Transparencia del verifier:** su primer intento sobre `tests/integration/test_assistant_chat.py` devolvió
+82 errores por correr en paralelo con otra sesión de pytest sobre la misma base de prueba
+(`psycopg.errors.InternalError: tuple concurrently updated`); la corrida secuencial dio 82 passed. No es
+defecto del código y refuerza la regla del repo: una suite por worktree a la vez.
+
+**Estado final de la unidad:** 7 commits sobre `14b297daa` (`ba918dad7`, `f0abaa7af`, `d0b3c867e`,
+`24e77f61f`, `28140eb9f`, `a960a49cf`, este cierre), 617 líneas, 6 archivos. Gates de cierre:
+integración 82 passed, foco 161 passed, familia compartida 235 passed, `scripts/test.sh full` exit 0 con
+0 FAILED/ERROR. Push, PR y deploy son decisión del owner.
