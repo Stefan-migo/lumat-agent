@@ -9,9 +9,11 @@ transacción del grafo, el cliente LLM y el camino de fallo, que usan todos los 
 ## Specs
 
 **S1 — Ningún nodo espera al proveedor con la transacción del turno abierta.**
-`plan_llm`, `repair_plan` y el responder (`execute` con `on_token`) liberan la transacción con el trabajo
-ya hecho **inmediatamente antes** de cada llamada al proveedor, incluida la segunda llamada del planner
-(el repair). Precedente textual en el repo: `_generate_thread_title` llama `release_transaction(session)`
+`plan_llm`, `repair_plan`, el responder (`execute` con `on_token`) y el verificador de efectos
+(`verify_effects`, cuyas dos llamadas al modelo se hacen a través de `verification.run_verification`)
+liberan la transacción con el trabajo ya hecho **inmediatamente antes** de cada llamada al proveedor,
+incluida la segunda llamada del planner (el repair) y la que sigue a cada tool de sólo lectura que
+despacha el verificador. Precedente textual en el repo: `_generate_thread_title` llama `release_transaction(session)`
 justo antes de `client.chat.completions.create` (`app/services/agent_chat.py:307`). Excepción explícita,
 la misma de `pool-safety` S2: el turno que reanuda una escritura aprobada mantiene su única transacción y
 no libera nada, porque un commit a mitad dejaría una aprobación consumida con la escritura sin aplicar
@@ -115,3 +117,32 @@ con el dato del paso 2. Este documento es el corte (1).
   verde: es la familia intermitente ya documentada en `odd/tasks/chatbot-defectos.md` y
   `odd/tasks/suite-truncate-stall.md`, no un efecto de este corte.
 
+
+**L5 — hallazgos de la verificación independiente y su resolución (2026-11-24).**
+El verifier corrió con sondas propias (`/tmp`, fuera del repo) y no aceptó los tests del worker como
+evidencia. Veredicto inicial: **S1 PASS, S2 PASS, S4 PASS, S3 FAIL**, más dos advisories.
+
+- **S3 FAIL (blocker, corregido en `28140eb9f`)**: `_run_agent_turn_session` se tragaba la excepción en su
+  propio `except`, así que `run_agent_turn` —único llamador de `_record_failed_run`— nunca corría y
+  `live.reason` quedaba vacío en el camino ordinario. El verifier lo reprodujo con `run_assistant`
+  lanzando `RuntimeError` sobre la base real: `live.reason: None`, `run_failed rows: 0`. Es decir, el
+  caso que S3 existe para explicar (un error de proveedor común) era justamente el que no dejaba rastro;
+  el camino que sí lo dejaba era el de la base muerta. Ahora el `except` del turno guarda la razón y una
+  fila, con el helper de SAVEPOINT. Test: `test_a_failed_turn_records_its_reason_and_one_audit_row`.
+- **Advisory corregido — cuarto llamador al proveedor**: `verification.run_verification` llamaba al modelo
+  con la transacción del turno abierta (`nodes.py:1278`, nodo `verify_effects`, que corre en todo turno
+  que exija verificación). Es la misma colisión, fuera de la enumeración original de S1, que se enmienda
+  arriba. Test: `test_verification_releases_transaction_before_each_verifier_call`.
+- **Advisory corregido — redacción incompleta**: `_failed_run_reason` dejaba pasar texto del operador
+  cuando llegaba escapado por `repr`. Ahora redacta las variantes cruda, `repr`, `json.dumps` y
+  `unicode_escape`. Test: `test_failed_run_reason_redacts_repr_escaped_operator_content`.
+- **Pin extra derivado del verifier**: el test de S2 ahora exige `LLM_MAX_RETRIES != openai.DEFAULT_MAX_RETRIES`,
+  para que el default del SDK (2, que da 180 s exactos) no vuelva a entrar sin que un test lo note.
+- **Lo que el verifier confirmó con sondas propias**: orden `write → COMMIT → PROVIDER(in_tx=False)` en los
+  tres sitios originales; `resume` con `PROVIDER(in_tx=True)` y **cero** commits; `(1+1)×60 = 120 s < 180 s`
+  con 60 s de margen y `max_retries=1` efectivamente pasado; copia al operador byte-idéntica en 17 chequeos
+  sobre base real; `OpenAI(` existe sólo en `app/services/llm.py`, o sea que el flujo de WhatsApp comparte
+  el cliente y **ningún test fijaba el conteo viejo**.
+- **Gates tras la corrección**: `tests/integration/test_assistant_chat.py` **82 passed**; foco (planner,
+  tool-loop, guardrails, write-chain y probes de recovery) **161 passed**; familia `llm`/`whatsapp`/`chat`/
+  `verification` **235 passed**; `bash scripts/test.sh full` **exit 0, 0 FAILED/ERROR, progreso 100%**.
