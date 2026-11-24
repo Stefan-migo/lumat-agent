@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 from langgraph.graph import END, START, StateGraph
 
 from app.db import release_transaction
@@ -20,6 +23,9 @@ from app.chat.assistant.nodes import (
     verify_effects,
 )
 from app.chat.assistant.state import AssistantState
+
+logger = logging.getLogger(__name__)
+SLOW_ASSISTANT_NODE_SECONDS = 30.0
 
 
 # Stages where the model's own output was unusable. A provider or instrumentation failure is not a plan:
@@ -107,7 +113,17 @@ def _releasing(node, *, release: bool):
     def wrapped(state):
         if release:
             release_transaction((state or {}).get("session"))
-        return node(state)
+        started = time.monotonic()
+        try:
+            return node(state)
+        finally:
+            elapsed = time.monotonic() - started
+            if elapsed > SLOW_ASSISTANT_NODE_SECONDS:
+                logger.warning(
+                    "Slow assistant node %s took %.0f ms",
+                    getattr(node, "__name__", type(node).__name__),
+                    elapsed * 1000,
+                )
     return wrapped
 
 
