@@ -8,6 +8,47 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.18] - 2026-11-24
+
+### Agregado
+
+- El asistente deja de esquivar la pregunta de disponibilidad: «¿qué días tienen disponibles?» se responde
+  desde la agenda real del técnico, nombrando los días que tienen lugar, y las horas sólo cuando el cliente
+  nombra el día que le interesa. La frase anterior —«Tengo estas horas libres: martes 24 a las 13:00»— el
+  juez del corpus la leía como una promesa inventada, y además rompía el gate G6 porque «horas libres» no
+  contiene ninguno de sus anclajes. El documento de KB que decía que «los días y las horas los confirmamos
+  al coordinar la visita» contradecía esa conducta, así que se alineó: informa los días con lugar y deja la
+  hora y la reserva para la coordinación (#880). El fingerprint de la KB pasa de `34670f5b3d75` a
+  `99a2bbabbeb1`, y por eso este release **re-siembra la KB** antes de go-live.
+- El panel puede responder con datos una pregunta que hasta ahora sólo tenía intuición: cada proyección de
+  evidencia que descarta o recorta contenido deja una fila `assistant.evidence_truncated` con el run, la
+  superficie (`planner` o `responder`), las tools implicadas, los caracteres perdidos, cuántos resultados se
+  conservaron y cuántos se omitieron, y el presupuesto vigente. Nunca contenido, y la fila vive dentro de un
+  `SAVEPOINT`: su fallo no puede romper un turno. Es la medición que faltaba para decidir si la cuota de
+  lectura de archivos debe subir (#879).
+
+### Corregido
+
+- Un turno del panel moría a los tres minutos cuando una llamada al modelo tardaba o reintentaba: el turno
+  esperaba al proveedor con la transacción abierta, el guard de la base
+  (`idle_in_transaction_session_timeout`, 180 s) le mataba la conexión, y el commit del nodo siguiente
+  fallaba. El operador sólo veía «El agente no pudo procesar este mensaje. Reinténtalo.» Coincidían dos
+  números de módulos distintos que nadie había atado: `LLM_TIMEOUT_SECONDS = 60` por los 3 intentos del SDK
+  es exactamente 180 s. La transacción se libera ahora inmediatamente antes de cada llamada al proveedor
+  —planner, su reparación, el responder y el verificador de efectos—, el tope de reintentos deja el peor
+  caso en 120 s, y un turno fallido guarda en `live.reason` y en `internal_chat.run_failed` qué pasó, sin
+  cambiar el texto que ve el operador (#878).
+- El arnés del evaluador de conversaciones relaja su propia sesión en vez del guard de la base, siembra la
+  ventana configurada para que el gate de disponibilidad pueda pasar, y mantiene la opción de sesión dentro
+  del proceso del arnés (#877).
+
+### Cambiado
+
+- Sin migraciones: el schema queda en `071_simulation_isolation`, y el rollback es sólo de código.
+- `odd/evals/` suma las corridas 2026-11-24a y 24b con sus lecturas: 36/43 sin gate fallido y, sobre la KB
+  alineada, 35/43 con un gate fallido. El documento dice explícitamente que no son comparables entre sí
+  porque el fingerprint de la KB cambió: no es una regresión, es otro bot.
+
 ## [2026.11.17] - 2026-11-24
 
 ### Corregido
