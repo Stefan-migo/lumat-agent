@@ -26,6 +26,8 @@ from app.services.settings import (
 
 EXPECTED_KEYS = {
     "booking_offer",
+    "availability_preview",
+    "availability_preview_day",
     "booking_no_more_today",
     "booking_window_unavailable",
     "booking_unclear",
@@ -75,6 +77,18 @@ def test_the_key_is_reply_texts():
 def test_the_catalog_covers_booking_manage_handoff_and_capture():
     assert set(REPLY_TEXT_DEFAULTS) == EXPECTED_KEYS
     assert set(REPLY_TEXT_SLOTS) == EXPECTED_KEYS
+
+
+def test_availability_preview_default_and_slot_contract_are_pinned():
+    assert REPLY_TEXT_DEFAULTS["availability_preview"] == (
+        "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo."
+    )
+    assert REPLY_TEXT_DEFAULTS["availability_preview_day"] == (
+        "El {{dia}} tengo estas horas libres: {{horas}}. "
+        "Si te sirve alguna, te tomo los datos y te reservo."
+    )
+    assert REPLY_TEXT_SLOTS["availability_preview"] == frozenset({"dias"})
+    assert REPLY_TEXT_SLOTS["availability_preview_day"] == frozenset({"dia", "horas"})
 
 
 def test_the_defaults_keep_the_current_wording():
@@ -137,7 +151,7 @@ def test_the_slot_vocabulary_is_closed():
     assert set().union(*REPLY_TEXT_SLOTS.values()) == {
         "opciones", "fecha", "visita", "accion", "tecnico", "comuna",
         "nombre", "equipo", "problema", "disponibilidad", "momento",
-        "direccion", "email",
+        "direccion", "email", "dias", "dia", "horas",
     }
 
 

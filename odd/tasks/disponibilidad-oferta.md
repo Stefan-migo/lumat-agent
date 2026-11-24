@@ -1,0 +1,197 @@
+# ODD — disponibilidad-oferta
+
+Que la pregunta «¿tienen hora disponible?» se conteste con la agenda real de los técnicos, sin
+inventar horarios y sin cerrar el chat por horario.
+
+- Branch: `odd/disponibilidad-oferta` · Base: `14b297daa` (main) · Worktree: `../lumat-agent-odd-disponibilidad-oferta`
+
+## Specs
+
+### S1 · El chat responde siempre
+
+> "la idea de la gente de lumat es que el chatbot pueda stender 24/7, pero que solo oueda agendar con
+> los horarios de los tecnicos"
+
+El bot no cierra por horario: `hours.schedule` expresa la ventana de atención del *chat* (hoy 24/7 en
+producción) y `hours.closure_enabled` queda en `false`, así que el mensaje `out_of_hours` no se manda.
+
+### S2 · Solo se agenda con la disponibilidad de los técnicos
+
+> "el chatbot esta disponible para responder siempre pero solo agenda segun los horarios de los
+> tecnicos"
+
+Ningún horario ofrecido al cliente cae fuera de la disponibilidad cargada de un técnico, ni promete un
+slot que `scheduling.book` vaya a rechazar. Ya lo cumplen `scheduling.open_slots_for_assignment` y
+`scheduling.book`; el corte no las relaja.
+
+### S3 · La pregunta por días y horas se contesta con la agenda
+
+Una pregunta directa por disponibilidad («¿tienen hora disponible esta semana?») recibe días y horas
+reales de la agenda, no una política. Forma exacta de la respuesta: **decisión del owner, abierta en
+L2** — el corte no la inventa.
+
+### S4 · El arnés mide con agenda
+
+La base de evaluación tiene cero técnicos y cero bloques de disponibilidad, así que una respuesta
+basada en agenda no puede existir ahí. Sembrar técnicos con horario es el equivalente de lo que
+`hours.schedule` necesitó en el corte anterior: sin datos, el escenario mide el vacío.
+
+## Tasks
+
+| ID | Task | Spec | Route | Commit |
+| --- | --- | --- | --- | --- |
+| T1 | Decidir la forma de la respuesta y el seam (oferta informativa vs entrar al flujo de agendamiento) | S3 | decisión del owner | — |
+| T2 | Implementar la respuesta desde `open_slots_for_assignment` sin crear oferta comprometida | S1, S2, S3 | inline | — |
+| T3 | Tests RED/GREEN de la respuesta y del no-cierre por horario | S1-S3 | inline | — |
+| T4 | Sembrar técnicos y disponibilidad en el arnés, y sellarlo | S4 | inline | — |
+| T5 | Correr `real-disponibilidad-dias` y sus vecinos de agenda | S3, S4 | corrida | — |
+| T6 | Re-baseline citable del corpus | S3, S4 | corrida | — |
+
+## Log
+
+### L1 — pedido del owner (2026-11-24)
+
+> "pk respecto a los horarios. la idea de la gente de lumat es que el chatbot pueda stender 24/7, pero
+> que solo oueda agendar con los horarios de los tecnicos
+
+o sea, el chatbot esta disponible para responder siempre pero solo agenda segun los horarios de los
+tecnicos. esta bien eso?"
+
+> "si arranca con eso. luego continuamos con familia 4"
+
+Verificado en ese intercambio: producción tiene 3 técnicos, 82 bloques de disponibilidad y 23 visitas;
+`hours.schedule` es todos los días `00:00-23:59` y `hours.closure_enabled` es `false`. El camino de
+*pedido* ya se acota con la agenda (`booking.py:146` → `open_slots_for_assignment`, `scheduling.book`,
+`booking.lead_minutes` = 120). Lo que no existía era la respuesta a la pregunta por disponibilidad:
+`configured_answers.hours_reply` contesta con la política.
+
+### L2 — la forma de la respuesta: horarios reales, sin oferta comprometida (2026-11-24)
+
+> Decisión del owner ante la pregunta: **«Horarios reales (día y hora) + invitar a reservar»** — texto
+> aprobado en la vista previa: «Esta semana tengo jueves 27 a las 10:00 y sábado 29 a las 11:00. Si
+> quieres, te tomo los datos y te la reservo.»
+
+Se descartaron las otras dos: **solo días** (dice «jueves» aunque no queden horas útiles del jueves, y
+el cliente no sabe a qué hora) y **dejarlo como está** (el cliente pregunta disponibilidad y recibe una
+política; el escenario se queda en 1.67).
+
+Tres precisiones medidas que el texto aprobado no podía decir:
+
+1. **El horizonte son 7 días desde ahora, no la semana calendario.** `open_slots_for_assignment` usa
+   `days=7` y lo extiende si el cliente nombró un día. La clave dice «Tengo estos horarios disponibles:»
+   y no «Esta semana tengo», porque un viernes incluiría la semana siguiente.
+2. **Es informativa, no una oferta.** Nada se persiste en `captured_data["_booking_offer"]`: el cliente
+   que elige un día entra al capture normal y la oferta real se congela al final, como hoy. Reusar
+   `booking_offer` habría dejado un callejón sin salida — dice «responde con el número» y no habría
+   oferta guardada que resolver.
+3. **Sin horarios, no se inventa nada**: si la agenda no devuelve slots, la respuesta cae en la política
+   que ya existe (`hours_reply`). No hace falta una segunda clave de mensaje.
+
+Costo asumido: **una clave nueva en `reply.texts`** (`availability_preview`), que toca el catálogo, el
+editor del panel, los fixtures y el test que fija las claves. Se elige `reply.texts` y no `messages.*`
+porque el cuerpo Pydantic y el tipo TS de `reply.texts` son mapas abiertos: la clave nueva entra sin
+campo nuevo en la API.
+
+### L3 — la oferta se midió dos veces, y el juez nombró dos defectos distintos (2026-11-24)
+
+Corrida 1 (`oferta-escenarios`, 6 escenarios de agenda, juez ×3): **4/6**, con `real-disponibilidad-dias`
+y `real-solo-sabados` en **0.00** y cero gates fallidos. El transcript los explicaba sin ambigüedad: la
+respuesta listaba **tres medias horas del mismo día** (`marzo... martes 24 a las 11:00, 11:30 y 12:00`) —
+el menú del flujo de agendamiento, no una respuesta a «¿qué días tienen?»— y a «¿este sábado 27?» contestaba
+con martes, porque el día pedido nunca se parseaba. Arreglado en `59fba5081`: un slot por día distinto,
+hasta tres días, y `resolve_window` alimentando `open_slots_for_assignment(window=...)`.
+
+Corrida 2 (`oferta-escenarios-2`): **4/6**, y los dos que fallan ya no son los mismos.
+`real-solo-sabados` recuperó (**1.83**), `real-disponibilidad-dias` sigue en 0.00, y
+`real-reagenda-mantencion` cayó de 2.50 a 0.00.
+
+`real-disponibilidad-dias` ya tiene la forma correcta (`martes 24 a las 12:00, miércoles 25 a las 09:00 y
+jueves 26 a las 09:00`, tres días distintos, todos los gates ✓) y el juez lo castiga por **el texto**,
+con sus propias palabras en la dimensión `policy`:
+
+> «promete horas y días confirmados sin consultar la agenda real, contra el KB: "según la disponibilidad
+> real de técnicos"»
+
+El bot **sí** consultó la agenda; lo que no dice es que esos huecos están libres y sin reservar. El juez no
+puede auditar la consulta, sólo lo que el mensaje afirma. La corrección es de redacción, no de
+comportamiento: decir «horas libres» y que la reserva se confirma al coordinar, como ya hace la ruta de
+agendamiento («Anoté martes pm como preferencia… todavía no queda agendada»). Es texto que aprobó el
+owner en L2, así que no se cambia sin su decisión.
+
+`real-reagenda-mantencion` es otra cosa, y verificada: `resolve_window` sobre «cambiar la fecha de la
+manutención para el **próximo martes** por favor», con hoy = martes 24/11, devuelve
+`SlotWindow(day=2026-11-24)` — **hoy**, no el martes siguiente; y «Martes **pm**» también resuelve al 24/11
+con `franja=None`, porque `pm` no es una franja reconocida. El horizonte de siete días no cubre el martes
+siguiente, así que la ruta escala en vez de inventar. Es un defecto de `slot_window` (días relativos y
+`am`/`pm`), no de la oferta, y pide corte propio.
+
+Consecuencia asumida: **el re-baseline de 43 no se paga todavía**. Medir 43 escenarios con un 0.00 que es
+artefacto de redacción fija ese número como si fuera del bot.
+
+### L4 — cinco corridas, y la que arregló el escenario fue la KB (2026-11-24)
+
+| Corrida | Texto | Pasan | `real-disponibilidad-dias` |
+| --- | --- | --- | --- |
+| 1 `oferta-escenarios` | horarios + 3 medias horas del mismo día | 4/6 | 0.00 |
+| 2 `oferta-escenarios-2` | un slot por día, día pedido respetado | 4/6 | 0.00 |
+| 3 `oferta-escenarios-3` | «Tengo estas horas libres…» | 4/6 | 0.00 **y G6 ✗** |
+| 4 `oferta-escenarios-4` | «Tengo disponibilidad el martes 24…» | 3/6 | 0.00 |
+| 5 `oferta-escenarios-5` | + KB alineada | 3/6 | **2.83 ✓** |
+
+Tres cosas que sólo se ven leyendo las cinco juntas:
+
+1. **La corrida 3 rompió un gate, no sólo el puntaje.** `Tengo estas horas libres` no contiene ninguna de las anclas del G6
+   (`horario`, `disponibilidad`, `sábado`, `semana`). Un cambio de redacción puede apagar un gate determinista que ya
+   pasaba: el texto es contrato, no cosmética.
+2. **El juez estaba aplicando la KB, no una preferencia de estilo.** Con «días» nombrados seguía el hard fail
+   («contradiciendo la KB que indica que los días se confirman al coordinar»). Alineada la línea de
+   `docs/kb/lumat-cobertura-horarios.md` (decisión del owner), el escenario pasó a 2.83 y `real-reagenda-mantencion`
+   saltó de 0.00 a 3.00 sin que nadie tocara la reagenda. Costo asumido: la KB cambió de `34670f5b3d75` a
+   **`99a2bbabbeb1`**, así que todo informe anterior deja de ser comparable y el re-baseline es obligatorio.
+   `scripts/kb_doc_drift.py` sigue en 0 hallazgos: la frase nueva habla de política, no repite días ni horas.
+
+Lo que las corridas 4 y 5 dejaron al descubierto **fuera de este corte**, con evidencia en el transcript y sin
+arreglar acá:
+
+- **El acuse del capture afirma una fecha.** `simple-horario-sabado`: «Sobre tu horario: el sábado 28/11. Queda
+  anotada y la confirmamos al coordinar la visita.» El juez lo lee como promesa y da hard fail. Es la misma clase de
+  defecto que este corte arregló en el preview, en otro nodo (`capture`).
+- **Claves de campo crudas al cliente:** `¿name?` (corrida 5) y `¿equipment?` (corrida 4). Al cliente le llega el
+  nombre interno del campo en vez de la pregunta.
+- **`slot_window` no entiende `am`/`pm` ni «próximo martes»:** «a las 9 am» y «el próximo martes» resuelven al
+  martes de hoy. Es lo que mantiene en 0.00 a `real-reagenda-familiar` y aporta a `real-reagenda-mantencion`.
+- **`complejo-agendar-calefont`**: el juez exige responder cobertura y precio antes de pedir los datos; el flujo
+  pide todo primero y termina escalando.
+
+### L5 — el baseline nuevo: 35/43, y el escenario del corte en 3.00 (2026-11-24)
+
+`rebaseline-2026-11-24b`, sello `f20d053b4`, árbol limpio, corpus `2c5469ddae42`, **KB `99a2bbabbeb1`**,
+bot `deepseek-flash`, juez ×3, **43/43 medidos**, **35 pasan**, un gate fallido (G4 ×1). Arnés: sesión
+`900s · source client`, config `09b067948eee`, agenda **3 técnicos · 36 bloques**.
+
+`real-disponibilidad-dias`: **3.00 y pasa**. El escenario que abrió este corte arrancó en 0.00 con el bot
+midiendo el vacío y termina así.
+
+**Contra `rebaseline-2026-11-24a` no se compara, y hay que decirlo antes que cualquier número:** el
+fingerprint de la KB cambió (`34670f5b3d75` → `99a2bbabbeb1`), así que la diferencia de total (36 → 35) no
+mide una regresión. Con esa salvedad, el movimiento escenario por escenario:
+
+- **Recuperados (3):** `real-diego-precio-y-duracion`, `real-revision-bano-ruidoso`, `real-vocabulario-impreciso`.
+- **Nuevos en fallar (4):** `complejo-agendar-calefont`, `real-precio-mantencion-ciclo`, `real-varias-reparaciones`, `super-near-miss-lavadora`.
+- **Siguen fallando (4):** `complejo-fuera-de-cobertura-insiste`, `real-consulta-otros-equipos`, `real-reclamo-real-si-deriva`, `super-enojo-reclamo`.
+
+**El único gate fallido merece su línea, porque un gate no es ruido.** `real-varias-reparaciones` registra
+`unknown_intent`, que el escenario prohíbe:
+
+```
+2. cliente — Eso!
+   bot     — Disculpa, no te entendí bien. ¿Me cuentas un poco más qué necesitas?
+```
+
+Es clasificación de un mensaje de relleno, no agenda: el preview no participó de ese turno. En `24a` ese
+escenario pasaba, así que hay que atribuirlo con un A/B —el escenario con y sin el cambio de KB, que es la
+regla del proyecto ante duda de causalidad— y no por cercanía. Queda como corte propio, junto con los otros
+tres hallazgos de L4.
+
+Consecuencia operativa: **todo informe anterior a este queda sin referencia válida.** El próximo re-baseline
+tiene que compararse contra `24b`, y `odd/evals/conv-eval-rebaseline-2026-11-24a.*` pasa a ser historia.

@@ -6,6 +6,7 @@ and the customer got a prose answer that contradicted the configured one. These
 answers read the configuration directly, so the KB keeps only the policy.
 """
 
+from datetime import date, time
 from types import SimpleNamespace
 
 import pytest
@@ -392,6 +393,98 @@ def test_an_hours_question_is_reached_when_no_commune_is_named(monkeypatch):
     assert configured_answers.configuration_reply(
         SESSION, _state("hasta que hora atienden?")
     ) == "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+
+
+def test_availability_question_renders_real_slots_without_persisting_an_offer(monkeypatch):
+    monkeypatch.setattr(configured_answers, "get_coverage_communes", lambda _session: [])
+    monkeypatch.setattr(configured_answers, "get_booking_lead_minutes", lambda _session: 120)
+    monkeypatch.setattr(
+        configured_answers, "get_hours_timezone", lambda _session: "America/Santiago"
+    )
+    calls = []
+
+    def available_slots(session, **kwargs):
+        calls.append(kwargs)
+        return [(1, date(2026, 11, 26), time(10, 0)), (1, date(2026, 11, 28), time(11, 0))]
+
+    monkeypatch.setattr(configured_answers, "open_slots_for_assignment", available_slots)
+    monkeypatch.setattr(configured_answers, "get_reply_texts", lambda _session: {
+        "availability_preview": "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo.",
+        "availability_preview_day": "El {{dia}} tengo estas horas libres: {{horas}}."
+    })
+    state = _state("¿Tienen disponibilidad para agendar?")
+    state.captured = {"_booking_offer": {"keep": "untouched"}}
+
+    reply = configured_answers.configuration_reply(SESSION, state)
+
+    assert reply == (
+        "Tengo disponibilidad el jueves 26 y sábado 28. "
+        "Si quieres, te tomo los datos y te reservo."
+    )
+    assert state.captured["_booking_offer"] == {"keep": "untouched"}
+    assert calls[0]["days"] == 7
+    assert calls[0]["duration_minutes"] == configured_answers.DEFAULT_DURATION_MINUTES
+    # No day was named, so the answer keeps one slot per day out of a wide slice.
+    assert calls[0]["limit"] == configured_answers._PREVIEW_UNIVERSE
+    assert calls[0]["window"] is None
+    assert calls[0]["lead_minutes"] == 120
+    assert calls[0]["now"].tzinfo is not None and calls[0]["now"].utcoffset().total_seconds() == 0
+
+
+def test_availability_question_uses_three_slot_spanish_list(monkeypatch):
+    monkeypatch.setattr(configured_answers, "get_coverage_communes", lambda _session: [])
+    monkeypatch.setattr(configured_answers, "get_booking_lead_minutes", lambda _session: 0)
+    monkeypatch.setattr(
+        configured_answers, "get_hours_timezone", lambda _session: "America/Santiago"
+    )
+    monkeypatch.setattr(
+        configured_answers,
+        "open_slots_for_assignment",
+        lambda _session, **kwargs: [
+            (1, date(2026, 11, 26), time(10, 0)),
+            (1, date(2026, 11, 27), time(11, 30)),
+            (1, date(2026, 11, 28), time(12, 0)),
+        ],
+    )
+    monkeypatch.setattr(configured_answers, "get_reply_texts", lambda _session: {
+        "availability_preview": "Días: {{dias}}."
+    })
+
+    assert configured_answers.configuration_reply(SESSION, _state("¿Hay cupos disponibles?")) == (
+        "Días: jueves 26, viernes 27 y sábado 28."
+    )
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["¿hasta qué hora atienden?", "¿cuál es el horario?", "¿qué días atienden?"],
+)
+def test_window_questions_still_use_the_existing_hours_answer(question, monkeypatch):
+    _coverage(monkeypatch, [])
+    _schedule(monkeypatch, WEEK)
+    monkeypatch.setattr(
+        configured_answers,
+        "open_slots_for_assignment",
+        lambda *_args, **_kwargs: pytest.fail("window question must not query availability"),
+    )
+
+    assert configured_answers.configuration_reply(SESSION, _state(question)) == (
+        "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00."
+    )
+
+
+def test_availability_question_without_slots_falls_back_to_policy_sentence(monkeypatch):
+    _coverage(monkeypatch, [])
+    _schedule(monkeypatch, [{"days": [1, 2, 3, 4, 5, 6, 7], "open": "00:00", "close": "23:59"}])
+    monkeypatch.setattr(configured_answers, "get_booking_lead_minutes", lambda _session: 120)
+    monkeypatch.setattr(
+        configured_answers, "get_hours_timezone", lambda _session: "America/Santiago"
+    )
+    monkeypatch.setattr(configured_answers, "open_slots_for_assignment", lambda *_args, **_kwargs: [])
+
+    assert configured_answers.configuration_reply(
+        SESSION, _state("¿Tienen hora disponible para reservar?")
+    ) == "Las visitas se agendan según la disponibilidad de los técnicos."
 
 
 def test_the_precedence_is_the_documented_one(monkeypatch):

@@ -43,7 +43,7 @@ const settings = (overrides: Partial<SettingsData> = {}): SettingsData => ({
     },
   },
   capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },
-  reply_texts: { texts: { booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual." }, slots: { booking_offer: ["opciones"], manage_kept: [] }, customized: false },
+  reply_texts: { texts: { availability_preview: "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo.", availability_preview_day: "El {{dia}} tengo estas horas libres: {{horas}}. Si te sirve alguna, te tomo los datos y te reservo.", booking_offer: "Horarios: {{opciones}}", manage_kept: "Quedó igual." }, slots: { availability_preview: ["dias"], availability_preview_day: ["dia", "horas"], booking_offer: ["opciones"], manage_kept: [] }, customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });

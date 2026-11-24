@@ -4,7 +4,7 @@
 
 **Otras comunas.** Si estás fuera de la cobertura habitual, igual podemos ayudarte: cuéntanos qué trabajo necesitas y un asesor coordina la visita según disponibilidad.
 
-**Horario de agendamiento.** Las visitas se agendan dentro de la ventana de atención vigente, según la disponibilidad real de técnicos. Los días y las horas los confirmamos al coordinar la visita.
+**Horario de agendamiento.** Las visitas se agendan dentro de la ventana de atención vigente, según la disponibilidad real de técnicos. Si preguntas por disponibilidad, te decimos los días que tienen cupo en la agenda; la hora y la reserva se confirman al coordinar la visita.
 
 **Fuera de horario, domingos y festivos.** Los domingos, los festivos y los horarios fuera de la ventana de atención se coordinan con un asesor, según disponibilidad.
 

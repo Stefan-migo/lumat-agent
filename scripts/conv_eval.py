@@ -1043,6 +1043,9 @@ class RunStamp:
     # one it was — and `[]` was the state that made a G6 unfixable.
     harness_settings: dict[str, Any] = field(default_factory=dict)
     harness_settings_fingerprint: str = ""
+    harness_technicians: int = 0
+    harness_availability_blocks: int = 0
+    harness_technicians_fingerprint: str = ""
 
     def as_dict(self) -> dict:
         return {
@@ -1062,6 +1065,9 @@ class RunStamp:
             "session_idle_timeout_source": self.session_idle_timeout_source,
             "harness_settings": self.harness_settings,
             "harness_settings_fingerprint": self.harness_settings_fingerprint,
+            "harness_technicians": self.harness_technicians,
+            "harness_availability_blocks": self.harness_availability_blocks,
+            "harness_technicians_fingerprint": self.harness_technicians_fingerprint,
         }
 
 
@@ -1308,6 +1314,21 @@ reasons this cut did not measure. `coverage.communes`, `booking.*` and the messa
 catalog keep reading their code defaults — a named gap, not parity.
 """
 
+HARNESS_TECHNICIANS: list[dict[str, Any]] = [
+    {
+        "username": f"conv-eval-tecnico-{number}",
+        "password_hash": "conv-eval-harness",
+        "name": f"Técnico de evaluación {number}",
+        "position": "Técnico",
+        "schedule": [
+            {"weekday": weekday, "opens_at": "09:00", "closes_at": "18:00"}
+            for weekday in range(1, 7)
+        ],
+    }
+    for number in range(1, 4)
+]
+"""Stable evaluation technicians; local Lumat work hours, Monday through Saturday."""
+
 
 def harness_settings_fingerprint(settings: Mapping[str, Any] | None = None) -> str:
     """A short, stable digest of the configuration a run measured."""
@@ -1343,6 +1364,83 @@ def seed_harness_settings() -> dict[str, Any]:
     return effective
 
 
+def harness_technicians_fingerprint(
+    technicians: Sequence[Mapping[str, Any]] | None = None,
+) -> str:
+    """A short, stable digest of the technician identities and weekly schedule."""
+    import json
+
+    payload = HARNESS_TECHNICIANS if technicians is None else technicians
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+    return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def seed_harness_technicians() -> dict[str, Any]:
+    """Ensure the harness technicians, weekly schedules, and availability exist.
+
+    Users survive `--reset`, but availability does not. Reuse the schedule service
+    for schedule persistence and its idempotent materializer for the current horizon.
+    """
+    from datetime import datetime, time, timezone
+
+    from sqlalchemy import func, select
+
+    from app.db import session_scope
+    from app.models import TechnicianAvailability, User, UserRole
+    from app.services import technician_schedule
+
+    now = datetime.now(timezone.utc)
+    technician_ids: list[int] = []
+    with session_scope() as session:
+        for entry in HARNESS_TECHNICIANS:
+            technician = session.scalar(
+                select(User).where(User.username == entry["username"])
+            )
+            if technician is None:
+                technician = User(
+                    username=entry["username"],
+                    password_hash=entry["password_hash"],
+                    role=UserRole.TECNICO,
+                    name=entry["name"],
+                    position=entry["position"],
+                )
+                session.add(technician)
+                session.flush()
+            elif technician.role != UserRole.TECNICO:
+                raise ValueError(
+                    f"harness technician {entry['username']!r} has role {technician.role!r}"
+                )
+
+            technician_ids.append(technician.id)
+            desired_schedule = [
+                {
+                    "weekday": schedule_entry["weekday"],
+                    "opens_at": time.fromisoformat(schedule_entry["opens_at"]),
+                    "closes_at": time.fromisoformat(schedule_entry["closes_at"]),
+                }
+                for schedule_entry in entry["schedule"]
+            ]
+            if technician_schedule.get_schedule(session, technician.id) != desired_schedule:
+                technician_schedule.set_schedule(session, technician.id, desired_schedule)
+
+        # `set_schedule` also fills its own horizon. This seam is intentionally
+        # repeated here: it repairs availability wiped by reset while the schedules
+        # and technician users survive, and the service won't duplicate existing rows.
+        technician_schedule.ensure_horizon(session, now)
+        session.flush()
+        availability_blocks = session.scalar(
+            select(func.count())
+            .select_from(TechnicianAvailability)
+            .where(TechnicianAvailability.technician_id.in_(technician_ids))
+        )
+
+    return {
+        "harness_technicians": len(technician_ids),
+        "harness_availability_blocks": availability_blocks,
+        "harness_technicians_fingerprint": harness_technicians_fingerprint(),
+    }
+
+
 def _days_label(days: Sequence[int]) -> str:
     """`días 1–7` for a consecutive run, the explicit list otherwise."""
     ordered = list(days)
@@ -1351,6 +1449,19 @@ def _days_label(days: Sequence[int]) -> str:
     if ordered == list(range(ordered[0], ordered[-1] + 1)):
         return f"días {ordered[0]}–{ordered[-1]}"
     return "días " + ", ".join(str(day) for day in ordered)
+
+
+def agenda_seal_line(stamp: Mapping[str, Any]) -> str | None:
+    """Name the technician agenda a run measured; absent from legacy stamps."""
+    count = stamp.get("harness_technicians")
+    blocks = stamp.get("harness_availability_blocks")
+    fingerprint = stamp.get("harness_technicians_fingerprint")
+    if count is None or blocks is None or not fingerprint:
+        return None
+    return (
+        f"- Agenda del arnés: **{count} técnicos** · **{blocks} bloques de disponibilidad** · "
+        f"`{fingerprint}`"
+    )
 
 
 def settings_seal_line(stamp: Mapping[str, Any]) -> str | None:
@@ -1648,6 +1759,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     settings_line = settings_seal_line(stamp)
     if settings_line:
         lines.append(settings_line)
+    agenda_line = agenda_seal_line(stamp)
+    if agenda_line:
+        lines.append(agenda_line)
     run_failures = report.get("run_failures") or {}
     blockers = citability_blockers(stamp, len(run_failures))
     if blockers:
@@ -1996,6 +2110,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # After the reset, before anything reads a setting: `settings` survives the
     # reset on purpose, and the window has to be in place before the first turn.
     harness_config = seed_harness_settings()
+    harness_agenda = seed_harness_technicians()
 
     try:
         kb_state = preflight()
@@ -2039,6 +2154,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         session_idle_timeout_source=session_window_source,
         harness_settings=harness_config,
         harness_settings_fingerprint=harness_settings_fingerprint(harness_config),
+        harness_technicians=harness_agenda["harness_technicians"],
+        harness_availability_blocks=harness_agenda["harness_availability_blocks"],
+        harness_technicians_fingerprint=harness_agenda["harness_technicians_fingerprint"],
     ).as_dict()
 
     miss_text = miss_offer_text()
