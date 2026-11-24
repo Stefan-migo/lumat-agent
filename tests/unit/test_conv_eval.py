@@ -1193,6 +1193,23 @@ def test_validate_only_accepts_the_shipped_corpus(capsys):
     assert captured.err == ""
 
 
+def test_a_path_that_opens_no_connection_writes_no_session_option(capsys):
+    """`--validate-only` touches neither the database nor the process environment.
+
+    Asking for the relaxed window is a process-wide side effect, so it belongs after
+    every early exit that never connects. Measured the hard way: the option leaked
+    into the next test in the same pytest process and the guard test at
+    `tests/integration/test_db.py` read `900.0` instead of `180.0`.
+    """
+    import os
+
+    before = os.environ.get("PGOPTIONS")
+
+    assert ev.main(["--validate-only"]) == 0
+
+    assert os.environ.get("PGOPTIONS") == before
+
+
 def test_validate_only_refuses_a_broken_corpus(tmp_path, capsys):
     path = write_corpus(tmp_path, MINIMAL.replace("tier: simple", "tier: facil"))
     assert ev.main(["--validate-only", "--corpus", str(path)]) == 2

@@ -1953,10 +1953,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = _parse_args(argv)
 
-    # Before the first connection: libpq reads PGOPTIONS when it opens one, so the
-    # window has to be asked for before anything touches the database.
-    relax_session_idle_timeout()
-
     try:
         corpus = load_corpus(args.corpus)
     except ValueError as error:
@@ -1971,6 +1967,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Before the first connection, and after every path that never opens one:
+    # libpq reads PGOPTIONS when it connects, so this cannot come later, and
+    # `--validate-only` must not write a process-wide option it never uses.
+    relax_session_idle_timeout()
 
     import seed_kb_docs
 
