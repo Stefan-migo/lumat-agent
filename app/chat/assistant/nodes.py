@@ -289,7 +289,7 @@ def _context_text(state: AssistantState) -> str:
 
 def _planner_context_text(state: AssistantState) -> str:
     context = _context_text(state)
-    prior_results = _render_tool_evidence(state)
+    prior_results = _render_tool_evidence(state, surface="planner")
     return f"{context}\nPrior tool evidence:\n{prior_results}" if prior_results else context
 
 
@@ -775,7 +775,7 @@ def _responder_prompt(state, config) -> str:
         "user_input": state["content"],
         "available_tools": ", ".join(_effective_tools(state)),
         "tool_statement": tool_statement,
-        "tool_evidence": _render_tool_evidence(state),
+        "tool_evidence": _render_tool_evidence(state, surface="responder"),
         "kb_evidence": _render_kb_evidence(state),
         "context": _context_text(state),
         "no_evidence": NO_EVIDENCE_DIRECTIVE if state.get("no_evidence") else "",
@@ -961,17 +961,20 @@ def _omission_marker(omitted: int) -> str:
     return f"[{omitted} earlier tool result(s) omitted]\n"
 
 
-def _cut_with_marker(text: str, available: int) -> str:
-    """Cut `text` to `available` characters and say how many characters were dropped.
+def _cut_with_marker(text: str, available: int) -> tuple[str, int]:
+    """Cut `text` to `available` characters, saying how many characters were dropped.
 
     The marker's own length depends on the number it carries, so the retained slice is recomputed
     with the marker in hand. Two passes settle it; the loop is bounded so a rounding surprise cannot
-    turn a brake into a spin.
+    turn a brake into a spin. The dropped count is returned with the text instead of being read back
+    out of the marker: callers account for it, and re-parsing our own wording is a silent zero the
+    day that wording changes.
     """
     retained = max(0, available)
     for _ in range(4):
         retained = max(0, available - len(f"[{len(text) - max(0, retained)} characters dropped]"))
-    return text[:retained] + f"[{len(text) - retained} characters dropped]"
+    dropped = len(text) - retained
+    return text[:retained] + f"[{dropped} characters dropped]", dropped
 
 
 def _project_capability_evidence(payload):
@@ -1089,12 +1092,13 @@ def _audit_arguments(arguments) -> dict:
     return trace
 
 
-def _render_tool_evidence(state: AssistantState) -> str:
+def _render_tool_evidence(state: AssistantState, *, surface: str = "responder") -> str:
     results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
     if not results:
         return ""
     results = _coalesce_file_reads(results)
     rendered_results: list[tuple[str, str]] = []
+    rendered_tools: list[str] = []
     for result in results:
         if not isinstance(result, dict):
             continue
@@ -1127,6 +1131,7 @@ def _render_tool_evidence(state: AssistantState) -> str:
         # model asked for it; quoting it twice only spends the responder's evidence budget.
         signature = f"{tool}\u0000{arguments}\u0000{json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)}"
         rendered_results.append((rendered, signature))
+        rendered_tools.append(tool)
     if not rendered_results:
         return ""
 
@@ -1138,8 +1143,12 @@ def _render_tool_evidence(state: AssistantState) -> str:
         inventory = f"Execution chain stopped ({stall}); tools already run: {ran}.\n"
     newest_first = list(reversed(rendered_results))
     kept: list[str] = []
+    kept_indices: set[int] = set()
     quoted: set[str] = set()
-    for item, signature in newest_first:
+    cut_dropped_chars = 0
+    cut_result_index: int | None = None
+    for reverse_index, (item, signature) in enumerate(newest_first):
+        result_index = len(rendered_results) - reverse_index - 1
         if signature in quoted:
             # Counted by the omission marker below, and still named in the inventory.
             continue
@@ -1154,15 +1163,23 @@ def _render_tool_evidence(state: AssistantState) -> str:
             ) + "\n"
         if len(inventory) + len(inventory_lines) + len(marker) + len(candidate) <= _TOOL_EVIDENCE_LIMIT:
             kept.append(item)
+            kept_indices.add(result_index)
             quoted.add(signature)
         elif not kept:
             # Preserve the newest result's provenance and label the payload tail lost to the brake.
             available = _TOOL_EVIDENCE_LIMIT - len(inventory) - len(inventory_lines) - len(marker)
             header, separator, payload_text = item.partition("\n")
             if separator:
-                kept.append(header + separator + _cut_with_marker(payload_text, available - len(header) - len(separator)))
+                cut_text, cut_dropped_chars = _cut_with_marker(
+                    payload_text, available - len(header) - len(separator)
+                )
+                cut_result_index = result_index
+                kept.append(header + separator + cut_text)
             else:
-                kept.append(_cut_with_marker(item, available))
+                cut_text, cut_dropped_chars = _cut_with_marker(item, available)
+                cut_result_index = result_index
+                kept.append(cut_text)
+            kept_indices.add(result_index)
             quoted.add(signature)
             break
         else:
@@ -1178,9 +1195,40 @@ def _render_tool_evidence(state: AssistantState) -> str:
         ) + "\n"
     prefix = inventory + inventory_lines + marker
     if len(prefix) + len(body) <= _TOOL_EVIDENCE_LIMIT:
-        return prefix + body
-    # If the newest payload alone exceeds the budget, retain its header and cut only payload text.
-    return prefix + body[: max(0, _TOOL_EVIDENCE_LIMIT - len(prefix) - 1)] + "…"
+        projection = prefix + body
+    else:
+        # If the newest payload alone exceeds the budget, retain its header and cut only payload text.
+        projection = prefix + body[: max(0, _TOOL_EVIDENCE_LIMIT - len(prefix) - 1)] + "…"
+
+    omitted_indices = set(range(len(rendered_results))) - kept_indices
+    dropped_chars = cut_dropped_chars + sum(len(rendered_results[index][0]) for index in omitted_indices)
+    if omitted_indices or cut_dropped_chars:
+        tools = [rendered_tools[index] for index in sorted(omitted_indices)]
+        if cut_dropped_chars and cut_result_index is not None:
+            tools.append(rendered_tools[cut_result_index])
+        session = state.get("session")
+        if session is not None:
+            try:
+                with session.begin_nested():
+                    record_audit(
+                        session,
+                        actor=state.get("actor") or "assistant",
+                        action="assistant.evidence_truncated",
+                        entity="internal_chat_thread",
+                        entity_id=str(state.get("thread_id")),
+                        after={
+                            "run_id": state.get("run_id"),
+                            "surface": surface,
+                            "tools": tools,
+                            "dropped_chars": dropped_chars,
+                            "kept_results": len(kept_indices),
+                            "omitted_results": len(omitted_indices),
+                            "budget": _TOOL_EVIDENCE_LIMIT,
+                        },
+                    )
+            except Exception:
+                logger.warning("Assistant evidence truncation audit failed", exc_info=True)
+    return projection
 
 
 def _resolve_tool_image(state: AssistantState, handle: dict) -> dict | None:

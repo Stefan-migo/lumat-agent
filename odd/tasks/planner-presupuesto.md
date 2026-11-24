@@ -54,6 +54,34 @@ planifica a ciegas sobre un documento que no vio completo.
 (`file_id`, `offset`, `limit`, `artifact_id`, `folder_id`) cuando existen. Nunca el contenido ni valores de
 dominio (nombres, teléfonos). Sin esto, la secuencia de seis lecturas del hilo 54 fue irreconstruible.
 
+**S9 — La omisión de evidencia queda contada, no sólo dicha.**
+Cuando la caja de evidencia descarta contenido, se emite **exactamente una** fila
+`audit_log(action="assistant.evidence_truncated")` por proyección, con
+`after={"run_id", "surface", "tools", "dropped_chars", "kept_results", "omitted_results", "budget"}`.
+Nunca contenido, nunca valores de dominio (nombres, teléfonos, texto de un documento). Sin omisión no hay
+fila: el evento cuenta lo que se perdió, no lo que se proyectó. `surface` distingue la caja que arma el
+prompt del planner de la que arma el del responder, porque el mismo documento se proyecta para prompts
+distintos y sumarlas confundiría la lectura.
+La fila se escribe dentro de un `SAVEPOINT` y su fallo degrada a log: la contabilidad no puede romper el
+turno, igual que `internal_chat.run_failed` (contrato de `pool-safety` S4). No agrega una tabla ni un
+contador nuevo; `audit_log` ya tiene la forma.
+
+**Criterio de decisión fijado ANTES de medir** (para no elegir el número después de ver el resultado):
+- `read_project_file` domina y el `dropped_chars` **mediano** de esos casos supera ~4.000 → el paso 3 está
+  justificado;
+- las omisiones son de listados (`customers.list`, `conversations.list`, `conversations.search`) → **no**
+  tocar la caja: `_LISTING_EVIDENCE_SHARE = 0.45` ya las cubre;
+- casi no hay omisiones → cerrar el tema y dejarlo en 12.000.
+Consulta de lectura:
+```sql
+select after->>'surface', after->>'tools', count(*) as filas,
+       percentile_cont(0.5) within group (order by (after->>'dropped_chars')::int) as mediana,
+       max((after->>'dropped_chars')::int) as peor
+from audit_log
+where action = 'assistant.evidence_truncated' and created_at > now() - interval '7 days'
+group by 1, 2 order by 3 desc;
+```
+
 ## Tasks
 
 | ID | Spec | Route | Commit |
@@ -63,6 +91,7 @@ dominio (nombres, teléfonos). Sin esto, la secuencia de seis lecturas del hilo 
 | T3 | S5, S6 | prompt + settings · dos páginas por turno y `assistant_tool_step_limit = 8` | this commit |
 | T4 | S7 | backend · adjuntos antes que historia + aviso de truncado | this commit |
 | T5 | S8 | backend · `arguments_sha256` + claves de cursor en `internal_chat.execution` | this commit |
+| T6 | S9 | backend · fila `assistant.evidence_truncated` por proyección con omisión | `e74be186e` |
 
 ## Log
 
@@ -112,3 +141,38 @@ y S4, y queda configurable para ajustarlo en producción sin un release.
   corridas son **concurrencia de suites sobre la misma base de prueba**, no un defecto del producto: pasaron
   cuando corrí `quick` mientras `full` corría en el mismo worktree, y no aparecen con la suite sola.
 
+
+**L5 — pedido del owner (2026-11-24), verbatim:**
+
+> vamos en el orden recomendado
+
+El orden recomendado y aprobado fue: (1) el corte `provider-budget-guard` —la colisión entre el
+presupuesto del proveedor y el guard de la base, que mataba turnos del panel a los ~3 min—, cerrado y
+commiteado antes de este paso; (2) **este paso 2**, instrumentar y medir las omisiones de evidencia antes
+de tocar cualquier número, con el criterio de S9 fijado de antemano; (3) el paso 3 sólo con el dato del
+paso 2. La ventana de observación no empieza hasta que esto esté desplegado en producción: es decisión del
+owner y no se simula con datos inventados.
+
+**L6 — lo que salió distinto al plan del paso 2 (2026-11-24):**
+- **S9 tuvo RED real**: 4 de 14 tests fallaron antes de implementar (`surface` no aceptado, ninguna fila
+  registrada, planner y responder indistinguibles).
+- **El caso "corte" no estaba cubierto**: cuando un solo resultado es más grande que la caja entera, el
+  resultado se conserva y se recorta su cola. `dropped_chars` se obtenía allí **re-parseando con regex el
+  marcador que el propio código acababa de escribir**, así que un cambio de redacción del marcador habría
+  convertido la métrica en cero en silencio. `_cut_with_marker` ahora devuelve `(texto, dropped)` y el
+  llamador recibe el número. El test derivado
+  (`test_a_single_result_larger_than_the_budget_records_the_cut_chars`) ata el valor de la fila al marcador
+  que vio el modelo. Ese test **pasaba antes del refactor**: no se presenta como RED, porque la conducta ya
+  era correcta y lo frágil era cómo se obtenía el dato.
+- **Contrato de "sólo observación" verificado**: el texto renderizado es byte-idéntico por las tres rutas
+  (renderer directo, `_planner_context_text`, `_responder_prompt`), y un `record_audit` que explota no
+  cambia ni una letra del prompt ni levanta excepción.
+- **La fila es contable, no narrativa**: un test serializa `after` y exige que el texto del documento no
+  aparezca. `dropped_chars` cuenta caracteres de la caja que se perdieron (resultados omitidos completos
+  más la cola recortada), no bytes del archivo original: es la unidad que la consulta de S9 puede sumar.
+- **Gates propios al cierre**: `scripts/test.sh quick` exit 0; foco (evidencia, planner, tool-loop,
+  planner-budget) **149 passed**; `tests/integration/test_assistant_chat.py` **81 passed**;
+  `scripts/test.sh full` **exit 0, 0 FAILED/ERROR, progreso 100%**.
+- **El paso 3 no arranca hoy**: S9 fija el criterio, pero la ventana de observación empieza cuando esto esté
+  desplegado en producción y haya uso real del panel. Hasta entonces el paso 3 no tiene dato, y no se
+  sustituye con una medición inventada.

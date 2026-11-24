@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.chat.assistant import nodes
 from app.chat.assistant.nodes import _LISTING_EVIDENCE_SHARE, _TOOL_EVIDENCE_LIMIT, _render_tool_evidence
 from app.chat.assistant.tools.registry import MAX_ITEMS, execute_tool
 
@@ -71,6 +72,127 @@ def _one_result(tool, payload):
     return _render_tool_evidence({"tool_results": [
         {"tool": tool, "status": "completed", "arguments": {}, "result": payload},
     ]})
+
+
+def _overflow_state(session=None):
+    return {
+        "thread_id": 42,
+        "run_id": "run-123",
+        "actor": "operator",
+        "session": session,
+        "content": "summarize these documents",
+        "tool_results": [
+            {"tool": "read_project_file", "status": "completed", "arguments": {"file_id": 1},
+             "result": {"text": "PRIVATE_OLDEST " + "a" * 7000}},
+            {"tool": "web.fetch", "status": "completed", "arguments": {},
+             "result": {"text": "newest " + "b" * 7000}},
+        ],
+    }
+
+
+def _audit_session():
+    from contextlib import nullcontext
+
+    return SimpleNamespace(begin_nested=lambda: nullcontext())
+
+
+def test_tool_evidence_projection_that_fits_emits_no_audit_row(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nodes, "record_audit", lambda *args, **kwargs: calls.append((args, kwargs)))
+    state = {**_overflow_state(_audit_session()), "tool_results": [
+        {"tool": "web.fetch", "status": "completed", "arguments": {}, "result": {"text": "small"}},
+    ]}
+
+    _render_tool_evidence(state)
+
+    assert calls == []
+
+
+def test_dropped_tool_result_emits_one_minimal_audit_row(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nodes, "record_audit", lambda *args, **kwargs: calls.append((args, kwargs)))
+    session = _audit_session()
+    nested = []
+    from contextlib import nullcontext
+    session.begin_nested = lambda: (nested.append(True), nullcontext())[1]
+
+    _render_tool_evidence(_overflow_state(session), surface="planner")
+
+    assert nested == [True]
+    assert len(calls) == 1
+    args, row = calls[0]
+    assert args == (session,)
+    assert row["actor"] == "operator"
+    assert row["action"] == "assistant.evidence_truncated"
+    assert row["entity"] == "internal_chat_thread"
+    assert row["entity_id"] == "42"
+    assert row["after"]["run_id"] == "run-123"
+    assert row["after"]["surface"] == "planner"
+    assert row["after"]["tools"] == ["read_project_file"]
+    assert row["after"]["dropped_chars"] > 0
+    assert row["after"]["kept_results"] == 1
+    assert row["after"]["omitted_results"] == 1
+    assert row["after"]["budget"] == _TOOL_EVIDENCE_LIMIT
+
+
+def test_a_single_result_larger_than_the_budget_records_the_cut_chars(monkeypatch):
+    """The cut path is not an omission: one result is kept and its tail is what gets dropped."""
+    calls = []
+    monkeypatch.setattr(nodes, "record_audit", lambda *args, **kwargs: calls.append(kwargs))
+    state = {
+        "thread_id": 42, "run_id": "run-123", "actor": "operator",
+        "session": _audit_session(),
+        "tool_results": [{
+            "tool": "read_project_file", "status": "completed", "arguments": {"file_id": 1},
+            "result": {"text": "X" * (_TOOL_EVIDENCE_LIMIT * 2)},
+        }],
+    }
+
+    rendered = _render_tool_evidence(state, surface="planner")
+
+    assert len(calls) == 1
+    row = calls[0]["after"]
+    assert row["surface"] == "planner"
+    assert row["tools"] == ["read_project_file"]
+    assert row["kept_results"] == 1
+    assert row["omitted_results"] == 0
+    assert row["dropped_chars"] > 0
+    # The number in the row is the number the model was told, not an estimate.
+    assert f"[{row['dropped_chars']} characters dropped]" in rendered
+
+
+def test_planner_and_responder_projections_audit_separately_without_changing_text(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nodes, "record_audit", lambda *args, **kwargs: calls.append(kwargs))
+    state = _overflow_state(_audit_session())
+    direct = _render_tool_evidence({**state, "session": None})
+    planner = nodes._planner_context_text(state).split("Prior tool evidence:\n", 1)[1]
+    responder = nodes._responder_prompt(state, SimpleNamespace(prompts={"respond": "{{tool_evidence}}"}))
+
+    assert planner == direct
+    assert responder == direct
+    assert [call["after"]["surface"] for call in calls] == ["planner", "responder"]
+
+
+def test_failed_evidence_audit_does_not_change_rendered_text_or_raise(monkeypatch):
+    monkeypatch.setattr(nodes, "record_audit", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("audit unavailable")))
+    state = _overflow_state()
+    expected = _render_tool_evidence(state)
+
+    actual = _render_tool_evidence({**state, "session": _audit_session()}, surface="planner")
+
+    assert actual == expected
+
+
+def test_evidence_audit_does_not_contain_document_text(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nodes, "record_audit", lambda *args, **kwargs: calls.append(kwargs))
+
+    _render_tool_evidence(_overflow_state(_audit_session()))
+
+    assert len(calls) == 1
+    document_text = "PRIVATE_OLDEST " + "a" * 7000
+    assert document_text not in json.dumps(calls[0]["after"])
 
 
 def _project_row(index):
