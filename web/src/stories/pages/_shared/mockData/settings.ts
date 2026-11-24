@@ -133,9 +133,10 @@ export const settings: Settings = {
     customized: false,
   },
   reply_texts: {
-    // Production returns all 25 keys; the story mirrors them so the grouped
+    // Production returns the fixed reply catalog; the story mirrors it so the grouped
     // editor and the Derivaciones card render complete instead of empty fields.
     texts: {
+      availability_preview: "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo.",
       booking_offer: "Tengo estos horarios disponibles para la visita técnica:\n{{opciones}}",
       booking_no_more_today: "Para ese día no me quedan más horarios. Te propongo estos otros días:\n{{opciones}}",
       booking_unclear: "No me quedó claro el horario que prefieres. ¿Me lo repites?",
@@ -164,6 +165,7 @@ export const settings: Settings = {
       capture_consent: "¿Te parece si coordinamos una visita técnica?",
     },
     slots: {
+      availability_preview: ["opciones"],
       booking_offer: ["opciones"],
       booking_no_more_today: ["opciones"],
       booking_unclear: [],

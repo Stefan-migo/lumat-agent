@@ -26,6 +26,7 @@ from app.services.settings import (
 
 EXPECTED_KEYS = {
     "booking_offer",
+    "availability_preview",
     "booking_no_more_today",
     "booking_window_unavailable",
     "booking_unclear",
@@ -75,6 +76,13 @@ def test_the_key_is_reply_texts():
 def test_the_catalog_covers_booking_manage_handoff_and_capture():
     assert set(REPLY_TEXT_DEFAULTS) == EXPECTED_KEYS
     assert set(REPLY_TEXT_SLOTS) == EXPECTED_KEYS
+
+
+def test_availability_preview_default_and_slot_contract_are_pinned():
+    assert REPLY_TEXT_DEFAULTS["availability_preview"] == (
+        "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo."
+    )
+    assert REPLY_TEXT_SLOTS["availability_preview"] == frozenset({"opciones"})
 
 
 def test_the_defaults_keep_the_current_wording():
