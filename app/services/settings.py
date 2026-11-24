@@ -109,7 +109,12 @@ EMERGENCY_PROTOCOL_FIELDS: tuple[str, ...] = (*EMERGENCY_PROTOCOL_LISTS, "notify
 REPLY_TEXTS_KEY = "reply.texts"
 REPLY_TEXT_DEFAULTS: dict[str, str] = {
     "availability_preview": (
-        "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
+        "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo."
+    ),
+    # A customer who names a day asked for that day, so the hours are the answer.
+    "availability_preview_day": (
+        "El {{dia}} tengo estas horas libres: {{horas}}. "
+        "Si te sirve alguna, te tomo los datos y te reservo."
     ),
     "booking_offer": (
         "Tengo estos horarios disponibles para la visita técnica:\n"
@@ -273,7 +278,8 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
 # `comuna` the captured commune and `equipo` the corrected equipment for a
 # coverage derivation (S5; optional when rendering legacy owner text).
 REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
-    "availability_preview": frozenset({"opciones"}),
+    "availability_preview": frozenset({"dias"}),
+    "availability_preview_day": frozenset({"dia", "horas"}),
     "booking_offer": frozenset({"opciones"}),
     "booking_unclear": frozenset(),
     "booking_no_more_today": frozenset({"opciones"}),

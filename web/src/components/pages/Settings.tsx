@@ -123,7 +123,7 @@ const DERIVACION_CASES: Array<{ key: string; label: string; when: string; icon: 
   },
 ];
 const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
-  { title: "Agendar", keys: ["availability_preview", "booking_offer", "booking_no_more_today", "booking_unclear", "booking_confirmed"] },
+  { title: "Agendar", keys: ["availability_preview", "availability_preview_day", "booking_offer", "booking_no_more_today", "booking_unclear", "booking_confirmed"] },
   { title: "Gestionar una visita", keys: [
     "manage_no_visits", "manage_confirm_cancel", "manage_select", "manage_slots_offer",
     "manage_expired", "manage_appointment_unclear", "manage_slots_unclear", "manage_kept",
@@ -137,6 +137,7 @@ const REPLY_TEXT_KEYS = [...DERIVACION_CASES.map(({ key }) => key), ...REPLY_TEX
 // Decorative navigation cues; reply keys and selection remain unchanged.
 const REPLY_TEXT_ICONS: Record<string, LucideIcon> = {
   availability_preview: CalendarClock,
+  availability_preview_day: CalendarClock,
   booking_offer: CalendarDays,
   booking_no_more_today: CalendarX,
   booking_unclear: CircleHelp,
@@ -160,6 +161,7 @@ const REPLY_TEXT_ICONS: Record<string, LucideIcon> = {
 };
 const REPLY_TEXT_LABELS: Record<string, string> = {
   availability_preview: "Vista previa de disponibilidad",
+  availability_preview_day: "Disponibilidad de un día pedido",
   booking_offer: "Oferta de horarios",
   booking_no_more_today: "Sin más horarios para ese día",
   booking_unclear: "No se entendió el horario pedido",

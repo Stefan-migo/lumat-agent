@@ -19,7 +19,8 @@ const replyTextValues = {
   handoff_campo_sin_respuesta: "Un asesor te contacta para coordinar.",
   handoff_booking_unavailable: "No hay horarios: un asesor te contacta.",
   booking_offer: "Horarios: {{opciones}}",
-  availability_preview: "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo.",
+  availability_preview: "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo.",
+  availability_preview_day: "El {{dia}} tengo estas horas libres: {{horas}}. Si te sirve alguna, te tomo los datos y te reservo.",
   booking_no_more_today: "Sin más horarios para hoy: {{opciones}}",
   booking_unclear: "No entendí el horario.",
   booking_confirmed: "Visita agendada.",
@@ -77,7 +78,7 @@ const settings = (overrides: Partial<SettingsWithOptions> = {}): SettingsWithOpt
     },
   },
   capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },
-  reply_texts: { texts: { ...replyTextValues }, slots: { booking_offer: ["opciones"], availability_preview: ["opciones"], handoff_cobertura: ["comuna"] }, customized: false },
+  reply_texts: { texts: { ...replyTextValues }, slots: { booking_offer: ["opciones"], availability_preview: ["dias"], availability_preview_day: ["dia", "horas"], handoff_cobertura: ["comuna"] }, customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });
@@ -975,7 +976,7 @@ describe("Settings", () => {
 
     const labels = [
       "Comuna sin cobertura", "Pide hablar con una persona", "Tres mensajes sin entender", "Un dato no se logró tomar", "No hay horarios para agendar",
-      "Oferta de horarios", "Vista previa de disponibilidad", "Sin más horarios para ese día", "No se entendió el horario pedido", "Visita agendada", "No tiene visitas",
+      "Oferta de horarios", "Vista previa de disponibilidad", "Disponibilidad de un día pedido", "Sin más horarios para ese día", "No se entendió el horario pedido", "Visita agendada", "No tiene visitas",
       "Confirmar la cancelación", "Elegir una visita", "Ofrecer nuevos horarios", "La visita ya pasó", "No se entendió la visita",
       "No se entendió el horario", "La visita sigue igual", "Sin horarios para reagendar", "Visita reagendada", "Pedir confirmación para cancelar",
       "No se puede cancelar", "Visita cancelada", "Derivación a un asesor",
@@ -983,9 +984,9 @@ describe("Settings", () => {
     ];
     expect(labels).toHaveLength(Object.keys(replyTextValues).length);
     const selectEntry = (label: string) => {
-      if (labels.indexOf(label) >= 5 && labels.indexOf(label) <= 9) {
+      if (labels.indexOf(label) >= 5 && labels.indexOf(label) <= 10) {
         if (within(situationList).getByRole("button", { name: /Agendar/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Agendar/ }));
-      } else if (labels.indexOf(label) >= 10 && labels.indexOf(label) <= 22) {
+      } else if (labels.indexOf(label) >= 11 && labels.indexOf(label) <= 23) {
         if (within(situationList).getByRole("button", { name: /Gestionar una visita/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Gestionar una visita/ }));
       } else if (["Derivación a un asesor", "Reconocer solicitud de cambio de fecha"].includes(label)) {
         if (within(situationList).getByRole("button", { name: /Derivar a una persona/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Derivar a una persona/ }));

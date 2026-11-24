@@ -99,16 +99,15 @@ def test_reply_names_only_slots_returned_inside_a_technicians_availability(monke
             session, _state("¿Tienen horarios disponibles para reservar?")
         )
 
-    # One slot per distinct day: the preview answers "which days", not "which hours".
+    # One slot per distinct day, and the days are the answer: naming hours to a
+    # customer who has not left their details reads as a promise the bot cannot make.
     names = [
-        f"{configured_answers._WEEKDAY_NAMES[slot_day.isoweekday() - 1]} "
-        f"{slot_day.day} a las {slot_time:%H:%M}"
-        for _, slot_day, slot_time in configured_answers._one_slot_per_day(slots)
+        f"{configured_answers._WEEKDAY_NAMES[slot_day.isoweekday() - 1]} {slot_day.day}"
+        for _, slot_day, _ in configured_answers._one_slot_per_day(slots)
     ]
     expected = (
-        "Tengo estas horas libres: "
-        f"{configured_answers._join_es(names)}. "
-        "Si te sirve alguna, te tomo los datos y la reservo."
+        f"Tengo disponibilidad el {configured_answers._join_es(names)}. "
+        "Si quieres, te tomo los datos y te reservo."
     )
     assert rendered == expected
 
@@ -212,3 +211,4 @@ def test_a_named_day_is_answered_with_that_days_slots(monkeypatch):
     named = re.findall(r"(lunes|martes|miércoles|jueves|viernes|sábado|domingo) (\d+)", reply)
     assert named, reply
     assert {day for _, day in named} == {str(requested.day)}, reply
+    assert "a las " in reply, reply

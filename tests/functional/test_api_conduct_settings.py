@@ -203,9 +203,14 @@ def test_reply_texts_expose_the_effective_text_and_slots(admin):
     assert sorted(payload["texts"]) == sorted(settings_service.REPLY_TEXT_DEFAULTS)
     assert payload["slots"]["booking_offer"] == ["opciones"]
     assert payload["texts"]["availability_preview"] == (
-        "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
+        "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo."
     )
-    assert payload["slots"]["availability_preview"] == ["opciones"]
+    assert payload["texts"]["availability_preview_day"] == (
+        "El {{dia}} tengo estas horas libres: {{horas}}. "
+        "Si te sirve alguna, te tomo los datos y te reservo."
+    )
+    assert payload["slots"]["availability_preview"] == ["dias"]
+    assert payload["slots"]["availability_preview_day"] == ["dia", "horas"]
     assert payload["slots"]["manage_kept"] == []
     assert payload["customized"] is False
 

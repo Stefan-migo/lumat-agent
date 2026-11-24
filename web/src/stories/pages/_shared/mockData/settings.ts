@@ -136,7 +136,8 @@ export const settings: Settings = {
     // Production returns the fixed reply catalog; the story mirrors it so the grouped
     // editor and the Derivaciones card render complete instead of empty fields.
     texts: {
-      availability_preview: "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo.",
+      availability_preview: "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo.",
+      availability_preview_day: "El {{dia}} tengo estas horas libres: {{horas}}. Si te sirve alguna, te tomo los datos y te reservo.",
       booking_offer: "Tengo estos horarios disponibles para la visita técnica:\n{{opciones}}",
       booking_no_more_today: "Para ese día no me quedan más horarios. Te propongo estos otros días:\n{{opciones}}",
       booking_unclear: "No me quedó claro el horario que prefieres. ¿Me lo repites?",
@@ -165,7 +166,8 @@ export const settings: Settings = {
       capture_consent: "¿Te parece si coordinamos una visita técnica?",
     },
     slots: {
-      availability_preview: ["opciones"],
+      availability_preview: ["dias"],
+      availability_preview_day: ["dia", "horas"],
       booking_offer: ["opciones"],
       booking_no_more_today: ["opciones"],
       booking_unclear: [],

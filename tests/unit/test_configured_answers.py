@@ -409,7 +409,8 @@ def test_availability_question_renders_real_slots_without_persisting_an_offer(mo
 
     monkeypatch.setattr(configured_answers, "open_slots_for_assignment", available_slots)
     monkeypatch.setattr(configured_answers, "get_reply_texts", lambda _session: {
-        "availability_preview": "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
+        "availability_preview": "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo.",
+        "availability_preview_day": "El {{dia}} tengo estas horas libres: {{horas}}."
     })
     state = _state("¿Tienen disponibilidad para agendar?")
     state.captured = {"_booking_offer": {"keep": "untouched"}}
@@ -417,8 +418,8 @@ def test_availability_question_renders_real_slots_without_persisting_an_offer(mo
     reply = configured_answers.configuration_reply(SESSION, state)
 
     assert reply == (
-        "Tengo estas horas libres: jueves 26 a las 10:00 y sábado 28 a las 11:00. "
-        "Si te sirve alguna, te tomo los datos y la reservo."
+        "Tengo disponibilidad el jueves 26 y sábado 28. "
+        "Si quieres, te tomo los datos y te reservo."
     )
     assert state.captured["_booking_offer"] == {"keep": "untouched"}
     assert calls[0]["days"] == 7
@@ -446,11 +447,11 @@ def test_availability_question_uses_three_slot_spanish_list(monkeypatch):
         ],
     )
     monkeypatch.setattr(configured_answers, "get_reply_texts", lambda _session: {
-        "availability_preview": "Horarios: {{opciones}}."
+        "availability_preview": "Días: {{dias}}."
     })
 
     assert configured_answers.configuration_reply(SESSION, _state("¿Hay cupos disponibles?")) == (
-        "Horarios: jueves 26 a las 10:00, viernes 27 a las 11:30 y sábado 28 a las 12:00."
+        "Días: jueves 26, viernes 27 y sábado 28."
     )
 
 

@@ -394,12 +394,25 @@ def availability_reply(session, state: ConversationState) -> str | None:
     if not slots:
         return None
     chosen = slots[:3] if window is not None else _one_slot_per_day(slots)
-    labels = [
-        f"{_WEEKDAY_NAMES[slot_day.isoweekday() - 1]} {slot_day.day} a las {slot_time:%H:%M}"
-        for _, slot_day, slot_time in chosen
-    ]
+    texts = get_reply_texts(session)
+    if window is None:
+        # Which days have room is the question; naming hours here reads as a promise
+        # the conversation has not earned yet.
+        days = _join_es(
+            [
+                f"{_WEEKDAY_NAMES[slot_day.isoweekday() - 1]} {slot_day.day}"
+                for _, slot_day, _ in chosen
+            ]
+        )
+        return render_reply(texts, "availability_preview", dias=days)
+    # A named day was asked for, so its hours are the answer.
+    first: date = chosen[0][1]
+    hours = _join_es([f"{slot_time:%H:%M}" for _, _, slot_time in chosen])
     return render_reply(
-        get_reply_texts(session), "availability_preview", opciones=_join_es(labels)
+        texts,
+        "availability_preview_day",
+        dia=f"{_WEEKDAY_NAMES[first.isoweekday() - 1]} {first.day}",
+        horas=f"a las {hours}",
     )
 
 
