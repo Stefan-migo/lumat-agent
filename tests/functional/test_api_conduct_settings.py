@@ -203,7 +203,7 @@ def test_reply_texts_expose_the_effective_text_and_slots(admin):
     assert sorted(payload["texts"]) == sorted(settings_service.REPLY_TEXT_DEFAULTS)
     assert payload["slots"]["booking_offer"] == ["opciones"]
     assert payload["texts"]["availability_preview"] == (
-        "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo."
+        "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
     )
     assert payload["slots"]["availability_preview"] == ["opciones"]
     assert payload["slots"]["manage_kept"] == []

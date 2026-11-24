@@ -80,7 +80,7 @@ def test_the_catalog_covers_booking_manage_handoff_and_capture():
 
 def test_availability_preview_default_and_slot_contract_are_pinned():
     assert REPLY_TEXT_DEFAULTS["availability_preview"] == (
-        "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo."
+        "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
     )
     assert REPLY_TEXT_SLOTS["availability_preview"] == frozenset({"opciones"})
 

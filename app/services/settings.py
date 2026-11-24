@@ -109,7 +109,7 @@ EMERGENCY_PROTOCOL_FIELDS: tuple[str, ...] = (*EMERGENCY_PROTOCOL_LISTS, "notify
 REPLY_TEXTS_KEY = "reply.texts"
 REPLY_TEXT_DEFAULTS: dict[str, str] = {
     "availability_preview": (
-        "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo."
+        "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
     ),
     "booking_offer": (
         "Tengo estos horarios disponibles para la visita técnica:\n"

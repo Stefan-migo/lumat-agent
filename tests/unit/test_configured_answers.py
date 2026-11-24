@@ -409,7 +409,7 @@ def test_availability_question_renders_real_slots_without_persisting_an_offer(mo
 
     monkeypatch.setattr(configured_answers, "open_slots_for_assignment", available_slots)
     monkeypatch.setattr(configured_answers, "get_reply_texts", lambda _session: {
-        "availability_preview": "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo."
+        "availability_preview": "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo."
     })
     state = _state("¿Tienen disponibilidad para agendar?")
     state.captured = {"_booking_offer": {"keep": "untouched"}}
@@ -417,8 +417,8 @@ def test_availability_question_renders_real_slots_without_persisting_an_offer(mo
     reply = configured_answers.configuration_reply(SESSION, state)
 
     assert reply == (
-        "Tengo estos horarios disponibles: jueves 26 a las 10:00 y sábado 28 a las 11:00. "
-        "Si quieres, te tomo los datos y te la reservo."
+        "Tengo estas horas libres: jueves 26 a las 10:00 y sábado 28 a las 11:00. "
+        "Si te sirve alguna, te tomo los datos y la reservo."
     )
     assert state.captured["_booking_offer"] == {"keep": "untouched"}
     assert calls[0]["days"] == 7

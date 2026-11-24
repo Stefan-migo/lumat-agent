@@ -19,7 +19,7 @@ const replyTextValues = {
   handoff_campo_sin_respuesta: "Un asesor te contacta para coordinar.",
   handoff_booking_unavailable: "No hay horarios: un asesor te contacta.",
   booking_offer: "Horarios: {{opciones}}",
-  availability_preview: "Tengo estos horarios disponibles: {{opciones}}. Si quieres, te tomo los datos y te la reservo.",
+  availability_preview: "Tengo estas horas libres: {{opciones}}. Si te sirve alguna, te tomo los datos y la reservo.",
   booking_no_more_today: "Sin más horarios para hoy: {{opciones}}",
   booking_unclear: "No entendí el horario.",
   booking_confirmed: "Visita agendada.",

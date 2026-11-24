@@ -106,9 +106,9 @@ def test_reply_names_only_slots_returned_inside_a_technicians_availability(monke
         for _, slot_day, slot_time in configured_answers._one_slot_per_day(slots)
     ]
     expected = (
-        "Tengo estos horarios disponibles: "
+        "Tengo estas horas libres: "
         f"{configured_answers._join_es(names)}. "
-        "Si quieres, te tomo los datos y te la reservo."
+        "Si te sirve alguna, te tomo los datos y la reservo."
     )
     assert rendered == expected
 

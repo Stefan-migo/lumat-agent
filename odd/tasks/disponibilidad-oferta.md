@@ -91,3 +91,39 @@ Costo asumido: **una clave nueva en `reply.texts`** (`availability_preview`), qu
 editor del panel, los fixtures y el test que fija las claves. Se elige `reply.texts` y no `messages.*`
 porque el cuerpo Pydantic y el tipo TS de `reply.texts` son mapas abiertos: la clave nueva entra sin
 campo nuevo en la API.
+
+### L3 — la oferta se midió dos veces, y el juez nombró dos defectos distintos (2026-11-24)
+
+Corrida 1 (`oferta-escenarios`, 6 escenarios de agenda, juez ×3): **4/6**, con `real-disponibilidad-dias`
+y `real-solo-sabados` en **0.00** y cero gates fallidos. El transcript los explicaba sin ambigüedad: la
+respuesta listaba **tres medias horas del mismo día** (`marzo... martes 24 a las 11:00, 11:30 y 12:00`) —
+el menú del flujo de agendamiento, no una respuesta a «¿qué días tienen?»— y a «¿este sábado 27?» contestaba
+con martes, porque el día pedido nunca se parseaba. Arreglado en `59fba5081`: un slot por día distinto,
+hasta tres días, y `resolve_window` alimentando `open_slots_for_assignment(window=...)`.
+
+Corrida 2 (`oferta-escenarios-2`): **4/6**, y los dos que fallan ya no son los mismos.
+`real-solo-sabados` recuperó (**1.83**), `real-disponibilidad-dias` sigue en 0.00, y
+`real-reagenda-mantencion` cayó de 2.50 a 0.00.
+
+`real-disponibilidad-dias` ya tiene la forma correcta (`martes 24 a las 12:00, miércoles 25 a las 09:00 y
+jueves 26 a las 09:00`, tres días distintos, todos los gates ✓) y el juez lo castiga por **el texto**,
+con sus propias palabras en la dimensión `policy`:
+
+> «promete horas y días confirmados sin consultar la agenda real, contra el KB: "según la disponibilidad
+> real de técnicos"»
+
+El bot **sí** consultó la agenda; lo que no dice es que esos huecos están libres y sin reservar. El juez no
+puede auditar la consulta, sólo lo que el mensaje afirma. La corrección es de redacción, no de
+comportamiento: decir «horas libres» y que la reserva se confirma al coordinar, como ya hace la ruta de
+agendamiento («Anoté martes pm como preferencia… todavía no queda agendada»). Es texto que aprobó el
+owner en L2, así que no se cambia sin su decisión.
+
+`real-reagenda-mantencion` es otra cosa, y verificada: `resolve_window` sobre «cambiar la fecha de la
+manutención para el **próximo martes** por favor», con hoy = martes 24/11, devuelve
+`SlotWindow(day=2026-11-24)` — **hoy**, no el martes siguiente; y «Martes **pm**» también resuelve al 24/11
+con `franja=None`, porque `pm` no es una franja reconocida. El horizonte de siete días no cubre el martes
+siguiente, así que la ruta escala en vez de inventar. Es un defecto de `slot_window` (días relativos y
+`am`/`pm`), no de la oferta, y pide corte propio.
+
+Consecuencia asumida: **el re-baseline de 43 no se paga todavía**. Medir 43 escenarios con un 0.00 que es
+artefacto de redacción fija ese número como si fuera del bot.
