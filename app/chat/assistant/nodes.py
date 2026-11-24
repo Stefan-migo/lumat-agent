@@ -17,7 +17,7 @@ from app.chat.assistant.planner_json import load_planner_payload
 from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
-from app.db import session_scope
+from app.db import release_transaction, session_scope
 from app.services import kb
 from app.services import llm
 from app.services import project_files
@@ -529,6 +529,9 @@ def repair_plan(state: AssistantState) -> AssistantState:
 def _planner_call(messages: list[dict], state: AssistantState, call_key: str) -> tuple[str, object, dict[str, str] | None]:
     """Run one paid planner call and read its text, keeping today's bounded diagnoses."""
     try:
+        session = state.get("session")
+        if not state.get("resume") and callable(getattr(session, "in_transaction", None)):
+            release_transaction(session)
         completion = _assistant_client().chat.completions.create(
             model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
             messages=messages,
@@ -1486,6 +1489,8 @@ def execute(state: AssistantState) -> AssistantState:
                 user_content: object = [*base, *tool_images]
             else:
                 user_content = prompt
+            if not state.get("resume") and callable(getattr(session, "in_transaction", None)):
+                release_transaction(session)
             completion = client.chat.completions.create(
                 model=model,
                 messages=[
