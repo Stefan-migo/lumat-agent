@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.chat.assistant.budgets import PROJECT_READ_FILE_PAGE_LIMIT as _PAGE_LIMIT
+
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.tools import registry as reg
 
@@ -66,11 +68,11 @@ def _run(monkeypatch, client):
     )
 
 
-@pytest.mark.parametrize("raw", ["6000", " 6000 ", None, 10**30, 6000.0])
+@pytest.mark.parametrize("raw", [str(_PAGE_LIMIT + 1), f" {_PAGE_LIMIT + 1} ", None, 10**30, float(_PAGE_LIMIT + 1)])
 def test_S3_every_page_over_the_ceiling_clamps_and_executes(monkeypatch, read_hits, raw):
     client = _Client([_plan(arguments={"file_id": 3, "limit": raw})])
     final = _run(monkeypatch, client)
-    assert read_hits == [{"file_id": 3, "offset": 0, "limit": 3890}]
+    assert read_hits == [{"file_id": 3, "offset": 0, "limit": _PAGE_LIMIT}]
     assert final["guardrails"]["decision"] == "execute"
     assert len(client.planner_calls) == 1
 

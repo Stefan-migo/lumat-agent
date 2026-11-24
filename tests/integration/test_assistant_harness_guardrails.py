@@ -342,11 +342,16 @@ def test_completed_tool_traversal_records_one_execution_audit(monkeypatch, migra
         ).all()
 
     assert len(audits) == 1
-    assert audits[0].after == {
+    payload = dict(audits[0].after)
+    digest = payload.pop("arguments_sha256", None)
+    assert payload == {
         "run_id": "run-tool-loop",
         "tool": "customers.search",
         "status": "completed",
     }
+    # S8: a step is identifiable later without storing what the operator asked for.
+    assert digest is not None and len(digest) == 64
+    assert "Ana" not in json.dumps(audits[0].after)
 
 
 def test_memory_read_orm_result_is_readable_tool_evidence(monkeypatch, migrated_db):
