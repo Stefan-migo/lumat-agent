@@ -199,8 +199,21 @@ def when_label(moment: datetime) -> str:
     return slot_label(moment.date(), moment.time().replace(second=0, microsecond=0))
 
 
-def window_label(window: SlotWindow) -> str:
-    """Name the window in the customer's own words for the S2 notice."""
+def window_label(window: SlotWindow, *, with_date: bool = True) -> str:
+    """Name the window in the customer's own words for the S2 notice.
+
+    `with_date=False` drops the calendar date and keeps the day, the franja and the
+    hour. The notice needs the date — "Para {{momento}} no me quedan horarios" is
+    about one concrete day — but the capture acknowledgement does not: measured on
+    `simple-horario-sabado`, «Sobre tu horario: el sábado 28/11. Queda anotada y la
+    confirmamos al coordinar la visita.» read as the promise the scenario forbids,
+    even though the sentence says the visit is confirmed later. The day the customer
+    named is the preference; the date is a commitment nobody made.
+    """
+
+    def day_label(day: date) -> str:
+        name = _WEEKDAY_LABELS[day.isoweekday() - 1]
+        return f"{name} {day:%d/%m}" if with_date else name
 
     if window.desde is not None:
         # The notice renders "Para {{momento}} no me quedan horarios", so the label
@@ -208,11 +221,10 @@ def window_label(window: SlotWindow) -> str:
         # "las 17:00 en adelante".
         if window.day is None:
             return f"las {window.desde:%H:%M} en adelante"
-        label = f"{_WEEKDAY_LABELS[window.day.isoweekday() - 1]} {window.day:%d/%m}"
-        return f"el {label} a partir de las {window.desde:%H:%M}"
+        return f"el {day_label(window.day)} a partir de las {window.desde:%H:%M}"
     if window.day is None:
         return franja_label(window.franja or AFTERNOON)
-    label = f"{_WEEKDAY_LABELS[window.day.isoweekday() - 1]} {window.day:%d/%m}"
+    label = day_label(window.day)
     if window.franja is None:
         return f"el {label}"
     return f"{franja_label(window.franja)} del {label}"

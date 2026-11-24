@@ -1083,8 +1083,14 @@ def _render_capture_question(
         # the customer had just proposed.
         # An exclusion names a time the customer cannot do, so the stored
         # preference is what gets held; a plain mention names the hour they are
-        # proposing right now.
-        held = availability.strip() if _excludes_the_window(current_text) else window_label(window)
+        # proposing right now. No calendar date: the hold says the visit is
+        # confirmed later, and a date in the same sentence reads as the promise
+        # `simple-horario-sabado` forbids.
+        held = (
+            availability.strip()
+            if _excludes_the_window(current_text)
+            else window_label(window, with_date=False)
+        )
         availability_hold_ack = render_reply(
             get_reply_texts(session),
             "capture_availability_hold",
