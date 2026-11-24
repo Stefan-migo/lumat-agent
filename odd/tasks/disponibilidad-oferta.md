@@ -162,3 +162,36 @@ arreglar acá:
   martes de hoy. Es lo que mantiene en 0.00 a `real-reagenda-familiar` y aporta a `real-reagenda-mantencion`.
 - **`complejo-agendar-calefont`**: el juez exige responder cobertura y precio antes de pedir los datos; el flujo
   pide todo primero y termina escalando.
+
+### L5 — el baseline nuevo: 35/43, y el escenario del corte en 3.00 (2026-11-24)
+
+`rebaseline-2026-11-24b`, sello `f20d053b4`, árbol limpio, corpus `2c5469ddae42`, **KB `99a2bbabbeb1`**,
+bot `deepseek-flash`, juez ×3, **43/43 medidos**, **35 pasan**, un gate fallido (G4 ×1). Arnés: sesión
+`900s · source client`, config `09b067948eee`, agenda **3 técnicos · 36 bloques**.
+
+`real-disponibilidad-dias`: **3.00 y pasa**. El escenario que abrió este corte arrancó en 0.00 con el bot
+midiendo el vacío y termina así.
+
+**Contra `rebaseline-2026-11-24a` no se compara, y hay que decirlo antes que cualquier número:** el
+fingerprint de la KB cambió (`34670f5b3d75` → `99a2bbabbeb1`), así que la diferencia de total (36 → 35) no
+mide una regresión. Con esa salvedad, el movimiento escenario por escenario:
+
+- **Recuperados (3):** `real-diego-precio-y-duracion`, `real-revision-bano-ruidoso`, `real-vocabulario-impreciso`.
+- **Nuevos en fallar (4):** `complejo-agendar-calefont`, `real-precio-mantencion-ciclo`, `real-varias-reparaciones`, `super-near-miss-lavadora`.
+- **Siguen fallando (4):** `complejo-fuera-de-cobertura-insiste`, `real-consulta-otros-equipos`, `real-reclamo-real-si-deriva`, `super-enojo-reclamo`.
+
+**El único gate fallido merece su línea, porque un gate no es ruido.** `real-varias-reparaciones` registra
+`unknown_intent`, que el escenario prohíbe:
+
+```
+2. cliente — Eso!
+   bot     — Disculpa, no te entendí bien. ¿Me cuentas un poco más qué necesitas?
+```
+
+Es clasificación de un mensaje de relleno, no agenda: el preview no participó de ese turno. En `24a` ese
+escenario pasaba, así que hay que atribuirlo con un A/B —el escenario con y sin el cambio de KB, que es la
+regla del proyecto ante duda de causalidad— y no por cercanía. Queda como corte propio, junto con los otros
+tres hallazgos de L4.
+
+Consecuencia operativa: **todo informe anterior a este queda sin referencia válida.** El próximo re-baseline
+tiene que compararse contra `24b`, y `odd/evals/conv-eval-rebaseline-2026-11-24a.*` pasa a ser historia.
