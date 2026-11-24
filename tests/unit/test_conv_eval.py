@@ -1003,6 +1003,49 @@ def test_render_markdown_declares_that_it_measures_the_brain_not_the_channel():
     assert "`baseline`" in markdown
 
 
+def test_render_markdown_declares_the_capture_redaction_the_run_measured():
+    """S2 (acuse-horario-config): production runs `chat.conduct.redaccion = llm`.
+
+    Measured 2026-11-24 on the production database (`select key, value from
+    settings`). The rewrite path runs only in `llm`, so a run in `llm` and a run in
+    `plantilla` put different words in the customer's mouth under seals that were
+    identical: the report has to name the one it measured.
+    """
+    report = report_for([score_row("a", "simple", True, score=4.0)])
+    report["stamp"]["harness_conduct"] = {
+        "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+        "redaccion": "llm",
+        "max_preguntas_por_mensaje": 1,
+        "derivaciones": ["cobertura"],
+    }
+    report["stamp"]["harness_conduct_fingerprint"] = "9f2a1c3d4e5f"
+
+    markdown = ev.render_markdown(report)
+
+    assert "Redacción de captura" in markdown
+    assert "`llm`" in markdown
+    assert "`9f2a1c3d4e5f`" in markdown
+
+
+def test_render_markdown_does_not_invent_a_conduct_line_for_an_older_stamp():
+    """A report written before this field existed keeps the lines it had."""
+    markdown = ev.render_markdown(report_for([score_row("a", "simple", True, score=4.0)]))
+
+    assert "Redacción de captura" not in markdown
+
+
+def test_conduct_fingerprint_moves_only_when_the_conduct_moves():
+    base = {
+        "orden": ["failure", "equipment"],
+        "redaccion": "plantilla",
+        "max_preguntas_por_mensaje": 1,
+        "derivaciones": ["cobertura"],
+    }
+
+    assert ev.conduct_fingerprint(base) == ev.conduct_fingerprint(dict(base))
+    assert ev.conduct_fingerprint({**base, "redaccion": "llm"}) != ev.conduct_fingerprint(base)
+
+
 def test_render_markdown_warns_that_a_dirty_run_is_not_a_baseline():
     markdown = ev.render_markdown(
         report_for([score_row("a", "simple", True, score=4.0)], dirty=True)

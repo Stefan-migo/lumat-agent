@@ -1043,6 +1043,11 @@ class RunStamp:
     # one it was — and `[]` was the state that made a G6 unfixable.
     harness_settings: dict[str, Any] = field(default_factory=dict)
     harness_settings_fingerprint: str = ""
+    # The capture conduct the run read from its own database. `redaccion` decides
+    # whether the model rephrases the capture questions, so it changes the words
+    # the customer reads while every other seal field stays the same.
+    harness_conduct: dict[str, Any] = field(default_factory=dict)
+    harness_conduct_fingerprint: str = ""
     harness_technicians: int = 0
     harness_availability_blocks: int = 0
     harness_technicians_fingerprint: str = ""
@@ -1065,6 +1070,8 @@ class RunStamp:
             "session_idle_timeout_source": self.session_idle_timeout_source,
             "harness_settings": self.harness_settings,
             "harness_settings_fingerprint": self.harness_settings_fingerprint,
+            "harness_conduct": self.harness_conduct,
+            "harness_conduct_fingerprint": self.harness_conduct_fingerprint,
             "harness_technicians": self.harness_technicians,
             "harness_availability_blocks": self.harness_availability_blocks,
             "harness_technicians_fingerprint": self.harness_technicians_fingerprint,
@@ -1312,6 +1319,13 @@ Only the hours window is seeded on purpose: it is the one configuration the corp
 probes deterministically, and every other key would move the historical numbers for
 reasons this cut did not measure. `coverage.communes`, `booking.*` and the message
 catalog keep reading their code defaults — a named gap, not parity.
+
+`chat.conduct` is the gap that is **declared** rather than seeded: production runs
+`redaccion: llm` (measured 2026-11-24), which is the switch that lets the model
+rephrase the capture questions. Seeding it would change the text of every scenario;
+saying nothing would let a run in `llm` and a run in `plantilla` share one seal. The
+report names it instead (`measured_conduct` → `conduct_seal_line`), and the seeding
+decision stays open.
 """
 
 HARNESS_TECHNICIANS: list[dict[str, Any]] = [
@@ -1337,6 +1351,31 @@ def harness_settings_fingerprint(settings: Mapping[str, Any] | None = None) -> s
     payload = HARNESS_SETTINGS if settings is None else settings
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def conduct_fingerprint(conduct: Mapping[str, Any]) -> str:
+    """A short, stable digest of the capture conduct a run measured."""
+    import json
+
+    encoded = json.dumps(dict(conduct), sort_keys=True, ensure_ascii=False).encode()
+    return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def measured_conduct() -> dict[str, Any]:
+    """The capture conduct the run measured, read from the database it runs on.
+
+    Unlike `HARNESS_SETTINGS`, this is **declared, not guaranteed**: the harness
+    does not seed `chat.conduct`, so the evaluation database decides and the report
+    has to say which state it got. Production carries `redaccion: llm` (measured on
+    2026-11-24), and that switch decides whether `phrasing.rewrite` rephrases the
+    capture questions at all: two runs with different values put different words in
+    the customer's mouth, and before this field existed their seals were identical.
+    """
+    from app.db import session_scope
+    from app.services.settings import get_conduct
+
+    with session_scope() as session:
+        return dict(get_conduct(session))
 
 
 def seed_harness_settings() -> dict[str, Any]:
@@ -1484,6 +1523,27 @@ def settings_seal_line(stamp: Mapping[str, Any]) -> str | None:
         f"- Config del arnés: `{stamp.get('harness_settings_fingerprint') or '?'}` · "
         f"`hours.schedule` {' y '.join(windows) if windows else 'sin ventana'} · "
         f"`{configured.get('hours.timezone') or '?'}`"
+    )
+
+
+def conduct_seal_line(stamp: Mapping[str, Any]) -> str | None:
+    """The seal line that names the capture conduct, or None for an older stamp.
+
+    `settings_seal_line` names the window and `agenda_seal_line` the technicians'
+    blocks; neither says whether the model rephrases the capture questions. In
+    `llm` the customer reads a rewritten question and in `plantilla` the shipped
+    one, so a report that stays silent about it describes two different bots the
+    same way.
+    """
+    conduct = stamp.get("harness_conduct")
+    if not conduct:
+        return None
+    derivaciones = ", ".join(str(rule) for rule in conduct.get("derivaciones") or []) or "—"
+    return (
+        f"- Redacción de captura: `{conduct.get('redaccion') or 'desconocida'}` · "
+        f"{conduct.get('max_preguntas_por_mensaje', '?')} pregunta(s) por mensaje · "
+        f"derivaciones `{derivaciones}` · "
+        f"`{stamp.get('harness_conduct_fingerprint') or '?'}`"
     )
 
 
@@ -1759,6 +1819,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     settings_line = settings_seal_line(stamp)
     if settings_line:
         lines.append(settings_line)
+    conduct_line = conduct_seal_line(stamp)
+    if conduct_line:
+        lines.append(conduct_line)
     agenda_line = agenda_seal_line(stamp)
     if agenda_line:
         lines.append(agenda_line)
@@ -2111,6 +2174,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     # reset on purpose, and the window has to be in place before the first turn.
     harness_config = seed_harness_settings()
     harness_agenda = seed_harness_technicians()
+    # Declared, not seeded: the conduct is whatever this database holds, and the
+    # seal names it so two runs that differ only in `redaccion` stop being
+    # indistinguishable.
+    harness_conduct = measured_conduct()
 
     try:
         kb_state = preflight()
@@ -2154,6 +2221,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         session_idle_timeout_source=session_window_source,
         harness_settings=harness_config,
         harness_settings_fingerprint=harness_settings_fingerprint(harness_config),
+        harness_conduct=harness_conduct,
+        harness_conduct_fingerprint=conduct_fingerprint(harness_conduct),
         harness_technicians=harness_agenda["harness_technicians"],
         harness_availability_blocks=harness_agenda["harness_availability_blocks"],
         harness_technicians_fingerprint=harness_agenda["harness_technicians_fingerprint"],
