@@ -8,6 +8,30 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.17] - 2026-11-24
+
+### Corregido
+
+- El asistente gastaba la cadena de pasos releyendo y cerraba el turno prometiendo escribir «el próximo
+  turno», o directamente respondiendo que el harness no lo dejaba usar herramientas. Cinco turnos del
+  hilo 54 ejecutaron seis `read_project_file` cada uno y **cero** escrituras sobre un archivo de 5.899 B.
+  La causa no era el tope de pasos: la caja de evidencia de 5.500 caracteres conservaba el resultado más
+  nuevo y descartaba el anterior, así que leer la segunda página **expulsaba la primera** (4.063
+  caracteres para la página 1 sola; 2.323 con las dos y la página 1 ausente) y el planner releía la mitad
+  que acababa de perder. Las páginas de un mismo archivo se agrupan ahora en un solo bloque, el
+  presupuesto sube a 12.000 caracteres, el último paso de un turno que pidió escribir no puede ser otra
+  lectura, la tercera lectura del mismo archivo se rechaza aunque cambie el `offset`, el prompt pide como
+  máximo dos páginas por turno y el tope de pasos es configurable (`assistant_tool_step_limit`, 8).
+- Un hilo largo podía descartar en silencio el archivo que el operador acababa de adjuntar: los adjuntos
+  se inyectan ahora antes que la historia, y cada uno informa cuántos caracteres entraron y si quedó
+  truncado.
+- La auditoría de cada paso guarda `arguments_sha256` y las claves de cursor, nunca contenido ni datos
+  del operador. Sin eso, la secuencia de seis lecturas no se pudo reconstruir en producción.
+
+### Cambiado
+
+- Sin migraciones: el schema queda en `071_simulation_isolation`. El rollback es sólo de código.
+
 ## [2026.11.16] - 2026-11-23
 
 ### Corregido

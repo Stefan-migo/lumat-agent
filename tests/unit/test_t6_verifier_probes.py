@@ -8,7 +8,7 @@ import json
 from types import SimpleNamespace
 
 from app.chat.assistant.graph import run_assistant
-from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS, tool_loop_head
+from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS, _tool_step_limit, tool_loop_head
 
 
 def _plan(tool, *, follow_up, summary="s", requires_approval=False):
@@ -108,5 +108,7 @@ def test_s7_cap_boundary_is_exactly_the_budget():
 
 
 def test_s7_budget_fits_a_five_step_chain_and_is_bounded():
-    assert MAX_ASSISTANT_TOOL_STEPS >= 5
-    assert MAX_ASSISTANT_TOOL_STEPS == 6
+    assert _tool_step_limit() >= 5
+    # S6: the cap is a setting now. The five-step chain the budget was sized for still fits, with the
+    # last step reserved for the write a read chain exists for.
+    assert MAX_ASSISTANT_TOOL_STEPS == 8

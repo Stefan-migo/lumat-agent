@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -38,6 +39,7 @@ from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, veri
 logger = logging.getLogger(__name__)
 
 # Shared evidence budgets and their rationale live in budgets.py.
+from app.config import get_settings
 from app.chat.assistant.budgets import (
     _DETAIL_EVIDENCE_SHARE,
     _KB_EVIDENCE_LIMIT,
@@ -49,7 +51,16 @@ _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 # is one bounded line: enough to name the bound, never the whole pydantic traceback.
 _ARGUMENTS_ERROR_LIMIT = 200
 _ARTIFACT_INVENTORY_LIMIT = 10
-MAX_ASSISTANT_TOOL_STEPS = 6
+# Default when settings cannot be read (tests and tooling that build a state without a session).
+MAX_ASSISTANT_TOOL_STEPS = 8
+
+
+def _tool_step_limit() -> int:
+    """Steps allowed in one turn, from settings so it can be tuned without a release."""
+    try:
+        return get_settings().assistant_tool_step_limit
+    except Exception:
+        return MAX_ASSISTANT_TOOL_STEPS
 # Bodies loaded for the responder every turn, even when the planner does not
 # declare them. Scoped to the responder: the planner keeps seeing only the
 # skill index ({name, description}), never these bodies (D8).
@@ -764,6 +775,49 @@ def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
     return tool_name in AUTONOMOUS_WRITE_ALLOWLIST and type(thread_id) is int and thread_id > 0
 
 
+# Verbs that name a write in the operator's own words. Used only to reserve the last step of a chain,
+# never to authorize a write: the approval gate stays the only authority.
+_WRITE_INTENT = (
+    "escribe", "escribi", "escribí", "guarda", "guardá", "guardar", "actualiza", "actualizá",
+    "crea", "creá", "crear", "edita", "editá", "agrega", "agregá", "agregar", "genera", "generá",
+    "corrige", "corregí", "agrega", "anota", "anotá", "write", "save", "update", "create", "edit", "append",
+)
+
+
+def _asks_for_a_write(content: str) -> bool:
+    text = (content or "").casefold()
+    return any(re.search(rf"\b{re.escape(stem)}", text) for stem in _WRITE_INTENT)
+
+
+def _chain_only_read(state: AssistantState) -> bool:
+    """True when every step of this chain so far was a read-only tool."""
+    results = state.get("tool_results") or []
+    if not results:
+        return False
+    for result in results:
+        if not isinstance(result, dict):
+            return False
+        try:
+            if not get_tool(str(result.get("tool") or "")).read_only:
+                return False
+        except Exception:
+            return False
+    return True
+
+
+def _file_read_counts(results) -> dict[int, int]:
+    """How many times each project file was read in this chain, by file id."""
+    counts: dict[int, int] = {}
+    for result in results or []:
+        if not isinstance(result, dict) or result.get("tool") != "read_project_file":
+            continue
+        arguments = result.get("arguments") or {}
+        file_id = arguments.get("file_id") if isinstance(arguments, dict) else None
+        if isinstance(file_id, int):
+            counts[file_id] = counts.get(file_id, 0) + 1
+    return counts
+
+
 def _is_conversational_turn(content: str) -> bool:
     """Allow only short, purely social turns to bypass knowledge grounding."""
     text = content.strip().casefold()
@@ -805,6 +859,23 @@ def guardrails(state: AssistantState) -> AssistantState:
         except Exception:
             # Invalid calls are handled by the normal validation path below.
             pass
+    # Pagination changes the offset, so an identical-call guard never fires on a re-read of the same
+    # file. Two reads of one file are all a chain needs; a third is the loop production paid for with
+    # six steps and no write.
+    file_read_loop = False
+    if plan_data.get("kind") == "tool" and tool_name == "read_project_file":
+        planned_file_id = (plan_data.get("arguments") or {}).get("file_id")
+        if isinstance(planned_file_id, int) and _file_read_counts(prior_results).get(planned_file_id, 0) >= 2:
+            file_read_loop = True
+    if file_read_loop:
+        return {
+            "plan": {**plan_data, "kind": "respond", "tool": None, "arguments": {}, "follow_up": False},
+            "execution_stall": "repeated_file_read",
+            "guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True,
+                           "approval_required": False, "decision": "respond", "skills": validated_skills,
+                           "execution_stall": "repeated_file_read"},
+            "status": "responding",
+        }
     if repeated_call:
         return {
             "plan": {**plan_data, "kind": "respond", "tool": None, "arguments": {}, "follow_up": False},
@@ -917,10 +988,97 @@ def _project_capability_evidence(payload):
     return {"tool_count": payload.get("tool_count", len(tools)), "tools": tools}
 
 
+def _coalesce_file_reads(results: list) -> list:
+    """Fold consecutive reads of one project file into a single evidence block.
+
+    Two pages of one file used to compete for the same evidence budget, and the newest won: reading a
+    5,899-byte file rendered 2,323 characters with the first half gone. The planner then re-read the half
+    it had lost, which evicted the other, until the step budget ended the turn. One file read in N steps
+    is one document, so it is rendered as one.
+    """
+    def _file_read(result) -> dict | None:
+        if not isinstance(result, dict) or result.get("tool") != "read_project_file":
+            return None
+        payload = result.get("result")
+        arguments = result.get("arguments")
+        if not isinstance(payload, dict) or not isinstance(payload.get("text"), str):
+            return None
+        if not isinstance(arguments, dict) or not isinstance(arguments.get("file_id"), int):
+            return None
+        return payload
+
+    coalesced: list = []
+    group: list = []
+    group_file_id: int | None = None
+
+    def _flush() -> None:
+        nonlocal group, group_file_id
+        if not group:
+            return
+        if len(group) == 1:
+            coalesced.append(group[0])
+        else:
+            pages = [item.get("result") for item in group]
+            first_result = group[-1]
+            merged_text = "".join(str(page.get("text") or "") for page in pages)
+            coalesced.append({
+                "tool": "read_project_file",
+                "status": first_result.get("status"),
+                "arguments": {
+                    "file_id": group_file_id,
+                    "offsets": [page.get("offset") for page in pages],
+                },
+                "result": {
+                    "file_id": group_file_id,
+                    "filename": pages[0].get("filename"),
+                    "text": merged_text,
+                    "offset": pages[0].get("offset") or 0,
+                    "next_offset": pages[-1].get("next_offset"),
+                    "pages_joined": len(pages),
+                    "chars": len(merged_text),
+                },
+            })
+        group = []
+        group_file_id = None
+
+    for result in results or []:
+        payload = _file_read(result)
+        if payload is None:
+            _flush()
+            coalesced.append(result)
+            continue
+        if group and payload.get("file_id") != group_file_id:
+            _flush()
+        group_file_id = payload.get("file_id")
+        group.append(result)
+    _flush()
+    return coalesced
+
+
+# Cursor-shaped argument keys that are safe to keep verbatim: they identify *what* a step touched
+# without carrying content or domain values. A digest of the whole argument map makes a repeat visible
+# without storing the operator's data.
+_AUDITABLE_ARGUMENT_KEYS = ("file_id", "artifact_id", "folder_id", "offset", "limit", "thread_id", "conversation_id", "customer_id", "case_id")
+
+
+def _audit_arguments(arguments) -> dict:
+    """Auditable trace of one step: a digest of the exact arguments plus safe cursor keys."""
+    if not isinstance(arguments, dict):
+        return {}
+    serialized = json.dumps(arguments, ensure_ascii=False, sort_keys=True, default=str)
+    trace = {"arguments_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest()}
+    for key in _AUDITABLE_ARGUMENT_KEYS:
+        value = arguments.get(key)
+        if isinstance(value, (int, str)) and not isinstance(value, bool):
+            trace[key] = value
+    return trace
+
+
 def _render_tool_evidence(state: AssistantState) -> str:
     results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
     if not results:
         return ""
+    results = _coalesce_file_reads(results)
     rendered_results: list[tuple[str, str]] = []
     for result in results:
         if not isinstance(result, dict):
@@ -1068,8 +1226,14 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
         return {"status": "completed"}
     if not plan.get("follow_up"):
         return {"status": "completed"}
+    limit = _tool_step_limit()
+    # A request that names a write must not spend its last step reading: the turn would close with the
+    # promise to write "next turn", which is what production did five times over. Reserve the final step
+    # for an action that is not another read of what this chain already consumed.
+    if steps >= limit - 1 and _asks_for_a_write(state.get("content", "")) and _chain_only_read(state):
+        return {"cap_reached": True, "execution_stall": "write_pending_after_reads", "status": "completed"}
     # Record the cap only when another step was requested and the budget ended the turn.
-    if steps >= MAX_ASSISTANT_TOOL_STEPS:
+    if steps >= limit:
         return {"cap_reached": True, "status": "completed"}
     # The step that just ran spent its approval. Clearing it is what makes the next plan
     # earn its own: an approval is bound to one exact plan, so carrying it forward would
@@ -1231,7 +1395,8 @@ def execute(state: AssistantState) -> AssistantState:
                     state["session"], actor=state.get("actor") or "assistant",
                     action="internal_chat.execution", entity="internal_chat_thread",
                     entity_id=str(state.get("thread_id")),
-                    after={"run_id": state.get("run_id"), "tool": tool_name, "status": "error"},
+                    after={"run_id": state.get("run_id"), "tool": tool_name, "status": "error",
+                           **_audit_arguments(plan_data.get("arguments"))},
                 )
             return {
                 "tool_result": failed_result,
@@ -1282,7 +1447,8 @@ def execute(state: AssistantState) -> AssistantState:
                 state["session"], actor=state.get("actor") or "assistant",
                 action="internal_chat.execution", entity="internal_chat_thread",
                 entity_id=str(state.get("thread_id")),
-                after={"run_id": state.get("run_id"), "tool": tool_name, "status": "completed"},
+                after={"run_id": state.get("run_id"), "tool": tool_name, "status": "completed",
+                       **_audit_arguments(plan_data.get("arguments"))},
             )
         return {
             "tool_result": result,

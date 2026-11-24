@@ -676,7 +676,7 @@ def test_read_project_file_page_is_clamped_and_keeps_cursor_before_text(monkeypa
         },
     )
 
-    result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3, "limit": 6000}, owner_id=1, role="admin")["result"]
+    result = execute_tool(SimpleNamespace(), "read_project_file", {"file_id": 3, "limit": page_limit * 4}, owner_id=1, role="admin")["result"]
 
     # Four times the ceiling is asked for; the reader gets one page and the turn survives.
     assert seen == [{"offset": 0, "limit": page_limit}]
