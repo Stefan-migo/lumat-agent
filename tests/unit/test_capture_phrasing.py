@@ -248,3 +248,43 @@ def test_capture_question_round_trip_keeps_extractor_field(monkeypatch):
         extracted=fake_extractor(asked["replies"][0], "Ñuñoa"), window=[{"text": "Ñuñoa"}],
     ))
     assert captured["captured"]["comuna"] == "Ñuñoa"
+
+
+@pytest.mark.parametrize("draft", [
+    "¿name?",
+    "¿equipment?",
+    "¿Name?",
+    "¿Tu name completo?",
+    "¿Qué equipment es?",
+    "¿availability?",
+])
+def test_validator_rejects_a_raw_field_identifier(draft):
+    """S1 (captura-claves-crudas): the customer read «¿name?» and «¿equipment?».
+
+    Measured in `rebaseline-2026-11-24b` with production's `redaccion: llm`: the
+    rewrite got `Campos pendientes: ['name']` and echoed the code identifier back as
+    the question. `_FIELD_IDENTIFIERS` are the tokens that mean nothing in Spanish,
+    so a draft carrying one is our field name on screen, never a rewrite.
+    """
+    assert not phrasing.validate(
+        draft,
+        template="¿Cuál es tu nombre?",
+        facts={},
+        pending=["name"],
+    )
+
+
+@pytest.mark.parametrize("draft,template,pending", [
+    ("¿En qué comuna estás?", "¿En qué comuna te encuentras?", ["comuna"]),
+    ("¿Cuál es tu email?", "¿Cuál es tu correo electrónico?", ["email"]),
+    ("¿Cuál es tu correo electrónico?", "¿Cuál es tu correo electrónico?", ["email"]),
+])
+def test_validator_still_accepts_the_spanish_words_that_look_like_identifiers(
+    draft, template, pending
+):
+    """`comuna` and `email` are the customer's own words, so they stay out of the list.
+
+    A gate that rejected them would throw away the rewrites that read best and fall
+    back to the template for no benefit.
+    """
+    assert phrasing.validate(draft, template=template, facts={}, pending=pending)

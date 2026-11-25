@@ -26,6 +26,22 @@ _FORWARD_GUARDED = {
     "address": ("direccion", "domicilio", "calle"),
 }
 
+# S1 (captura-claves-crudas): the rewrite received `Campos pendientes: ['name']` and
+# echoed the code identifier back as the question — with production's
+# `redaccion: llm` customers read «¿name?» and «¿equipment?»
+# (`rebaseline-2026-11-24b`). These are the only field names that mean nothing in
+# Spanish. `comuna` and `email` are the customer's own words and stay out of the
+# list: rejecting them would throw away the rewrites that read best. The remaining
+# guarantee (contact data is never pulled forward) is `_FORWARD_GUARDED`'s job.
+_FIELD_IDENTIFIERS = frozenset({
+    "failure",
+    "equipment",
+    "equipment_type",
+    "availability",
+    "name",
+    "address",
+})
+
 
 def facts(captured: dict[str, Any] | None = None, pending: Any = ()) -> dict[str, Any]:
     """Return the ONE fact just captured, plus the fields currently asked.
@@ -108,6 +124,10 @@ def validate(draft: str, *, template: str, facts: dict[str, Any], pending: Any) 
     if re.search(r"(?m)```|`|\[[^]]+\]\([^)]*\)|^\s*#{1,6}\s|[*_]{1,2}", draft):
         return False
     if re.search(r"(?m)^\s*[-+*]\s+", draft):
+        return False
+    # Our field names are not Spanish, so one of them in the draft is the identifier
+    # on screen instead of a question.
+    if _terms(draft) & _FIELD_IDENTIFIERS:
         return False
     if any(unicodedata.category(char) in {"So", "Sk"} for char in draft):
         return False
