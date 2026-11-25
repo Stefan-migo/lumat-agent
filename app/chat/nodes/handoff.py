@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # alias is the default the tests assert.
 HANDOFF_REPLY = REPLY_TEXT_DEFAULTS["handoff"]
 
-# S4: the five escalation reasons whose wording the customer reads. Every other
+# S4: the six escalation reasons whose wording the customer reads. Every other
 # reason (injection, emergency, cost limits, KB misses, unclear bookings…) keeps
 # the generic `handoff` text, so a reason added later never ships copy nobody
 # reviewed. The keys are `reply.texts` entries, editable from the panel.
@@ -77,7 +77,11 @@ def derivation_reply(
     strict, so an unfilled `{{comuna}}` would otherwise reach the customer as
     literal braces or break the escalation.
     """
-    key = DERIVATION_REPLY_KEYS.get(reason, "handoff")
+    key = (
+        "handoff_ruptura"
+        if reason == "ruptura"
+        else DERIVATION_REPLY_KEYS.get(reason, "handoff")
+    )
     placeholders = prompts.placeholders(texts[key])
     values: dict[str, str] = {}
     if "comuna" in placeholders:

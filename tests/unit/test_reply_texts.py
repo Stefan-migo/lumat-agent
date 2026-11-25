@@ -51,6 +51,7 @@ EXPECTED_KEYS = {
     "handoff_unknown_intent_thrice",
     "handoff_campo_sin_respuesta",
     "handoff_booking_unavailable",
+    "handoff_ruptura",
     "handoff_booking_change_ack",
     "gas_instruction_guard",
     "appliance_valve_guard",
@@ -113,6 +114,11 @@ def test_the_defaults_keep_the_current_wording():
     assert REPLY_TEXT_DEFAULTS["handoff"] == (
         "Un asesor revisará tu caso y te contactará a la brevedad."
     )
+    assert REPLY_TEXT_DEFAULTS["handoff_ruptura"] == (
+        "Lamento mucho cómo terminó esto. No voy a discutirlo contigo ni ofrecerte "
+        "nada más: lo dejo en manos de una persona de Lumat, que va a revisar lo "
+        "que pasó y te va a contactar."
+    )
     assert REPLY_TEXT_DEFAULTS["capture_availability_ack"] == (
         "Anoté {{disponibilidad}} como preferencia; la visita la confirmamos al coordinar, "
         "todavía no queda agendada. "
@@ -148,6 +154,7 @@ def test_every_default_slot_is_whitelisted_for_its_key():
 
 
 def test_the_slot_vocabulary_is_closed():
+    assert REPLY_TEXT_SLOTS["handoff_ruptura"] == frozenset()
     assert set().union(*REPLY_TEXT_SLOTS.values()) == {
         "opciones", "fecha", "visita", "accion", "tecnico", "comuna",
         "nombre", "equipo", "problema", "disponibilidad", "momento",
@@ -163,6 +170,7 @@ def test_only_the_coverage_derivation_takes_optional_equipment_slot():
         "handoff_unknown_intent_thrice",
         "handoff_campo_sin_respuesta",
         "handoff_booking_unavailable",
+        "handoff_ruptura",
         "handoff_booking_change_ack",
     ):
         assert REPLY_TEXT_SLOTS[key] == frozenset(), key

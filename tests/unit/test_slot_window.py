@@ -295,3 +295,61 @@ def test_the_preference_label_names_the_day_without_a_calendar_date():
         == "el sábado a partir de las 17:00"
     )
     assert window_label(SlotWindow(day=saturday)) == "el sábado 28/11"
+
+
+def test_proximo_excludes_today_when_today_is_that_weekday():
+    """S1 (slot-window-proximo): "próximo martes" said on a Tuesday is next week.
+
+    Measured 2026-11-25 with the function in hand: `resolve_window("el próximo
+    martes", today=<martes>)` returned **today**, so the offer started on the day
+    the customer had just stepped over by asking for the next one. A bare "martes"
+    keeps including today — the strict rule belongs to the marker.
+    """
+    window = _resolve("el próximo martes", today=date(2026, 11, 24))
+
+    assert window is not None
+    assert window.day == date(2026, 12, 1)
+
+
+def test_que_viene_excludes_today_the_same_way():
+    """S1: "el martes que viene" resolved to today on the same measurement."""
+    window = _resolve("mejor el martes que viene", today=date(2026, 11, 24))
+
+    assert window is not None
+    assert window.day == date(2026, 12, 1)
+
+
+def test_a_bare_weekday_still_includes_today():
+    """S3: what works today keeps working — no marker, no strictness."""
+    window = _resolve("el martes", today=date(2026, 11, 24))
+
+    assert window is not None
+    assert window.day == date(2026, 11, 24)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("el martes a las 3 pm", time(15, 0)),
+        ("a las 3 pm", time(15, 0)),
+        ("a las 3 p.m.", time(15, 0)),
+        ("a las 3 P.M.", time(15, 0)),
+        ("3:30 pm", time(15, 30)),
+        ("después de las 3 pm", time(15, 0)),
+        ("a las 12 pm", time(12, 0)),
+        ("a las 12 am", time(0, 0)),
+        ("a las 10 am", time(10, 0)),
+    ],
+)
+def test_a_meridiem_decides_the_half_of_the_day(text, expected):
+    """S2: "a las 3 pm" is 15:00, never 03:00.
+
+    Measured 2026-11-25: with no meridiem the hour parser read the digits alone and
+    `desde` became 03:00, so the notice told the customer "a partir de las 03:00"
+    and the offer started in the madrugada. `12 am` and `12 pm` are the two corners
+    where the twelve-hour clock is not `hour + 12`.
+    """
+    window = _resolve(text)
+
+    assert window is not None
+    assert window.desde == expected
