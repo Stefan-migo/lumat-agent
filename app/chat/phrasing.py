@@ -167,14 +167,22 @@ def validate(draft: str, *, template: str, facts: dict[str, Any], pending: Any) 
     return True
 
 
-def rewrite(template: str, facts: dict[str, Any], pending: Any) -> str | None:
-    """Ask once for a concise rewrite; every provider failure is a fallback."""
+def rewrite(template: str, facts: dict[str, Any]) -> str | None:
+    """Ask once for a concise rewrite; every provider failure is a fallback.
+
+    The pending fields are not sent. The template already asks them in Spanish, and
+    naming them in code (`Campos pendientes: ['name']`) is exactly what the model
+    echoed back as «¿name?» in production (`captura-claves-crudas`, S1): the input
+    was the leak, not only the missing guard. It gets the number of questions to keep
+    instead, which is the part of the contract `validate` re-checks.
+    """
+    questions = template.count("?")
     try:
         response = llm.openai_client().chat.completions.create(
             model=llm.CHAT_MODEL,
             messages=[
                 {"role": "system", "content": "Reescribe brevemente el texto en español. Conserva exactamente su intención y los campos preguntados. Usa solo los hechos autorizados. Devuelve únicamente el texto."},
-                {"role": "user", "content": f"Plantilla: {template}\nHechos permitidos: {facts!r}\nCampos pendientes: {pending!r}"},
+                {"role": "user", "content": f"Plantilla: {template}\nHechos permitidos: {facts!r}\nMantén exactamente {questions} pregunta(s), sin agregar ni quitar ninguna."},
             ],
             temperature=0.1,
             timeout=4.0,
@@ -193,7 +201,7 @@ def phrase(session, key: str, rendered: str, *, facts: dict[str, Any], pending: 
         return rendered
     verdict = "fallback"
     try:
-        draft = rewrite(rendered, facts, pending)
+        draft = rewrite(rendered, facts)
         if draft is not None and validate(draft, template=rendered, facts=facts, pending=pending):
             verdict = "accepted"
             logger.info("capture phrase key=%s mode=%s verdict=%s", key, mode, verdict)
