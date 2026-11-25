@@ -116,9 +116,18 @@ _HOUR = re.compile(
     r"\b(?:(?:despues\s+de\s+las?|cerca\s+de\s+las?|desde\s+las?|a\s+las?)\s*"
     r"(\d{1,2})(?::(\d{2}))?|"
     r"(\d{1,2}):(\d{2})|"
-    r"(\d{1,2})\s*(?:hrs?|horas?))\b"
+    r"(\d{1,2})\s*(?:hrs?|horas?))"
+    # The twelve-hour clock: "a las 3 pm" is 15:00. Without this the digits were
+    # read alone and `desde` became 03:00, so the notice offered the madrugada
+    # (measured 2026-11-25). `a` and `p` require their `m`, so a bare "a" is not a
+    # meridiem.
+    r"\s*(a\.?\s?m\.?|p\.?\s?m\.?)?\b"
 )
 _LATER = re.compile(r"\bmas\s+tarde\b")
+
+# "próximo martes" is not today. Measured 2026-11-25: with the weekday alone,
+# said on a Tuesday, it resolved to that same Tuesday.
+_NEXT_WEEK = re.compile(r"\b(?:proxim[oa]|siguiente)\b|\bque\s+viene\b")
 
 _DAY_MONTH_YEAR = re.compile(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b")
 _DAY_OF_MONTH = re.compile(r"\b(\d{1,2})\s+de\s+([a-z]+)\b")
@@ -150,6 +159,12 @@ def _next_weekday(today: date, weekday: int) -> date:
     """The next date on or after ``today`` that falls on ``weekday`` (1 = Monday)."""
 
     return today + timedelta(days=(weekday - today.isoweekday()) % 7)
+
+
+def _next_weekday_strict(today: date, weekday: int) -> date:
+    """The next date **after** ``today`` on ``weekday``, never today itself."""
+
+    return today + timedelta(days=(weekday - today.isoweekday()) % 7 or 7)
 
 
 def _next_month_day(today: date, month: int, day: int) -> date | None:
@@ -263,12 +278,19 @@ def resolve_window(text: str, *, today: date) -> SlotWindow | None:
             hour, minute = int(groups[2]), int(groups[3])
         else:
             hour, minute = int(groups[4]), 0
+        meridiem = (groups[5] or "").replace(".", "").replace(" ", "")
         ambiguous_evening_six = (
             hour == 6
             and normalized[hour_match.start():].startswith("despues de las 6")
             and not re.match(r"despues de las 6\s*(?:hrs?|horas?)\b", normalized[hour_match.start():])
         )
-        if franja == AFTERNOON and 0 < hour < 12:
+        if meridiem.startswith("p"):
+            # "a las 3 pm" is 15:00; "12 pm" is noon, not midnight.
+            hour = hour + 12 if 0 < hour < 12 else hour
+        elif meridiem.startswith("a"):
+            # "12 am" is midnight; every other am hour is itself.
+            hour = 0 if hour == 12 else hour
+        elif franja == AFTERNOON and 0 < hour < 12:
             # "a las 3 de la tarde" is 15:00: when the customer already said which
             # half of the day, the digits are a twelve-hour clock. Without this the
             # notice told them "a partir de las 03:00".
@@ -311,9 +333,11 @@ def resolve_window(text: str, *, today: date) -> SlotWindow | None:
             day = _weekday_and_day(today, _WEEKDAYS[match.group(1)], int(match.group(2)))
 
     if day is None:
+        strict = bool(_NEXT_WEEK.search(normalized))
         for name, weekday in _WEEKDAYS.items():
             if re.search(rf"\b{name}\b", normalized):
-                day = _next_weekday(today, weekday)
+                resolver = _next_weekday_strict if strict else _next_weekday
+                day = resolver(today, weekday)
                 break
 
     if day is None and _TOMORROW.search(normalized):
