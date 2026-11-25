@@ -20,7 +20,7 @@ Aprobadas por el owner el 2026-11-25, verbatim:
   ni agenda.»
 - **S6** — «Se edita desde el panel como las otras derivaciones.»
 
-**Borrador del texto, pendiente de aprobación del owner (S4):**
+**Texto predeterminado enviado en el cambio (S4), pendiente de aprobación del owner:**
 
 > «Lamento mucho cómo terminó esto. No voy a discutirlo contigo ni ofrecerte nada más: lo dejo en
 > manos de una persona de Lumat, que va a revisar lo que pasó y te va a contactar.»
@@ -56,3 +56,17 @@ ni «irresponsable», ni «me dejaste la embarrada», ni «lleguemos hasta aquí
 L4 — alcance: A+B, no C. Una instrucción de prompt no arregla la causa —23b muestra el turno 1 bien y
 el turno 2 fallando igual— y `agent/prompts/*` es superficie de forma, así que costaría la suite
 completa sin garantía.
+
+L5 — verificación observada. Backend: `focused tests/integration/test_handoff.py` 81 tests en verde,
+`quick` exit 0, `shape` exit 0 sin superficie de forma. Panel: `npm ci` exit 0 (con 15 avisos de
+auditoría preexistentes), `npm run build` exit 0 con `tsc -b`, `npm test` exit 0 — 122 archivos, 1452
+tests. RED real, no de proveedor: el worker confirmó que los dos tests fallaban por el disparador y el
+texto ausentes, no por un error de autenticación, después de mockear el clasificador como el resto del
+archivo.
+
+L6 — corrección de calibración antes de commitear (2026-11-25): el primer disparador coincidía con las
+dos frases del corpus como literales, que es enseñarle la prueba en vez de implementar S2. Se reemplazó
+por una clase de frases —terminar la relación, reemplazar a Lumat, y las dos medidas— con una prueba
+de recall de cinco redacciones plausibles que **no** son las del corpus y una de precisión con tres
+mensajes enojados que piden algo. Una declaración de ruptura gana sobre una petición en el mismo
+mensaje: es la decisión, y quedó comentada en el código.
