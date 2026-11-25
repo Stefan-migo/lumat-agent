@@ -29,3 +29,11 @@ def test_a_field_dropped_from_the_order_is_never_missing():
 def test_a_skipped_field_is_not_missing():
     """A skip is stored as `unknown`, so it counts as answered (CM-2)."""
     assert _missing_fields({"failure": "unknown"}, ["failure", "comuna"]) == ["comuna"]
+
+
+def test_the_pending_list_is_untouched_by_an_answer_only_turn():
+    captured = {"_pending": ["comuna", "equipment"], "comuna": "Ñuñoa"}
+
+    assert _missing_fields(captured, ["comuna", "equipment"]) == ["equipment"]
+    assert captured["comuna"] == "Ñuñoa"
+    assert captured["_pending"] == ["comuna", "equipment"]

@@ -39,6 +39,13 @@ def _coverage(monkeypatch, communes):
 # --- S4: coverage from configuration -------------------------------------
 
 
+def test_a_statement_of_residence_alone_is_not_a_coverage_question(monkeypatch):
+    _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
+
+    assert configured_answers.coverage_reply(SESSION, _state("vivo en ñuñoa")) is None
+    assert configured_answers.coverage_reply(SESSION, _state("atienden en Ñuñoa?")) is not None
+
+
 def test_a_coverage_question_lists_the_configured_communes(monkeypatch):
     _coverage(monkeypatch, DEFAULT_COVERAGE_COMMUNES)
 

@@ -28,7 +28,7 @@ import unicodedata
 from datetime import datetime, timezone
 
 from app.chat.nodes.capture import is_social_only
-from app.chat.nodes.respond import asks_about_schedule, quotes_required
+from app.chat.nodes.respond import asks_about_schedule, quotes_required, tariff_service
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Conversation, Customer
@@ -59,6 +59,7 @@ def _dispatch(
     mid_capture: bool = False,
     template_id: str | None = None,
     question: bool = False,
+    resume_capture: bool = False,
     quote_question: bool = False,
     change_request: bool = False,
     has_upcoming_visit: bool = True,
@@ -68,8 +69,9 @@ def _dispatch(
     Returns the state field updates (same shape the node returns):
     ``next_step`` is one of handoff | capture | research | respond; escalation
     flags ride along so the downstream node knows why it was chosen.
-    ``question`` marks a mid-capture message that asks something (S16): it is
-    answered and the pending field resumes, whatever intent the classifier gave.
+    ``question`` marks a message to answer before capture, including the opening
+    turn when it carries a coverage or price signal; ``resume_capture`` marks
+    that pendingless opening so capture follows the answer in the same turn.
     ``quote_question`` marks a turn that asks the price of work outside the
     published tariff (D8): it is answered, not turned into a diagnostic capture.
     ``change_request`` marks a turn that explicitly asks to move or cancel the
@@ -162,14 +164,14 @@ def _dispatch(
         # work is a question, not a new fault to diagnose.
         return {"next_step": "respond"}
     if question:
-        # S1: answer an interrogative capture-intent turn even before a capture
-        # batch exists. Only a real pending batch is paused; otherwise research
-        # must not resume by inventing a capture step afterward.
+        # S1: answer an interrogative capture-intent turn, or a pendingless
+        # opening with a coverage/price signal. Pause either active capture or
+        # that opening so research can resume the agenda in the same turn.
         decision = {
             "next_step": "research",
             "active_sub_agent": RESEARCH_TRIAGE,
         }
-        if mid_capture:
+        if mid_capture or resume_capture:
             decision["capture_paused"] = True
         return decision
     if intent in CAPTURE_INTENTS:
@@ -261,6 +263,21 @@ def _is_question(state: ConversationState) -> bool:
     return asks_about_schedule(text)
 
 
+def _has_pendingless_answer_signal(state: ConversationState) -> bool:
+    """A first-turn place or published-price signal merits an answer first."""
+    captured = state.captured or {}
+    if "_pending" in captured or not state.window:
+        return False
+    text = state.window[-1].get("text") or ""
+    normalized = _normalise_interrogative_text(text)
+    if re.search(r"\b(?:vivo|vives|viven|estoy|estas|estamos)\s+en\b", normalized):
+        return True
+    return bool(
+        re.search(r"\b(?:precio|precios|vale|cuesta|sale|tarifa|valor)\b", normalized)
+        and tariff_service(text)
+    )
+
+
 def _is_quote_question(state: ConversationState) -> bool:
     """A turn that asks the price of work with no published tariff (S2/D8).
 
@@ -306,6 +323,7 @@ def orchestrate(state: ConversationState) -> dict:
     this wrapper records the selected sub-agent on the state and returns the
     routing updates the graph consumes via ``_route_path``.
     """
+    pendingless_answer_signal = _has_pendingless_answer_signal(state)
     decision = _dispatch(
         state.intent or "",
         escalate=state.escalate,
@@ -313,7 +331,8 @@ def orchestrate(state: ConversationState) -> dict:
         escalate_reason=state.escalate_reason,
         mid_capture="_pending" in (state.captured or {}),
         template_id=getattr(state, "template_id", None),
-        question=_is_question(state),
+        question=_is_question(state) or pendingless_answer_signal,
+        resume_capture=pendingless_answer_signal,
         quote_question=_is_quote_question(state),
         change_request=asks_for_change(
             (state.window[-1].get("text") or "") if state.window else ""
