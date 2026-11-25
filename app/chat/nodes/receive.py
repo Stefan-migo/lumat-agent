@@ -107,6 +107,20 @@ def _normalized_inbound(state: ConversationState) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
+_ACKNOWLEDGEMENT_WORDS = frozenset(
+    {"eso", "exacto", "correcto", "ok", "oka", "dale", "listo", "bueno", "vale", "perfecto"}
+)
+
+
+def is_acknowledgement_only(state: ConversationState) -> bool:
+    """True when the whole short message is a standalone acknowledgement."""
+    text = _normalized_inbound(state)
+    if not text or len(text) > _MAX_GREETING_LENGTH:
+        return False
+    tokens = text.split()
+    return bool(tokens) and all(token in _ACKNOWLEDGEMENT_WORDS for token in tokens)
+
+
 def is_greeting_only(state: ConversationState) -> bool:
     """True when the message is only a greeting, whatever its variant.
 
