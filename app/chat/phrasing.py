@@ -26,6 +26,22 @@ _FORWARD_GUARDED = {
     "address": ("direccion", "domicilio", "calle"),
 }
 
+# S1 (captura-claves-crudas): the rewrite received `Campos pendientes: ['name']` and
+# echoed the code identifier back as the question — with production's
+# `redaccion: llm` customers read «¿name?» and «¿equipment?»
+# (`rebaseline-2026-11-24b`). These are the only field names that mean nothing in
+# Spanish. `comuna` and `email` are the customer's own words and stay out of the
+# list: rejecting them would throw away the rewrites that read best. The remaining
+# guarantee (contact data is never pulled forward) is `_FORWARD_GUARDED`'s job.
+_FIELD_IDENTIFIERS = frozenset({
+    "failure",
+    "equipment",
+    "equipment_type",
+    "availability",
+    "name",
+    "address",
+})
+
 
 def facts(captured: dict[str, Any] | None = None, pending: Any = ()) -> dict[str, Any]:
     """Return the ONE fact just captured, plus the fields currently asked.
@@ -109,6 +125,10 @@ def validate(draft: str, *, template: str, facts: dict[str, Any], pending: Any) 
         return False
     if re.search(r"(?m)^\s*[-+*]\s+", draft):
         return False
+    # Our field names are not Spanish, so one of them in the draft is the identifier
+    # on screen instead of a question.
+    if _terms(draft) & _FIELD_IDENTIFIERS:
+        return False
     if any(unicodedata.category(char) in {"So", "Sk"} for char in draft):
         return False
 
@@ -147,14 +167,22 @@ def validate(draft: str, *, template: str, facts: dict[str, Any], pending: Any) 
     return True
 
 
-def rewrite(template: str, facts: dict[str, Any], pending: Any) -> str | None:
-    """Ask once for a concise rewrite; every provider failure is a fallback."""
+def rewrite(template: str, facts: dict[str, Any]) -> str | None:
+    """Ask once for a concise rewrite; every provider failure is a fallback.
+
+    The pending fields are not sent. The template already asks them in Spanish, and
+    naming them in code (`Campos pendientes: ['name']`) is exactly what the model
+    echoed back as «¿name?» in production (`captura-claves-crudas`, S1): the input
+    was the leak, not only the missing guard. It gets the number of questions to keep
+    instead, which is the part of the contract `validate` re-checks.
+    """
+    questions = template.count("?")
     try:
         response = llm.openai_client().chat.completions.create(
             model=llm.CHAT_MODEL,
             messages=[
                 {"role": "system", "content": "Reescribe brevemente el texto en español. Conserva exactamente su intención y los campos preguntados. Usa solo los hechos autorizados. Devuelve únicamente el texto."},
-                {"role": "user", "content": f"Plantilla: {template}\nHechos permitidos: {facts!r}\nCampos pendientes: {pending!r}"},
+                {"role": "user", "content": f"Plantilla: {template}\nHechos permitidos: {facts!r}\nMantén exactamente {questions} pregunta(s), sin agregar ni quitar ninguna."},
             ],
             temperature=0.1,
             timeout=4.0,
@@ -173,7 +201,7 @@ def phrase(session, key: str, rendered: str, *, facts: dict[str, Any], pending: 
         return rendered
     verdict = "fallback"
     try:
-        draft = rewrite(rendered, facts, pending)
+        draft = rewrite(rendered, facts)
         if draft is not None and validate(draft, template=rendered, facts=facts, pending=pending):
             verdict = "accepted"
             logger.info("capture phrase key=%s mode=%s verdict=%s", key, mode, verdict)
