@@ -45,3 +45,20 @@ L3 — evidencia de la fila de producción (S3): `acuse-horario-config.md` L2 la
 `select key, left(value::text,220) from settings order by key` por SSH del 2026-11-24. No se vuelve a
 leer producción en este corte: la lectura está registrada y fechada, y el test fija la relación con
 `CHAT_CONDUCT_DEFAULTS` para que un cambio de default reabra la decisión en vez de pasar inadvertido.
+
+L4 — corrida y cierre (2026-11-25). `rebaseline-2026-11-25` sobre sello `78b756254`: **37/43, ningún
+gate fallido**, y por primera vez el informe declara `Redacción de captura: llm · … · 59d788b0fa50`
+(S2, ver `odd/tasks/chatbot-conv-eval.md` L26). La corrida **no es citable**: este doc quedó editado y
+sin commitear cuando arrancó, así que el árbol estaba sucio — error de proceso, no del instrumento.
+
+**Frontera de entrega declarada.** El corte tiene tres unidades de commit y la tercera es la más grande
+porque incluye los dos informes generados (`.md` y `-conversaciones.md`), que este repositorio versiona
+igual que los de 24b:
+
+- `045fda387` — la spec del corte.
+- `78b756254` — la semilla y sus tests (código, tests y `L25` de la doc del arnés).
+- `afb1e2b9f` — la evidencia de la corrida, `L26` y este registro.
+
+El baseline **citable** se corre después de mergear los cortes del día, sobre árbol limpio: esta corrida
+midió el código base, sin ninguno de los arreglos de hoy, así que describe un bot que ya está siendo
+reemplazado.
