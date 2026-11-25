@@ -8,6 +8,26 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.19] - 2026-11-25
+
+### Agregado
+
+- El informe de la evaluación conversacional declara la **redacción de captura que midió**: «Redacción de captura:
+  `llm` · N pregunta(s) por mensaje · derivaciones `cobertura` · fingerprint». Producción corre `chat.conduct
+  .redaccion = "llm"`, y ese interruptor decide si el modelo reescribe la pregunta de captura; hasta ahora dos
+  corridas que le ponían palabras distintas al bot compartían el mismo sello.
+
+### Corregido
+
+- El cliente deja de leer el **nombre interno del campo** en la pregunta de captura: con la redacción por modelo
+  activa el asistente llegaba a preguntar «¿name?» o «¿equipment?». La reescritura ya no recibe los
+  identificadores —recibe cuántas preguntas conservar— y una reescritura que los contenga se descarta, así que
+  la pregunta vuelve a leer la frase original en español.
+- El **acuse de horario** ya no afirma una fecha: dice «Sobre tu horario: el sábado» en vez de «el sábado
+  28/11», que el juez del corpus leía como una promesa de visita que nadie hizo. El día, la franja y la hora se
+  conservan; el aviso de disponibilidad sin cupo sí mantiene la fecha, porque ahí la fecha es el día que no
+  tiene lugar.
+
 ## [2026.11.18] - 2026-11-24
 
 ### Agregado
