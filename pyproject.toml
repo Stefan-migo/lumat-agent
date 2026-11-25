@@ -33,8 +33,12 @@ dependencies = [
     "faster-whisper>=1.2.1",
     # faster-whisper 1.2.1 calls av.open(metadata_errors=...), which av 19 removed.
     # Without this, the resolver picks av 19 for Python >= 3.12 and every audio
-    # fails at runtime; av 18.1.0 ships an abi3 wheel that works on 3.14.
-    "av>=18,<19",
+    # fails at runtime; av 18 ships an abi3 wheel that works on 3.14.
+    # The floor is 18.1.1 because 18.1.0 was **yanked**: it double-freed while
+    # decoding audio with custom layouts, which is the failure this pin exists to
+    # avoid. 18.1.0 stays resolvable for a lockfile that already has it, so the
+    # constraint is what keeps a fresh resolve away from it.
+    "av>=18.1.1,<19",
 ]
 
 [dependency-groups]
