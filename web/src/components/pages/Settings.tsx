@@ -86,7 +86,7 @@ const MESSAGE_TEMPLATES = [
   { id: "out_of_hours", label: "Fuera de horario", description: "Atención no disponible", icon: Clock3 },
 ] as const;
 /**
- * S4: the five derivations whose wording the customer reads. Every other
+ * S4: the six derivations whose wording the customer reads. Every other
  * reason (inyección, emergencia, límites de costo, KB) reuses the generic
  * "Derivación a un asesor" reply text, so the panel never offers copy nobody reviewed.
  */
@@ -120,6 +120,12 @@ const DERIVACION_CASES: Array<{ key: string; label: string; when: string; icon: 
     icon: CalendarX,
     label: "No hay horarios para agendar",
     when: "Se intentó agendar la visita y no quedó ningún horario disponible.",
+  },
+  {
+    key: "handoff_ruptura",
+    icon: Headset,
+    label: "Termina la relación de trabajo",
+    when: "Declara que quiere terminar la relación de trabajo con Lumat.",
   },
 ];
 const REPLY_TEXT_GROUPS: Array<{ title: string; keys: string[] }> = [
@@ -156,6 +162,7 @@ const REPLY_TEXT_ICONS: Record<string, LucideIcon> = {
   manage_cancel_unavailable: Ban,
   manage_cancelled: CalendarX,
   handoff: Headset,
+  handoff_ruptura: Headset,
   capture_evidence: Camera,
   capture_consent: ShieldCheck,
 };
@@ -180,6 +187,7 @@ const REPLY_TEXT_LABELS: Record<string, string> = {
   manage_cancel_unavailable: "No se puede cancelar",
   manage_cancelled: "Visita cancelada",
   handoff: "Derivación a un asesor",
+  handoff_ruptura: "Ruptura de la relación de trabajo",
   handoff_booking_change_ack: "Reconocer solicitud de cambio de fecha",
   capture_evidence: "Pedir evidencia",
   capture_consent: "Pedir consentimiento",
@@ -856,7 +864,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
             </div>
           </Card>
           <Card title="Derivaciones y respuestas" description="Selecciona una situación para editar el mensaje que recibe el cliente.">
-            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los cinco casos específicos se muestran primero.</p>
+            <p className="settings-agent__helper">Cualquier otro motivo de derivación responde con el texto genérico de <strong>Derivar a una persona</strong>. Los seis casos específicos se muestran primero.</p>
             <div className="settings-replies">
               <nav className="settings-replies__list" aria-label="Situaciones de respuesta">
                 <SearchInput aria-label="Buscar situación" placeholder="Buscar situación" delay={0} onSearch={setReplySearch} />

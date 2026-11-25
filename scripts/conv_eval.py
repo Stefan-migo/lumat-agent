@@ -1320,13 +1320,34 @@ probes deterministically, and every other key would move the historical numbers 
 reasons this cut did not measure. `coverage.communes`, `booking.*` and the message
 catalog keep reading their code defaults — a named gap, not parity.
 
-`chat.conduct` is the gap that is **declared** rather than seeded: production runs
-`redaccion: llm` (measured 2026-11-24), which is the switch that lets the model
-rephrase the capture questions. Seeding it would change the text of every scenario;
-saying nothing would let a run in `llm` and a run in `plantilla` share one seal. The
-report names it instead (`measured_conduct` → `conduct_seal_line`), and the seeding
-decision stays open.
+`chat.conduct` is deliberately **not** in here. It is seeded by `HARNESS_CONDUCT`
+through `seed_harness_conduct`, with its own constant and its own fingerprint,
+because the redaction changes the words the customer reads and earns its own seal
+line instead of riding on this one.
 """
+
+HARNESS_CONDUCT: dict[str, Any] = {
+    # Production's row, read on 2026-11-24 with
+    # `select key, left(value::text,220) from settings order by key`
+    # (`odd/tasks/acuse-horario-config.md` L2). It is the shipped defaults with one
+    # difference — `redaccion: llm` — and that single key was the whole gap.
+    "orden": ["failure", "equipment", "comuna", "availability", "name", "email", "address"],
+    "redaccion": "llm",
+    "max_preguntas_por_mensaje": 1,
+    "derivaciones": ["cobertura"],
+}
+"""The capture conduct the corpus measures, because the default belongs to another bot.
+
+Measured 2026-11-25 (pendiente 1 of the post-`v2026.11.19` handoff): a bare
+evaluation database holds no `chat.conduct` row, so `redaccion` read its `plantilla`
+default while production runs `llm`. That switch decides whether
+`phrasing.rewrite` rephrases the capture question at all — the customer reads
+different words in each state — so the corpus was scoring a bot nobody is served by
+and the seal could only apologise for it. Declaring a value is not the same as
+measuring one: `measured_conduct` still reads what the database holds after the
+seed, so an out-of-band edit remains visible in the report.
+"""
+
 
 HARNESS_TECHNICIANS: list[dict[str, Any]] = [
     {
@@ -1364,12 +1385,13 @@ def conduct_fingerprint(conduct: Mapping[str, Any]) -> str:
 def measured_conduct() -> dict[str, Any]:
     """The capture conduct the run measured, read from the database it runs on.
 
-    Unlike `HARNESS_SETTINGS`, this is **declared, not guaranteed**: the harness
-    does not seed `chat.conduct`, so the evaluation database decides and the report
-    has to say which state it got. Production carries `redaccion: llm` (measured on
-    2026-11-24), and that switch decides whether `phrasing.rewrite` rephrases the
-    capture questions at all: two runs with different values put different words in
-    the customer's mouth, and before this field existed their seals were identical.
+    Seeded, then read back: `seed_harness_conduct` guarantees `HARNESS_CONDUCT`
+    before the first turn, and this function is what the seal declares, so a value
+    changed out of band surfaces in the report instead of hiding behind the
+    constant. `redaccion` decides whether `phrasing.rewrite` rephrases the capture
+    questions at all: two runs with different values put different words in the
+    customer's mouth, and their seals have said which one ran since
+    `acuse-horario-config` (S2).
     """
     from app.db import session_scope
     from app.services.settings import get_conduct
@@ -1412,6 +1434,28 @@ def harness_technicians_fingerprint(
     payload = HARNESS_TECHNICIANS if technicians is None else technicians
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def seed_harness_conduct() -> dict[str, Any]:
+    """Make the evaluation database hold `HARNESS_CONDUCT`; report what it holds.
+
+    Idempotent for the same reason the window is: a repeated run adds no audit row
+    and the same tag measures the same conduct. A value that differs is overwritten,
+    because a shared database must not decide what a run measured. The returned
+    mapping is read back through `get_conduct`, not echoed from the constant, so the
+    seal declares the state that produced the words the customer read.
+    """
+    from app.db import session_scope
+    from app.services.settings import CHAT_CONDUCT_KEY, get_setting, set_setting
+
+    with session_scope() as session:
+        if get_setting(session, CHAT_CONDUCT_KEY) != HARNESS_CONDUCT:
+            set_setting(session, CHAT_CONDUCT_KEY, HARNESS_CONDUCT, actor="conv-eval")
+            # `SessionLocal` runs autoflush=False: a row this session just wrote is
+            # invisible to `get_conduct` until it is flushed, and the read-back would
+            # then report the default the seed exists to replace.
+            session.flush()
+    return measured_conduct()
 
 
 def seed_harness_technicians() -> dict[str, Any]:
@@ -2174,10 +2218,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     # reset on purpose, and the window has to be in place before the first turn.
     harness_config = seed_harness_settings()
     harness_agenda = seed_harness_technicians()
-    # Declared, not seeded: the conduct is whatever this database holds, and the
-    # seal names it so two runs that differ only in `redaccion` stop being
-    # indistinguishable.
-    harness_conduct = measured_conduct()
+    # Seeded, then read back: `redaccion` decides which words the customer reads, so
+    # a run that measured the `plantilla` default describes a bot production does not
+    # run. The seal still prints the value the database holds.
+    harness_conduct = seed_harness_conduct()
 
     try:
         kb_state = preflight()
