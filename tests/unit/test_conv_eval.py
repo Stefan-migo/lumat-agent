@@ -1794,6 +1794,22 @@ def test_the_harness_window_is_a_valid_no_restriction_schedule():
     assert _covers_every_hour(schedule[0])
 
 
+def test_the_harness_conduct_is_productions_row_verbatim():
+    """S3 (eval-conduct-paridad): production's `chat.conduct`, read on 2026-11-24.
+
+    A bare evaluation database falls back to `plantilla` while production runs
+    `llm`, so the corpus measured a bot no customer is served by: the switch
+    decides whether `phrasing.rewrite` rephrases the capture questions at all.
+    Production's row is the shipped defaults with the owner's redaction and
+    nothing else, and it is pinned here so that changing a default reopens the
+    parity decision instead of silently widening the gap (`acuse-horario-config`
+    L2, `select key, left(value::text,220) from settings order by key`).
+    """
+    from app.services.settings import CHAT_CONDUCT_DEFAULTS
+
+    assert dict(ev.HARNESS_CONDUCT) == {**CHAT_CONDUCT_DEFAULTS, "redaccion": "llm"}
+
+
 def test_the_stamp_names_the_configuration_the_run_measured():
     """A run with a window and a run without one answer the same question
     differently; the seal is where that difference survives."""

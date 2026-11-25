@@ -863,3 +863,44 @@ También se confirmó que cualquier corrida de `pytest` sobre la base de test co
 Referencias para seguir la cadena: `odd/tasks/agenda-config-fuente.md` S3; `tests/integration/test_db.py:292`; `app/chat/nodes/configured_answers.py` (`hours_reply`, `_covers_every_hour`); `app/services/settings.py:972` (`get_hours_schedule`).
 
 Lo que **no** cubre este corte: no completa la paridad de configuración —comunas, duraciones, anticipación ni catálogo—, no decide la ventana restrictiva que quería S3, y no resuelve la respuesta escueta de disponibilidad. Tampoco convierte los cambios judge-only sin gate en regresiones del bot ni arregla las limitaciones de comparación automática del reporte.
+
+### L25 — el arnés garantiza la redacción de captura, no la declara (2026-11-25)
+
+> «sembrar `{"redaccion": "llm"}` para paridad» (decisión del owner, 2026-11-25; corte
+> `eval-conduct-paridad`).
+
+`acuse-horario-config` (S2) hizo que el sello **dijera** `redaccion`; no hizo que la
+corrida la **controlara**. Así, una base de evaluación vacía —el estado por defecto, recién
+creada o después de un `--reset` en otra máquina— leía `plantilla` mientras producción corre
+`llm`, y el corpus puntuaba un bot que ningún cliente recibe. Declarar la brecha no la cierra:
+el número citable seguía describiendo otro bot, con una línea del informe disculpándose.
+
+La fila de producción ya estaba registrada (`acuse-horario-config` L2, lectura por SSH del
+2026-11-24) y es `CHAT_CONDUCT_DEFAULTS` con una sola diferencia: `redaccion: "llm"`. Eso es
+exactamente `HARNESS_CONDUCT`, y un test fija la relación para que un cambio de default
+reabra la decisión en vez de ensanchar la brecha en silencio.
+
+**Lo que cambia en `scripts/conv_eval.py`:**
+
+- `HARNESS_CONDUCT` — constante nueva, junto a `HARNESS_SETTINGS` y separada a propósito: la
+  redacción cambia las palabras que lee el cliente y merece su propia línea de sello y su
+  propio `conduct_fingerprint`, no viajar dentro del fingerprint de la ventana.
+- `seed_harness_conduct()` — idempotente y autoritativa, igual que `seed_harness_settings`:
+  un valor repetido no escribe una segunda fila de auditoría, uno distinto se sobrescribe
+  porque una base compartida no decide qué midió la corrida. Devuelve el valor **releído por
+  `get_conduct`**, no el literal, así que `measured_conduct` sigue siendo lo que el sello
+  declara y una edición fuera de banda sigue siendo visible.
+- `main()` siembra la conducta después del reset y antes del primer turno, en el mismo lugar
+  que la ventana y la agenda.
+
+Verificación: RED con los cuatro tests nuevos fallando por `AttributeError` (constante y
+función inexistentes) y GREEN con ellos más los ocho de `test_conv_eval_settings.py`, incluido
+el que prueba que `measured_conduct` sigue leyendo la base y no el default.
+
+**Sigue abierto de paridad** (L24, sin cambios): `coverage.communes`,
+`booking.service_durations`, `booking.lead_minutes` y el catálogo de mensajes. Con la
+redacción ya garantizada, la brecha de configuración que queda es de datos del owner, no de
+conducta.
+
+**La corrida siguiente:** el re-baseline se hace con esta semilla; cualquier informe anterior
+midió `plantilla` y no es comparable con uno nuevo por `harness_conduct_fingerprint`.
