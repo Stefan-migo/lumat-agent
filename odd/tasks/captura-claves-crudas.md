@@ -59,3 +59,13 @@ L7 — el gate no se retira cuando el prompt mejore: la entrada es higiene (`rew
 campo) y `validate` es la autoridad. Un proveedor que cambie de comportamiento, o un template futuro con
 otra forma, pasan por el gate igual. Es la misma jerarquía que este programa ya adoptó para la agenda y
 para la KB.
+
+L8 — verificación de cierre:
+
+- `bash scripts/test.sh full --deselect tests/functional/test_seed_dev.py::test_dev_seed_populates_dashboard_and_composer`
+  → **EXIT 0**, 11 m 46 s, 100 % de la barra, cero `Timeout`/`FAILED`/`ERROR` en el log. El deselect
+  es el mismo stall preexistente documentado en `odd/tasks/suite-truncate-stall.md`, no este diff.
+- `assess` (RDD on): riesgo `medium`, `reviewDue: false`, sin verificador independiente; la
+  autoverificación del writer es la que vale.
+- Medición del efecto en el cliente: queda para la corrida del corpus, porque lo que este corte cambia
+  es la reescritura de la pregunta y eso sólo lo ve el juez con un escenario real.
