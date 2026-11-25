@@ -22,11 +22,30 @@ PAULINA = (
 )
 
 
-def _state_for(text: str) -> ConversationState:
+def _state_for(
+    text: str,
+    *,
+    prior_bot_reply: bool = False,
+    captured: dict | None = None,
+) -> ConversationState:
     with SessionLocal() as session:
         phone = "+56912345001"
         customer = get_or_create_customer(session, phone)
         conversation = get_or_create_conversation(session, customer, phone)
+        if captured is not None:
+            conversation.captured_data = captured
+        if prior_bot_reply:
+            session.add(
+                Message(
+                    wamid=f"wamid.rescue.bot.{conversation.id}",
+                    conversation_id=conversation.id,
+                    direction=MessageDirection.OUTBOUND,
+                    msg_type=MessageType.TEXT,
+                    text="¿En qué puedo ayudarte?",
+                    status=MessageStatus.PROCESSED,
+                )
+            )
+            session.flush()
         session.add(
             Message(
                 wamid=f"wamid.rescue.{conversation.id}",
@@ -110,6 +129,68 @@ def test_valid_classifier_intent_is_never_rewritten(monkeypatch):
     assert update["intent"] == "caldera"
     assert update["intents"] == ["caldera"]
     assert _events(state.conversation_id, "unknown_intent") == []
+
+
+def test_a_bare_acknowledgement_after_the_bot_turn_is_not_an_unknown_intent(monkeypatch):
+    monkeypatch.setattr(classify_node, "_llm_classify", _unknown_result)
+    state = _state_for("Eso!", prior_bot_reply=True)
+
+    update = classify_node.classify_intent(state)
+
+    assert update["intent"] == "smalltalk"
+    assert _events(state.conversation_id, "unknown_intent") == []
+    classified = _events(state.conversation_id, "classified")
+    assert [event.cause for event in classified] == ["intent:smalltalk"]
+    with SessionLocal() as session:
+        assert ConversationState.from_db(session, state.conversation_id).unknown_count == 0
+
+
+def test_a_bare_dale_while_a_booking_offer_is_pending_stays_an_answer(monkeypatch):
+    monkeypatch.setattr(classify_node, "_llm_classify", _unknown_result)
+    state = _state_for(
+        "dale",
+        prior_bot_reply=True,
+        captured={"_booking_offer": {"slots": []}},
+    )
+
+    update = classify_node.classify_intent(state)
+
+    assert update["intent"] == "unknown"
+    assert len(_events(state.conversation_id, "unknown_intent")) == 1
+
+
+def test_a_bare_si_mid_capture_keeps_the_capture(monkeypatch):
+    monkeypatch.setattr(classify_node, "_llm_classify", _unknown_result)
+    state = _state_for(
+        "sí",
+        prior_bot_reply=True,
+        captured={"_pending": "address"},
+    )
+
+    update = classify_node.classify_intent(state)
+
+    assert update["intent"] == "unknown"
+    assert _events(state.conversation_id, "unknown_intent") == []
+
+
+def test_a_real_request_starting_with_eso_is_still_a_consulta(monkeypatch):
+    monkeypatch.setattr(
+        classify_node,
+        "_llm_classify",
+        lambda *_args, **_kwargs: {
+            **_unknown_result(),
+            "intent": "consulta",
+            "intents": ["consulta"],
+        },
+    )
+    state = _state_for("eso no funciona, necesito una visita")
+
+    update = classify_node.classify_intent(state)
+
+    assert update["intent"] == "consulta"
+    assert _events(state.conversation_id, "unknown_intent") == []
+    classified = _events(state.conversation_id, "classified")
+    assert [event.cause for event in classified] == ["intent:consulta"]
 
 
 def test_injection_still_escalates_without_classifier_call(monkeypatch):
