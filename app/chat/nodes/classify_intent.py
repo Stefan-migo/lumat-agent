@@ -26,6 +26,7 @@ import unicodedata
 from app.chat.human_request import is_human_request
 from app.chat.state import ConversationState, conversation_transcript, unknown_streak
 from app.chat.nodes.capture import EXTRACTABLE_FIELDS
+from app.chat.nodes.receive import is_acknowledgement_only
 from app.db import session_scope
 from app.models import ConversationEvent
 from app.services import prompts
@@ -336,6 +337,16 @@ def classify_intent(state: ConversationState) -> dict:
         rescued = _rescue_intents(text)
         if rescued:
             result = {**result, "intent": rescued[0], "intents": rescued}
+
+    captured = state.captured or {}
+    if (
+        result["intent"] == "unknown"
+        and not mid_capture
+        and "_booking_offer" not in captured
+        and "_manage_offer" not in captured
+        and is_acknowledgement_only(state)
+    ):
+        result = {**result, "intent": "smalltalk", "intents": ["smalltalk"]}
 
     if result["intent"] == "smalltalk":
         # Courtesy is an understood turn: it breaks the unknown streak, but it
