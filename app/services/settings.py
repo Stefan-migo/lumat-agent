@@ -200,6 +200,12 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "dejar esperando: un asesor de Lumat te contacta para coordinar la visita "
         "directamente."
     ),
+    # Shipped default from odd/tasks/ruptura-handoff.md; awaiting owner approval.
+    "handoff_ruptura": (
+        "Lamento mucho cómo terminó esto. No voy a discutirlo contigo ni ofrecerte "
+        "nada más: lo dejo en manos de una persona de Lumat, que va a revisar lo "
+        "que pasó y te va a contactar."
+    ),
     "handoff_booking_change_ack": (
         "Entiendo que necesitas cambiar la fecha y lamento el inconveniente. "
     ),
@@ -304,6 +310,7 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "handoff_unknown_intent_thrice": frozenset(),
     "handoff_campo_sin_respuesta": frozenset(),
     "handoff_booking_unavailable": frozenset(),
+    "handoff_ruptura": frozenset(),
     "handoff_booking_change_ack": frozenset(),
     "gas_instruction_guard": frozenset(),
     "appliance_valve_guard": frozenset(),

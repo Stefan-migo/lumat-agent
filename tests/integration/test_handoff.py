@@ -351,6 +351,97 @@ def test_gate_empty_window_no_trigger():
     ) == {"handoff_reason": None}
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "me dejaste la embarrada con el depto de Av. Siempre Viva, el arrendatario "
+        "contrató otro gasfiter y dice que te llamó muchísimas veces y no contestas, "
+        "eso yo lo sé, Así que lleguemos hasta aquí con el tema de trabajo. Tengo "
+        "otra persona que hará la pega de Av. Siempre Viva",
+        "Muy irresponsable tu forma de trabajar",
+    ],
+    ids=["explicit-end-of-work", "irresponsible-work"],
+)
+def test_a_declared_relationship_break_escalates_before_the_model(text, mock_openai_chat):
+    """An explicit end to the working relationship takes the deterministic path."""
+    conv_id = _start_conversation()
+    replies = _turn(conv_id, text, f"wamid.ruptura.{text[:8]}")
+    assert _conversation_state(conv_id) == "human"
+    assert _case(conv_id).bundle["escalate_reason"] == "ruptura"
+    assert not any("coordinar una visita" in reply.lower() for reply in replies)
+    assert not any("tomar los datos" in reply.lower() for reply in replies)
+    assert not any(
+        "clasificador de intenciones" in request["messages"][0]["content"].lower()
+        for request in mock_openai_chat
+    )
+
+
+def test_an_angry_message_that_asks_for_something_does_not_escalate_as_a_break(
+    mock_openai_chat,
+):
+    conv_id = _start_conversation()
+    replies = _turn(
+        conv_id,
+        "esto es una vergüenza, necesito que vengan mañana",
+        "wamid.ruptura.precision",
+    )
+    assert handoff_gate(_gate_state("esto es una vergüenza, necesito que vengan mañana")) == {
+        "handoff_reason": None
+    }
+    assert _conversation_state(conv_id) == "bot"
+    assert not any(reply == REPLY_TEXT_DEFAULTS.get("handoff_ruptura") for reply in replies)
+
+
+def test_relationship_break_phrase_class_recalls_generalized_declarations():
+    plausible_breaks = (
+        "no quiero seguir trabajando con ustedes",
+        "busquen a otra persona",
+        "tengo otra empresa que hace la pega",
+        "hasta aquí llegamos con ustedes",
+        "contraté otro técnico",
+    )
+    for text in plausible_breaks:
+        assert handoff_gate(_gate_state(text)) == {"handoff_reason": "ruptura"}, text
+
+
+def test_angry_service_requests_stay_out_of_the_relationship_break_path():
+    angry_requests = (
+        "esto es una vergüenza, necesito que vengan mañana",
+        "son unos irresponsables, necesito que revisen el calefont",
+        "estoy muy molesta, ¿pueden venir hoy?",
+    )
+    for text in angry_requests:
+        assert handoff_gate(_gate_state(text)) != {"handoff_reason": "ruptura"}, text
+
+
+def test_the_benign_corpus_does_not_trigger_the_break():
+    for text in _BENIGN_MESSAGES_THAT_MUST_NOT_TRIGGER:
+        assert handoff_gate(_gate_state(text)) != {"handoff_reason": "ruptura"}, text
+
+
+def test_the_break_derivation_has_its_own_text(monkeypatch, mock_openai_chat):
+    monkeypatch.setattr(
+        "app.chat.nodes.handoff.generate_summary", lambda state, customer: "resumen"
+    )
+    custom = "Texto propio para una ruptura de relación."
+    with SessionLocal() as session:
+        set_setting(
+            session,
+            REPLY_TEXTS_KEY,
+            {**REPLY_TEXT_DEFAULTS, "handoff_ruptura": custom},
+            actor="test",
+        )
+        session.commit()
+    conv_id = _start_conversation()
+    replies = _turn(
+        conv_id,
+        "Muy irresponsable tu forma de trabajar",
+        "wamid.ruptura.text",
+    )
+    assert replies == [custom]
+    assert replies[0] != REPLY_TEXT_DEFAULTS["handoff"]
+
+
 # ---------------------------------------------------------------------------
 # HH-3 trigger 5 — SS-1 always_escalate scope rule (post-classification)
 # ---------------------------------------------------------------------------

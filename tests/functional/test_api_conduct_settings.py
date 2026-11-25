@@ -212,6 +212,12 @@ def test_reply_texts_expose_the_effective_text_and_slots(admin):
     assert payload["slots"]["availability_preview"] == ["dias"]
     assert payload["slots"]["availability_preview_day"] == ["dia", "horas"]
     assert payload["slots"]["manage_kept"] == []
+    assert payload["texts"]["handoff_ruptura"] == (
+        "Lamento mucho cómo terminó esto. No voy a discutirlo contigo ni ofrecerte "
+        "nada más: lo dejo en manos de una persona de Lumat, que va a revisar lo "
+        "que pasó y te va a contactar."
+    )
+    assert payload["slots"]["handoff_ruptura"] == []
     assert payload["customized"] is False
 
 

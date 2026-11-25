@@ -77,6 +77,28 @@ _COMPLAINT_PHRASES = (
     "no me devolvieron",
     "nadie responde",
 )
+# Phrase class for ending the working relationship or replacing Lumat, plus
+# the two measured complaint phrasings. These are declarations, not general
+# negative sentiment; service requests without a break stay on the normal path.
+_RELATIONSHIP_BREAK_PHRASES = (
+    r"\blleguemos hasta aqu[ií](?:\s+con el tema de trabajo)?\b",
+    r"\bhasta aqu[ií] llegamos(?:\s+con ustedes)?\b",
+    r"\blo dejamos hasta aqu[ií](?:\s+con (?:ustedes|vosotros))?\b",
+    r"\bno quiero seguir trabajando con (?:ustedes|vosotros)\b",
+    r"\bno seguimos trabajando(?:\s+con (?:ustedes|vosotros))?\b",
+    r"\bterminemos esto\b",
+    r"\btengo otra persona\b",
+    r"\btengo otra empresa(?:\s+que\s+(?:hace|har[aá])\s+la pega)?\b",
+    r"\b(?:contrat[eé]|consegu[ií])\s+(?:otro|otra|un|una)\s+"
+    r"(?:gasf[ií]ter|t[eé]cnic[oa]|maestr[oa]|empresa)\b",
+    r"\bbusquen\s+a\s+otra\s+(?:persona|empresa)\b",
+    r"\botra persona har[aá] la pega\b",
+    r"\birresponsable tu forma de trabajar\b",
+    r"\bme dejaste la embarrada\b",
+)
+_RELATIONSHIP_BREAK_PATTERN = re.compile(
+    "|".join(_RELATIONSHIP_BREAK_PHRASES), re.IGNORECASE
+)
 _COMPLAINT_PATTERN = re.compile(
     "|".join(
         [rf"\b{re.escape(w)}\b" for w in _COMPLAINT_WORDS]
@@ -141,6 +163,9 @@ def evaluate_handoff(state: ConversationState) -> str | None:
     text = message.get("text") or ""
     if is_human_request(text):
         return "persona"
+    # A declared break wins even when the same message also asks for a service.
+    if _RELATIONSHIP_BREAK_PATTERN.search(text):
+        return "ruptura"
     if _COMPLAINT_WORD_PATTERN.search(text):
         return "complaint"
     if _COMPLAINT_UPSET_PATTERN.search(text):
