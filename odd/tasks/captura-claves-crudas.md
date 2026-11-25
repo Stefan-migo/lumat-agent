@@ -42,3 +42,20 @@ L5 — restricción de no regresión: `tests/unit/test_capture_phrasing.py` fija
 menciona hechos capturados se acepta y que el modo `plantilla` es byte-idéntico; `test_chat_capture.py` y
 `test_capture_validation.py` fijan la pregunta que llega al cliente. Ningún arreglo de este corte puede
 cambiar la pregunta cuando el rewrite falla: la caída sigue siendo el template.
+
+L6 — RED y GREEN observados (worktree `../lumat-agent-odd-captura-claves-crudas`, base `c8898bd6f`):
+
+- **T1 RED**: `validate()` aceptaba `¿name?`, `¿equipment?`, `¿Name?`, `¿Tu name completo?`,
+  `¿Qué equipment es?` y `¿availability?` — seis casos, seis fallos con el template de una sola
+  pregunta. Los tres casos de precisión (`¿En qué comuna estás?`, `¿Cuál es tu email?`,
+  `¿Cuál es tu correo electrónico?`) ya pasaban y siguen pasando, que es la prueba de que el gate no
+  está rechazando español. GREEN: **37 passed** en `tests/unit/test_capture_phrasing.py`.
+- **T2 RED**: el prompt al modelo contenía literalmente `Campos pendientes: ['name']`.
+  GREEN: **114 passed** en `test_capture_phrasing.py`, `test_capture_validation.py` y
+  `test_chat_capture.py`.
+- `bash scripts/test.sh quick` → **EXIT 0**.
+
+L7 — el gate no se retira cuando el prompt mejore: la entrada es higiene (`rewrite` ya no nombra el
+campo) y `validate` es la autoridad. Un proveedor que cambie de comportamiento, o un template futuro con
+otra forma, pasan por el gate igual. Es la misma jerarquía que este programa ya adoptó para la agenda y
+para la KB.
