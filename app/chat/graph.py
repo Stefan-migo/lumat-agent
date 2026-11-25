@@ -253,9 +253,9 @@ def _after_respond(state: ConversationState) -> str:
 def _after_research_triage(state: ConversationState) -> str:
     """Resume the capture agenda after a KB deviation was answered (CI-2).
 
-    Only when a mid-capture deviation was routed here (capture_paused) and the
-    sub-graph did not itself escalate/hand off. A KB miss sets `escalate` inside
-    the sub-graph and must terminate, never resume.
+    When an interrupted or pendingless first-turn capture was routed here
+    (`capture_paused`) and the sub-graph did not itself escalate/hand off. A KB
+    miss sets `escalate` inside the sub-graph and must terminate, never resume.
 
     S13 (chatbot-realismo-conversacional): not when the answer already asked
     something. Production #23 turns 287 and 288 arrived in the same second — a KB

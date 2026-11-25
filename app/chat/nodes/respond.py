@@ -173,9 +173,16 @@ def tariff_price_reply(session, state: ConversationState) -> str | None:
     or that service has no price in force today; the caller then keeps its
     existing answer path.
     """
-    if state.intent != "valores":
+    text = _current_text(state)
+    if state.intent != "valores" and not (
+        state.intent in {"calefont", "caldera", "calefaccion", "solicitar_visita"}
+        and re.search(
+            r"\b(?:precio|precios|vale|cuesta|sale|tarifa|valor)\b",
+            _normalise_question(text),
+        )
+    ):
         return None
-    service = tariff_service(_current_text(state))
+    service = tariff_service(text)
     if service is None:
         return None
     today = datetime.now(ZoneInfo(get_hours_timezone(session))).date()

@@ -53,3 +53,23 @@ L5 — riesgo declarado: `simpre-horario-sabado`, `simple-dia-especifico`, `real
 `real-multi-equipo-un-mensaje` abren con comuna o precio y podrían cambiar de ruta, y
 `super-burst-contradiccion` es media captura y no debe ganar una segunda respuesta. La verificación
 de T4 los mira a mano.
+
+L6 — cierre (2026-11-25). La apertura sin pendientes que trae señal de lugar o de precio publicado
+rutea a `research_triage` con `capture_paused`, y la captura se reanuda en el mismo turno por la arista
+que ya existía: `_merge_extracted` corre antes de preguntar, así que la comuna queda guardada y no se
+vuelve a pedir. El invariante de una sola pregunta por mensaje sigue en `_after_research_triage`.
+
+`tariff_price_reply` deja de estar atado sólo a `intent == "valores"`: también responde ante una
+pregunta explícita de precio en un intent de captura. Una declaración de residencia sola sigue **sin**
+ser pregunta de cobertura, con test propio.
+
+L7 — límite medido y honesto: la redacción exacta del escenario («hola, necesito mantener mi calefont,
+vivo en ñuñoa») trae señal de lugar pero **no** señal de precio, así que el test fija el ruteo y la
+cobertura, no una respuesta de precio para esa frase. Si el juez sigue castigando el turno por no
+nombrar el precio de la mantención, el paso siguiente es una señal de precio implícita para «mantener
+mi calefont», y eso se decide con el transcript nuevo, no por inferencia.
+
+L8 — verificación observada: `focused` de `test_routing_table.py`, `test_configured_answers.py` y
+`test_capture_order.py` en verde (salida del worker), `quick` en verde tras acotar el guard de precio
+—el primer intento rompió `test_a_turn_that_is_not_a_price_intent_is_left_to_the_existing_path`—,
+`shape` exit 0 sin superficie de forma, y el padre repitió las tres suites focused: exit 0.
