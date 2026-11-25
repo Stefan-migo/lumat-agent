@@ -21,10 +21,10 @@ ofrece como las 03:00.
 
 ## Tasks
 
-- T1 → S1, S2, S3 · RED: los tests del día estrictamente posterior y del reloj de doce horas · `-`
-- T2 → S1, S2 · GREEN: la marca de «próximo» y el meridiem en `app/chat/slot_window.py` · `-`
-- T3 → S3 · chequeo diferencial contra el commit base sobre el resto de las frases · `-`
-- T4 → S1-S3 · verificación y cierre del corte · `-`
+- T1 → S1, S2, S3 · RED: los tests del día estrictamente posterior y del reloj de doce horas · `c00bb76fd`
+- T2 → S1, S2 · GREEN: la marca de «próximo» y el meridiem en `app/chat/slot_window.py` · `c00bb76fd`
+- T3 → S3 · chequeo diferencial contra el commit base sobre el resto de las frases · `c00bb76fd`
+- T4 → S1-S3 · verificación y cierre del corte · `c00bb76fd`
 
 ## Log
 
@@ -49,3 +49,16 @@ que es la regla que el docstring del módulo defiende.
 L4 — `resolve_window` no es exclusivo del agendamiento: lo leen `booking`, `manage`, `capture` y
 `configured_answers`, así que el cambio entra en la regla de código compartido y T3 corre el
 diferencial contra el commit base antes de cerrar.
+
+L5 — cierre y verificación observada: RED con 9 casos fallando (los dos de «próximo/que viene» y
+seis del meridiem; «10 am» y «12 pm» pasaban por accidente, y `test_a_bare_weekday_still_includes_today`
+pasaba como control), GREEN con `bash scripts/test.sh focused tests/unit/test_slot_window.py`
+(exit 0), `quick` (exit 0) y `shape` (exit 0, «no shape surface touched»).
+
+L6 — diferencial (T3): 49 frases × 3 días = 147 comparaciones entre `app/chat/slot_window.py` del
+commit base y el del corte. **13 diferencias, todas la regla pedida**: «el próximo martes», «mejor el
+martes que viene» y «la próxima semana el martes» desde un martes pasan de hoy a +7; «el próximo
+miércoles en la mañana» desde un miércoles pasa de hoy a +7; y `a las 3 pm` / `a las 3 p.m.` /
+`3:30 pm` pasan de 03:00 a 15:00 en los tres días. Ninguna otra frase se movió, incluidos «el jueves»,
+«mañana», «cualquier día en la mañana», «después de las 6», «después de las 6 hrs» y las de
+reagendamiento. El diferencial es un script de una pasada en `mktemp -d`; no se commitea.
