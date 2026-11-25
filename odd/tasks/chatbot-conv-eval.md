@@ -904,3 +904,27 @@ conducta.
 
 **La corrida siguiente:** el re-baseline se hace con esta semilla; cualquier informe anterior
 midió `plantilla` y no es comparable con uno nuevo por `harness_conduct_fingerprint`.
+
+### L26 — primera corrida que declara su redacción, y por qué no es citable (2026-11-25)
+
+Corrida `rebaseline-2026-11-25`, sello `78b756254`, con `HARNESS_CONDUCT` (L25).
+
+- **37/43 escenarios, ningún gate fallido**, peor dimensión `conversational`.
+- Sello nuevo en el informe: `Redacción de captura: llm · 1 pregunta(s) por mensaje · derivaciones
+  cobertura · 59d788b0fa50`. La KB seguía en `99a2bbabbeb1` y la agenda en 3 técnicos / 36 bloques.
+- **No citable**: el árbol tenía `odd/tasks/eval-conduct-paridad.md` editado y sin commitear al
+  arrancar. El aviso es correcto y el error es de proceso, no del instrumento: un doc del corte tocado
+  después del último commit ensucia la corrida igual que un cambio de código.
+
+**Cómo se lee el número.** Esta corrida midió el **código base** (`78b756254` es sólo el arnés): no
+incluye ninguno de los cortes del día —`slot_window`, el acuse, la ruptura, calefont—, así que no es
+el baseline del bot que va a producción. Es un A/B de la semilla de conducta: la misma corrida de 24b
+(35/43, un G4 fallido en `real-varias-reparaciones`) contra 37/43 y cero gates, con la redacción de
+captura ya en `llm` en vez de `plantilla`. Que `real-varias-reparaciones` no repita su G4 sin el
+arreglo del clasificador es exactamente el motivo por el que el puntaje no decide: la voz de captura
+cambió, la conversación cambió, y el juez se mueve ±3 puntos (L24, trampa 13). El transcript es lo que
+se lee.
+
+**Decisión:** el baseline citable se corre **después** de mergear los cortes del día, sobre un árbol
+limpio y con la conducta ya garantizada. Repetir esta corrida ahora, sobre código que ya está siendo
+reemplazado, gastaría hora y media para producir un número que no describe a nadie.

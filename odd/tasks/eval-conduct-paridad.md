@@ -21,10 +21,10 @@ evaluación medía `plantilla` mientras producción corre `llm`.
 
 ## Tasks
 
-- T1 → S1-S4 · RED: los tests que fijan la conducta sembrada, su paridad y su idempotencia · `-`
-- T2 → S1, S3, S4 · GREEN: `HARNESS_CONDUCT` + `seed_harness_conduct()` y su llamada en `main()` · `-`
-- T3 → S2 · las docstrings que hoy dicen «declarada, no sembrada» y el informe · `-`
-- T4 → S1-S4 · verificación (`focused` + `quick`) y cierre del corte · `-`
+- T1 → S1-S4 · RED: los tests que fijan la conducta sembrada, su paridad y su idempotencia · `78b756254`
+- T2 → S1, S3, S4 · GREEN: `HARNESS_CONDUCT` + `seed_harness_conduct()` y su llamada en `main()` · `78b756254`
+- T3 → S2 · las docstrings que decían «declarada, no sembrada» y `L25` del doc del arnés · `78b756254`
+- T4 → S1-S4 · verificación (`focused` + `db` + `quick` + `shape`) y cierre del corte · `-`
 
 ## Log
 
