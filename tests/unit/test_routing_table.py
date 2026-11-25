@@ -492,14 +492,39 @@ def test_a_greeting_mid_capture_is_not_a_schedule_question():
     assert orchestrate(_capture_state("hola, buenas")) == {"next_step": "capture"}
 
 
-def test_a_first_turn_schedule_mention_keeps_starting_the_capture():
-    """Known limit: this rule answers mid-capture turns, not the opening one."""
+def test_a_first_turn_capture_intent_with_coverage_and_price_answers_first():
     state = _capture_state(
-        "necesito una visita, el calefont no calienta. vivo en ñuñoa y solo puedo un sabado",
+        "hola, necesito mantener mi calefont, vivo en ñuñoa",
         pending=(),
+        intent="calefont",
     )
 
-    assert orchestrate(state) == {"next_step": "capture"}
+    assert orchestrate(state) == {
+        "next_step": "research",
+        "active_sub_agent": "research_triage",
+        "capture_paused": True,
+    }
+
+
+def test_a_location_statement_mid_capture_still_answers_the_field():
+    assert orchestrate(_capture_state("vivo en ñuñoa")) == {"next_step": "capture"}
+
+
+def test_first_turn_answer_then_resume_asks_after_the_answer():
+    from app.chat.graph import _after_research_triage
+
+    state = ConversationState(
+        customer_id=1,
+        conversation_id=1,
+        phone="+56912345678",
+        captured={"comuna": "Ñuñoa"},
+        capture_paused=True,
+        replies=["Atendemos normalmente en Ñuñoa."],
+    )
+    assert _after_research_triage(state) == "capture"
+
+    state.replies = ["Atendemos normalmente en Ñuñoa. ¿Qué equipo es?"]
+    assert _after_research_triage(state) == "__end__"
 
 
 def test_a_price_question_about_an_unpriced_work_is_answered_not_diagnosed():

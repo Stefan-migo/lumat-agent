@@ -18,6 +18,7 @@ const replyTextValues = {
   handoff_unknown_intent_thrice: "Te dejo con una persona del equipo.",
   handoff_campo_sin_respuesta: "Un asesor te contacta para coordinar.",
   handoff_booking_unavailable: "No hay horarios: un asesor te contacta.",
+  handoff_ruptura: "Lamento mucho cómo terminó esto. No voy a discutirlo contigo ni ofrecerte nada más: lo dejo en manos de una persona de Lumat, que va a revisar lo que pasó y te va a contactar.",
   booking_offer: "Horarios: {{opciones}}",
   availability_preview: "Tengo disponibilidad el {{dias}}. Si quieres, te tomo los datos y te reservo.",
   availability_preview_day: "El {{dia}} tengo estas horas libres: {{horas}}. Si te sirve alguna, te tomo los datos y te reservo.",
@@ -78,7 +79,7 @@ const settings = (overrides: Partial<SettingsWithOptions> = {}): SettingsWithOpt
     },
   },
   capture_questions: { questions: { failure: "¿Qué pasa con el equipo?", comuna: "¿En qué comuna estás?", name: "¿Cuál es tu nombre?" }, customized: false },
-  reply_texts: { texts: { ...replyTextValues }, slots: { booking_offer: ["opciones"], availability_preview: ["dias"], availability_preview_day: ["dia", "horas"], handoff_cobertura: ["comuna"] }, customized: false },
+  reply_texts: { texts: { ...replyTextValues }, slots: { booking_offer: ["opciones"], availability_preview: ["dias"], availability_preview_day: ["dia", "horas"], handoff_cobertura: ["comuna"], handoff_ruptura: [] }, customized: false },
   snapshot: { date: "2026-10-08", conversation_spend: 1, conversation_limit: 4, conversation_percent: 25, daily_spend: 2, daily_limit: 20, daily_percent: 10, mode: "normal" },
   ...overrides,
 });
@@ -191,7 +192,7 @@ describe("Settings", () => {
     expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
     expect(fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
   });
-  it("uses contextual decorative icons for all five derivation cases", async () => {
+  it("uses contextual decorative icons for all six derivation cases", async () => {
     const user = userEvent.setup();
     renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
     await selectSection(user, "Conducta");
@@ -200,6 +201,7 @@ describe("Settings", () => {
       ["Comuna sin cobertura", "map-pin-off"], ["Pide hablar con una persona", "headset"],
       ["Tres mensajes sin entender", "message-circle-question-mark"],
       ["Un dato no se logró tomar", "clipboard-x"], ["No hay horarios para agendar", "calendar-x"],
+      ["Termina la relación de trabajo", "headset"],
     ]) {
       const button = within(nav).getByRole("button", { name: label });
       expect(button.querySelector("svg")).toHaveClass(`lucide-${icon}`);
@@ -250,7 +252,7 @@ describe("Settings", () => {
     const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
     const cases = within(nav).getByRole("button", { name: /Casos de derivación/ });
     expect(cases).toHaveAttribute("aria-expanded", "true");
-    expect(cases).toHaveTextContent("5");
+    expect(cases).toHaveTextContent("6");
     fireEvent.change(screen.getByLabelText("Mensaje al cliente"), { target: { value: "Borrador específico" } });
     await user.click(cases);
     expect(cases).toHaveAttribute("aria-expanded", "false");
@@ -263,6 +265,26 @@ describe("Settings", () => {
     expect(screen.getByLabelText("Mensaje al cliente")).not.toHaveValue("Borrador específico");
     await user.click(within(nav).getByRole("button", { name: "Comuna sin cobertura" }));
     expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Borrador específico");
+  });
+
+  it("edits and saves the relationship-break derivation text", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
+    await selectSection(user, "Conducta");
+    const nav = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
+    const rupture = within(nav).getByRole("button", { name: "Termina la relación de trabajo" });
+    expect(rupture.querySelector("svg")).toHaveClass("lucide-headset");
+    await user.click(rupture);
+    const editor = screen.getByLabelText("Mensaje al cliente");
+    expect(editor).toHaveValue(replyTextValues.handoff_ruptura);
+    await user.clear(editor);
+    await user.type(editor, "Lo revisará una persona de Lumat.");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/panel/api/settings/reply-texts", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ texts: { ...replyTextValues, handoff_ruptura: "Lo revisará una persona de Lumat." } }),
+    })));
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -975,7 +997,7 @@ describe("Settings", () => {
     const situationList = screen.getByRole("navigation", { name: "Situaciones de respuesta" });
 
     const labels = [
-      "Comuna sin cobertura", "Pide hablar con una persona", "Tres mensajes sin entender", "Un dato no se logró tomar", "No hay horarios para agendar",
+      "Comuna sin cobertura", "Pide hablar con una persona", "Tres mensajes sin entender", "Un dato no se logró tomar", "No hay horarios para agendar", "Termina la relación de trabajo",
       "Oferta de horarios", "Vista previa de disponibilidad", "Disponibilidad de un día pedido", "Sin más horarios para ese día", "No se entendió el horario pedido", "Visita agendada", "No tiene visitas",
       "Confirmar la cancelación", "Elegir una visita", "Ofrecer nuevos horarios", "La visita ya pasó", "No se entendió la visita",
       "No se entendió el horario", "La visita sigue igual", "Sin horarios para reagendar", "Visita reagendada", "Pedir confirmación para cancelar",
@@ -984,9 +1006,9 @@ describe("Settings", () => {
     ];
     expect(labels).toHaveLength(Object.keys(replyTextValues).length);
     const selectEntry = (label: string) => {
-      if (labels.indexOf(label) >= 5 && labels.indexOf(label) <= 10) {
+      if (labels.indexOf(label) >= 6 && labels.indexOf(label) <= 11) {
         if (within(situationList).getByRole("button", { name: /Agendar/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Agendar/ }));
-      } else if (labels.indexOf(label) >= 11 && labels.indexOf(label) <= 23) {
+      } else if (labels.indexOf(label) >= 12 && labels.indexOf(label) <= 24) {
         if (within(situationList).getByRole("button", { name: /Gestionar una visita/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Gestionar una visita/ }));
       } else if (["Derivación a un asesor", "Reconocer solicitud de cambio de fecha"].includes(label)) {
         if (within(situationList).getByRole("button", { name: /Derivar a una persona/ }).getAttribute("aria-expanded") !== "true") fireEvent.click(within(situationList).getByRole("button", { name: /Derivar a una persona/ }));
@@ -1055,7 +1077,7 @@ describe("Settings", () => {
   });
 
   describe("derivaciones (S6.5–S6.6)", () => {
-    it("shows the five specific cases first and their existing team rule only when offered", async () => {
+    it("shows the six specific cases first and their existing team rule only when offered", async () => {
       const user = userEvent.setup();
       renderSettings(<Settings data={settings()} state="ready" capabilities={capabilities} />);
       await selectSection(user, "Conducta");
@@ -1064,6 +1086,7 @@ describe("Settings", () => {
       expect(screen.getByText("Selecciona una situación para editar el mensaje que recibe el cliente.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Comuna sin cobertura" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Pide hablar con una persona" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Termina la relación de trabajo" })).toBeInTheDocument();
       expect(screen.getByLabelText("Mensaje al cliente")).toHaveValue("Sin cobertura en {{comuna}}.");
       expect(screen.getByLabelText("Derivar al equipo")).toBeChecked();
       expect(screen.queryByRole("button", { name: "Guardar respuestas" })).not.toBeInTheDocument();
