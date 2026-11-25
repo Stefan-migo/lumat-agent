@@ -16,6 +16,7 @@ Scenarios mapped 1:1 from openspec/specs/conversation-manager/spec.md:
 Runs the full graph per turn (multi-turn flows). OpenAI mocked via respx.
 """
 
+import re
 from dataclasses import replace
 
 import psycopg
@@ -1448,6 +1449,46 @@ def test_s5_the_hold_names_the_window_the_customer_just_proposed():
     replies = " ".join(result["replies"])
     assert "14:00" in replies
     assert "queda anotada" in replies.lower()
+
+
+def test_s5_the_hold_names_the_day_without_pinning_a_date():
+    """S1 (acuse-horario-config): `simple-horario-sabado` read the date as a promise.
+
+    «Sobre tu horario: el sábado 28/11. Queda anotada y la confirmamos al coordinar la
+    visita.» The scenario forbids promising the Saturday without the real agenda, and
+    the judge read the calendar date as exactly that promise. The day the customer
+    named is the preference; the date is a commitment nobody made.
+    """
+    from app.chat.nodes.capture import _reask_pending
+    from app.chat.state import ConversationState
+    from app.models import Conversation
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        customer_id = session.get(Conversation, conv_id).customer_id
+
+    captured = {
+        "equipment": "calefont",
+        "availability": "un sábado",
+        "_pending": ["failure"],
+        "_asked": {"failure": 1},
+        "_availability_acked": (
+            "Anoté un sábado como preferencia; la visita la confirmamos al coordinar, "
+            "todavía no queda agendada."
+        ),
+    }
+    state = ConversationState(
+        customer_id=customer_id, conversation_id=conv_id, phone="+56912345678"
+    )
+    state.captured = captured
+    state.window = [{"text": "solo puedo un sabado"}]
+
+    result = _reask_pending(captured, ["failure"], state)
+
+    replies = " ".join(result["replies"])
+    assert "Sobre tu horario" in replies
+    assert "sábado" in replies
+    assert not re.search(r"\d{2}/\d{2}", replies), replies
 
 
 def test_s5_the_hold_does_not_turn_an_exclusion_into_a_preference():

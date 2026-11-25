@@ -105,3 +105,29 @@ def test_seeding_a_second_time_writes_no_second_audit_row():
     module.seed_harness_settings()
 
     assert schedule_writes() == before
+
+
+def test_the_capture_conduct_is_read_from_the_database_the_run_uses():
+    """S2 (acuse-horario-config): the conduct measured is the run's own database.
+
+    Production carries `redaccion: llm` (measured 2026-11-24); a bare evaluation
+    database falls back to `plantilla`. Both are real states, the customer reads
+    different words in each, and only the database says which one ran.
+    """
+    conv_eval = _conv_eval()
+    with session_scope() as session:
+        set_setting(
+            session,
+            "chat.conduct",
+            {
+                "redaccion": "llm",
+                "orden": ["failure", "equipment"],
+                "max_preguntas_por_mensaje": 2,
+                "derivaciones": [],
+            },
+        )
+
+    conduct = conv_eval.measured_conduct()
+
+    assert conduct["redaccion"] == "llm"
+    assert conduct["max_preguntas_por_mensaje"] == 2

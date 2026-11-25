@@ -272,3 +272,26 @@ def test_when_label_renders_a_stored_appointment_the_same_way():
     moment = datetime(2026, 11, 6, 13, 0, 45, tzinfo=timezone.utc)
 
     assert when_label(moment) == "Viernes 06/11 a las 13:00"
+
+
+def test_the_preference_label_names_the_day_without_a_calendar_date():
+    """S1 (acuse-horario-config): `simple-horario-sabado` read the date as a promise.
+
+    The capture held «Sobre tu horario: el sábado 28/11. Queda anotada y la
+    confirmamos al coordinar la visita.» and the judge read the calendar date as the
+    promise the scenario forbids. The notice keeps the date because there the date is
+    the day with no slots; the preference names the day, and the hour when the
+    customer gave one.
+    """
+    saturday = date(2026, 11, 28)
+
+    assert window_label(SlotWindow(day=saturday), with_date=False) == "el sábado"
+    assert (
+        window_label(SlotWindow(day=saturday, franja=(time(13, 0), time(18, 0))), with_date=False)
+        == "la tarde del sábado"
+    )
+    assert (
+        window_label(SlotWindow(day=saturday, desde=time(17, 0)), with_date=False)
+        == "el sábado a partir de las 17:00"
+    )
+    assert window_label(SlotWindow(day=saturday)) == "el sábado 28/11"
