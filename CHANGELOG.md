@@ -8,6 +8,23 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.21] - 2026-11-26
+
+### Corregido
+
+- El **día que el bot acaba de ofrecer** deja de perderse: cuando el cliente responde «Perfecto! El sábado 28 anda
+  súper bien», el día se guarda como preferencia, se nombra de vuelta como preferencia —nunca como cita agendada— y
+  la oferta que se construye después de la captura queda restringida a ese día. Antes esa respuesta no traía término
+  de disponibilidad, caía a la respuesta de horarios y recibía la frase genérica `Las visitas se agendan según la
+  disponibilidad de los técnicos.`, así que el cliente tenía que preguntar de nuevo para ver las horas del sábado.
+- Una **pregunta que nombra un día** se responde desde la agenda real (`¿Pueden el sábado?`, «tener hora el sábado»),
+  y un día sin cupo responde un texto configurado propio en vez de la política genérica. Una pregunta sobre la
+  **semana configurada** (`¿hasta qué hora abren el sábado?`, `¿trabajan en domingo?`) conserva la semana, y un día
+  que la semana cierra responde con la semana mientras un día lleno dice que no quedan horarios: son hechos distintos.
+- Una **cita previa del mismo cliente** deja de aparecer en la oferta de reserva: la elegibilidad del cliente se
+  aplica antes del límite de resultados y antes de asignar técnico, de modo que un conflicto del cliente no ocupa un
+  lugar del menú. La reserva final ya lo rechazaba; la oferta no lo consultaba.
+
 ## [2026.11.20] - 2026-11-26
 
 ### Agregado
