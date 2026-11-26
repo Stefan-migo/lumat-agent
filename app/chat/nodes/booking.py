@@ -133,6 +133,8 @@ def _search_slots(
     duration: int,
     window: SlotWindow | None,
     limit: int = UNIVERSE_LIMIT,
+    *,
+    customer_id: int | None = None,
 ) -> list[tuple[int, date, time]]:
     """Slots for a window, widening the day count when the day sits past it.
 
@@ -148,6 +150,7 @@ def _search_slots(
         # S1: a visit offered for "right now" cannot be staffed.
         lead_minutes=get_booking_lead_minutes(session),
         window=window,
+        customer_id=customer_id,
     )
     if window is not None and window.desde is not None:
         assignments = [slot for slot in assignments if slot[2] >= window.desde]
@@ -161,6 +164,7 @@ def slots_for_window(
     duration_minutes: int,
     window: SlotWindow | None,
     limit: int = UNIVERSE_LIMIT,
+    customer_id: int | None = None,
 ) -> tuple[list[tuple[int, date, time]], bool]:
     """Slots for a requested window, moving forward when that window holds nothing.
 
@@ -168,25 +172,33 @@ def slots_for_window(
     customer already ruled out is worse than saying the day is full. The same
     widening covers a franja that leaves nothing, so a preference never dead-ends.
 
+    Customer eligibility, when supplied, is preserved through every fallback.
+    Existing callers without a customer retain technician-only eligibility.
+
     Returns the assignments and whether the fallback produced them, because the
     reply differs: a widened offer has to say what was asked and is unavailable.
     """
 
     today = local_today(session, now)
-    assignments = _search_slots(session, now, today, duration_minutes, window, limit)
+    assignments = _search_slots(
+        session, now, today, duration_minutes, window, limit, customer_id=customer_id,
+    )
     if assignments or window is None:
         return assignments, False
     if window.day is not None:
         for offset in range(1, FALLBACK_DAYS + 1):
             day = window.day + timedelta(days=offset)
             assignments = _search_slots(
-                session, now, today, duration_minutes, SlotWindow(day=day), limit
+                session, now, today, duration_minutes, SlotWindow(day=day), limit,
+                customer_id=customer_id,
             )
             if assignments:
                 return assignments, True
         return [], False
     widened_window = SlotWindow(desde=window.desde) if window.desde is not None else None
-    widened = _search_slots(session, now, today, duration_minutes, widened_window, limit)
+    widened = _search_slots(
+        session, now, today, duration_minutes, widened_window, limit, customer_id=customer_id,
+    )
     return widened, bool(widened)
 
 
@@ -213,7 +225,7 @@ def _new_offer(
     duration = get_service_duration(session, case.service, default=DEFAULT_DURATION_MINUTES)
     technician_schedule.ensure_horizon(session, now)
     assignments, widened = slots_for_window(
-        session, now=now, duration_minutes=duration, window=window
+        session, now=now, duration_minutes=duration, window=window, customer_id=state.customer_id,
     )
     if not assignments:
         return {"next_step": "handoff", "escalate": True, "escalate_reason": "booking_unavailable"}

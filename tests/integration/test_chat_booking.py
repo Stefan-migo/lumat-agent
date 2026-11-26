@@ -848,3 +848,85 @@ def test_an_explicit_request_for_another_visit_still_offers(mock_openai_chat, mo
     )
 
     assert any("Tengo estos horarios disponibles" in reply for reply in replies)
+
+
+@pytest.mark.parametrize("conflict_after_offer", [False, True])
+def test_customer_conflict_in_another_closed_thread_never_repeats_invalid_offer(
+    mock_openai_chat, monkeypatch, conflict_after_offer,
+):
+    """A customer conflict is excluded both before offering and after a stale offer."""
+    import importlib
+    from zoneinfo import ZoneInfo
+    from app.models import ConversationState as ThreadState
+
+    booking_node = importlib.import_module("app.chat.nodes.booking")
+
+    class FixedClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            now = cls(2026, 11, 26, 13, 34, tzinfo=timezone.utc)
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    monkeypatch.setattr(booking_node, "datetime", FixedClock)
+    conv_id, customer_id, case_id, tech_id, _ = _seed_conversation()
+    zone = ZoneInfo("America/Santiago")
+    with SessionLocal() as session:
+        conv = session.get(Conversation, conv_id)
+        conv.captured_data = {**conv.captured_data, "availability": "sábado 28 a las 10:00"}
+        previous = Conversation(
+            customer_id=customer_id, wa_phone=conv.wa_phone, state=ThreadState.CLOSED,
+        )
+        other_tech = User(username="previous-visit-tech", password_hash="test", role=UserRole.TECNICO)
+        session.add_all([previous, other_tech])
+        session.flush()
+        previous_case = Case(customer_id=customer_id, conversation_id=previous.id, service="Visita técnica")
+        session.add(previous_case)
+        session.flush()
+        for technician_id in (tech_id, other_tech.id):
+            scheduling.add_availability(
+                session, technician_id=technician_id,
+                starts_at=datetime(2026, 11, 28, 9, tzinfo=zone),
+                ends_at=datetime(2026, 11, 28, 18, tzinfo=zone),
+            )
+        set_setting(session, "hours.timezone", "America/Santiago")
+        set_setting(session, "hours.schedule", [{"days": list(range(1, 8)), "open": "00:00", "close": "23:59"}])
+        set_setting(session, "booking.service_durations", {"Visita técnica": 60})
+        previous_case_id, other_tech_id = previous_case.id, other_tech.id
+        session.commit()
+
+    def book_previous_visit():
+        with SessionLocal() as session:
+            appointment = scheduling.book(
+                session, service="Visita técnica", customer_id=customer_id,
+                case_id=previous_case_id, technician_id=other_tech_id,
+                local_date=date(2026, 11, 28), local_time=time(9, 30),
+                timezone_name="America/Santiago", duration_minutes=60, actor="test",
+            )
+            session.commit()
+            return appointment.id
+
+    previous_id = None if conflict_after_offer else book_previous_visit()
+    first = _invoke(conv_id, _add_message(conv_id, "si", "wamid.customer-conflict.offer"))
+    if conflict_after_offer:
+        assert any("10:00" in reply for reply in first)
+        previous_id = book_previous_visit()
+        replacement = _invoke(conv_id, _add_message(conv_id, "1", "wamid.customer-conflict.stale"))
+        assert replacement != first
+    with SessionLocal() as session:
+        offer = session.get(Conversation, conv_id).captured_data["_booking_offer"]
+        assert offer["slots"][0]["time"] == "10:30:00"
+        assert all(slot["time"] != "10:00:00" for slot in offer["slots"])
+        assert session.query(Appointment).filter_by(case_id=case_id).count() == 0
+
+    confirmed = _invoke(conv_id, _add_message(conv_id, "1", "wamid.customer-conflict.confirm"))
+    assert any("confirm" in reply.lower() for reply in confirmed)
+    with SessionLocal() as session:
+        current = session.scalar(select(Appointment).where(Appointment.case_id == case_id))
+        assert current.local_start == datetime(2026, 11, 28, 10, 30)
+        assert current.status.value == "booked"
+        previous = session.get(Appointment, previous_id)
+        assert previous.local_start == datetime(2026, 11, 28, 9, 30)
+        assert previous.duration_minutes == 60 and previous.status.value == "booked"
+        assert previous.case_id == previous_case_id and previous.technician_id == other_tech_id
+        assert len(previous.history) == 1
+        assert "_booking_offer" not in session.get(Conversation, conv_id).captured_data

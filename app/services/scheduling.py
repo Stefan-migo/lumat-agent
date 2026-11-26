@@ -156,6 +156,7 @@ def open_slots(
     session: Session,
     *,
     technician_id: int,
+    customer_id: int | None = None,
     window_start: datetime,
     window_end: datetime,
     duration_minutes: int,
@@ -167,6 +168,8 @@ def open_slots(
     now: datetime | None = None,
 ) -> list[tuple[date, time]]:
     """Return up to ``limit`` bookable local start times in a UTC window.
+
+    When supplied, ``customer_id`` also excludes the customer's booked visits.
 
     Candidates sit on a ``grid_minutes`` grid and start no earlier than
     ``lead_minutes`` from ``now`` (the real clock when the caller does not pin
@@ -198,7 +201,7 @@ def open_slots(
             validated_start, validated_end = local_interval(local_date, local_time, timezone_name, duration_minutes)
             if validated_start != starts:
                 continue
-            _validate_interval(session, customer_id=None, technician_id=technician_id, starts=validated_start, ends=validated_end)
+            _validate_interval(session, customer_id=customer_id, technician_id=technician_id, starts=validated_start, ends=validated_end)
         except (NonexistentLocalTime, AmbiguousLocalTime, Unavailable, AppointmentConflict):
             continue
         slots.append((local_date, local_time))
@@ -327,8 +330,11 @@ def open_slots_for_assignment(
     limit: int = 3,
     lead_minutes: int = 0,
     window: SlotWindow | None = None,
+    customer_id: int | None = None,
 ) -> list[tuple[int, date, time]]:
     """Return deterministic slots assigned by the day's load, not by id.
+
+    Optional customer eligibility is applied before limiting or assigning slots.
 
     Every technician that can cover a slot is a candidate; among them the one
     with the fewest visits already booked that local day wins, and a tie
@@ -376,6 +382,7 @@ def open_slots_for_assignment(
             slots = open_slots(
                 session,
                 technician_id=technician.id,
+                customer_id=customer_id,
                 window_start=max(now, block.starts_at),
                 window_end=min(window_end, block.ends_at),
                 duration_minutes=duration_minutes,
