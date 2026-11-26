@@ -8,9 +8,9 @@ Branch: `odd/booking-customer-conflict` · Delivery: ask-on-risk, single slice f
 - **S3** — User worktree consent: «si procede». Preserve existing no-customer searches and rescheduling behavior. No production actions, deployment, Saturday intent redesign, preview changes, or automatic cancellation.
 
 ## Tasks
-- **T1** — S1–S2 · inline · verified: regression RED (3 failures), customer-aware search and booking GREEN (3 cases) · commit: this work-unit commit.
-- **T2** — S3 · inline · verified: quick, focused compatibility, full suite and independent verifier passed (risk item 3) · commit: this work-unit commit.
-- **T3** — S1–S3 · inline · pending: native assessment/review as applicable, recovery evidence and coherent work-unit commit · commit pending.
+- **T1** — S1–S2 · inline · verified: regression RED (3 failures), customer-aware search and booking GREEN (3 cases) · commit: `3148d4166838355ec419f65ebdb54fb306401d1c`.
+- **T2** — S3 · inline · verified: quick, focused compatibility, full suite and independent verifier passed (risk item 3) · commit: `3148d4166838355ec419f65ebdb54fb306401d1c`.
+- **T3** — S1–S3 · inline · verified: native review approved with no findings across four lenses; exact acknowledgement completed · implementation `3148d416`; closure in this documentation commit.
 
 ## Log
 - **L1** — Request sequence: «ok entonces lo primero seria reproducir el caso exacto? lo pudes hacer?» → «ok vamos con eso» → worktree authorization «si procede».
@@ -25,4 +25,7 @@ Branch: `odd/booking-customer-conflict` · Delivery: ask-on-risk, single slice f
 - **L8** — Test runner agent ended before returning final result; parent recovered completed logs and explicit exit statuses. No suite was restarted. Independent verifier uses a fresh scratch copy and its own database; no concurrent suite targets the worktree DB.
 
 - **L9** — Independent verifier PASS S1–S3 in fresh scratch PostgreSQL: six candidate cases passed; three baseline compatibility cases passed. Default direct/assigned/window/fallback outputs identical. Final reservation guards and reschedule self-overlap preserved. No blockers. Parent focal recheck passed all three regression cases.
-- **L10** — Rollback: revert this work-unit commit; no migrations, configuration, stored-format changes or production operations. Native review remains pending user consent/assessment. Actual authored delta ~190 lines including this specification, within one slice.
+- **L10** — Rollback: revert this work-unit commit; no migrations, configuration, stored-format changes or production operations. Native review completed (see L11). Actual authored delta ~190 lines including this specification, within one slice.
+
+- **L11** — User selected review (`1`). Native review of `3148d416` against `69468cff8`: risk, resilience, readability and reliability all returned no findings; no correction required. Lineage `review-a5cd4ac84c196b70`, target `sha256:3476899a3388e29d8e077e69cf92697bd4fa795613bb30a4bd51a70d684ea6ac`. Exact acknowledgement returned `acknowledged`, authority `burned`; lifecycle ended.
+- **L12** — Feature complete locally. No push, PR, merge or deployment. Isolated test containers and scratch removed. Remaining Saturday-intent and preview continuity findings are separate, unchanged scope. Review is informational, not permission to publish.
