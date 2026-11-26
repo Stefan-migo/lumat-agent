@@ -116,6 +116,10 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "El {{dia}} tengo estas horas libres: {{horas}}. "
         "Si te sirve alguna, te tomo los datos y te reservo."
     ),
+    "availability_preview_day_none": (
+        "Para {{dia}} no me quedan horarios. Si te sirve otro día, dime cuál y te tomo "
+        "los datos para reservarlo."
+    ),
     "booking_offer": (
         "Tengo estos horarios disponibles para la visita técnica:\n"
         "{{opciones}}\n"
@@ -287,6 +291,7 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
 REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "availability_preview": frozenset({"dias"}),
     "availability_preview_day": frozenset({"dia", "horas"}),
+    "availability_preview_day_none": frozenset({"dia"}),
     "booking_offer": frozenset({"opciones"}),
     "booking_unclear": frozenset(),
     "booking_no_more_today": frozenset({"opciones"}),

@@ -36,7 +36,7 @@ from app.services.settings import (
     get_hours_timezone,
     get_service_durations,
 )
-from app.chat.slot_window import resolve_window
+from app.chat.slot_window import resolve_window, window_label
 
 # Terms that ask WHERE the visits happen, as opposed to a question that merely
 # names a commune. Deliberately narrow: `cubre`/`cubren` are verbs other questions
@@ -70,6 +70,36 @@ _SCHEDULE_TAIL = re.compile(
 # service returns the earliest slots, which for a free agenda are consecutive
 # hours of the same afternoon.
 _PREVIEW_UNIVERSE = 30
+
+# The day and franja words `resolve_window` can turn into a window. Matched
+# against the folded words: `_fold` drops diacritics, so "mañana" arrives as
+# "manana". A turn that carries none of these cannot name a window, and reading
+# the business clock for it would make the answer depend on settings nobody asked
+# about.
+_WINDOW_TERMS = frozenset(
+    {
+        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "sabados",
+        "domingo", "domingos", "hoy", "manana", "tarde", "noche", "mediodia",
+        "cualquier", "finde", "semana", "proximo", "proxima",
+        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+        "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    }
+)
+
+# Business-hours vocabulary: the verbs and nouns of *when the business works*,
+# not of a slot. A turn carrying one of these asks when the business opens,
+# closes or works ("¿hasta qué hora abren el sábado?", "¿trabajan en domingo?")
+# and the configured week is its answer. Deliberately excludes `hora`/`horas`:
+# in Chilean usage "¿tienen hora el sábado?" asks for an appointment slot, so the
+# agenda owns that turn. Kept apart from `_HOURS_TERMS`, which also holds the
+# weekday words themselves.
+_HOURS_VOCABULARY = frozenset(
+    {
+        "horario", "horarios", "abren", "abrimos", "cierran", "cerramos",
+        "abierto", "abiertos", "cerrado", "cerrados",
+        "trabajan", "trabaja", "trabajamos",
+    }
+)
 
 _AVAILABILITY_TERMS = frozenset(
     {
@@ -365,6 +395,28 @@ def hours_reply(session, state: ConversationState) -> str | None:
     return f"Las visitas se agendan {' y '.join(labels)}."
 
 
+def _schedule_closes_day(session, window) -> bool:
+    """True when the configured week does not cover the day the customer named.
+
+    A day the business works and is full and a day the week closes are different
+    facts, and the same sentence cannot carry both: "no me quedan horarios"
+    implies there were hours to run out of. A window that restricts nothing (the
+    24/7 placeholder the offer filter needs) is not a closing statement, so it
+    never takes this branch.
+    """
+    if window is None or window.day is None:
+        return False
+    schedule = get_hours_schedule(session)
+    if not schedule or any(_covers_every_hour(entry) for entry in schedule):
+        return False
+    weekday = window.day.isoweekday()
+    return not any(
+        weekday in (entry.get("days") or [])
+        for entry in schedule
+        if isinstance(entry, dict)
+    )
+
+
 def availability_reply(session, state: ConversationState) -> str | None:
     """Preview real technician slots without creating a booking offer.
 
@@ -376,12 +428,43 @@ def availability_reply(session, state: ConversationState) -> str | None:
     day is the booking menu and scored 0 when the customer asked which days exist;
     and a question that names a day is answered with that day, because naming the
     requested day is what the customer asked for.
+
+    `odd/tasks/saturday-day-continuity.md` added two boundaries to that. A day the
+    customer names in question form reaches the agenda even without an availability
+    term ("¿Pueden el sábado?"), while a question about the configured week keeps
+    the week ("¿hasta qué hora abren el sábado?", "¿trabajan en domingo?") — the
+    `_HOURS_VOCABULARY` sentence, still owned by `hours_reply`. And a day with no
+    eligible slots answers from configuration instead of falling through to the
+    policy sentence that made the reported defect invisible.
     """
     text = _current_text(state)
-    if not text or _asks_price(text) or not (_words(text) & _AVAILABILITY_TERMS):
+    if not text or _asks_price(text):
         return None
+    words = _words(text)
+    has_term = bool(words & _AVAILABILITY_TERMS)
+    # Only a day/franja word can become a window, so the business clock and the
+    # settings table are read for exactly those turns. A question about the
+    # configured hours ("¿cuál es el horario?") is answered by `hours_reply`
+    # without this module ever asking for the timezone or the reply texts.
+    names_a_window = bool(words & _WINDOW_TERMS)
+    if not has_term and (words & _HOURS_VOCABULARY):
+        # "¿Hasta qué hora abren el sábado?" names a day and asks about the week:
+        # answering it with slot times turns a closing-time question into a menu.
+        return None
+    asks = (
+        "?" in text
+        or "¿" in text
+        or bool(words & {"pueden", "puede", "atienden", "tienen", "hay", "dan", "dar"})
+    )
+    if not has_term and not (names_a_window and asks):
+        return None
+
     now = datetime.now(timezone.utc)
-    window = resolve_window(text, today=_local_today(session, now))
+    window = (
+        resolve_window(text, today=_local_today(session, now)) if names_a_window else None
+    )
+    if window is None and not has_term:
+        return None
     slots = open_slots_for_assignment(
         session,
         now=now,
@@ -392,9 +475,24 @@ def availability_reply(session, state: ConversationState) -> str | None:
         window=window,
     )
     if not slots:
-        return None
-    chosen = slots[:3] if window is not None else _one_slot_per_day(slots)
+        if window is None:
+            # Nothing to render: `hours_reply` keeps this turn, and the reply
+            # texts stay unread so the answer never depends on them.
+            return None
+        if _schedule_closes_day(session, window) and (words & _HOURS_VOCABULARY):
+            # The customer asked whether the business works that day, and it does
+            # not: "no me quedan horarios" would claim it does and is merely full.
+            # The configured week is the honest answer, and `hours_reply` renders
+            # it. A question about a visit ("¿Pueden el sábado?") keeps the slot
+            # answer below even when the day is closed.
+            return None
+        return render_reply(
+            get_reply_texts(session),
+            "availability_preview_day_none",
+            dia=window_label(window),
+        )
     texts = get_reply_texts(session)
+    chosen = slots[:3] if window is not None else _one_slot_per_day(slots)
     if window is None:
         # Which days have room is the question; naming hours here reads as a promise
         # the conversation has not earned yet.

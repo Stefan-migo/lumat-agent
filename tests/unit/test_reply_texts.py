@@ -28,6 +28,7 @@ EXPECTED_KEYS = {
     "booking_offer",
     "availability_preview",
     "availability_preview_day",
+    "availability_preview_day_none",
     "booking_no_more_today",
     "booking_window_unavailable",
     "booking_unclear",
@@ -88,8 +89,13 @@ def test_availability_preview_default_and_slot_contract_are_pinned():
         "El {{dia}} tengo estas horas libres: {{horas}}. "
         "Si te sirve alguna, te tomo los datos y te reservo."
     )
+    assert REPLY_TEXT_DEFAULTS["availability_preview_day_none"] == (
+        "Para {{dia}} no me quedan horarios. Si te sirve otro día, dime cuál y te tomo "
+        "los datos para reservarlo."
+    )
     assert REPLY_TEXT_SLOTS["availability_preview"] == frozenset({"dias"})
     assert REPLY_TEXT_SLOTS["availability_preview_day"] == frozenset({"dia", "horas"})
+    assert REPLY_TEXT_SLOTS["availability_preview_day_none"] == frozenset({"dia"})
 
 
 def test_the_defaults_keep_the_current_wording():
