@@ -304,3 +304,30 @@ def test_a_farewell_closes_the_conversation(text, mock_openai_chat):
         conversation = session.get(Conversation, conversation_id)
         assert conversation.state == ConvState.CLOSED
         assert conversation.closed_at is not None
+
+
+def test_a_farewell_during_capture_closes_instead_of_asking_again(mock_openai_chat):
+    """S1 (farewell-mid-capture): measured in `simple-despedida`, run 2026-11-25b.
+
+    The customer said «dale, muchas gracias, eso era todo» while a capture batch
+    was pending, and the gate's pending mask turned a goodbye into one more
+    capture question. The judge's hard fail named exactly that: «Respondió la
+    despedida del cliente … con una nueva pregunta comercial/de diagnóstico en
+    lugar de cerrar la conversación».
+
+    A refusal during a capture still does not close, because it answers the
+    question; a farewell is the customer ending the conversation, pending or not.
+    """
+    from app.chat.state import ConvState
+    from app.models import Conversation
+
+    conversation_id = _start_conversation()
+    with SessionLocal() as session:
+        session.get(Conversation, conversation_id).captured_data = {"_pending": ["failure"]}
+        session.commit()
+
+    replies = _turn(conversation_id, "dale, muchas gracias, eso era todo", "wamid.farewell.pending")
+
+    assert replies == [FAREWELL]
+    with SessionLocal() as session:
+        assert session.get(Conversation, conversation_id).state == ConvState.CLOSED
