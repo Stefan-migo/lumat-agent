@@ -616,3 +616,39 @@ def test_open_slots_for_assignment_reaches_a_day_beyond_the_day_count(monkeypatc
 
         assert slots
         assert {day for _, day, _ in slots} == {far.date()}
+
+
+def test_customer_aware_slot_search_preserves_default_and_adjacent_boundary():
+    """Customer filtering is opt-in and runs before the result limit."""
+    from app.models import UserRole
+    from app.services.settings import set_setting
+
+    with SessionLocal() as session:
+        customer, case, previous_tech = _linked_rows(session)
+        previous_tech.role = UserRole.TECNICO
+        free_tech = User(username="customer-search-free", password_hash="test", role=UserRole.TECNICO)
+        session.add(free_tech)
+        session.flush()
+        start = datetime(2026, 11, 28, 9, tzinfo=timezone.utc)
+        scheduling.add_availability(
+            session, technician_id=free_tech.id,
+            starts_at=start + timedelta(hours=1), ends_at=start + timedelta(hours=4),
+        )
+        scheduling.add_availability(
+            session, technician_id=previous_tech.id,
+            starts_at=start + timedelta(minutes=30), ends_at=start + timedelta(minutes=90),
+        )
+        previous = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=previous_tech.id, local_date=start.date(), local_time=time(9, 30),
+            timezone_name="UTC", duration_minutes=60, actor="test",
+        )
+        set_setting(session, "hours.timezone", "UTC")
+        set_setting(session, "hours.schedule", [{"days": list(range(1, 8)), "open": "00:00", "close": "23:59"}])
+        kwargs = dict(now=datetime(2026, 11, 26, tzinfo=timezone.utc), limit=1,
+                      window=SlotWindow(day=start.date(), desde=time(10)))
+        before = (session.query(Appointment).count(), session.query(AppointmentHistory).count())
+        assert scheduling.open_slots_for_assignment(session, **kwargs)[0][2] == time(10)
+        assert scheduling.open_slots_for_assignment(session, customer_id=customer.id, **kwargs)[0][2] == time(10, 30)
+        assert (session.query(Appointment).count(), session.query(AppointmentHistory).count()) == before
+        assert previous.status.value == "booked" and previous.local_start.time() == time(9, 30)
