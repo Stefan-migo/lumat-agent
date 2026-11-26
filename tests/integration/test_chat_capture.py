@@ -1024,9 +1024,22 @@ def test_s9_availability_acknowledges_a_preference_not_a_booking(
     assert "lo tengo en cuenta para la visita" not in reply
 
 
-def test_s4_availability_question_is_answered_without_capturing_the_date(
+def test_s4_availability_question_is_answered_and_kept_as_a_preference(
     mock_openai_chat, monkeypatch
 ):
+    """A named-day question is answered from the agenda, not from the policy.
+
+    Superseded expectation (2026-11-26): this case used to pin the generic
+    "Las visitas se agendan de lunes a sábado…" sentence for
+    "Este sábado 27 ud tiene disponibilidad?", and it also claimed the date was
+    never captured — an assertion that never held, because it matched the string
+    "Anoté que sábado 27", which the acknowledgement does not produce. The
+    question is answered from real availability now (`S4.4`/`S4.6` of
+    `odd/tasks/saturday-day-continuity.md`), and the day the customer named in
+    question form stays on record as a *preference*, never as a booked date:
+    `captura-pregunta` S9 and `agenda-respeta-horario` S3 decided the value is
+    kept and only the wording must not promise. The pending field still resumes.
+    """
     from app.chat.nodes import classify_intent
 
     with session_scope() as session:
@@ -1061,10 +1074,18 @@ def test_s4_availability_question_is_answered_without_capturing_the_date(
     )
     answer = " ".join(replies)
 
-    assert "Las visitas se agendan de lunes a sábado, de 09:00 a 18:00." in answer
-    assert "Anoté que sábado 27" not in answer
+    assert re.search(
+        r"Para el sábado 27/\d{2} no me quedan horarios\. Si te sirve otro día, dime cuál "
+        r"y te tomo los datos para reservarlo\.",
+        answer,
+    )
+    assert "Anoté sábado 27 como preferencia" in answer
+    assert "todavía no queda agendada" in answer
     assert "Cuéntame qué pasa con el equipo" in answer
     assert MESSAGE_DEFAULTS["kb_miss_offer"] not in answer
+    captured = _conversation_captured(conv_id)
+    assert captured["availability"] == "sábado 27"
+    assert captured["_pending"] == ["failure"]
 
 
 def test_s8_new_capture_data_does_not_charge_the_pending_field_attempt(

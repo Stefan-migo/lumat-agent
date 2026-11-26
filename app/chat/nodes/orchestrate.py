@@ -25,10 +25,11 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.chat.nodes.capture import is_social_only
 from app.chat.nodes.respond import asks_about_schedule, quotes_required, tariff_service
+from app.chat.slot_window import resolve_window
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Conversation, Customer
@@ -61,6 +62,7 @@ def _dispatch(
     question: bool = False,
     resume_capture: bool = False,
     quote_question: bool = False,
+    day_selection: bool = False,
     change_request: bool = False,
     has_upcoming_visit: bool = True,
 ) -> dict:
@@ -163,6 +165,8 @@ def _dispatch(
         # was unreachable for the eight measured works. Asking the price of that
         # work is a question, not a new fault to diagnose.
         return {"next_step": "respond"}
+    if day_selection:
+        return {"next_step": "capture"}
     if question:
         # S1: answer an interrogative capture-intent turn, or a pendingless
         # opening with a coverage/price signal. Pause either active capture or
@@ -324,6 +328,15 @@ def orchestrate(state: ConversationState) -> dict:
     routing updates the graph consumes via ``_route_path``.
     """
     pendingless_answer_signal = _has_pendingless_answer_signal(state)
+    text = (state.window[-1].get("text") or "") if state.window else ""
+    day_selection = (
+        resolve_window(text, today=date.today()) is not None
+        and not asks_explicitly(text)
+        and not asks_for_change(text)
+        and not _is_quote_question(state)
+        and not is_social_only(text)
+        and state.intent not in {"postventa", "valores"}
+    )
     decision = _dispatch(
         state.intent or "",
         escalate=state.escalate,
@@ -334,6 +347,7 @@ def orchestrate(state: ConversationState) -> dict:
         question=_is_question(state) or pendingless_answer_signal,
         resume_capture=pendingless_answer_signal,
         quote_question=_is_quote_question(state),
+        day_selection=day_selection,
         change_request=asks_for_change(
             (state.window[-1].get("text") or "") if state.window else ""
         ),

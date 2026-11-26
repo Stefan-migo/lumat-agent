@@ -537,6 +537,17 @@ def _merge_extracted(
             continue
         if field == "availability" and _prose_availability(value):
             continue
+        if field == "availability" and (
+            _looks_like_prose(value) or len(value.split()) > 4
+        ):
+            # A day the customer accepted in a sentence ("Perfecto! El sábado 28
+            # anda súper bien") is stored as the window it resolves to, so the
+            # acknowledgement names the day instead of interpolating the whole
+            # sentence. A terse value ("lunes", "sábado 27", "9 am") is left
+            # verbatim: it is already the customer's own words.
+            window = resolve_window(value, today=date.today())
+            if window is not None:
+                value = window_label(window)
         # No field may echo a PROSE turn: a multi-sentence message copied into a
         # field is extraction corruption ("Soy Braulio, me dieron este numero...").
         # A terse answer legitimately equals the whole message ("tengo un calefont
@@ -700,9 +711,18 @@ def capture(state: ConversationState) -> dict:
     # `failure` and the next question is the equipment). Validators decide what is
     # accepted; the merge no longer waits for an "answer turn".
     captured_before_merge = set(captured)
+    extracted = state.extracted
+    if _asks_about_availability(_current_text(state)):
+        # A named-day availability question is answered by the configured reply,
+        # not saved as the answer to the pending capture field.
+        extracted = {
+            field: value
+            for field, value in extracted.items()
+            if field != "availability"
+        }
     with session_scope() as session:
         _merge_extracted(
-            captured, state.extracted, [], state, get_coverage_communes(session)
+            captured, extracted, [], state, get_coverage_communes(session)
         )
     merged_fields = (set(captured) - captured_before_merge) & EXTRACTABLE_FIELDS
     if "failure" in captured:
@@ -1131,13 +1151,13 @@ def _pick_ack(
     over the generic base ack. Markers are written only for text returned to the
     customer.
     """
-    if preventive_ack:
-        return preventive_ack
     if availability_ack:
-        # The customer just told us when they are reachable: naming it beats a
-        # generic "Entiendo." when only one acknowledgement fits the turn.
+        # In the continuity flow, this acknowledgement must name the accepted day;
+        # a preventive acknowledgement would otherwise hide the stored selection.
         captured["_availability_acked"] = availability_ack.strip()
         return availability_ack
+    if preventive_ack:
+        return preventive_ack
     if availability_hold_ack:
         return availability_hold_ack
     if not quote_ack:
