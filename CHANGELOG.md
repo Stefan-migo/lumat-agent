@@ -8,6 +8,35 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.20] - 2026-11-26
+
+### Agregado
+
+- Una **ruptura de relación explícita** escala a una persona antes de cualquier respuesta del modelo: un cliente
+  que declara que la relación de trabajo termina —o que ya contrató a otra persona— recibe una derivación con
+  **texto propio**, editable desde el panel como las otras, en vez de un saludo y una oferta para tomar sus datos.
+  Un enojo que sigue pidiendo algo queda en el camino de reclamo de siempre.
+- `av` pasa a **18.1.1**: 18.1.0 estaba *yanked* por un *double-free* al decodificar audio con layouts custom, y la
+  restricción anterior lo permitía.
+
+### Corregido
+
+- **«Próximo martes» ya no resuelve al martes de hoy**, y `am`/`pm` se leen como reloj de doce horas: «a las 3 pm»
+  es 15:00, no las 03:00 que el aviso ofrecía. Un «martes» sin marca sigue incluyendo hoy.
+- Un **acuse breve** del cliente («Eso!», «dale», «listo») ya no se registra como incomprensión cuando responde al
+  turno anterior del bot. La media de captura, la oferta de agenda y la de gestión quedan excluidas, y `sí`/`no`
+  no entran en el vocabulario.
+- **Cobertura y precio se contestan antes de capturar**: una apertura que dice dónde vive el equipo, o que
+  pregunta el precio, recibe la respuesta y la captura se reanuda en el mismo turno, sin volver a pedir lo que el
+  cliente ya entregó.
+- Una **despedida con captura pendiente cierra** la conversación en vez de responder con una pregunta más.
+
+### Cambiado
+
+- El arnés de evaluación **siembra la redacción de captura de producción** (`llm`) en vez de declarar la que
+  encuentre, así que el corpus mide el bot que atiende a los clientes. Baseline citable del árbol mergeado:
+  **37 de 43 escenarios, ningún gate fallido**.
+
 ## [2026.11.19] - 2026-11-25
 
 ### Agregado
