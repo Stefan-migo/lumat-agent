@@ -46,3 +46,26 @@ def test_a_trailing_question_mark_with_whitespace_also_waits():
 
 def test_an_escalating_deviation_never_resumes_capture():
     assert _after_deviation("No tengo ese dato.", escalate=True) == END
+
+
+def test_an_answer_that_asks_mid_text_does_not_get_a_second_question():
+    """S1 (triage-resume-ask): measured in `simple-despedida`, run 2026-11-25b.
+
+    The answer asked a question in the middle and ended with a period:
+    «…Con eso te oriento para coordinar la visita.» `endswith("?")` read that as
+    "the answer asked nothing", capture resumed and sent a second question, and the
+    armed `_pending` then masked the customer's farewell on the next turn. What the
+    rule protects is one question per message, so the whole answer is what decides.
+    """
+    reply = (
+        "El valor es $60.000. ¿En qué comuna está la caldera y de qué casa comercial"
+        " es? Con eso te oriento para coordinar la visita."
+    )
+
+    assert _after_deviation(reply) == END
+
+
+def test_an_answer_without_a_question_still_resumes_the_capture():
+    """The other half: no question in the answer means the agenda asks now."""
+
+    assert _after_deviation("Anoté tu preferencia para mañana en la tarde.") == "capture"

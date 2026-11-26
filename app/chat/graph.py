@@ -264,12 +264,24 @@ def _after_research_triage(state: ConversationState) -> str:
     against `chat.conduct.max_preguntas_por_mensaje` (1). The capture question is
     not lost: `_pending` stays in the captured state, so the agenda asks it on the
     customer's next message.
+
+    "Already asked" is **anywhere in the answer**, not only at its end: measured in
+    `simple-despedida` (run 2026-11-25b), a price answer that asked for the commune
+    mid-text and closed with "Con eso te oriento para coordinar la visita." resumed
+    the capture, sent a second question, and the armed `_pending` then masked the
+    customer's farewell on the next turn.
     """
     if not state.capture_paused or state.escalate:
         return END
-    if state.replies and state.replies[-1].rstrip().endswith("?"):
+    if state.replies and _answer_asks_something(state.replies[-1]):
         return END
     return "capture"
+
+
+def _answer_asks_something(reply: str) -> bool:
+    """True when the answer already asked the customer something, anywhere in it."""
+
+    return "?" in reply or "¿" in reply
 
 
 def _triage_node(subgraph):
