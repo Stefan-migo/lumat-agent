@@ -200,7 +200,8 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "dejar esperando: un asesor de Lumat te contacta para coordinar la visita "
         "directamente."
     ),
-    # Shipped default from odd/tasks/ruptura-handoff.md; awaiting owner approval.
+    # Shipped default from odd/tasks/ruptura-handoff.md; approved by the owner on
+    # 2026-11-25 and editable from the panel like the other derivations.
     "handoff_ruptura": (
         "Lamento mucho cómo terminó esto. No voy a discutirlo contigo ni ofrecerte "
         "nada más: lo dejo en manos de una persona de Lumat, que va a revisar lo "
