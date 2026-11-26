@@ -123,11 +123,17 @@ def _is_refusal(text: str) -> bool:
 
 def closure_gate(state: ConversationState) -> dict:
     """Reply to farewells or closed-hours messages before normal flow."""
-    if "_pending" in (state.captured or {}):
-        return {}
-
     message = state.window[-1] if state.window else {}
     text = message.get("text") or ""
+    # A pending capture batch is not a reason to answer a goodbye with another
+    # question. Measured in `simple-despedida` (run 2026-11-25b): «dale, muchas
+    # gracias, eso era todo» arrived with a batch pending and read the capture
+    # question instead of closing, which is what the judge hard-failed. A refusal
+    # stays out of this exemption: "no" answers the pending question and does not
+    # end the conversation (`test_refusal_during_capture_does_not_close`).
+    if "_pending" in (state.captured or {}) and not is_farewell(text):
+        return {}
+
     with session_scope() as session:
         should_close_after_refusals = False
         if message.get("direction") == "inbound" and _is_refusal(text):
