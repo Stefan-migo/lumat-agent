@@ -928,3 +928,41 @@ se lee.
 **Decisión:** el baseline citable se corre **después** de mergear los cortes del día, sobre un árbol
 limpio y con la conducta ya garantizada. Repetir esta corrida ahora, sobre código que ya está siendo
 reemplazado, gastaría hora y media para producir un número que no describe a nadie.
+
+### L27 — el baseline del árbol mergeado, y lo que el instrumento cazó (2026-11-25)
+
+Corrida `rebaseline-2026-11-25b`, sello `b239fe6fa`, **árbol limpio**, KB `99a2bbabbeb1`, redacción
+de captura `llm` con su fingerprint.
+
+- **37/43 escenarios, ningún gate fallido.** Una dimensión peor: `conversational` (1.74).
+- **Un escenario sin veredicto**: `complejo-no-quiere-email` — el juez devolvió JSON inválido dos
+  veces (`unparseable verdict JSON`). Es fragilidad del juez, no del bot, y por eso la corrida no es
+  un 43/43 medido.
+- Los dos cortes que este baseline existía para medir movieron de forma inequívoca:
+  `real-reclamo-real-si-deriva` **3.83 con ±0** (antes hard fail 0.00) y `complejo-agendar-calefont`
+  fuera de la lista de fallos.
+
+**Lo que el instrumento cazó, y el error que impidió taparlo.** Dos escenarios que pasaban en la
+corrida previa aparecieron fallando. Se diagnosticaron antes de escribir que era varianza:
+
+1. `simple-despedida` — **causa de código**. El cliente dijo «dale, muchas gracias, eso era todo» con
+   un lote de captura pendiente; `closure_gate` devolvía `{}` por ese `_pending`, así que la despedida
+   quedó enmascarada y recibió otra pregunta. El `_pending` se había armado porque el corte de
+   calefont reanudó la captura tras una respuesta que **preguntaba a mitad de texto y cerraba en
+   punto**. Corregido en #894 (PR `3950fbddd`): una despedida cierra con lote pendiente o sin él, y
+   un rechazo sigue sin cerrar porque responde la pregunta.
+2. `real-dato-mas-pregunta` — **varianza**: el turno 1 del bot es idéntico byte a byte en las dos
+   corridas, y la divergencia empieza en la etiqueta de intención del turno 2 (`kb_miss` en una,
+   reconocimiento de preferencia en la otra).
+
+**Un intento descartado, y por qué importa.** El primer arreglo (#893, cerrado sin mergear) cambió
+`_after_research_triage` para tratar «la respuesta contiene un ?» como «ya preguntó algo». CI lo
+atajó: un golden thread —`test_booking_thread_interrupts_for_price_then_resumes_capture`— fija que
+tras una interrupción por precio la captura reanuda, y existe porque el texto recuperado de la KB
+puede contener un «?» que no es una pregunta del bot al cliente. `?` en cualquier parte no distingue
+esas dos cosas; el daño real estaba en el enmascaramiento. **`quick` (T0+T1) no podía verlo: el
+golden thread es functional y sólo lo corre la suite completa.**
+
+**Estado de citabilidad.** Este informe documenta `b239fe6fa`, que **sí** llevaba la regresión de
+`simple-despedida`. El árbol corregido (`6299bb62b`) todavía no tiene su propia corrida: hasta que la
+tenga, cualquier número «actual» es el de un árbol con un defecto conocido.
