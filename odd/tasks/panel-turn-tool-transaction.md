@@ -44,11 +44,11 @@ ya decía.
 
 | ID | Spec | Route | Commit |
 | --- | --- | --- | --- |
-| T1 | S2 | test · `tests/integration/` guard comprimido + tool que espera (RED) | pendiente |
-| T2 | S1 | backend · `external_io` en `ToolDefinition` + release en `execute` | pendiente |
-| T3 | S1 | backend · `chatbot.simulate` en sesión propia (deja de commitear la del turno) | pendiente |
-| T4 | S3 | backend · `internal_chat.execution_started` al despachar | pendiente |
-| T5 | S4 | verificación · focused + `quick` + `full` | pendiente |
+| T1 | S2 | test · `tests/integration/test_assistant_tool_transaction.py` + `test_assistant_simulation_session.py` | `7ebaacd57`, `7157477cf` |
+| T2 | S1 | backend · `external_io` en `ToolDefinition` + release en `execute` | `7ebaacd57` |
+| T3 | S1 | backend · `chatbot.simulate` en sesión propia (deja de commitear la del turno) | `7157477cf` |
+| T4 | S3 | backend · `internal_chat.execution_started` al despachar un tool marcado | `7ebaacd57` |
+| T5 | S4 | verificación · focused + `quick` + `full` | sin commit propio (evidencia en L7) |
 
 ## Log
 
@@ -128,3 +128,18 @@ teléfono y `summary`, nunca por el texto de los mensajes.
 - S3 se asertó a nivel de nodo (sesión espía: `add(execution_started)` → `commit` → handler), no
   end-to-end: los tools marcados que podrían llevar esa aserción piden aprobación del owner, y montar
   el flujo de aprobación para probar una fila de auditoría cuesta más de lo que mide.
+
+**L7 — evidencia de verificación (worktree `odd/panel-turn-tool-transaction`, 2026-11-27).**
+- RED por reversión (`git stash push -- app/`): 4 de los 5 tests de los dos archivos nuevos fallan —
+  clasificación, release en el despacho y las dos de simulación. El control (`customers.list`, no
+  marcado) pasa en ambos sentidos, que es lo que debe hacer.
+- GREEN focalizado: `test_assistant_tool_transaction.py` + `test_assistant_simulation_session.py` +
+  `test_assistant_harness_guardrails.py` → **34 passed in 2.90s**.
+- Familia asistente (chat, write chain y sus probes, simulate, eval_regression, chat_simulation,
+  guardrails): **147 passed**.
+- `bash scripts/test.sh quick` → verde (T0 + T1).
+- `bash scripts/test.sh full` → **exit 0**, progreso 100% sin fallos ni errores (12m 13s). Corrido con
+  el exit real del job, porque `addopts = "-q"` más el `-q` del tier dejan la corrida en `-qq` y no
+  imprime el resumen: la evidencia es el exit y el 100% sin `F`/`E`.
+- `bash scripts/test.sh shape` → "no shape surface touched", los tiers dirigidos alcanzaban; `full` se
+  corrió igual por ser cierre de feature.
