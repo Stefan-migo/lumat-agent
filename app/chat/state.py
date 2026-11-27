@@ -35,6 +35,7 @@ from app.services.customers import get_or_create_customer
 from app.services.memory import load_customer_context, close_conversation
 from app.services.realtime import stage_event
 from app.services.settings import MESSAGE_DEFAULTS
+from app.services.users import technician_display_name
 
 # Context window: last N messages of the conversation (design Data Flow).
 WINDOW_SIZE = 10
@@ -347,6 +348,12 @@ class ConversationState:
                     "service": appointment.service,
                     "label": when_label(appointment.local_start),
                     "status": appointment.status.value,
+                    # D4 (odd/tasks/appointment-status-query.md): who is coming is
+                    # part of the visit. Empty string means nobody is named on it,
+                    # which each caller renders in its own words.
+                    "technician": technician_display_name(
+                        session, appointment.technician_id
+                    ),
                 }
                 if appointment
                 else None

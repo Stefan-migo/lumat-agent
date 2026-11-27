@@ -429,6 +429,25 @@ def _tarifario_context() -> tuple[str, str]:
     )
 
 
+def _booking_context(booking: dict | None) -> str:
+    """The `<booking>` datum: the visit the customer holds, with its technician.
+
+    D4 (odd/tasks/appointment-status-query.md): the technician is part of the visit.
+    Before this line the prompt knew the date and the service and nothing about who
+    is coming, and the measured turn still denied that the visit existed at all; the
+    rule that a recorded visit is named lives in the system prompt
+    (`services/prompts.py`). `""` is the shape of an appointment nobody is named on.
+    """
+    if not booking:
+        return "El cliente no tiene ninguna visita agendada."
+    technician = booking.get("technician") or "por asignar"
+    return (
+        f"El cliente tiene una visita agendada: {booking['service']} "
+        f"el {booking['label']} (estado {booking['status']}), "
+        f"técnico {technician}."
+    )
+
+
 def _answer_from_kb(
     text: str,
     kb_text: str,
@@ -1012,12 +1031,7 @@ def respond(state: ConversationState) -> dict:
         memory_context=state.memory_context,
         ficha=ficha,
         conversation=conversation_transcript(state.window),
-        booking=(
-            f"El cliente tiene una visita agendada: {state.booking['service']} "
-            f"el {state.booking['label']} (estado {state.booking['status']})."
-            if state.booking
-            else "El cliente no tiene ninguna visita agendada."
-        ),
+        booking=_booking_context(state.booking),
     )
     model_answer = answer
     with session_scope() as session:

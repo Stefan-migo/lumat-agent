@@ -69,6 +69,13 @@ EXPECTED_KEYS = {
     "capture_consent_refused",
     "capture_consent_unclear",
     "capture_ack",
+    # Answer to a question about the visit the customer already holds
+    # (odd/tasks/appointment-status-query.md).
+    "appointment_line",
+    "appointment_technician_unassigned",
+    "appointment_status_one",
+    "appointment_status_many",
+    "appointment_status_none",
 }
 
 
@@ -164,8 +171,32 @@ def test_the_slot_vocabulary_is_closed():
     assert set().union(*REPLY_TEXT_SLOTS.values()) == {
         "opciones", "fecha", "visita", "accion", "tecnico", "comuna",
         "nombre", "equipo", "problema", "disponibilidad", "momento",
-        "direccion", "email", "dias", "dia", "horas",
+        "direccion", "email", "dias", "dia", "horas", "servicio",
     }
+
+
+def test_appointment_status_defaults_and_slots_are_pinned():
+    """The held visit names its date, its service and its technician."""
+    assert REPLY_TEXT_DEFAULTS["appointment_line"] == (
+        "{{fecha}} — {{servicio}}, técnico {{tecnico}}"
+    )
+    assert REPLY_TEXT_DEFAULTS["appointment_technician_unassigned"] == "por asignar"
+    assert REPLY_TEXT_DEFAULTS["appointment_status_one"] == (
+        "Tienes una visita agendada: {{visita}}."
+    )
+    assert REPLY_TEXT_DEFAULTS["appointment_status_many"] == (
+        "Tienes estas visitas agendadas:\n{{opciones}}"
+    )
+    assert REPLY_TEXT_DEFAULTS["appointment_status_none"] == (
+        "No tienes visitas agendadas por ahora. Si quieres, te agendo una."
+    )
+    assert REPLY_TEXT_SLOTS["appointment_line"] == frozenset(
+        {"fecha", "servicio", "tecnico"}
+    )
+    assert REPLY_TEXT_SLOTS["appointment_technician_unassigned"] == frozenset()
+    assert REPLY_TEXT_SLOTS["appointment_status_one"] == frozenset({"visita"})
+    assert REPLY_TEXT_SLOTS["appointment_status_many"] == frozenset({"opciones"})
+    assert REPLY_TEXT_SLOTS["appointment_status_none"] == frozenset()
 
 
 def test_only_the_coverage_derivation_takes_optional_equipment_slot():

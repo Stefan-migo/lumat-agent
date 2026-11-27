@@ -557,3 +557,86 @@ def test_a_published_service_price_question_is_not_a_quote_question():
     )
 
     assert _is_quote_question(state) is False
+
+
+def test_a_question_about_the_booked_visit_is_answered_not_managed():
+    """Measured conversation 50: the customer asks about the visit she holds.
+
+    The classifier returns `consulta`, `reagendar_visita` or `solicitar_visita`
+    for that sentence depending on the run, and every one of them ended in a
+    different wrong path (free slots, a reschedule menu, the questionnaire). The
+    destination is `respond`, where the deterministic status answer reads the
+    appointment rows.
+    """
+    assert _dispatch("consulta", booked_visit_question=True) == {"next_step": "respond"}
+    assert _dispatch("reagendar_visita", booked_visit_question=True) == {
+        "next_step": "respond"
+    }
+    assert _dispatch("solicitar_visita", booked_visit_question=True) == {
+        "next_step": "respond"
+    }
+
+
+def test_a_booked_visit_question_outranks_the_day_selection_shape():
+    """The turn names a weekday and is not a question mark; it is still not a field."""
+    assert _dispatch(
+        "solicitar_visita", booked_visit_question=True, day_selection=True
+    ) == {"next_step": "respond"}
+
+
+def test_a_change_request_keeps_its_manage_path():
+    """S5 (6): asking to move the visit is not asking about the visit."""
+    assert _dispatch("reagendar_visita", change_request=True) == {"next_step": "manage"}
+    assert _dispatch(
+        "reagendar_visita", change_request=True, booked_visit_question=False
+    ) == {"next_step": "manage"}
+
+
+def test_an_emergency_about_a_booked_visit_still_escalates():
+    assert _dispatch("emergencia", emergency=True, booked_visit_question=True) == {
+        "next_step": "handoff",
+        "escalate": True,
+        "escalate_reason": "emergencia",
+        "emergency": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "text, intent",
+    [
+        ("Tengo una visita para el lunes, puedes confirmarme que tecnico va?", "consulta"),
+        ("Tengo una hora agendada para el lunes", "reagendar_visita"),
+    ],
+)
+def test_the_measured_turns_reach_the_answer_path(text, intent):
+    """End to end through `orchestrate`, with no conversation row (no DB read)."""
+    state = ConversationState(
+        customer_id=None,
+        conversation_id=None,
+        phone="+56912345678",
+        intent=intent,
+        captured={},
+        window=[{"id": 1, "text": text}],
+    )
+
+    assert orchestrate(state) == {"next_step": "respond"}
+
+
+def test_mid_capture_booked_visit_question_is_answered_without_repeating_the_field():
+    """A question about the held visit during capture is answered, not stored.
+
+    S13's rule (one question per message) is why capture does not resume in the
+    same turn: the field stays pending in `captured` and capture asks it on the
+    customer's next message. The order matters — a branch below the `mid_capture`
+    block would receive this turn as a field answer.
+    """
+    state = ConversationState(
+        customer_id=None,
+        conversation_id=None,
+        phone="+56912345678",
+        intent="consulta",
+        captured={"_pending": ["comuna"], "_asked": {"comuna": 1}},
+        window=[{"id": 1, "text": "hola, me confirmas a que hora es mi visita?"}],
+    )
+
+    assert orchestrate(state) == {"next_step": "respond"}

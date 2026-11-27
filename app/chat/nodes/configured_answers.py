@@ -24,8 +24,11 @@ from sqlalchemy import select
 
 from app.chat.nodes.booking import DEFAULT_DURATION_MINUTES
 from app.chat.nodes.replies import render_reply
+from app.chat.slot_window import when_label
 from app.chat.state import ConversationState
-from app.models import KbChunk, KbDocument, KbVisibility
+from app.chat.visit_questions import asks_about_booked_visit
+from app.models import Appointment, AppointmentStatus, KbChunk, KbDocument, KbVisibility
+from app.services.users import technician_display_name
 from app.services.prompts import render_text
 from app.services.scheduling import open_slots_for_assignment
 from app.services.settings import (
@@ -65,6 +68,11 @@ _SCHEDULE_TAIL = re.compile(
     r"(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|festivos?|feriados?)s?"
     r"(?:\s+(?:por la|en la)\s+(?:manana|tarde|noche))?"
 )
+
+# The owner's decision: every upcoming visit is named, not only the nearest one.
+# Three is the same ceiling the reschedule menu uses, so a customer never reads a
+# list longer than the one cancellation and rescheduling already show.
+MAX_STATUS_VISITS = 3
 
 # The preview asks the agenda for a wide slice and keeps one slot per day: the
 # service returns the earliest slots, which for a free agenda are consecutive
@@ -417,6 +425,65 @@ def _schedule_closes_day(session, window) -> bool:
     )
 
 
+def appointment_status_reply(session, state: ConversationState) -> str | None:
+    """Answer a question about the visit the customer already holds.
+
+    Measured production case (2026-11-27, conversation 50): «Tengo una visita para
+    el lunes, puedes confirmarme que técnico va?» was answered with free hours by
+    `availability_reply`, and «Tengo una hora agendada para el lunes» was stored as
+    a day preference by `capture`. The appointment was `booked` throughout.
+
+    The answer reads the same rows `manage` reads — `booked`, `starts_at > now` —
+    and renders date and hour in the customer's local time, the service and the
+    technician. Owner decisions pinned here: the technician is always named, every
+    upcoming visit is named, and a visit nobody is named on says "por asignar"
+    rather than deriving to a person. Deterministic: no model call.
+
+    Returns None for every other turn, including an explicit change request, which
+    belongs to `manage` (`asks_about_booked_visit` excludes it).
+    """
+    if not getattr(state, "customer_id", None):
+        return None
+    text = _current_text(state)
+    if not text or not asks_about_booked_visit(text):
+        return None
+    now = datetime.now(timezone.utc)
+    appointments = session.scalars(
+        select(Appointment)
+        .where(
+            Appointment.customer_id == state.customer_id,
+            Appointment.status == AppointmentStatus.BOOKED,
+            Appointment.starts_at > now,
+        )
+        .order_by(Appointment.starts_at)
+        .limit(MAX_STATUS_VISITS)
+    ).all()
+    texts = get_reply_texts(session)
+    if not appointments:
+        # Nothing to name is a fact to state, not a reason to offer free hours for
+        # a visit the customer says she already has.
+        return render_reply(texts, "appointment_status_none")
+    unassigned = render_reply(texts, "appointment_technician_unassigned")
+    lines = [
+        render_reply(
+            texts,
+            "appointment_line",
+            fecha=when_label(appointment.local_start),
+            servicio=appointment.service,
+            tecnico=technician_display_name(session, appointment.technician_id)
+            or unassigned,
+        )
+        for appointment in appointments
+    ]
+    if len(lines) == 1:
+        return render_reply(texts, "appointment_status_one", visita=lines[0])
+    return render_reply(
+        texts,
+        "appointment_status_many",
+        opciones="\n".join(f"{index}. {line}" for index, line in enumerate(lines, 1)),
+    )
+
+
 def availability_reply(session, state: ConversationState) -> str | None:
     """Preview real technician slots without creating a booking offer.
 
@@ -548,7 +615,16 @@ def configuration_reply(session, state: ConversationState) -> str | None:
     Duration is most specific, followed by coverage, then schedule. The place
     branch is restricted to known communes, so weekdays reach the hours answer.
     """
-    for answer in (duration_reply, coverage_reply, availability_reply, hours_reply):
+    for answer in (
+        duration_reply,
+        coverage_reply,
+        # An appointment the customer holds is a fact the configuration answers
+        # cannot state, and it outranks the free-agenda preview: without this row
+        # the measured question about a booked visit read three free hours back.
+        appointment_status_reply,
+        availability_reply,
+        hours_reply,
+    ):
         reply = answer(session, state)
         if reply is not None:
             return reply

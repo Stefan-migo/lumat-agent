@@ -224,3 +224,49 @@ def test_hidden_menu_thread_answers_consulta_and_manages_existing_visits(
     assert "horarios" in reschedule_offer.lower()
     assert "1." in reschedule_offer
     assert offer["appointment_id"] == appointment.id
+
+
+@pytest.mark.functional
+def test_a_question_about_the_visit_already_booked_names_it(
+    client, mock_openai_chat, mock_meta_send, seed_future_appointment
+):
+    """Measured production conversation 50, end to end through the webhook.
+
+    The customer asked which technician was coming to a visit she already held, and
+    the second turn named the day without a question mark. Both turns were answered
+    from the free calendar: the first with three free hours, the second with "Anoté
+    lunes como preferencia … todavía no queda agendada". The seeded technician has no
+    loaded name, which is the S2.3 shape.
+    """
+    from app.chat.slot_window import when_label
+
+    appointment_ids = seed_future_appointment()
+    with SessionLocal() as session:
+        labels = [
+            when_label(appointment.local_start)
+            for appointment in session.scalars(
+                select(Appointment).order_by(Appointment.starts_at)
+            )
+        ]
+    assert len(appointment_ids) == 2
+
+    post_message(
+        client,
+        "wamid.status.1",
+        "Tengo una visita para el lunes, puedes confirmarme que tecnico va?",
+    )
+    with SessionLocal() as session:
+        first_reply = _outbound_texts(session)[-1]
+    assert "1." in first_reply and "2." in first_reply
+    for label in labels:
+        assert label in first_reply
+    assert "Visita técnica" in first_reply
+    assert "por asignar" in first_reply
+    assert "horas libres" not in first_reply
+
+    post_message(client, "wamid.status.2", "Tengo una hora agendada para el lunes")
+    with SessionLocal() as session:
+        second_reply = _outbound_texts(session)[-1]
+    for label in labels:
+        assert label in second_reply
+    assert "todavía no queda agendada" not in second_reply
