@@ -180,6 +180,19 @@ REPLY_TEXT_DEFAULTS: dict[str, str] = {
         "su horario pudo haber comenzado o cambiado."
     ),
     "manage_cancelled": "Tu visita del {{visita}} quedó cancelada.",
+    # Answer to a question about the visit the customer already holds (measured
+    # conversation 50, 2026-11-27). The technician is always named — the owner's
+    # decision — and an appointment nobody is named on says "por asignar" instead
+    # of deriving to a person. `appointment_line` is the one rendering of a held
+    # visit: date and hour in the customer's local time, the service and the
+    # technician.
+    "appointment_line": "{{fecha}} — {{servicio}}, técnico {{tecnico}}",
+    "appointment_technician_unassigned": "por asignar",
+    "appointment_status_one": "Tienes una visita agendada: {{visita}}.",
+    "appointment_status_many": "Tienes estas visitas agendadas:\n{{opciones}}",
+    "appointment_status_none": (
+        "No tienes visitas agendadas por ahora. Si quieres, te agendo una."
+    ),
     "handoff": "Un asesor revisará tu caso y te contactará a la brevedad.",
     # S4 (chatbot-experiencia): one approved text per derivation reason the
     # customer reads. The remaining reasons keep `handoff` above.
@@ -310,6 +323,11 @@ REPLY_TEXT_SLOTS: dict[str, frozenset[str]] = {
     "manage_cancel_prompt": frozenset(),
     "manage_cancel_unavailable": frozenset(),
     "manage_cancelled": frozenset({"visita"}),
+    "appointment_line": frozenset({"fecha", "servicio", "tecnico"}),
+    "appointment_technician_unassigned": frozenset(),
+    "appointment_status_one": frozenset({"visita"}),
+    "appointment_status_many": frozenset({"opciones"}),
+    "appointment_status_none": frozenset(),
     "handoff": frozenset(),
     "handoff_cobertura": frozenset({"comuna", "equipo"}),
     "handoff_persona": frozenset(),

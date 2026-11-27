@@ -70,6 +70,22 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+def technician_display_name(session: Session, technician_id: int | None) -> str:
+    """The technician's loaded name, or "" when nobody is named on the visit.
+
+    One definition for the three places that put a technician in front of a
+    customer: the booking confirmation, the answer about a held visit, and the
+    case context the reply prompt reads. `""` is the unassigned shape; each caller
+    decides its own wording for it, because "nuestro equipo técnico" (a promise
+    about who will attend) and "por asignar" (a fact about the appointment) are
+    different statements.
+    """
+    if technician_id is None:
+        return ""
+    technician = session.get(User, technician_id)
+    return technician.name.strip() if technician and technician.name else ""
+
+
 def get_user_by_username(session: Session, username: str) -> User | None:
     """One user by exact username (usernames are unique)."""
     return session.scalar(select(User).where(User.username == username))

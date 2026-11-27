@@ -24,13 +24,17 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 from datetime import date, datetime, timezone
 
 from app.chat.nodes.capture import is_social_only
 from app.chat.nodes.respond import asks_about_schedule, quotes_required, tariff_service
 from app.chat.slot_window import resolve_window
 from app.chat.state import ConversationState
+from app.chat.visit_questions import (
+    asks_about_booked_visit,
+    asks_for_change,
+    normalise as _normalise_visit_text,
+)
 from app.db import session_scope
 from app.models import Conversation, Customer
 
@@ -65,6 +69,7 @@ def _dispatch(
     day_selection: bool = False,
     change_request: bool = False,
     has_upcoming_visit: bool = True,
+    booked_visit_question: bool = False,
 ) -> dict:
     """Pure (intent, flags) -> routing decision (AO-3, no LLM).
 
@@ -107,6 +112,15 @@ def _dispatch(
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+    if booked_visit_question:
+        # Measured conversation 50: a question about the visit the customer holds
+        # is answered from her appointment rows, never from the free-agenda preview
+        # (`availability_reply` outranked everything) and never as a capture field
+        # (`day_selection` read «para el lunes» as a preference). The classifier
+        # returns `consulta`, `reagendar_visita` or `solicitar_visita` for the same
+        # sentence across runs, so the answer cannot depend on that label. A change
+        # request never carries this flag (`asks_about_booked_visit` excludes it).
+        return {"next_step": "respond"}
     if intent == "reagendar_visita" and change_request:
         # S2/S12: an explicit request to change the visit remains management,
         # even when no upcoming appointment is currently in the database.
@@ -199,9 +213,13 @@ def is_tool_whitelisted(whitelist: tuple[str, ...] | list[str] | None, tool: str
 
 
 def _normalise_interrogative_text(text: str) -> str:
-    """Case-fold and remove accents for explicit interrogative marker matching."""
-    decomposed = unicodedata.normalize("NFKD", (text or "").casefold())
-    return "".join(char for char in decomposed if not unicodedata.combining(char))
+    """Case-fold and remove accents for explicit interrogative marker matching.
+
+    Same fold `app.chat.visit_questions` uses, imported rather than reimplemented
+    so the routing predicates and the answer match the customer's words the same
+    way.
+    """
+    return _normalise_visit_text(text)
 
 
 def asks_explicitly(text: str) -> bool:
@@ -223,25 +241,6 @@ def asks_explicitly(text: str) -> bool:
         return True
     normalized = _normalise_interrogative_text(text)
     return re.search(r"\b(?:cuanto|pueden|se\s+puede|factible|podrias|podria|sera)\b", normalized) is not None
-
-
-def asks_for_change(text: str) -> bool:
-    """True when the turn explicitly asks to move, cancel or void the visit (S12).
-
-    S1 lets a mid-capture question reach the answering path first. This is the
-    carve-out that keeps S12 intact: the customer's own words name the visit and
-    the action, so the turn is a request, not a question about availability.
-    """
-    normalized = _normalise_interrogative_text(text)
-    return (
-        re.search(
-            r"\b(?:reagend\w*|cancel\w*|anul\w*"
-            r"|cambiar\s+(?:la|el|mi|de)\s+(?:visita|hora|dia|fecha|mantencion|mantenimiento)"
-            r"|mover\s+(?:la|el|mi|de)\s+(?:visita|hora|dia|fecha|mantencion|mantenimiento))\b",
-            normalized,
-        )
-        is not None
-    )
 
 
 def _is_question(state: ConversationState) -> bool:
@@ -329,10 +328,14 @@ def orchestrate(state: ConversationState) -> dict:
     """
     pendingless_answer_signal = _has_pendingless_answer_signal(state)
     text = (state.window[-1].get("text") or "") if state.window else ""
+    booked_visit_question = asks_about_booked_visit(text)
     day_selection = (
         resolve_window(text, today=date.today()) is not None
         and not asks_explicitly(text)
         and not asks_for_change(text)
+        # Naming a day is not choosing a slot when the day belongs to a visit the
+        # customer already holds (measured conversation 50, turn 3).
+        and not booked_visit_question
         and not _is_quote_question(state)
         and not is_social_only(text)
         and state.intent not in {"postventa", "valores"}
@@ -352,6 +355,7 @@ def orchestrate(state: ConversationState) -> dict:
             (state.window[-1].get("text") or "") if state.window else ""
         ),
         has_upcoming_visit=_has_upcoming_visit(state),
+        booked_visit_question=booked_visit_question,
     )
     if decision.get("active_sub_agent"):
         logger.info(
