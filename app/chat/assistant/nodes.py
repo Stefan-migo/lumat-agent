@@ -1440,6 +1440,22 @@ def execute(state: AssistantState) -> AssistantState:
         raise error
     tool_name = plan_data.get("tool")
     if tool_name and not tool_already_ran:
+        definition = TOOL_REGISTRY.get(tool_name)
+        if definition is not None and definition.external_io:
+            # Only a tool that can wait on external I/O earns a start row, and it is recorded
+            # before dispatch so a tool that never returns is still attributable: the stalled
+            # turn keeps this row and nothing else. `_release_before_provider_call` after it
+            # commits the row, which is what keeps the wait from holding the transaction.
+            # The other tools keep their single completed row (`test_execution_audits_before_evidence`).
+            if state.get("session") is not None:
+                record_audit(
+                    state["session"], actor=state.get("actor") or "assistant",
+                    action="internal_chat.execution_started", entity="internal_chat_thread",
+                    entity_id=str(state.get("thread_id")),
+                    after={"run_id": state.get("run_id"), "tool": tool_name,
+                           **_audit_arguments(plan_data.get("arguments"))},
+                )
+            _release_before_provider_call(state)
         try:
             result = execute_tool(
                 state.get("session"),

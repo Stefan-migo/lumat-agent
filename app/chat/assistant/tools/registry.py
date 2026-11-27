@@ -1357,6 +1357,7 @@ class ToolDefinition:
     handler: Callable[[Any, BaseModel], Any]
     description: str
     tier: Literal["default", "opt_in"]
+    external_io: bool = False
 
     @property
     def write(self) -> bool:
@@ -1375,7 +1376,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments, "List upcoming appointments.", tier="default"),
     "customers.operational_history": ToolDefinition("customers.operational_history", OperationalHistoryArgs, True, _operational_history, "Read one customer's cases (including closed) and appointments (including past).", tier="default"),
     "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases.", tier="default"),
-    "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results.", tier="default"),
+    # Embedding is local (fastembed/ONNX, CPU-bound), not network I/O; cold model load is unbounded.
+    "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results.", tier="default", external_io=True),
     "kb.propose_document": ToolDefinition(
         "kb.propose_document",
         KbProposeDocumentArgs,
@@ -1391,6 +1393,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
         _chatbot_simulate,
         "Run up to six customer turns through the real chatbot brain without delivering replies.",
         tier="default",
+        external_io=True,
     ),
     "chatbot.eval_regression": ToolDefinition(
         "chatbot.eval_regression",
@@ -1399,6 +1402,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
         _chatbot_eval_regression,
         "Run deterministic gates and the rubric judge for up to three corpus scenarios against a named baseline; measured conversations appear in the operator inbox.",
         tier="default",
+        external_io=True,
     ),
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory.", tier="default"),
     "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory.", tier="default"),
@@ -1425,8 +1429,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
         "Revert an assistant-writable chatbot setting to an audited version (0 restores the built-in default), after owner approval.",
         tier="default",
     ),
-    "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
-    "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
+    "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in", external_io=True),
+    "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in", external_io=True),
     "automation.create_rule": ToolDefinition(
         "automation.create_rule",
         RecipeArgs,
