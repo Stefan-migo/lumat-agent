@@ -620,3 +620,23 @@ def test_the_measured_turns_reach_the_answer_path(text, intent):
     )
 
     assert orchestrate(state) == {"next_step": "respond"}
+
+
+def test_mid_capture_booked_visit_question_is_answered_without_repeating_the_field():
+    """A question about the held visit during capture is answered, not stored.
+
+    S13's rule (one question per message) is why capture does not resume in the
+    same turn: the field stays pending in `captured` and capture asks it on the
+    customer's next message. The order matters — a branch below the `mid_capture`
+    block would receive this turn as a field answer.
+    """
+    state = ConversationState(
+        customer_id=None,
+        conversation_id=None,
+        phone="+56912345678",
+        intent="consulta",
+        captured={"_pending": ["comuna"], "_asked": {"comuna": 1}},
+        window=[{"id": 1, "text": "hola, me confirmas a que hora es mi visita?"}],
+    )
+
+    assert orchestrate(state) == {"next_step": "respond"}
