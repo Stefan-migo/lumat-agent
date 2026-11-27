@@ -8,6 +8,28 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.23] - 2026-11-27
+
+### Corregido
+
+- El **bot responde las consultas sobre una visita ya agendada**. Antes no tenía forma de hacerlo: «Tengo una visita
+  para el lunes, puedes confirmarme que técnico va?» recibía tres horarios libres, y «Tengo una hora agendada para el
+  lunes» se guardaba como preferencia de día y se contestaba «todavía no queda agendada» — con la visita `booked` en
+  la base todo el tiempo (conversación 50 de producción, 27/11, visita 24 del 30/11 a las 14:00 con técnico
+  asignado). Ahora la pregunta tiene respuesta determinística, sin llamada al modelo: fecha y hora en la hora local del
+  cliente, servicio y **técnico**, con todas las visitas próximas (hasta tres) numeradas, «por asignar» cuando la visita
+  todavía no tiene técnico nombrado, y el hecho de no tener visitas cuando no las hay. Sólo responde a la consulta: un
+  pedido explícito de cambiar o cancelar sigue yendo al flujo de gestión, y las preguntas de disponibilidad y de horario
+  de atención conservan su respuesta. El contexto del modelo (`<booking>`) ahora lleva el técnico y la regla de que una
+  visita registrada existe: se nombra, no se niega y no se vuelve a ofrecer como si no estuviera agendada.
+- El **turno del asistente del panel deja de morir cuando un tool hace I/O externo** con la transacción del turno
+  abierta. PostgreSQL cortaba la conexión por `idle_in_transaction_session_timeout` (180 s) y el turno recién se
+  enteraba en el siguiente borde de nodo, donde el `INSERT` de auditoría levantaba `PendingRollbackError`: el operador
+  sólo veía «El agente no pudo procesar este mensaje. Reinténtalo.» (medido en producción el 27/11: hilo 65, mensaje
+  333, 192 s; 8/31 turnos el 24/11). Los tools que hacen I/O externo quedan marcados, registran la fila de arranque y
+  liberan la transacción antes de despacharse; el corte anterior cubría las llamadas al proveedor y el despacho de
+  tools había quedado afuera. La simulación de chatbot corre en su propia sesión y deja de commitear la del turno.
+
 ## [2026.11.22] - 2026-11-27
 
 ### Corregido
