@@ -334,7 +334,14 @@ def test_respond_model_call_receives_conversation_and_booking(respond_client):
             {"direction": "outbound", "text": "¿Qué día?"},
             {"direction": "inbound", "id": 77, "text": "ya agendé una visita"},
         ],
-        booking={"service": "Visita técnica", "label": "06/05/2030 a las 15:30", "status": "booked"},
+        booking={
+            "service": "Visita técnica",
+            "label": "06/05/2030 a las 15:30",
+            "status": "booked",
+            # D4 (odd/tasks/appointment-status-query.md): who is coming is part of
+            # the visit the prompt reads.
+            "technician": "Max Escanilla",
+        },
         turn=3,
         cost_mode="normal",
         memory_context="",
@@ -346,7 +353,10 @@ def test_respond_model_call_receives_conversation_and_booking(respond_client):
         _rn.respond(state)
     user_prompt = respond_client.captured[-1]["messages"][1]["content"]
     assert "<conversation>Cliente: Quiero una visita\nAsistente: ¿Qué día?</conversation>" in user_prompt
-    assert "<booking>El cliente tiene una visita agendada: Visita técnica el 06/05/2030 a las 15:30 (estado booked).</booking>" in user_prompt
+    assert (
+        "<booking>El cliente tiene una visita agendada: Visita técnica el "
+        "06/05/2030 a las 15:30 (estado booked), técnico Max Escanilla.</booking>"
+    ) in user_prompt
 
 
 def test_respond_answer_from_kb_brief_mode_appends_brief_persona(respond_client):

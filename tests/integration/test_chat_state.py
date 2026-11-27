@@ -207,7 +207,10 @@ def test_d2_state_carries_latest_booked_appointment():
             customer_id=conversation.customer_id,
             service="Visita técnica",
         )
-        technician = User(username=f"booking-state-tech-{uuid4().hex}", password_hash="test", role=UserRole.TECNICO)
+        technician = User(
+            username=f"booking-state-tech-{uuid4().hex}", password_hash="test",
+            role=UserRole.TECNICO, name="Max Escanilla",
+        )
         session.add_all([case, technician])
         session.flush()
         starts_at = datetime(2030, 5, 6, 15, 30, tzinfo=timezone.utc)
@@ -231,12 +234,52 @@ def test_d2_state_carries_latest_booked_appointment():
         session.commit()
         state_without_booking = ConversationState.from_db(session, conv_id)
 
+    # D4 (odd/tasks/appointment-status-query.md): who is coming is part of the
+    # visit, so the reply can name the technician and cannot deny the appointment.
     assert state_with_booking.booking == {
         "service": "Visita técnica",
         "label": "Lunes 06/05 a las 15:30",
         "status": "booked",
+        "technician": "Max Escanilla",
     }
     assert state_without_booking.booking is None
+
+
+def test_a_visit_nobody_is_named_on_carries_an_empty_technician():
+    """The S2.3 shape: the panel can book a visit before a name is loaded."""
+    conv_id = _seed(["hola"])
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        case = Case(
+            conversation_id=conv_id,
+            customer_id=conversation.customer_id,
+            service="Visita técnica",
+        )
+        technician = User(
+            username=f"booking-state-unnamed-{uuid4().hex}", password_hash="test",
+            role=UserRole.TECNICO,
+        )
+        session.add_all([case, technician])
+        session.flush()
+        starts_at = datetime(2030, 5, 6, 15, 30, tzinfo=timezone.utc)
+        session.add(
+            Appointment(
+                service="Visita técnica",
+                customer_id=conversation.customer_id,
+                case_id=case.id,
+                technician_id=technician.id,
+                local_start=datetime(2030, 5, 6, 15, 30),
+                timezone="UTC",
+                starts_at=starts_at,
+                ends_at=starts_at + timedelta(hours=1),
+                duration_minutes=60,
+                status=AppointmentStatus.BOOKED,
+            )
+        )
+        session.commit()
+        state = ConversationState.from_db(session, conv_id)
+
+    assert state.booking["technician"] == ""
 
 
 def test_d2_window_capped_at_10():
