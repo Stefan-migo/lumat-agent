@@ -59,6 +59,19 @@ def _intent_of(events: list[dict]) -> str | None:
 
 def simulate(session: Session, messages: list[str]) -> dict:
     """Run each supplied customer message through ``run_conversation`` in isolation."""
+    # The simulation can run the production graph for minutes. Its own session
+    # prevents its per-turn commits from committing the assistant turn's work.
+    from app.db import SessionLocal
+
+    with SessionLocal() as simulation_session:
+        # The simulation is its own unit of work now: the replies it writes must be durable
+        # before it returns, because closing this session would otherwise discard them.
+        result = _simulate_in_session(simulation_session, messages)
+        simulation_session.commit()
+        return result
+
+
+def _simulate_in_session(session: Session, messages: list[str]) -> dict:
     # Import lazily: registry.py is loaded while graph node imports are still
     # in progress, and importing chat.graph at module scope would form a cycle.
     from app.chat.graph import run_conversation
