@@ -8,6 +8,18 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 _(sin otros cambios después de este release)_
 
+## [2026.11.22] - 2026-11-27
+
+### Corregido
+
+- El **reagendamiento deja de rechazar lo que el cliente responde**: cuando contesta el menú de horarios con un día
+  (`¿Puede ser para la próxima semana? Lunes quizás en la mañana?`), con una semana relativa (`necesito reagendar
+  para la próxima semana`) o con un rechazo (`ninguno me sirve, necesito otro día`), la oferta se rearma desde la
+  agenda real en vez de responder «No pude identificar un único horario. Responde con el número de una opción.» y
+  escalar a una persona en el turno siguiente. «La próxima semana», sin día, conserva el día y la franja de la
+  visita que se está moviendo, siete días adelante; un rechazo sin día avanza un día. La compuerta previa al modelo
+  y el nodo de reagendamiento por fin coinciden en qué es una respuesta válida.
+
 ## [2026.11.21] - 2026-11-26
 
 ### Corregido
