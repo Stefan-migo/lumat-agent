@@ -9,8 +9,23 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 
 from app.chat.state import ConversationState
-from app.chat.nodes.booking import _resolve, local_today, slots_for_window
-from app.chat.slot_window import resolve_window, slot_label, when_label, window_label
+from app.chat.nodes.booking import (
+    _requests_more_slots,
+    _requested_window,
+    _resolve,
+    local_today,
+    slots_for_window,
+)
+from app.chat.slot_window import (
+    AFTERNOON,
+    MADRUGADA,
+    MORNING,
+    SlotWindow,
+    resolve_window,
+    slot_label,
+    when_label,
+    window_label,
+)
 from app.chat.nodes.replies import render_reply
 from app.db import session_scope
 from app.models import Appointment, AppointmentStatus, Conversation
@@ -22,6 +37,17 @@ MAX_INVALID_REPLIES = 1
 # A reschedule shows one page and no frozen universe: the customer is moving an
 # existing visit, so three options are the offer, not the first page of many.
 RESCHEDULE_SLOTS = 3
+# How many times a customer may move the offer before a person takes over. Kept
+# apart from MAX_INVALID_REPLIES: naming a day or asking for other options is a
+# served request, not a failed answer, so it must not spend the clarification.
+MAX_REBUILD_ROUNDS = 4
+
+# "La próxima semana" is a week, not a day. It is only consulted when the words
+# name no weekday of their own, and then the reference comes from the visit.
+_RELATIVE_WEEK = re.compile(
+    r"\b(?:proxima|siguiente|otra)\s+semana\b|\bsemana\s+que\s+viene\b"
+    r"|\ben\s+una\s+semana\b|\bpara\s+la\s+semana\b"
+)
 
 
 def _fold(value: str) -> str:
@@ -114,8 +140,12 @@ def _new_reschedule_offer(
     *,
     attempts: int = 0,
     text: str = "",
+    window: SlotWindow | None = None,
+    rounds: int = 0,
+    unchanged_against: dict | None = None,
 ) -> dict:
-    window = resolve_window(text, today=local_today(session, now))
+    if window is None:
+        window = resolve_window(text, today=local_today(session, now))
     assignments, widened = slots_for_window(
         session,
         now=now,
@@ -129,9 +159,15 @@ def _new_reschedule_offer(
         {"technician_id": technician_id, "date": day.isoformat(), "time": clock.isoformat()}
         for technician_id, day, clock in assignments
     ]
+    # Rebuilding for the window a reply named can land on the very list already on
+    # screen; printing it again is the loop production sat in, so the caller is told
+    # instead and the next resolution step applies.
+    if unchanged_against is not None and slots == (unchanged_against.get("slots") or []):
+        return {"next_step": "end", "_unchanged_offer": True}
     offer = {
         "mode": "reschedule", "appointment_id": appointment.id, "phase": "slots",
         "slots": slots, "created_at": now.isoformat(), "attempts": attempts,
+        "rounds": rounds,
     }
     _persist_offer(session, state, offer)
     opciones = "\n".join(
@@ -155,6 +191,112 @@ def _invalid(session, state: ConversationState, offer: dict, prompt: str, reason
     offer["attempts"] = attempts + 1
     _persist_offer(session, state, offer)
     return {"next_step": "end", "replies": [prompt]}
+
+
+def _franja_of(clock: time) -> tuple[time, time]:
+    """The franja a time of day belongs to, so "next week" can keep it."""
+
+    if clock < MORNING[0]:
+        return MADRUGADA
+    return MORNING if clock < AFTERNOON[0] else AFTERNOON
+
+
+def _week_ahead_window(
+    session,
+    state: ConversationState,
+    appointment: Appointment,
+    now: datetime,
+    resolved: SlotWindow | None,
+) -> SlotWindow:
+    """S5-2 (owner decision): a relative week keeps the day and franja we have.
+
+    The reference is the preference capture stored when there is one, and the visit
+    being moved otherwise: "la próxima semana" about a Saturday 10:30 visit means
+    the Saturday of next week, in the morning. A franja the reply names itself wins
+    over the reference franja.
+    """
+
+    today = local_today(session, now)
+    captured = _requested_window(session, state, now)
+    if captured is not None and captured.day is not None:
+        reference_day, reference_franja = captured.day, captured.franja
+    else:
+        reference_day = appointment.local_start.date()
+        reference_franja = _franja_of(appointment.local_start.time())
+    reference_day += timedelta(days=7)
+    while reference_day <= today:
+        reference_day += timedelta(days=7)
+    franja = resolved.franja if resolved is not None and resolved.franja else reference_franja
+    return SlotWindow(
+        day=reference_day,
+        franja=franja,
+        desde=resolved.desde if resolved is not None else None,
+    )
+
+
+def _rebuild(
+    session,
+    state: ConversationState,
+    offer: dict,
+    appointment: Appointment,
+    now: datetime,
+    texts: dict[str, str],
+    window: SlotWindow,
+) -> dict | None:
+    """Serve one continuation; ``None`` when it would only reprint the same menu."""
+
+    rounds = int(offer.get("rounds", 0))
+    if rounds >= MAX_REBUILD_ROUNDS:
+        return _handoff(session, state, "manage_unclear")
+    rebuilt = _new_reschedule_offer(
+        session, state, appointment, now, texts,
+        window=window, rounds=rounds + 1, unchanged_against=offer,
+    )
+    if rebuilt.pop("_unchanged_offer", False):
+        return None
+    return rebuilt
+
+
+def _continuation_offer(
+    session,
+    state: ConversationState,
+    offer: dict,
+    appointment: Appointment,
+    now: datetime,
+    texts: dict[str, str],
+    text: str,
+) -> dict | None:
+    """S5: serve what the customer actually sent instead of asking for a number.
+
+    Order: a day or franja the words name (including a relative week, which keeps
+    the day and franja the conversation has), then a request for other options, which
+    moves one day forward. Returning ``None`` leaves the turn to the single
+    clarification, as before.
+    """
+
+    resolved = resolve_window(text, today=local_today(session, now))
+    window: SlotWindow | None = None
+    if resolved is not None and resolved.day is not None:
+        window = resolved
+    elif _RELATIVE_WEEK.search(_fold(text)):
+        window = _week_ahead_window(session, state, appointment, now, resolved)
+    elif resolved is not None:
+        # A franja or an hour floor with no day still narrows the offer.
+        window = resolved
+    if window is not None:
+        rebuilt = _rebuild(session, state, offer, appointment, now, texts, window)
+        if rebuilt is not None:
+            return rebuilt
+    if _requests_more_slots(text):
+        slots = offer.get("slots") or []
+        if not slots:
+            return None
+        last_day = date.fromisoformat(slots[-1]["date"])
+        return _rebuild(
+            session, state, offer, appointment, now, texts,
+            SlotWindow(day=last_day + timedelta(days=1)),
+        )
+    return None
 
 
 def manage(state: ConversationState) -> dict:
@@ -217,6 +359,18 @@ def manage(state: ConversationState) -> dict:
             slots = offer.get("slots") or []
             selected = _resolve(text, slots)
             if selected is None:
+                appointment = session.get(Appointment, offer.get("appointment_id"))
+                if (
+                    appointment is not None
+                    and appointment.customer_id == state.customer_id
+                    and appointment.status is AppointmentStatus.BOOKED
+                    and appointment.starts_at > datetime.now(timezone.utc)
+                ):
+                    rebuilt = _continuation_offer(
+                        session, state, offer, appointment, now, texts, text
+                    )
+                    if rebuilt is not None:
+                        return rebuilt
                 return _invalid(
                     session,
                     state,

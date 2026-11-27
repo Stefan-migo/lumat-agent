@@ -230,12 +230,168 @@ def test_reschedule_fallback_notifies_when_requested_window_is_empty(mock_openai
     assert _day(fallback_day) + " a las 11:00" in reply[0]
 
 
+def _business_today():
+    from zoneinfo import ZoneInfo
+
+    from app.services.settings import get_hours_timezone
+
+    with SessionLocal() as session:
+        zone = ZoneInfo(get_hours_timezone(session))
+    return datetime.now(timezone.utc).astimezone(zone).date()
+
+
+def _add_reschedule_availability_block(spans):
+    """Open availability over whole local days, given as inclusive offsets.
+
+    The reschedule offer only survives if the day the customer names has real
+    capacity, so these blocks reach a week past the visit under test.
+    """
+    from zoneinfo import ZoneInfo
+
+    from app.services.settings import get_hours_timezone
+
+    with SessionLocal() as session:
+        zone = ZoneInfo(get_hours_timezone(session))
+        today = datetime.now(timezone.utc).astimezone(zone).date()
+        technician = session.scalar(select(User).where(User.username == "manage-technician"))
+        for first, last in spans:
+            start = datetime.combine(today + timedelta(days=first), time.min, tzinfo=zone)
+            end = datetime.combine(today + timedelta(days=last + 1), time.min, tzinfo=zone)
+            scheduling.add_availability(
+                session, technician_id=technician.id, starts_at=start, ends_at=end,
+            )
+        session.commit()
+        return technician.id
+
+
+def _seed_reschedule_visit(day_offset, local_time):
+    """Seed a conversation whose booked visit sits on a known local day and time."""
+    from zoneinfo import ZoneInfo
+
+    from app.services.settings import get_hours_timezone
+
+    with SessionLocal() as session:
+        zone = ZoneInfo(get_hours_timezone(session))
+        local_day = datetime.now(timezone.utc).astimezone(zone).date() + timedelta(days=day_offset)
+        customer = get_or_create_customer(session, "+56912345678")
+        conversation = get_or_create_conversation(session, customer, customer.phone_e164)
+        case = Case(conversation_id=conversation.id, customer_id=customer.id, service="Visita técnica")
+        technician = User(username="manage-technician", password_hash="test", role=UserRole.TECNICO)
+        session.add_all([case, technician])
+        session.flush()
+        appointment = scheduling.book(
+            session, service="Visita técnica", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=local_day, local_time=local_time,
+            timezone_name=str(zone), duration_minutes=60, actor="test",
+        )
+        conversation.turn_count = 1
+        session.add(Message(
+            wamid="wamid.manage.visit.seed", conversation_id=conversation.id,
+            direction=MessageDirection.INBOUND, msg_type=MessageType.TEXT,
+            text="quiero cancelar mi visita", status=MessageStatus.RECEIVED,
+        ))
+        session.commit()
+        return conversation.id, customer.id, appointment.id, local_day
+
+
+def test_reschedule_offer_rebuilds_for_the_day_the_customer_names(mock_openai_chat, monkeypatch):
+    # S5-1: production case 48, turn 3. The day resolves; the offer has to follow it
+    # instead of asking for a number again.
+    _classify_reschedule(monkeypatch)
+    conv_id, _, appointment_id, visit_day = _seed_reschedule_visit(2, time(10, 30))
+    _add_reschedule_availability_block([(1, 4), (5, 12)])
+    _invoke(conv_id, _add_message(conv_id, "quiero reagendar mi visita", "wamid.manage.day.ask"))
+    today = _business_today()
+    expected_day = today + timedelta(days=(1 - today.isoweekday()) % 7 or 7)
+
+    replies = _invoke(conv_id, _add_message(
+        conv_id, "Puede ser para la próxima semana? Lunes quizás en la mañana?",
+        "wamid.manage.day.reply",
+    ))
+
+    assert all("no pude identificar" not in reply.lower() for reply in replies)
+    assert _day(expected_day) in replies[0]
+    with SessionLocal() as session:
+        offer = session.get(Conversation, conv_id).captured_data["_manage_offer"]
+        assert offer["slots"]
+        assert {slot["date"] for slot in offer["slots"]} == {expected_day.isoformat()}
+        assert all(
+            time(9, 0) <= time.fromisoformat(slot["time"]) < time(13, 0)
+            for slot in offer["slots"]
+        )
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.status is AppointmentStatus.BOOKED
+        assert appointment.local_start.date() == visit_day
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 0
+
+
+def test_reschedule_relative_week_keeps_the_day_and_franja_of_the_visit(mock_openai_chat, monkeypatch):
+    # S5-2: production case 48, turn 5, and conversation 42. "Próxima semana" with no
+    # day named keeps the day and franja the visit already has, one week forward.
+    _classify_reschedule(monkeypatch)
+    conv_id, _, appointment_id, visit_day = _seed_reschedule_visit(2, time(10, 30))
+    _add_reschedule_availability_block([(1, 4), (5, 12)])
+    _invoke(conv_id, _add_message(conv_id, "quiero reagendar mi visita", "wamid.manage.week.ask"))
+    expected_day = visit_day + timedelta(days=7)
+
+    replies = _invoke(conv_id, _add_message(
+        conv_id, "No me sirve el horario que diste, necesito reagendar para la próxima semana",
+        "wamid.manage.week.reply",
+    ))
+
+    assert all("no pude identificar" not in reply.lower() for reply in replies)
+    assert all("asesor" not in reply.lower() for reply in replies)
+    assert _day(expected_day) in replies[0]
+    with SessionLocal() as session:
+        offer = session.get(Conversation, conv_id).captured_data["_manage_offer"]
+        assert offer["slots"]
+        assert {slot["date"] for slot in offer["slots"]} == {expected_day.isoformat()}
+        assert all(
+            time(9, 0) <= time.fromisoformat(slot["time"]) < time(13, 0)
+            for slot in offer["slots"]
+        )
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.status is AppointmentStatus.BOOKED
+        assert appointment.local_start.date() == visit_day
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 0
+
+
+def test_reschedule_rejection_without_a_day_offers_later_options(mock_openai_chat, monkeypatch):
+    # S5-3: "no me sirve ... necesito otro día" is a request for other options, not
+    # an ambiguous answer, and it must not spend the single clarification.
+    _classify_reschedule(monkeypatch)
+    conv_id, _, appointment_id, visit_day = _seed_reschedule_visit(2, time(10, 30))
+    _add_reschedule_availability_block([(1, 4), (5, 12)])
+    _invoke(conv_id, _add_message(conv_id, "quiero reagendar mi visita", "wamid.manage.more.ask"))
+    with SessionLocal() as session:
+        before = session.get(Conversation, conv_id).captured_data["_manage_offer"]["slots"]
+
+    replies = _invoke(conv_id, _add_message(
+        conv_id, "Ninguno me sirve, necesito otro día", "wamid.manage.more.reply",
+    ))
+
+    assert all("no pude identificar" not in reply.lower() for reply in replies)
+    assert all("asesor" not in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        offer = session.get(Conversation, conv_id).captured_data["_manage_offer"]
+        assert offer["attempts"] == 0
+        assert offer["slots"]
+        last_offered = (before[-1]["date"], before[-1]["time"])
+        assert all(
+            (slot["date"], slot["time"]) > last_offered for slot in offer["slots"]
+        )
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.status is AppointmentStatus.BOOKED
+        assert appointment.local_start.date() == visit_day
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 0
+
+
 def test_reschedule_ambiguous_slot_reasks_once_then_hands_off(mock_openai_chat, monkeypatch):
     _classify_reschedule(monkeypatch)
     conv_id, _, appointment_id = _seed_conversation()
     _add_reschedule_availability()
     _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.ambask"))
-    clarification = _invoke(conv_id, _add_message(conv_id, "el martes", "wamid.manage.reschedule.amb"))
+    clarification = _invoke(conv_id, _add_message(conv_id, "mmm no entiendo", "wamid.manage.reschedule.amb"))
     assert any("no pude identificar" in reply.lower() for reply in clarification)
     final = _invoke(conv_id, _add_message(conv_id, "no sé", "wamid.manage.reschedule.amb2"))
     assert any("asesor" in reply.lower() for reply in final)
